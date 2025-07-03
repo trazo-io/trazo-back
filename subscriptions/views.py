@@ -12,6 +12,7 @@ from rest_framework.views import APIView
 from rest_framework.viewsets import ViewSet
 import stripe
 import json
+from carbon.services.circuit_breaker_enhanced import stripe_circuit_breaker, stripe_fallback_response
 from .models import Plan, Subscription, AddOn, SubscriptionAddOn, Invoice, PaymentMethod
 from .serializers import (
     PlanSerializer, SubscriptionSerializer, AddOnSerializer,

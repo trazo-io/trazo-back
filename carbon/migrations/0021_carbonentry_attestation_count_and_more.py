@@ -33,13 +33,7 @@ class Migration(migrations.Migration):
                 max_length=20,
             ),
         ),
-        migrations.AddField(
-            model_name="carbonentry",
-            name="community_attestations",
-            field=models.JSONField(
-                blank=True, default=list, help_text="List of community attestations"
-            ),
-        ),
+
         migrations.AddField(
             model_name="carbonentry",
             name="effective_amount",

@@ -13,6 +13,7 @@ from django.core.cache import cache
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from botocore.exceptions import ClientError, BotoCoreError
+from backend.services.secrets_manager import secrets_manager
 import base64
 import time
 from cryptography.fernet import Fernet
@@ -420,13 +421,18 @@ class SecureKeyManager:
     def get_blockchain_private_key(self) -> str:
         """Securely retrieve blockchain private key"""
         try:
-            # Try AWS Secrets Manager first
-            secret = self.get_secret('trazo/blockchain/private_key')
+            # Use new production secrets manager
+            secret = secrets_manager.get_secret('blockchain_private_key', required=False)
             
             if secret:
-                if isinstance(secret, dict):
-                    return secret.get('private_key', '')
                 return secret
+            
+            # Fallback to AWS direct access
+            aws_secret = self.get_secret('trazo/blockchain/private_key')
+            if aws_secret:
+                if isinstance(aws_secret, dict):
+                    return aws_secret.get('private_key', '')
+                return aws_secret
             
             # Fallback to settings for development
             if not self.is_production and hasattr(settings, 'BLOCKCHAIN_PRIVATE_KEY'):
@@ -442,14 +448,24 @@ class SecureKeyManager:
     def get_usda_api_keys(self) -> Dict[str, str]:
         """Securely retrieve USDA API keys"""
         try:
-            # Try AWS Secrets Manager first
-            secret = self.get_secret('trazo/usda/api_keys')
+            # Use new production secrets manager
+            keys = {
+                'nass_api_key': secrets_manager.get_secret('usda_nass_api_key', required=False) or '',
+                'ers_api_key': secrets_manager.get_secret('usda_ers_api_key', required=False) or '',
+                'fooddata_api_key': secrets_manager.get_secret('usda_fooddata_api_key', required=False) or ''
+            }
             
-            if secret and isinstance(secret, dict):
+            # If any keys found via new system, return them
+            if any(keys.values()):
+                return keys
+            
+            # Fallback to AWS direct access
+            aws_secret = self.get_secret('trazo/usda/api_keys')
+            if aws_secret and isinstance(aws_secret, dict):
                 return {
-                    'nass_api_key': secret.get('nass_api_key', ''),
-                    'ers_api_key': secret.get('ers_api_key', ''),
-                    'fooddata_api_key': secret.get('fooddata_api_key', '')
+                    'nass_api_key': aws_secret.get('nass_api_key', ''),
+                    'ers_api_key': aws_secret.get('ers_api_key', ''),
+                    'fooddata_api_key': aws_secret.get('fooddata_api_key', '')
                 }
             
             # Fallback to settings for development

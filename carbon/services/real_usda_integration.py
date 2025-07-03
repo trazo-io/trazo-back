@@ -16,6 +16,7 @@ import hashlib
 import time
 import threading
 from .secure_key_management import secure_key_manager, get_secure_usda_keys
+from backend.services.secrets_manager import secrets_manager
 from .usda_cache_service import (
     USDADataCacheManager, 
     USDASpecializedCache, 
@@ -23,11 +24,11 @@ from .usda_cache_service import (
     usda_cache,
     specialized_cache
 )
-from .api_circuit_breaker import (
-    usda_circuit_breakers,
-    with_circuit_breaker,
-    safe_api_call,
-    CircuitBreakerOpenError
+from .circuit_breaker_enhanced import (
+    circuit_manager,
+    usda_circuit_breaker,
+    usda_fallback_response,
+    CircuitBreakerError
 )
 from .enhanced_error_handling import (
     error_handler,
@@ -108,11 +109,11 @@ class RealUSDAAPIClient:
         self.nass_rate_limiter = APIRateLimiter(calls_per_minute=10)  # Conservative limit
         self.fooddata_rate_limiter = APIRateLimiter(calls_per_minute=30)  # Higher limit for FoodData Central
         
-        # Base emission factors from IPCC/EPA guidelines
+        # Updated emission factors from USDA-ARS Corrected Research Findings 2025
         self.base_emission_factors = {
-            'nitrogen': 5.86,    # kg CO2e per kg N (IPCC 2019)
-            'phosphorus': 0.20,  # kg CO2e per kg P2O5
-            'potassium': 0.15,   # kg CO2e per kg K2O
+            'nitrogen': 11.0,    # kg CO2e per kg N (USDA-ARS 2025, corrected from 5.86)
+            'phosphorus': 1.25,  # kg CO2e per kg P2O5 (corrected from 0.20)
+            'potassium': 0.60,   # kg CO2e per kg K2O (corrected from 0.15)
             'diesel': 2.68,      # kg CO2e per liter
             'gasoline': 2.31,    # kg CO2e per liter
             'natural_gas': 2.03, # kg CO2e per m³
@@ -738,4 +739,72 @@ def get_real_usda_carbon_data(crop_type: str, state: str, farm_practices: Dict) 
                 'description': f"Produces {efficiency.get('protein_content', 0):.1f}g protein per unit of carbon emissions"
             }
     
-    return result 
+    return result
+
+
+    def _test_nass_connection(self, api_key: str) -> bool:
+        """Test NASS API connection with provided key"""
+        try:
+            test_url = "https://quickstats.nass.usda.gov/api/api_GET/"
+            test_params = {
+                'key': api_key,
+                'source_desc': 'CENSUS',
+                'sector_desc': 'CROPS',
+                'commodity_desc': 'CORN',
+                'year': '2022',
+                'agg_level_desc': 'STATE',
+                'state_alpha': 'IA'
+            }
+            
+            response = requests.get(test_url, params=test_params, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                return 'data' in data and len(data.get('data', [])) > 0
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"NASS connection test failed: {e}")
+            return False
+
+    def _test_fooddata_connection(self, api_key: str) -> bool:
+        """Test FoodData Central API connection with provided key"""
+        try:
+            test_url = "https://api.nal.usda.gov/fdc/v1/foods/search"
+            test_params = {
+                'api_key': api_key,
+                'query': 'corn',
+                'dataType': 'Foundation',
+                'pageSize': 1
+            }
+            
+            response = requests.get(test_url, params=test_params, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                return 'foods' in data and len(data.get('foods', [])) > 0
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"FoodData connection test failed: {e}")
+            return False
+
+    def _test_ers_connection(self, api_key: str) -> bool:
+        """Test ERS API connection with provided key"""
+        try:
+            # Note: ERS API endpoints may vary, this is a generic test
+            test_url = "https://api.ers.usda.gov/data/arms/surveydata"
+            test_params = {
+                'api_key': api_key
+            }
+            
+            response = requests.get(test_url, params=test_params, timeout=10)
+            
+            # ERS API may return different status codes for valid keys
+            return response.status_code in [200, 204]
+            
+        except Exception as e:
+            logger.error(f"ERS connection test failed: {e}")
+            return False 

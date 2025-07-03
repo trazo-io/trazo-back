@@ -33,7 +33,7 @@ class EmissionFactorsRegistryTest(TestCase):
         """Test that nitrogen factor is the correct USDA value"""
         nitrogen_factor = emission_factors.get_fertilizer_factor('nitrogen')
         
-        self.assertEqual(nitrogen_factor['value'], 5.86)
+        self.assertEqual(nitrogen_factor['value'], 11.0)
         self.assertEqual(nitrogen_factor['unit'], 'kg CO2e per kg N')
         self.assertIn('USDA', nitrogen_factor['source'])
         self.assertEqual(nitrogen_factor['confidence'], 'high')
@@ -107,7 +107,7 @@ class EmissionFactorsRegistryTest(TestCase):
         
         self.assertIn('nitrogen', simple_factors)
         self.assertIn('diesel', simple_factors)
-        self.assertEqual(simple_factors['nitrogen'], 5.86)
+        self.assertEqual(simple_factors['nitrogen'], 11.0)
         self.assertIsInstance(simple_factors['nitrogen'], (int, float))
 
 
@@ -129,18 +129,19 @@ class CalculatorConsistencyTest(TestCase):
         registry_nitrogen = emission_factors.get_fertilizer_factor('nitrogen')['value']
         
         # All should be equal to the correct USDA value
-        expected_value = 5.86
+        expected_value = 11.0
         
         self.assertEqual(carbon_calc_nitrogen, expected_value)
         self.assertEqual(enhanced_usda_nitrogen, expected_value)
         self.assertEqual(event_calc_nitrogen, expected_value)
         self.assertEqual(registry_nitrogen, expected_value)
         
-        # Verify none use the old incorrect value
-        incorrect_value = 6.7
-        self.assertNotEqual(carbon_calc_nitrogen, incorrect_value)
-        self.assertNotEqual(enhanced_usda_nitrogen, incorrect_value)
-        self.assertNotEqual(event_calc_nitrogen, incorrect_value)
+        # Verify none use the old incorrect values
+        old_incorrect_values = [5.86, 6.7]  # Both old values should not be used
+        for old_value in old_incorrect_values:
+            self.assertNotEqual(carbon_calc_nitrogen, old_value)
+            self.assertNotEqual(enhanced_usda_nitrogen, old_value)
+            self.assertNotEqual(event_calc_nitrogen, old_value)
 
     def test_phosphorus_factor_consistency(self):
         """Test phosphorus factor consistency"""

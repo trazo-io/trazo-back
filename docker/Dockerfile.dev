@@ -1,0 +1,68 @@
+# Use Python 3.11 slim image as base
+FROM python:3.11-slim-bullseye as base
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Create app user to avoid running as root
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # PostgreSQL client and development headers
+    postgresql-client \
+    libpq-dev \
+    # Essential build tools
+    build-essential \
+    # Network tools for health checks
+    curl \
+    # Git for development
+    git \
+    # Additional tools
+    vim \
+    htop \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set work directory
+WORKDIR /app
+
+# Install Poetry
+RUN pip install poetry==1.8.3
+
+# Configure poetry: no virtual env since we're in container
+ENV POETRY_NO_INTERACTION=1 \
+    POETRY_VENV_IN_PROJECT=1 \
+    POETRY_CACHE_DIR=/tmp/poetry_cache
+
+# Copy poetry files
+COPY pyproject.toml poetry.lock* ./
+
+# Development stage
+FROM base as development
+
+# Install dependencies including dev dependencies
+RUN poetry install --with dev && rm -rf $POETRY_CACHE_DIR
+
+# Copy application code
+COPY . /app/
+
+# Make scripts executable
+RUN chmod +x /app/scripts/*.sh
+
+# Create directories for Django
+RUN mkdir -p /app/staticfiles /app/media /app/logs
+
+# Change ownership to app user
+RUN chown -R appuser:appuser /app
+
+# Switch to non-root user
+USER appuser
+
+# Expose port
+EXPOSE 8000
+
+# Default command
+CMD ["/app/scripts/start-django.sh"] 

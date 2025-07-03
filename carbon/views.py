@@ -410,7 +410,7 @@ class CarbonEntryViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(production_id=production_id)
         queryset = queryset.filter(year=year)
 
-        total_emissions = queryset.filter(type='emission').aggregate(Sum('amount'))['amount__sum'] or 0
+        total_emissions = queryset.filter(type='emission').aggregate(Sum('co2e_amount'))['co2e_amount__sum'] or 0
         # Use effective_amount for offsets to account for trust score discounts
         total_offsets = queryset.filter(type='offset').aggregate(Sum('effective_amount'))['effective_amount__sum'] or 0
         net_carbon = total_emissions - total_offsets
@@ -1072,9 +1072,9 @@ class CarbonEstablishmentSummaryViewSet(viewsets.ViewSet):
                 year=year
             )
             
-            # Calculate totals
+            # Calculate totals using co2e_amount (the actual carbon impact)
             emissions_data = entries.filter(type='emission').aggregate(
-                total=Sum('amount'),
+                total=Sum('co2e_amount'),
                 count=Count('id')
             )
             
@@ -1088,16 +1088,33 @@ class CarbonEstablishmentSummaryViewSet(viewsets.ViewSet):
             total_offsets = float(offsets_data['total'] or 0)
             net_carbon = total_emissions - total_offsets
             
-            # Calculate carbon score (0-100)
-            carbon_score = 85  # Default score
+            # Enhanced carbon score calculation (0-100) with production-ready logic
+            carbon_score = 50  # Neutral baseline (was 85, too optimistic)
+            
             if total_emissions > 0:
                 offset_percentage = min(100, (total_offsets / total_emissions) * 100)
+                
                 if offset_percentage >= 100:
-                    carbon_score = 90 + min(10, ((offset_percentage - 100) / 50) * 10)
+                    # Carbon negative - excellent performance
+                    excess_percentage = offset_percentage - 100
+                    carbon_score = 90 + min(10, (excess_percentage / 50) * 10)
+                elif offset_percentage >= 75:
+                    # Very good performance (75-99% offset)
+                    carbon_score = 75 + ((offset_percentage - 75) / 25) * 15
+                elif offset_percentage >= 50:
+                    # Good performance (50-74% offset)
+                    carbon_score = 60 + ((offset_percentage - 50) / 25) * 15
+                elif offset_percentage >= 25:
+                    # Fair performance (25-49% offset)
+                    carbon_score = 40 + ((offset_percentage - 25) / 25) * 20
                 else:
-                    carbon_score = max(10, min(90, offset_percentage * 0.85))
+                    # Poor performance (0-24% offset)
+                    carbon_score = 10 + (offset_percentage / 25) * 30
+                    
             elif total_offsets > 0:
-                carbon_score = 95  # Excellent if only offsets
+                carbon_score = 95  # Excellent if only offsets, no emissions
+            else:
+                carbon_score = 50  # Neutral if no data
             
             # Get recent entries for debugging
             recent_entries = entries.order_by('-timestamp')[:5]
@@ -1106,39 +1123,111 @@ class CarbonEstablishmentSummaryViewSet(viewsets.ViewSet):
                 entries_debug.append({
                     'id': entry.id,
                     'type': entry.type,
-                    'amount': float(entry.amount),
+                    'amount': float(entry.co2e_amount or 0),
                     'source': entry.source.name if entry.source else None,
                     'date': entry.timestamp.isoformat()
                 })
             
-            # Prepare response data
+            # Calculate emissions breakdown by category and source
+            emissions_by_category = {}
+            emissions_by_source = {}
+            offsets_by_action = {}
+            
+            # Calculate emissions by source and category using co2e_amount
+            for entry in entries.filter(type='emission'):
+                source_name = entry.source.name if entry.source else 'Unknown'
+                if source_name not in emissions_by_source:
+                    emissions_by_source[source_name] = 0
+                emissions_by_source[source_name] += float(entry.co2e_amount or 0)
+                
+                # Also categorize by source category
+                category = entry.source.category if entry.source else 'Other'
+                if category not in emissions_by_category:
+                    emissions_by_category[category] = 0
+                emissions_by_category[category] += float(entry.co2e_amount or 0)
+            
+            # Calculate offsets by action
+            for entry in entries.filter(type='offset'):
+                action_name = entry.source.name if entry.source else 'Unknown Offset'
+                if action_name not in offsets_by_action:
+                    offsets_by_action[action_name] = 0
+                offsets_by_action[action_name] += float(entry.effective_amount or entry.amount or 0)
+            
+            # Calculate transparency score for production readiness
+            transparency_score = 10  # Base score
+            total_entries_count = entries.count()
+            
+            if total_entries_count > 0:
+                # More sophisticated transparency scoring
+                base_score = min(total_entries_count * 0.8, 70)  # Max 70 from entries count
+                verification_bonus = 0
+                
+                # Check USDA verification percentage
+                usda_verified_count = entries.filter(usda_verified=True).count()
+                if total_entries_count > 0:
+                    verification_ratio = usda_verified_count / total_entries_count
+                    verification_bonus = verification_ratio * 30  # Max 30 bonus
+                
+                transparency_score = min(base_score + verification_bonus, 100)
+            
+            # Calculate performance indicators
+            offset_ratio = (total_offsets / total_emissions) if total_emissions > 0 else 0
+            
+            # Prepare enhanced response data
             response_data = {
                 'establishment_id': establishment_id,
                 'year': year,
-                'total_emissions': total_emissions,
-                'total_offsets': total_offsets,
-                'net_carbon': net_carbon,
+                'total_emissions': round(total_emissions, 2),
+                'total_offsets': round(total_offsets, 2),
+                'net_carbon': round(net_carbon, 2),
                 'carbon_score': int(carbon_score),
+                'transparency_score': int(transparency_score),
+                'offset_ratio': round(offset_ratio * 100, 1),  # Percentage
+                'performance_tier': self._get_performance_tier(carbon_score),
                 'entries_count': {
                     'emissions': emissions_data['count'] or 0,
                     'offsets': offsets_data['count'] or 0,
-                    'total': entries.count()
+                    'total': total_entries_count,
+                    'usda_verified': usda_verified_count
                 },
                 'has_data': total_emissions > 0 or total_offsets > 0,
+                'data_quality': {
+                    'completeness': min((total_entries_count / 50) * 100, 100),  # Assume 50 entries = 100% complete
+                    'verification_rate': round((usda_verified_count / max(total_entries_count, 1)) * 100, 1)
+                },
                 'recent_entries': entries_debug,
+                'emissionsByCategory': emissions_by_category,
+                'emissionsBySource': emissions_by_source,
+                'offsetsByAction': offsets_by_action,
                 'calculated_at': timezone.now().isoformat(),
-                'data_source': 'carbon_entries'
+                'data_source': 'carbon_entries',
+                'api_version': '2.0'
             }
             
             return Response(response_data, status=status.HTTP_200_OK)
             
         except Exception as e:
             logger.error(f"Error in carbon establishment summary: {str(e)}")
+            logger.error(f"Stack trace: {traceback.format_exc()}")
             return Response({
                 'error': 'Failed to calculate carbon summary',
-                'detail': str(e),
-                'establishment_id': pk
+                'detail': str(e) if settings.DEBUG else 'Internal server error',
+                'establishment_id': pk,
+                'timestamp': timezone.now().isoformat()
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def _get_performance_tier(self, carbon_score):
+        """Get performance tier based on carbon score"""
+        if carbon_score >= 90:
+            return {'tier': 'Excellent', 'color': 'green', 'description': 'Carbon negative or very low impact'}
+        elif carbon_score >= 75:
+            return {'tier': 'Very Good', 'color': 'light_green', 'description': 'Strong environmental performance'}
+        elif carbon_score >= 60:
+            return {'tier': 'Good', 'color': 'blue', 'description': 'Above average performance'}
+        elif carbon_score >= 40:
+            return {'tier': 'Fair', 'color': 'orange', 'description': 'Room for improvement'}
+        else:
+            return {'tier': 'Needs Improvement', 'color': 'red', 'description': 'Significant emission reduction needed'}
 
 
 class CarbonProductionSummaryViewSet(viewsets.ViewSet):

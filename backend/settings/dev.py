@@ -5,6 +5,74 @@ from decouple import config
 
 ALLOWED_HOSTS = ("localhost", ".localhost", "127.0.0.1", "192.168.1.3", "7172-167-60-250-132.ngrok-free.app", "testserver")
 
+# Database configuration for local development
+# Use PostgreSQL if Docker services are running, fallback to SQLite
+
+# Check if PostgreSQL is available (Docker services running)
+try:
+    import psycopg2
+    from decouple import config
+    
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': config('DATABASE_NAME', default='trazo_dev'),
+            'USER': config('DATABASE_USER', default='postgres'),
+            'PASSWORD': config('DATABASE_PASSWORD', default='postgres'),
+            'HOST': config('DATABASE_HOST', default='localhost'),
+            'PORT': config('DATABASE_PORT', default='5432'),
+        }
+    }
+    
+    # Redis Cache Configuration
+    CACHES = {
+        "default": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": config('REDIS_URL', default='redis://localhost:6379/1'),
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            }
+        }
+    }
+    
+    # Celery Configuration with Redis
+    CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://localhost:6379/0')
+    CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default='redis://localhost:6379/0')
+    
+    # Email Configuration (MailDev)
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+    EMAIL_HOST = "localhost"
+    EMAIL_PORT = 3025
+    EMAIL_USE_TLS = False
+    EMAIL_HOST_USER = ""
+    EMAIL_HOST_PASSWORD = ""
+    
+except ImportError:
+    # Fallback to SQLite if PostgreSQL is not available
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db_dev.sqlite3',
+        }
+    }
+    
+    # File-based cache backend for development (compatible with django_ratelimit)
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+            "LOCATION": "/tmp/django_cache",
+        }
+    }
+    
+    # Disable Celery and Redis for local development (optional services)
+    CELERY_TASK_ALWAYS_EAGER = True  # Run tasks synchronously in development
+    CELERY_TASK_EAGER_PROPAGATES = True
+    CELERY_BROKER_URL = 'memory://'  # In-memory broker for development
+    CELERY_RESULT_BACKEND = 'cache+memory://'
+    
+    # Use console backend to print emails to terminal instead of sending them
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
 # CSRF_TRUSTED_ORIGINS = [
 #     "http://localhost:3000",
 #     "http://app.localhost:3000",
@@ -53,20 +121,8 @@ DEFAULT_FROM_EMAIL = os.environ.get("FROM_EMAIL_ADDRESS", "info@trazo.io")
 # Use local filesystem in development
 DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
 
-# Override Celery settings for development
-CELERY_BROKER_URL = config('REDIS_URL', default='redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = config('REDIS_URL', default='redis://localhost:6379/0')
-
-# Override Redis Cache settings for development
-CACHES = {
-    "default": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": config('REDIS_URL', default='redis://localhost:6379/1'),
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-        }
-    }
-}
+# Note: Using Redis and Celery services from Docker for consistency
+# Cache and Celery are already configured above in the PostgreSQL section
 
 # John Deere API Configuration
 JOHN_DEERE_CLIENT_ID = os.environ.get('JOHN_DEERE_CLIENT_ID', 'test_client_id')

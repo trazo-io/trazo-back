@@ -10,7 +10,7 @@ This module contains background tasks for:
 
 from celery import shared_task
 from django.db.models import Sum, Avg, Count
-from .models import CarbonEntry, CarbonReport, CarbonBenchmark, SustainabilityBadge, CarbonAuditLog, IoTDevice, IoTDataPoint, Establishment, Production
+from .models import CarbonEntry, CarbonReport, CarbonBenchmark, SustainabilityBadge, CarbonAuditLog, IoTDevice, IoTDataPoint, Establishment, ProductionTemplate
 from django.utils import timezone
 from datetime import timedelta, datetime
 from django.contrib.auth import get_user_model
@@ -105,7 +105,7 @@ def award_sustainability_badges():
     ).distinct()
     
     # Also get all productions with carbon entries
-    productions = Production.objects.filter(
+    productions = ProductionTemplate.objects.filter(
         carbonentry__isnull=False
     ).distinct()
     
@@ -692,7 +692,7 @@ def batch_submit_monthly_summaries(self):
             logger.info(f"Processing company: {company.name} (ID: {company.id})")
             
             # Get all productions for this company in the previous month
-            productions = Production.objects.filter(
+            productions = ProductionTemplate.objects.filter(
                 parcel__establishment__company=company,
                 created_at__date__gte=first_day_previous_month,
                 created_at__date__lte=last_day_previous_month
@@ -831,7 +831,7 @@ def verify_blockchain_compliance(production_id):
     try:
         blockchain_service = BlockchainService()
         
-        production = Production.objects.get(id=production_id)
+        production = ProductionTemplate.objects.get(id=production_id)
         company = production.parcel.establishment.company
         
         # Only process if company has blockchain subscription
@@ -850,7 +850,7 @@ def verify_blockchain_compliance(production_id):
             'compliance_result': compliance_result
         }
         
-    except Production.DoesNotExist:
+    except ProductionTemplate.DoesNotExist:
         logger.error(f"Production {production_id} not found")
         return {'status': 'error', 'message': 'Production not found'}
     except Exception as e:
@@ -865,7 +865,7 @@ def issue_carbon_credits(production_id, credits_amount):
     try:
         blockchain_service = BlockchainService()
         
-        production = Production.objects.get(id=production_id)
+        production = ProductionTemplate.objects.get(id=production_id)
         company = production.parcel.establishment.company
         
         # Only process if company has blockchain subscription
@@ -885,7 +885,7 @@ def issue_carbon_credits(production_id, credits_amount):
             'credits_result': credits_result
         }
         
-    except Production.DoesNotExist:
+    except ProductionTemplate.DoesNotExist:
         logger.error(f"Production {production_id} not found")
         return {'status': 'error', 'message': 'Production not found'}
     except Exception as e:
