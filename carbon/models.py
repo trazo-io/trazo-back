@@ -411,6 +411,18 @@ class CarbonEntry(models.Model):
     evidence_photos = models.JSONField(default=list, blank=True, help_text='List of photo URLs as evidence')
     evidence_documents = models.JSONField(default=list, blank=True, help_text='List of document URLs as evidence')
     
+    # Additional verification fields added via migrations
+    external_verification_id = models.CharField(max_length=100, blank=True, default='')
+    gps_coordinates = models.JSONField(default=dict, blank=True)
+    verification_notes = models.TextField(blank=True, default='')
+    baseline_scenario = models.JSONField(default=dict, blank=True)
+    detected_patterns = models.JSONField(default=dict, blank=True)
+    financial_analysis = models.JSONField(default=dict, blank=True)
+    methodology_id = models.CharField(max_length=100, blank=True, default='')
+    monitoring_plan = models.JSONField(default=dict, blank=True)
+    registry_name = models.CharField(max_length=100, blank=True, default='')
+    registry_submission_id = models.CharField(max_length=100, blank=True, default='')
+    verification_report_url = models.URLField(blank=True, default='')
     
     created_at = models.DateTimeField(auto_now=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -434,7 +446,10 @@ class CarbonEntry(models.Model):
             models.Index(fields=['verification_level']),
             models.Index(fields=['audit_status']),
             models.Index(fields=['additionality_verified']),
-            models.Index(fields=['registry_verification_id'])
+            models.Index(fields=['registry_verification_id']),
+            models.Index(fields=['external_verification_id']),
+            models.Index(fields=['methodology_id']),
+            models.Index(fields=['registry_name']),
         ]
 
     def save(self, *args, **kwargs):

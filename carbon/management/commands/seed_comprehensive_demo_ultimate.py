@@ -221,6 +221,10 @@ class Command(BaseCommand):
         Company.objects.filter(name='GreenHarvest Agricultural Enterprises').delete()
         User.objects.filter(email='demo@trazo.io').delete()
         
+        # Clear carbon framework data to ensure fresh data
+        CarbonBenchmark.objects.all().delete()
+        CarbonSource.objects.all().delete()
+        
         self.stdout.write('   ✅ Existing demo data cleared')
 
     def create_demo_user(self):
@@ -298,37 +302,42 @@ class Command(BaseCommand):
 
     def create_subscription(self, company):
         """Create enterprise subscription showcasing full platform value"""
-        plan, _ = Plan.objects.get_or_create(
-            name='Enterprise',
-            defaults={
-                'slug': 'enterprise',
-                'description': 'Enterprise tier with unlimited features, dedicated support, and custom analytics',
-                'price': Decimal('499.00'),
-                'interval': 'monthly',
-                'features': {
-                    'unlimited_establishments': True,
-                    'unlimited_parcels': True,
-                    'unlimited_productions': True,
-                    'unlimited_scans': True,
-                    'unlimited_storage': True,
-                    'carbon_tracking': True,
-                    'blockchain_verification': True,
-                    'advanced_analytics': True,
-                    'custom_reporting': True,
-                    'api_access': True,
-                    'iot_integration': True,
-                    'usda_verification': True,
-                    'carbon_offset_marketplace': True,
-                    'white_label_options': True,
-                    'dedicated_support': True,
-                    'custom_integrations': True,
-                    'multi_language_support': True,
-                    'advanced_security': True,
-                    'audit_compliance': True,
-                    'premium_certifications': True
-                }
-            }
-        )
+        # Handle case where multiple plans exist with same name
+        try:
+            plan = Plan.objects.filter(name='Enterprise').first()
+            if not plan:
+                plan = Plan.objects.create(
+                    name='Enterprise',
+                    slug='enterprise',
+                    description='Enterprise tier with unlimited features, dedicated support, and custom analytics',
+                    price=float(Decimal('499.00')),
+                    interval='monthly',
+                    features={
+                        'unlimited_establishments': True,
+                        'unlimited_parcels': True,
+                        'unlimited_productions': True,
+                        'unlimited_scans': True,
+                        'unlimited_storage': True,
+                        'carbon_tracking': True,
+                        'blockchain_verification': True,
+                        'advanced_analytics': True,
+                        'custom_reporting': True,
+                        'api_access': True,
+                        'iot_integration': True,
+                        'usda_verification': True,
+                        'carbon_offset_marketplace': True,
+                        'white_label_options': True,
+                        'dedicated_support': True,
+                        'custom_integrations': True,
+                        'multi_language_support': True,
+                        'advanced_security': True,
+                        'audit_compliance': True,
+                        'premium_certifications': True
+                    }
+                )
+        except Exception as e:
+            # If there are multiple plans, just use the first one
+            plan = Plan.objects.filter(name='Enterprise').first()
         
         subscription, _ = Subscription.objects.get_or_create(
             company=company,
@@ -338,7 +347,7 @@ class Command(BaseCommand):
                 'current_period_start': timezone.now() - datetime.timedelta(days=750),  # Customer for 2+ years
                 'current_period_end': timezone.now() + datetime.timedelta(days=30),
                 'used_productions': 47,  # Heavy usage showing value
-                'used_storage_gb': Decimal('1247.8'),
+                'used_storage_gb': float(Decimal('1247.8')),
                 'scan_count': 28459,  # High consumer engagement
                 'stripe_subscription_id': 'sub_enterprise_demo_12345'
             }
@@ -414,7 +423,7 @@ class Command(BaseCommand):
                 defaults={
                     'category': category,
                     'unit': unit,
-                    'default_emission_factor': Decimal(str(factor)),
+                    'default_emission_factor': float(Decimal(str(factor))),
                     'description': description,
                     'usda_verified': abs(factor) > 0.01,  # All significant factors are verified
                     'usda_factors_based': abs(factor) > 0.01,
@@ -432,12 +441,12 @@ class Command(BaseCommand):
         self.stdout.write('   📊 Creating industry carbon benchmarks...')
         
         benchmarks_data = [
-            ('Citrus Production', 2024, 0.42, 0.25, 0.68, 'kg CO2e per kg fruit', 'Valencia and Navel oranges'),
-            ('Tree Nut Production', 2024, 0.58, 0.35, 0.85, 'kg CO2e per kg nuts', 'Almonds and walnuts'),
-            ('Avocado Production', 2024, 0.35, 0.22, 0.55, 'kg CO2e per kg fruit', 'Hass avocados'),
-            ('Berry Production', 2024, 0.28, 0.18, 0.45, 'kg CO2e per kg berries', 'Strawberries and blueberries'),
-            ('Leafy Greens', 2024, 0.15, 0.08, 0.28, 'kg CO2e per kg greens', 'Lettuce and spinach'),
-            ('Grain Production', 2024, 0.32, 0.18, 0.52, 'kg CO2e per kg grain', 'Wheat and barley'),
+            ('Citrus Production', 2025, 0.42, 0.25, 0.68, 'kg CO2e per kg fruit', 'Valencia and Navel oranges'),
+            ('Tree Nut Production', 2025, 0.58, 0.35, 0.85, 'kg CO2e per kg nuts', 'Almonds and walnuts'),
+            ('Avocado Production', 2025, 0.35, 0.22, 0.55, 'kg CO2e per kg fruit', 'Hass avocados'),
+            ('Berry Production', 2025, 0.28, 0.18, 0.45, 'kg CO2e per kg berries', 'Strawberries and blueberries'),
+            ('Leafy Greens', 2025, 0.15, 0.08, 0.28, 'kg CO2e per kg greens', 'Lettuce and spinach'),
+            ('Grain Production', 2025, 0.32, 0.18, 0.52, 'kg CO2e per kg grain', 'Wheat and barley'),
         ]
         
         for industry, year, avg, min_val, max_val, unit, description in benchmarks_data:
@@ -445,9 +454,9 @@ class Command(BaseCommand):
                 industry=industry,
                 year=year,
                 defaults={
-                    'average_emissions': Decimal(str(avg)),
-                    'min_emissions': Decimal(str(min_val)),
-                    'max_emissions': Decimal(str(max_val)),
+                    'average_emissions': float(Decimal(str(avg))),
+                    'min_emissions': float(Decimal(str(min_val))),
+                    'max_emissions': float(Decimal(str(max_val))),
                     'unit': unit,
                     'company_count': random.randint(250, 450),
                     'source': 'USDA Agricultural Research Service 2024',
@@ -470,8 +479,8 @@ class Command(BaseCommand):
                 'state': 'California',
                 'zip_code': '93711',
                 'country': 'USA',
-                'latitude': Decimal('36.7378'),
-                'longitude': Decimal('-119.7871'),
+                'latitude': float(Decimal('36.7378')),
+                'longitude': float(Decimal('-119.7871')),
                 'phone': '+1-559-248-7871',
                 'email': 'citrus@greenharvest.com',
                 'contact_phone': '+1-559-248-7871',
@@ -510,8 +519,8 @@ class Command(BaseCommand):
                 'state': 'California',
                 'zip_code': '93901',
                 'country': 'USA',
-                'latitude': Decimal('36.6777'),
-                'longitude': Decimal('-121.6555'),
+                'latitude': float(Decimal('36.6777')),
+                'longitude': float(Decimal('-121.6555')),
                 'phone': '+1-831-674-2642',
                 'email': 'innovation@greenharvest.com',
                 'contact_phone': '+1-831-674-2642',
@@ -550,8 +559,8 @@ class Command(BaseCommand):
                 'state': 'California',
                 'zip_code': '93308',
                 'country': 'USA',
-                'latitude': Decimal('35.3733'),
-                'longitude': Decimal('-119.0187'),
+                'latitude': float(Decimal('35.3733')),
+                'longitude': float(Decimal('-119.0187')),
                 'phone': '+1-661-227-2665',
                 'email': 'regenerative@greenharvest.com',
                 'contact_phone': '+1-661-227-2665',
@@ -627,22 +636,22 @@ class Command(BaseCommand):
                 name=config['name'],
                 defaults={
                     'unique_code': f"GH-CR-{config['name'][:3].upper()}-2024",
-                    'area': Decimal(str(config['area'])),
+                    'area': float(Decimal(str(config['area']))),
                     'soil_type': config['soil_type'],
                     'certification_type': config['certifications'],
                     'polygon': {
                         'type': 'Polygon',
                         'coordinates': [[
-                            [establishment.longitude + Decimal(str(config['lng_offset'])) - Decimal('0.02'), 
-                             establishment.latitude + Decimal(str(config['lat_offset'])) - Decimal('0.02')],
-                            [establishment.longitude + Decimal(str(config['lng_offset'])) + Decimal('0.02'), 
-                             establishment.latitude + Decimal(str(config['lat_offset'])) - Decimal('0.02')],
-                            [establishment.longitude + Decimal(str(config['lng_offset'])) + Decimal('0.02'), 
-                             establishment.latitude + Decimal(str(config['lat_offset'])) + Decimal('0.02')],
-                            [establishment.longitude + Decimal(str(config['lng_offset'])) - Decimal('0.02'), 
-                             establishment.latitude + Decimal(str(config['lat_offset'])) + Decimal('0.02')],
-                            [establishment.longitude + Decimal(str(config['lng_offset'])) - Decimal('0.02'), 
-                             establishment.latitude + Decimal(str(config['lat_offset'])) - Decimal('0.02')]
+                            [float(establishment.longitude + float(str(config['lng_offset'])) - float('0.02')), 
+                             float(establishment.latitude + float(str(config['lat_offset'])) - float('0.02'))],
+                            [float(establishment.longitude + float(str(config['lng_offset'])) + float('0.02')), 
+                             float(establishment.latitude + float(str(config['lat_offset'])) - float('0.02'))],
+                            [float(establishment.longitude + float(str(config['lng_offset'])) + float('0.02')), 
+                             float(establishment.latitude + float(str(config['lat_offset'])) + float('0.02'))],
+                            [float(establishment.longitude + float(str(config['lng_offset'])) - float('0.02')), 
+                             float(establishment.latitude + float(str(config['lat_offset'])) + float('0.02'))],
+                            [float(establishment.longitude + float(str(config['lng_offset'])) - float('0.02')), 
+                             float(establishment.latitude + float(str(config['lat_offset'])) - float('0.02'))]
                         ]]
                     },
                     'map_metadata': {
@@ -702,22 +711,22 @@ class Command(BaseCommand):
                 name=config['name'],
                 defaults={
                     'unique_code': f"GH-OIC-{i+1:02d}-2024",
-                    'area': Decimal(str(config['area'])),
+                    'area': float(Decimal(str(config['area']))),
                     'soil_type': 'Organic-enriched Salinas Clay Loam',
                     'certification_type': config['certification'],
                     'polygon': {
                         'type': 'Polygon',
                         'coordinates': [[
-                            [establishment.longitude - Decimal('0.01') + Decimal(str(i * 0.005)), 
-                             establishment.latitude - Decimal('0.01')],
-                            [establishment.longitude + Decimal('0.01') + Decimal(str(i * 0.005)), 
-                             establishment.latitude - Decimal('0.01')],
-                            [establishment.longitude + Decimal('0.01') + Decimal(str(i * 0.005)), 
-                             establishment.latitude + Decimal('0.01')],
-                            [establishment.longitude - Decimal('0.01') + Decimal(str(i * 0.005)), 
-                             establishment.latitude + Decimal('0.01')],
-                            [establishment.longitude - Decimal('0.01') + Decimal(str(i * 0.005)), 
-                             establishment.latitude - Decimal('0.01')]
+                            [float(establishment.longitude - float('0.01') + float(str(i * 0.005))), 
+                             float(establishment.latitude - float('0.01'))],
+                            [float(establishment.longitude + float('0.01') + float(str(i * 0.005))), 
+                             float(establishment.latitude - float('0.01'))],
+                            [float(establishment.longitude + float('0.01') + float(str(i * 0.005))), 
+                             float(establishment.latitude + float('0.01'))],
+                            [float(establishment.longitude - float('0.01') + float(str(i * 0.005))), 
+                             float(establishment.latitude + float('0.01'))],
+                            [float(establishment.longitude - float('0.01') + float(str(i * 0.005))), 
+                             float(establishment.latitude - float('0.01'))]
                         ]]
                     },
                     'map_metadata': {
@@ -764,17 +773,17 @@ class Command(BaseCommand):
                 name=config['name'],
                 defaults={
                     'unique_code': f"GH-RGR-{i+1:02d}-2024",
-                    'area': Decimal(str(config['area'])),
+                    'area': float(Decimal(str(config['area']))),
                     'soil_type': 'Wasco Sandy Loam',
                     'certification_type': 'Regenerative Organic Certified',
                     'polygon': {
                         'type': 'Polygon',
                         'coordinates': [[
-                            [establishment.longitude - Decimal('0.02'), establishment.latitude - Decimal('0.02')],
-                            [establishment.longitude + Decimal('0.02'), establishment.latitude - Decimal('0.02')],
-                            [establishment.longitude + Decimal('0.02'), establishment.latitude + Decimal('0.02')],
-                            [establishment.longitude - Decimal('0.02'), establishment.latitude + Decimal('0.02')],
-                            [establishment.longitude - Decimal('0.02'), establishment.latitude - Decimal('0.02')]
+                            [float(establishment.longitude - float('0.02')), float(establishment.latitude - float('0.02'))],
+                            [float(establishment.longitude + float('0.02')), float(establishment.latitude - float('0.02'))],
+                            [float(establishment.longitude + float('0.02')), float(establishment.latitude + float('0.02'))],
+                            [float(establishment.longitude - float('0.02')), float(establishment.latitude + float('0.02'))],
+                            [float(establishment.longitude - float('0.02')), float(establishment.latitude - float('0.02'))]
                         ]]
                     },
                     'map_metadata': {
@@ -799,36 +808,29 @@ class Command(BaseCommand):
         
         products = {}
         product_configs = [
-            # Premium Citrus
+            # Premium Citrus (keeping names under 30 characters)
             ('valencia_orange', 'Premium Valencia Orange', 'Carbon-negative premium Valencia oranges with verified sustainable practices. Perfect for fresh consumption and premium juice markets. Blockchain-verified from tree to table.', 'kg'),
             ('navel_orange', 'Heritage Navel Orange', 'Sweet, seedless Navel oranges from heritage trees. Regenerative farming practices ensure superior flavor while sequestering carbon. Premium export quality.', 'kg'),
             ('nonpareil_almond', 'Premium Nonpareil Almond', 'Gourmet Nonpareil almonds grown with bee-friendly practices. Superior blanching characteristics and exceptional taste. Carbon-neutral certified.', 'kg'),
             
             # Organic Innovation Products
             ('hass_avocado', 'Organic Hass Avocado', 'Certified organic Hass avocados with perfect ripeness guarantee. Grown using biodynamic principles and innovative water conservation. Zero chemical residues.', 'kg'),
-            ('organic_strawberry', 'Ultra-Premium Organic Strawberry', 'Pesticide-free strawberries with exceptional flavor and extended shelf life. Grown in substrate systems with beneficial insect partnerships.', 'kg'),
+            ('organic_strawberry', 'Premium Organic Strawberry', 'Pesticide-free strawberries with exceptional flavor and extended shelf life. Grown in substrate systems with beneficial insect partnerships.', 'kg'),
             ('butter_lettuce', 'Hydroponic Butter Lettuce', 'Premium butterhead lettuce grown in climate-controlled hydroponic systems. 95% water savings, year-round availability, exceptional freshness.', 'kg'),
             
             # Regenerative Grain Products
-            ('organic_wheat', 'Regenerative Ancient Grain Wheat', 'Ancient grain wheat varieties grown using carbon farming practices. Superior nutrition profile and exceptional baking qualities. Supports soil health.', 'kg'),
-            ('cover_crop_mix', 'Carbon Farming Cover Crop Mix', 'Specialized multi-species cover crop seeds designed for maximum carbon sequestration and soil health improvement. Research-backed blend.', 'kg'),
+            ('organic_wheat', 'Regenerative Wheat', 'Ancient grain wheat varieties grown using carbon farming practices. Superior nutrition profile and exceptional baking qualities. Supports soil health.', 'kg'),
+            ('cover_crop_mix', 'Cover Crop Mix', 'Specialized multi-species cover crop seeds designed for maximum carbon sequestration and soil health improvement. Research-backed blend.', 'kg'),
         ]
         
         for key, name, description, unit in product_configs:
+            # Enhance description with unit and sustainability attributes since Product model is simple
+            enhanced_description = f"{description}\n\nUnit: {unit}\nCategory: {'Premium Sustainable' if 'Premium' in name else 'Organic Certified' if 'Organic' in name else 'Regenerative'}\nAttributes: Blockchain verified, fully traceable, {'carbon-negative' if 'Premium' in name else 'certified organic' if 'Organic' in name else 'regenerative agriculture'}"
+            
             product, _ = Product.objects.get_or_create(
                 name=name,
                 defaults={
-                    'description': description,
-                    'unit': unit,
-                    'product_category': 'premium_sustainable' if 'Premium' in name else 'organic_certified' if 'Organic' in name else 'regenerative',
-                    'sustainability_attributes': {
-                        'carbon_negative': 'Premium' in name,
-                        'organic_certified': 'Organic' in name,
-                        'regenerative': 'Regenerative' in name,
-                        'blockchain_verified': True,
-                        'traceable': True,
-                        'premium_quality': True
-                    }
+                    'description': enhanced_description
                 }
             )
             products[key] = product
@@ -841,6 +843,9 @@ class Command(BaseCommand):
     def create_valencia_orange_production(self, parcel, product, user, year_offset, year_label):
         """Create Valencia orange production with comprehensive carbon tracking"""
         productions = []
+        
+        # Convert parcel area to float for calculations
+        area = float(parcel.area)
         
         # Determine if this is current, recent, or historical
         is_current = year_offset == 0
@@ -858,13 +863,13 @@ class Command(BaseCommand):
             start_date=timezone.now() - timezone.timedelta(days=year_offset + 365),
             finish_date=None if is_current else timezone.now() - timezone.timedelta(days=year_offset + 60),
             published=not is_current,
-            production_amount=int(parcel.area * 28.5 * yield_scaling),  # kg per hectare (realistic citrus yield)
+            production_amount=int(area * 28.5 * yield_scaling),  # kg per hectare (realistic citrus yield)
             description=f'Premium Valencia oranges {year_label} - Carbon-negative production with verified regenerative practices and {int((yield_scaling - 1) * 100)}% yield improvement through sustainable intensification.',
             is_outdoor=True,
             age_of_plants=8 + (year_offset // 365),  # Trees getting older
-            number_of_plants=int(parcel.area * 120),  # 120 trees per hectare
-            soil_ph=Decimal('6.8'),
-            earning=int(parcel.area * 28.5 * yield_scaling * 3.25 * (1 + (yield_scaling - 1) * 2)),  # Premium pricing increases with sustainability
+            number_of_plants=int(area * 120),  # 120 trees per hectare
+            soil_ph=float(Decimal('6.8')),
+            earning=int(area * 28.5 * yield_scaling * 3.25 * (1 + (yield_scaling - 1) * 2)),  # Premium pricing increases with sustainability
             extra_data={
                 'variety': 'Valencia',
                 'harvest_window': 'April-June',
@@ -889,6 +894,9 @@ class Command(BaseCommand):
     def create_citrus_event_sequence_with_carbon(self, production, user, year_offset, carbon_efficiency):
         """Create realistic citrus production events with accurate carbon calculations"""
         
+        # Convert parcel area to float for calculations
+        area = float(production.parcel.area)
+        
         # 1. SOIL PREPARATION & CARBON SEQUESTRATION (January)
         soil_prep = SoilManagementEvent.objects.create(
             history=production,
@@ -896,11 +904,11 @@ class Command(BaseCommand):
             date=production.start_date + timezone.timedelta(days=15),
             type='CO',  # Cover crop
             description='Multi-species cover crop establishment for carbon sequestration',
-            soil_ph=Decimal('6.8'),
-            organic_matter_percentage=Decimal('4.2'),
+            soil_ph=float(Decimal('6.8')),
+            organic_matter_percentage=float(Decimal('4.2')),
             amendment_type='9-species cover crop mix (legumes, brassicas, grasses)',
-            amendment_amount=f'{int(production.parcel.area * 25)} kg seed mix',
-            carbon_sequestration_potential=Decimal(str(production.parcel.area * 2.5 * carbon_efficiency)),
+            amendment_amount=f'{int(area * 25)} kg seed mix',
+            carbon_sequestration_potential=float(Decimal(str(area * 2.5 * carbon_efficiency))),
             extra_data={
                 'species_count': 9,
                 'nitrogen_fixation_potential': f'{int(production.parcel.area * 120)} kg N/year',
@@ -915,7 +923,7 @@ class Command(BaseCommand):
             production, user, soil_prep,
             'Cover Crop Sequestration',
             production.parcel.area,  # hectares
-            -production.parcel.area * 2.5 * carbon_efficiency,  # negative CO2e
+            -float(production.parcel.area) * 2.5 * carbon_efficiency,  # negative CO2e
             f'Cover crop carbon sequestration - {soil_prep.amendment_type}'
         )
 
@@ -959,7 +967,6 @@ class Command(BaseCommand):
             created_by=user,
             name='AI-Optimized Solar Irrigation System',
             date=production.start_date + timezone.timedelta(days=75),
-            type='IR',
             observation=f'Precision irrigation with {int(production.parcel.area * 4)} soil moisture sensors. 65% water reduction vs industry average. 100% solar powered with battery backup.',
             extra_data={
                 'sensor_count': int(production.parcel.area * 4),
@@ -986,7 +993,6 @@ class Command(BaseCommand):
         habitat_event = ProductionEvent.objects.create(
             history=production,
             created_by=user,
-            name='Beneficial Insect Habitat Enhancement',
             type='PL',
             date=production.start_date + timezone.timedelta(days=105),
             observation=f'Established {int(production.parcel.area * 0.1)} hectares of native flowering plants. Reduced pesticide needs by 90%. Supporting 25+ beneficial species.',
@@ -1037,20 +1043,24 @@ class Command(BaseCommand):
         ipm_event = PestManagementEvent.objects.create(
             history=production,
             created_by=user,
-            name='Organic IPM Program',
+            description='Organic IPM Program',
             date=production.start_date + timezone.timedelta(days=165),
-            pest_type='Citrus leafminer, Scale insects, Aphids',
-            treatment_type='biological',
-            product_used='Beneficial insect releases + organic oils',
-            area_treated=production.parcel.area,
-            effectiveness='high',
-            environmental_impact='positive',
+            type='IP',  # IPM Implementation
+            pest_species='Citrus leafminer, Scale insects, Aphids',
+            pest_pressure_level='Medium',
+            beneficial_species='Beneficial insects + organic oils',
+            release_quantity='50000 beneficial insects',
+            action_threshold_met=True,
+            ipm_strategy='Beneficial insect releases + organic oils targeting citrus leafminer and aphids',
             extra_data={
                 'beneficial_insects_released': 50000,
                 'organic_treatments': ['Neem oil', 'Insecticidal soap', 'Bacillus thuringiensis'],
                 'pest_reduction_percentage': 95,
                 'cost_vs_conventional': '-45%',
-                'residue_free': True
+                'residue_free': True,
+                'area_treated': production.parcel.area,
+                'effectiveness': 'high',
+                'environmental_impact': 'positive'
             }
         )
         self.events_created += 1
@@ -1060,21 +1070,22 @@ class Command(BaseCommand):
             harvest_event = ProductionEvent.objects.create(
                 history=production,
                 created_by=user,
-                name='Premium Hand Harvest',
+                description='Premium Hand Harvest',
                 type='HA',
                 date=production.finish_date - timezone.timedelta(days=30),
-                amount=production.production_amount,
-                unit='kg',
-                quality_grade='Premium Export',
-                destination='Premium markets + Direct-to-consumer',
-                notes=f'Hand-picked at optimal ripeness. {production.production_amount:,} kg harvested. Premium pricing achieved.',
+                observation=f'Hand-picked at optimal ripeness. {production.production_amount:,} kg harvested. Premium pricing achieved. Quality: Premium Export. Destination: Premium markets + Direct-to-consumer.',
+                index=7,
                 extra_data={
                     'harvest_method': 'selective hand picking',
                     'crew_size': 24,
                     'harvest_duration_days': 21,
                     'quality_rejection_rate': '2.1%',
                     'brix_levels': '12.8-14.5',
-                    'premium_market_percentage': 85
+                    'premium_market_percentage': 85,
+                    'amount': production.production_amount,
+                    'unit': 'kg',
+                    'quality_grade': 'Premium Export',
+                    'destination': 'Premium markets + Direct-to-consumer'
                 }
             )
             self.events_created += 1
@@ -1083,21 +1094,22 @@ class Command(BaseCommand):
             processing_event = ProductionEvent.objects.create(
                 history=production,
                 created_by=user,
-                name='Solar-Powered Processing & Cold Storage',
+                description='Solar-Powered Processing & Cold Storage',
                 type='PR',
                 date=production.finish_date - timezone.timedelta(days=15),
-                amount=production.production_amount * Decimal('0.98'),  # After quality sorting
-                unit='kg',
-                quality_grade='Premium Export',
-                destination='Premium retail + Export markets',
-                notes='Solar-powered washing, grading, and cold storage. Blockchain verification applied.',
+                observation='Solar-powered washing, grading, and cold storage. Blockchain verification applied.',
+                index=8,
                 extra_data={
                     'processing_energy_kwh': production.production_amount * 0.08,
                     'cold_storage_days': 14,
                     'packaging_materials_kg': production.production_amount * 0.05,
                     'solar_energy_percentage': 100,
                     'blockchain_hash': f'0x{uuid.uuid4().hex[:16]}',
-                    'traceability_score': '100%'
+                    'traceability_score': '100%',
+                    'amount': float(production.production_amount) * 0.98,
+                    'unit': 'kg',
+                    'quality_grade': 'Premium Export',
+                    'destination': 'Premium retail + Export markets'
                 }
             )
             self.events_created += 1
@@ -1106,8 +1118,8 @@ class Command(BaseCommand):
             self.create_accurate_carbon_entry(
                 production, user, processing_event,
                 'Solar Panel Generation',
-                float(production.production_amount * Decimal('0.08')),  # kWh
-                -float(production.production_amount * Decimal('0.08')) * 0.388,  # negative CO2e
+                float(production.production_amount) * 0.08,  # kWh
+                -float(production.production_amount) * 0.08 * 0.388,  # negative CO2e
                 'Solar-powered post-harvest processing'
             )
             
@@ -1115,8 +1127,8 @@ class Command(BaseCommand):
             self.create_accurate_carbon_entry(
                 production, user, processing_event,
                 'Cardboard Packaging',
-                float(production.production_amount * Decimal('0.05')),  # kg packaging
-                float(production.production_amount * Decimal('0.05')) * 1.05,  # CO2e
+                float(production.production_amount) * 0.05,  # kg packaging
+                float(production.production_amount) * 0.05 * 1.05,  # CO2e
                 'Recyclable cardboard packaging materials'
             )
 
@@ -1129,61 +1141,36 @@ class Command(BaseCommand):
             # Determine entry type
             entry_type = 'offset' if co2e_amount < 0 else 'emission'
             
-            # Create carbon entry with comprehensive verification data
-            carbon_entry = CarbonEntry.objects.create(
-                establishment=production.parcel.establishment,
-                production=production,
-                created_by=user,
-                source=carbon_source,
-                type=entry_type,
-                year=event.date.year if hasattr(event, 'date') else timezone.now().year,
-                amount=abs(amount),
-                co2e_amount=co2e_amount,
-                description=description,
-                timestamp=event.date if hasattr(event, 'date') else timezone.now(),
-                usda_verified=True,
-                usda_factors_based=True,
-                verification_status='usda_verified',
-                data_source='USDA Agricultural Research Service / IPCC Guidelines',
-                additionality_verified=True,
-                additionality_evidence=f'Verified {event.__class__.__name__} data with USDA emission factors',
-                documentation_complete=True,
-                evidence_requirements_met=True,
-                methodology_template=f'USDA_{carbon_source.category.upper()}',
-                permanence_plan='Event-based carbon tracking with verified methodologies',
-                registry_verification_id=f'USDA-{production.id}-{event.id}-{carbon_source.id}',
-                external_verification_id=f'TRAZO-{uuid.uuid4().hex[:16]}',
-                gps_coordinates=json.dumps({
-                    'lat': float(production.parcel.establishment.latitude),
-                    'lng': float(production.parcel.establishment.longitude),
-                    'parcel': production.parcel.name
-                }),
-                verification_notes=f'Calculated using USDA emission factor {carbon_source.default_emission_factor} {carbon_source.unit}',
-                baseline_scenario=json.dumps({
-                    'conventional_practice': f'Standard {carbon_source.category} usage',
-                    'improvement': description
-                }),
-                detected_patterns=json.dumps([]),
-                financial_analysis=json.dumps({
-                    'cost_per_kg_co2e': round(abs(amount * 0.05), 2) if amount > 0 else 0,
-                    'savings_potential': 'Achieved through sustainable practices'
-                }),
-                methodology_id=f'USDA_{carbon_source.category.upper()}_2024',
-                monitoring_plan=json.dumps({
-                    'frequency': 'per_event',
-                    'verification': 'usda_factors',
-                    'accuracy': 'high'
-                }),
-                registry_name='USDA Agricultural Carbon Registry',
-                registry_submission_id=f'SUB-{production.id}-{event.id}',
-                verification_report_url='https://usda.gov/carbon-verification',
-                audit_status='verified',
-                effective_amount=abs(co2e_amount) * Decimal('0.95'),  # 95% confidence
-                evidence_documents=json.dumps([]),
-                evidence_photos=json.dumps([]),
-                trust_score=Decimal('0.95'),
-                verification_level='usda_certified'
-            )
+                    # Create carbon entry with proper verification data
+        carbon_entry = CarbonEntry.objects.create(
+            establishment=production.parcel.establishment,
+            production=production,
+            created_by=user,
+            source=carbon_source,
+            type=entry_type,
+            year=2025,  # Use 2025 as the demo year for all carbon entries
+            amount=abs(amount),
+            co2e_amount=co2e_amount,
+            description=description,
+            timestamp=event.date if hasattr(event, 'date') else timezone.now(),
+            usda_verified=True,
+            usda_factors_based=True,
+            verification_status='usda_verified',
+            data_source='USDA Agricultural Research Service / IPCC Guidelines',
+            additionality_verified=True,
+            additionality_evidence=f'Verified {event.__class__.__name__} data with USDA emission factors',
+            documentation_complete=True,
+            evidence_requirements_met=True,
+            methodology_template=f'USDA_{carbon_source.category.upper()}',
+            permanence_plan='Event-based carbon tracking with verified methodologies',
+            registry_verification_id=f'USDA-{production.id}-{event.id}-{carbon_source.id}',
+            audit_status='passed',
+            effective_amount=float(abs(co2e_amount)) * 0.95,  # 95% confidence
+            evidence_documents=[],
+            evidence_photos=[],
+            trust_score=0.95,
+            verification_level='certified_project'
+        )
             
             self.carbon_entries_created += 1
             return carbon_entry
@@ -1216,7 +1203,7 @@ class Command(BaseCommand):
             is_outdoor=True,
             age_of_plants=6 + (year_offset // 365),
             number_of_plants=int(parcel.area * 130),  # Higher density for Navels
-            soil_ph=Decimal('7.0'),
+            soil_ph=7.0,
             earning=int(parcel.area * 32.0 * yield_scaling * 3.85 * (1 + (yield_scaling - 1) * 2.5)),
             extra_data={
                 'variety': 'Navel',
@@ -1260,7 +1247,7 @@ class Command(BaseCommand):
             is_outdoor=True,
             age_of_plants=5 + (year_offset // 365),
             number_of_plants=int(parcel.area * 170),
-            soil_ph=Decimal('7.2'),
+            soil_ph=float(Decimal('7.2')),
             earning=int(parcel.area * 2.8 * yield_scaling * 6500),  # Premium almond pricing
             extra_data={
                 'variety': 'Nonpareil with Monterey pollinizers',
@@ -1310,7 +1297,6 @@ class Command(BaseCommand):
             created_by=user,
             name='Premium Bee Pollination Service',
             date=production.start_date + timezone.timedelta(days=60),
-            type='PL',
             observation=f'Placed {int(production.parcel.area * 5)} strong bee hives. Achieved 82% nut set. Enhanced pollinator habitat with native flowering plants.',
             extra_data={
                 'hive_count': int(production.parcel.area * 5),
@@ -1328,20 +1314,20 @@ class Command(BaseCommand):
             harvest_event = ProductionEvent.objects.create(
                 history=production,
                 created_by=user,
-                name='Precision Almond Harvest',
+                description='Precision Almond Harvest',
                 type='HA',
                 date=production.finish_date - timezone.timedelta(days=15),
-                amount=production.production_amount,
-                unit='tons',
-                quality_grade='Premium Export',
-                destination='Premium export markets',
-                notes=f'Mechanical harvest with optimal timing. {production.production_amount} tons harvested at 6.5% moisture.',
+                observation=f'Mechanical harvest with optimal timing. {production.production_amount} tons harvested at 6.5% moisture.',
                 extra_data={
                     'harvest_method': 'tree shaker + sweeper',
                     'moisture_content': '6.5%',
                     'quality_grade_distribution': {'Premium': 85, 'Standard': 15},
                     'hull_split_timing': 'optimal',
-                    'equipment_efficiency': 'high'
+                    'equipment_efficiency': 'high',
+                    'amount': production.production_amount,
+                    'unit': 'tons',
+                    'quality_grade': 'Premium Export',
+                    'destination': 'Premium export markets'
                 }
             )
             self.events_created += 1
@@ -1380,7 +1366,7 @@ class Command(BaseCommand):
             is_outdoor=True,
             age_of_plants=8 + (year_offset // 365),  # Trees getting older
             number_of_plants=int(parcel.area * 120),  # 120 trees per hectare
-            soil_ph=Decimal('6.8'),
+            soil_ph=float(Decimal('6.8')),
             earning=int(parcel.area * 28.5 * yield_scaling * 3.25 * (1 + (yield_scaling - 1) * 2)),  # Premium pricing increases with sustainability
             extra_data={
                 'variety': 'Hass',
@@ -1413,11 +1399,11 @@ class Command(BaseCommand):
             date=production.start_date + timezone.timedelta(days=15),
             type='CO',  # Cover crop
             description='Multi-species cover crop establishment for carbon sequestration',
-            soil_ph=Decimal('6.8'),
-            organic_matter_percentage=Decimal('4.2'),
+            soil_ph=float(Decimal('6.8')),
+            organic_matter_percentage=float(Decimal('4.2')),
             amendment_type='9-species cover crop mix (legumes, brassicas, grasses)',
             amendment_amount=f'{int(production.parcel.area * 25)} kg seed mix',
-            carbon_sequestration_potential=Decimal(str(production.parcel.area * 2.5 * carbon_efficiency)),
+            carbon_sequestration_potential=float(Decimal(str(production.parcel.area * 2.5 * carbon_efficiency))),
             extra_data={
                 'species_count': 9,
                 'nitrogen_fixation_potential': f'{int(production.parcel.area * 120)} kg N/year',
@@ -1432,7 +1418,7 @@ class Command(BaseCommand):
             production, user, soil_prep,
             'Cover Crop Sequestration',
             production.parcel.area,  # hectares
-            -production.parcel.area * 2.5 * carbon_efficiency,  # negative CO2e
+            -float(production.parcel.area) * 2.5 * carbon_efficiency,  # negative CO2e
             f'Cover crop carbon sequestration - {soil_prep.amendment_type}'
         )
 
@@ -1476,7 +1462,6 @@ class Command(BaseCommand):
             created_by=user,
             name='AI-Optimized Solar Irrigation System',
             date=production.start_date + timezone.timedelta(days=75),
-            type='IR',
             observation=f'Precision irrigation with {int(production.parcel.area * 4)} soil moisture sensors. 65% water reduction vs industry average. 100% solar powered with battery backup.',
             extra_data={
                 'sensor_count': int(production.parcel.area * 4),
@@ -1503,7 +1488,6 @@ class Command(BaseCommand):
         habitat_event = ProductionEvent.objects.create(
             history=production,
             created_by=user,
-            name='Beneficial Insect Habitat Enhancement',
             type='PL',
             date=production.start_date + timezone.timedelta(days=105),
             observation=f'Established {int(production.parcel.area * 0.1)} hectares of native flowering plants. Reduced pesticide needs by 90%. Supporting 25+ beneficial species.',
@@ -1554,20 +1538,24 @@ class Command(BaseCommand):
         ipm_event = PestManagementEvent.objects.create(
             history=production,
             created_by=user,
-            name='Organic IPM Program',
+            description='Organic IPM Program',
             date=production.start_date + timezone.timedelta(days=165),
-            pest_type='Citrus leafminer, Scale insects, Aphids',
-            treatment_type='biological',
-            product_used='Beneficial insect releases + organic oils',
-            area_treated=production.parcel.area,
-            effectiveness='high',
-            environmental_impact='positive',
+            type='IP',  # IPM Implementation
+            pest_species='Citrus leafminer, Scale insects, Aphids',
+            pest_pressure_level='Medium',
+            beneficial_species='Beneficial insects + organic oils',
+            release_quantity=50000,
+            action_threshold_met=True,
             extra_data={
+                'imp_strategy': 'Beneficial insect releases + organic oils targeting citrus leafminer and aphids',
                 'beneficial_insects_released': 50000,
                 'organic_treatments': ['Neem oil', 'Insecticidal soap', 'Bacillus thuringiensis'],
                 'pest_reduction_percentage': 95,
                 'cost_vs_conventional': '-45%',
-                'residue_free': True
+                'residue_free': True,
+                'area_treated': production.parcel.area,
+                'effectiveness': 'high',
+                'environmental_impact': 'positive'
             }
         )
         self.events_created += 1
@@ -1577,15 +1565,16 @@ class Command(BaseCommand):
             harvest_event = ProductionEvent.objects.create(
                 history=production,
                 created_by=user,
-                name='Premium Hand Harvest',
-                type='HA',
                 date=production.finish_date - timezone.timedelta(days=30),
-                amount=production.production_amount,
-                unit='kg',
-                quality_grade='Premium Export',
-                destination='Premium markets + Direct-to-consumer',
-                notes=f'Hand-picked at optimal ripeness. {production.production_amount:,} kg harvested. Premium pricing achieved.',
+                type='HA',
+                description='Premium Hand Harvest',
+                observation=f'Hand-picked at optimal ripeness. {production.production_amount:,} kg harvested. Premium pricing achieved.',
                 extra_data={
+                    'name': 'Premium Hand Harvest',
+                    'amount': production.production_amount,
+                    'unit': 'kg',
+                    'quality_grade': 'Premium Export',
+                    'destination': 'Premium markets + Direct-to-consumer',
                     'harvest_method': 'selective hand picking',
                     'crew_size': 24,
                     'harvest_duration_days': 21,
@@ -1600,15 +1589,16 @@ class Command(BaseCommand):
             processing_event = ProductionEvent.objects.create(
                 history=production,
                 created_by=user,
-                name='Solar-Powered Processing & Cold Storage',
-                type='PR',
                 date=production.finish_date - timezone.timedelta(days=15),
-                amount=production.production_amount * Decimal('0.98'),  # After quality sorting
-                unit='kg',
-                quality_grade='Premium Export',
-                destination='Premium retail + Export markets',
-                notes='Solar-powered washing, grading, and cold storage. Blockchain verification applied.',
+                type='PR',
+                description='Solar-Powered Processing & Cold Storage',
+                observation='Solar-powered washing, grading, and cold storage. Blockchain verification applied.',
                 extra_data={
+                    'name': 'Solar-Powered Processing & Cold Storage',
+                    'amount': float(production.production_amount) * 0.98,  # After quality sorting
+                    'unit': 'kg',
+                    'quality_grade': 'Premium Export',
+                    'destination': 'Premium retail + Export markets',
                     'processing_energy_kwh': production.production_amount * 0.08,
                     'cold_storage_days': 14,
                     'packaging_materials_kg': production.production_amount * 0.05,
@@ -1623,8 +1613,8 @@ class Command(BaseCommand):
             self.create_accurate_carbon_entry(
                 production, user, processing_event,
                 'Solar Panel Generation',
-                float(production.production_amount * Decimal('0.08')),  # kWh
-                -float(production.production_amount * Decimal('0.08')) * 0.388,  # negative CO2e
+                float(production.production_amount) * 0.08,  # kWh
+                -float(production.production_amount) * 0.08 * 0.388,  # negative CO2e
                 'Solar-powered post-harvest processing'
             )
             
@@ -1632,8 +1622,8 @@ class Command(BaseCommand):
             self.create_accurate_carbon_entry(
                 production, user, processing_event,
                 'Cardboard Packaging',
-                float(production.production_amount * Decimal('0.05')),  # kg packaging
-                float(production.production_amount * Decimal('0.05')) * 1.05,  # CO2e
+                float(production.production_amount) * 0.05,  # kg packaging
+                float(production.production_amount) * 0.05 * 1.05,  # CO2e
                 'Recyclable cardboard packaging materials'
             )
 
@@ -1662,7 +1652,7 @@ class Command(BaseCommand):
             is_outdoor=True,
             age_of_plants=8 + (year_offset // 365),  # Plants getting older
             number_of_plants=int(parcel.area * 120),  # 120 plants per hectare
-            soil_ph=Decimal('6.8'),
+            soil_ph=float(Decimal('6.8')),
             earning=int(parcel.area * 28.5 * yield_scaling * 3.25 * (1 + (yield_scaling - 1) * 2)),  # Premium pricing increases with sustainability
             extra_data={
                 'variety': 'Organic Strawberry',
@@ -1695,11 +1685,11 @@ class Command(BaseCommand):
             date=production.start_date + timezone.timedelta(days=15),
             type='CO',  # Cover crop
             description='Multi-species cover crop establishment for carbon sequestration',
-            soil_ph=Decimal('6.8'),
-            organic_matter_percentage=Decimal('4.2'),
+            soil_ph=float(Decimal('6.8')),
+            organic_matter_percentage=float(Decimal('4.2')),
             amendment_type='9-species cover crop mix (legumes, brassicas, grasses)',
             amendment_amount=f'{int(production.parcel.area * 25)} kg seed mix',
-            carbon_sequestration_potential=Decimal(str(production.parcel.area * 2.5 * carbon_efficiency)),
+            carbon_sequestration_potential=float(Decimal(str(production.parcel.area * 2.5 * carbon_efficiency))),
             extra_data={
                 'species_count': 9,
                 'nitrogen_fixation_potential': f'{int(production.parcel.area * 120)} kg N/year',
@@ -1714,7 +1704,7 @@ class Command(BaseCommand):
             production, user, soil_prep,
             'Cover Crop Sequestration',
             production.parcel.area,  # hectares
-            -production.parcel.area * 2.5 * carbon_efficiency,  # negative CO2e
+            -float(production.parcel.area) * 2.5 * carbon_efficiency,  # negative CO2e
             f'Cover crop carbon sequestration - {soil_prep.amendment_type}'
         )
 
@@ -1758,7 +1748,6 @@ class Command(BaseCommand):
             created_by=user,
             name='AI-Optimized Solar Irrigation System',
             date=production.start_date + timezone.timedelta(days=75),
-            type='IR',
             observation=f'Precision irrigation with {int(production.parcel.area * 4)} soil moisture sensors. 65% water reduction vs industry average. 100% solar powered with battery backup.',
             extra_data={
                 'sensor_count': int(production.parcel.area * 4),
@@ -1785,9 +1774,9 @@ class Command(BaseCommand):
         habitat_event = ProductionEvent.objects.create(
             history=production,
             created_by=user,
-            name='Beneficial Insect Habitat Enhancement',
             type='PL',
             date=production.start_date + timezone.timedelta(days=105),
+            description='Beneficial Insect Habitat Establishment',
             observation=f'Established {int(production.parcel.area * 0.1)} hectares of native flowering plants. Reduced pesticide needs by 90%. Supporting 25+ beneficial species.',
             extra_data={
                 'habitat_area_hectares': production.parcel.area * 0.1,
@@ -1805,15 +1794,16 @@ class Command(BaseCommand):
             harvest_event = ProductionEvent.objects.create(
                 history=production,
                 created_by=user,
-                name='Premium Hand Harvest',
-                type='HA',
                 date=production.finish_date - timezone.timedelta(days=30),
-                amount=production.production_amount,
-                unit='kg',
-                quality_grade='Premium Export',
-                destination='Premium markets + Direct-to-consumer',
-                notes=f'Hand-picked at optimal ripeness. {production.production_amount:,} kg harvested. Premium pricing achieved.',
+                type='HA',
+                description='Premium Hand Harvest',
+                observation=f'Hand-picked at optimal ripeness. {production.production_amount:,} kg harvested. Premium pricing achieved.',
                 extra_data={
+                    'name': 'Premium Hand Harvest',
+                    'amount': production.production_amount,
+                    'unit': 'kg',
+                    'quality_grade': 'Premium Export',
+                    'destination': 'Premium markets + Direct-to-consumer',
                     'harvest_method': 'selective hand picking',
                     'crew_size': 24,
                     'harvest_duration_days': 21,
@@ -1828,15 +1818,16 @@ class Command(BaseCommand):
             processing_event = ProductionEvent.objects.create(
                 history=production,
                 created_by=user,
-                name='Solar-Powered Processing & Cold Storage',
-                type='PR',
                 date=production.finish_date - timezone.timedelta(days=15),
-                amount=production.production_amount * Decimal('0.98'),  # After quality sorting
-                unit='kg',
-                quality_grade='Premium Export',
-                destination='Premium retail + Export markets',
-                notes='Solar-powered washing, grading, and cold storage. Blockchain verification applied.',
+                type='PR',
+                description='Solar-Powered Processing & Cold Storage',
+                observation='Solar-powered washing, grading, and cold storage. Blockchain verification applied.',
                 extra_data={
+                    'name': 'Solar-Powered Processing & Cold Storage',
+                    'amount': float(production.production_amount) * 0.98,  # After quality sorting
+                    'unit': 'kg',
+                    'quality_grade': 'Premium Export',
+                    'destination': 'Premium retail + Export markets',
                     'processing_energy_kwh': production.production_amount * 0.08,
                     'cold_storage_days': 14,
                     'packaging_materials_kg': production.production_amount * 0.05,
@@ -1851,8 +1842,8 @@ class Command(BaseCommand):
             self.create_accurate_carbon_entry(
                 production, user, processing_event,
                 'Solar Panel Generation',
-                float(production.production_amount * Decimal('0.08')),  # kWh
-                -float(production.production_amount * Decimal('0.08')) * 0.388,  # negative CO2e
+                float(production.production_amount) * 0.08,  # kWh
+                -float(production.production_amount) * 0.08 * 0.388,  # negative CO2e
                 'Solar-powered post-harvest processing'
             )
             
@@ -1860,8 +1851,8 @@ class Command(BaseCommand):
             self.create_accurate_carbon_entry(
                 production, user, processing_event,
                 'Cardboard Packaging',
-                float(production.production_amount * Decimal('0.05')),  # kg packaging
-                float(production.production_amount * Decimal('0.05')) * 1.05,  # CO2e
+                float(production.production_amount) * 0.05,  # kg packaging
+                float(production.production_amount) * 0.05 * 1.05,  # CO2e
                 'Recyclable cardboard packaging materials'
             )
 
@@ -1890,7 +1881,7 @@ class Command(BaseCommand):
             is_outdoor=True,
             age_of_plants=8 + (year_offset // 365),  # Plants getting older
             number_of_plants=int(parcel.area * 120),  # 120 plants per hectare
-            soil_ph=Decimal('6.8'),
+            soil_ph=float(Decimal('6.8')),
             earning=int(parcel.area * 28.5 * yield_scaling * 3.25 * (1 + (yield_scaling - 1) * 2)),  # Premium pricing increases with sustainability
             extra_data={
                 'variety': 'Hydroponic Lettuce',
@@ -1923,11 +1914,11 @@ class Command(BaseCommand):
             date=production.start_date + timezone.timedelta(days=15),
             type='CO',  # Cover crop
             description='Multi-species cover crop establishment for carbon sequestration',
-            soil_ph=Decimal('6.8'),
-            organic_matter_percentage=Decimal('4.2'),
+            soil_ph=float(Decimal('6.8')),
+            organic_matter_percentage=float(Decimal('4.2')),
             amendment_type='9-species cover crop mix (legumes, brassicas, grasses)',
             amendment_amount=f'{int(production.parcel.area * 25)} kg seed mix',
-            carbon_sequestration_potential=Decimal(str(production.parcel.area * 2.5 * carbon_efficiency)),
+            carbon_sequestration_potential=float(Decimal(str(production.parcel.area * 2.5 * carbon_efficiency))),
             extra_data={
                 'species_count': 9,
                 'nitrogen_fixation_potential': f'{int(production.parcel.area * 120)} kg N/year',
@@ -1942,7 +1933,7 @@ class Command(BaseCommand):
             production, user, soil_prep,
             'Cover Crop Sequestration',
             production.parcel.area,  # hectares
-            -production.parcel.area * 2.5 * carbon_efficiency,  # negative CO2e
+            -float(production.parcel.area) * 2.5 * carbon_efficiency,  # negative CO2e
             f'Cover crop carbon sequestration - {soil_prep.amendment_type}'
         )
 
@@ -1986,7 +1977,6 @@ class Command(BaseCommand):
             created_by=user,
             name='AI-Optimized Solar Irrigation System',
             date=production.start_date + timezone.timedelta(days=75),
-            type='IR',
             observation=f'Precision irrigation with {int(production.parcel.area * 4)} soil moisture sensors. 65% water reduction vs industry average. 100% solar powered with battery backup.',
             extra_data={
                 'sensor_count': int(production.parcel.area * 4),
@@ -2013,9 +2003,9 @@ class Command(BaseCommand):
         habitat_event = ProductionEvent.objects.create(
             history=production,
             created_by=user,
-            name='Beneficial Insect Habitat Enhancement',
             type='PL',
             date=production.start_date + timezone.timedelta(days=105),
+            description='Beneficial Insect Habitat Establishment',
             observation=f'Established {int(production.parcel.area * 0.1)} hectares of native flowering plants. Reduced pesticide needs by 90%. Supporting 25+ beneficial species.',
             extra_data={
                 'habitat_area_hectares': production.parcel.area * 0.1,
@@ -2033,15 +2023,16 @@ class Command(BaseCommand):
             harvest_event = ProductionEvent.objects.create(
                 history=production,
                 created_by=user,
-                name='Premium Hand Harvest',
-                type='HA',
                 date=production.finish_date - timezone.timedelta(days=30),
-                amount=production.production_amount,
-                unit='kg',
-                quality_grade='Premium Export',
-                destination='Premium markets + Direct-to-consumer',
-                notes=f'Hand-picked at optimal ripeness. {production.production_amount:,} kg harvested. Premium pricing achieved.',
+                type='HA',
+                description='Premium Hand Harvest',
+                observation=f'Hand-picked at optimal ripeness. {production.production_amount:,} kg harvested. Premium pricing achieved.',
                 extra_data={
+                    'name': 'Premium Hand Harvest',
+                    'amount': production.production_amount,
+                    'unit': 'kg',
+                    'quality_grade': 'Premium Export',
+                    'destination': 'Premium markets + Direct-to-consumer',
                     'harvest_method': 'selective hand picking',
                     'crew_size': 24,
                     'harvest_duration_days': 21,
@@ -2056,15 +2047,16 @@ class Command(BaseCommand):
             processing_event = ProductionEvent.objects.create(
                 history=production,
                 created_by=user,
-                name='Solar-Powered Processing & Cold Storage',
-                type='PR',
                 date=production.finish_date - timezone.timedelta(days=15),
-                amount=production.production_amount * Decimal('0.98'),  # After quality sorting
-                unit='kg',
-                quality_grade='Premium Export',
-                destination='Premium retail + Export markets',
-                notes='Solar-powered washing, grading, and cold storage. Blockchain verification applied.',
+                type='PR',
+                description='Solar-Powered Processing & Cold Storage',
+                observation='Solar-powered washing, grading, and cold storage. Blockchain verification applied.',
                 extra_data={
+                    'name': 'Solar-Powered Processing & Cold Storage',
+                    'amount': float(production.production_amount) * 0.98,  # After quality sorting
+                    'unit': 'kg',
+                    'quality_grade': 'Premium Export',
+                    'destination': 'Premium retail + Export markets',
                     'processing_energy_kwh': production.production_amount * 0.08,
                     'cold_storage_days': 14,
                     'packaging_materials_kg': production.production_amount * 0.05,
@@ -2079,8 +2071,8 @@ class Command(BaseCommand):
             self.create_accurate_carbon_entry(
                 production, user, processing_event,
                 'Solar Panel Generation',
-                float(production.production_amount * Decimal('0.08')),  # kWh
-                -float(production.production_amount * Decimal('0.08')) * 0.388,  # negative CO2e
+                float(production.production_amount) * 0.08,  # kWh
+                -float(production.production_amount) * 0.08 * 0.388,  # negative CO2e
                 'Solar-powered post-harvest processing'
             )
             
@@ -2088,8 +2080,8 @@ class Command(BaseCommand):
             self.create_accurate_carbon_entry(
                 production, user, processing_event,
                 'Cardboard Packaging',
-                float(production.production_amount * Decimal('0.05')),  # kg packaging
-                float(production.production_amount * Decimal('0.05')) * 1.05,  # CO2e
+                float(production.production_amount) * 0.05,  # kg packaging
+                float(production.production_amount) * 0.05 * 1.05,  # CO2e
                 'Recyclable cardboard packaging materials'
             )
 
@@ -2118,7 +2110,7 @@ class Command(BaseCommand):
             is_outdoor=True,
             age_of_plants=8 + (year_offset // 365),  # Plants getting older
             number_of_plants=int(parcel.area * 120),  # 120 plants per hectare
-            soil_ph=Decimal('6.8'),
+            soil_ph=float(Decimal('6.8')),
             earning=int(parcel.area * 28.5 * yield_scaling * 3.25 * (1 + (yield_scaling - 1) * 2)),  # Premium pricing increases with sustainability
             extra_data={
                 'variety': 'Regenerative Wheat',
@@ -2151,11 +2143,11 @@ class Command(BaseCommand):
             date=production.start_date + timezone.timedelta(days=15),
             type='CO',  # Cover crop
             description='Multi-species cover crop establishment for carbon sequestration',
-            soil_ph=Decimal('6.8'),
-            organic_matter_percentage=Decimal('4.2'),
+            soil_ph=float(Decimal('6.8')),
+            organic_matter_percentage=float(Decimal('4.2')),
             amendment_type='9-species cover crop mix (legumes, brassicas, grasses)',
             amendment_amount=f'{int(production.parcel.area * 25)} kg seed mix',
-            carbon_sequestration_potential=Decimal(str(production.parcel.area * 2.5 * carbon_efficiency)),
+            carbon_sequestration_potential=float(Decimal(str(production.parcel.area * 2.5 * carbon_efficiency))),
             extra_data={
                 'species_count': 9,
                 'nitrogen_fixation_potential': f'{int(production.parcel.area * 120)} kg N/year',
@@ -2170,7 +2162,7 @@ class Command(BaseCommand):
             production, user, soil_prep,
             'Cover Crop Sequestration',
             production.parcel.area,  # hectares
-            -production.parcel.area * 2.5 * carbon_efficiency,  # negative CO2e
+            -float(production.parcel.area) * 2.5 * carbon_efficiency,  # negative CO2e
             f'Cover crop carbon sequestration - {soil_prep.amendment_type}'
         )
 
@@ -2214,7 +2206,6 @@ class Command(BaseCommand):
             created_by=user,
             name='AI-Optimized Solar Irrigation System',
             date=production.start_date + timezone.timedelta(days=75),
-            type='IR',
             observation=f'Precision irrigation with {int(production.parcel.area * 4)} soil moisture sensors. 65% water reduction vs industry average. 100% solar powered with battery backup.',
             extra_data={
                 'sensor_count': int(production.parcel.area * 4),
@@ -2241,7 +2232,6 @@ class Command(BaseCommand):
         habitat_event = ProductionEvent.objects.create(
             history=production,
             created_by=user,
-            name='Beneficial Insect Habitat Enhancement',
             type='PL',
             date=production.start_date + timezone.timedelta(days=105),
             observation=f'Established {int(production.parcel.area * 0.1)} hectares of native flowering plants. Reduced pesticide needs by 90%. Supporting 25+ beneficial species.',
@@ -2287,7 +2277,7 @@ class Command(BaseCommand):
                 name='Solar-Powered Processing & Cold Storage',
                 type='PR',
                 date=production.finish_date - timezone.timedelta(days=15),
-                amount=production.production_amount * Decimal('0.98'),  # After quality sorting
+                amount=float(production.production_amount) * 0.98,  # After quality sorting
                 unit='kg',
                 quality_grade='Premium Export',
                 destination='Premium retail + Export markets',
@@ -2307,8 +2297,8 @@ class Command(BaseCommand):
             self.create_accurate_carbon_entry(
                 production, user, processing_event,
                 'Solar Panel Generation',
-                float(production.production_amount * Decimal('0.08')),  # kWh
-                -float(production.production_amount * Decimal('0.08')) * 0.388,  # negative CO2e
+                float(production.production_amount) * 0.08,  # kWh
+                -float(production.production_amount) * 0.08 * 0.388,  # negative CO2e
                 'Solar-powered post-harvest processing'
             )
             
@@ -2316,8 +2306,8 @@ class Command(BaseCommand):
             self.create_accurate_carbon_entry(
                 production, user, processing_event,
                 'Cardboard Packaging',
-                float(production.production_amount * Decimal('0.05')),  # kg packaging
-                float(production.production_amount * Decimal('0.05')) * 1.05,  # CO2e
+                float(production.production_amount) * 0.05,  # kg packaging
+                float(production.production_amount) * 0.05 * 1.05,  # CO2e
                 'Recyclable cardboard packaging materials'
             )
 
@@ -2346,7 +2336,7 @@ class Command(BaseCommand):
             is_outdoor=True,
             age_of_plants=8 + (year_offset // 365),  # Plants getting older
             number_of_plants=int(parcel.area * 120),  # 120 plants per hectare
-            soil_ph=Decimal('6.8'),
+            soil_ph=float(Decimal('6.8')),
             earning=int(parcel.area * 28.5 * yield_scaling * 3.25 * (1 + (yield_scaling - 1) * 2)),  # Premium pricing increases with sustainability
             extra_data={
                 'variety': 'Cover Crop',
@@ -2379,11 +2369,11 @@ class Command(BaseCommand):
             date=production.start_date + timezone.timedelta(days=15),
             type='CO',  # Cover crop
             description='Multi-species cover crop establishment for carbon sequestration',
-            soil_ph=Decimal('6.8'),
-            organic_matter_percentage=Decimal('4.2'),
+            soil_ph=float(Decimal('6.8')),
+            organic_matter_percentage=float(Decimal('4.2')),
             amendment_type='9-species cover crop mix (legumes, brassicas, grasses)',
             amendment_amount=f'{int(production.parcel.area * 25)} kg seed mix',
-            carbon_sequestration_potential=Decimal(str(production.parcel.area * 2.5 * carbon_efficiency)),
+            carbon_sequestration_potential=float(Decimal(str(production.parcel.area * 2.5 * carbon_efficiency))),
             extra_data={
                 'species_count': 9,
                 'nitrogen_fixation_potential': f'{int(production.parcel.area * 120)} kg N/year',
@@ -2398,7 +2388,7 @@ class Command(BaseCommand):
             production, user, soil_prep,
             'Cover Crop Sequestration',
             production.parcel.area,  # hectares
-            -production.parcel.area * 2.5 * carbon_efficiency,  # negative CO2e
+            -float(production.parcel.area) * 2.5 * carbon_efficiency,  # negative CO2e
             f'Cover crop carbon sequestration - {soil_prep.amendment_type}'
         )
 
@@ -2442,7 +2432,6 @@ class Command(BaseCommand):
             created_by=user,
             name='AI-Optimized Solar Irrigation System',
             date=production.start_date + timezone.timedelta(days=75),
-            type='IR',
             observation=f'Precision irrigation with {int(production.parcel.area * 4)} soil moisture sensors. 65% water reduction vs industry average. 100% solar powered with battery backup.',
             extra_data={
                 'sensor_count': int(production.parcel.area * 4),
@@ -2470,15 +2459,16 @@ class Command(BaseCommand):
             harvest_event = ProductionEvent.objects.create(
                 history=production,
                 created_by=user,
-                name='Premium Hand Harvest',
-                type='HA',
                 date=production.finish_date - timezone.timedelta(days=30),
-                amount=production.production_amount,
-                unit='kg',
-                quality_grade='Premium Export',
-                destination='Premium markets + Direct-to-consumer',
-                notes=f'Hand-picked at optimal ripeness. {production.production_amount:,} kg harvested. Premium pricing achieved.',
+                type='HA',
+                description='Premium Hand Harvest',
+                observation=f'Hand-picked at optimal ripeness. {production.production_amount:,} kg harvested. Premium pricing achieved.',
                 extra_data={
+                    'name': 'Premium Hand Harvest',
+                    'amount': production.production_amount,
+                    'unit': 'kg',
+                    'quality_grade': 'Premium Export',
+                    'destination': 'Premium markets + Direct-to-consumer',
                     'harvest_method': 'selective hand picking',
                     'crew_size': 24,
                     'harvest_duration_days': 21,
@@ -2493,15 +2483,16 @@ class Command(BaseCommand):
             processing_event = ProductionEvent.objects.create(
                 history=production,
                 created_by=user,
-                name='Solar-Powered Processing & Cold Storage',
-                type='PR',
                 date=production.finish_date - timezone.timedelta(days=15),
-                amount=production.production_amount * Decimal('0.98'),  # After quality sorting
-                unit='kg',
-                quality_grade='Premium Export',
-                destination='Premium retail + Export markets',
-                notes='Solar-powered washing, grading, and cold storage. Blockchain verification applied.',
+                type='PR',
+                description='Solar-Powered Processing & Cold Storage',
+                observation='Solar-powered washing, grading, and cold storage. Blockchain verification applied.',
                 extra_data={
+                    'name': 'Solar-Powered Processing & Cold Storage',
+                    'amount': float(production.production_amount) * 0.98,  # After quality sorting
+                    'unit': 'kg',
+                    'quality_grade': 'Premium Export',
+                    'destination': 'Premium retail + Export markets',
                     'processing_energy_kwh': production.production_amount * 0.08,
                     'cold_storage_days': 14,
                     'packaging_materials_kg': production.production_amount * 0.05,
@@ -2516,8 +2507,8 @@ class Command(BaseCommand):
             self.create_accurate_carbon_entry(
                 production, user, processing_event,
                 'Solar Panel Generation',
-                float(production.production_amount * Decimal('0.08')),  # kWh
-                -float(production.production_amount * Decimal('0.08')) * 0.388,  # negative CO2e
+                float(production.production_amount) * 0.08,  # kWh
+                -float(production.production_amount) * 0.08 * 0.388,  # negative CO2e
                 'Solar-powered post-harvest processing'
             )
             
@@ -2525,8 +2516,8 @@ class Command(BaseCommand):
             self.create_accurate_carbon_entry(
                 production, user, processing_event,
                 'Cardboard Packaging',
-                float(production.production_amount * Decimal('0.05')),  # kg packaging
-                float(production.production_amount * Decimal('0.05')) * 1.05,  # CO2e
+                float(production.production_amount) * 0.05,  # kg packaging
+                float(production.production_amount) * 0.05 * 1.05,  # CO2e
                 'Recyclable cardboard packaging materials'
             )
 
@@ -2555,7 +2546,7 @@ class Command(BaseCommand):
             is_outdoor=True,
             age_of_plants=8 + (year_offset // 365),  # Plants getting older
             number_of_plants=int(parcel.area * 120),  # 120 plants per hectare
-            soil_ph=Decimal('6.8'),
+            soil_ph=float(Decimal('6.8')),
             earning=int(parcel.area * 28.5 * yield_scaling * 3.25 * (1 + (yield_scaling - 1) * 2)),  # Premium pricing increases with sustainability
             extra_data={
                 'variety': 'Regenerative Wheat',
@@ -2588,11 +2579,11 @@ class Command(BaseCommand):
             date=production.start_date + timezone.timedelta(days=15),
             type='CO',  # Cover crop
             description='Multi-species cover crop establishment for carbon sequestration',
-            soil_ph=Decimal('6.8'),
-            organic_matter_percentage=Decimal('4.2'),
+            soil_ph=float(Decimal('6.8')),
+            organic_matter_percentage=float(Decimal('4.2')),
             amendment_type='9-species cover crop mix (legumes, brassicas, grasses)',
             amendment_amount=f'{int(production.parcel.area * 25)} kg seed mix',
-            carbon_sequestration_potential=Decimal(str(production.parcel.area * 2.5 * carbon_efficiency)),
+            carbon_sequestration_potential=float(Decimal(str(production.parcel.area * 2.5 * carbon_efficiency))),
             extra_data={
                 'species_count': 9,
                 'nitrogen_fixation_potential': f'{int(production.parcel.area * 120)} kg N/year',
@@ -2607,7 +2598,7 @@ class Command(BaseCommand):
             production, user, soil_prep,
             'Cover Crop Sequestration',
             production.parcel.area,  # hectares
-            -production.parcel.area * 2.5 * carbon_efficiency,  # negative CO2e
+            -float(production.parcel.area) * 2.5 * carbon_efficiency,  # negative CO2e
             f'Cover crop carbon sequestration - {soil_prep.amendment_type}'
         )
 
@@ -2651,7 +2642,6 @@ class Command(BaseCommand):
             created_by=user,
             name='AI-Optimized Solar Irrigation System',
             date=production.start_date + timezone.timedelta(days=75),
-            type='IR',
             observation=f'Precision irrigation with {int(production.parcel.area * 4)} soil moisture sensors. 65% water reduction vs industry average. 100% solar powered with battery backup.',
             extra_data={
                 'sensor_count': int(production.parcel.area * 4),
@@ -2679,15 +2669,16 @@ class Command(BaseCommand):
             harvest_event = ProductionEvent.objects.create(
                 history=production,
                 created_by=user,
-                name='Premium Hand Harvest',
-                type='HA',
                 date=production.finish_date - timezone.timedelta(days=30),
-                amount=production.production_amount,
-                unit='kg',
-                quality_grade='Premium Export',
-                destination='Premium markets + Direct-to-consumer',
-                notes=f'Hand-picked at optimal ripeness. {production.production_amount:,} kg harvested. Premium pricing achieved.',
+                type='HA',
+                description='Premium Hand Harvest',
+                observation=f'Hand-picked at optimal ripeness. {production.production_amount:,} kg harvested. Premium pricing achieved.',
                 extra_data={
+                    'name': 'Premium Hand Harvest',
+                    'amount': production.production_amount,
+                    'unit': 'kg',
+                    'quality_grade': 'Premium Export',
+                    'destination': 'Premium markets + Direct-to-consumer',
                     'harvest_method': 'selective hand picking',
                     'crew_size': 24,
                     'harvest_duration_days': 21,
@@ -2702,15 +2693,16 @@ class Command(BaseCommand):
             processing_event = ProductionEvent.objects.create(
                 history=production,
                 created_by=user,
-                name='Solar-Powered Processing & Cold Storage',
-                type='PR',
                 date=production.finish_date - timezone.timedelta(days=15),
-                amount=production.production_amount * Decimal('0.98'),  # After quality sorting
-                unit='kg',
-                quality_grade='Premium Export',
-                destination='Premium retail + Export markets',
-                notes='Solar-powered washing, grading, and cold storage. Blockchain verification applied.',
+                type='PR',
+                description='Solar-Powered Processing & Cold Storage',
+                observation='Solar-powered washing, grading, and cold storage. Blockchain verification applied.',
                 extra_data={
+                    'name': 'Solar-Powered Processing & Cold Storage',
+                    'amount': float(production.production_amount) * 0.98,  # After quality sorting
+                    'unit': 'kg',
+                    'quality_grade': 'Premium Export',
+                    'destination': 'Premium retail + Export markets',
                     'processing_energy_kwh': production.production_amount * 0.08,
                     'cold_storage_days': 14,
                     'packaging_materials_kg': production.production_amount * 0.05,
@@ -2725,8 +2717,8 @@ class Command(BaseCommand):
             self.create_accurate_carbon_entry(
                 production, user, processing_event,
                 'Solar Panel Generation',
-                float(production.production_amount * Decimal('0.08')),  # kWh
-                -float(production.production_amount * Decimal('0.08')) * 0.388,  # negative CO2e
+                float(production.production_amount) * 0.08,  # kWh
+                -float(production.production_amount) * 0.08 * 0.388,  # negative CO2e
                 'Solar-powered post-harvest processing'
             )
             
@@ -2734,8 +2726,8 @@ class Command(BaseCommand):
             self.create_accurate_carbon_entry(
                 production, user, processing_event,
                 'Cardboard Packaging',
-                float(production.production_amount * Decimal('0.05')),  # kg packaging
-                float(production.production_amount * Decimal('0.05')) * 1.05,  # CO2e
+                float(production.production_amount) * 0.05,  # kg packaging
+                float(production.production_amount) * 0.05 * 1.05,  # CO2e
                 'Recyclable cardboard packaging materials'
             )
 
@@ -2748,29 +2740,128 @@ class Command(BaseCommand):
         # Create IoT devices for each establishment
         iot_created = 0
         
-        # Citrus ranch IoT devices
+        # ESTABLISHMENT 1: Premium Citrus Ranch IoT devices
         devices_citrus = [
-            ('Soil Sensor Network', 'soil_monitoring', 'Real-time soil moisture, pH, and nutrient monitoring'),
-            ('Weather Station Pro', 'weather_monitoring', 'Comprehensive weather monitoring with AI predictions'),
-            ('Tree Health Camera System', 'visual_monitoring', 'AI-powered tree health analysis with disease detection'),
-            ('Smart Irrigation Controller', 'irrigation_control', 'Automated irrigation with water optimization'),
-            ('Energy Management System', 'energy_monitoring', 'Solar panel efficiency and energy consumption tracking')
+            ('Soil Sensor Network', 'soil_moisture', 'Real-time soil moisture, pH, and nutrient monitoring'),
+            ('Weather Station Pro', 'weather_station', 'Comprehensive weather monitoring with AI predictions'),
+            ('Tree Health Camera System', 'equipment_monitor', 'AI-powered tree health analysis with disease detection'),
+            ('Smart Irrigation Controller', 'irrigation', 'Automated irrigation with water optimization'),
+            ('Energy Management System', 'equipment_monitor', 'Solar panel efficiency and energy consumption tracking')
         ]
         
         for name, device_type, description in devices_citrus:
             device = IoTDevice.objects.create(
                 establishment=establishment1,
+                device_id=f'{device_type}_{random.randint(10000, 99999)}',
                 name=name,
                 device_type=device_type,
-                description=description,
-                status='active',
+                manufacturer='TrazoTech',
+                model=f'TZ-{device_type.upper()}-2024',
+                notes=description,
+                status='online',
                 last_seen=timezone.now() - timezone.timedelta(minutes=random.randint(1, 30)),
-                firmware_version=f'v{random.randint(1,3)}.{random.randint(0,9)}.{random.randint(0,9)}',
                 battery_level=random.randint(85, 100) if 'sensor' in name.lower() else None,
-                location_metadata={
-                    'parcel': 'Multiple parcels',
-                    'coverage_area': '875 hectares',
-                    'installation_date': '2023-01-15'
+                latitude=Decimal('36.7378') + Decimal(str(random.uniform(-0.01, 0.01))),
+                longitude=Decimal('-119.7871') + Decimal(str(random.uniform(-0.01, 0.01))),
+                configuration={
+                    'firmware_version': f'v{random.randint(1,3)}.{random.randint(0,9)}.{random.randint(0,9)}',
+                    'location_metadata': {
+                        'establishment': 'Premium Citrus Ranch',
+                        'focus_area': 'Premium citrus production',
+                        'coverage_area': '950 hectares',
+                        'installation_date': '2023-01-15'
+                    },
+                    'sampling_rate': '5 minutes',
+                    'calibration_date': '2024-01-15',
+                    'data_encryption': True
+                }
+            )
+            iot_created += 1
+            
+            # Create sample data points
+            self.create_iot_data_points(device, user)
+        
+        # ESTABLISHMENT 2: Organic Innovation Center IoT devices
+        devices_organic = [
+            ('Organic Certification Monitoring System', 'equipment_monitor', 'Real-time monitoring of organic compliance parameters and inputs'),
+            ('AI Crop Analytics Platform', 'equipment_monitor', 'Machine learning-powered crop health analysis and yield prediction'),
+            ('Hydroponic System Controller', 'irrigation', 'Automated hydroponic nutrient and pH management system'),
+            ('Biodiversity Sensor Network', 'soil_moisture', 'Multi-sensor array monitoring soil biology and beneficial microorganisms'),
+            ('Research Weather Station', 'weather_station', 'High-precision weather monitoring for research applications'),
+            ('Smart Greenhouse Controller', 'equipment_monitor', 'Climate-controlled greenhouse automation and monitoring')
+        ]
+        
+        for name, device_type, description in devices_organic:
+            device = IoTDevice.objects.create(
+                establishment=establishment2,
+                device_id=f'{device_type}_{random.randint(10000, 99999)}',
+                name=name,
+                device_type=device_type,
+                manufacturer='TrazoTech Organic',
+                model=f'TZ-ORG-{device_type.upper()}-2024',
+                notes=description,
+                status='online',
+                last_seen=timezone.now() - timezone.timedelta(minutes=random.randint(1, 30)),
+                battery_level=random.randint(85, 100) if 'sensor' in name.lower() else None,
+                latitude=Decimal('36.6777') + Decimal(str(random.uniform(-0.01, 0.01))),
+                longitude=Decimal('-121.6555') + Decimal(str(random.uniform(-0.01, 0.01))),
+                configuration={
+                    'firmware_version': f'v{random.randint(1,3)}.{random.randint(0,9)}.{random.randint(0,9)}',
+                    'location_metadata': {
+                        'establishment': 'Organic Innovation Center',
+                        'focus_area': 'Organic research and innovation',
+                        'coverage_area': '450 hectares',
+                        'installation_date': '2023-03-15'
+                    },
+                    'sampling_rate': '2 minutes',
+                    'calibration_date': '2024-02-15',
+                    'data_encryption': True,
+                    'organic_certified': True,
+                    'research_mode': True
+                }
+            )
+            iot_created += 1
+            
+            # Create sample data points
+            self.create_iot_data_points(device, user)
+        
+        # ESTABLISHMENT 3: Regenerative Grain Ranch IoT devices
+        devices_regenerative = [
+            ('Carbon Sequestration Monitor', 'soil_moisture', 'Advanced soil carbon monitoring and sequestration tracking'),
+            ('Precision Agriculture Hub', 'equipment_monitor', 'GPS-guided precision farming equipment coordination'),
+            ('Regenerative Weather Station', 'weather_station', 'Climate monitoring optimized for regenerative agriculture'),
+            ('Cover Crop Sensor Array', 'equipment_monitor', 'Multi-species cover crop health and carbon capture monitoring'),
+            ('No-Till Equipment Monitor', 'equipment_monitor', 'Zero-tillage equipment efficiency and soil impact tracking'),
+            ('Carbon Credit Verification System', 'equipment_monitor', 'Automated carbon credit generation and verification monitoring')
+        ]
+        
+        for name, device_type, description in devices_regenerative:
+            device = IoTDevice.objects.create(
+                establishment=establishment3,
+                device_id=f'{device_type}_{random.randint(10000, 99999)}',
+                name=name,
+                device_type=device_type,
+                manufacturer='TrazoTech Regenerative',
+                model=f'TZ-REG-{device_type.upper()}-2024',
+                notes=description,
+                status='online',
+                last_seen=timezone.now() - timezone.timedelta(minutes=random.randint(1, 30)),
+                battery_level=random.randint(85, 100) if 'sensor' in name.lower() else None,
+                latitude=Decimal('35.3733') + Decimal(str(random.uniform(-0.01, 0.01))),
+                longitude=Decimal('-119.0187') + Decimal(str(random.uniform(-0.01, 0.01))),
+                configuration={
+                    'firmware_version': f'v{random.randint(1,3)}.{random.randint(0,9)}.{random.randint(0,9)}',
+                    'location_metadata': {
+                        'establishment': 'Regenerative Grain Ranch',
+                        'focus_area': 'Carbon farming and regenerative agriculture',
+                        'coverage_area': '875 hectares',
+                        'installation_date': '2023-05-15'
+                    },
+                    'sampling_rate': '10 minutes',
+                    'calibration_date': '2024-03-15',
+                    'data_encryption': True,
+                    'carbon_monitoring': True,
+                    'regenerative_certified': True
                 }
             )
             iot_created += 1
@@ -2786,23 +2877,133 @@ class Command(BaseCommand):
         for days_ago in range(30):
             timestamp = timezone.now() - timezone.timedelta(days=days_ago, hours=random.randint(0, 23))
             
-            if device.device_type == 'soil_monitoring':
+            if device.device_type == 'soil_moisture':
+                # Different data based on establishment type
+                if 'Organic' in device.establishment.name:
+                    # Organic Innovation Center - focus on biological activity
+                    data = {
+                        'soil_moisture': round(random.uniform(35, 75), 1),
+                        'soil_ph': round(random.uniform(6.0, 7.2), 1),
+                        'soil_temperature': round(random.uniform(16, 26), 1),
+                        'organic_matter': round(random.uniform(4.5, 8.2), 1),
+                        'microbial_activity': round(random.uniform(75, 95), 1),
+                        'beneficial_microorganisms': round(random.uniform(850, 1200), 0)
+                    }
+                elif 'Regenerative' in device.establishment.name:
+                    # Regenerative Grain Ranch - focus on carbon sequestration
+                    data = {
+                        'soil_moisture': round(random.uniform(25, 65), 1),
+                        'soil_ph': round(random.uniform(6.5, 7.8), 1),
+                        'soil_temperature': round(random.uniform(12, 25), 1),
+                        'soil_carbon_ppm': round(random.uniform(2800, 4200), 0),
+                        'carbon_sequestration_rate': round(random.uniform(4.2, 7.8), 1),
+                        'organic_matter_percentage': round(random.uniform(3.5, 6.2), 1)
+                    }
+                else:
+                    # Premium Citrus Ranch - standard soil monitoring
+                    data = {
+                        'soil_moisture': round(random.uniform(25, 85), 1),
+                        'soil_ph': round(random.uniform(6.2, 7.4), 1),
+                        'soil_temperature': round(random.uniform(15, 28), 1),
+                        'nitrogen_ppm': round(random.uniform(180, 250), 1),
+                        'phosphorus_ppm': round(random.uniform(25, 65), 1),
+                        'potassium_ppm': round(random.uniform(140, 220), 1)
+                    }
+            elif device.device_type == 'weather_station':
+                # Specialized weather data based on establishment
+                if 'Organic' in device.establishment.name:
+                    # Research-grade weather station
+                    data = {
+                        'temperature': round(random.uniform(14, 28), 1),
+                        'humidity': round(random.uniform(45, 85), 1),
+                        'wind_speed': round(random.uniform(0, 12), 1),
+                        'rainfall': round(random.uniform(0, 15), 1),
+                        'uv_index': random.randint(2, 9),
+                        'barometric_pressure': round(random.uniform(1000, 1020), 1),
+                        'research_grade': True
+                    }
+                elif 'Regenerative' in device.establishment.name:
+                    # Climate monitoring for grain farming
+                    data = {
+                        'temperature': round(random.uniform(8, 32), 1),
+                        'humidity': round(random.uniform(25, 75), 1),
+                        'wind_speed': round(random.uniform(0, 18), 1),
+                        'rainfall': round(random.uniform(0, 35), 1),
+                        'uv_index': random.randint(1, 12),
+                        'barometric_pressure': round(random.uniform(990, 1030), 1),
+                        'growing_degree_days': round(random.uniform(0, 25), 1)
+                    }
+                else:
+                    # Standard weather monitoring for citrus
+                    data = {
+                        'temperature': round(random.uniform(12, 32), 1),
+                        'humidity': round(random.uniform(35, 85), 1),
+                        'wind_speed': round(random.uniform(0, 15), 1),
+                        'rainfall': round(random.uniform(0, 25), 1),
+                        'uv_index': random.randint(1, 11),
+                        'barometric_pressure': round(random.uniform(995, 1025), 1)
+                    }
+            elif device.device_type == 'irrigation':
+                if 'Hydroponic' in device.name:
+                    # Hydroponic system controller data
+                    data = {
+                        'nutrient_ph': round(random.uniform(5.8, 6.5), 1),
+                        'ec_level': round(random.uniform(1.2, 2.0), 2),
+                        'water_temperature': round(random.uniform(18, 24), 1),
+                        'flow_rate': round(random.uniform(15, 35), 1),
+                        'system_efficiency': round(random.uniform(0.92, 0.98), 3),
+                        'organic_compliance': True
+                    }
+                else:
+                    # Standard irrigation controller data
+                    data = {
+                        'water_flow_rate': round(random.uniform(10, 45), 1),
+                        'pressure': round(random.uniform(2.1, 3.8), 1),
+                        'system_efficiency': round(random.uniform(0.88, 0.96), 3),
+                        'energy_consumption': round(random.uniform(0.5, 2.2), 2),
+                        'water_savings': round(random.uniform(35, 70), 1)
+                    }
+            elif device.device_type == 'equipment_monitor':
+                # Specialized equipment monitoring based on device name
+                if 'AI' in device.name or 'Analytics' in device.name:
+                    data = {
+                        'system_status': 'optimal',
+                        'ai_confidence': round(random.uniform(0.85, 0.98), 3),
+                        'processing_speed': round(random.uniform(120, 280), 1),
+                        'data_quality': 'high',
+                        'model_accuracy': round(random.uniform(0.92, 0.98), 3)
+                    }
+                elif 'Carbon' in device.name:
+                    data = {
+                        'system_status': 'operational',
+                        'carbon_capture_rate': round(random.uniform(4.5, 8.2), 1),
+                        'verification_score': round(random.uniform(0.95, 1.0), 3),
+                        'credits_generated': round(random.uniform(0.8, 2.1), 2),
+                        'monitoring_accuracy': round(random.uniform(0.94, 0.99), 3)
+                    }
+                elif 'Organic' in device.name:
+                    data = {
+                        'system_status': 'compliant',
+                        'organic_compliance_score': round(random.uniform(0.95, 1.0), 3),
+                        'certification_status': 'active',
+                        'audit_readiness': round(random.uniform(0.88, 0.98), 3),
+                        'input_verification': True
+                    }
+                else:
+                    # Standard equipment monitoring
+                    data = {
+                        'system_status': 'normal',
+                        'efficiency': round(random.uniform(0.85, 0.96), 3),
+                        'operating_hours': round(random.uniform(2, 12), 1),
+                        'maintenance_score': round(random.uniform(0.88, 0.96), 3),
+                        'energy_consumption': round(random.uniform(15, 85), 1)
+                    }
+            elif device.device_type == 'fuel_sensor':
                 data = {
-                    'soil_moisture': round(random.uniform(25, 85), 1),
-                    'soil_ph': round(random.uniform(6.2, 7.4), 1),
-                    'soil_temperature': round(random.uniform(15, 28), 1),
-                    'nitrogen_ppm': round(random.uniform(180, 250), 1),
-                    'phosphorus_ppm': round(random.uniform(25, 65), 1),
-                    'potassium_ppm': round(random.uniform(140, 220), 1)
-                }
-            elif device.device_type == 'weather_monitoring':
-                data = {
-                    'temperature': round(random.uniform(12, 32), 1),
-                    'humidity': round(random.uniform(35, 85), 1),
-                    'wind_speed': round(random.uniform(0, 15), 1),
-                    'rainfall': round(random.uniform(0, 25), 1),
-                    'uv_index': random.randint(1, 11),
-                    'barometric_pressure': round(random.uniform(995, 1025), 1)
+                    'fuel_level': round(random.uniform(10, 95), 1),
+                    'fuel_consumption_rate': round(random.uniform(5, 25), 2),
+                    'engine_hours': round(random.uniform(0.5, 8.0), 1),
+                    'efficiency_rating': round(random.uniform(0.85, 0.98), 3)
                 }
             else:
                 data = {'status': 'normal', 'value': round(random.uniform(20, 90), 1)}
@@ -2810,8 +3011,7 @@ class Command(BaseCommand):
             IoTDataPoint.objects.create(
                 device=device,
                 timestamp=timestamp,
-                data=data,
-                created_by=user
+                data=data
             )
 
     def create_automated_carbon_monitoring(self, productions, user):
@@ -2824,18 +3024,24 @@ class Command(BaseCommand):
         for production in productions[:5]:  # Sample for first few productions
             rule = AutomationRule.objects.create(
                 name=f'Auto Carbon Tracking - {production.name}',
+                establishment=production.parcel.establishment,
                 description=f'Automatically track carbon emissions and sequestration for {production.name}',
-                trigger_type='event_created',
-                conditions={
+                device_type='fuel_sensor',
+                trigger_type='threshold',
+                trigger_config={
+                    'fuel_consumption': {'operator': 'greater_than', 'value': 20},
                     'production_id': production.id,
                     'event_types': ['fertilizer', 'fuel', 'equipment', 'processing'],
                     'auto_calculate': True
                 },
-                actions={
+                action_type='create_event',
+                action_config={
                     'create_carbon_entry': True,
                     'verify_calculations': True,
                     'send_notifications': True,
-                    'update_dashboard': True
+                    'update_dashboard': True,
+                    'event_type': 'equipment',
+                    'auto_approve': False
                 },
                 is_active=True,
                 created_by=user
@@ -2854,33 +3060,12 @@ class Command(BaseCommand):
         for establishment in establishments:
             project = CarbonOffsetProject.objects.create(
                 name=f'Carbon Sequestration Program - {establishment.name}',
-                description=f'Verified carbon sequestration through regenerative agriculture practices at {establishment.name}',
+                description=f'Verified carbon sequestration through regenerative agriculture practices at {establishment.name}. Annual sequestration rate: {(establishment.total_acreage or 100.0) * 4.2} tons CO2e. Verified by SCS Global Services with quarterly monitoring and blockchain registry.',
                 project_type='agriculture_sequestration',
-                methodology='Verified Carbon Standard (VCS)',
+                certification_standard='VCS + Gold Standard',
                 location=f'{establishment.city}, {establishment.state}',
-                total_credits_available=int(establishment.cultivated_area * 4.2),  # tons CO2e per year
-                credits_sold=int(establishment.cultivated_area * 2.1),  # 50% sold
-                price_per_credit=Decimal('25.50'),
-                verification_standard='VCS + Gold Standard',
-                project_status='active',
-                start_date=timezone.now().date() - timezone.timedelta(days=365),
-                end_date=timezone.now().date() + timezone.timedelta(days=365*5),
-                additionality_verified=True,
-                permanence_guaranteed=True,
-                created_by=user,
-                extra_data={
-                    'annual_sequestration_rate': f'{establishment.cultivated_area * 4.2} tons CO2e',
-                    'verification_body': 'SCS Global Services',
-                    'monitoring_frequency': 'Quarterly',
-                    'satellite_verification': True,
-                    'blockchain_registry': True,
-                    'co_benefits': [
-                        'Biodiversity enhancement',
-                        'Soil health improvement',
-                        'Water quality protection',
-                        'Rural economic development'
-                    ]
-                }
+                price_per_ton=Decimal('25.50'),
+                available_capacity=Decimal(str(int((establishment.total_acreage or 100.0) * 4.2)))  # tons CO2e per year
             )
             projects_created += 1
             
@@ -2888,15 +3073,11 @@ class Command(BaseCommand):
             purchase = CarbonOffsetPurchase.objects.create(
                 project=project,
                 user=user,
-                credits_purchased=50,
-                price_per_credit=project.price_per_credit,
-                total_amount=50 * project.price_per_credit,
-                purchase_reason='Corporate sustainability program',
-                retirement_immediately=True,
-                purchase_date=timezone.now() - timezone.timedelta(days=random.randint(1, 90)),
-                certificate_issued=True,
-                certificate_number=f'GH-{project.id}-{uuid.uuid4().hex[:8].upper()}',
-                verification_documents=['VCS_Certificate.pdf', 'Gold_Standard_Verification.pdf']
+                amount=Decimal('50.0'),
+                price_per_ton=project.price_per_ton,
+                total_price=Decimal('50.0') * project.price_per_ton,
+                status='completed',
+                is_verified=True
             )
         
         self.stdout.write(f'   ✅ Carbon marketplace: {projects_created} offset projects, active trading')
@@ -2923,8 +3104,8 @@ class Command(BaseCommand):
                         production=production,
                         created_by=user,
                         source=CarbonSource.objects.get(name='Cover Crop Sequestration'),
-                        type='credit_generated',
-                        year=production.finish_date.year,
+                        type='offset',
+                        year=2025,  # Use 2025 as the demo year for all carbon entries
                         amount=abs(net_sequestration),
                         co2e_amount=-abs(net_sequestration),
                         description=f'Carbon credits generated from {production.name}',
@@ -2949,41 +3130,16 @@ class Command(BaseCommand):
         
         for production in productions[:10]:  # Sample for first 10 productions
             cert = CarbonCertification.objects.create(
+                establishment=production.parcel.establishment,
                 production=production,
-                certification_type='carbon_neutral',
-                issuing_body='Carbon Trust Standard',
-                certificate_number=f'CTS-{production.id}-{uuid.uuid4().hex[:8].upper()}',
-                issued_date=timezone.now().date(),
-                valid_until=timezone.now().date() + timezone.timedelta(days=365),
-                verification_level='third_party_verified',
-                carbon_footprint=Decimal('0.25'),  # kg CO2e per kg product
-                benchmark_comparison='58% below industry average',
-                methodology='PAS 2050:2011',
-                verification_documents=['verification_report.pdf', 'carbon_footprint_study.pdf'],
-                extra_data={
-                    'certifications': [
-                        'Carbon Neutral Product',
-                        'Regenerative Organic Certified',
-                        'USDA Organic',
-                        'Fair Trade Certified',
-                        'Rainforest Alliance',
-                        'Non-GMO Project Verified'
-                    ],
-                    'environmental_benefits': [
-                        'Carbon negative production',
-                        'Soil health improvement',
-                        'Biodiversity enhancement',
-                        'Water conservation',
-                        'Renewable energy use'
-                    ],
-                    'social_benefits': [
-                        'Fair labor practices',
-                        'Living wages',
-                        'Community development',
-                        'Education programs',
-                        'Healthcare benefits'
-                    ]
-                }
+                certifier='Carbon Trust Standard',
+                certificate_id=f'CTS-{production.id}-{uuid.uuid4().hex[:8].upper()}',
+                issue_date=timezone.now().date(),
+                expiry_date=timezone.now().date() + timezone.timedelta(days=365),
+                document='certifications/carbon_certificate.pdf',  # Placeholder path
+                is_usda_soe_verified=True,
+                verification_date=timezone.now().date(),
+                verification_details=f'Third-party verified carbon neutral certification for {production.name}. Methodology: PAS 2050:2011. Carbon footprint: 0.25 kg CO2e per kg product (58% below industry average). Certifications include: Carbon Neutral Product, Regenerative Organic Certified, USDA Organic, Fair Trade Certified, Rainforest Alliance, Non-GMO Project Verified. Environmental benefits: Carbon negative production, Soil health improvement, Biodiversity enhancement, Water conservation, Renewable energy use.'
             )
             certifications_created += 1
         
@@ -2995,38 +3151,58 @@ class Command(BaseCommand):
         
         badges_created = 0
         
-        for production in productions[:15]:  # Sample for first 15 productions
-            badge = SustainabilityBadge.objects.create(
-                production=production,
-                badge_type='carbon_negative',
-                title='Carbon Negative Champion',
-                description='Achieved verified carbon negative production, sequestering more CO2 than emitted',
-                criteria_met=['carbon_sequestration', 'usda_verification', 'third_party_audit'],
-                achievement_level='gold',
-                points_awarded=1000,
-                badge_image_url='https://cdn.trazo.io/badges/carbon_negative_gold.png',
-                earned_date=timezone.now().date(),
-                verified_by='USDA Agricultural Research Service',
-                verification_id=f'USDA-BADGE-{production.id}-{uuid.uuid4().hex[:8]}',
-                extra_data={
-                    'achievements': [
-                        'Carbon Negative Production',
-                        'Premium Market Access',
-                        'Regenerative Practices',
-                        'Biodiversity Enhancement',
-                        'Water Conservation',
-                        'Renewable Energy Use'
-                    ],
-                    'impact_metrics': {
-                        'carbon_sequestered': '4.2 tons CO2e per acre',
-                        'premium_pricing': '45% above market',
-                        'water_savings': '65% reduction',
-                        'biodiversity_increase': '180% improvement',
-                        'soil_health_score': '96/100'
-                    }
-                }
+        # Create or get the sustainability badges
+        badge_data = [
+            {
+                'name': 'Carbon Negative Champion',
+                'description': 'Achieved verified carbon negative production, sequestering more CO2 than emitted through regenerative practices, biodiversity enhancement, water conservation, and renewable energy use.',
+                'criteria': {
+                    'carbon_sequestration': True,
+                    'usda_verification': True,
+                    'third_party_audit': True,
+                    'carbon_sequestered_per_acre': 4.2,
+                    'premium_pricing': 45,
+                    'water_savings': 65,
+                    'biodiversity_increase': 180,
+                    'soil_health_score': 96,
+                    'renewable_energy': True,
+                    'regenerative_practices': True
+                },
+                'minimum_score': 90,
+                'is_automatic': True,
+                'icon': 'badges/carbon_negative_gold.png',
+                'usda_verified': True
+            },
+            {
+                'name': 'Regenerative Agriculture Leader',
+                'description': 'Leading in regenerative agricultural practices that improve soil health and biodiversity.',
+                'criteria': {'regenerative_practices': True, 'soil_health_improvement': True, 'biodiversity_enhancement': True},
+                'minimum_score': 85,
+                'is_automatic': True,
+                'usda_verified': True
+            },
+            {
+                'name': 'Premium Market Access',
+                'description': 'Achieving premium pricing through sustainable and transparent production practices.',
+                'criteria': {'premium_pricing': True, 'market_access': True, 'quality_certification': True},
+                'minimum_score': 80,
+                'is_automatic': True,
+                'usda_verified': True
+            }
+        ]
+        
+        for badge_info in badge_data:
+            badge, created = SustainabilityBadge.objects.get_or_create(
+                name=badge_info['name'],
+                defaults=badge_info
             )
-            badges_created += 1
+            
+            if created:
+                badges_created += 1
+            
+            # Associate badge with top performing productions
+            for production in productions[:15]:  # Top 15 productions
+                badge.productions.add(production)
         
         self.stdout.write(f'   ✅ Badges: {badges_created} sustainability achievement badges')
 
@@ -3040,40 +3216,14 @@ class Command(BaseCommand):
             # Create annual carbon report
             report = CarbonReport.objects.create(
                 establishment=establishment,
-                report_type='annual_summary',
-                year=2024,
-                reporting_period_start=timezone.now().date().replace(month=1, day=1),
-                reporting_period_end=timezone.now().date().replace(month=12, day=31),
-                total_emissions=Decimal('1247.5'),
-                total_sequestration=Decimal('2856.8'),
-                net_carbon_impact=Decimal('-1609.3'),  # Negative = net sequestration
-                baseline_year=2022,
-                improvement_percentage=Decimal('78.5'),
-                verification_status='usda_verified',
-                verification_date=timezone.now().date(),
-                report_summary='Achieved carbon negative operations with 78% improvement vs baseline',
-                methodology='USDA Agricultural Research Service Guidelines',
-                extra_data={
-                    'trends': {
-                        '2022': {'emissions': 2456, 'sequestration': 1234, 'net': -1222},
-                        '2023': {'emissions': 1834, 'sequestration': 2145, 'net': 311},
-                        '2024': {'emissions': 1247, 'sequestration': 2857, 'net': 1610}
-                    },
-                    'key_improvements': [
-                        'Implemented cover crop sequestration program',
-                        'Transitioned to 100% renewable energy',
-                        'Reduced synthetic fertilizer use by 90%',
-                        'Improved soil carbon by 35%',
-                        'Enhanced biodiversity by 180%'
-                    ],
-                    'future_targets': [
-                        'Increase sequestration by 15% in 2025',
-                        'Achieve net 2,000 tons CO2e sequestration',
-                        'Expand carbon credit generation',
-                        'Implement regenerative grazing',
-                        'Add 500 acres of carbon farming'
-                    ]
-                }
+                period_start=timezone.now().date().replace(month=1, day=1),
+                period_end=timezone.now().date().replace(month=12, day=31),
+                total_emissions=1247.5,
+                total_offsets=2856.8,
+                net_footprint=-1609.3,  # Negative = net sequestration
+                carbon_score=92,  # High score for carbon negative operations
+                generated_at=timezone.now(),
+                usda_verified=True
             )
             reports_created += 1
         
@@ -3137,33 +3287,15 @@ class Command(BaseCommand):
                     scan = HistoryScan.objects.create(
                         history=production,
                         user=user,
-                        scan_date=scan_date,
-                        location_city=random.choice(['San Francisco', 'Los Angeles', 'Seattle', 'Portland']),
-                        location_state=random.choice(['CA', 'WA', 'OR']),
-                        location_country='USA',
-                        device_type=random.choice(['iPhone', 'Android', 'iPad']),
-                        user_agent=random.choice([
-                            'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)',
-                            'Mozilla/5.0 (Android 13; Mobile; rv:109.0)',
-                            'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)'
-                        ]),
-                        referrer_source=random.choice(['organic', 'social_media', 'retailer', 'direct']),
-                        scan_context=random.choice(['grocery_store', 'farmers_market', 'restaurant', 'home']),
-                        extra_data={
-                            'engagement_time': random.randint(15, 180),  # seconds
-                            'sections_viewed': random.choice([
-                                ['carbon_footprint', 'sustainability'],
-                                ['farm_story', 'certifications'],
-                                ['carbon_footprint', 'farm_story', 'reviews'],
-                                ['all_sections']
-                            ]),
-                            'actions_taken': random.choice([
-                                ['view_carbon_data'],
-                                ['view_farm_story', 'share_product'],
-                                ['leave_review', 'view_certifications'],
-                                ['view_carbon_data', 'share_product', 'leave_review']
-                            ])
-                        }
+                        ip_address=f"192.168.{random.randint(1, 255)}.{random.randint(1, 255)}",
+                        city=random.choice(['San Francisco', 'Los Angeles', 'Seattle', 'Portland']),
+                        country='USA',
+                        comment=f"Scanned from {random.choice(['iPhone', 'Android', 'iPad'])} device. "
+                                f"Source: {random.choice(['organic', 'social_media', 'retailer', 'direct'])}. "
+                                f"Context: {random.choice(['grocery_store', 'farmers_market', 'restaurant', 'home'])}. "
+                                f"Engagement: {random.randint(15, 180)}s. "
+                                f"Viewed: {', '.join(random.choice([['carbon_footprint', 'sustainability'], ['farm_story', 'certifications'], ['carbon_footprint', 'farm_story', 'reviews']]))}. "
+                                f"Actions: {', '.join(random.choice([['view_carbon_data'], ['view_farm_story', 'share_product'], ['leave_review', 'view_certifications']]))}"
                     )
                     scans_created += 1
         
@@ -3225,24 +3357,11 @@ class Command(BaseCommand):
                             production=production,
                             user=user,
                             rating=template['rating'],
-                            title=template['title'],
-                            content=template['content'],
-                            verified_purchase=True,
-                            helpful_count=random.randint(5, 35),
-                            review_date=production.finish_date + timezone.timedelta(
-                                days=random.randint(7, 120)
-                            ),
-                            extra_data={
-                                'purchase_context': random.choice([
-                                    'farmers_market', 'grocery_store', 'online_order', 'restaurant'
-                                ]),
-                                'highlights': template['highlights'],
-                                'would_recommend': True,
-                                'sustainability_interest': random.choice([
-                                    'carbon_footprint', 'organic_farming', 'regenerative_agriculture',
-                                    'biodiversity', 'water_conservation'
-                                ])
-                            }
+                            headline=template['title'],
+                            written_review=template['content'] + f"\n\nPurchase context: {random.choice(['farmers_market', 'grocery_store', 'online_order', 'restaurant'])}. "
+                                           f"Highlights: {', '.join(template['highlights'])}. "
+                                           f"Would recommend: Yes. "
+                                           f"Sustainability interest: {random.choice(['carbon_footprint', 'organic_farming', 'regenerative_agriculture', 'biodiversity', 'water_conservation'])}"
                         )
                         reviews_created += 1
         
@@ -3391,12 +3510,44 @@ class Command(BaseCommand):
         
         self.stdout.write(f'   ✅ Publishing: {published_count} productions published with QR codes')
 
+    def fix_parcel_current_history(self, company):
+        """Fix current_history field for all parcels to ensure API works properly"""
+        self.stdout.write('   🔧 Fixing parcel current_history fields...')
+        
+        from product.models import Parcel
+        from history.models import History
+        
+        parcels = Parcel.objects.filter(establishment__company=company)
+        fixed_count = 0
+        
+        for parcel in parcels:
+            # Check if parcel has current_history set
+            if parcel.current_history is None:
+                # Look for unfinished productions
+                unfinished_productions = History.objects.filter(
+                    parcel=parcel,
+                    finish_date__isnull=True,
+                    published=False
+                )
+                
+                if unfinished_productions.exists():
+                    first_unfinished = unfinished_productions.first()
+                    parcel.current_history = first_unfinished
+                    parcel.save()
+                    fixed_count += 1
+        
+        self.stdout.write(f'   ✅ Fixed current_history for {fixed_count} parcels')
+        return fixed_count
+
     def create_ultimate_demo_summary(self, company, user, productions, establishments):
         """Create ultimate demo summary and key metrics"""
         self.stdout.write(self.style.SUCCESS('\n🎯 ULTIMATE DEMO SUMMARY & KEY METRICS'))
         
+        # Fix parcel current_history fields to ensure API works properly
+        self.fix_parcel_current_history(company)
+        
         # Calculate comprehensive metrics
-        total_area = sum([est.cultivated_area for est in establishments])
+        total_area = sum([(est.total_acreage or 100.0) for est in establishments])
         total_productions = len(productions)
         completed_productions = len([p for p in productions if p.finish_date])
         

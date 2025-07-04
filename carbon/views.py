@@ -1156,6 +1156,7 @@ class CarbonEstablishmentSummaryViewSet(viewsets.ViewSet):
             # Calculate transparency score for production readiness
             transparency_score = 10  # Base score
             total_entries_count = entries.count()
+            usda_verified_count = 0  # Initialize before conditional block
             
             if total_entries_count > 0:
                 # More sophisticated transparency scoring
@@ -2582,7 +2583,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                 extra_data = carbon_entry.extra_data or {}
                 
                 return {
-                    'co2e': float(carbon_entry.amount),
+                    'co2e': float(carbon_entry.co2e_amount or carbon_entry.amount),
                     'efficiency_score': float(extra_data.get('efficiency_score', 75)),
                     'usda_verified': carbon_entry.usda_factors_based,
                     'calculation_method': carbon_entry.data_source or 'USDA Agricultural Emission Factors',
@@ -4425,7 +4426,7 @@ class AutomationRuleViewSet(viewsets.ViewSet):
             return Response({
                 'carbon_entry_id': carbon_entry.id,
                 'message': 'Event approved and carbon entry created successfully',
-                'co2e_amount': carbon_entry.amount
+                'co2e_amount': carbon_entry.co2e_amount or carbon_entry.amount
             }, status=status.HTTP_201_CREATED)
             
         except Exception as e:
@@ -5284,10 +5285,18 @@ def get_production_carbon_economics(request, production_id):
     """
     try:
         # Verify user has access to this production
-        production = History.objects.get(
-            id=production_id,
-            parcel__establishment__company__owner=request.user
-        )
+        # First get the production, then check access through company membership
+        production = History.objects.get(id=production_id)
+        
+        # Check if user has access through company membership or ownership
+        from users.models import WorksIn
+        user_companies = WorksIn.objects.filter(user=request.user).values_list('company_id', flat=True)
+        
+        if production.parcel.establishment.company.id not in user_companies:
+            return Response({
+                'success': False,
+                'error': 'Production not found or access denied'
+            }, status=404)
         
         # Use cached carbon data from CarbonEntry instead of real-time calculations
         from carbon.models import CarbonEntry
@@ -5354,7 +5363,7 @@ def get_production_carbon_economics(request, production_id):
     except History.DoesNotExist:
         return Response({
             'success': False,
-            'error': 'Production not found or access denied'
+            'error': 'Production not found'
         }, status=404)
     except Exception as e:
         logger.error(f"Error getting cached carbon economics: {e}")
@@ -6929,7 +6938,7 @@ def verify_registry_credentials(request):
                     carbon_entry.third_party_verification_url = project_url
                     carbon_entry.verification_level = 'certified_project'
                     carbon_entry.trust_score = 1.0
-                    carbon_entry.effective_amount = carbon_entry.amount * carbon_entry.trust_score
+                    carbon_entry.effective_amount = (carbon_entry.co2e_amount or carbon_entry.amount) * carbon_entry.trust_score
                     # carbon_entry.verification_date = timezone.now()  # Field does not exist
                     carbon_entry.save()
                     

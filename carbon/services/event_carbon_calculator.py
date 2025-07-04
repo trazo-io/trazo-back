@@ -87,85 +87,29 @@ class EventCarbonCalculator:
             'natural_gas': emission_factors.get_fuel_factor('natural_gas')['value'],
         }
 
-    APPLICATION_EFFICIENCY = {
-        'broadcast': 0.7,
-        'drip_irrigation': 0.95,
-        'foliar': 0.85,
-        'banded': 0.8,
-        'injection': 0.9,
-    }
+    @property
+    def APPLICATION_EFFICIENCY(self):
+        """Get application efficiency factors from centralized registry (legacy compatibility)"""
+        return {method: data['value'] for method, data in emission_factors.APPLICATION_EFFICIENCY_FACTORS.items()}
 
-    # Crop-specific emission factors (kg CO2e per kg of crop)
-    CROP_SPECIFIC_FACTORS = {
-        # Fruits
-        'orange': 0.5,
-        'apple': 0.4,
-        'grape': 0.6,
-        'lemon': 0.5,
-        'lime': 0.5,
-        'strawberry': 0.3,
-        'blueberry': 0.4,
-        'avocado': 1.2,
-        
-        # Vegetables
-        'tomato': 0.8,
-        'lettuce': 0.2,
-        'carrot': 0.15,
-        'broccoli': 0.4,
-        'spinach': 0.15,
-        'cucumber': 0.3,
-        'bell pepper': 0.7,
-        'onion': 0.2,
-        
-        # Grains
-        'corn': 0.6,
-        'wheat': 0.5,
-        'rice': 2.5,  # Higher due to methane emissions
-        'barley': 0.4,
-        'oats': 0.4,
-        
-        # Herbs
-        'basil': 0.1,
-        'oregano': 0.1,
-        'thyme': 0.1,
-        'rosemary': 0.1,
-        'mint': 0.1,
-        
-        # Legumes
-        'soybean': 0.4,
-        'black bean': 0.3,
-        'chickpea': 0.3,
-        'lentil': 0.2,
-        'pea': 0.2,
-        
-        # Nuts
-        'almond': 2.1,  # High water and energy requirements
-        'walnut': 1.8,
-        'pecan': 1.9,
-        'hazelnut': 1.5,
-        
-        # Default fallback
-        'default': 1.0
-    }
+    @property
+    def CROP_SPECIFIC_FACTORS(self):
+        """Get crop-specific factors from centralized registry (legacy compatibility)"""
+        return {crop: data['value'] for crop, data in emission_factors.CROP_SPECIFIC_FACTORS.items()}
 
-    # Crop-specific fertilizer efficiency factors
-    CROP_FERTILIZER_EFFICIENCY = {
-        'fruits': 0.85,      # Tree crops generally more efficient
-        'vegetables': 0.75,   # Annual crops less efficient
-        'grains': 0.70,      # Field crops
-        'herbs': 0.90,       # Small plants, precision application
-        'legumes': 0.60,     # Nitrogen fixers need less N fertilizer
-        'nuts': 0.80,        # Tree crops, established root systems
-        'default': 0.75
-    }
+    @property
+    def CROP_FERTILIZER_EFFICIENCY(self):
+        """Get crop fertilizer efficiency factors from centralized registry (legacy compatibility)"""
+        return {category: data['value'] for category, data in emission_factors.CROP_FERTILIZER_EFFICIENCY.items()}
 
     def __init__(self):
         self.current_year = timezone.now().year
         self.enhanced_usda = EnhancedUSDAFactors()
         
         # Log initialization with centralized factors
-        logger.info(f"EventCarbonCalculator initialized with standardized USDA factors v{emission_factors.VERSION}")
+        logger.info(f"EventCarbonCalculator initialized with centralized emission factors v{emission_factors.VERSION}")
         logger.info(f"Nitrogen factor: {self.USDA_FERTILIZER_FACTORS['nitrogen']} kg CO2e per kg N (USDA-verified)")
+        logger.info(f"Loaded {len(emission_factors.CROP_SPECIFIC_FACTORS)} centralized crop factors")
 
     def _get_usda_emission_factors(self) -> Dict[str, float]:
         """Get base USDA emission factors for compatibility"""
@@ -994,15 +938,22 @@ class EventCarbonCalculator:
             carbon_entry = CarbonEntry.objects.create(
                 establishment_id=establishment_id,
                 production_id=getattr(event.history, 'id', None) if hasattr(event, 'history') else None,
-                type='emission' if calculation_result.get('co2e', 0) > 0 else 'sequestration',
+                type='emission' if calculation_result.get('co2e', 0) > 0 else 'offset',
                 source=carbon_source,
                 amount=abs(calculation_result.get('co2e', 0)),
                 year=event.date.year if hasattr(event, 'date') else timezone.now().year,
-                description=f"Auto-calculated from {event.type} event: {calculation_result.get('calculation_method', 'unknown')}",
+                description=f"Auto-calculated from {event.__class__.__name__} event: {calculation_result.get('calculation_method', 'unknown')}",
                 usda_factors_based=calculation_result.get('usda_factors_based', False),
                 verification_status=calculation_result.get('verification_status', 'estimated'),
                 data_source=calculation_result.get('data_source', 'Unknown'),
-                created_by=getattr(event, 'created_by', None) if hasattr(event, 'created_by') else None
+                created_by=getattr(event, 'created_by', None) if hasattr(event, 'created_by') else None,
+                registry_verification_id=f'REG-{event.__class__.__name__}-{event.id}',
+                methodology_template=f'USDA_{event.__class__.__name__.upper()}',
+                permanence_plan='Auto-generated from verified farm event data',
+                baseline_data=calculation_result.get('breakdown', {}),
+                co2e_amount=calculation_result.get('co2e', 0),
+                timestamp=event.date if hasattr(event, 'date') else timezone.now(),
+                external_verification_id=f'EXT-{event.__class__.__name__}-{event.id}',
             )
             
             # Create USDA compliance record

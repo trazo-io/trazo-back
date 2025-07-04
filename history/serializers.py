@@ -1088,10 +1088,3 @@ class PestManagementEventSerializer(EventSerializer):
 
     def get_event_type(self, pest_event):
         return PEST_MANAGEMENT_EVENT_TYPE
-
-    class Meta:
-        model = History
-        fields = ["id", "period"]
-
-    def get_period(self, history):
-        return f"{history.start_date.strftime('%m/%d/%Y')} - {history.finish_date.strftime('%m/%d/%Y')}"

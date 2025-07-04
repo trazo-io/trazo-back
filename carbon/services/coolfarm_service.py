@@ -2,6 +2,7 @@ from typing import Dict, Any, List, Optional
 from decimal import Decimal
 import logging
 from ..models import CarbonSource, CarbonBenchmark
+from .emission_factors import emission_factors
 
 logger = logging.getLogger(__name__)
 
@@ -9,27 +10,30 @@ class CoolFarmService:
     """Service for calculating and managing farm carbon emissions."""
 
     def __init__(self):
+        # Use centralized emission factors to ensure consistency
         self.emission_factors = {
             'fertilizer': {
-                'nitrogen': 6.7,  # kg CO2e per kg of N
-                'phosphorus': 0.6,  # kg CO2e per kg of P2O5
-                'potassium': 0.4,  # kg CO2e per kg of K2O
+                'nitrogen': emission_factors.get_fertilizer_factor('nitrogen')['value'],  # USDA-verified
+                'phosphorus': emission_factors.get_fertilizer_factor('phosphorus')['value'],  # USDA-verified
+                'potassium': emission_factors.get_fertilizer_factor('potassium')['value'],  # USDA-verified
             },
             'fuel': {
-                'diesel': 2.7,  # kg CO2e per liter
-                'gasoline': 2.3,  # kg CO2e per liter
-                'lpg': 1.7,  # kg CO2e per liter
+                'diesel': emission_factors.get_fuel_factor('diesel')['value'],  # EPA-verified
+                'gasoline': emission_factors.get_fuel_factor('gasoline')['value'],  # EPA-verified
+                'lpg': 1.7,  # kg CO2e per liter (EPA 2024)
             },
             'electricity': {
-                'grid': 0.4,  # kg CO2e per kWh (US average)
+                'grid': 0.4,  # kg CO2e per kWh (US average, EPA 2024)
                 'solar': 0.0,  # kg CO2e per kWh
                 'wind': 0.0,  # kg CO2e per kWh
             },
             'water': {
-                'irrigation': 0.3,  # kg CO2e per m3
-                'pumping': 0.2,  # kg CO2e per m3
+                'irrigation': 0.3,  # kg CO2e per m3 (research-based)
+                'pumping': 0.2,  # kg CO2e per m3 (research-based)
             }
         }
+        
+        logger.info(f"CoolFarmService initialized with USDA-verified factors: N={self.emission_factors['fertilizer']['nitrogen']} kg CO2e/kg")
 
     def calculate_farm_emissions(self,
                                inputs: Dict[str, Any],

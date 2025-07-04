@@ -10,6 +10,7 @@ from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.pagination import PageNumberPagination
 
 from company.models import Company
 from product.models import Product, Parcel
@@ -91,6 +92,12 @@ from .constants import (
 )
 
 from django.db.models import Q
+
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
 
 
 class HistoryViewSet(viewsets.ModelViewSet):
@@ -592,6 +599,105 @@ class HistoryViewSet(viewsets.ModelViewSet):
                     ).data
                 )
         return Response(scans_data)
+
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def establishment_scans_paginated(self, request):
+        """
+        Paginated endpoint for establishment scans with filtering.
+        Used by the commercial dashboard's "view all scans" functionality.
+        """
+        establishment_id = request.query_params.get('establishment_id')
+        company_id = request.query_params.get('company_id')
+        
+        if not establishment_id or not company_id:
+            return Response(
+                {'error': 'establishment_id and company_id are required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get scans for the establishment
+        scans_queryset = HistoryScan.objects.filter(
+            history__parcel__establishment_id=establishment_id,
+            history__parcel__establishment__company_id=company_id
+        ).select_related(
+            'history', 
+            'history__product',
+            'history__parcel',
+            'history__parcel__establishment',
+            'user'
+        ).order_by('-date')
+        
+        # Apply date filtering if provided
+        date_from = request.query_params.get('date_from')
+        date_to = request.query_params.get('date_to')
+        
+        if date_from:
+            try:
+                date_from_parsed = date_parser.parse(date_from)
+                scans_queryset = scans_queryset.filter(date__gte=date_from_parsed)
+            except ValueError:
+                pass
+                
+        if date_to:
+            try:
+                date_to_parsed = date_parser.parse(date_to)
+                scans_queryset = scans_queryset.filter(date__lte=date_to_parsed)
+            except ValueError:
+                pass
+        
+        # Apply product filtering if provided
+        product_id = request.query_params.get('product_id')
+        if product_id:
+            scans_queryset = scans_queryset.filter(history__product_id=product_id)
+            
+        # Apply parcel filtering if provided
+        parcel_id = request.query_params.get('parcel_id')
+        if parcel_id:
+            scans_queryset = scans_queryset.filter(history__parcel_id=parcel_id)
+            
+        # Apply search filtering if provided
+        search = request.query_params.get('search')
+        if search:
+            from django.db.models import Q
+            scans_queryset = scans_queryset.filter(
+                Q(history__product__name__icontains=search) |
+                Q(user__first_name__icontains=search) |
+                Q(user__last_name__icontains=search) |
+                Q(user__email__icontains=search) |
+                Q(comment__icontains=search) |
+                Q(city__icontains=search) |
+                Q(country__icontains=search) |
+                Q(history__parcel__name__icontains=search)
+            )
+        
+        # Paginate results
+        paginator = StandardResultsSetPagination()
+        page = paginator.paginate_queryset(scans_queryset, request)
+        
+        if page is not None:
+            # Transform to the expected format
+            scans_data = []
+            for scan in page:
+                scan_data = {
+                    'id': scan.id,
+                    'date': scan.date.strftime('%Y-%m-%d %H:%M:%S') if scan.date else None,
+                    'product': scan.history.product.name if scan.history.product else None,
+                    'product_id': scan.history.product.id if scan.history.product else None,
+                    'location': f"{scan.city}, {scan.country}" if scan.city and scan.country else scan.country or scan.city or 'Unknown',
+                    'parcel': scan.history.parcel.name if scan.history.parcel else None,
+                    'parcel_id': scan.history.parcel.id if scan.history.parcel else None,
+                    'comment': getattr(scan, 'comment', ''),
+                    'user': scan.user.get_full_name() if scan.user else 'Anonymous',
+                    'ip_address': scan.ip_address,
+                    'qr_code': scan.history.qr_code.url if scan.history.qr_code else None,
+                    'carbon_score': getattr(scan.history, 'carbon_score', 0),
+                    'production_period': scan.history.period if hasattr(scan.history, 'period') else None
+                }
+                scans_data.append(scan_data)
+            
+            return paginator.get_paginated_response(scans_data)
+        
+        return Response([])
 
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def my_reviews(self, request):

@@ -478,7 +478,7 @@ class TestCarbonReportGeneration(TransactionTestCase):
             establishment=self.establishment,
             type='emission',
             year=2024
-        ).aggregate(total=models.Sum('amount'))['total'] or 0
+        ).aggregate(total=models.Sum('co2e_amount'))['total'] or 0
         
         offsets = CarbonEntry.objects.filter(
             establishment=self.establishment,

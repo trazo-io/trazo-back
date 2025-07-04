@@ -44,6 +44,7 @@ class Parcel(models.Model):
     contact_person = models.CharField(max_length=60, blank=True, null=True)
     contact_phone = models.CharField(max_length=30, blank=True, null=True)
     contact_email = models.EmailField(max_length=254, blank=True, null=True)
+    address = models.CharField(max_length=200, blank=True, null=True, help_text="Parcel specific address or location details")
 
     def __str__(self):
         return str(self.id) + " - " + self.name + " - " + self.establishment.name

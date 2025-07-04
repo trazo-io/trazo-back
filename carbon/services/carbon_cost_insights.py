@@ -144,7 +144,7 @@ class CarbonCostInsights:
             # Get total carbon sequestered from production
             carbon_entries = CarbonEntry.objects.filter(
                 production=production,
-                entry_type='sequestration'
+                type='offset'
             )
             
             total_sequestered = carbon_entries.aggregate(
@@ -248,7 +248,7 @@ class CarbonCostInsights:
             has_regular_events = total_events >= 5
             has_sequestration = CarbonEntry.objects.filter(
                 production=production,
-                entry_type='sequestration'
+                type='offset'
             ).exists()
             
             score = 0

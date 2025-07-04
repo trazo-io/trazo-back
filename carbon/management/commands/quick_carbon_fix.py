@@ -222,7 +222,7 @@ class Command(BaseCommand):
                 entry = CarbonEntry.objects.create(
                     establishment=establishment,
                     created_by=user,
-                    type='sequestration',
+                    type='offset',
                     source=sequestration_source,
                     amount=random.uniform(10, 30),
                     co2e_amount=random.uniform(-25, -75),  # Negative for sequestration
@@ -400,7 +400,7 @@ class Command(BaseCommand):
         for est in establishments:
             total_entries = CarbonEntry.objects.filter(establishment=est).count()
             emissions = sum([e.co2e_amount for e in CarbonEntry.objects.filter(establishment=est, type='emission')])
-            offsets = sum([abs(e.co2e_amount) for e in CarbonEntry.objects.filter(establishment=est, type__in=['offset', 'sequestration'])])
+            offsets = sum([abs(e.co2e_amount) for e in CarbonEntry.objects.filter(establishment=est, type='offset')])
             net = emissions - offsets
             
             self.stdout.write(f'     {est.name}:')
