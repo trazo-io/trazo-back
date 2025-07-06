@@ -7,6 +7,7 @@ from django_ratelimit.decorators import ratelimit
 from django.utils.decorators import method_decorator
 from django.db.models import Sum, Avg, F, Q, Count
 from django.utils import timezone
+from django.core.cache import cache
 from datetime import datetime, timedelta
 from .models import (
     CropType, ProductionTemplate, EventTemplate,
@@ -1229,6 +1230,139 @@ class CarbonEstablishmentSummaryViewSet(viewsets.ViewSet):
             return {'tier': 'Fair', 'color': 'orange', 'description': 'Room for improvement'}
         else:
             return {'tier': 'Needs Improvement', 'color': 'red', 'description': 'Significant emission reduction needed'}
+
+    @action(detail=True, methods=['get'], url_path='entries/paginated')
+    def entries_paginated(self, request, pk=None):
+        """
+        Get paginated carbon entries for an establishment
+        
+        Following the same pattern as the Scans pagination used in AllScans.tsx
+        """
+        try:
+            establishment_id = pk
+            
+            # Verify establishment exists and user has access
+            from company.models import Establishment
+            try:
+                establishment = Establishment.objects.get(id=establishment_id)
+                
+                # Allow access if user is member of the company or staff
+                user_companies = request.user.companies.all() if hasattr(request.user, 'companies') else []
+                company_ids = [c.id for c in user_companies]
+                
+                if (establishment.company.id not in company_ids and not request.user.is_staff):
+                    return Response({
+                        'error': 'Access denied to this establishment'
+                    }, status=status.HTTP_403_FORBIDDEN)
+                    
+            except Establishment.DoesNotExist:
+                return Response({
+                    'error': 'Establishment not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # Get pagination parameters
+            page = int(request.query_params.get('page', 1))
+            page_size = int(request.query_params.get('page_size', 10))
+            
+            # Get filter parameters
+            entry_type = request.query_params.get('type', '')
+            category = request.query_params.get('category', '')
+            verified_only = request.query_params.get('verified_only', '').lower() == 'true'
+            search = request.query_params.get('search', '')
+            date_from = request.query_params.get('date_from', '')
+            date_to = request.query_params.get('date_to', '')
+            
+            # Build queryset
+            entries = CarbonEntry.objects.filter(establishment_id=establishment_id)
+            
+            # Apply filters
+            if entry_type:
+                entries = entries.filter(type=entry_type)
+            
+            if verified_only:
+                entries = entries.filter(usda_verified=True)
+            
+            if search:
+                entries = entries.filter(
+                    Q(description__icontains=search) |
+                    Q(source__name__icontains=search) if entries.model._meta.get_field('source') else Q()
+                )
+            
+            if date_from:
+                from datetime import datetime
+                entries = entries.filter(created_at__gte=datetime.fromisoformat(date_from.replace('Z', '+00:00')))
+            
+            if date_to:
+                from datetime import datetime
+                entries = entries.filter(created_at__lte=datetime.fromisoformat(date_to.replace('Z', '+00:00')))
+            
+            # Order by creation date (newest first)
+            entries = entries.order_by('-created_at')
+            
+            # Get total count
+            total_count = entries.count()
+            
+            # Apply pagination
+            from django.core.paginator import Paginator
+            paginator = Paginator(entries, page_size)
+            
+            try:
+                paginated_entries = paginator.page(page)
+            except:
+                # If page is out of range, return last page
+                paginated_entries = paginator.page(paginator.num_pages)
+            
+            # Serialize the entries
+            results = []
+            for entry in paginated_entries:
+                entry_data = {
+                    'id': entry.id,
+                    'type': entry.type,
+                    'amount': float(entry.amount or 0),
+                    'verification_status': entry.verification_status if hasattr(entry, 'verification_status') else ('verified' if entry.usda_verified else 'pending'),
+                    'created_at': entry.created_at.isoformat() if entry.created_at else entry.timestamp.isoformat(),
+                    'timestamp': entry.timestamp.isoformat() if entry.timestamp else entry.created_at.isoformat(),
+                }
+                
+                # Add effective amount for offsets
+                if entry.type == 'offset' and hasattr(entry, 'effective_amount'):
+                    entry_data['effective_amount'] = float(entry.effective_amount or entry.amount or 0)
+                
+                # Add source information if available
+                if entry.source:
+                    entry_data['source'] = {
+                        'name': entry.source.name,
+                        'category': entry.source.category
+                    }
+                
+                # Add verification details
+                if hasattr(entry, 'verification_level'):
+                    entry_data['verification_level'] = entry.verification_level
+                
+                if hasattr(entry, 'trust_score'):
+                    entry_data['trust_score'] = float(entry.trust_score) if entry.trust_score else None
+                
+                results.append(entry_data)
+            
+            # Prepare response in Django REST Framework pagination format
+            response_data = {
+                'results': results,
+                'count': total_count,
+                'next': f"?page={page + 1}" if paginated_entries.has_next() else None,
+                'previous': f"?page={page - 1}" if paginated_entries.has_previous() else None,
+            }
+            
+            return Response(response_data, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error in paginated carbon entries: {str(e)}")
+            logger.error(f"Stack trace: {traceback.format_exc()}")
+            return Response({
+                'error': 'Failed to retrieve carbon entries',
+                'detail': str(e) if settings.DEBUG else 'Internal server error',
+                'establishment_id': pk,
+                'timestamp': timezone.now().isoformat()
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class CarbonProductionSummaryViewSet(viewsets.ViewSet):

@@ -1,0 +1,45 @@
+WELCOME TO TRAZO!
+
+Hi {{ user.first_name|default:"there" }},
+
+{% if user_type == 'producer' %}
+Welcome to Trazo, the leading platform for agricultural carbon transparency and verification.
+
+As a producer, you now have access to enterprise-grade tools for tracking, calculating, and verifying your carbon footprint. Our platform integrates with USDA data and blockchain technology to provide credible, transparent carbon intelligence.
+
+What you can do with Trazo:
+• Track carbon footprint across your entire operation
+• Generate verifiable carbon certificates  
+• Access real-time USDA emission factors
+• Create transparent QR codes for consumers
+• Manage your team with role-based access
+
+Get started: https://producer.trazo.io
+{% else %}
+Welcome to Trazo, where transparency meets sustainability.
+
+You can now scan QR codes on agricultural products to discover their complete carbon story. See the real environmental impact of your food choices and support farmers who are making a difference.
+
+What you can discover:
+• Complete carbon footprint of products
+• Verified sustainability practices
+• Farm-to-table traceability
+• Impact of your purchasing decisions
+
+Get started: https://consumer.trazo.io
+{% endif %}
+
+Your account is ready to use. We're excited to have you join the movement toward more transparent and sustainable agriculture.
+
+If you have any questions or need help getting started, don't hesitate to reach out to our support team.
+
+Welcome to the future of agricultural transparency!
+
+The Trazo Team
+
+---
+Trazo - Carbon Intelligence for Agriculture
+Making sustainable farming transparent and verifiable
+
+Visit us: https://trazo.io
+Support: support@trazo.io

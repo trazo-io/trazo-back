@@ -63,6 +63,9 @@ INSTALLED_APPS = [
     "carbon",
     "support",
     "education",
+    "notifications",
+    # Django Channels
+    "channels",
     # django-allauth apps
     "allauth",
     "allauth.account",
@@ -141,6 +144,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "backend.wsgi.application"
+ASGI_APPLICATION = "backend.asgi.application"
 
 GEOIP_PATH = os.path.join(Path(__file__).resolve().parent.parent.parent, "geoip_data")
 
@@ -238,6 +242,17 @@ CACHES = {
         },
         "KEY_PREFIX": "trazo",
     }
+}
+
+# Django Channels Configuration
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("localhost", 6379)],
+            "symmetric_encryption_keys": [SECRET_KEY],
+        },
+    },
 }
 
 # CoolFarmTool API configuration for carbon calculations

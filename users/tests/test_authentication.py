@@ -606,6 +606,81 @@ class TestSecurityFeatures(TestCase):
         self.assertIsNotNone(csrf_token)
         self.assertTrue(len(csrf_token) > 10)
         
+    @patch('users.utils.send_verification_email')
+    def test_resend_verification_email(self, mock_send_email):
+        """Test resend verification email endpoint"""
+        from django.urls import reverse
+        
+        # Create an unverified user
+        user = User.objects.create_user(
+            email='unverified@example.com',
+            password='testpass123',
+            first_name='Test',
+            last_name='User',
+            is_verified=False
+        )
+        
+        # Mock successful email sending
+        mock_send_email.return_value = True
+        
+        # Test resend verification email
+        url = '/api/users/resend_verification_email/'
+        response = self.client.post(url, {
+            'email': 'unverified@example.com'
+        }, content_type='application/json')
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.content)
+        self.assertEqual(data['message'], 'Verification email sent successfully')
+        
+        # Verify that a new verification code was created
+        verification_code = VerificationCode.objects.filter(user=user).last()
+        self.assertIsNotNone(verification_code)
+        
+        # Verify email function was called
+        mock_send_email.assert_called_once()
+        
+    def test_resend_verification_email_already_verified(self):
+        """Test resend verification email for already verified user"""
+        # Create a verified user
+        user = User.objects.create_user(
+            email='verified@example.com',
+            password='testpass123',
+            first_name='Test',
+            last_name='User',
+            is_verified=True
+        )
+        
+        # Test resend verification email for verified user
+        url = '/api/users/resend_verification_email/'
+        response = self.client.post(url, {
+            'email': 'verified@example.com'
+        }, content_type='application/json')
+        
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.content)
+        self.assertEqual(data['error'], 'User is already verified')
+        
+    def test_resend_verification_email_nonexistent_user(self):
+        """Test resend verification email for non-existent user"""
+        url = '/api/users/resend_verification_email/'
+        response = self.client.post(url, {
+            'email': 'nonexistent@example.com'
+        }, content_type='application/json')
+        
+        self.assertEqual(response.status_code, 404)
+        data = json.loads(response.content)
+        self.assertEqual(data['error'], 'User with this email does not exist')
+        
+    def test_resend_verification_email_missing_email(self):
+        """Test resend verification email with missing email"""
+        url = '/api/users/resend_verification_email/'
+        response = self.client.post(url, {}, content_type='application/json')
+        
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.content)
+        self.assertEqual(data['error'], 'Email is required')
+        
 
 if __name__ == '__main__':
     unittest.main()

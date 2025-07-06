@@ -13,21 +13,58 @@ SECRET_KEY = config('SECRET_KEY')
 if not SECRET_KEY or len(SECRET_KEY) < 50:
     raise ValueError("Production requires a strong SECRET_KEY with at least 50 characters")
 
-# Database Configuration for Railway
-DATABASES = {
-    'default': dj_database_url.parse(
-        config('DATABASE_URL', default='sqlite:///db.sqlite3')
-    )
-}
+# Database Configuration - Use individual environment variables for staging/production
+if config('DATABASE_URL', default=None):
+    # Use DATABASE_URL if available (Railway/Heroku style)
+    DATABASES = {
+        'default': dj_database_url.parse(config('DATABASE_URL'))
+    }
+else:
+    # Use individual database variables (AWS Secrets Manager style)
+    database_host = config('DATABASE_HOST')
+    # Extract host and port if DATABASE_HOST contains port
+    if ':' in database_host:
+        host, port = database_host.split(':')
+    else:
+        host = database_host
+        port = config('DATABASE_PORT', default='5432')
+    
+    # Debug output
+    print(f"=== DATABASE CONFIG DEBUG ===")
+    print(f"DATABASE_HOST raw: {database_host}")
+    print(f"Parsed host: {host}")
+    print(f"Parsed port: {port}")
+    print(f"=== END DEBUG ===")
+        
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': config('DATABASE_NAME', default='trazo_staging'),
+            'USER': config('DATABASE_USER', default='trazo_staging'),
+            'PASSWORD': config('DATABASE_PASSWORD'),
+            'HOST': host,
+            'PORT': port,
+        }
+    }
 
-ALLOWED_HOSTS = [
-    "api.trazo.io",
-    "api-staging.trazo.io",
-    os.environ.get("LOAD_BALANCER_DNS", "localhost"),
-    os.environ.get("RAILWAY_STATIC_URL", "localhost"),
-    "*.railway.app",
-    "localhost"
+# Get ALLOWED_HOSTS from environment variable or use defaults
+allowed_hosts_env = config("ALLOWED_HOSTS", default="api.trazo.io,api-staging.trazo.io,localhost")
+ALLOWED_HOSTS = [host.strip() for host in allowed_hosts_env.split(",")]
+
+# Add additional hosts from other environment variables
+additional_hosts = [
+    os.environ.get("LOAD_BALANCER_DNS", ""),
+    os.environ.get("RAILWAY_STATIC_URL", ""),
 ]
+
+# Add non-empty additional hosts
+for host in additional_hosts:
+    if host and host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(host)
+
+# Add wildcard hosts
+if "*.railway.app" not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append("*.railway.app")
 
 CSRF_TRUSTED_ORIGINS = [
     "https://*.trazo.io",
@@ -55,7 +92,7 @@ CORS_ALLOWED_ORIGINS = [
 
 CSRF_COOKIE_DOMAIN = "trazo.io"
 
-CSRF_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = config('CSRF_COOKIE_SECURE', default=True, cast=bool)
 
 # Security Headers for Production
 SECURE_BROWSER_XSS_FILTER = True
@@ -64,8 +101,9 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_HSTS_PRELOAD = True
 SECURE_HSTS_SECONDS = 31536000  # 1 year
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-SECURE_SSL_REDIRECT = True
-SESSION_COOKIE_SECURE = True
+# Disable SSL redirect for staging (no SSL certificate configured)
+SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=True, cast=bool)
+SESSION_COOKIE_SECURE = config('SESSION_COOKIE_SECURE', default=True, cast=bool)
 SESSION_COOKIE_HTTPONLY = True
 X_FRAME_OPTIONS = 'DENY'
 SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
@@ -114,12 +152,21 @@ if REDIS_URL:
         }
     }
 else:
-    # Fallback to local memory cache if no Redis
+    # Use dummy cache for staging without Redis
     CACHES = {
         "default": {
-            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "BACKEND": "django.core.cache.backends.dummy.DummyCache",
         }
     }
+    
+    # Disable django-ratelimit for staging (no shared cache available)
+    RATELIMIT_ENABLE = False
+    
+    # Remove django-ratelimit from INSTALLED_APPS for staging
+    try:
+        INSTALLED_APPS.remove("django_ratelimit")
+    except ValueError:
+        pass  # Already removed
 
 # USDA API Configuration - Use environment variables for security
 USDA_NASS_API_KEY = os.environ.get('USDA_NASS_API_KEY', None)

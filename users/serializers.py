@@ -142,3 +142,70 @@ class RegisterSerializer(BasicUserSerializer):
         except ObjectDoesNotExist:
             user = User.objects.create_user(**validated_data)
         return user
+
+
+class CompanyInvitationSerializer(serializers.ModelSerializer):
+    """
+    Serializer for CompanyInvitation
+    """
+    inviter_name = serializers.SerializerMethodField()
+    company_name = serializers.SerializerMethodField()
+    role_display = serializers.SerializerMethodField()
+    is_expired = serializers.SerializerMethodField()
+    can_be_accepted = serializers.SerializerMethodField()
+    accepted_by_name = serializers.SerializerMethodField()
+    
+    class Meta:
+        from .models_invitation import CompanyInvitation
+        model = CompanyInvitation
+        fields = [
+            'id', 'email', 'invitee_name', 'company_name', 'role', 'role_display',
+            'inviter_name', 'invitation_message', 'status', 'created_at', 
+            'updated_at', 'expires_at', 'accepted_at', 'is_expired', 
+            'can_be_accepted', 'accepted_by_name'
+        ]
+        read_only_fields = [
+            'id', 'created_at', 'updated_at', 'accepted_at', 'invitation_code'
+        ]
+    
+    def get_inviter_name(self, obj):
+        return obj.inviter.get_full_name() if obj.inviter else None
+    
+    def get_company_name(self, obj):
+        return obj.company.name if obj.company else None
+    
+    def get_role_display(self, obj):
+        return obj.get_role_display()
+    
+    def get_is_expired(self, obj):
+        return obj.is_expired()
+    
+    def get_can_be_accepted(self, obj):
+        return obj.can_be_accepted()
+    
+    def get_accepted_by_name(self, obj):
+        return obj.accepted_by.get_full_name() if obj.accepted_by else None
+
+
+class InvitationCreateSerializer(serializers.Serializer):
+    """
+    Serializer for creating invitations
+    """
+    email = serializers.EmailField()
+    invitee_name = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    role = serializers.ChoiceField(
+        choices=[
+            ('CA', 'Company Admin'),
+            ('DS', 'Domain Supervisor'),
+            ('DW', 'Domain Worker'),
+            ('DE', 'Dealer')
+        ],
+        default='DW'
+    )
+    message = serializers.CharField(max_length=500, required=False, allow_blank=True)
+    
+    def validate_email(self, value):
+        """
+        Validate that the email is properly formatted
+        """
+        return value.lower().strip()

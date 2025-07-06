@@ -97,3 +97,7 @@ class VerificationCode(models.Model):
 
     def __str__(self):
         return f"{self.user.email} - {self.code}"
+
+
+# Import invitation model
+from .models_invitation import CompanyInvitation

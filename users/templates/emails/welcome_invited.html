@@ -1,0 +1,64 @@
+{% extends "emails/base.html" %}
+
+{% block title %}Welcome to {{ company.name }}{% endblock %}
+
+{% block header_title %}Welcome to {{ company.name }}!{% endblock %}
+
+{% block header_subtitle %}
+    You're now part of the team and ready to make an impact
+{% endblock %}
+
+{% block greeting %}Hi {{ user.first_name|default:"there" }},{% endblock %}
+
+{% block message %}
+    <p><strong>Congratulations!</strong> You've successfully joined <strong>{{ company.name }}</strong> as a <strong>{{ role_display }}</strong>.</p>
+    
+    <p>{{ inviter.first_name }} {{ inviter.last_name }} invited you to be part of their team, and we're excited to have you on board!</p>
+    
+    <p><strong>Your role as {{ role_display }}:</strong></p>
+    <ul style="margin: 16px 0; padding-left: 20px; color: #4b5563;">
+        {% if role == 'CA' %}
+            <li>Full access to all company establishments and data</li>
+            <li>Manage team members and send invitations</li>
+            <li>Configure company settings and preferences</li>
+            <li>Access all carbon tracking and verification tools</li>
+        {% elif role == 'FM' %}
+            <li>Manage assigned farm establishments</li>
+            <li>Track carbon footprint for your operations</li>
+            <li>Create and manage production records</li>
+            <li>Generate QR codes for transparency</li>
+        {% else %}
+            <li>Contribute to your team's carbon tracking efforts</li>
+            <li>Record agricultural events and activities</li>
+            <li>Support sustainable farming practices</li>
+            <li>Access training and educational resources</li>
+        {% endif %}
+    </ul>
+    
+    <p><strong>What you can do with Trazo:</strong></p>
+    <ul style="margin: 16px 0; padding-left: 20px; color: #4b5563;">
+        <li>Track carbon footprint across agricultural operations</li>
+        <li>Generate verifiable carbon certificates</li>
+        <li>Access real-time USDA emission factors</li>
+        <li>Create transparent QR codes for consumers</li>
+        <li>Collaborate with your team on sustainability goals</li>
+    </ul>
+{% endblock %}
+
+{% block content %}
+    <div class="btn-container">
+        <a href="{{ BASE_APP_URL|default:'https://app.trazo.io' }}" 
+           class="btn {% if user_type == 'consumer' %}consumer{% endif %}">
+            Access Your Dashboard
+        </a>
+    </div>
+    
+    <div class="message">
+        <p>Your account is ready and you're automatically logged in. Start exploring your dashboard and see how {{ company.name }} is leading the way in agricultural sustainability.</p>
+        
+        <p><strong>Need help getting started?</strong> Don't hesitate to reach out to {{ inviter.first_name }} or our support team.</p>
+        
+        <p style="margin-top: 24px; font-weight: 600; color: #111827;">Welcome to {{ company.name }} and the future of agricultural transparency!</p>
+        <p style="margin-top: 16px; color: #059669; font-weight: 600;">The Trazo Team</p>
+    </div>
+{% endblock %}

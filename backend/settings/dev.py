@@ -70,8 +70,13 @@ except ImportError:
     CELERY_BROKER_URL = 'memory://'  # In-memory broker for development
     CELERY_RESULT_BACKEND = 'cache+memory://'
     
-    # Use console backend to print emails to terminal instead of sending them
-    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+    # Use MailDev for email testing (fallback configuration)
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+    EMAIL_HOST = "localhost"
+    EMAIL_PORT = 3025
+    EMAIL_USE_TLS = False
+    EMAIL_HOST_USER = ""
+    EMAIL_HOST_PASSWORD = ""
 
 # CSRF_TRUSTED_ORIGINS = [
 #     "http://localhost:3000",
@@ -87,6 +92,7 @@ CORS_ORIGIN_ALLOW_ALL = True
 CORS_ORIGIN_WHITELIST = [
     # "http://localhost:3000",
     "http://app.localhost:3000",
+    "http://consumer.localhost:3000",
     "http://app.192.168.1.3:3000",
     "https://7172-167-60-250-132.ngrok-free.app",
     # "http://127.0.0.1:3000",
@@ -96,6 +102,7 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     # "http://localhost:3000",
     "http://app.localhost:3000",
+    "http://consumer.localhost:3000",
     "http://app.192.168.1.3:3000",
     "https://7172-167-60-250-132.ngrok-free.app",
 ]
@@ -105,18 +112,18 @@ CSRF_COOKIE_DOMAIN = None  # Allow cookies to work across app.localhost and loca
 CSRF_COOKIE_SECURE = False  # Allow HTTP in development
 
 # Email configuration for development
-# Use console backend to print emails to terminal instead of sending them
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+# Use MailDev for email testing in development
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = "localhost"
+EMAIL_PORT = 3025
+EMAIL_USE_TLS = False
+EMAIL_HOST_USER = ""
+EMAIL_HOST_PASSWORD = ""
 SERVER_EMAIL = os.environ.get("FROM_EMAIL_ADDRESS", "info@trazo.io")
 DEFAULT_FROM_EMAIL = os.environ.get("FROM_EMAIL_ADDRESS", "info@trazo.io")
 
-# SMTP settings (commented out for development)
-# EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-# EMAIL_PORT = 1025
-# EMAIL_HOST = "localhost"
-# EMAIL_USE_TLS = False
-# EMAIL_HOST_USER = None
-# EMAIL_HOST_PASSWORD = None
+# Console backend (for debugging - switch back if needed)
+# EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
 # Use local filesystem in development
 DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
@@ -146,6 +153,10 @@ WEATHER_ALERT_THRESHOLDS = {
     'low_humidity': 30,  # percentage
     'high_humidity': 85  # percentage
 }
+
+# Override base URLs for development to include proper subdomains
+BASE_APP_URL = "http://app.localhost:3000/"
+BASE_CONSUMER_URL = "http://consumer.localhost:3000/"
 
 # USDA API Configuration - Use environment variables for security
 USDA_NASS_API_KEY = os.environ.get('USDA_NASS_API_KEY', None)

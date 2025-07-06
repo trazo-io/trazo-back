@@ -25,6 +25,8 @@ resource "aws_s3_bucket_cors_configuration" "media" {
 }
 
 resource "aws_s3_bucket_policy" "media" {
+  count = var.cf_oai_arn != null ? 1 : 0
+  
   bucket = aws_s3_bucket.media.id
   policy = jsonencode({
     Version = "2012-10-17"
@@ -47,6 +49,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "media" {
   rule {
     id     = "transition-to-ia"
     status = "Enabled"
+    
+    filter {
+      prefix = ""
+    }
     
     transition {
       days          = 30

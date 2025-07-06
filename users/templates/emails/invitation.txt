@@ -1,0 +1,59 @@
+YOU'RE INVITED TO JOIN {{ company.name|upper }} ON TRAZO!
+
+Hi {{ invitee_name|default:"there" }},
+
+{{ inviter.first_name }} {{ inviter.last_name }} has invited you to join {{ company.name }} on Trazo, the leading platform for agricultural carbon transparency.
+
+COMPANY DETAILS:
+• Company: {{ company.name }}
+• Your Role: {{ role_display }}
+• Invited by: {{ inviter.first_name }} {{ inviter.last_name }}
+{% if invitation_message %}
+• Message: {{ invitation_message }}
+{% endif %}
+
+As a member of {{ company.name }}, you'll be able to:
+
+{% if role == 'CA' %}
+• Manage all company operations and team members
+• Access complete carbon tracking and reporting
+• Generate and manage carbon certificates
+• Configure company settings and integrations
+• View comprehensive analytics and insights
+{% elif role == 'DS' %}
+• Supervise specific agricultural domains
+• Track carbon footprint for assigned areas
+• Generate reports for your domains
+• Manage domain workers and activities
+• Monitor sustainability metrics
+{% elif role == 'DW' %}
+• Record agricultural activities and events
+• Track inputs and outputs for assigned areas
+• Contribute to carbon footprint calculations
+• Generate QR codes for products
+• View domain-specific reports
+{% elif role == 'DE' %}
+• Access dealer-specific features
+• Track distribution and sales data
+• Generate customer-facing reports
+• Monitor product traceability
+• Support transparency initiatives
+{% endif %}
+
+ACCEPT YOUR INVITATION:
+{{ invitation_link }}
+
+IMPORTANT: This invitation will expire in 7 days. Once you accept, you'll be able to create your account and start collaborating with {{ company.name }}.
+
+If you already have a Trazo account, you'll be automatically added to {{ company.name }} when you accept this invitation.
+
+If you believe you received this invitation in error, you can safely ignore this email or contact our support team.
+
+The Trazo Team
+
+---
+Trazo - Carbon Intelligence for Agriculture
+Making sustainable farming transparent and verifiable
+
+Visit us: https://trazo.io
+Support: support@trazo.io

@@ -1,0 +1,100 @@
+# Trazo Staging Environment Variables
+# Copy this file to terraform.tfvars and fill in the values
+
+# Basic Configuration
+domain_name = "api-staging.trazo.io"
+aws_region  = "us-east-2"
+
+# Security (REQUIRED - Generate secure values)
+database_password = "your-secure-database-password-here"
+django_secret_key = "your-50-character-django-secret-key-here"
+
+# Email Configuration (Optional for staging)
+sendgrid_api_key = "your-sendgrid-api-key-here"
+alert_email      = "osmunogue@gmail.com"
+
+# Cost Optimization Settings
+max_budget_amount = "15"  # Monthly budget in USD
+enable_ssl        = false  # Set to true if you need HTTPS
+enable_cloudfront = false  # Set to true if you need CDN
+enable_redis      = false  # Set to true if you need Redis
+
+# Resource Sizing (Ultra-minimal for cost optimization)
+ecs_task_cpu    = 128   # 0.125 vCPU - minimal
+ecs_task_memory = 256   # 256 MB - minimal
+desired_count   = 1     # Number of running tasks
+min_capacity    = 0     # Can scale to zero
+max_capacity    = 2     # Maximum tasks
+
+# Database Configuration
+rds_backup_retention_days = 1      # Minimal backups
+allocated_storage        = 20     # GB - minimal
+storage_type            = "gp3"   # Cost-effective storage
+
+# Monitoring & Logging
+log_retention_days           = 1     # Minimal log retention
+enable_enhanced_monitoring   = false # Disable to save cost
+enable_performance_insights  = false # Disable to save cost
+container_insights          = false # Disable to save cost
+
+# Auto-scaling and Scheduling
+enable_auto_scaling      = true
+enable_scheduled_scaling = true
+scale_down_schedule     = "cron(0 20 * * ? *)"  # 8 PM UTC daily
+scale_up_schedule       = "cron(0 8 * * ? *)"   # 8 AM UTC daily
+
+# Weekend Hibernation (Scale to zero)
+enable_hibernation         = true
+hibernation_start_schedule = "cron(0 22 ? * FRI *)"  # Friday 10 PM UTC
+hibernation_end_schedule   = "cron(0 8 ? * MON *)"   # Monday 8 AM UTC
+
+# Cost Features
+enable_spot_instances = true   # Use Fargate Spot (up to 70% cheaper)
+enable_budget_alerts  = true
+budget_alert_threshold = 80    # Alert at 80% of budget
+
+# ALB Configuration
+enable_access_logs      = false  # Disable to save cost
+deregistration_delay    = 30     # Faster for staging
+health_check_interval   = 30
+health_check_timeout    = 5
+healthy_threshold       = 2
+unhealthy_threshold     = 5
+
+# Security (Keep enabled for staging)
+storage_encrypted         = true
+enable_deletion_protection = false  # Disabled for staging
+enable_multi_az           = false   # Disabled for staging
+
+# Debugging
+enable_execute_command = true  # Useful for staging debugging
+
+# Additional Tags (Optional)
+tags = {
+  Project     = "trazo"
+  Environment = "staging"
+  Owner       = "your-name"
+  Department  = "engineering"
+  Purpose     = "cost-optimized-staging"
+}
+
+# Additional Environment Variables (Optional)
+environment_variables = {
+  # Add any additional environment variables here
+  # FEATURE_FLAG_XYZ = "true"
+}
+
+# Additional Secrets (Optional)
+secrets = {
+  # Add any additional secrets here
+  # EXTERNAL_API_KEY = "your-secret-arn"
+}
+
+# Optional: SSL Certificate ARN (if enable_ssl = true)
+# certificate_arn = "arn:aws:acm:us-east-2:123456789012:certificate/12345678-1234-1234-1234-123456789012"
+
+# Network Configuration (Using defaults for cost optimization)
+# vpc_cidr = "10.1.0.0/16"
+# public_subnets = ["10.1.1.0/24"]
+# private_subnets = ["10.1.2.0/24"]
+# availability_zones = ["us-east-2a"] 

@@ -55,6 +55,7 @@ urlpatterns = [
     path('api/carbon/', include('carbon.urls')),
     path('api/support/', include('support.urls')),
     path('api/education/', include('education.urls')),
+    path('api/notifications/', include('notifications.urls')),
     path("health/", health_check, name="health_check"),
     path("test/", simple_test, name="simple_test"),  # Simple test endpoint
 ]

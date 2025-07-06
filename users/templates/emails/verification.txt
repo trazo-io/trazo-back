@@ -1,0 +1,44 @@
+VERIFY YOUR TRAZO ACCOUNT
+
+Hi {{ user.first_name|default:"there" }},
+
+Thank you for signing up for Trazo! To complete your account setup and ensure the security of your account, please verify your email address.
+
+{% if verification_code %}
+Enter this verification code in the app to activate your account:
+
+{{ verification_code }}
+
+Enter this code in the verification screen to activate your account.
+{% endif %}
+
+{% if verification_link %}
+Click this link to verify your email address and activate your account:
+{{ verification_link }}
+{% endif %}
+
+Once your account is verified, you'll have full access to all Trazo features:
+
+{% if user_type == 'producer' %}
+• Carbon footprint tracking and calculation
+• USDA-verified emission factors
+• Blockchain-verified carbon certificates
+• QR code generation for products
+• Team management and role assignments
+{% else %}
+• QR code scanning for product transparency
+• Carbon footprint information
+• Farm-to-table traceability
+• Sustainability impact tracking
+{% endif %}
+
+This verification link will expire in 24 hours. If you didn't create an account with Trazo, you can safely ignore this email.
+
+The Trazo Team
+
+---
+Trazo - Carbon Intelligence for Agriculture
+Making sustainable farming transparent and verifiable
+
+Visit us: https://trazo.io
+Support: support@trazo.io

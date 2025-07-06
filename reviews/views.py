@@ -11,6 +11,7 @@ from dateutil import parser as date_parser
 
 from .models import Review
 from .serializers import ReviewSerializer, ListReviewSerializer
+from notifications.services import notification_service
 
 
 class StandardResultsSetPagination(PageNumberPagination):
@@ -47,6 +48,43 @@ class ReviewsViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
+        
+        # Send notification to product owner about the review
+        try:
+            review = serializer.instance
+            if review.production and review.production.parcel and review.production.parcel.establishment:
+                # Get the company and find company admins via WorksIn relationship
+                company = review.production.parcel.establishment.company
+                reviewer = review.user if review.user else None
+                
+                # Get company admins (users with 'CA' role)
+                from users.models import WorksIn
+                company_admins = WorksIn.objects.filter(
+                    company=company, 
+                    role='CA'  # Company Admin role
+                ).select_related('user')
+                
+                # Send notification to all company admins who are not the reviewer
+                for admin_relation in company_admins:
+                    product_owner = admin_relation.user
+                    
+                    # Only send notification if reviewer is different from product owner
+                    if reviewer != product_owner:
+                        # Get product name
+                        product_name = review.production.product.name if review.production.product else f"Production {review.production.id}"
+                        
+                        # Create notification
+                        notification_service.create_product_review_notification(
+                            product_owner=product_owner,
+                            reviewer=reviewer,
+                            product_name=product_name,
+                            rating=review.rating,
+                            review_text=review.written_review
+                        )
+        except Exception as e:
+            # Log error but don't break the review functionality
+            print(f"Error creating review notification: {e}")
+        
         return Response(serializer.data, status=201)
     
     @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated])
@@ -146,7 +184,7 @@ class ReviewsViewSet(viewsets.ModelViewSet):
             for review in page:
                 review_data = {
                     'id': review.id,
-                    'user': review.user or 'Anonymous',
+                    'user': review.user.get_full_name() if review.user else 'Anonymous',
                     'user_avatar': None,  # Add avatar logic if needed
                     'date': review.date.strftime('%Y-%m-%d') if review.date else None,
                     'rating': review.rating,

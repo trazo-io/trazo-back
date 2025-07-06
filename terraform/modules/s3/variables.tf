@@ -8,4 +8,5 @@ variable "domain_name" {
 
 variable "cf_oai_arn" {
   type = string
+  default = null
 } 

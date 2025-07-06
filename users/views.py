@@ -13,6 +13,7 @@ from rest_framework.decorators import (
     permission_classes as permission_classes_decorator,
     api_view,
 )
+from django_ratelimit.decorators import ratelimit
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.shortcuts import get_object_or_404
@@ -51,7 +52,7 @@ class UserViewSet(viewsets.ModelViewSet):
         return obj
 
     def get_permissions(self):
-        if self.action == "verify_email":
+        if self.action in ["verify_email", "resend_verification_email"]:
             permission_classes = [AllowAny]
         else:
             permission_classes = [IsAuthenticated]
@@ -109,11 +110,130 @@ class UserViewSet(viewsets.ModelViewSet):
             user.is_active = True
             user.save()
             
-            return Response({"message": "Email verified successfully"}, status=status.HTTP_200_OK)
+            # Generate JWT tokens for automatic sign-in after verification
+            from rest_framework_simplejwt.tokens import RefreshToken
+            refresh = RefreshToken.for_user(user)
+            access_token = refresh.access_token
+            
+            response = Response({
+                "message": "Email verified successfully",
+                "access": str(access_token),
+                "refresh": str(refresh),
+                "user": {
+                    "id": user.id,
+                    "email": user.email,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "user_type": user.user_type,
+                    "is_verified": user.is_verified
+                }
+            }, status=status.HTTP_200_OK)
+            
+            # Set secure HTTP-only cookies for automatic authentication (same as login)
+            cookie_options = {
+                'secure': settings.SIMPLE_JWT['AUTH_COOKIE_SECURE'],
+                'httponly': settings.SIMPLE_JWT['AUTH_COOKIE_HTTP_ONLY'],
+                'samesite': settings.SIMPLE_JWT['AUTH_COOKIE_SAMESITE'],
+            }
+            
+            # Only set domain in production, not in development (localhost)
+            if not settings.DEBUG and hasattr(settings, 'CSRF_COOKIE_DOMAIN') and settings.CSRF_COOKIE_DOMAIN:
+                cookie_options['domain'] = settings.CSRF_COOKIE_DOMAIN
+
+            # Set cookies with improved security
+            response.set_cookie(
+                key="access",
+                value=str(access_token),
+                max_age=settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"].total_seconds(),
+                **cookie_options
+            )
+            response.set_cookie(
+                key="refresh",
+                value=str(refresh),
+                max_age=settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds(),
+                **cookie_options
+            )
+            
+            return response
         except Exception as e:
             logger.error(f"Error verifying email: {e}")
             return Response(
                 {"error": "An error occurred while verifying your email"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @action(detail=False, methods=["post"], permission_classes=[AllowAny])
+    def resend_verification_email(self, request, pk=None):
+        """
+        Resend verification email to user
+        """
+        from django_ratelimit.decorators import ratelimit
+        from django.utils.decorators import method_decorator
+        from .utils import send_verification_email
+        from .signals import generate_verification_code
+        from .constants import PRODUCER, CONSUMER
+        from urllib.parse import quote
+        
+        email = request.data.get("email")
+        
+        if not email:
+            return Response(
+                {"error": "Email is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response(
+                {"error": "User with this email does not exist"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        
+        if user.is_verified:
+            return Response(
+                {"error": "User is already verified"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        try:
+            # Generate new verification code
+            new_code = generate_verification_code()
+            
+            # Remove old verification codes
+            user.verification_code.all().delete()
+            
+            # Create new verification code
+            from .models import VerificationCode
+            VerificationCode.objects.create(user=user, code=new_code)
+            
+            # Generate verification link
+            encoded_email = quote(user.email)
+            verification_link = ""
+            user_type = int(user.user_type)
+            if user_type == PRODUCER:
+                verification_link = f"{settings.BASE_APP_URL}auth/verifyemail?email={encoded_email}&code={new_code}"
+            elif user_type == CONSUMER:
+                verification_link = f"{settings.BASE_CONSUMER_URL}auth/verifyemail?email={encoded_email}&code={new_code}"
+            
+            # Send verification email
+            send_verification_email(
+                user=user,
+                verification_code=new_code,
+                verification_link=verification_link
+            )
+            
+            logger.info(f"Resent verification email to {user.email}")
+            
+            return Response(
+                {"message": "Verification email sent successfully"},
+                status=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            logger.error(f"Error resending verification email to {user.email}: {str(e)}")
+            return Response(
+                {"error": "An error occurred while sending verification email"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 

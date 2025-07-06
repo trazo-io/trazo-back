@@ -8,7 +8,7 @@ from .views import (
 )
 from .social_auth import SocialAuthView
 from rest_framework_simplejwt.views import TokenRefreshView
-from django.urls import path
+from django.urls import path, include
 
 routes = SimpleRouter()
 
@@ -25,4 +25,7 @@ urlpatterns = [
     path("auth/refresh/", CustomTokenRefreshView.as_view(), name="token_refresh"),
     path("auth/logout/", APILogoutView.as_view(), name="logout"),
     path("auth/social/", SocialAuthView.as_view(), name="social_auth"),
+    
+    # Company invitation system
+    path("", include("users.urls_invitation")),
 ]

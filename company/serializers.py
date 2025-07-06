@@ -396,17 +396,39 @@ class RetrieveCompanySerializer(ModelSerializer):
                 ).data
                 
             user = self.context["request"].user
-            worksIn = WorksIn.objects.filter(user=user, company=company)[0]
+            
+            # Get user's WorksIn relationship for this company
+            try:
+                worksIn = WorksIn.objects.get(user=user, company=company)
+            except WorksIn.DoesNotExist:
+                # User doesn't work in this company - return empty list
+                return []
+            except WorksIn.MultipleObjectsReturned:
+                # Multiple relationships (shouldn't happen) - get the first one
+                worksIn = WorksIn.objects.filter(user=user, company=company).first()
+            
+            # Company Admins see all establishments
             if worksIn.role == "CA":
                 return EstablishmentSerializer(
-                    company.establishment_set.all().order_by("name"), many=True, context=self.context
+                    company.establishment_set.all().order_by("name"), 
+                    many=True, 
+                    context=self.context
                 ).data
+            
+            # Other roles see only their assigned establishments
             return EstablishmentSerializer(
-                worksIn.establishments_in_charge.all(), many=True, context=self.context
+                worksIn.establishments_in_charge.all().order_by("name"), 
+                many=True, 
+                context=self.context
             ).data
+            
         except Exception as e:
-            # Log error and return empty list as fallback
-            print(f"Error getting establishments: {str(e)}")
+            # Log detailed error for debugging
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error getting establishments for user {user.email} in company {company.name}: {str(e)}")
+            
+            # For safety, return empty list instead of all establishments
             return []
 
     def get_image(self, company):

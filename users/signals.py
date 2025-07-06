@@ -4,7 +4,7 @@ from .models import VerificationCode, User
 from django.conf import settings
 from smtplib import SMTPException
 import logging
-from .utils import send_invitation_to_user
+from .utils import send_invitation_to_user, send_welcome_email, send_verification_email
 from .constants import PRODUCER, CONSUMER
 from urllib.parse import quote
 
@@ -22,25 +22,40 @@ def generate_verification_code(length=6):
 @receiver(post_save, sender=User)
 def create_verification_code(sender, instance, created, **kwargs):
     if created:
-        code = generate_verification_code()
-        VerificationCode.objects.create(user=instance, code=code)
-        
-        # Properly encode the email for URLs
-        encoded_email = quote(instance.email)
-        
-        verification_link = ""
-        user_type = int(instance.user_type)
-        if user_type == PRODUCER:
-            verification_link = f"{settings.BASE_APP_URL}auth/verifyemail?email={encoded_email}&code={code}"
-        elif user_type == CONSUMER:
-            verification_link = f"{settings.BASE_CONSUMER_URL}auth/verifyemail?email={encoded_email}&code={code}"
+        # Check if user was created via invitation (already verified)
+        if instance.is_verified:
+            # For invited users: skip email sending here since the invitation flow
+            # handles sending the specialized welcome email with company context
+            logger.info(f"User created via invitation: {instance.email} - email handled by invitation flow")
+        else:
+            # For regular signups: send both welcome and verification emails
+            code = generate_verification_code()
+            VerificationCode.objects.create(user=instance, code=code)
+            
+            # Properly encode the email for URLs
+            encoded_email = quote(instance.email)
+            
+            verification_link = ""
+            user_type = int(instance.user_type)
+            if user_type == PRODUCER:
+                verification_link = f"{settings.BASE_APP_URL}auth/verifyemail?email={encoded_email}&code={code}"
+            elif user_type == CONSUMER:
+                verification_link = f"{settings.BASE_CONSUMER_URL}auth/verifyemail?email={encoded_email}&code={code}"
 
-        # send verification code to user
-        try:
-            send_invitation_to_user(
-                instance.email, verification_link, instance.first_name, instance.email, instance.user_type
-            )
-        except SMTPException as e:
-            logger.error(
-                f"Could not send invitation email to user: {instance.email}, Error: {e}"
-            )
+            # Send both welcome and verification emails for regular users
+            try:
+                # Send welcome email
+                send_welcome_email(instance)
+                
+                # Send verification email with new template
+                send_verification_email(
+                    user=instance,
+                    verification_code=code,
+                    verification_link=verification_link
+                )
+                
+                logger.info(f"Welcome and verification emails sent to new user: {instance.email}")
+            except SMTPException as e:
+                logger.error(
+                    f"Could not send emails to user: {instance.email}, Error: {e}"
+                )
