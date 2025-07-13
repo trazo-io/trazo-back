@@ -7,6 +7,7 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 from common.models import Gallery
 
 from django.core.files.base import ContentFile
+from backend.security.qr_security import generate_secure_qr_url
 
 
 from product.models import Parcel
@@ -115,14 +116,24 @@ class History(models.Model):
         self.save()
 
     def save(self, *args, **kwargs):
-        url = f"{settings.BASE_CONSUMER_URL}production/{self.id}"
+        # Save first to get ID if this is a new object
+        if not self.id:
+            super().save(*args, **kwargs)
+        
+        # Generate secure QR URL with HMAC signature
+        secure_url = generate_secure_qr_url(
+            f"{settings.BASE_CONSUMER_URL}production/{self.id}",
+            self.id,
+            expiry_hours=24 * 365  # 1 year expiry for production QR codes
+        )
+        
         qr = qrcode.QRCode(
             version=1,
             error_correction=qrcode.constants.ERROR_CORRECT_L,
             box_size=10,
             border=4,
         )
-        qr.add_data(url)
+        qr.add_data(secure_url)
         qr.make(fit=True)
 
         img = qr.make_image(fill_color="black", back_color="white")

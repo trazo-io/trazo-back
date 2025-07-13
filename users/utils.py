@@ -152,6 +152,15 @@ def send_invitation_email(invitee_email, invitee_name, inviter, company, role, i
         msg_html = render_to_string("emails/invitation.html", context)
         subject = f"You're Invited to Join {company.name} on Trazo"
         
+        # Debug logging for email configuration
+        logger.info(f"Email settings debug for invitation to {invitee_email}:")
+        logger.info(f"  DEFAULT_FROM_EMAIL: {settings.DEFAULT_FROM_EMAIL}")
+        logger.info(f"  SERVER_EMAIL: {settings.SERVER_EMAIL}")
+        logger.info(f"  EMAIL_HOST: {settings.EMAIL_HOST}")
+        logger.info(f"  EMAIL_BACKEND: {settings.EMAIL_BACKEND}")
+        import os
+        logger.info(f"  FROM_EMAIL_ADDRESS env var: {os.environ.get('FROM_EMAIL_ADDRESS', 'NOT SET')}")
+        
         return send_mail(
             subject,
             msg_plain,

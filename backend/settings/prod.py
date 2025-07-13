@@ -5,8 +5,17 @@ from decouple import config
 from backend.settings.base import *
 import dj_database_url
 
-# Explicitly disable debug in production
-DEBUG = False
+# Import secure settings after base settings are loaded
+try:
+    from backend.settings.secure import apply_secure_settings
+    # Apply secure settings to this module's globals
+    apply_secure_settings(globals())
+except ImportError:
+    import logging
+    logging.getLogger(__name__).warning("Secure settings module not available, using environment variables")
+
+# Allow DEBUG to be controlled by environment variable for staging
+DEBUG = config('DEBUG', default=False, cast=bool)
 
 # Validate SECRET_KEY for production
 SECRET_KEY = config('SECRET_KEY')
@@ -70,29 +79,36 @@ CSRF_TRUSTED_ORIGINS = [
     "https://*.trazo.io",
     "https://trazo.io",
     "https://api.trazo.io",
-    "https://api-staging.trazo.io"
+    "https://api-staging.trazo.io",
+    # Add ALB domain for staging - using HTTP since ALB doesn't have SSL cert
+    "http://staging-alb-1273700937.us-east-2.elb.amazonaws.com"
 ]
 
-CORS_ORIGIN_ALLOW_ALL = True
+CORS_ORIGIN_ALLOW_ALL = False
 
 CORS_ORIGIN_WHITELIST = [
     "https://app.trazo.io", 
+    "https://consumer.trazo.io",
     "https://trazo.io",
     "https://app-staging.trazo.io",
+    "https://consumer-staging.trazo.io",
     "https://staging.trazo.io"
 ]
 CORS_ALLOW_CREDENTIALS = True
 
 CORS_ALLOWED_ORIGINS = [
     "https://app.trazo.io", 
+    "https://consumer.trazo.io",
     "https://trazo.io",
     "https://app-staging.trazo.io",
+    "https://consumer-staging.trazo.io",
     "https://staging.trazo.io"
 ]
 
 CSRF_COOKIE_DOMAIN = "trazo.io"
 
-CSRF_COOKIE_SECURE = config('CSRF_COOKIE_SECURE', default=True, cast=bool)
+# When DEBUG is True, disable CSRF cookie security for non-SSL environments
+CSRF_COOKIE_SECURE = config('CSRF_COOKIE_SECURE', default=not DEBUG, cast=bool)
 
 # Security Headers for Production
 SECURE_BROWSER_XSS_FILTER = True
@@ -102,15 +118,16 @@ SECURE_HSTS_PRELOAD = True
 SECURE_HSTS_SECONDS = 31536000  # 1 year
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 # Disable SSL redirect for staging (no SSL certificate configured)
-SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=True, cast=bool)
-SESSION_COOKIE_SECURE = config('SESSION_COOKIE_SECURE', default=True, cast=bool)
+# When DEBUG is True, disable SSL redirect by default
+SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=not DEBUG, cast=bool)
+SESSION_COOKIE_SECURE = config('SESSION_COOKIE_SECURE', default=not DEBUG, cast=bool)
 SESSION_COOKIE_HTTPONLY = True
 X_FRAME_OPTIONS = 'DENY'
 SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
 
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-SERVER_EMAIL = os.environ.get("FROM_EMAIL_ADDRESS", "info@trazo.io")
-DEFAULT_FROM_EMAIL = config("FROM_EMAIL_ADDRESS", "info@trazo.io")
+SERVER_EMAIL = os.environ.get("FROM_EMAIL_ADDRESS", "osmunogue@gmail.com")
+DEFAULT_FROM_EMAIL = config("FROM_EMAIL_ADDRESS", "osmunogue@gmail.com")
 
 SENDGRID_API_KEY = config("SENDGRID_API_KEY", default=None)
 

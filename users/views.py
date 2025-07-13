@@ -28,6 +28,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 
 from users.constants import SUPERUSER, PRODUCER, CONSUMER
+from backend.subdomain_config import APP_SUBDOMAIN, CONSUMER_SUBDOMAIN
 
 import logging
 
@@ -136,10 +137,9 @@ class UserViewSet(viewsets.ModelViewSet):
                 'samesite': settings.SIMPLE_JWT['AUTH_COOKIE_SAMESITE'],
             }
             
-            # Only set domain in production, not in development (localhost)
-            if not settings.DEBUG and hasattr(settings, 'CSRF_COOKIE_DOMAIN') and settings.CSRF_COOKIE_DOMAIN:
-                cookie_options['domain'] = settings.CSRF_COOKIE_DOMAIN
-
+            if settings.DEBUG and 'AUTH_COOKIE_DOMAIN' in settings.SIMPLE_JWT:
+                cookie_options['domain'] = settings.SIMPLE_JWT['AUTH_COOKIE_DOMAIN']
+            
             # Set cookies with improved security
             response.set_cookie(
                 key="access",
@@ -279,13 +279,13 @@ class LoginViewSet(viewsets.ModelViewSet, TokenObtainPairView):
         user_type = serializer.validated_data.get('user_type')
         subdomain = self.get_subdomain(request)
 
-        if subdomain == 'app':
+        if subdomain == APP_SUBDOMAIN:
             if user_type not in [SUPERUSER, PRODUCER]:
                 return Response(
                     {"error": "Access denied"},
                     status=status.HTTP_403_FORBIDDEN
                 )
-        elif subdomain == 'consumer':
+        elif subdomain == CONSUMER_SUBDOMAIN:
             if user_type == CONSUMER:
                 # Add additional consumer-specific validation if needed
                 pass
@@ -304,10 +304,9 @@ class LoginViewSet(viewsets.ModelViewSet, TokenObtainPairView):
             'samesite': settings.SIMPLE_JWT['AUTH_COOKIE_SAMESITE'],
         }
         
-        # Only set domain in production, not in development (localhost)
-        if not settings.DEBUG and hasattr(settings, 'CSRF_COOKIE_DOMAIN') and settings.CSRF_COOKIE_DOMAIN:
-            cookie_options['domain'] = settings.CSRF_COOKIE_DOMAIN
-
+        if settings.DEBUG and 'AUTH_COOKIE_DOMAIN' in settings.SIMPLE_JWT:
+            cookie_options['domain'] = settings.SIMPLE_JWT['AUTH_COOKIE_DOMAIN']
+        
         # Set cookies with improved security
         response.set_cookie(
             key="access",
@@ -371,9 +370,8 @@ class CustomTokenRefreshView(TokenRefreshView):
             'samesite': settings.SIMPLE_JWT['AUTH_COOKIE_SAMESITE'],
         }
         
-        # Only set domain in production, not in development (localhost)
-        if not settings.DEBUG and hasattr(settings, 'CSRF_COOKIE_DOMAIN') and settings.CSRF_COOKIE_DOMAIN:
-            cookie_options['domain'] = settings.CSRF_COOKIE_DOMAIN
+        if settings.DEBUG and 'AUTH_COOKIE_DOMAIN' in settings.SIMPLE_JWT:
+            cookie_options['domain'] = settings.SIMPLE_JWT['AUTH_COOKIE_DOMAIN']
         
         response.set_cookie(
             key="access",

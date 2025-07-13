@@ -33,8 +33,8 @@ class Command(BaseCommand):
             }
         )
         if created:
-        user.set_password('testpass123')
-        user.save()
+            user.set_password('testpass123')
+            user.save()
 
         # Create company
         company, _ = Company.objects.get_or_create(

@@ -56,6 +56,7 @@ urlpatterns = [
     path('api/support/', include('support.urls')),
     path('api/education/', include('education.urls')),
     path('api/notifications/', include('notifications.urls')),
+    path('api/security/', include('backend.security.urls')),
     path("health/", health_check, name="health_check"),
     path("test/", simple_test, name="simple_test"),  # Simple test endpoint
 ]

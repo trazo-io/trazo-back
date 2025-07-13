@@ -3,7 +3,17 @@ import os
 from backend.settings.base import *
 from decouple import config
 
-ALLOWED_HOSTS = ("localhost", ".localhost", "127.0.0.1", "192.168.1.3", "7172-167-60-250-132.ngrok-free.app", "testserver")
+# ALLOWED_HOSTS - check for staging environment
+if os.environ.get('ENVIRONMENT') == 'staging':
+    # Staging-specific allowed hosts
+    ALLOWED_HOSTS = [
+        "localhost", ".localhost", "127.0.0.1", "testserver",
+        "staging-alb-1273700937.us-east-2.elb.amazonaws.com",
+        "api-staging.trazo.io"
+    ]
+else:
+    # Development allowed hosts
+    ALLOWED_HOSTS = ("localhost", ".localhost", "127.0.0.1", "192.168.1.3", "7172-167-60-250-132.ngrok-free.app", "testserver")
 
 # Database configuration for local development
 # Use PostgreSQL if Docker services are running, fallback to SQLite
@@ -85,31 +95,89 @@ except ImportError:
 #     "http://localhost:8000",
 # ]
 
-CSRF_TRUSTED_ORIGINS = ["https://*.localhost", "http://app.localhost:3000", "https://7172-167-60-250-132.ngrok-free.app"]
+# CSRF trusted origins - check for staging environment
+if os.environ.get('ENVIRONMENT') == 'staging':
+    # Staging-specific CSRF configuration
+    CSRF_TRUSTED_ORIGINS = [
+        "https://staging-alb-1273700937.us-east-2.elb.amazonaws.com",
+        "http://staging-alb-1273700937.us-east-2.elb.amazonaws.com",
+        "https://*.localhost", 
+        "http://app.localhost:3000",
+        "http://localhost:3000"  # Add direct localhost support
+    ]
+else:
+    # Development CSRF configuration  
+    CSRF_TRUSTED_ORIGINS = [
+        "https://*.localhost", 
+        "http://app.localhost:3000", 
+        "http://localhost:3000",  # Add direct localhost support
+        "https://7172-167-60-250-132.ngrok-free.app", 
+        "http://localhost:4173", 
+        "http://app.localhost:4173"
+    ]
 
 CORS_ORIGIN_ALLOW_ALL = True
 
 CORS_ORIGIN_WHITELIST = [
-    # "http://localhost:3000",
+    "http://localhost:3000",  # Enable direct localhost support
     "http://app.localhost:3000",
     "http://consumer.localhost:3000",
     "http://app.192.168.1.3:3000",
     "https://7172-167-60-250-132.ngrok-free.app",
-    # "http://127.0.0.1:3000",
+    "http://127.0.0.1:3000",  # Also add 127.0.0.1 support
+    "http://localhost:4173",  # For production build testing
+    "http://app.localhost:4173",  # For production build testing with subdomain
 ]
 CORS_ALLOW_CREDENTIALS = True
 
 CORS_ALLOWED_ORIGINS = [
-    # "http://localhost:3000",
+    "http://localhost:3000",  # Enable direct localhost support
     "http://app.localhost:3000",
     "http://consumer.localhost:3000",
     "http://app.192.168.1.3:3000",
     "https://7172-167-60-250-132.ngrok-free.app",
+    "http://127.0.0.1:3000",  # Also add 127.0.0.1 support
+    "http://localhost:4173",  # For production build testing
+    "http://app.localhost:4173",  # For production build testing with subdomain
 ]
 
 # Fix for development - allow cross-subdomain cookies and HTTP
 CSRF_COOKIE_DOMAIN = None  # Allow cookies to work across app.localhost and localhost
 CSRF_COOKIE_SECURE = False  # Allow HTTP in development
+
+# Development-specific rate limiting configuration
+# Disable aggressive rate limiting for development
+RATELIMIT_ENABLE = False  # Disable rate limiting in development
+
+# Override REST_FRAMEWORK throttle rates for development
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": ("users.auth.CustomAuthentication",),
+    "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle"
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "1000/hour",          # Very permissive for development
+        "user": "2000/hour",          # Very permissive for development
+        "login": "100/minute",        # Very permissive for development
+        "signup": "50/minute",        # Very permissive for development
+        "password_reset": "50/hour",  # Very permissive for development
+        "carbon_calculation": "500/hour",
+        "api_sensitive": "200/hour",
+        "qr_scan": "1000/hour",
+        "blockchain": "100/hour",
+    },
+}
+
+# JWT Cookie Configuration for Development
+# Enable cross-subdomain cookies for localhost development
+SIMPLE_JWT = {
+    **SIMPLE_JWT,  # Inherit base settings
+    'AUTH_COOKIE_DOMAIN': '.localhost',  # Allow cookies across *.localhost
+    'AUTH_COOKIE_SECURE': False,  # Allow HTTP in development
+    'AUTH_COOKIE_SAMESITE': 'None',  # For dev cross-subdomain cookie sharing (requires secure=False)
+}
 
 # Email configuration for development
 # Use MailDev for email testing in development

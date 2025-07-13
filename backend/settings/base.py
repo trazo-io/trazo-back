@@ -27,8 +27,13 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 BASE_TRAZO_URL = config("BASE_TRAZO_URL", default="http://localhost:3000/")
 
-BASE_APP_URL = config("BASE_APP_URL", default="http://app.localhost:3000/")
-BASE_CONSUMER_URL = config("BASE_CONSUMER_URL", default="http://consumer.localhost:3000/")
+# Import subdomain configuration
+from backend.subdomain_config import get_frontend_urls, APP_SUBDOMAIN, CONSUMER_SUBDOMAIN
+
+# Get environment-specific frontend URLs
+_frontend_urls = get_frontend_urls()
+BASE_APP_URL = config("BASE_APP_URL", default=_frontend_urls['BASE_APP_URL'])
+BASE_CONSUMER_URL = config("BASE_CONSUMER_URL", default=_frontend_urls['BASE_CONSUMER_URL'])
 CSRF_TRUSTED_ORIGINS = config("CSRF_TRUSTED_ORIGINS", default="http://localhost:3000").split(",")
 
 # SECURITY WARNING: keep the secret key used in production secret!
@@ -78,11 +83,14 @@ INSTALLED_APPS = [
     "django_redis",
     # Security
     "django_ratelimit",
+    # Security
+    "backend.security",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "corsheaders.middleware.CorsMiddleware",
+    "backend.security.rate_limiting.SecurityMiddleware",
     "backend.security_middleware.SecurityLoggingMiddleware",
     "backend.security_middleware.CSRFSecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
@@ -117,11 +125,15 @@ REST_FRAMEWORK = {
         "rest_framework.throttling.UserRateThrottle"
     ],
     "DEFAULT_THROTTLE_RATES": {
-        "anon": "100/hour",
-        "user": "1000/hour",
-        "login": "5/minute",
-        "carbon_calculation": "200/hour",
-        "api_sensitive": "50/hour"
+        "anon": "50/hour",
+        "user": "500/hour", 
+        "login": "3/minute",
+        "signup": "2/minute",
+        "password_reset": "3/hour",
+        "carbon_calculation": "100/hour",
+        "api_sensitive": "30/hour",
+        "qr_scan": "300/hour",
+        "blockchain": "20/hour"
     },
 }
 
@@ -287,6 +299,10 @@ EMAIL_HOST_PASSWORD = config("SENDGRID_API_KEY", default=None)
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 
+# Email sender defaults - can be overridden in environment-specific settings
+DEFAULT_FROM_EMAIL = config("FROM_EMAIL_ADDRESS", default="osmunogue@gmail.com")
+SERVER_EMAIL = config("FROM_EMAIL_ADDRESS", default="osmunogue@gmail.com")
+
 BASE_URL = config("BASE_URL", default="http://localhost:8000/")
 
 # Media files
@@ -423,7 +439,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://consumer.localhost:3000",
     "http://127.0.0.1:3000",
 ]
-CORS_ALLOW_ALL_ORIGINS = DEBUG  # Allow all origins in development
+CORS_ALLOW_ALL_ORIGINS = DEBUG  # Allow all origins in development only
 CORS_ALLOW_HEADERS = [
     'accept',
     'accept-encoding',
@@ -507,7 +523,7 @@ SOCIALACCOUNT_PROVIDERS = {
     },
 }
 
-JWT_EXPIRATION_DELTA = timedelta(seconds=20)
+JWT_EXPIRATION_DELTA = timedelta(minutes=15)
 
 # Cookie security settings - adjust based on environment
 SESSION_COOKIE_SECURE = not DEBUG  # Only secure in production
@@ -530,12 +546,12 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = (
 
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=20),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
     "UPDATE_LAST_LOGIN": False,
-    "ALGORITHM": "HS256",
+    "ALGORITHM": "HS256",  # Keep HS256 for simplicity in MVP, RS256 requires key pair management
     "SIGNING_KEY": SECRET_KEY,
     "VERIFYING_KEY": None,
     "AUDIENCE": None,

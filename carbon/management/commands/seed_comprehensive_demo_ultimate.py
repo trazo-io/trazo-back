@@ -1141,8 +1141,8 @@ class Command(BaseCommand):
             # Determine entry type
             entry_type = 'offset' if co2e_amount < 0 else 'emission'
             
-                    # Create carbon entry with proper verification data
-        carbon_entry = CarbonEntry.objects.create(
+            # Create carbon entry with proper verification data
+            carbon_entry = CarbonEntry.objects.create(
             establishment=production.parcel.establishment,
             production=production,
             created_by=user,
