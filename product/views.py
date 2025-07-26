@@ -17,10 +17,40 @@ from subscriptions.permissions import HasParcelCreationPermission
 from rest_framework.permissions import IsAuthenticated
 
 class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
-    queryset = Parcel.objects.all()
+    queryset = Parcel.objects.select_related(
+        'establishment', 'establishment__company', 'album'
+    ).prefetch_related(
+        'product_set', 'history_set'
+    ).all()
     filter_backends = [filters.OrderingFilter]
     parser_classes = (MultiPartParser, FormParser)
     permission_classes = [IsAuthenticated, HasParcelCreationPermission]
+    
+    def partial_update(self, request, *args, **kwargs):
+        """Override to handle indexed image URLs from FormData"""
+        # Handle indexed image URLs from FormData
+        
+        # Handle indexed uploaded_image_urls
+        uploaded_urls = []
+        i = 0
+        while f'uploaded_image_urls[{i}]' in request.data:
+            url = request.data.get(f'uploaded_image_urls[{i}]')
+            if url:
+                uploaded_urls.append(url)
+            i += 1
+        
+        if uploaded_urls:
+            # Process indexed URLs
+            # Convert to mutable QueryDict and update
+            request.data._mutable = True
+            # Remove indexed entries
+            for j in range(i):
+                request.data.pop(f'uploaded_image_urls[{j}]', None)
+            # Add as list
+            request.data.setlist('uploaded_image_urls', uploaded_urls)
+            request.data._mutable = False
+            
+        return super().partial_update(request, *args, **kwargs)
 
     def get_serializer_class(self):
         if (

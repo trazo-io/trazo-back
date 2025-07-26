@@ -13,7 +13,23 @@ from rest_framework.decorators import (
     permission_classes as permission_classes_decorator,
     api_view,
 )
-from django_ratelimit.decorators import ratelimit
+# Conditional ratelimit import for staging compatibility
+try:
+    from django.conf import settings
+    if getattr(settings, 'RATELIMIT_ENABLE', True) and 'django_ratelimit' in getattr(settings, 'INSTALLED_APPS', []):
+        from django_ratelimit.decorators import ratelimit
+    else:
+        # Create a no-op decorator when ratelimit is disabled
+        def ratelimit(*args, **kwargs):
+            def decorator(func):
+                return func
+            return decorator
+except ImportError:
+    # Fallback no-op decorator if django_ratelimit is not available
+    def ratelimit(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.shortcuts import get_object_or_404
@@ -167,7 +183,7 @@ class UserViewSet(viewsets.ModelViewSet):
         """
         Resend verification email to user
         """
-        from django_ratelimit.decorators import ratelimit
+        # Use the conditional ratelimit already defined at module level
         from django.utils.decorators import method_decorator
         from .utils import send_verification_email
         from .signals import generate_verification_code
@@ -399,8 +415,11 @@ class CustomTokenRefreshView(TokenRefreshView):
         return response
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class APILogoutView(APIView):
+    """
+    SECURITY: Logout endpoint with CSRF protection enabled
+    State-changing operations should always be protected against CSRF attacks
+    """
     permission_classes = (IsAuthenticated,)
     http_method_names = ["post"]
 

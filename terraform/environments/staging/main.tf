@@ -299,7 +299,7 @@ resource "aws_ecs_task_definition" "staging_django" {
   container_definitions = jsonencode([
     {
       name      = "django"
-      image     = "${aws_ecr_repository.staging.repository_url}:latest"
+      image     = "013640213707.dkr.ecr.us-east-1.amazonaws.com/trazo-backend:latest"
       essential = true
       
       environment = concat([

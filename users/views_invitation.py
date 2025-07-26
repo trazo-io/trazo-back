@@ -117,6 +117,9 @@ def create_invitation(request):
             if settings.DEBUG:
                 # Use local frontend URL for development
                 invitation_link = f"{settings.BASE_APP_URL}invitation/{invitation.invitation_code}"
+            elif hasattr(settings, 'ENVIRONMENT') and settings.ENVIRONMENT == 'staging':
+                # Use staging frontend URL
+                invitation_link = f"{settings.BASE_APP_URL}invitation/{invitation.invitation_code}"
             else:
                 # Use production domain
                 domain = Site.objects.get_current().domain
@@ -345,6 +348,9 @@ def resend_invitation(request, invitation_id):
         # Generate invitation link
         if settings.DEBUG:
             # Use local frontend URL for development
+            invitation_link = f"{settings.BASE_APP_URL}invitation/{invitation.invitation_code}"
+        elif hasattr(settings, 'ENVIRONMENT') and settings.ENVIRONMENT == 'staging':
+            # Use staging frontend URL
             invitation_link = f"{settings.BASE_APP_URL}invitation/{invitation.invitation_code}"
         else:
             # Use production domain

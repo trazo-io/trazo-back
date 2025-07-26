@@ -5,7 +5,16 @@ import logging
 import json
 from django.utils.deprecation import MiddlewareMixin
 from django.http import HttpResponseForbidden
-from django_ratelimit.exceptions import Ratelimited
+from django.conf import settings
+
+# Only import Ratelimited if rate limiting is enabled
+if getattr(settings, 'RATELIMIT_ENABLE', True):
+    try:
+        from django_ratelimit.exceptions import Ratelimited
+    except ImportError:
+        Ratelimited = None
+else:
+    Ratelimited = None
 
 logger = logging.getLogger('security')
 
@@ -39,7 +48,7 @@ class SecurityLoggingMiddleware(MiddlewareMixin):
         user = getattr(request, 'user', None)
         username = user.username if user and user.is_authenticated else 'Anonymous'
         
-        if isinstance(exception, Ratelimited):
+        if Ratelimited and isinstance(exception, Ratelimited):
             # Log rate limit violations
             logger.warning(
                 f"Rate limit exceeded - IP: {client_ip}, User: {username}, "

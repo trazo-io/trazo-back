@@ -3,7 +3,23 @@ from rest_framework import viewsets, status, generics, permissions
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from django_ratelimit.decorators import ratelimit
+# Conditional ratelimit import for staging compatibility
+try:
+    from django.conf import settings
+    if getattr(settings, 'RATELIMIT_ENABLE', True) and 'django_ratelimit' in getattr(settings, 'INSTALLED_APPS', []):
+        from django_ratelimit.decorators import ratelimit
+    else:
+        # Create a no-op decorator when ratelimit is disabled
+        def ratelimit(*args, **kwargs):
+            def decorator(func):
+                return func
+            return decorator
+except ImportError:
+    # Fallback no-op decorator if django_ratelimit is not available
+    def ratelimit(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
 from django.utils.decorators import method_decorator
 from django.db.models import Sum, Avg, F, Q, Count
 from django.utils import timezone
@@ -2078,6 +2094,8 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     'contact_person': getattr(production.parcel, 'contact_person', ''),
                     'contact_phone': getattr(production.parcel, 'contact_phone', ''),
                     'contact_email': getattr(production.parcel, 'contact_email', ''),
+                    # Agricultural details for carbon calculations and USDA compliance
+                    'agricultural_details': getattr(production.parcel, 'agricultural_details', {}),
                     # Current production info
                     'current_history': {
                         'id': production.id,
@@ -2291,12 +2309,17 @@ class PublicProductionViewSet(viewsets.ViewSet):
                         # Skip images without valid files
                         continue
                     
-                    images.append({
-                        'id': image.id,
-                        'image': image_url,
-                        'name': getattr(image, 'name', '') or ''
-                    })
-                return images
+                    # Only append if we have a valid image URL
+                    if image_url:
+                        images.append({
+                            'id': image.id,
+                            'image': image_url,
+                            'name': getattr(image, 'name', '') or ''
+                        })
+                
+                # Only return if we found valid images
+                if images:
+                    return images
             
             # If no production images, try parcel images
             if production.parcel and production.parcel.album and production.parcel.album.images.exists():
@@ -2315,12 +2338,17 @@ class PublicProductionViewSet(viewsets.ViewSet):
                         # Skip images without valid files
                         continue
                     
-                    images.append({
-                        'id': f"parcel_{image.id}",
-                        'image': image_url,
-                        'name': f"Field: {getattr(image, 'name', '') or production.parcel.name}"
-                    })
-                return images
+                    # Only append if we have a valid image URL
+                    if image_url:
+                        images.append({
+                            'id': f"parcel_{image.id}",
+                            'image': image_url,
+                            'name': f"Field: {getattr(image, 'name', '') or production.parcel.name}"
+                        })
+                
+                # Only return if we found valid images
+                if images:
+                    return images
             
             # If no parcel images, try establishment images
             if (production.parcel and production.parcel.establishment and 
@@ -2341,12 +2369,17 @@ class PublicProductionViewSet(viewsets.ViewSet):
                         # Skip images without valid files
                         continue
                     
-                    images.append({
-                        'id': f"establishment_{image.id}",
-                        'image': image_url,
-                        'name': f"Farm: {getattr(image, 'name', '') or production.parcel.establishment.name}"
-                    })
-                return images
+                    # Only append if we have a valid image URL
+                    if image_url:
+                        images.append({
+                            'id': f"establishment_{image.id}",
+                            'image': image_url,
+                            'name': f"Farm: {getattr(image, 'name', '') or production.parcel.establishment.name}"
+                        })
+                
+                # Only return if we found valid images
+                if images:
+                    return images
             
             # If no real images available, provide crop-specific placeholder images
             crop_name = production.product.name.lower() if production.product else "unknown"
@@ -2364,6 +2397,12 @@ class PublicProductionViewSet(viewsets.ViewSet):
                 'wheat': 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?w=800&h=600&fit=crop&crop=center',
                 'carrot': 'https://images.unsplash.com/photo-1598170845058-32b9d6a5da37?w=800&h=600&fit=crop&crop=center',
                 'potato': 'https://images.unsplash.com/photo-1518977676601-b53f82aba655?w=800&h=600&fit=crop&crop=center',
+                'strawberry': 'https://images.unsplash.com/photo-1543528176-61b239494933?w=800&h=600&fit=crop&crop=center',
+                'premium_organic_strawberry': 'https://images.unsplash.com/photo-1543528176-61b239494933?w=800&h=600&fit=crop&crop=center',
+                'avocado': 'https://images.unsplash.com/photo-1519162808019-7de1683fa2ad?w=800&h=600&fit=crop&crop=center',
+                'organic_hass_avocado': 'https://images.unsplash.com/photo-1519162808019-7de1683fa2ad?w=800&h=600&fit=crop&crop=center',
+                'almond': 'https://images.unsplash.com/photo-1508061253366-f7da158b6d46?w=800&h=600&fit=crop&crop=center',
+                'premium_nonpareil_almond': 'https://images.unsplash.com/photo-1508061253366-f7da158b6d46?w=800&h=600&fit=crop&crop=center',
             }
             
             # Get specific placeholder or default to generic farm image

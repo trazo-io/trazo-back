@@ -183,26 +183,105 @@ class UpdateEstablishmentSerializer(ModelSerializer):
         
         # Handle S3 keys from production environment
         if s3_keys:
-            for s3_key in s3_keys:
-                gallery_image = gallery.images.create(s3_key=s3_key)
-                gallery_image.save()
+            self._update_gallery_images_by_s3_keys(gallery, s3_keys)
             validated_data["album"] = gallery
         
         # Handle uploaded image URLs (for both environments)
         elif uploaded_image_urls:
-            for url in uploaded_image_urls:
-                gallery_image = gallery.images.create(image_url=url)
-                gallery_image.save()
+            self._update_gallery_images_by_urls(gallery, uploaded_image_urls)
             validated_data["album"] = gallery
         
         # Handle direct file uploads from form (development environment)
         elif album_data:
-            for image_data in album_data.values():
-                gallery_image = gallery.images.create(image=image_data)
-                gallery_image.save()
+            self._update_gallery_images_by_files(gallery, album_data)
             validated_data["album"] = gallery
             
         return super().update(instance, validated_data)
+
+    def _update_gallery_images_by_urls(self, gallery, new_urls):
+        """
+        Update gallery images using differential approach - Django best practice.
+        Only creates/deletes what's actually changed.
+        """
+        import logging
+        from django.db import transaction
+        
+        logger = logging.getLogger(__name__)
+        
+        with transaction.atomic():
+            # Validate input
+            if not new_urls:
+                logger.warning(f"Empty URL list provided for gallery {gallery.id}")
+                return
+                
+            # Get current image URLs
+            existing_images = gallery.images.filter(image_url__isnull=False)
+            existing_urls = set(existing_images.values_list('image_url', flat=True))
+            new_urls_set = set(filter(None, new_urls))  # Remove any None/empty URLs
+            
+            # Find URLs to add and remove
+            urls_to_add = new_urls_set - existing_urls
+            urls_to_remove = existing_urls - new_urls_set
+            
+            logger.info(f"Gallery {gallery.id}: Adding {len(urls_to_add)} images, removing {len(urls_to_remove)} images")
+            
+            # Remove images that are no longer needed
+            if urls_to_remove:
+                removed_count = gallery.images.filter(image_url__in=urls_to_remove).delete()[0]
+                logger.info(f"Removed {removed_count} images from gallery {gallery.id}")
+            
+            # Add new images (bulk_create for efficiency)
+            if urls_to_add:
+                new_images = [
+                    gallery.images.model(gallery=gallery, image_url=url)
+                    for url in urls_to_add
+                ]
+                created_images = gallery.images.bulk_create(new_images)
+                logger.info(f"Added {len(created_images)} images to gallery {gallery.id}")
+
+    def _update_gallery_images_by_s3_keys(self, gallery, new_s3_keys):
+        """
+        Update gallery images by S3 keys using differential approach.
+        """
+        from django.db import transaction
+        
+        with transaction.atomic():
+            # Get current S3 keys
+            existing_images = gallery.images.filter(s3_key__isnull=False)
+            existing_keys = set(existing_images.values_list('s3_key', flat=True))
+            new_keys_set = set(new_s3_keys)
+            
+            # Find keys to add and remove
+            keys_to_add = new_keys_set - existing_keys
+            keys_to_remove = existing_keys - new_keys_set
+            
+            # Remove images that are no longer needed
+            if keys_to_remove:
+                gallery.images.filter(s3_key__in=keys_to_remove).delete()
+            
+            # Add new images
+            if keys_to_add:
+                new_images = [
+                    gallery.images.model(gallery=gallery, s3_key=key)
+                    for key in keys_to_add
+                ]
+                gallery.images.bulk_create(new_images)
+
+    def _update_gallery_images_by_files(self, gallery, album_data):
+        """
+        Update gallery images by direct file uploads.
+        Note: File-based comparison is more complex, using simpler approach for now.
+        """
+        from django.db import transaction
+        
+        with transaction.atomic():
+            # For file uploads, we need to replace all since we can't easily compare files
+            # This is acceptable for file uploads as they represent a complete replacement
+            gallery.images.filter(image__isnull=False).delete()
+            
+            # Add new file-based images
+            for image_data in album_data.values():
+                gallery.images.create(image=image_data)
 
     def create(self, validated_data):
         s3_keys = validated_data.pop('s3_keys', None)

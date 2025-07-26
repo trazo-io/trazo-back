@@ -318,3 +318,75 @@ class SocialAuthView(APIView):
                 {'error': 'Authentication failed'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class OAuthConfigView(APIView):
+    """
+    SECURITY: Secure OAuth configuration endpoint
+    Provides OAuth client IDs and redirect URIs without exposing secrets
+    """
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        """
+        Get OAuth configuration for specified provider
+        SECURITY: Only returns public configuration, never secrets
+        """
+        provider = request.data.get('provider')
+        
+        if not provider:
+            return Response(
+                {'error': 'Provider is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # SECURITY: Validate provider to prevent injection
+        allowed_providers = ['google', 'facebook', 'apple']
+        if provider not in allowed_providers:
+            return Response(
+                {'error': 'Invalid provider'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Get the current domain for redirect URI
+            host = request.get_host()
+            protocol = 'https' if request.is_secure() else 'http'
+            base_url = f"{protocol}://{host}"
+            
+            # SECURITY: Generate secure redirect URI
+            redirect_uri = f"{base_url}/auth/callback/{provider}/"
+            
+            if provider == 'google':
+                return Response({
+                    'clientId': settings.GOOGLE_CLIENT_ID,  # Public ID, safe to expose
+                    'redirectUri': redirect_uri,
+                    'scope': ['openid', 'email', 'profile']
+                })
+            
+            elif provider == 'facebook':
+                return Response({
+                    'clientId': settings.FACEBOOK_APP_ID,  # Public ID, safe to expose
+                    'redirectUri': redirect_uri,
+                    'scope': ['email', 'public_profile']
+                })
+            
+            elif provider == 'apple':
+                return Response({
+                    'clientId': settings.APPLE_CLIENT_ID,  # Public ID, safe to expose
+                    'redirectUri': redirect_uri,
+                    'scope': ['name', 'email']
+                })
+                
+        except AttributeError as e:
+            logger.error(f"OAuth configuration missing: {str(e)}")
+            return Response(
+                {'error': 'OAuth configuration not available'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        except Exception as e:
+            logger.error(f"OAuth config error: {str(e)}")
+            return Response(
+                {'error': 'Configuration unavailable'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

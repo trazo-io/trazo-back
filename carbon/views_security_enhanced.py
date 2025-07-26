@@ -12,7 +12,23 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from django_ratelimit.decorators import ratelimit
+# Conditional ratelimit import for staging compatibility
+try:
+    from django.conf import settings
+    if getattr(settings, 'RATELIMIT_ENABLE', True) and 'django_ratelimit' in getattr(settings, 'INSTALLED_APPS', []):
+        from django_ratelimit.decorators import ratelimit
+    else:
+        # Create a no-op decorator when ratelimit is disabled
+        def ratelimit(*args, **kwargs):
+            def decorator(func):
+                return func
+            return decorator
+except ImportError:
+    # Fallback no-op decorator if django_ratelimit is not available
+    def ratelimit(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
 from django.views.decorators.csrf import csrf_protect
 from django.utils.decorators import method_decorator
 

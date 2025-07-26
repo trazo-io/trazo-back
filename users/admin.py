@@ -5,6 +5,7 @@ from django.contrib import messages
 from django.utils import timezone
 from django.utils.html import format_html
 from .models import User, WorksIn, VerificationCode
+from .models_invitation import CompanyInvitation
 from .forms import CustomUserCreationForm, CustomUserChangeForm
 from company.models import Company
 from subscriptions.models import Subscription, Plan
@@ -234,6 +235,149 @@ class CustomUserAdmin(UserAdmin):
         if not obj:
             return list()
         return super(CustomUserAdmin, self).get_inline_instances(request, obj)
+
+
+@admin.register(CompanyInvitation)
+class CompanyInvitationAdmin(admin.ModelAdmin):
+    list_display = (
+        'email',
+        'invitee_name',
+        'company',
+        'role',
+        'status',
+        'created_at',
+        'expires_at',
+        'inviter',
+        'is_expired_display'
+    )
+    list_filter = (
+        'status',
+        'role',
+        'created_at',
+        'expires_at',
+        'company'
+    )
+    search_fields = (
+        'email',
+        'invitee_name',
+        'company__name',
+        'inviter__email',
+        'invitation_code'
+    )
+    readonly_fields = (
+        'invitation_code',
+        'created_at',
+        'updated_at',
+        'accepted_at',
+        'accepted_by',
+        'is_expired_display',
+        'invitation_link'
+    )
+    fieldsets = (
+        ('Invitation Details', {
+            'fields': (
+                'email',
+                'invitee_name',
+                'company',
+                'role',
+                'establishments',
+                'invitation_message'
+            )
+        }),
+        ('Metadata', {
+            'fields': (
+                'inviter',
+                'invitation_code',
+                'invitation_link',
+                'status',
+                'expires_at'
+            )
+        }),
+        ('Timestamps', {
+            'fields': (
+                'created_at',
+                'updated_at',
+                'accepted_at',
+                'accepted_by',
+                'is_expired_display'
+            ),
+            'classes': ('collapse',)
+        })
+    )
+    filter_horizontal = ('establishments',)
+    actions = ['mark_as_expired', 'resend_invitations', 'extend_expiration']
+    
+    def is_expired_display(self, obj):
+        """Display if invitation is expired with visual indicator"""
+        if obj.is_expired():
+            return format_html('<span style="color: red; font-weight: bold;">✗ Expired</span>')
+        else:
+            days_left = (obj.expires_at - timezone.now()).days
+            if days_left <= 1:
+                return format_html('<span style="color: orange;">⚠ Expires soon ({} days)</span>', days_left)
+            return format_html('<span style="color: green;">✓ Active ({} days left)</span>', days_left)
+    is_expired_display.short_description = 'Expiration Status'
+    
+    def invitation_link(self, obj):
+        """Display the invitation link"""
+        if obj.invitation_code:
+            link = obj.get_invitation_link()
+            return format_html('<a href="{}" target="_blank">{}</a>', link, link)
+        return "N/A"
+    invitation_link.short_description = 'Invitation Link'
+    
+    def mark_as_expired(self, request, queryset):
+        """Admin action to mark invitations as expired"""
+        updated = queryset.filter(status=CompanyInvitation.STATUS_PENDING).update(
+            status=CompanyInvitation.STATUS_EXPIRED
+        )
+        messages.success(request, f'Marked {updated} invitation(s) as expired.')
+    mark_as_expired.short_description = "Mark selected invitations as expired"
+    
+    def resend_invitations(self, request, queryset):
+        """Admin action to resend invitations (for pending ones)"""
+        pending_invitations = queryset.filter(status=CompanyInvitation.STATUS_PENDING)
+        count = pending_invitations.count()
+        
+        if count > 0:
+            # Here you would implement the actual email sending logic
+            messages.success(request, f'Resent {count} invitation(s). (Email sending needs to be implemented)')
+        else:
+            messages.warning(request, 'No pending invitations to resend.')
+    resend_invitations.short_description = "Resend selected pending invitations"
+    
+    def extend_expiration(self, request, queryset):
+        """Admin action to extend expiration by 7 days"""
+        from datetime import timedelta
+        pending_invitations = queryset.filter(status=CompanyInvitation.STATUS_PENDING)
+        updated = 0
+        
+        for invitation in pending_invitations:
+            invitation.expires_at = invitation.expires_at + timedelta(days=7)
+            invitation.save()
+            updated += 1
+        
+        if updated > 0:
+            messages.success(request, f'Extended expiration for {updated} invitation(s) by 7 days.')
+        else:
+            messages.warning(request, 'No pending invitations to extend.')
+    extend_expiration.short_description = "Extend expiration by 7 days"
+    
+    def get_queryset(self, request):
+        """Optimize queries with select_related"""
+        return super().get_queryset(request).select_related(
+            'company',
+            'inviter',
+            'accepted_by'
+        ).prefetch_related('establishments')
+    
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        """Optimize foreign key fields"""
+        if db_field.name == "company":
+            kwargs["queryset"] = Company.objects.all().order_by('name')
+        elif db_field.name == "inviter":
+            kwargs["queryset"] = User.objects.filter(is_active=True).order_by('email')
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
 
 admin.site.register(User, CustomUserAdmin)

@@ -88,7 +88,10 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    # SECURITY: Enhanced security middleware stack (order matters!)
     "django.middleware.security.SecurityMiddleware",
+    "backend.security.middleware.SecurityHeadersMiddleware",  # Add security headers early
+    "backend.security.middleware.RequestSecurityMiddleware",  # Validate requests
     "corsheaders.middleware.CorsMiddleware",
     "backend.security.rate_limiting.SecurityMiddleware",
     "backend.security_middleware.SecurityLoggingMiddleware",
@@ -102,6 +105,8 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     'subscriptions.middleware.SubscriptionMiddleware',
+    "backend.security.middleware.RateLimitHeadersMiddleware",  # Add rate limit headers
+    "backend.security.middleware.SecurityEventMiddleware",  # Log security events last
     'subscriptions.middleware.UsageTrackingMiddleware',
 ]
 
@@ -394,15 +399,13 @@ LOGGING = {
 }
 
 
-# Password validation
+# SECURITY: Enhanced Password validation with OWASP 2025 compliance
 # https://docs.djangoproject.com/en/4.1/ref/settings/#auth-password-validators
 
 AUTH_PASSWORD_VALIDATORS = [
+    # Django built-in validators (enhanced)
     {
         "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
-    },
-    {
-        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
     },
     {
         "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
@@ -410,7 +413,123 @@ AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
+    
+    # SECURITY: Custom enhanced validators for improved security
+    {
+        "NAME": "backend.security.password_validators.EnhancedMinimumLengthValidator",
+        "OPTIONS": {
+            "min_length": 12,  # OWASP recommendation: 12+ characters
+        }
+    },
+    {
+        "NAME": "backend.security.password_validators.PasswordComplexityValidator",
+        "OPTIONS": {
+            "min_uppercase": 1,
+            "min_lowercase": 1,
+            "min_digits": 1,
+            "min_special": 1,
+        }
+    },
+    {
+        "NAME": "backend.security.password_validators.PasswordEntropyValidator",
+        "OPTIONS": {
+            "min_entropy": 50,  # Bits of entropy for strong passwords
+        }
+    },
+    {
+        "NAME": "backend.security.password_validators.BreachedPasswordValidator",
+        "OPTIONS": {
+            "enabled": not DEBUG,  # Only check in production
+            "timeout": 5,
+        }
+    },
+    {
+        "NAME": "backend.security.password_validators.NoPersonalInformationValidator",
+    },
+    {
+        "NAME": "backend.security.password_validators.NoSequentialCharactersValidator",
+        "OPTIONS": {
+            "max_sequential": 3,
+        }
+    },
 ]
+
+# SECURITY: Password policy settings
+PASSWORD_RESET_TIMEOUT = 3600  # 1 hour (default is 3 days)
+PASSWORD_HASHERS = [
+    'django.contrib.auth.hashers.Argon2PasswordHasher',  # Most secure
+    'django.contrib.auth.hashers.PBKDF2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
+    'django.contrib.auth.hashers.BCryptSHA256PasswordHasher',
+]
+
+# SECURITY: Additional Django Security Settings
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'
+SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0  # 1 year in production
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+SECURE_HSTS_PRELOAD = True
+SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+
+# SECURITY: Force HTTPS in production
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# SECURITY: File Upload Security
+FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024  # 5MB
+DATA_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024  # 5MB
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 100
+FILE_UPLOAD_PERMISSIONS = 0o644
+
+# SECURITY: Session Security
+SESSION_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Strict' if not DEBUG else 'Lax'
+SESSION_COOKIE_AGE = 3600  # 1 hour
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+
+# SECURITY: Logging Configuration for Security Events
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'security': {
+            'format': '[SECURITY] {levelname} {asctime} {name} {message}',
+            'style': '{',
+        },
+        'verbose': {
+            'format': '{levelname} {asctime} {name} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'security_file': {
+            'level': 'WARNING',
+            'class': 'logging.FileHandler',
+            'filename': 'logs/security.log',
+            'formatter': 'security',
+        },
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'backend.security': {
+            'handlers': ['security_file', 'console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'django.security': {
+            'handlers': ['security_file', 'console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+    },
+}
 
 
 # Default primary key field type
@@ -525,12 +644,12 @@ SOCIALACCOUNT_PROVIDERS = {
 
 JWT_EXPIRATION_DELTA = timedelta(minutes=15)
 
-# Cookie security settings - adjust based on environment
-SESSION_COOKIE_SECURE = not DEBUG  # Only secure in production
-CSRF_COOKIE_SECURE = not DEBUG     # Only secure in production
-CSRF_COOKIE_HTTPONLY = False       # Allow JavaScript access to CSRF token
-CSRF_COOKIE_SAMESITE = 'Lax'       # Less restrictive for development
-CSRF_COOKIE_DOMAIN = None          # No domain restriction in development
+# SECURITY: Enhanced cookie security settings for CSRF protection
+SESSION_COOKIE_SECURE = not DEBUG  # Only secure in production (HTTPS only)
+CSRF_COOKIE_SECURE = not DEBUG     # Only secure in production (HTTPS only)
+CSRF_COOKIE_HTTPONLY = False       # Must be False for JavaScript access to CSRF token
+CSRF_COOKIE_SAMESITE = 'Strict' if not DEBUG else 'Lax'  # Strict in production, Lax in dev
+CSRF_COOKIE_DOMAIN = None          # No domain restriction (suitable for subdomains)
 CSRF_TRUSTED_ORIGINS = config("CSRF_TRUSTED_ORIGINS", default="http://localhost:3000,http://app.localhost:3000").split(",")
 
 # Session configuration

@@ -17,9 +17,16 @@ resource "aws_s3_bucket_cors_configuration" "media" {
 
   cors_rule {
     allowed_headers = ["*"]
-    allowed_methods = ["GET", "PUT", "POST"]
-    allowed_origins = ["https://${var.domain_name}"]
-    expose_headers  = ["ETag"]
+    allowed_methods = ["GET", "PUT", "POST", "DELETE"]
+    allowed_origins = var.environment == "staging" ? [
+      "https://${var.domain_name}",
+      "http://${var.domain_name}",
+      "https://app-staging.trazo.io",
+      "http://app-staging.trazo.io",
+      "http://localhost:3000",
+      "http://localhost:3001"
+    ] : ["https://${var.domain_name}"]
+    expose_headers  = ["ETag", "Content-Type", "x-amz-server-side-encryption", "x-amz-request-id", "x-amz-id-2"]
     max_age_seconds = 3000
   }
 }
@@ -61,4 +68,24 @@ resource "aws_s3_bucket_lifecycle_configuration" "media" {
   }
 }
 
-data "aws_caller_identity" "current" {} 
+data "aws_caller_identity" "current" {}
+
+# Enable versioning for media files (optional, helps with recovery)
+resource "aws_s3_bucket_versioning" "media" {
+  bucket = aws_s3_bucket.media.id
+  
+  versioning_configuration {
+    status = var.environment == "prod" ? "Enabled" : "Suspended"
+  }
+}
+
+# Server-side encryption
+resource "aws_s3_bucket_server_side_encryption_configuration" "media" {
+  bucket = aws_s3_bucket.media.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+} 

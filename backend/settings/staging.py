@@ -15,6 +15,9 @@ _staging_urls = get_frontend_urls()
 BASE_APP_URL = _staging_urls['BASE_APP_URL']
 BASE_CONSUMER_URL = _staging_urls['BASE_CONSUMER_URL']
 
+# Override BASE_URL for email templates in staging
+BASE_URL = "https://api-staging.trazo.io/"
+
 # Override production settings for staging
 # NEVER set DEBUG=True in any deployed environment
 DEBUG = False
@@ -72,15 +75,41 @@ SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=False, cast=bool)
 SESSION_COOKIE_SECURE = config('SESSION_COOKIE_SECURE', default=False, cast=bool)
 CSRF_COOKIE_SECURE = config('CSRF_COOKIE_SECURE', default=False, cast=bool)
 
-# CORS configuration for staging
+# CORS configuration for staging - very permissive for development
 CORS_ORIGIN_ALLOW_ALL = True
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_ALL_ORIGINS = True  # More explicit setting
+CORS_ALLOWED_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
 
 CORS_ALLOWED_ORIGINS = [
     "http://staging-alb-1273700937.us-east-2.elb.amazonaws.com",
     "https://staging-alb-1273700937.us-east-2.elb.amazonaws.com",
+    "https://api-staging.trazo.io",
+    "http://api-staging.trazo.io",
+    "https://app-staging.trazo.io",
+    "http://app-staging.trazo.io",
     "http://localhost:3000",
     "https://localhost:3000",
+    "http://localhost:3001",
+    "https://localhost:3001",
 ]
 
 # CSRF configuration for staging - allow environment variable override
@@ -91,8 +120,16 @@ CSRF_COOKIE_DOMAIN = config('CSRF_COOKIE_DOMAIN', default=None)  # Allow any dom
 default_trusted_origins = [
     'http://staging-alb-1273700937.us-east-2.elb.amazonaws.com',
     'https://staging-alb-1273700937.us-east-2.elb.amazonaws.com',
+    'https://api-staging.trazo.io',
+    'http://api-staging.trazo.io',
+    'https://app-staging.trazo.io',
+    'http://app-staging.trazo.io',
     'http://localhost:8000',
     'https://localhost:8000',
+    'http://localhost:3000',
+    'https://localhost:3000',
+    'http://localhost:3001',
+    'https://localhost:3001',
 ]
 
 # Add environment variable origins if provided
@@ -117,13 +154,31 @@ SESSION_COOKIE_HTTPONLY = True
 X_FRAME_OPTIONS = 'DENY'
 SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
 
-# Email configuration for staging
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"  # Console for staging
-SERVER_EMAIL = os.environ.get("FROM_EMAIL_ADDRESS", "osmunogue@gmail.com")
-DEFAULT_FROM_EMAIL = config("FROM_EMAIL_ADDRESS", "osmunogue@gmail.com")
+# Email configuration for staging - use SendGrid SMTP
+EMAIL_HOST = "smtp.sendgrid.net"
+EMAIL_HOST_USER = "apikey"
+EMAIL_HOST_PASSWORD = config("SENDGRID_API_KEY", default=None)
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+SERVER_EMAIL = config("FROM_EMAIL_ADDRESS", default="osmunogue@gmail.com")
+DEFAULT_FROM_EMAIL = config("FROM_EMAIL_ADDRESS", default="osmunogue@gmail.com")
 
 # Storage configuration for staging
 DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+
+# S3 settings for staging
+AWS_DEFAULT_ACL = None  # Use bucket default ACL
+AWS_S3_FILE_OVERWRITE = False  # Don't overwrite files with same name
+AWS_S3_VERIFY = True
+AWS_LOCATION = 'media'  # Store media files in 'media' folder within bucket
+
+# Configure media URL to use S3
+if config('AWS_STORAGE_BUCKET_NAME', default=None):
+    AWS_S3_CUSTOM_DOMAIN = f"{config('AWS_STORAGE_BUCKET_NAME')}.s3.{config('AWS_S3_REGION_NAME', default='us-east-2')}.amazonaws.com"
+    MEDIA_URL = f"https://{AWS_S3_CUSTOM_DOMAIN}/media/"
+else:
+    # Fallback to local media URL
+    MEDIA_URL = '/media/'
 
 # Staging logging configuration - more verbose than production
 LOGGING = {
@@ -164,9 +219,11 @@ LOGGING = {
     },
 }
 
-# Email settings for staging - use console backend to prevent accidental emails
-if config('USE_CONSOLE_EMAIL', default=True, cast=bool):
+# Email settings for staging - use SendGrid for actual email delivery
+if config('USE_CONSOLE_EMAIL', default=False, cast=bool):
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 
 # Cache configuration for staging
 REDIS_URL = config('REDIS_URL', default=None)
@@ -194,6 +251,10 @@ else:
     
     # Disable django-ratelimit for staging (no shared cache available)
     RATELIMIT_ENABLE = False
+    
+    # Remove django_ratelimit from INSTALLED_APPS when using DummyCache
+    if "django_ratelimit" in INSTALLED_APPS:
+        INSTALLED_APPS.remove("django_ratelimit")
 
 # Staging-specific feature flags
 FEATURES = {
@@ -209,3 +270,11 @@ CONN_MAX_AGE = 300  # 5 minutes instead of 600
 # Static files - ensure proper serving in staging
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 WHITENOISE_AUTOREFRESH = True  # Auto-refresh static files in staging
+
+# Password hashers - use PBKDF2 first to avoid argon2 dependency in staging
+PASSWORD_HASHERS = [
+    'django.contrib.auth.hashers.PBKDF2PasswordHasher',  # Default, no extra dependencies
+    'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
+    'django.contrib.auth.hashers.BCryptSHA256PasswordHasher',
+    'django.contrib.auth.hashers.Argon2PasswordHasher',  # Move to end (requires argon2-cffi)
+]

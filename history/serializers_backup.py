@@ -777,7 +777,7 @@ class PublicParcelSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Parcel
-        fields = ["name", "polygon", "map_metadata", "establishment"]
+        fields = ["name", "polygon", "map_metadata", "establishment", "agricultural_details"]
 
 
 class PublicHistoryListSerializer(serializers.ModelSerializer):

@@ -816,7 +816,10 @@ class HistoryViewSet(viewsets.ModelViewSet):
 
 
 class PublicHistoryScanViewSet(viewsets.ModelViewSet):
-    queryset = HistoryScan.objects.all()
+    queryset = HistoryScan.objects.select_related(
+        'history', 'history__product', 'history__parcel', 
+        'history__parcel__establishment', 'user'
+    ).all()
     permission_classes = [AllowAny]
 
     def create(self, request):
@@ -914,7 +917,10 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
 
 
 class HistoryScanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
-    queryset = HistoryScan.objects.all()
+    queryset = HistoryScan.objects.select_related(
+        'history', 'history__product', 'history__parcel',
+        'history__parcel__establishment', 'user'
+    ).all()
     serializer_class = ListHistoryClassSerializer
 
     @action(detail=False, methods=["get"])

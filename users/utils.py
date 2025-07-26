@@ -16,6 +16,7 @@ from datetime import timedelta
 from django.urls import reverse
 from django.contrib.sites.models import Site
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +152,12 @@ def send_invitation_email(invitee_email, invitee_name, inviter, company, role, i
         msg_plain = render_to_string("emails/invitation.txt", context)
         msg_html = render_to_string("emails/invitation.html", context)
         subject = f"You're Invited to Join {company.name} on Trazo"
+        print(f"Email settings debug for invitation to {invitee_email}:")
+        print(f"  DEFAULT_FROM_EMAIL: {settings.DEFAULT_FROM_EMAIL}")
+        print(f"  SERVER_EMAIL: {settings.SERVER_EMAIL}")
+        print(f"  EMAIL_HOST: {settings.EMAIL_HOST}")
+        print(f"  EMAIL_BACKEND: {settings.EMAIL_BACKEND}")
+        print(f"  FROM_EMAIL_ADDRESS env var: {settings.DEFAULT_FROM_EMAIL}")
         
         # Debug logging for email configuration
         logger.info(f"Email settings debug for invitation to {invitee_email}:")
@@ -158,13 +165,12 @@ def send_invitation_email(invitee_email, invitee_name, inviter, company, role, i
         logger.info(f"  SERVER_EMAIL: {settings.SERVER_EMAIL}")
         logger.info(f"  EMAIL_HOST: {settings.EMAIL_HOST}")
         logger.info(f"  EMAIL_BACKEND: {settings.EMAIL_BACKEND}")
-        import os
-        logger.info(f"  FROM_EMAIL_ADDRESS env var: {os.environ.get('FROM_EMAIL_ADDRESS', 'NOT SET')}")
+        logger.info(f"  FROM_EMAIL_ADDRESS env var: {settings.DEFAULT_FROM_EMAIL}")
         
         return send_mail(
             subject,
             msg_plain,
-            settings.DEFAULT_FROM_EMAIL,
+            'info@trazo.io',
             [invitee_email],
             html_message=msg_html,
         )
