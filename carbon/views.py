@@ -2252,12 +2252,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                 'emissionsByCategory': emissions_by_category,
                 'emissionsBySource': emissions_by_source,
                 'offsetsByAction': offsets_by_action,
-                'socialProof': {
-                    'totalScans': 1000,  # Could be calculated from actual scan data
-                    'totalOffsets': float(total_offsets),
-                    'totalUsers': 500,
-                    'averageRating': 4.5
-                },
+                'socialProof': self._calculate_social_proof(production),
                 'verificationDate': benchmark.last_updated.isoformat() if benchmark else None,
                 # Enhanced blockchain verification data
                 'blockchainVerification': blockchain_verification,
@@ -2291,6 +2286,9 @@ class PublicProductionViewSet(viewsets.ViewSet):
                 'cache_hit': False,
                 'timestamp': timezone.now().isoformat()
             }
+            
+            # Track public view (separate from QR scans) with bot filtering
+            production.increment_public_views(request)
             
             # Cache the response for 15 minutes (900 seconds)
             # Production data doesn't change frequently, so caching is safe
@@ -2670,6 +2668,9 @@ class PublicProductionViewSet(viewsets.ViewSet):
                 'timestamp': timezone.now().isoformat(),
                 'api_version': 'complete_v1'
             }
+            
+            # Track public view (separate from QR scans) with bot filtering
+            production.increment_public_views(request)
             
             # Cache the complete response for 15 minutes (900 seconds)
             cache.set(cache_key, response_data, 900)
@@ -3380,12 +3381,26 @@ class PublicProductionViewSet(viewsets.ViewSet):
             return []
 
     def _calculate_social_proof(self, production):
-        """Calculate social proof metrics"""
+        """Calculate social proof metrics with enhanced trust data"""
         try:
             from history.models import HistoryScan
+            from reviews.models import Review
+            
+            # Update trust metrics before returning (ensures fresh calculations)
+            production.update_trust_metrics()
             
             # Get scan statistics
             total_scans = HistoryScan.objects.filter(history=production).count()
+            
+            # Get actual review count
+            review_count = Review.objects.filter(production=production).count()
+            
+            # Get average rating from reviews
+            reviews = Review.objects.filter(production=production)
+            if reviews.exists():
+                avg_rating = sum(r.rating for r in reviews) / reviews.count()
+            else:
+                avg_rating = float(production.reputation) if production.reputation > 0 else 0.0
             
             # Get company-wide statistics
             company_scans = HistoryScan.objects.filter(
@@ -3394,17 +3409,36 @@ class PublicProductionViewSet(viewsets.ViewSet):
             
             return {
                 'totalScans': total_scans,
+                'reviewsCount': review_count,  # Actual review count
                 'totalOffsets': 0.0,  # Would be calculated from actual offset purchases
                 'totalUsers': total_scans,  # Approximate unique users
-                'averageRating': float(production.reputation) if production.reputation else 4.5,
-                'companyScans': company_scans
+                'averageRating': avg_rating,
+                'companyScans': company_scans,
+                # Enhanced trust metrics
+                'confidenceScore': production.confidence_score,
+                'transparencyScore': production.transparency_score,
+                'publicViews': production.public_views,
+                'uniqueVisitors': production.unique_visitors,
+                'farmHistoryYears': production.get_farm_history_years()
             }
-        except Exception:
+        except Exception as e:
+            # Log the error for debugging
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error calculating social proof for production {production.id}: {str(e)}")
+            
             return {
                 'totalScans': 0,
+                'reviewsCount': 0,  # Actual review count
                 'totalOffsets': 0.0,
                 'totalUsers': 0,
-                'averageRating': 4.5
+                'averageRating': 0.0,
+                'companyScans': 0,
+                'confidenceScore': 0.0,
+                'transparencyScore': 0.0,
+                'publicViews': 0,
+                'uniqueVisitors': 0,
+                'farmHistoryYears': 0
             }
 
     def _get_relatable_footprint(self, net_footprint):

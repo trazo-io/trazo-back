@@ -39,6 +39,25 @@ class History(models.Model):
     reputation = models.FloatField(
         default=0, validators=[MinValueValidator(0), MaxValueValidator(5)]
     )
+    
+    # Trust metrics for enhanced transparency
+    confidence_score = models.FloatField(
+        default=0, validators=[MinValueValidator(0), MaxValueValidator(100)],
+        help_text="Statistical confidence in carbon calculations (0-100%)"
+    )
+    transparency_score = models.FloatField(
+        default=0, validators=[MinValueValidator(0), MaxValueValidator(100)],
+        help_text="Overall transparency rating (0-100%)"
+    )
+    public_views = models.PositiveIntegerField(
+        default=0, help_text="Total public page views (QR + direct + search)"
+    )
+    unique_visitors = models.PositiveIntegerField(
+        default=0, help_text="Estimated unique visitors (session-based tracking)"
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True, help_text="Last time production data was updated"
+    )
     product = models.ForeignKey(
         "product.Product",
         on_delete=models.CASCADE,
@@ -114,6 +133,164 @@ class History(models.Model):
             # If there are no reviews, the default reputation is 0
             self.reputation = 0.00
         self.save()
+    
+    def calculate_confidence_score(self):
+        """
+        Calculate statistical confidence in carbon calculations (0-100%)
+        Based on data completeness, measurement precision, verification status
+        """
+        score = 0
+        
+        # Data completeness (40 points)
+        required_fields = ['start_date', 'finish_date', 'production_amount', 'parcel', 'product']
+        completed_fields = sum(1 for field in required_fields if getattr(self, field))
+        score += (completed_fields / len(required_fields)) * 40
+        
+        # Events documentation (30 points)
+        total_events = (
+            self.history_productionevent_events.count() +
+            self.history_chemicalevent_events.count() +
+            self.history_weatherevent_events.count() +
+            self.history_generalevent_events.count()
+        )
+        if total_events > 0:
+            score += min(total_events * 3, 30)  # 3 points per event, max 30
+        
+        # USDA verification (20 points)
+        if hasattr(self, 'carbon_entries') and self.carbon_entries.filter(usda_verified=True).exists():
+            score += 20
+        
+        # Recent updates (10 points)
+        from django.utils import timezone
+        if self.updated_at and (timezone.now() - self.updated_at).days < 30:
+            score += 10
+        
+        return min(round(score, 1), 100.0)
+    
+    def calculate_transparency_score(self):
+        """
+        Calculate overall transparency rating (0-100%)
+        Based on documentation completeness, public accessibility, third-party verifications
+        """
+        score = 0
+        
+        # Basic information completeness (25 points)
+        if self.name and self.description:
+            score += 15
+        if self.album and self.album.images.exists():
+            score += 10
+        
+        # Event documentation with images (25 points)
+        events_with_images = 0
+        total_events = (
+            self.history_productionevent_events.count() +
+            self.history_chemicalevent_events.count() +
+            self.history_generalevent_events.count()
+        )
+        
+        for event in self.history_productionevent_events.all():
+            if hasattr(event, 'images') and event.images.exists():
+                events_with_images += 1
+        
+        if total_events > 0:
+            score += (events_with_images / total_events) * 25
+        
+        # Public accessibility (25 points)
+        if self.published:
+            score += 15
+        if self.qr_code:
+            score += 10
+        
+        # Third-party verification (25 points)
+        if hasattr(self, 'carbon_entries') and self.carbon_entries.exists():
+            score += 10
+        if hasattr(self, 'reviews') and self.reviews.count() > 0:
+            score += 10
+        if hasattr(self, 'blockchain_verification') and self.blockchain_verification:
+            score += 5
+        
+        return min(round(score, 1), 100.0)
+    
+    def get_farm_history_years(self):
+        """
+        Calculate years the farm has been operating based on establishment year
+        """
+        if self.parcel and self.parcel.establishment and self.parcel.establishment.year_established:
+            from datetime import datetime
+            current_year = datetime.now().year
+            return max(0, current_year - self.parcel.establishment.year_established)
+        return 0
+    
+    def update_trust_metrics(self):
+        """
+        Update all trust metrics (confidence_score, transparency_score)
+        Call this when production data changes
+        """
+        self.confidence_score = self.calculate_confidence_score()
+        self.transparency_score = self.calculate_transparency_score()
+        # Note: public_views is updated separately via view tracking
+        self.save(update_fields=['confidence_score', 'transparency_score'])
+    
+    def increment_public_views(self, request=None, skip_bot_check=False):
+        """
+        Increment public view counter (separate from QR scans)
+        with bot filtering and unique visitor tracking
+        
+        Args:
+            request: Django request object for user agent analysis
+            skip_bot_check: Skip bot detection (for testing)
+        """
+        from django.db.models import F
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        # Bot detection - skip if likely a bot/crawler
+        if request and not skip_bot_check:
+            user_agent = request.META.get('HTTP_USER_AGENT', '').lower()
+            bot_indicators = [
+                'bot', 'crawler', 'spider', 'scraper', 'facebook', 'twitter',
+                'linkedinbot', 'whatsapp', 'telegram', 'googlebot', 'bingbot',
+                'slackbot', 'discordbot', 'applebot', 'yandexbot', 'baiduspider'
+            ]
+            
+            if any(indicator in user_agent for indicator in bot_indicators):
+                logger.info(f"Skipping view increment for bot: {user_agent[:100]}")
+                return {'views_incremented': False, 'unique_visitor': False, 'reason': 'bot_detected'}
+        
+        try:
+            # Check if this is a unique visitor (session-based)
+            is_unique_visitor = False
+            if request and hasattr(request, 'session'):
+                session_key = f'viewed_production_{self.id}'
+                if not request.session.get(session_key):
+                    is_unique_visitor = True
+                    request.session[session_key] = True
+                    request.session.save()
+            
+            # Atomic increment to prevent race conditions
+            update_fields = {'public_views': F('public_views') + 1}
+            if is_unique_visitor:
+                update_fields['unique_visitors'] = F('unique_visitors') + 1
+            
+            History.objects.filter(id=self.id).update(**update_fields)
+            self.refresh_from_db(fields=['public_views', 'unique_visitors'])
+            
+            logger.debug(
+                f"Incremented public views for production {self.id} to {self.public_views}"
+                f"{' (unique visitor)' if is_unique_visitor else ''}"
+            )
+            
+            return {
+                'views_incremented': True, 
+                'unique_visitor': is_unique_visitor,
+                'total_views': self.public_views,
+                'unique_visitors': self.unique_visitors
+            }
+            
+        except Exception as e:
+            logger.error(f"Error incrementing public views for production {self.id}: {str(e)}")
+            return {'views_incremented': False, 'unique_visitor': False, 'reason': 'error', 'error': str(e)}
 
     def save(self, *args, **kwargs):
         # Save first to get ID if this is a new object
