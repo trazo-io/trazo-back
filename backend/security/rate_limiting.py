@@ -220,11 +220,18 @@ class DDoSProtection:
         
         # Track request patterns
         cache_key = self.request_pattern_cache % hashlib.md5(ip.encode()).hexdigest()
-        pattern_data = cache.get(cache_key, {
+        cached_data = cache.get(cache_key, {
             'requests': [],
             'endpoints': {},
-            'user_agents': set()
+            'user_agents': []
         })
+        
+        # Convert user_agents back to set if it's a list (from cache)
+        pattern_data = cached_data.copy()
+        if isinstance(pattern_data['user_agents'], list):
+            pattern_data['user_agents'] = set(pattern_data['user_agents'])
+        elif not isinstance(pattern_data['user_agents'], set):
+            pattern_data['user_agents'] = set()
         
         # Add current request
         pattern_data['requests'].append(now)
@@ -255,8 +262,10 @@ class DDoSProtection:
         if not request.META.get('HTTP_USER_AGENT'):
             suspicious_indicators.append('no_user_agent')
         
-        # Update cache
-        cache.set(cache_key, pattern_data, 300)  # 5 minutes
+        # Update cache (convert set to list for JSON serialization)
+        cacheable_data = pattern_data.copy()
+        cacheable_data['user_agents'] = list(pattern_data['user_agents'])
+        cache.set(cache_key, cacheable_data, 300)  # 5 minutes
         
         is_suspicious = len(suspicious_indicators) >= 2
         reason = ', '.join(suspicious_indicators) if suspicious_indicators else 'clean'

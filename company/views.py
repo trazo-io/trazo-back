@@ -67,7 +67,7 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     queryset = Establishment.objects.select_related(
         'company', 'album'
     ).prefetch_related(
-        'parcel_set', 'parcel_set__product_set'
+        'parcels', 'parcels__product'
     ).all()
     filter_backends = [filters.OrderingFilter]
     serializer_class = UpdateEstablishmentSerializer

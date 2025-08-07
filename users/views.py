@@ -258,6 +258,250 @@ class UserViewSet(viewsets.ModelViewSet):
         return Response(
             [{"id": role[0], "name": role[1]} for role in WorksIn.USER_ROLES]
         )
+    
+    @action(detail=False, methods=["post"], permission_classes=[IsAuthenticated])
+    def change_password(self, request, pk=None):
+        """
+        Change user password
+        """
+        from django.contrib.auth.hashers import check_password
+        
+        old_password = request.data.get("old_password")
+        new_password = request.data.get("new_password")
+        
+        if not old_password:
+            return Response(
+                {"error": "Current password is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        if not new_password:
+            return Response(
+                {"error": "New password is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        user = request.user
+        
+        # Verify old password
+        if not check_password(old_password, user.password):
+            return Response(
+                {"error": "Current password is incorrect"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        # Validate new password
+        from django.contrib.auth.password_validation import validate_password
+        from django.core.exceptions import ValidationError
+        
+        try:
+            validate_password(new_password, user)
+        except ValidationError as e:
+            return Response(
+                {"error": e.messages},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        # Set new password
+        user.set_password(new_password)
+        user.save()
+        
+        logger.info(f"Password changed successfully for user: {user.email}")
+        
+        return Response(
+            {"message": "Password changed successfully"},
+            status=status.HTTP_200_OK
+        )
+    
+    @action(detail=False, methods=["post"], permission_classes=[AllowAny])
+    def request_password_reset(self, request, pk=None):
+        """
+        Request password reset via email
+        Following 2025 security best practices with rate limiting
+        """
+        from .models import PasswordResetToken
+        from .utils import generate_password_reset_token, send_password_reset_email
+        from .constants import PRODUCER, CONSUMER
+        from urllib.parse import quote
+        from datetime import timedelta
+        
+        email = request.data.get("email")
+        
+        if not email:
+            return Response(
+                {"error": "Email is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        # Always return success to prevent email enumeration attacks
+        # This is a security best practice for 2025
+        try:
+            user = User.objects.get(email=email.lower())
+        except User.DoesNotExist:
+            logger.warning(f"Password reset requested for non-existent email: {email}")
+            # Still return success response to prevent email enumeration
+            return Response(
+                {"message": "If an account with this email exists, a password reset link has been sent"},
+                status=status.HTTP_200_OK
+            )
+        
+        # Check rate limiting: max 3 requests per hour per user
+        one_hour_ago = timezone.now() - timedelta(hours=1)
+        recent_requests = PasswordResetToken.objects.filter(
+            user=user,
+            created_at__gte=one_hour_ago
+        ).count()
+        
+        if recent_requests >= 3:
+            logger.warning(f"Rate limit exceeded for password reset: {email}")
+            # Return generic success to prevent abuse detection
+            return Response(
+                {"message": "If an account with this email exists, a password reset link has been sent"},
+                status=status.HTTP_200_OK
+            )
+        
+        # Invalidate any existing tokens for this user
+        PasswordResetToken.objects.filter(user=user, used_at__isnull=True).update(
+            used_at=timezone.now()
+        )
+        
+        # Generate new secure token
+        token = generate_password_reset_token()
+        expires_at = timezone.now() + timedelta(minutes=15)  # 15-minute expiration
+        
+        # Get client IP and user agent for security tracking
+        ip_address = request.META.get('REMOTE_ADDR')
+        user_agent = request.META.get('HTTP_USER_AGENT', '')
+        
+        # Create password reset token
+        reset_token = PasswordResetToken.objects.create(
+            user=user,
+            token=token,
+            expires_at=expires_at,
+            ip_address=ip_address,
+            user_agent=user_agent
+        )
+        
+        # Generate reset link based on user type
+        encoded_email = quote(user.email)
+        user_type = int(user.user_type)
+        
+        if user_type == PRODUCER:
+            reset_link = f"{settings.BASE_APP_URL}auth/reset-password?token={token}&email={encoded_email}"
+        elif user_type == CONSUMER:
+            reset_link = f"{settings.BASE_CONSUMER_URL}auth/reset-password?token={token}&email={encoded_email}"
+        else:
+            reset_link = f"{settings.BASE_APP_URL}auth/reset-password?token={token}&email={encoded_email}"
+        
+        # Send password reset email
+        try:
+            email_sent = send_password_reset_email(
+                user=user,
+                reset_token=token,
+                reset_link=reset_link
+            )
+            
+            if email_sent:
+                logger.info(f"Password reset email sent successfully to {user.email}")
+            else:
+                logger.error(f"Failed to send password reset email to {user.email}")
+        except Exception as e:
+            logger.error(f"Error sending password reset email to {user.email}: {str(e)}")
+        
+        # Always return success response (security best practice)
+        return Response(
+            {"message": "If an account with this email exists, a password reset link has been sent"},
+            status=status.HTTP_200_OK
+        )
+    
+    @action(detail=False, methods=["post"], permission_classes=[AllowAny])
+    def confirm_password_reset(self, request, pk=None):
+        """
+        Confirm password reset with token and set new password
+        Following 2025 security best practices
+        """
+        from .models import PasswordResetToken
+        from django.contrib.auth.password_validation import validate_password
+        from django.core.exceptions import ValidationError
+        
+        token = request.data.get("token")
+        email = request.data.get("email")
+        new_password = request.data.get("new_password")
+        
+        # Validate required fields
+        if not all([token, email, new_password]):
+            return Response(
+                {"error": "Token, email, and new password are required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        try:
+            # Find the password reset token
+            reset_token = PasswordResetToken.objects.get(
+                token=token,
+                user__email=email.lower()
+            )
+            
+            # Validate token
+            if not reset_token.is_valid():
+                if reset_token.is_expired():
+                    return Response(
+                        {"error": "Password reset token has expired. Please request a new one."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                elif reset_token.is_used():
+                    return Response(
+                        {"error": "Password reset token has already been used. Please request a new one."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                else:
+                    return Response(
+                        {"error": "Invalid password reset token"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+            
+            user = reset_token.user
+            
+            # Validate new password
+            try:
+                validate_password(new_password, user)
+            except ValidationError as e:
+                return Response(
+                    {"error": e.messages},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            
+            # Set new password
+            user.set_password(new_password)
+            user.save(update_fields=['password'])
+            
+            # Mark token as used
+            reset_token.mark_as_used()
+            
+            # Invalidate all other tokens for this user
+            PasswordResetToken.objects.filter(
+                user=user,
+                used_at__isnull=True
+            ).exclude(id=reset_token.id).update(used_at=timezone.now())
+            
+            logger.info(f"Password reset completed successfully for user: {user.email}")
+            
+            return Response(
+                {"message": "Password reset successfully. You can now sign in with your new password."},
+                status=status.HTTP_200_OK
+            )
+            
+        except PasswordResetToken.DoesNotExist:
+            return Response(
+                {"error": "Invalid or expired password reset token"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as e:
+            logger.error(f"Error during password reset confirmation: {str(e)}")
+            return Response(
+                {"error": "An error occurred while resetting your password. Please try again."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class LoginViewSet(viewsets.ModelViewSet, TokenObtainPairView):

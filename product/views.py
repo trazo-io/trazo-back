@@ -18,9 +18,9 @@ from rest_framework.permissions import IsAuthenticated
 
 class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     queryset = Parcel.objects.select_related(
-        'establishment', 'establishment__company', 'album'
+        'establishment', 'establishment__company', 'album', 'product'
     ).prefetch_related(
-        'product_set', 'history_set'
+        'histories'
     ).all()
     filter_backends = [filters.OrderingFilter]
     parser_classes = (MultiPartParser, FormParser)

@@ -34,15 +34,34 @@ try:
         }
     }
     
-    # Redis Cache Configuration
+    # Optimized Redis Cache Configuration for Carbon Calculations
     CACHES = {
         "default": {
             "BACKEND": "django_redis.cache.RedisCache",
             "LOCATION": config('REDIS_URL', default='redis://localhost:6379/1'),
             "OPTIONS": {
                 "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            }
+                "CONNECTION_POOL_KWARGS": {
+                    'max_connections': 50,
+                    'retry_on_timeout': True,
+                    'socket_keepalive': True,
+                    'socket_keepalive_options': {},
+                },
+                "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
+                "SERIALIZER": "django_redis.serializers.json.JSONSerializer",
+            },
+            "TIMEOUT": 3600,  # 1 hour default timeout
+            "KEY_PREFIX": "trazo_carbon",
         }
+    }
+    
+    # Carbon calculation cache timeouts
+    CARBON_CACHE_TIMEOUTS = {
+        'emission_factors': 3600,  # 1 hour
+        'calculations': 300,       # 5 minutes
+        'dashboard_stats': 600,    # 10 minutes
+        'usda_api_results': 7200,  # 2 hours
+        'circuit_breaker': 300,    # 5 minutes
     }
     
     # Celery Configuration with Redis

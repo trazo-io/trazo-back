@@ -99,5 +99,59 @@ class VerificationCode(models.Model):
         return f"{self.user.email} - {self.code}"
 
 
+class PasswordResetToken(models.Model):
+    """
+    Secure password reset token with 15-minute expiration
+    Following 2025 security best practices
+    """
+    user = models.ForeignKey(
+        User, 
+        on_delete=models.CASCADE, 
+        related_name="password_reset_tokens"
+    )
+    token = models.CharField(max_length=255, unique=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(null=True, blank=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['token']),
+            models.Index(fields=['user', 'created_at']),
+            models.Index(fields=['expires_at']),
+        ]
+    
+    def __str__(self):
+        return f"Password reset for {self.user.email} - {self.token[:8]}..."
+    
+    def is_expired(self):
+        """Check if token has expired"""
+        return timezone.now() > self.expires_at
+    
+    def is_used(self):
+        """Check if token has been used"""
+        return self.used_at is not None
+    
+    def is_valid(self):
+        """Check if token is valid (not expired and not used)"""
+        return not self.is_expired() and not self.is_used()
+    
+    def mark_as_used(self):
+        """Mark token as used"""
+        self.used_at = timezone.now()
+        self.save(update_fields=['used_at'])
+    
+    @classmethod
+    def cleanup_expired_tokens(cls):
+        """Remove expired tokens - call this periodically"""
+        expired_tokens = cls.objects.filter(expires_at__lt=timezone.now())
+        count = expired_tokens.count()
+        expired_tokens.delete()
+        return count
+
+
 # Import invitation model
 from .models_invitation import CompanyInvitation

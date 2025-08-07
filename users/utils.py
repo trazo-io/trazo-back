@@ -125,6 +125,60 @@ def send_verification_email(user, verification_code=None, verification_link=None
         return False
 
 
+def generate_password_reset_token():
+    """
+    Generate cryptographically secure password reset token
+    Following OWASP 2025 recommendations for token security
+    """
+    return secrets.token_urlsafe(32)  # 256 bits of entropy
+
+
+def send_password_reset_email(user, reset_token, reset_link):
+    """
+    Send password reset email to user with secure token link
+    Following 2025 security and UX best practices
+    """
+    try:
+        from .constants import PRODUCER, CONSUMER
+        user_type = 'producer' if user.user_type == PRODUCER else 'consumer'
+        
+        # Get user's first name or fallback to email
+        display_name = user.first_name if user.first_name else user.email.split('@')[0]
+        
+        context = {
+            'user': user,
+            'user_type': user_type,
+            'display_name': display_name,
+            'reset_token': reset_token,
+            'reset_link': reset_link,
+            'BASE_URL': settings.BASE_URL,
+            'expiry_minutes': 15,  # Token expires in 15 minutes
+        }
+        
+        msg_plain = render_to_string("emails/password_reset.txt", context)
+        msg_html = render_to_string("emails/password_reset.html", context)
+        subject = "Reset Your Trazo Password"
+        
+        result = send_mail(
+            subject,
+            msg_plain,
+            settings.DEFAULT_FROM_EMAIL,
+            [user.email],
+            html_message=msg_html,
+        )
+        
+        if result:
+            logger.info(f"Password reset email sent successfully to {user.email}")
+        else:
+            logger.warning(f"Password reset email send failed for {user.email}")
+            
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error sending password reset email to {user.email}: {str(e)}")
+        return False
+
+
 def send_invitation_email(invitee_email, invitee_name, inviter, company, role, invitation_link, invitation_message=None):
     """
     Send invitation email to user being invited to join a company
