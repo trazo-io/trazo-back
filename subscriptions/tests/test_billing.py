@@ -10,7 +10,9 @@ from decimal import Decimal
 from unittest.mock import MagicMock, call, patch
 
 from django.contrib.auth import get_user_model
+from django.db import models
 from django.test import Client, TestCase, TransactionTestCase, override_settings
+from django.urls import reverse
 from django.utils import timezone
 
 from company.models import Company, Establishment

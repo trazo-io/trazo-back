@@ -7,11 +7,14 @@ import hashlib
 import hmac
 import ipaddress
 from datetime import datetime, timedelta
-from typing import Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, Optional, Tuple
 
 from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
+
+if TYPE_CHECKING:
+    from django.db.models import QuerySet
 
 
 class PrivacyService:

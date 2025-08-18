@@ -5,6 +5,7 @@ import uuid
 
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
+from django.db import models
 from django.utils import timezone
 
 from carbon.models import (

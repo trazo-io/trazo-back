@@ -9,6 +9,7 @@ from decimal import Decimal
 from unittest.mock import MagicMock, call, patch
 
 from django.contrib.auth import get_user_model
+from django.db import models
 from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 
