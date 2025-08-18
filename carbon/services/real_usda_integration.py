@@ -18,6 +18,9 @@ from django.utils import timezone
 
 import requests
 
+# Configure logging
+logger = logging.getLogger(__name__)
+
 # Import dependencies with fallbacks for testing
 try:
     from .secure_key_management import get_secure_usda_keys, secure_key_manager

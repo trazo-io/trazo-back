@@ -16,6 +16,14 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
+# Try to import OpenAI
+try:
+    from openai import AsyncOpenAI, OpenAI
+except ImportError:
+    OpenAI = None
+    AsyncOpenAI = None
+    logger.warning("OpenAI library not available")
+
 # Initialize global OpenAI clients
 openai_client = None
 async_openai_client = None

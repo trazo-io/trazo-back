@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import timedelta
 
@@ -8,6 +9,9 @@ from django.utils import timezone
 
 from company.models import Establishment
 from history.models import History
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 # Database-driven Crop Template System
 
