@@ -67,7 +67,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install bandit safety black isort flake8 mypy --no-deps
+          pip install bandit safety black isort flake8 mypy PyYAML
           
       - name: 🔒 Security Scan with Bandit
         run: |
@@ -151,7 +151,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-django pytest-cov coverage --no-deps
+          pip install pytest pytest-django pytest-cov coverage
           
       - name: 🧪 Run Tests with Coverage
         env:
