@@ -272,7 +272,7 @@ class ProductionHistoryIntegrationTests(APITestCase):
         self.assertIn("carbon_score", response.data)
 
         # Verify calculation was stored
-        calculation = CarbonCalculation.objects.get(history=history)
+        calculation = OptimizedCarbonCalculation.objects.get(production=history)
         self.assertEqual(calculation.crop_type, "tomatoes")
         self.assertEqual(calculation.production_amount, 1000)
 
@@ -385,7 +385,7 @@ class BlockchainIntegrationTests(TransactionTestCase):
             name="Blockchain Verified Production", parcel=self.parcel, start_date="2024-01-01", published=True
         )
 
-        carbon_calc = CarbonCalculation.objects.create(
+        carbon_calc = OptimizedCarbonCalculation.objects.create(
             history=history, crop_type="corn", production_amount=1500, total_emissions=750.0, carbon_score=85
         )
 
