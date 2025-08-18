@@ -48,7 +48,7 @@ jobs:
   quality-checks:
     name: 🔍 Quality & Security
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     
     steps:
       - name: 🔄 Checkout Code
@@ -89,8 +89,8 @@ jobs:
           
       - name: 🔒 Security Scan with Bandit
         run: |
-          poetry run bandit -r . -f json -o bandit-report.json
-          poetry run bandit -r . -f txt
+          poetry run bandit -r . -f json -o bandit-report.json -c .bandit
+          poetry run bandit -r . -f txt -c .bandit
           
       - name: 🔐 Dependency Vulnerability Check
         run: |
