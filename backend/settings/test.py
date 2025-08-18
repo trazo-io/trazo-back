@@ -3,8 +3,23 @@ Django settings for testing environment.
 Optimized for CI/CD with in-memory database and minimal external dependencies.
 """
 
-from backend.settings.base import *
 import os
+
+# Set required environment variables before importing base settings
+os.environ.setdefault('SECRET_KEY', 'test-secret-key-for-ci-not-production-use-only-12345678901234567890123456789012345')
+os.environ.setdefault('DATABASE_NAME', 'test_trazo')
+os.environ.setdefault('DATABASE_USER', 'postgres')
+os.environ.setdefault('DATABASE_PASSWORD', 'postgres')
+os.environ.setdefault('DATABASE_HOST', 'localhost')
+os.environ.setdefault('DATABASE_PORT', '5432')
+os.environ.setdefault('DEBUG', 'False')
+os.environ.setdefault('USDA_API_KEY', 'test-key')
+os.environ.setdefault('STRIPE_PUBLISHABLE_KEY', 'pk_test_fake')
+os.environ.setdefault('STRIPE_SECRET_KEY', 'sk_test_fake')
+os.environ.setdefault('BASE_TRAZO_URL', 'http://localhost:3000/')
+os.environ.setdefault('ENVIRONMENT', 'testing')
+
+from backend.settings.base import *
 
 # Test-specific settings
 DEBUG = False
