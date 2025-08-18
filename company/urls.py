@@ -1,11 +1,12 @@
-from django.urls import path, include, re_path
+from django.urls import include, path, re_path
 
 from rest_framework_nested import routers
-from .views import CompanyViewSet, EstablishmentViewSet, PublicEstablishmentViewSet
-from history.views import HistoryViewSet, HistoryScanViewSet, EventViewSet
+
+from history.views import EventViewSet, HistoryScanViewSet, HistoryViewSet
 from product.views import ParcelViewSet, ProductsViewSet
 from reviews.views import ReviewsViewSet
 
+from .views import CompanyViewSet, EstablishmentViewSet, PublicEstablishmentViewSet
 
 router = routers.DefaultRouter()
 
@@ -16,31 +17,19 @@ router.register(r"companies/public/establishments", PublicEstablishmentViewSet, 
 
 # Company routes
 company_router = routers.NestedDefaultRouter(router, r"companies", lookup="company")
-company_router.register(
-    r"establishments", EstablishmentViewSet, basename="company-establishments"
-)
+company_router.register(r"establishments", EstablishmentViewSet, basename="company-establishments")
 
 
 # Establishment routes
-establishment_router = routers.NestedDefaultRouter(
-    company_router, r"establishments", lookup="establishment"
-)
+establishment_router = routers.NestedDefaultRouter(company_router, r"establishments", lookup="establishment")
 
-establishment_router.register(
-    r"scans", HistoryScanViewSet, basename="establishment-scans"
-)
+establishment_router.register(r"scans", HistoryScanViewSet, basename="establishment-scans")
 establishment_router.register(r"events", EventViewSet, basename="establishment-events")
-establishment_router.register(
-    r"parcels", ParcelViewSet, basename="establishment-parcels"
-)
-establishment_router.register(
-    r"products", ProductsViewSet, basename="establishment-products"
-)
+establishment_router.register(r"parcels", ParcelViewSet, basename="establishment-parcels")
+establishment_router.register(r"products", ProductsViewSet, basename="establishment-products")
 
 # Parcels routes
-parcel_router = routers.NestedDefaultRouter(
-    establishment_router, r"parcels", lookup="parcel"
-)
+parcel_router = routers.NestedDefaultRouter(establishment_router, r"parcels", lookup="parcel")
 
 parcel_router.register(
     r"histories",
@@ -49,9 +38,7 @@ parcel_router.register(
 )
 
 # History routes
-history_router = routers.NestedDefaultRouter(
-    parcel_router, r"histories", lookup="history"
-)
+history_router = routers.NestedDefaultRouter(parcel_router, r"histories", lookup="history")
 history_router.register(r"reviews", ReviewsViewSet, basename="history-reviews")
 
 

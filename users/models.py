@@ -1,10 +1,12 @@
 from django.contrib.auth.models import AbstractUser, Group
 from django.db import models
 from django.utils import timezone
-from .managers import UserManager
-from .constants import USER_TYPE_CHOICES, CONSUMER
-from company.models import Company, Establishment
 from django.utils.translation import gettext_lazy as _
+
+from company.models import Company, Establishment
+
+from .constants import CONSUMER, USER_TYPE_CHOICES
+from .managers import UserManager
 
 
 class User(AbstractUser):
@@ -22,21 +24,19 @@ class User(AbstractUser):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    user_type = models.PositiveSmallIntegerField(
-        choices=USER_TYPE_CHOICES, default=CONSUMER
-    )
+    user_type = models.PositiveSmallIntegerField(choices=USER_TYPE_CHOICES, default=CONSUMER)
     image = models.ImageField(upload_to="user_images/", blank=True, null=True)
-    
+
     # Social authentication fields
     social_auth_provider = models.CharField(
-        max_length=50, 
-        blank=True, 
+        max_length=50,
+        blank=True,
         null=True,
         choices=[
-            ('google', 'Google'),
-            ('facebook', 'Facebook'),
-            ('apple', 'Apple'),
-        ]
+            ("google", "Google"),
+            ("facebook", "Facebook"),
+            ("apple", "Apple"),
+        ],
     )
     social_auth_id = models.CharField(max_length=255, blank=True, null=True)
 
@@ -50,7 +50,7 @@ class User(AbstractUser):
 
     def get_full_name(self):
         return self.first_name + " " + self.last_name
-    
+
     def get_active_company(self):
         # Check for active or trialing subscriptions
         return self.companies.filter(subscription__status__in=["active", "trialing"]).first()
@@ -73,22 +73,14 @@ class WorksIn(models.Model):
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    company = models.ForeignKey(
-        Company, on_delete=models.CASCADE, related_name="company_workers"
-    )
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="company_workers")
     role = models.CharField(choices=USER_ROLES, max_length=5)
-    establishments_in_charge = models.ManyToManyField(
-        Establishment, related_name="workers", blank=True, null=True
-    )
-    role_group = models.ForeignKey(
-        Group, on_delete=models.CASCADE, null=True, blank=True
-    )
+    establishments_in_charge = models.ManyToManyField(Establishment, related_name="workers", blank=True, null=True)
+    role_group = models.ForeignKey(Group, on_delete=models.CASCADE, null=True, blank=True)
 
 
 class VerificationCode(models.Model):
-    user = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="verification_code"
-    )
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="verification_code")
     code = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -104,46 +96,43 @@ class PasswordResetToken(models.Model):
     Secure password reset token with 15-minute expiration
     Following 2025 security best practices
     """
-    user = models.ForeignKey(
-        User, 
-        on_delete=models.CASCADE, 
-        related_name="password_reset_tokens"
-    )
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="password_reset_tokens")
     token = models.CharField(max_length=255, unique=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
     used_at = models.DateTimeField(null=True, blank=True)
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.TextField(null=True, blank=True)
-    
+
     class Meta:
-        ordering = ['-created_at']
+        ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=['token']),
-            models.Index(fields=['user', 'created_at']),
-            models.Index(fields=['expires_at']),
+            models.Index(fields=["token"]),
+            models.Index(fields=["user", "created_at"]),
+            models.Index(fields=["expires_at"]),
         ]
-    
+
     def __str__(self):
         return f"Password reset for {self.user.email} - {self.token[:8]}..."
-    
+
     def is_expired(self):
         """Check if token has expired"""
         return timezone.now() > self.expires_at
-    
+
     def is_used(self):
         """Check if token has been used"""
         return self.used_at is not None
-    
+
     def is_valid(self):
         """Check if token is valid (not expired and not used)"""
         return not self.is_expired() and not self.is_used()
-    
+
     def mark_as_used(self):
         """Mark token as used"""
         self.used_at = timezone.now()
-        self.save(update_fields=['used_at'])
-    
+        self.save(update_fields=["used_at"])
+
     @classmethod
     def cleanup_expired_tokens(cls):
         """Remove expired tokens - call this periodically"""

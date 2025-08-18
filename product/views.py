@@ -1,63 +1,63 @@
 from django.shortcuts import get_object_or_404
-from rest_framework import viewsets, permissions, filters, mixins
+
+from rest_framework import filters, mixins, permissions, viewsets
+from rest_framework.decorators import action
+from rest_framework.parsers import FileUploadParser, FormParser, MultiPartParser
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+from backend.permissions import CompanyNestedViewSet
+from common.models import Gallery, GalleryImage
+from history.serializers import HistorySerializer
+from subscriptions.permissions import HasParcelCreationPermission
+
 from .models import Parcel, Product
 from .serializers import (
-    RetrieveParcelSerializer,
     CreateParcelSerializer,
-    ProductListSerializer,
     ProductListOptionsSerializer,
+    ProductListSerializer,
+    RetrieveParcelSerializer,
 )
-from history.serializers import HistorySerializer
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from backend.permissions import CompanyNestedViewSet
-from rest_framework.parsers import MultiPartParser, FormParser, FileUploadParser
-from common.models import GalleryImage, Gallery
-from subscriptions.permissions import HasParcelCreationPermission
-from rest_framework.permissions import IsAuthenticated
+
 
 class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
-    queryset = Parcel.objects.select_related(
-        'establishment', 'establishment__company', 'album', 'product'
-    ).prefetch_related(
-        'histories'
-    ).all()
+    queryset = (
+        Parcel.objects.select_related("establishment", "establishment__company", "album", "product")
+        .prefetch_related("histories")
+        .all()
+    )
     filter_backends = [filters.OrderingFilter]
     parser_classes = (MultiPartParser, FormParser)
     permission_classes = [IsAuthenticated, HasParcelCreationPermission]
-    
+
     def partial_update(self, request, *args, **kwargs):
         """Override to handle indexed image URLs from FormData"""
         # Handle indexed image URLs from FormData
-        
+
         # Handle indexed uploaded_image_urls
         uploaded_urls = []
         i = 0
-        while f'uploaded_image_urls[{i}]' in request.data:
-            url = request.data.get(f'uploaded_image_urls[{i}]')
+        while f"uploaded_image_urls[{i}]" in request.data:
+            url = request.data.get(f"uploaded_image_urls[{i}]")
             if url:
                 uploaded_urls.append(url)
             i += 1
-        
+
         if uploaded_urls:
             # Process indexed URLs
             # Convert to mutable QueryDict and update
             request.data._mutable = True
             # Remove indexed entries
             for j in range(i):
-                request.data.pop(f'uploaded_image_urls[{j}]', None)
+                request.data.pop(f"uploaded_image_urls[{j}]", None)
             # Add as list
-            request.data.setlist('uploaded_image_urls', uploaded_urls)
+            request.data.setlist("uploaded_image_urls", uploaded_urls)
             request.data._mutable = False
-            
+
         return super().partial_update(request, *args, **kwargs)
 
     def get_serializer_class(self):
-        if (
-            self.action == "create"
-            or self.action == "update"
-            or self.action == "partial_update"
-        ):
+        if self.action == "create" or self.action == "update" or self.action == "partial_update":
             return CreateParcelSerializer
         return RetrieveParcelSerializer
 
@@ -67,9 +67,7 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         return context
 
     @action(detail=True, methods=["get"])
-    def current_history(
-        self, request, pk=None, parcel_pk=None, company_pk=None, establishment_pk=None
-    ):
+    def current_history(self, request, pk=None, parcel_pk=None, company_pk=None, establishment_pk=None):
         establishments = self.company.establishment_set.all()
         parcel = get_object_or_404(
             Parcel,
@@ -80,46 +78,54 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         return Response(HistorySerializer(current_history).data)
 
     @action(detail=True, methods=["get"])
-    def history(
-        self, request, pk=None, parcel_pk=None, company_pk=None, establishment_pk=None
-    ):
+    def history(self, request, pk=None, parcel_pk=None, company_pk=None, establishment_pk=None):
         """
         OPTIMIZED: Get parcel history using the optimized serializer to prevent USDA API calls.
         This endpoint was causing performance issues by using HistorySerializer which triggers
         expensive carbon calculations and USDA API calls.
         """
         from history.serializers import OptimizedHistoryListSerializer
-        
+
         parcel = self.get_object()
 
         # Use optimized queryset to prevent N+1 queries
-        histories = parcel.histories.select_related(
-            'product',
-            'parcel',
-            'crop_type'
-        ).only(
-            'id', 'name', 'start_date', 'finish_date', 'published',
-            'earning', 'reputation', 'qr_code', 'is_outdoor',
-            'age_of_plants', 'number_of_plants', 'soil_ph', 'extra_data',
-            'product__id', 'product__name',
-            'parcel__id', 'parcel__name', 
-            'crop_type__id', 'crop_type__name', 'crop_type__category', 'crop_type__slug'
-        ).filter(published=True).order_by("-id")
-        
-        if parcel.current_history is not None:
-            histories = histories.exclude(id=parcel.current_history.id)
-        
-        # Use the optimized serializer that avoids expensive operations
-        return Response(
-            OptimizedHistoryListSerializer(
-                histories, many=True, context={'request': request}
-            ).data
+        histories = (
+            parcel.histories.select_related("product", "parcel", "crop_type")
+            .only(
+                "id",
+                "name",
+                "start_date",
+                "finish_date",
+                "published",
+                "earning",
+                "reputation",
+                "qr_code",
+                "is_outdoor",
+                "age_of_plants",
+                "number_of_plants",
+                "soil_ph",
+                "extra_data",
+                "product__id",
+                "product__name",
+                "parcel__id",
+                "parcel__name",
+                "crop_type__id",
+                "crop_type__name",
+                "crop_type__category",
+                "crop_type__slug",
+            )
+            .filter(published=True)
+            .order_by("-id")
         )
 
+        if parcel.current_history is not None:
+            histories = histories.exclude(id=parcel.current_history.id)
+
+        # Use the optimized serializer that avoids expensive operations
+        return Response(OptimizedHistoryListSerializer(histories, many=True, context={"request": request}).data)
+
     @action(detail=True, methods=["post"])
-    def finish_history(
-        self, request, pk=None, parcel_pk=None, company_pk=None, establishment_pk=None
-    ):
+    def finish_history(self, request, pk=None, parcel_pk=None, company_pk=None, establishment_pk=None):
         parcel = self.get_object()
         history_data = request.data
         images = request.FILES.getlist("album[images]")

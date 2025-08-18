@@ -1,7 +1,17 @@
-from django.db.models.signals import post_save, post_delete
+from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
-from .models import WeatherEvent, ChemicalEvent, ProductionEvent, GeneralEvent, EquipmentEvent, SoilManagementEvent, PestManagementEvent
+
 from carbon.services.event_carbon_calculator import EventCarbonCalculator
+
+from .models import (
+    ChemicalEvent,
+    EquipmentEvent,
+    GeneralEvent,
+    PestManagementEvent,
+    ProductionEvent,
+    SoilManagementEvent,
+    WeatherEvent,
+)
 
 
 @receiver(post_save, sender=ChemicalEvent)
@@ -9,26 +19,28 @@ def calculate_chemical_event_carbon(sender, instance, created, **kwargs):
     """
     Automatically calculate carbon impact when a chemical event is created or updated
     """
-    if created or kwargs.get('update_fields'):  # Only on create or specific field updates
+    if created or kwargs.get("update_fields"):  # Only on create or specific field updates
         try:
             calculator = EventCarbonCalculator()
             calculation_result = calculator.calculate_chemical_event_impact(instance)
-            
+
             # Create carbon entry if calculation was successful
-            if calculation_result.get('co2e', 0) > 0:
+            if calculation_result.get("co2e", 0) > 0:
                 carbon_entry = calculator.create_carbon_entry_from_event(instance, calculation_result)
-                
+
                 # Store calculation result in event's extra_data for future reference
-                if not hasattr(instance, 'extra_data') or instance.extra_data is None:
+                if not hasattr(instance, "extra_data") or instance.extra_data is None:
                     instance.extra_data = {}
-                
-                instance.extra_data['carbon_calculation'] = calculation_result
-                
+
+                instance.extra_data["carbon_calculation"] = calculation_result
+
                 # Update without triggering signal again
                 ChemicalEvent.objects.filter(id=instance.id).update(extra_data=instance.extra_data)
-                
-                print(f"✅ Carbon calculation completed for Chemical Event {instance.id}: {calculation_result['co2e']} kg CO2e")
-            
+
+                print(
+                    f"✅ Carbon calculation completed for Chemical Event {instance.id}: {calculation_result['co2e']} kg CO2e"
+                )
+
         except Exception as e:
             print(f"❌ Error calculating carbon for Chemical Event {instance.id}: {e}")
 
@@ -38,26 +50,28 @@ def calculate_production_event_carbon(sender, instance, created, **kwargs):
     """
     Automatically calculate carbon impact when a production event is created or updated
     """
-    if created or kwargs.get('update_fields'):
+    if created or kwargs.get("update_fields"):
         try:
             calculator = EventCarbonCalculator()
             calculation_result = calculator.calculate_production_event_impact(instance)
-            
+
             # Create carbon entry if calculation was successful
-            if calculation_result.get('co2e', 0) > 0:
+            if calculation_result.get("co2e", 0) > 0:
                 carbon_entry = calculator.create_carbon_entry_from_event(instance, calculation_result)
-                
+
                 # Store calculation result in event's extra_data
-                if not hasattr(instance, 'extra_data') or instance.extra_data is None:
+                if not hasattr(instance, "extra_data") or instance.extra_data is None:
                     instance.extra_data = {}
-                
-                instance.extra_data['carbon_calculation'] = calculation_result
-                
+
+                instance.extra_data["carbon_calculation"] = calculation_result
+
                 # Update without triggering signal again
                 ProductionEvent.objects.filter(id=instance.id).update(extra_data=instance.extra_data)
-                
-                print(f"✅ Carbon calculation completed for Production Event {instance.id}: {calculation_result['co2e']} kg CO2e")
-            
+
+                print(
+                    f"✅ Carbon calculation completed for Production Event {instance.id}: {calculation_result['co2e']} kg CO2e"
+                )
+
         except Exception as e:
             print(f"❌ Error calculating carbon for Production Event {instance.id}: {e}")
 
@@ -67,26 +81,28 @@ def calculate_weather_event_carbon(sender, instance, created, **kwargs):
     """
     Automatically calculate carbon impact when a weather event is created or updated
     """
-    if created or kwargs.get('update_fields'):
+    if created or kwargs.get("update_fields"):
         try:
             calculator = EventCarbonCalculator()
             calculation_result = calculator.calculate_weather_event_impact(instance)
-            
+
             # Create carbon entry if calculation was successful
-            if calculation_result.get('co2e', 0) > 0:
+            if calculation_result.get("co2e", 0) > 0:
                 carbon_entry = calculator.create_carbon_entry_from_event(instance, calculation_result)
-                
+
                 # Store calculation result in event's extra_data
-                if not hasattr(instance, 'extra_data') or instance.extra_data is None:
+                if not hasattr(instance, "extra_data") or instance.extra_data is None:
                     instance.extra_data = {}
-                
-                instance.extra_data['carbon_calculation'] = calculation_result
-                
+
+                instance.extra_data["carbon_calculation"] = calculation_result
+
                 # Update without triggering signal again
                 WeatherEvent.objects.filter(id=instance.id).update(extra_data=instance.extra_data)
-                
-                print(f"✅ Carbon calculation completed for Weather Event {instance.id}: {calculation_result['co2e']} kg CO2e")
-            
+
+                print(
+                    f"✅ Carbon calculation completed for Weather Event {instance.id}: {calculation_result['co2e']} kg CO2e"
+                )
+
         except Exception as e:
             print(f"❌ Error calculating carbon for Weather Event {instance.id}: {e}")
 
@@ -98,56 +114,61 @@ def calculate_general_event_carbon(sender, instance, created, **kwargs):
     """
     if created:  # Only for new general events
         try:
-            from carbon.services.event_carbon_calculator import EventCarbonCalculator
             from carbon.models import CarbonEntry
-            
+            from carbon.services.event_carbon_calculator import EventCarbonCalculator
+
             calculator = EventCarbonCalculator()
-            
+
             # General events have minimal standard carbon impact
             calculation_result = {
-                'co2e': 0.1,  # Minimal impact
-                'efficiency_score': 50.0,
-                'usda_factors_based': False,
-                'verification_status': 'estimated',
-                'calculation_method': 'general_event_standard',
-                'data_source': 'Industry Standards',
-                'recommendations': [],
-                'event_type': 'general',
-                'timestamp': instance.date.isoformat() if instance.date else None
+                "co2e": 0.1,  # Minimal impact
+                "efficiency_score": 50.0,
+                "usda_factors_based": False,
+                "verification_status": "estimated",
+                "calculation_method": "general_event_standard",
+                "data_source": "Industry Standards",
+                "recommendations": [],
+                "event_type": "general",
+                "timestamp": instance.date.isoformat() if instance.date else None,
             }
-            
+
             # Only create carbon entry if the event might have actual impact
-            impact_keywords = ['fuel', 'energy', 'transport', 'machinery', 'equipment']
-            
+            impact_keywords = ["fuel", "energy", "transport", "machinery", "equipment"]
+
             # Safe string concatenation - handle None values
-            name_text = instance.name or ''
-            observation_text = instance.observation or ''
-            combined_text = (name_text + ' ' + observation_text).lower()
-            
+            name_text = instance.name or ""
+            observation_text = instance.observation or ""
+            combined_text = (name_text + " " + observation_text).lower()
+
             if any(keyword in combined_text for keyword in impact_keywords):
                 carbon_entry = calculator.create_carbon_entry_from_event(instance, calculation_result)
-                
+
                 # Store calculation result
-                if not hasattr(instance, 'extra_data') or instance.extra_data is None:
+                if not hasattr(instance, "extra_data") or instance.extra_data is None:
                     instance.extra_data = {}
-                
-                instance.extra_data['carbon_calculation'] = calculation_result
+
+                instance.extra_data["carbon_calculation"] = calculation_result
                 GeneralEvent.objects.filter(id=instance.id).update(extra_data=instance.extra_data)
-                
-                print(f"✅ Carbon calculation completed for General Event {instance.id}: {calculation_result['co2e']} kg CO2e")
+
+                print(
+                    f"✅ Carbon calculation completed for General Event {instance.id}: {calculation_result['co2e']} kg CO2e"
+                )
             else:
                 # Still store the calculation result even if no carbon entry is created
-                if not hasattr(instance, 'extra_data') or instance.extra_data is None:
+                if not hasattr(instance, "extra_data") or instance.extra_data is None:
                     instance.extra_data = {}
-                
-                instance.extra_data['carbon_calculation'] = calculation_result
+
+                instance.extra_data["carbon_calculation"] = calculation_result
                 GeneralEvent.objects.filter(id=instance.id).update(extra_data=instance.extra_data)
-                
-                print(f"✅ General Event {instance.id} processed with minimal carbon impact: {calculation_result['co2e']} kg CO2e")
-            
+
+                print(
+                    f"✅ General Event {instance.id} processed with minimal carbon impact: {calculation_result['co2e']} kg CO2e"
+                )
+
         except Exception as e:
             print(f"❌ Error calculating carbon for General Event {instance.id}: {e}")
             import traceback
+
             traceback.print_exc()
 
 
@@ -161,21 +182,20 @@ def cleanup_carbon_entries_on_event_delete(sender, instance, **kwargs):
     """
     try:
         from carbon.models import CarbonEntry
-        
+
         # Find and delete associated carbon entries
         # We identify them by the description pattern
         event_class_name = instance.__class__.__name__
         carbon_entries = CarbonEntry.objects.filter(
-            production=instance.history,
-            description__icontains=f"Auto-calculated from {event_class_name}"
+            production=instance.history, description__icontains=f"Auto-calculated from {event_class_name}"
         )
-        
+
         deleted_count = carbon_entries.count()
         carbon_entries.delete()
-        
+
         if deleted_count > 0:
             print(f"🗑️ Cleaned up {deleted_count} carbon entries for deleted {event_class_name} {instance.id}")
-        
+
     except Exception as e:
         print(f"❌ Error cleaning up carbon entries for {instance.__class__.__name__} {instance.id}: {e}")
 
@@ -188,22 +208,24 @@ def calculate_equipment_event_carbon(sender, instance, created, **kwargs):
     if created:  # Only for new equipment events
         try:
             from carbon.services.event_carbon_calculator import EventCarbonCalculator
-            
+
             calculator = EventCarbonCalculator()
             calculation_result = calculator.calculate_equipment_event_impact(instance)
-            
+
             # Create carbon entry automatically
             carbon_entry = calculator.create_carbon_entry_from_event(instance, calculation_result)
-            
+
             # Store calculation result in event extra_data
-            if not hasattr(instance, 'extra_data') or instance.extra_data is None:
+            if not hasattr(instance, "extra_data") or instance.extra_data is None:
                 instance.extra_data = {}
-            
-            instance.extra_data['carbon_calculation'] = calculation_result
+
+            instance.extra_data["carbon_calculation"] = calculation_result
             EquipmentEvent.objects.filter(id=instance.id).update(extra_data=instance.extra_data)
-            
-            print(f"✅ Carbon calculation completed for Equipment Event {instance.id}: {calculation_result['co2e']} kg CO2e")
-            
+
+            print(
+                f"✅ Carbon calculation completed for Equipment Event {instance.id}: {calculation_result['co2e']} kg CO2e"
+            )
+
         except Exception as e:
             print(f"❌ Error calculating carbon for Equipment Event {instance.id}: {e}")
 
@@ -216,22 +238,24 @@ def calculate_soil_management_event_carbon(sender, instance, created, **kwargs):
     if created:  # Only for new soil management events
         try:
             from carbon.services.event_carbon_calculator import EventCarbonCalculator
-            
+
             calculator = EventCarbonCalculator()
             calculation_result = calculator.calculate_soil_management_event_impact(instance)
-            
+
             # Create carbon entry automatically
             carbon_entry = calculator.create_carbon_entry_from_event(instance, calculation_result)
-            
+
             # Store calculation result in event extra_data
-            if not hasattr(instance, 'extra_data') or instance.extra_data is None:
+            if not hasattr(instance, "extra_data") or instance.extra_data is None:
                 instance.extra_data = {}
-            
-            instance.extra_data['carbon_calculation'] = calculation_result
+
+            instance.extra_data["carbon_calculation"] = calculation_result
             SoilManagementEvent.objects.filter(id=instance.id).update(extra_data=instance.extra_data)
-            
-            print(f"✅ Carbon calculation completed for Soil Management Event {instance.id}: {calculation_result['co2e']} kg CO2e")
-            
+
+            print(
+                f"✅ Carbon calculation completed for Soil Management Event {instance.id}: {calculation_result['co2e']} kg CO2e"
+            )
+
         except Exception as e:
             print(f"❌ Error calculating carbon for Soil Management Event {instance.id}: {e}")
 
@@ -244,22 +268,24 @@ def calculate_pest_management_event_carbon(sender, instance, created, **kwargs):
     if created:  # Only for new pest management events
         try:
             from carbon.services.event_carbon_calculator import EventCarbonCalculator
-            
+
             calculator = EventCarbonCalculator()
             calculation_result = calculator.calculate_pest_management_event_impact(instance)
-            
+
             # Create carbon entry automatically (only for significant impacts)
-            if abs(calculation_result['co2e']) > 0.05:
+            if abs(calculation_result["co2e"]) > 0.05:
                 carbon_entry = calculator.create_carbon_entry_from_event(instance, calculation_result)
-            
+
             # Store calculation result in event extra_data
-            if not hasattr(instance, 'extra_data') or instance.extra_data is None:
+            if not hasattr(instance, "extra_data") or instance.extra_data is None:
                 instance.extra_data = {}
-            
-            instance.extra_data['carbon_calculation'] = calculation_result
+
+            instance.extra_data["carbon_calculation"] = calculation_result
             PestManagementEvent.objects.filter(id=instance.id).update(extra_data=instance.extra_data)
-            
-            print(f"✅ Carbon calculation completed for Pest Management Event {instance.id}: {calculation_result['co2e']} kg CO2e")
-            
+
+            print(
+                f"✅ Carbon calculation completed for Pest Management Event {instance.id}: {calculation_result['co2e']} kg CO2e"
+            )
+
         except Exception as e:
-            print(f"❌ Error calculating carbon for Pest Management Event {instance.id}: {e}") 
+            print(f"❌ Error calculating carbon for Pest Management Event {instance.id}: {e}")

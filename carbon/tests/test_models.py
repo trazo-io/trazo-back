@@ -3,25 +3,44 @@ Comprehensive Test Suite for Carbon App
 Tests carbon calculation models, USDA integration, IoT devices, and verification systems
 """
 
+import json
 import unittest
-from unittest.mock import patch, MagicMock
-from django.test import TestCase, TransactionTestCase, Client, override_settings
+import uuid
+from datetime import date, datetime, timedelta
+from decimal import Decimal
+from unittest.mock import MagicMock, patch
+
 from django.contrib.auth import get_user_model
-from django.urls import reverse
-from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
-from datetime import datetime, timedelta, date
-from decimal import Decimal
-import json
-import uuid
+from django.test import Client, TestCase, TransactionTestCase, override_settings
+from django.urls import reverse
+from django.utils import timezone
 
 from carbon.models import (
-    CropType, ProductionTemplate, EventTemplate, CarbonSource, CarbonOffsetAction,
-    CarbonEntry, CarbonCertification, CarbonBenchmark, CarbonReport, CarbonAuditLog,
-    SustainabilityBadge, MicroOffset, GreenPoints, CarbonOffsetProject, CarbonOffsetPurchase,
-    CarbonOffsetCertificate, IoTDevice, IoTDataPoint, AutomationRule,
-    USDAComplianceRecord, RegionalEmissionFactor, USDACalculationAudit, VerificationAudit
+    AutomationRule,
+    CarbonAuditLog,
+    CarbonBenchmark,
+    CarbonCertification,
+    CarbonEntry,
+    CarbonOffsetAction,
+    CarbonOffsetCertificate,
+    CarbonOffsetProject,
+    CarbonOffsetPurchase,
+    CarbonReport,
+    CarbonSource,
+    CropType,
+    EventTemplate,
+    GreenPoints,
+    IoTDataPoint,
+    IoTDevice,
+    MicroOffset,
+    ProductionTemplate,
+    RegionalEmissionFactor,
+    SustainabilityBadge,
+    USDACalculationAudit,
+    USDAComplianceRecord,
+    VerificationAudit,
 )
 from company.models import Company, Establishment
 from history.models import History
@@ -32,76 +51,73 @@ User = get_user_model()
 
 class TestCropTypeModel(TestCase):
     """Test CropType model functionality"""
-    
+
     def setUp(self):
         """Set up test data"""
         self.crop_data = {
-            'name': 'Citrus (Oranges)',
-            'slug': 'citrus_oranges',
-            'category': 'tree_fruit',
-            'description': 'Citrus fruit production with focus on oranges',
-            'typical_farm_size': '20-100 hectares',
-            'growing_season': '12 months (evergreen)',
-            'harvest_season': 'November - April',
-            'emissions_per_hectare': 2500.0,
-            'industry_average': 2800.0,
-            'best_practice': 1800.0,
-            'carbon_credit_potential': 500.0,
-            'typical_cost_per_hectare': 15000.0,
-            'fertilizer_cost_per_hectare': 3000.0,
-            'fuel_cost_per_hectare': 2000.0,
-            'irrigation_cost_per_hectare': 1500.0,
-            'labor_cost_per_hectare': 8500.0,
-            'sustainability_opportunities': ['precision agriculture', 'organic transition']
+            "name": "Citrus (Oranges)",
+            "slug": "citrus_oranges",
+            "category": "tree_fruit",
+            "description": "Citrus fruit production with focus on oranges",
+            "typical_farm_size": "20-100 hectares",
+            "growing_season": "12 months (evergreen)",
+            "harvest_season": "November - April",
+            "emissions_per_hectare": 2500.0,
+            "industry_average": 2800.0,
+            "best_practice": 1800.0,
+            "carbon_credit_potential": 500.0,
+            "typical_cost_per_hectare": 15000.0,
+            "fertilizer_cost_per_hectare": 3000.0,
+            "fuel_cost_per_hectare": 2000.0,
+            "irrigation_cost_per_hectare": 1500.0,
+            "labor_cost_per_hectare": 8500.0,
+            "sustainability_opportunities": ["precision agriculture", "organic transition"],
         }
-        
+
     def test_crop_type_creation(self):
         """Test basic crop type creation"""
         crop = CropType.objects.create(**self.crop_data)
-        
-        self.assertEqual(crop.name, 'Citrus (Oranges)')
-        self.assertEqual(crop.category, 'tree_fruit')
+
+        self.assertEqual(crop.name, "Citrus (Oranges)")
+        self.assertEqual(crop.category, "tree_fruit")
         self.assertTrue(crop.is_active)
         self.assertFalse(crop.usda_verified)
         self.assertIsNotNone(crop.created_at)
         self.assertIsNotNone(crop.updated_at)
-        
+
     def test_crop_type_unique_constraints(self):
         """Test uniqueness constraints"""
         CropType.objects.create(**self.crop_data)
-        
+
         # Same name should fail
         with self.assertRaises(IntegrityError):
             CropType.objects.create(**self.crop_data)
-            
+
         # Same slug should fail
         duplicate_data = self.crop_data.copy()
-        duplicate_data['name'] = 'Different Name'
+        duplicate_data["name"] = "Different Name"
         with self.assertRaises(IntegrityError):
             CropType.objects.create(**duplicate_data)
-            
+
     def test_crop_type_string_representation(self):
         """Test string representation"""
         crop = CropType.objects.create(**self.crop_data)
-        self.assertEqual(str(crop), 'Citrus (Oranges)')
-        
+        self.assertEqual(str(crop), "Citrus (Oranges)")
+
     def test_carbon_benchmark_range_property(self):
         """Test carbon benchmark range property"""
         crop = CropType.objects.create(**self.crop_data)
         expected = "1800.0-2500.0 kg CO2e/ha"
         self.assertEqual(crop.carbon_benchmark_range, expected)
-        
+
     def test_crop_type_category_choices(self):
         """Test category choices validation"""
-        valid_categories = [
-            'tree_fruit', 'tree_nut', 'grain', 'oilseed', 
-            'vegetable', 'herb', 'legume', 'other'
-        ]
-        
+        valid_categories = ["tree_fruit", "tree_nut", "grain", "oilseed", "vegetable", "herb", "legume", "other"]
+
         for category in valid_categories:
             crop_data = self.crop_data.copy()
-            crop_data['slug'] = f'test_{category}'
-            crop_data['category'] = category
+            crop_data["slug"] = f"test_{category}"
+            crop_data["category"] = category
             crop = CropType.objects.create(**crop_data)
             self.assertEqual(crop.category, category)
             crop.delete()
@@ -109,83 +125,89 @@ class TestCropTypeModel(TestCase):
 
 class TestProductionTemplateModel(TransactionTestCase):
     """Test ProductionTemplate model functionality"""
-    
+
     def setUp(self):
         """Set up test data"""
         self.crop_type = CropType.objects.create(
-            name='Test Crop',
-            slug='test_crop',
-            category='vegetable',
-            description='Test crop for templates',
+            name="Test Crop",
+            slug="test_crop",
+            category="vegetable",
+            description="Test crop for templates",
             emissions_per_hectare=1000.0,
             industry_average=1200.0,
             best_practice=800.0,
             carbon_credit_potential=200.0,
-            typical_cost_per_hectare=5000.0
+            typical_cost_per_hectare=5000.0,
         )
-        
+
         self.template_data = {
-            'crop_type': self.crop_type,
-            'name': 'Organic Production',
-            'slug': 'organic_production',
-            'farming_approach': 'organic',
-            'description': 'Comprehensive organic production system',
-            'complexity_level': 'intermediate',
-            'projected_emissions_reduction': 25.0,
-            'projected_cost_change': 15.0,
-            'projected_yield_impact': -5.0,
-            'certification_requirements': ['USDA Organic', 'CCOF'],
-            'market_demand': 'high'
+            "crop_type": self.crop_type,
+            "name": "Organic Production",
+            "slug": "organic_production",
+            "farming_approach": "organic",
+            "description": "Comprehensive organic production system",
+            "complexity_level": "intermediate",
+            "projected_emissions_reduction": 25.0,
+            "projected_cost_change": 15.0,
+            "projected_yield_impact": -5.0,
+            "certification_requirements": ["USDA Organic", "CCOF"],
+            "market_demand": "high",
         }
-        
+
     def test_production_template_creation(self):
         """Test production template creation"""
         template = ProductionTemplate.objects.create(**self.template_data)
-        
-        self.assertEqual(template.name, 'Organic Production')
-        self.assertEqual(template.farming_approach, 'organic')
+
+        self.assertEqual(template.name, "Organic Production")
+        self.assertEqual(template.farming_approach, "organic")
         self.assertTrue(template.is_active)
         self.assertFalse(template.is_recommended)
         self.assertEqual(template.usage_count, 0)
         self.assertTrue(template.usda_compliant)
-        
+
     def test_production_template_string_representation(self):
         """Test string representation"""
         template = ProductionTemplate.objects.create(**self.template_data)
         expected = f"{self.crop_type.name} - Organic Production"
         self.assertEqual(str(template), expected)
-        
+
     def test_unique_together_constraint(self):
         """Test unique together constraint for crop_type and slug"""
         ProductionTemplate.objects.create(**self.template_data)
-        
+
         # Same crop_type and slug should fail
         duplicate_data = self.template_data.copy()
-        duplicate_data['name'] = 'Different Name'
+        duplicate_data["name"] = "Different Name"
         with self.assertRaises(IntegrityError):
             ProductionTemplate.objects.create(**duplicate_data)
-            
+
     def test_increment_usage_method(self):
         """Test increment usage method"""
         template = ProductionTemplate.objects.create(**self.template_data)
         initial_count = template.usage_count
-        
+
         template.increment_usage()
         template.refresh_from_db()
-        
+
         self.assertEqual(template.usage_count, initial_count + 1)
-        
+
     def test_farming_approach_choices(self):
         """Test farming approach choices"""
         valid_approaches = [
-            'conventional', 'organic', 'precision', 'regenerative',
-            'sustainable', 'integrated', 'no_till', 'cover_crop'
+            "conventional",
+            "organic",
+            "precision",
+            "regenerative",
+            "sustainable",
+            "integrated",
+            "no_till",
+            "cover_crop",
         ]
-        
+
         for approach in valid_approaches:
             template_data = self.template_data.copy()
-            template_data['slug'] = f'test_{approach}'
-            template_data['farming_approach'] = approach
+            template_data["slug"] = f"test_{approach}"
+            template_data["farming_approach"] = approach
             template = ProductionTemplate.objects.create(**template_data)
             self.assertEqual(template.farming_approach, approach)
             template.delete()
@@ -193,481 +215,406 @@ class TestProductionTemplateModel(TransactionTestCase):
 
 class TestEventTemplateModel(TransactionTestCase):
     """Test EventTemplate model functionality"""
-    
+
     def setUp(self):
         """Set up test data"""
         self.crop_type = CropType.objects.create(
-            name='Test Crop',
-            slug='test_crop',
-            category='vegetable',
-            description='Test crop',
+            name="Test Crop",
+            slug="test_crop",
+            category="vegetable",
+            description="Test crop",
             emissions_per_hectare=1000.0,
             industry_average=1200.0,
             best_practice=800.0,
             carbon_credit_potential=200.0,
-            typical_cost_per_hectare=5000.0
+            typical_cost_per_hectare=5000.0,
         )
-        
+
         self.production_template = ProductionTemplate.objects.create(
             crop_type=self.crop_type,
-            name='Test Template',
-            slug='test_template',
-            farming_approach='organic',
-            description='Test template'
+            name="Test Template",
+            slug="test_template",
+            farming_approach="organic",
+            description="Test template",
         )
-        
+
         self.event_data = {
-            'production_template': self.production_template,
-            'name': 'Winter Pruning',
-            'event_type': 'pruning',
-            'description': 'Annual winter pruning activity',
-            'timing': 'December - February',
-            'frequency': 'annual',
-            'typical_duration': '2-3 hours',
-            'order_sequence': 1,
-            'carbon_impact': 50.0,
-            'carbon_category': 'medium',
-            'cost_estimate': 200.0,
-            'labor_hours': 2.5,
-            'efficiency_tips': 'Use sharp tools to minimize plant damage',
-            'sustainability_score': 8,
-            'backend_event_type': 2,
-            'carbon_sources': ['fuel', 'equipment'],
-            'typical_amounts': {'fuel': '5L', 'hours': '2.5'},
-            'alternative_methods': ['hand pruning', 'mechanical pruning'],
-            'backend_event_fields': {'type': 'maintenance', 'category': 'pruning'}
+            "production_template": self.production_template,
+            "name": "Winter Pruning",
+            "event_type": "pruning",
+            "description": "Annual winter pruning activity",
+            "timing": "December - February",
+            "frequency": "annual",
+            "typical_duration": "2-3 hours",
+            "order_sequence": 1,
+            "carbon_impact": 50.0,
+            "carbon_category": "medium",
+            "cost_estimate": 200.0,
+            "labor_hours": 2.5,
+            "efficiency_tips": "Use sharp tools to minimize plant damage",
+            "sustainability_score": 8,
+            "backend_event_type": 2,
+            "carbon_sources": ["fuel", "equipment"],
+            "typical_amounts": {"fuel": "5L", "hours": "2.5"},
+            "alternative_methods": ["hand pruning", "mechanical pruning"],
+            "backend_event_fields": {"type": "maintenance", "category": "pruning"},
         }
-        
+
     def test_event_template_creation(self):
         """Test event template creation"""
         event = EventTemplate.objects.create(**self.event_data)
-        
-        self.assertEqual(event.name, 'Winter Pruning')
-        self.assertEqual(event.event_type, 'pruning')
+
+        self.assertEqual(event.name, "Winter Pruning")
+        self.assertEqual(event.event_type, "pruning")
         self.assertEqual(event.carbon_impact, 50.0)
-        self.assertEqual(event.carbon_category, 'medium')
+        self.assertEqual(event.carbon_category, "medium")
         self.assertTrue(event.is_active)
         self.assertTrue(event.is_default_enabled)
         self.assertFalse(event.is_required)
-        
+
     def test_event_template_string_representation(self):
         """Test string representation"""
         event = EventTemplate.objects.create(**self.event_data)
         expected = f"{self.production_template.name} - Winter Pruning"
         self.assertEqual(str(event), expected)
-        
+
     def test_crop_type_property(self):
         """Test crop_type property"""
         event = EventTemplate.objects.create(**self.event_data)
         self.assertEqual(event.crop_type, self.crop_type)
-        
+
     def test_formatted_carbon_impact_property(self):
         """Test formatted carbon impact property"""
         # Positive impact
         event = EventTemplate.objects.create(**self.event_data)
         self.assertEqual(event.formatted_carbon_impact, "50.0 kg CO₂")
-        
+
         # Negative impact (sequestration)
         event_data_negative = self.event_data.copy()
-        event_data_negative['name'] = 'Carbon Sequestration'
-        event_data_negative['carbon_impact'] = -30.0
-        event_data_negative['carbon_category'] = 'negative'
+        event_data_negative["name"] = "Carbon Sequestration"
+        event_data_negative["carbon_impact"] = -30.0
+        event_data_negative["carbon_category"] = "negative"
         event_negative = EventTemplate.objects.create(**event_data_negative)
         self.assertEqual(event_negative.formatted_carbon_impact, "-30.0 kg CO₂ (sequestration)")
-        
+
     def test_carbon_impact_color_property(self):
         """Test carbon impact color property"""
         # High impact
-        high_event = EventTemplate.objects.create(**{
-            **self.event_data, 
-            'name': 'High Impact',
-            'carbon_category': 'high'
-        })
-        self.assertEqual(high_event.carbon_impact_color, 'red')
-        
+        high_event = EventTemplate.objects.create(
+            **{**self.event_data, "name": "High Impact", "carbon_category": "high"}
+        )
+        self.assertEqual(high_event.carbon_impact_color, "red")
+
         # Negative impact
-        negative_event = EventTemplate.objects.create(**{
-            **self.event_data,
-            'name': 'Negative Impact', 
-            'carbon_category': 'negative'
-        })
-        self.assertEqual(negative_event.carbon_impact_color, 'green')
-        
+        negative_event = EventTemplate.objects.create(
+            **{**self.event_data, "name": "Negative Impact", "carbon_category": "negative"}
+        )
+        self.assertEqual(negative_event.carbon_impact_color, "green")
+
     def test_increment_usage_method(self):
         """Test increment usage method"""
         event = EventTemplate.objects.create(**self.event_data)
         initial_count = event.usage_count
-        
+
         event.increment_usage()
         event.refresh_from_db()
-        
+
         self.assertEqual(event.usage_count, initial_count + 1)
 
 
 class TestCarbonSourceModel(TestCase):
     """Test CarbonSource model functionality"""
-    
+
     def test_carbon_source_creation(self):
         """Test carbon source creation"""
         source = CarbonSource.objects.create(
-            name='Nitrogen Fertilizer',
-            description='Synthetic nitrogen fertilizer',
-            unit='kg N',
-            category='Fertilizer',
+            name="Nitrogen Fertilizer",
+            description="Synthetic nitrogen fertilizer",
+            unit="kg N",
+            category="Fertilizer",
             default_emission_factor=5.9,
             usda_verified=True,
             usda_factors_based=True,
-            verification_status='factors_verified',
-            data_source='USDA Agricultural Research Service'
+            verification_status="factors_verified",
+            data_source="USDA Agricultural Research Service",
         )
-        
-        self.assertEqual(source.name, 'Nitrogen Fertilizer')
-        self.assertEqual(source.unit, 'kg N')
+
+        self.assertEqual(source.name, "Nitrogen Fertilizer")
+        self.assertEqual(source.unit, "kg N")
         self.assertTrue(source.usda_verified)
-        self.assertEqual(source.verification_status, 'factors_verified')
-        
+        self.assertEqual(source.verification_status, "factors_verified")
+
     def test_carbon_source_string_representation(self):
         """Test string representation"""
         source = CarbonSource.objects.create(
-            name='Test Source',
-            unit='kg',
-            category='Test',
-            default_emission_factor=2.5
+            name="Test Source", unit="kg", category="Test", default_emission_factor=2.5
         )
-        self.assertEqual(str(source), 'Test Source')
-        
+        self.assertEqual(str(source), "Test Source")
+
     def test_carbon_source_unique_name(self):
         """Test unique name constraint"""
-        CarbonSource.objects.create(
-            name='Unique Source',
-            unit='kg',
-            category='Test',
-            default_emission_factor=1.0
-        )
-        
+        CarbonSource.objects.create(name="Unique Source", unit="kg", category="Test", default_emission_factor=1.0)
+
         with self.assertRaises(IntegrityError):
-            CarbonSource.objects.create(
-                name='Unique Source',
-                unit='L',
-                category='Test2',
-                default_emission_factor=2.0
-            )
+            CarbonSource.objects.create(name="Unique Source", unit="L", category="Test2", default_emission_factor=2.0)
 
 
 class TestCarbonEntryModel(TransactionTestCase):
     """Test CarbonEntry model functionality"""
-    
+
     def setUp(self):
         """Set up test data"""
-        self.user = User.objects.create_user(
-            email='test@example.com',
-            password='testpass123'
-        )
-        
-        self.company = Company.objects.create(
-            name='Test Company',
-            country='USA',
-            created_by=self.user
-        )
-        
+        self.user = User.objects.create_user(email="test@example.com", password="testpass123")
+
+        self.company = Company.objects.create(name="Test Company", country="USA", created_by=self.user)
+
         self.establishment = Establishment.objects.create(
-            company=self.company,
-            name='Test Farm',
-            address='123 Farm Road',
-            country='USA',
-            created_by=self.user
+            company=self.company, name="Test Farm", address="123 Farm Road", country="USA", created_by=self.user
         )
-        
+
         self.carbon_source = CarbonSource.objects.create(
-            name='Test Source',
-            unit='kg',
-            category='Fuel',
-            default_emission_factor=2.5
+            name="Test Source", unit="kg", category="Fuel", default_emission_factor=2.5
         )
-        
+
     def test_carbon_entry_creation_emission(self):
         """Test carbon entry creation for emission"""
         entry = CarbonEntry.objects.create(
             establishment=self.establishment,
             created_by=self.user,
-            type='emission',
+            type="emission",
             source=self.carbon_source,
             amount=100.0,
             co2e_amount=250.0,
             year=2024,
-            description='Test emission entry'
+            description="Test emission entry",
         )
-        
-        self.assertEqual(entry.type, 'emission')
+
+        self.assertEqual(entry.type, "emission")
         self.assertEqual(entry.amount, 100.0)
         self.assertEqual(entry.effective_amount, 100.0)  # Should equal amount for emissions
         self.assertFalse(entry.usda_verified)
-        self.assertEqual(entry.verification_status, 'estimated')
-        
+        self.assertEqual(entry.verification_status, "estimated")
+
     def test_carbon_entry_creation_offset(self):
         """Test carbon entry creation for offset"""
         entry = CarbonEntry.objects.create(
             establishment=self.establishment,
             created_by=self.user,
-            type='offset',
+            type="offset",
             source=self.carbon_source,
             amount=50.0,
             year=2024,
-            verification_level='self_reported',
-            description='Test offset entry'
+            verification_level="self_reported",
+            description="Test offset entry",
         )
-        
-        self.assertEqual(entry.type, 'offset')
-        self.assertEqual(entry.verification_level, 'self_reported')
+
+        self.assertEqual(entry.type, "offset")
+        self.assertEqual(entry.verification_level, "self_reported")
         self.assertEqual(entry.trust_score, 0.5)
         self.assertEqual(entry.effective_amount, 25.0)  # 50.0 * 0.5
-        
+
     def test_carbon_entry_string_representation(self):
         """Test string representation"""
         entry = CarbonEntry.objects.create(
             establishment=self.establishment,
             created_by=self.user,
-            type='emission',
+            type="emission",
             source=self.carbon_source,
             amount=100.0,
-            year=2024
+            year=2024,
         )
-        
-        self.assertIn('Emission', str(entry))
-        self.assertIn('100.0', str(entry))
-        
+
+        self.assertIn("Emission", str(entry))
+        self.assertIn("100.0", str(entry))
+
     def test_verification_badge_property(self):
         """Test verification badge property"""
         entry = CarbonEntry.objects.create(
             establishment=self.establishment,
             created_by=self.user,
-            type='offset',
+            type="offset",
             source=self.carbon_source,
             amount=50.0,
             year=2024,
-            verification_level='certified_project'
+            verification_level="certified_project",
         )
-        
+
         badge = entry.verification_badge
-        self.assertEqual(badge['color'], 'green')
-        self.assertEqual(badge['text'], 'Certified Project')
-        self.assertEqual(badge['icon'], 'certificate')
-        
+        self.assertEqual(badge["color"], "green")
+        self.assertEqual(badge["text"], "Certified Project")
+        self.assertEqual(badge["icon"], "certificate")
+
     def test_calculate_carbon_score_method(self):
         """Test carbon score calculation"""
         # Carbon negative scenario
-        score = CarbonEntry.calculate_carbon_score(
-            total_emissions=100.0,
-            total_offsets=150.0
-        )
+        score = CarbonEntry.calculate_carbon_score(total_emissions=100.0, total_offsets=150.0)
         self.assertGreater(score, 50)  # Should be > 50 for carbon negative
-        
+
         # Carbon neutral scenario
-        score = CarbonEntry.calculate_carbon_score(
-            total_emissions=100.0,
-            total_offsets=100.0
-        )
+        score = CarbonEntry.calculate_carbon_score(total_emissions=100.0, total_offsets=100.0)
         self.assertEqual(score, 50)  # Should be exactly 50 for neutral
-        
+
         # Carbon positive scenario
-        score = CarbonEntry.calculate_carbon_score(
-            total_emissions=100.0,
-            total_offsets=50.0
-        )
+        score = CarbonEntry.calculate_carbon_score(total_emissions=100.0, total_offsets=50.0)
         self.assertLess(score, 50)  # Should be < 50 for carbon positive
-        
+
     def test_constraint_either_establishment_or_production(self):
         """Test constraint requiring either establishment or production"""
         # Should fail with neither establishment nor production
         with self.assertRaises(IntegrityError):
             CarbonEntry.objects.create(
-                created_by=self.user,
-                type='emission',
-                source=self.carbon_source,
-                amount=100.0,
-                year=2024
+                created_by=self.user, type="emission", source=self.carbon_source, amount=100.0, year=2024
             )
 
 
 class TestCarbonCertificationModel(TransactionTestCase):
     """Test CarbonCertification model functionality"""
-    
+
     def setUp(self):
         """Set up test data"""
-        self.user = User.objects.create_user(
-            email='test@example.com',
-            password='testpass123'
-        )
-        
-        self.company = Company.objects.create(
-            name='Test Company',
-            country='USA',
-            created_by=self.user
-        )
-        
+        self.user = User.objects.create_user(email="test@example.com", password="testpass123")
+
+        self.company = Company.objects.create(name="Test Company", country="USA", created_by=self.user)
+
         self.establishment = Establishment.objects.create(
-            company=self.company,
-            name='Test Farm',
-            address='123 Farm Road',
-            country='USA',
-            created_by=self.user
+            company=self.company, name="Test Farm", address="123 Farm Road", country="USA", created_by=self.user
         )
-        
+
     def test_carbon_certification_creation(self):
         """Test carbon certification creation"""
         cert = CarbonCertification.objects.create(
             establishment=self.establishment,
-            certifier='USDA Organic',
-            certificate_id='CERT-2024-001',
+            certifier="USDA Organic",
+            certificate_id="CERT-2024-001",
             issue_date=date.today(),
             expiry_date=date.today() + timedelta(days=365),
             is_usda_soe_verified=True,
             verification_date=date.today(),
-            verification_details='Verified by USDA inspector'
+            verification_details="Verified by USDA inspector",
         )
-        
-        self.assertEqual(cert.certifier, 'USDA Organic')
-        self.assertEqual(cert.certificate_id, 'CERT-2024-001')
+
+        self.assertEqual(cert.certifier, "USDA Organic")
+        self.assertEqual(cert.certificate_id, "CERT-2024-001")
         self.assertTrue(cert.is_usda_soe_verified)
-        
+
     def test_carbon_certification_string_representation(self):
         """Test string representation"""
-        cert = CarbonCertification.objects.create(
-            establishment=self.establishment,
-            certificate_id='CERT-TEST-001'
-        )
-        
-        expected = f'CERT-TEST-001 ({self.establishment.name})'
+        cert = CarbonCertification.objects.create(establishment=self.establishment, certificate_id="CERT-TEST-001")
+
+        expected = f"CERT-TEST-001 ({self.establishment.name})"
         self.assertEqual(str(cert), expected)
 
 
 class TestIoTDeviceModel(TransactionTestCase):
     """Test IoTDevice model functionality"""
-    
+
     def setUp(self):
         """Set up test data"""
-        self.user = User.objects.create_user(
-            email='test@example.com',
-            password='testpass123'
-        )
-        
-        self.company = Company.objects.create(
-            name='Test Company',
-            country='USA',
-            created_by=self.user
-        )
-        
+        self.user = User.objects.create_user(email="test@example.com", password="testpass123")
+
+        self.company = Company.objects.create(name="Test Company", country="USA", created_by=self.user)
+
         self.establishment = Establishment.objects.create(
-            company=self.company,
-            name='Test Farm',
-            address='123 Farm Road',
-            country='USA',
-            created_by=self.user
+            company=self.company, name="Test Farm", address="123 Farm Road", country="USA", created_by=self.user
         )
-        
+
     def test_iot_device_creation(self):
         """Test IoT device creation"""
         device = IoTDevice.objects.create(
-            device_id='SENSOR-001',
-            device_type='fuel_sensor',
+            device_id="SENSOR-001",
+            device_type="fuel_sensor",
             establishment=self.establishment,
-            name='Main Fuel Sensor',
-            manufacturer='John Deere',
-            model='FuelSensor-X1',
-            status='online',
+            name="Main Fuel Sensor",
+            manufacturer="John Deere",
+            model="FuelSensor-X1",
+            status="online",
             battery_level=85,
-            latitude=Decimal('37.7749'),
-            longitude=Decimal('-122.4194'),
-            configuration={'sample_rate': 300, 'threshold': 10}
+            latitude=Decimal("37.7749"),
+            longitude=Decimal("-122.4194"),
+            configuration={"sample_rate": 300, "threshold": 10},
         )
-        
-        self.assertEqual(device.device_id, 'SENSOR-001')
-        self.assertEqual(device.device_type, 'fuel_sensor')
-        self.assertEqual(device.name, 'Main Fuel Sensor')
-        self.assertEqual(device.status, 'online')
+
+        self.assertEqual(device.device_id, "SENSOR-001")
+        self.assertEqual(device.device_type, "fuel_sensor")
+        self.assertEqual(device.name, "Main Fuel Sensor")
+        self.assertEqual(device.status, "online")
         self.assertEqual(device.battery_level, 85)
-        
+
     def test_iot_device_string_representation(self):
         """Test string representation"""
         device = IoTDevice.objects.create(
-            device_id='TEST-001',
-            device_type='weather_station',
+            device_id="TEST-001",
+            device_type="weather_station",
             establishment=self.establishment,
-            name='Weather Monitor'
+            name="Weather Monitor",
         )
-        
+
         expected = f"Weather Monitor (TEST-001) - {self.establishment.name}"
         self.assertEqual(str(device), expected)
-        
+
     def test_update_status_method(self):
         """Test update status method"""
         device = IoTDevice.objects.create(
-            device_id='TEST-002',
-            device_type='soil_moisture',
-            establishment=self.establishment,
-            name='Soil Sensor'
+            device_id="TEST-002", device_type="soil_moisture", establishment=self.establishment, name="Soil Sensor"
         )
-        
+
         # Update to online
-        device.update_status('online')
+        device.update_status("online")
         device.refresh_from_db()
-        
-        self.assertEqual(device.status, 'online')
+
+        self.assertEqual(device.status, "online")
         self.assertIsNotNone(device.last_seen)
         self.assertIsNotNone(device.last_data_received)
-        
+
     def test_increment_data_points_method(self):
         """Test increment data points method"""
         device = IoTDevice.objects.create(
-            device_id='TEST-003',
-            device_type='irrigation',
+            device_id="TEST-003",
+            device_type="irrigation",
             establishment=self.establishment,
-            name='Irrigation Controller'
+            name="Irrigation Controller",
         )
-        
+
         initial_count = device.total_data_points
         device.increment_data_points()
         device.refresh_from_db()
-        
+
         self.assertEqual(device.total_data_points, initial_count + 1)
         self.assertIsNotNone(device.last_data_received)
-        
+
     def test_is_online_property(self):
         """Test is_online property"""
         device = IoTDevice.objects.create(
-            device_id='TEST-004',
-            device_type='gps_tracker',
-            establishment=self.establishment,
-            name='GPS Tracker'
+            device_id="TEST-004", device_type="gps_tracker", establishment=self.establishment, name="GPS Tracker"
         )
-        
+
         # No last_seen should be offline
         self.assertFalse(device.is_online)
-        
+
         # Recent last_seen should be online
         device.last_seen = timezone.now()
         device.save()
         self.assertTrue(device.is_online)
-        
+
         # Old last_seen should be offline
         device.last_seen = timezone.now() - timedelta(hours=2)
         device.save()
         self.assertFalse(device.is_online)
-        
+
     def test_needs_maintenance_property(self):
         """Test needs_maintenance property"""
         device = IoTDevice.objects.create(
-            device_id='TEST-005',
-            device_type='equipment_monitor',
+            device_id="TEST-005",
+            device_type="equipment_monitor",
             establishment=self.establishment,
-            name='Equipment Monitor'
+            name="Equipment Monitor",
         )
-        
+
         # Low battery should need maintenance
         device.battery_level = 15
         device.save()
         self.assertTrue(device.needs_maintenance)
-        
+
         # Good battery, recent installation should not need maintenance
         device.battery_level = 80
         device.save()
@@ -676,276 +623,237 @@ class TestIoTDeviceModel(TransactionTestCase):
 
 class TestIoTDataPointModel(TransactionTestCase):
     """Test IoTDataPoint model functionality"""
-    
+
     def setUp(self):
         """Set up test data"""
-        self.user = User.objects.create_user(
-            email='test@example.com',
-            password='testpass123'
-        )
-        
-        self.company = Company.objects.create(
-            name='Test Company',
-            country='USA',
-            created_by=self.user
-        )
-        
+        self.user = User.objects.create_user(email="test@example.com", password="testpass123")
+
+        self.company = Company.objects.create(name="Test Company", country="USA", created_by=self.user)
+
         self.establishment = Establishment.objects.create(
-            company=self.company,
-            name='Test Farm',
-            address='123 Farm Road',
-            country='USA',
-            created_by=self.user
+            company=self.company, name="Test Farm", address="123 Farm Road", country="USA", created_by=self.user
         )
-        
+
         self.device = IoTDevice.objects.create(
-            device_id='SENSOR-001',
-            device_type='fuel_sensor',
-            establishment=self.establishment,
-            name='Test Sensor'
+            device_id="SENSOR-001", device_type="fuel_sensor", establishment=self.establishment, name="Test Sensor"
         )
-        
+
     def test_iot_data_point_creation(self):
         """Test IoT data point creation"""
         data_point = IoTDataPoint.objects.create(
             device=self.device,
             timestamp=timezone.now(),
-            data={'fuel_level': 75.5, 'temperature': 22.3},
-            quality_score=0.95
+            data={"fuel_level": 75.5, "temperature": 22.3},
+            quality_score=0.95,
         )
-        
+
         self.assertEqual(data_point.device, self.device)
-        self.assertEqual(data_point.data['fuel_level'], 75.5)
+        self.assertEqual(data_point.data["fuel_level"], 75.5)
         self.assertFalse(data_point.processed)
         self.assertFalse(data_point.anomaly_detected)
         self.assertEqual(data_point.quality_score, 0.95)
-        
+
     def test_iot_data_point_string_representation(self):
         """Test string representation"""
         timestamp = timezone.now()
-        data_point = IoTDataPoint.objects.create(
-            device=self.device,
-            timestamp=timestamp,
-            data={'test': 'data'}
-        )
-        
+        data_point = IoTDataPoint.objects.create(device=self.device, timestamp=timestamp, data={"test": "data"})
+
         expected = f"{self.device.device_id} - {timestamp}"
         self.assertEqual(str(data_point), expected)
-        
+
     def test_mark_processed_method(self):
         """Test mark processed method"""
-        data_point = IoTDataPoint.objects.create(
-            device=self.device,
-            timestamp=timezone.now(),
-            data={'test': 'data'}
-        )
-        
+        data_point = IoTDataPoint.objects.create(device=self.device, timestamp=timezone.now(), data={"test": "data"})
+
         # Mark as processed without carbon entry
         data_point.mark_processed()
         data_point.refresh_from_db()
-        
+
         self.assertTrue(data_point.processed)
         self.assertIsNone(data_point.carbon_entry)
 
 
 class TestRegionalEmissionFactorModel(TestCase):
     """Test RegionalEmissionFactor model functionality"""
-    
+
     def setUp(self):
         """Set up test data"""
-        self.user = User.objects.create_user(
-            email='test@example.com',
-            password='testpass123'
-        )
-        
+        self.user = User.objects.create_user(email="test@example.com", password="testpass123")
+
     def test_regional_emission_factor_creation(self):
         """Test regional emission factor creation"""
         factor = RegionalEmissionFactor.objects.create(
-            state='CA',
-            county='Fresno',
-            region='Central Valley',
-            crop_type='Citrus',
-            factor_type='nitrogen',
-            factor_name='California Nitrogen Fertilizer',
+            state="CA",
+            county="Fresno",
+            region="Central Valley",
+            crop_type="Citrus",
+            factor_type="nitrogen",
+            factor_name="California Nitrogen Fertilizer",
             emission_factor=6.2,
-            unit='kg N',
+            unit="kg N",
             adjustment_factor=1.1,
-            data_source='usda_api',
-            source_reference='USDA NRCS California',
+            data_source="usda_api",
+            source_reference="USDA NRCS California",
             confidence_level=0.9,
             usda_verified=True,
             valid_from=date.today(),
-            created_by=self.user
+            created_by=self.user,
         )
-        
-        self.assertEqual(factor.state, 'CA')
-        self.assertEqual(factor.crop_type, 'Citrus')
-        self.assertEqual(factor.factor_type, 'nitrogen')
+
+        self.assertEqual(factor.state, "CA")
+        self.assertEqual(factor.crop_type, "Citrus")
+        self.assertEqual(factor.factor_type, "nitrogen")
         self.assertEqual(factor.emission_factor, 6.2)
         self.assertTrue(factor.usda_verified)
         self.assertEqual(factor.confidence_level, 0.9)
-        
+
     def test_adjusted_emission_factor_property(self):
         """Test adjusted emission factor property"""
         factor = RegionalEmissionFactor.objects.create(
-            state='TX',
-            crop_type='Cotton',
-            factor_type='diesel',
-            factor_name='Texas Diesel',
+            state="TX",
+            crop_type="Cotton",
+            factor_type="diesel",
+            factor_name="Texas Diesel",
             emission_factor=2.5,
-            unit='liter',
+            unit="liter",
             adjustment_factor=1.2,
-            valid_from=date.today()
+            valid_from=date.today(),
         )
-        
+
         expected = 2.5 * 1.2  # 3.0
         self.assertEqual(factor.adjusted_emission_factor, expected)
-        
+
     def test_is_current_property(self):
         """Test is_current property"""
         # Current factor
         current_factor = RegionalEmissionFactor.objects.create(
-            state='NY',
-            crop_type='Apples',
-            factor_type='nitrogen',
-            factor_name='NY Nitrogen',
+            state="NY",
+            crop_type="Apples",
+            factor_type="nitrogen",
+            factor_name="NY Nitrogen",
             emission_factor=5.8,
-            unit='kg N',
+            unit="kg N",
             valid_from=date.today() - timedelta(days=30),
-            valid_until=date.today() + timedelta(days=30)
+            valid_until=date.today() + timedelta(days=30),
         )
         self.assertTrue(current_factor.is_current)
-        
+
         # Expired factor
         expired_factor = RegionalEmissionFactor.objects.create(
-            state='FL',
-            crop_type='Oranges',
-            factor_type='nitrogen',
-            factor_name='FL Nitrogen',
+            state="FL",
+            crop_type="Oranges",
+            factor_type="nitrogen",
+            factor_name="FL Nitrogen",
             emission_factor=5.5,
-            unit='kg N',
+            unit="kg N",
             valid_from=date.today() - timedelta(days=60),
-            valid_until=date.today() - timedelta(days=30)
+            valid_until=date.today() - timedelta(days=30),
         )
         self.assertFalse(expired_factor.is_current)
-        
+
     def test_increment_usage_method(self):
         """Test increment usage method"""
         factor = RegionalEmissionFactor.objects.create(
-            state='WA',
-            crop_type='Apples',
-            factor_type='diesel',
-            factor_name='WA Diesel',
+            state="WA",
+            crop_type="Apples",
+            factor_type="diesel",
+            factor_name="WA Diesel",
             emission_factor=2.4,
-            unit='liter',
-            valid_from=date.today()
+            unit="liter",
+            valid_from=date.today(),
         )
-        
+
         initial_count = factor.usage_count
         factor.increment_usage()
         factor.refresh_from_db()
-        
+
         self.assertEqual(factor.usage_count, initial_count + 1)
         self.assertIsNotNone(factor.last_used)
-        
+
     def test_get_factor_for_region_classmethod(self):
         """Test get_factor_for_region class method"""
         # Create test factors
         state_factor = RegionalEmissionFactor.objects.create(
-            state='CA',
-            county='',
-            crop_type='Almonds',
-            factor_type='nitrogen',
-            factor_name='CA State Nitrogen',
+            state="CA",
+            county="",
+            crop_type="Almonds",
+            factor_type="nitrogen",
+            factor_name="CA State Nitrogen",
             emission_factor=6.0,
-            unit='kg N',
-            valid_from=date.today()
+            unit="kg N",
+            valid_from=date.today(),
         )
-        
+
         county_factor = RegionalEmissionFactor.objects.create(
-            state='CA',
-            county='Kern',
-            crop_type='Almonds',
-            factor_type='nitrogen',
-            factor_name='Kern County Nitrogen',
+            state="CA",
+            county="Kern",
+            crop_type="Almonds",
+            factor_type="nitrogen",
+            factor_name="Kern County Nitrogen",
             emission_factor=6.5,
-            unit='kg N',
-            valid_from=date.today()
+            unit="kg N",
+            valid_from=date.today(),
         )
-        
+
         # Should return county-specific factor when county is provided
-        factor = RegionalEmissionFactor.get_factor_for_region('CA', 'Almonds', 'nitrogen', 'Kern')
+        factor = RegionalEmissionFactor.get_factor_for_region("CA", "Almonds", "nitrogen", "Kern")
         self.assertEqual(factor, county_factor)
-        
+
         # Should return state-level factor when county not found
-        factor = RegionalEmissionFactor.get_factor_for_region('CA', 'Almonds', 'nitrogen', 'Unknown')
+        factor = RegionalEmissionFactor.get_factor_for_region("CA", "Almonds", "nitrogen", "Unknown")
         self.assertEqual(factor, state_factor)
 
 
 class TestUSDAComplianceRecordModel(TransactionTestCase):
     """Test USDAComplianceRecord model functionality"""
-    
+
     def setUp(self):
         """Set up test data"""
-        self.user = User.objects.create_user(
-            email='test@example.com',
-            password='testpass123'
-        )
-        
-        self.company = Company.objects.create(
-            name='Test Company',
-            country='USA',
-            created_by=self.user
-        )
-        
+        self.user = User.objects.create_user(email="test@example.com", password="testpass123")
+
+        self.company = Company.objects.create(name="Test Company", country="USA", created_by=self.user)
+
         self.establishment = Establishment.objects.create(
-            company=self.company,
-            name='Test Farm',
-            address='123 Farm Road',
-            country='USA',
-            created_by=self.user
+            company=self.company, name="Test Farm", address="123 Farm Road", country="USA", created_by=self.user
         )
-        
+
         self.carbon_source = CarbonSource.objects.create(
-            name='Test Source',
-            unit='kg',
-            category='Fuel',
-            default_emission_factor=2.5
+            name="Test Source", unit="kg", category="Fuel", default_emission_factor=2.5
         )
-        
+
         self.carbon_entry = CarbonEntry.objects.create(
             establishment=self.establishment,
             created_by=self.user,
-            type='emission',
+            type="emission",
             source=self.carbon_source,
             amount=100.0,
-            year=2024
+            year=2024,
         )
-        
+
     def test_usda_compliance_record_creation(self):
         """Test USDA compliance record creation"""
         record = USDAComplianceRecord.objects.create(
             carbon_entry=self.carbon_entry,
             establishment=self.establishment,
-            compliance_status='compliant',
+            compliance_status="compliant",
             confidence_score=0.95,
-            validation_method='api_validation',
-            validation_details={'api_version': '2.0', 'factors_matched': True},
-            recommendations=['Use certified organic fertilizer'],
+            validation_method="api_validation",
+            validation_details={"api_version": "2.0", "factors_matched": True},
+            recommendations=["Use certified organic fertilizer"],
             usda_api_used=True,
             api_response_code=200,
-            crop_type='Citrus',
-            state='CA',
+            crop_type="Citrus",
+            state="CA",
             regional_factors_used=True,
-            validated_by=self.user
+            validated_by=self.user,
         )
-        
-        self.assertEqual(record.compliance_status, 'compliant')
+
+        self.assertEqual(record.compliance_status, "compliant")
         self.assertEqual(record.confidence_score, 0.95)
-        self.assertEqual(record.confidence_level, 'high')
+        self.assertEqual(record.confidence_level, "high")
         self.assertTrue(record.usda_api_used)
-        self.assertEqual(record.crop_type, 'Citrus')
-        
+        self.assertEqual(record.crop_type, "Citrus")
+
     def test_confidence_level_auto_setting(self):
         """Test automatic confidence level setting based on score"""
         # High confidence
@@ -953,391 +861,357 @@ class TestUSDAComplianceRecordModel(TransactionTestCase):
             carbon_entry=self.carbon_entry,
             establishment=self.establishment,
             confidence_score=0.95,
-            crop_type='Test',
-            state='CA'
+            crop_type="Test",
+            state="CA",
         )
-        self.assertEqual(high_record.confidence_level, 'high')
-        
+        self.assertEqual(high_record.confidence_level, "high")
+
         # Medium confidence
         medium_record = USDAComplianceRecord.objects.create(
             carbon_entry=self.carbon_entry,
             establishment=self.establishment,
             confidence_score=0.8,
-            crop_type='Test2',
-            state='CA'
+            crop_type="Test2",
+            state="CA",
         )
-        self.assertEqual(medium_record.confidence_level, 'medium')
-        
+        self.assertEqual(medium_record.confidence_level, "medium")
+
         # Low confidence
         low_record = USDAComplianceRecord.objects.create(
             carbon_entry=self.carbon_entry,
             establishment=self.establishment,
             confidence_score=0.6,
-            crop_type='Test3',
-            state='CA'
+            crop_type="Test3",
+            state="CA",
         )
-        self.assertEqual(low_record.confidence_level, 'low')
-        
+        self.assertEqual(low_record.confidence_level, "low")
+
     def test_is_usda_verified_property(self):
         """Test is_usda_verified property"""
         # Verified record
         verified_record = USDAComplianceRecord.objects.create(
             carbon_entry=self.carbon_entry,
-            compliance_status='compliant',
+            compliance_status="compliant",
             confidence_score=0.95,
-            crop_type='Test',
-            state='CA'
+            crop_type="Test",
+            state="CA",
         )
         self.assertTrue(verified_record.is_usda_verified)
-        
+
         # Non-verified record (low confidence)
         unverified_record = USDAComplianceRecord.objects.create(
             carbon_entry=self.carbon_entry,
-            compliance_status='compliant',
+            compliance_status="compliant",
             confidence_score=0.7,
-            crop_type='Test2',
-            state='CA'
+            crop_type="Test2",
+            state="CA",
         )
         self.assertFalse(unverified_record.is_usda_verified)
-        
+
     def test_needs_review_property(self):
         """Test needs_review property"""
         # Non-compliant should need review
         non_compliant = USDAComplianceRecord.objects.create(
             carbon_entry=self.carbon_entry,
-            compliance_status='non_compliant',
+            compliance_status="non_compliant",
             confidence_score=0.8,
-            crop_type='Test',
-            state='CA'
+            crop_type="Test",
+            state="CA",
         )
         self.assertTrue(non_compliant.needs_review)
-        
+
         # Low confidence should need review
         low_confidence = USDAComplianceRecord.objects.create(
             carbon_entry=self.carbon_entry,
-            compliance_status='compliant',
+            compliance_status="compliant",
             confidence_score=0.6,
-            crop_type='Test2',
-            state='CA'
+            crop_type="Test2",
+            state="CA",
         )
         self.assertTrue(low_confidence.needs_review)
-        
+
         # Good record should not need review
         good_record = USDAComplianceRecord.objects.create(
             carbon_entry=self.carbon_entry,
-            compliance_status='compliant',
+            compliance_status="compliant",
             confidence_score=0.9,
-            crop_type='Test3',
-            state='CA'
+            crop_type="Test3",
+            state="CA",
         )
         self.assertFalse(good_record.needs_review)
 
 
 class TestCarbonOffsetProjectModel(TestCase):
     """Test CarbonOffsetProject model functionality"""
-    
+
     def test_carbon_offset_project_creation(self):
         """Test carbon offset project creation"""
         project = CarbonOffsetProject.objects.create(
-            name='Reforestation Project Brazil',
-            description='Large-scale reforestation in Amazon basin',
-            project_type='Forestry',
-            certification_standard='VCS',
-            location='Brazil, Amazon',
-            price_per_ton=Decimal('15.50'),
-            available_capacity=Decimal('10000.00')
+            name="Reforestation Project Brazil",
+            description="Large-scale reforestation in Amazon basin",
+            project_type="Forestry",
+            certification_standard="VCS",
+            location="Brazil, Amazon",
+            price_per_ton=Decimal("15.50"),
+            available_capacity=Decimal("10000.00"),
         )
-        
-        self.assertEqual(project.name, 'Reforestation Project Brazil')
-        self.assertEqual(project.project_type, 'Forestry')
-        self.assertEqual(project.price_per_ton, Decimal('15.50'))
-        self.assertEqual(project.available_capacity, Decimal('10000.00'))
-        
+
+        self.assertEqual(project.name, "Reforestation Project Brazil")
+        self.assertEqual(project.project_type, "Forestry")
+        self.assertEqual(project.price_per_ton, Decimal("15.50"))
+        self.assertEqual(project.available_capacity, Decimal("10000.00"))
+
     def test_carbon_offset_project_string_representation(self):
         """Test string representation"""
         project = CarbonOffsetProject.objects.create(
-            name='Test Project',
-            description='Test description',
-            project_type='Test',
-            certification_standard='Test',
-            location='Test Location',
-            price_per_ton=Decimal('10.00'),
-            available_capacity=Decimal('1000.00')
+            name="Test Project",
+            description="Test description",
+            project_type="Test",
+            certification_standard="Test",
+            location="Test Location",
+            price_per_ton=Decimal("10.00"),
+            available_capacity=Decimal("1000.00"),
         )
-        
-        self.assertEqual(str(project), 'Test Project')
+
+        self.assertEqual(str(project), "Test Project")
 
 
 class TestCarbonOffsetPurchaseModel(TransactionTestCase):
     """Test CarbonOffsetPurchase model functionality"""
-    
+
     def setUp(self):
         """Set up test data"""
-        self.user = User.objects.create_user(
-            email='test@example.com',
-            password='testpass123'
-        )
-        
+        self.user = User.objects.create_user(email="test@example.com", password="testpass123")
+
         self.project = CarbonOffsetProject.objects.create(
-            name='Test Project',
-            description='Test project',
-            project_type='Forestry',
-            certification_standard='VCS',
-            location='Test Location',
-            price_per_ton=Decimal('12.00'),
-            available_capacity=Decimal('5000.00')
+            name="Test Project",
+            description="Test project",
+            project_type="Forestry",
+            certification_standard="VCS",
+            location="Test Location",
+            price_per_ton=Decimal("12.00"),
+            available_capacity=Decimal("5000.00"),
         )
-        
+
     def test_carbon_offset_purchase_creation(self):
         """Test carbon offset purchase creation"""
         purchase = CarbonOffsetPurchase.objects.create(
             project=self.project,
             user=self.user,
-            amount=Decimal('10.0'),
-            price_per_ton=Decimal('12.00'),
-            status='completed',
-            is_verified=True
+            amount=Decimal("10.0"),
+            price_per_ton=Decimal("12.00"),
+            status="completed",
+            is_verified=True,
         )
-        
-        self.assertEqual(purchase.amount, Decimal('10.0'))
-        self.assertEqual(purchase.total_price, Decimal('120.00'))  # 10 * 12
+
+        self.assertEqual(purchase.amount, Decimal("10.0"))
+        self.assertEqual(purchase.total_price, Decimal("120.00"))  # 10 * 12
         self.assertTrue(purchase.is_verified)
         self.assertIsNotNone(purchase.certificate_id)
-        
+
     def test_total_price_auto_calculation(self):
         """Test automatic total price calculation"""
         purchase = CarbonOffsetPurchase.objects.create(
-            project=self.project,
-            user=self.user,
-            amount=Decimal('5.0'),
-            price_per_ton=Decimal('15.00')
+            project=self.project, user=self.user, amount=Decimal("5.0"), price_per_ton=Decimal("15.00")
         )
-        
+
         # Should automatically calculate total_price
-        expected_total = Decimal('5.0') * Decimal('15.00')
+        expected_total = Decimal("5.0") * Decimal("15.00")
         self.assertEqual(purchase.total_price, expected_total)
-        
+
     def test_carbon_offset_purchase_string_representation(self):
         """Test string representation"""
         purchase = CarbonOffsetPurchase.objects.create(
-            project=self.project,
-            user=self.user,
-            amount=Decimal('2.5'),
-            price_per_ton=Decimal('10.00')
+            project=self.project, user=self.user, amount=Decimal("2.5"), price_per_ton=Decimal("10.00")
         )
-        
+
         expected = f"{self.user.username} - {self.project.name} - 2.5 tons"
         self.assertEqual(str(purchase), expected)
 
 
 class TestGreenPointsModel(TestCase):
     """Test GreenPoints model functionality"""
-    
+
     def setUp(self):
         """Set up test data"""
-        self.user = User.objects.create_user(
-            email='test@example.com',
-            password='testpass123'
-        )
-        
+        self.user = User.objects.create_user(email="test@example.com", password="testpass123")
+
     def test_green_points_creation(self):
         """Test green points creation"""
         points = GreenPoints.objects.create(
-            user=self.user,
-            points=150,
-            last_scan=timezone.now(),
-            achievements=['first_scan', 'carbon_conscious']
+            user=self.user, points=150, last_scan=timezone.now(), achievements=["first_scan", "carbon_conscious"]
         )
-        
+
         self.assertEqual(points.user, self.user)
         self.assertEqual(points.points, 150)
-        self.assertIn('first_scan', points.achievements)
-        
+        self.assertIn("first_scan", points.achievements)
+
     def test_green_points_string_representation(self):
         """Test string representation"""
-        points = GreenPoints.objects.create(
-            user=self.user,
-            points=250
-        )
-        
-        expected = f'{self.user} - 250 points'
+        points = GreenPoints.objects.create(user=self.user, points=250)
+
+        expected = f"{self.user} - 250 points"
         self.assertEqual(str(points), expected)
 
 
 class TestCarbonIntegrations(TransactionTestCase):
     """Test carbon model integrations and complex scenarios"""
-    
+
     def setUp(self):
         """Set up test data for integration tests"""
-        self.user = User.objects.create_user(
-            email='test@example.com',
-            password='testpass123'
-        )
-        
-        self.company = Company.objects.create(
-            name='Test Company',
-            country='USA',
-            created_by=self.user
-        )
-        
+        self.user = User.objects.create_user(email="test@example.com", password="testpass123")
+
+        self.company = Company.objects.create(name="Test Company", country="USA", created_by=self.user)
+
         self.establishment = Establishment.objects.create(
-            company=self.company,
-            name='Test Farm',
-            address='123 Farm Road',
-            country='USA',
-            created_by=self.user
+            company=self.company, name="Test Farm", address="123 Farm Road", country="USA", created_by=self.user
         )
-        
+
     def test_complete_carbon_tracking_flow(self):
         """Test complete carbon tracking workflow"""
         # Create crop type and template
         crop_type = CropType.objects.create(
-            name='Integration Test Crop',
-            slug='integration_test',
-            category='vegetable',
-            description='Test crop for integration',
+            name="Integration Test Crop",
+            slug="integration_test",
+            category="vegetable",
+            description="Test crop for integration",
             emissions_per_hectare=1500.0,
             industry_average=1800.0,
             best_practice=1200.0,
             carbon_credit_potential=300.0,
-            typical_cost_per_hectare=8000.0
+            typical_cost_per_hectare=8000.0,
         )
-        
+
         template = ProductionTemplate.objects.create(
             crop_type=crop_type,
-            name='Sustainable Production',
-            slug='sustainable_production',
-            farming_approach='sustainable',
-            description='Sustainable production system'
+            name="Sustainable Production",
+            slug="sustainable_production",
+            farming_approach="sustainable",
+            description="Sustainable production system",
         )
-        
+
         event_template = EventTemplate.objects.create(
             production_template=template,
-            name='Fertilizer Application',
-            event_type='fertilization',
-            description='Nitrogen fertilizer application',
-            timing='Spring',
-            frequency='annual',
+            name="Fertilizer Application",
+            event_type="fertilization",
+            description="Nitrogen fertilizer application",
+            timing="Spring",
+            frequency="annual",
             carbon_impact=75.0,
-            carbon_category='medium',
+            carbon_category="medium",
             cost_estimate=300.0,
-            backend_event_type=1
+            backend_event_type=1,
         )
-        
+
         # Create carbon source
         carbon_source = CarbonSource.objects.create(
-            name='Nitrogen Fertilizer',
-            unit='kg N',
-            category='Fertilizer',
+            name="Nitrogen Fertilizer",
+            unit="kg N",
+            category="Fertilizer",
             default_emission_factor=5.9,
-            usda_verified=True
+            usda_verified=True,
         )
-        
+
         # Create carbon entry
         carbon_entry = CarbonEntry.objects.create(
             establishment=self.establishment,
             created_by=self.user,
-            type='emission',
+            type="emission",
             source=carbon_source,
             amount=100.0,
             co2e_amount=590.0,
             year=2024,
-            usda_verified=True
+            usda_verified=True,
         )
-        
+
         # Create USDA compliance record
         compliance = USDAComplianceRecord.objects.create(
             carbon_entry=carbon_entry,
             establishment=self.establishment,
-            compliance_status='compliant',
+            compliance_status="compliant",
             confidence_score=0.9,
             crop_type=crop_type.name,
-            state='CA',
+            state="CA",
             usda_api_used=True,
-            regional_factors_used=True
+            regional_factors_used=True,
         )
-        
+
         # Verify the complete flow
-        self.assertEqual(carbon_entry.source.name, 'Nitrogen Fertilizer')
+        self.assertEqual(carbon_entry.source.name, "Nitrogen Fertilizer")
         self.assertTrue(carbon_entry.usda_verified)
         self.assertTrue(compliance.is_usda_verified)
-        self.assertEqual(compliance.confidence_level, 'high')
-        
+        self.assertEqual(compliance.confidence_level, "high")
+
     def test_iot_device_carbon_entry_integration(self):
         """Test IoT device integration with carbon entries"""
         # Create IoT device
         device = IoTDevice.objects.create(
-            device_id='FUEL-SENSOR-001',
-            device_type='fuel_sensor',
+            device_id="FUEL-SENSOR-001",
+            device_type="fuel_sensor",
             establishment=self.establishment,
-            name='Main Fuel Monitor',
-            status='online'
+            name="Main Fuel Monitor",
+            status="online",
         )
-        
+
         # Create data point
         data_point = IoTDataPoint.objects.create(
             device=device,
             timestamp=timezone.now(),
-            data={'fuel_consumed': 50.0, 'engine_hours': 5.0},
-            quality_score=0.98
+            data={"fuel_consumed": 50.0, "engine_hours": 5.0},
+            quality_score=0.98,
         )
-        
+
         # Create carbon source for fuel
         fuel_source = CarbonSource.objects.create(
-            name='Diesel Fuel',
-            unit='liter',
-            category='Fuel',
-            default_emission_factor=2.68
+            name="Diesel Fuel", unit="liter", category="Fuel", default_emission_factor=2.68
         )
-        
+
         # Create carbon entry linked to IoT data
         carbon_entry = CarbonEntry.objects.create(
             establishment=self.establishment,
             created_by=self.user,
-            type='emission',
+            type="emission",
             source=fuel_source,
             amount=50.0,
             co2e_amount=134.0,  # 50 * 2.68
             year=2024,
             iot_device_id=device.device_id,
-            description='Automated fuel consumption entry'
+            description="Automated fuel consumption entry",
         )
-        
+
         # Link data point to carbon entry
         data_point.mark_processed(carbon_entry)
-        
+
         # Verify integration
         self.assertEqual(carbon_entry.iot_device_id, device.device_id)
         self.assertTrue(data_point.processed)
         self.assertEqual(data_point.carbon_entry, carbon_entry)
-        
+
     def test_benchmark_comparison_integration(self):
         """Test benchmark comparison functionality"""
         # Create benchmark
         benchmark = CarbonBenchmark.objects.create(
-            industry='Citrus Production',
+            industry="Citrus Production",
             year=2024,
             average_emissions=2500.0,
             min_emissions=1800.0,
             max_emissions=3200.0,
             company_count=150,
-            unit='kg CO2e per hectare',
-            source='USDA Agricultural Census',
-            crop_type='Citrus',
-            region='California'
+            unit="kg CO2e per hectare",
+            source="USDA Agricultural Census",
+            crop_type="Citrus",
+            region="California",
         )
-        
+
         # Test carbon score calculation with benchmark
         score = CarbonEntry.calculate_carbon_score(
-            total_emissions=2000.0,
-            total_offsets=500.0,
-            industry_benchmark=benchmark.average_emissions
+            total_emissions=2000.0, total_offsets=500.0, industry_benchmark=benchmark.average_emissions
         )
-        
+
         # Should get a good score for being below industry average
         self.assertGreater(score, 25)  # Better than worst case
-        self.assertLess(score, 50)     # Still carbon positive
+        self.assertLess(score, 50)  # Still carbon positive
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

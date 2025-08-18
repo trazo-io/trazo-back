@@ -1,85 +1,88 @@
-from django.db import models
-from company.models import Establishment
-from history.models import History
-from django.conf import settings
-from django.utils import timezone
-from django.core.validators import MinValueValidator, MaxValueValidator
 import uuid
 from datetime import timedelta
 
+from django.conf import settings
+from django.core.validators import MaxValueValidator, MinValueValidator
+from django.db import models
+from django.utils import timezone
+
+from company.models import Establishment
+from history.models import History
+
 # Database-driven Crop Template System
+
 
 class CropType(models.Model):
     """Model for different crop types with their characteristics"""
-    
+
     CATEGORY_CHOICES = [
-        ('tree_fruit', 'Tree Fruit'),
-        ('tree_nut', 'Tree Nut'),
-        ('grain', 'Grain'),
-        ('oilseed', 'Oilseed'),
-        ('vegetable', 'Vegetable'),
-        ('herb', 'Herb'),
-        ('legume', 'Legume'),
-        ('other', 'Other'),
+        ("tree_fruit", "Tree Fruit"),
+        ("tree_nut", "Tree Nut"),
+        ("grain", "Grain"),
+        ("oilseed", "Oilseed"),
+        ("vegetable", "Vegetable"),
+        ("herb", "Herb"),
+        ("legume", "Legume"),
+        ("other", "Other"),
     ]
-    
-    name = models.CharField(max_length=100, unique=True, help_text='e.g., Citrus (Oranges)')
-    slug = models.SlugField(max_length=100, unique=True, help_text='e.g., citrus_oranges')
+
+    name = models.CharField(max_length=100, unique=True, help_text="e.g., Citrus (Oranges)")
+    slug = models.SlugField(max_length=100, unique=True, help_text="e.g., citrus_oranges")
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
-    description = models.TextField(help_text='Brief description of the crop type')
-    
+    description = models.TextField(help_text="Brief description of the crop type")
+
     # Agricultural characteristics
-    typical_farm_size = models.CharField(max_length=100, help_text='e.g., 20-100 hectares')
-    growing_season = models.CharField(max_length=100, help_text='e.g., 12 months (evergreen)')
-    harvest_season = models.CharField(max_length=100, help_text='e.g., November - April')
-    
+    typical_farm_size = models.CharField(max_length=100, help_text="e.g., 20-100 hectares")
+    growing_season = models.CharField(max_length=100, help_text="e.g., 12 months (evergreen)")
+    harvest_season = models.CharField(max_length=100, help_text="e.g., November - April")
+
     # USDA benchmarks and carbon data
-    emissions_per_hectare = models.FloatField(help_text='kg CO2e per hectare')
-    industry_average = models.FloatField(help_text='Industry average emissions')
-    best_practice = models.FloatField(help_text='Best practice emissions')
-    carbon_credit_potential = models.FloatField(help_text='Potential carbon credits per hectare')
-    
+    emissions_per_hectare = models.FloatField(help_text="kg CO2e per hectare")
+    industry_average = models.FloatField(help_text="Industry average emissions")
+    best_practice = models.FloatField(help_text="Best practice emissions")
+    carbon_credit_potential = models.FloatField(help_text="Potential carbon credits per hectare")
+
     # Economic data
-    typical_cost_per_hectare = models.FloatField(help_text='Total production cost per hectare')
+    typical_cost_per_hectare = models.FloatField(help_text="Total production cost per hectare")
     fertilizer_cost_per_hectare = models.FloatField(default=0.0)
     fuel_cost_per_hectare = models.FloatField(default=0.0)
     irrigation_cost_per_hectare = models.FloatField(default=0.0)
     labor_cost_per_hectare = models.FloatField(default=0.0)
-    
+
     # Premium pricing potential
-    organic_premium = models.CharField(max_length=20, default='0%', help_text='e.g., 25-40%')
-    sustainable_premium = models.CharField(max_length=20, default='0%', help_text='e.g., 10-20%')
-    local_premium = models.CharField(max_length=20, default='0%', help_text='e.g., 5-15%')
-    
+    organic_premium = models.CharField(max_length=20, default="0%", help_text="e.g., 25-40%")
+    sustainable_premium = models.CharField(max_length=20, default="0%", help_text="e.g., 10-20%")
+    local_premium = models.CharField(max_length=20, default="0%", help_text="e.g., 5-15%")
+
     # Sustainability opportunities
-    sustainability_opportunities = models.JSONField(default=list, help_text='List of sustainability practices')
-    
+    sustainability_opportunities = models.JSONField(default=list, help_text="List of sustainability practices")
+
     # Meta information
     usda_verified = models.BooleanField(default=False)
-    data_source = models.CharField(max_length=200, default='USDA Agricultural Research Service')
+    data_source = models.CharField(max_length=200, default="USDA Agricultural Research Service")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
-        db_table = 'carbon_crop_type'
-        ordering = ['name']
-        verbose_name = 'Crop Type'
-        verbose_name_plural = 'Crop Types'
-    
+        db_table = "carbon_crop_type"
+        ordering = ["name"]
+        verbose_name = "Crop Type"
+        verbose_name_plural = "Crop Types"
+
     def __str__(self):
         return self.name
-    
+
     @property
     def total_templates_count(self):
         """Count of associated production templates"""
         return self.production_templates.count()
-    
+
     @property
     def total_events_count(self):
         """Count of associated event templates across all production templates"""
         return EventTemplate.objects.filter(production_template__crop_type=self).count()
-    
+
     @property
     def carbon_benchmark_range(self):
         """Formatted carbon benchmark range"""
@@ -88,256 +91,271 @@ class CropType(models.Model):
 
 class ProductionTemplate(models.Model):
     """Model for different production approaches per crop type (e.g., Conventional, Organic, Precision)"""
-    
+
     FARMING_APPROACH_CHOICES = [
-        ('conventional', 'Conventional'),
-        ('organic', 'Organic'),
-        ('precision', 'Precision Agriculture'),
-        ('regenerative', 'Regenerative'),
-        ('sustainable', 'Sustainable'),
-        ('integrated', 'Integrated Pest Management'),
-        ('no_till', 'No-Till'),
-        ('cover_crop', 'Cover Crop System'),
+        ("conventional", "Conventional"),
+        ("organic", "Organic"),
+        ("precision", "Precision Agriculture"),
+        ("regenerative", "Regenerative"),
+        ("sustainable", "Sustainable"),
+        ("integrated", "Integrated Pest Management"),
+        ("no_till", "No-Till"),
+        ("cover_crop", "Cover Crop System"),
     ]
-    
+
     COMPLEXITY_CHOICES = [
-        ('beginner', 'Beginner Friendly'),
-        ('intermediate', 'Intermediate'),
-        ('advanced', 'Advanced'),
-        ('expert', 'Expert Level'),
+        ("beginner", "Beginner Friendly"),
+        ("intermediate", "Intermediate"),
+        ("advanced", "Advanced"),
+        ("expert", "Expert Level"),
     ]
-    
-    crop_type = models.ForeignKey(CropType, on_delete=models.CASCADE, related_name='production_templates')
-    name = models.CharField(max_length=100, help_text='e.g., Citrus Organic Production')
-    slug = models.SlugField(max_length=100, help_text='e.g., citrus_organic')
+
+    crop_type = models.ForeignKey(CropType, on_delete=models.CASCADE, related_name="production_templates")
+    name = models.CharField(max_length=100, help_text="e.g., Citrus Organic Production")
+    slug = models.SlugField(max_length=100, help_text="e.g., citrus_organic")
     farming_approach = models.CharField(max_length=20, choices=FARMING_APPROACH_CHOICES)
-    description = models.TextField(help_text='Detailed description of this production approach')
-    
+    description = models.TextField(help_text="Detailed description of this production approach")
+
     # Template characteristics
-    complexity_level = models.CharField(max_length=15, choices=COMPLEXITY_CHOICES, default='intermediate')
-    estimated_setup_time = models.IntegerField(help_text='Setup time in minutes', default=8)
-    
+    complexity_level = models.CharField(max_length=15, choices=COMPLEXITY_CHOICES, default="intermediate")
+    estimated_setup_time = models.IntegerField(help_text="Setup time in minutes", default=8)
+
     # Carbon and economic projections
-    projected_emissions_reduction = models.FloatField(default=0.0, help_text='% reduction vs conventional')
-    projected_cost_change = models.FloatField(default=0.0, help_text='% cost change vs conventional')
-    projected_yield_impact = models.FloatField(default=0.0, help_text='% yield change vs conventional')
-    
+    projected_emissions_reduction = models.FloatField(default=0.0, help_text="% reduction vs conventional")
+    projected_cost_change = models.FloatField(default=0.0, help_text="% cost change vs conventional")
+    projected_yield_impact = models.FloatField(default=0.0, help_text="% yield change vs conventional")
+
     # Premium pricing and market data
-    premium_pricing_potential = models.CharField(max_length=20, default='0%', help_text='e.g., 25-40%')
-    market_demand = models.CharField(max_length=20, choices=[
-        ('low', 'Low Demand'),
-        ('medium', 'Medium Demand'),
-        ('high', 'High Demand'),
-        ('very_high', 'Very High Demand'),
-    ], default='medium')
-    
+    premium_pricing_potential = models.CharField(max_length=20, default="0%", help_text="e.g., 25-40%")
+    market_demand = models.CharField(
+        max_length=20,
+        choices=[
+            ("low", "Low Demand"),
+            ("medium", "Medium Demand"),
+            ("high", "High Demand"),
+            ("very_high", "Very High Demand"),
+        ],
+        default="medium",
+    )
+
     # Certification and compliance
-    certification_requirements = models.JSONField(default=list, help_text='Required certifications')
-    compliance_notes = models.TextField(blank=True, help_text='USDA compliance and regulatory notes')
-    
+    certification_requirements = models.JSONField(default=list, help_text="Required certifications")
+    compliance_notes = models.TextField(blank=True, help_text="USDA compliance and regulatory notes")
+
     # Template metadata
     is_active = models.BooleanField(default=True)
-    is_recommended = models.BooleanField(default=False, help_text='Recommended template for this crop')
-    usage_count = models.IntegerField(default=0, help_text='How many times this template has been used')
-    success_rate = models.FloatField(default=0.0, help_text='Success rate based on user feedback')
-    
+    is_recommended = models.BooleanField(default=False, help_text="Recommended template for this crop")
+    usage_count = models.IntegerField(default=0, help_text="How many times this template has been used")
+    success_rate = models.FloatField(default=0.0, help_text="Success rate based on user feedback")
+
     # USDA verification
-    usda_reviewed = models.BooleanField(default=False, help_text='Template reviewed against USDA practices')
-    usda_compliant = models.BooleanField(default=True, help_text='Meets USDA agricultural standards')
+    usda_reviewed = models.BooleanField(default=False, help_text="Template reviewed against USDA practices")
+    usda_compliant = models.BooleanField(default=True, help_text="Meets USDA agricultural standards")
     last_updated = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
-        db_table = 'carbon_production_template'
-        ordering = ['crop_type', 'farming_approach', 'name']
-        verbose_name = 'Production Template'
-        verbose_name_plural = 'Production Templates'
-        unique_together = ('crop_type', 'slug')
-    
+        db_table = "carbon_production_template"
+        ordering = ["crop_type", "farming_approach", "name"]
+        verbose_name = "Production Template"
+        verbose_name_plural = "Production Templates"
+        unique_together = ("crop_type", "slug")
+
     def __str__(self):
         return f"{self.crop_type.name} - {self.name}"
-    
+
     def increment_usage(self):
         """Increment usage counter"""
         self.usage_count += 1
-        self.save(update_fields=['usage_count'])
-    
+        self.save(update_fields=["usage_count"])
+
     @property
     def events_count(self):
         """Count of events in this template"""
         return self.event_templates.count()
-    
+
     @property
     def total_carbon_impact(self):
         """Calculate total carbon impact of all events in template"""
-        return self.event_templates.aggregate(
-            total=models.Sum('carbon_impact')
-        )['total'] or 0
-    
+        return self.event_templates.aggregate(total=models.Sum("carbon_impact"))["total"] or 0
+
     @property
     def total_cost_estimate(self):
         """Calculate total cost estimate of all events in template"""
-        return self.event_templates.aggregate(
-            total=models.Sum('cost_estimate')
-        )['total'] or 0
+        return self.event_templates.aggregate(total=models.Sum("cost_estimate"))["total"] or 0
 
 
 class EventTemplate(models.Model):
     """Model for event templates associated with production templates"""
-    
+
     EVENT_TYPE_CHOICES = [
-        ('fertilization', 'Fertilization'),
-        ('irrigation', 'Irrigation'),
-        ('pest_control', 'Pest Control'),
-        ('pruning', 'Pruning'),
-        ('planting', 'Planting'),
-        ('harvest', 'Harvest'),
-        ('soil_management', 'Soil Management'),
-        ('equipment', 'Equipment Operation'),
-        ('weather_protection', 'Weather Protection'),
-        ('certification', 'Certification Activity'),
-        ('monitoring', 'Monitoring & Testing'),
-        ('other', 'Other'),
+        ("fertilization", "Fertilization"),
+        ("irrigation", "Irrigation"),
+        ("pest_control", "Pest Control"),
+        ("pruning", "Pruning"),
+        ("planting", "Planting"),
+        ("harvest", "Harvest"),
+        ("soil_management", "Soil Management"),
+        ("equipment", "Equipment Operation"),
+        ("weather_protection", "Weather Protection"),
+        ("certification", "Certification Activity"),
+        ("monitoring", "Monitoring & Testing"),
+        ("other", "Other"),
     ]
-    
+
     FREQUENCY_CHOICES = [
-        ('annual', 'Annual'),
-        ('seasonal', 'Seasonal'),
-        ('monthly', 'Monthly'),
-        ('weekly', 'Weekly'),
-        ('as_needed', 'As Needed'),
-        ('natural', 'Natural Process'),
-        ('one_time', 'One Time Setup'),
+        ("annual", "Annual"),
+        ("seasonal", "Seasonal"),
+        ("monthly", "Monthly"),
+        ("weekly", "Weekly"),
+        ("as_needed", "As Needed"),
+        ("natural", "Natural Process"),
+        ("one_time", "One Time Setup"),
     ]
-    
+
     CARBON_CATEGORY_CHOICES = [
-        ('high', 'High Impact (>100 kg CO2e)'),
-        ('medium', 'Medium Impact (25-100 kg CO2e)'),
-        ('low', 'Low Impact (<25 kg CO2e)'),
-        ('negative', 'Negative Impact (Carbon Sequestration)'),
-        ('neutral', 'Carbon Neutral'),
+        ("high", "High Impact (>100 kg CO2e)"),
+        ("medium", "Medium Impact (25-100 kg CO2e)"),
+        ("low", "Low Impact (<25 kg CO2e)"),
+        ("negative", "Negative Impact (Carbon Sequestration)"),
+        ("neutral", "Carbon Neutral"),
     ]
-    
+
     QR_VISIBILITY_CHOICES = [
-        ('high', 'High - Prominent display to consumers'),
-        ('medium', 'Medium - Standard visibility'),
-        ('low', 'Low - Technical information'),
-        ('hidden', 'Hidden - Internal use only'),
+        ("high", "High - Prominent display to consumers"),
+        ("medium", "Medium - Standard visibility"),
+        ("low", "Low - Technical information"),
+        ("hidden", "Hidden - Internal use only"),
     ]
-    
+
     # Temporary: Keep both fields during migration
-    crop_type = models.ForeignKey(CropType, on_delete=models.CASCADE, related_name='old_event_templates', null=True, blank=True)
-    production_template = models.ForeignKey(ProductionTemplate, on_delete=models.CASCADE, related_name='event_templates', null=True, blank=True)
-    name = models.CharField(max_length=100, help_text='e.g., Winter Pruning')
+    crop_type = models.ForeignKey(
+        CropType, on_delete=models.CASCADE, related_name="old_event_templates", null=True, blank=True
+    )
+    production_template = models.ForeignKey(
+        ProductionTemplate, on_delete=models.CASCADE, related_name="event_templates", null=True, blank=True
+    )
+    name = models.CharField(max_length=100, help_text="e.g., Winter Pruning")
     event_type = models.CharField(max_length=20, choices=EVENT_TYPE_CHOICES)
-    description = models.TextField(help_text='Detailed description of the event')
-    
+    description = models.TextField(help_text="Detailed description of the event")
+
     # Timing and scheduling
-    timing = models.CharField(max_length=100, help_text='e.g., December - February')
+    timing = models.CharField(max_length=100, help_text="e.g., December - February")
     frequency = models.CharField(max_length=20, choices=FREQUENCY_CHOICES)
-    typical_duration = models.CharField(max_length=50, help_text='e.g., 2-3 hours')
-    order_sequence = models.IntegerField(default=0, help_text='Order in which this event typically occurs')
-    
+    typical_duration = models.CharField(max_length=50, help_text="e.g., 2-3 hours")
+    order_sequence = models.IntegerField(default=0, help_text="Order in which this event typically occurs")
+
     # Carbon and environmental impact
-    carbon_impact = models.FloatField(help_text='kg CO2e impact (negative for sequestration)')
+    carbon_impact = models.FloatField(help_text="kg CO2e impact (negative for sequestration)")
     carbon_category = models.CharField(max_length=10, choices=CARBON_CATEGORY_CHOICES)
-    carbon_sources = models.JSONField(default=list, help_text='List of carbon sources')
-    typical_amounts = models.JSONField(default=dict, help_text='Typical amounts used')
-    
+    carbon_sources = models.JSONField(default=list, help_text="List of carbon sources")
+    typical_amounts = models.JSONField(default=dict, help_text="Typical amounts used")
+
     # Economic impact
-    cost_estimate = models.FloatField(help_text='Estimated cost per hectare')
-    labor_hours = models.FloatField(default=0.0, help_text='Estimated labor hours per hectare')
-    
+    cost_estimate = models.FloatField(help_text="Estimated cost per hectare")
+    labor_hours = models.FloatField(default=0.0, help_text="Estimated labor hours per hectare")
+
     # Sustainability and efficiency
-    efficiency_tips = models.TextField(help_text='Tips for reducing environmental impact')
+    efficiency_tips = models.TextField(help_text="Tips for reducing environmental impact")
     sustainability_score = models.IntegerField(default=5, validators=[MinValueValidator(1), MaxValueValidator(10)])
-    alternative_methods = models.JSONField(default=list, help_text='Alternative methods for this event')
-    
+    alternative_methods = models.JSONField(default=list, help_text="Alternative methods for this event")
+
     # Consumer visibility
-    qr_visibility = models.CharField(max_length=10, choices=QR_VISIBILITY_CHOICES, default='medium')
-    consumer_message = models.CharField(max_length=200, blank=True, help_text='Message shown to consumers')
-    
+    qr_visibility = models.CharField(max_length=10, choices=QR_VISIBILITY_CHOICES, default="medium")
+    consumer_message = models.CharField(max_length=200, blank=True, help_text="Message shown to consumers")
+
     # Backend event mapping
-    backend_event_type = models.IntegerField(help_text='Maps to backend event model: 0=Weather, 1=Chemical, 2=Production, 3=General, 4=Equipment, 5=Soil, 6=Pest')
-    backend_event_fields = models.JSONField(default=dict, help_text='Default field values for backend event creation')
-    
+    backend_event_type = models.IntegerField(
+        help_text="Maps to backend event model: 0=Weather, 1=Chemical, 2=Production, 3=General, 4=Equipment, 5=Soil, 6=Pest"
+    )
+    backend_event_fields = models.JSONField(default=dict, help_text="Default field values for backend event creation")
+
     # USDA compliance and verification
-    usda_practice_code = models.CharField(max_length=10, blank=True, help_text='USDA NRCS practice code if applicable')
-    usda_compliant = models.BooleanField(default=True, help_text='Meets USDA standards')
-    emission_factor_source = models.CharField(max_length=200, default='USDA Agricultural Research Service')
-    
+    usda_practice_code = models.CharField(max_length=10, blank=True, help_text="USDA NRCS practice code if applicable")
+    usda_compliant = models.BooleanField(default=True, help_text="Meets USDA standards")
+    emission_factor_source = models.CharField(max_length=200, default="USDA Agricultural Research Service")
+
     # Meta information
     is_active = models.BooleanField(default=True)
-    is_default_enabled = models.BooleanField(default=True, help_text='Enabled by default in production creation')
-    is_required = models.BooleanField(default=False, help_text='Required event that cannot be disabled')
-    usage_count = models.IntegerField(default=0, help_text='Track how often this template is used')
+    is_default_enabled = models.BooleanField(default=True, help_text="Enabled by default in production creation")
+    is_required = models.BooleanField(default=False, help_text="Required event that cannot be disabled")
+    usage_count = models.IntegerField(default=0, help_text="Track how often this template is used")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
-        db_table = 'carbon_event_template'
-        ordering = ['production_template', 'order_sequence', 'timing', 'name']
-        verbose_name = 'Event Template'
-        verbose_name_plural = 'Event Templates'
-        unique_together = ('production_template', 'name')
-    
+        db_table = "carbon_event_template"
+        ordering = ["production_template", "order_sequence", "timing", "name"]
+        verbose_name = "Event Template"
+        verbose_name_plural = "Event Templates"
+        unique_together = ("production_template", "name")
+
     def __str__(self):
         return f"{self.production_template.name} - {self.name}"
-    
+
     def increment_usage(self):
         """Increment usage counter"""
         self.usage_count += 1
-        self.save(update_fields=['usage_count'])
-    
+        self.save(update_fields=["usage_count"])
+
     @property
     def crop_type(self):
         """Get crop type through production template"""
         return self.production_template.crop_type
-    
+
     @property
     def formatted_carbon_impact(self):
         """Format carbon impact for display"""
         if self.carbon_impact < 0:
             return f"-{abs(self.carbon_impact)} kg CO₂ (sequestration)"
         return f"{self.carbon_impact} kg CO₂"
-    
+
     @property
     def carbon_impact_color(self):
         """Color for carbon impact display"""
-        if self.carbon_category == 'negative':
-            return 'green'
-        elif self.carbon_category == 'high':
-            return 'red'
-        elif self.carbon_category == 'medium':
-            return 'orange'
-        return 'blue'
+        if self.carbon_category == "negative":
+            return "green"
+        elif self.carbon_category == "high":
+            return "red"
+        elif self.carbon_category == "medium":
+            return "orange"
+        return "blue"
+
 
 # Create your models here.
 
+
 class CarbonSource(models.Model):
-    name = models.CharField(max_length=100, unique=True, help_text='e.g., Citrus Fertilizer')
+    name = models.CharField(max_length=100, unique=True, help_text="e.g., Citrus Fertilizer")
     description = models.TextField(blank=True)
     unit = models.CharField(max_length=50, help_text="e.g. kg CO2e, liters, kWh")
-    category = models.CharField(max_length=50, help_text='e.g., Fuel, Offset')
-    default_emission_factor = models.FloatField(help_text='kg CO2e per unit, USDA-aligned', default=0.0)
-    usda_verified = models.BooleanField(default=False, help_text='Whether this source is verified by USDA')
+    category = models.CharField(max_length=50, help_text="e.g., Fuel, Offset")
+    default_emission_factor = models.FloatField(help_text="kg CO2e per unit, USDA-aligned", default=0.0)
+    usda_verified = models.BooleanField(default=False, help_text="Whether this source is verified by USDA")
     # New fields for better verification tracking
-    usda_factors_based = models.BooleanField(default=False, help_text='Whether calculations use USDA emission factors')
-    verification_status = models.CharField(max_length=50, default='estimated', help_text='factors_verified, estimated, calculation_error')
-    data_source = models.CharField(max_length=200, default='Unknown', help_text='Source of emission factors (e.g., USDA Agricultural Research Service)')
+    usda_factors_based = models.BooleanField(default=False, help_text="Whether calculations use USDA emission factors")
+    verification_status = models.CharField(
+        max_length=50, default="estimated", help_text="factors_verified, estimated, calculation_error"
+    )
+    data_source = models.CharField(
+        max_length=200,
+        default="Unknown",
+        help_text="Source of emission factors (e.g., USDA Agricultural Research Service)",
+    )
     created_at = models.DateTimeField(auto_now=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         indexes = [
-            models.Index(fields=['category']),
-            models.Index(fields=['usda_verified']),
-            models.Index(fields=['usda_factors_based']),
-            models.Index(fields=['verification_status'])
+            models.Index(fields=["category"]),
+            models.Index(fields=["usda_verified"]),
+            models.Index(fields=["usda_factors_based"]),
+            models.Index(fields=["verification_status"]),
         ]
 
     def __str__(self):
         return self.name
+
 
 class CarbonOffsetAction(models.Model):
     name = models.CharField(max_length=100)
@@ -352,78 +370,85 @@ class CarbonOffsetAction(models.Model):
     def __str__(self):
         return self.name
 
+
 class CarbonEntry(models.Model):
     TYPE_CHOICES = (
-        ('emission', 'Emission'),
-        ('offset', 'Offset'),
+        ("emission", "Emission"),
+        ("offset", "Offset"),
     )
-    establishment = models.ForeignKey('company.Establishment', on_delete=models.CASCADE, null=True, blank=True)
-    production = models.ForeignKey('history.History', on_delete=models.CASCADE, null=True, blank=True)
-    created_by = models.ForeignKey('users.User', on_delete=models.SET_NULL, null=True)
+    establishment = models.ForeignKey("company.Establishment", on_delete=models.CASCADE, null=True, blank=True)
+    production = models.ForeignKey("history.History", on_delete=models.CASCADE, null=True, blank=True)
+    created_by = models.ForeignKey("users.User", on_delete=models.SET_NULL, null=True)
     type = models.CharField(max_length=10, choices=TYPE_CHOICES)
-    source = models.ForeignKey('CarbonSource', on_delete=models.SET_NULL, null=True)
-    amount = models.FloatField(help_text='Amount in kg CO2e')
-    co2e_amount = models.FloatField(default=0.0, help_text='Amount in CO2 equivalent')
+    source = models.ForeignKey("CarbonSource", on_delete=models.SET_NULL, null=True)
+    amount = models.FloatField(help_text="Amount in kg CO2e")
+    co2e_amount = models.FloatField(default=0.0, help_text="Amount in CO2 equivalent")
     year = models.IntegerField()
     timestamp = models.DateTimeField(default=timezone.now)
     description = models.TextField(blank=True)
-    iot_device_id = models.CharField(max_length=100, blank=True, help_text='ID of IoT device if automated entry')
+    iot_device_id = models.CharField(max_length=100, blank=True, help_text="ID of IoT device if automated entry")
     usda_verified = models.BooleanField(default=False)
     # New fields for better verification tracking
-    usda_factors_based = models.BooleanField(default=False, help_text='Whether calculations use USDA emission factors')
-    verification_status = models.CharField(max_length=50, default='estimated', help_text='factors_verified, estimated, calculation_error')
-    data_source = models.CharField(max_length=200, default='Unknown', help_text='Source of emission factors (e.g., USDA Agricultural Research Service)')
-    
+    usda_factors_based = models.BooleanField(default=False, help_text="Whether calculations use USDA emission factors")
+    verification_status = models.CharField(
+        max_length=50, default="estimated", help_text="factors_verified, estimated, calculation_error"
+    )
+    data_source = models.CharField(
+        max_length=200,
+        default="Unknown",
+        help_text="Source of emission factors (e.g., USDA Agricultural Research Service)",
+    )
+
     # Enhanced verification fields for offset verification system - MVP 2-tier system
     VERIFICATION_LEVEL_CHOICES = [
-        ('self_reported', 'Self Reported'),
-        ('certified_project', 'Certified Project'),
+        ("self_reported", "Self Reported"),
+        ("certified_project", "Certified Project"),
     ]
-    
+
     AUDIT_STATUS_CHOICES = [
-        ('pending', 'Pending'),
-        ('scheduled', 'Audit Scheduled'),
-        ('in_progress', 'Under Review'),
-        ('passed', 'Audit Passed'),
-        ('failed', 'Audit Failed'),
+        ("pending", "Pending"),
+        ("scheduled", "Audit Scheduled"),
+        ("in_progress", "Under Review"),
+        ("passed", "Audit Passed"),
+        ("failed", "Audit Failed"),
     ]
-    
-    verification_level = models.CharField(max_length=25, choices=VERIFICATION_LEVEL_CHOICES, default='self_reported')
+
+    verification_level = models.CharField(max_length=25, choices=VERIFICATION_LEVEL_CHOICES, default="self_reported")
     trust_score = models.FloatField(default=0.5, validators=[MinValueValidator(0.0), MaxValueValidator(1.0)])
-    effective_amount = models.FloatField(null=True, blank=True, help_text='Amount * trust_score')
-    
+    effective_amount = models.FloatField(null=True, blank=True, help_text="Amount * trust_score")
+
     # Additionality and verification requirements
     additionality_verified = models.BooleanField(default=False)
     permanence_plan = models.TextField(blank=True)
     baseline_data = models.JSONField(default=dict)
-    audit_status = models.CharField(max_length=20, choices=AUDIT_STATUS_CHOICES, default='pending')
+    audit_status = models.CharField(max_length=20, choices=AUDIT_STATUS_CHOICES, default="pending")
     audit_scheduled_date = models.DateTimeField(null=True, blank=True)
     third_party_verification_url = models.URLField(blank=True)
     registry_verification_id = models.CharField(max_length=100, blank=True)
     methodology_template = models.CharField(max_length=50, blank=True)
-    
+
     # Requirements tracking
     evidence_requirements_met = models.BooleanField(default=False)
     documentation_complete = models.BooleanField(default=False)
     additionality_evidence = models.TextField(blank=True)
-    
+
     # Evidence files
-    evidence_photos = models.JSONField(default=list, blank=True, help_text='List of photo URLs as evidence')
-    evidence_documents = models.JSONField(default=list, blank=True, help_text='List of document URLs as evidence')
-    
+    evidence_photos = models.JSONField(default=list, blank=True, help_text="List of photo URLs as evidence")
+    evidence_documents = models.JSONField(default=list, blank=True, help_text="List of document URLs as evidence")
+
     # Additional verification fields added via migrations
-    external_verification_id = models.CharField(max_length=100, blank=True, default='')
+    external_verification_id = models.CharField(max_length=100, blank=True, default="")
     gps_coordinates = models.JSONField(default=dict, blank=True)
-    verification_notes = models.TextField(blank=True, default='')
+    verification_notes = models.TextField(blank=True, default="")
     baseline_scenario = models.JSONField(default=dict, blank=True)
     detected_patterns = models.JSONField(default=dict, blank=True)
     financial_analysis = models.JSONField(default=dict, blank=True)
-    methodology_id = models.CharField(max_length=100, blank=True, default='')
+    methodology_id = models.CharField(max_length=100, blank=True, default="")
     monitoring_plan = models.JSONField(default=dict, blank=True)
-    registry_name = models.CharField(max_length=100, blank=True, default='')
-    registry_submission_id = models.CharField(max_length=100, blank=True, default='')
-    verification_report_url = models.URLField(blank=True, default='')
-    
+    registry_name = models.CharField(max_length=100, blank=True, default="")
+    registry_submission_id = models.CharField(max_length=100, blank=True, default="")
+    verification_report_url = models.URLField(blank=True, default="")
+
     created_at = models.DateTimeField(auto_now=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -431,94 +456,91 @@ class CarbonEntry(models.Model):
         constraints = [
             models.CheckConstraint(
                 check=models.Q(establishment__isnull=False) | models.Q(production__isnull=False),
-                name='either_establishment_or_production_set'
+                name="either_establishment_or_production_set",
             )
         ]
         indexes = [
-            models.Index(fields=['establishment']),
-            models.Index(fields=['production']),
-            models.Index(fields=['year']),
-            models.Index(fields=['timestamp']),
-            models.Index(fields=['iot_device_id']),
-            models.Index(fields=['usda_verified']),
-            models.Index(fields=['usda_factors_based']),
-            models.Index(fields=['verification_status']),
-            models.Index(fields=['verification_level']),
-            models.Index(fields=['audit_status']),
-            models.Index(fields=['additionality_verified']),
-            models.Index(fields=['registry_verification_id']),
-            models.Index(fields=['external_verification_id']),
-            models.Index(fields=['methodology_id']),
-            models.Index(fields=['registry_name']),
+            models.Index(fields=["establishment"]),
+            models.Index(fields=["production"]),
+            models.Index(fields=["year"]),
+            models.Index(fields=["timestamp"]),
+            models.Index(fields=["iot_device_id"]),
+            models.Index(fields=["usda_verified"]),
+            models.Index(fields=["usda_factors_based"]),
+            models.Index(fields=["verification_status"]),
+            models.Index(fields=["verification_level"]),
+            models.Index(fields=["audit_status"]),
+            models.Index(fields=["additionality_verified"]),
+            models.Index(fields=["registry_verification_id"]),
+            models.Index(fields=["external_verification_id"]),
+            models.Index(fields=["methodology_id"]),
+            models.Index(fields=["registry_name"]),
         ]
 
     def save(self, *args, **kwargs):
         # Only set basic trust score if not already set by verification service
-        if self.type == 'offset' and not hasattr(self, '_verification_processed'):
-            trust_scores = {
-                'self_reported': 0.5,
-                'certified_project': 1.0
-            }
+        if self.type == "offset" and not hasattr(self, "_verification_processed"):
+            trust_scores = {"self_reported": 0.5, "certified_project": 1.0}
             # Only set trust score if it's still the default
             if self.trust_score == 0.5 or self.trust_score is None:
                 self.trust_score = trust_scores.get(self.verification_level, 0.5)
-            
+
             # Only set basic effective amount if not set by verification service
             if self.effective_amount is None:
                 self.effective_amount = self.amount * self.trust_score
-        elif self.type == 'emission':
+        elif self.type == "emission":
             self.effective_amount = self.amount
-        
+
         super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.type.capitalize()} - {self.amount} ({self.timestamp})"
-    
+
     @property
     def verification_badge(self):
         """Return verification badge configuration"""
         badges = {
-            'self_reported': {'color': 'orange', 'text': 'Self Reported', 'icon': 'document'},
-            'certified_project': {'color': 'green', 'text': 'Certified Project', 'icon': 'certificate'}
+            "self_reported": {"color": "orange", "text": "Self Reported", "icon": "document"},
+            "certified_project": {"color": "green", "text": "Certified Project", "icon": "certificate"},
         }
-        return badges.get(self.verification_level, badges['self_reported'])
+        return badges.get(self.verification_level, badges["self_reported"])
 
     @classmethod
     def calculate_carbon_score(cls, total_emissions, total_offsets, industry_benchmark=None):
         """
         Calculate a carbon score on a scale of 1-100.
         100 is the best (carbon negative), 50 is neutral, <50 is carbon positive.
-        
+
         Args:
             total_emissions: Total emissions in kg CO2e
             total_offsets: Total offsets in kg CO2e
             industry_benchmark: Industry average emissions (optional)
-            
+
         Returns:
             int: Carbon score from 1-100
         """
         # If no emissions or offsets, return neutral score
         if total_emissions == 0 and total_offsets == 0:
             return 50
-            
+
         net_carbon = total_emissions - total_offsets
-        
+
         # If carbon negative (more offsets than emissions)
         if net_carbon <= 0:
             # Scale from 50 (neutral) to 100 (highly negative)
             # The more negative, the higher the score
             if total_emissions == 0:
                 return 100  # Perfect score if no emissions but has offsets
-            
+
             # Calculate how much more offsets than emissions (as percentage)
             offset_ratio = abs(net_carbon) / total_emissions
-            
+
             # Cap at 100% (or 2x emissions) for max score
             offset_ratio = min(offset_ratio, 1.0)
-            
+
             # Scale from 50 to 100
             return int(50 + (offset_ratio * 50))
-        
+
         # If carbon positive (more emissions than offsets)
         else:
             # If we have an industry benchmark to compare against
@@ -533,7 +555,7 @@ class CarbonEntry(models.Model):
                     ratio = min(net_carbon / industry_benchmark, 2.0)  # Cap at 2x industry average
                     # Scale from 1 to 25
                     return max(1, int(25 - (ratio - 1) * 24))
-            
+
             # Without industry benchmark, use a simple ratio
             else:
                 # Calculate ratio of offsets to emissions
@@ -543,14 +565,15 @@ class CarbonEntry(models.Model):
                 score = int(offset_ratio * 50)
                 return max(1, score) if total_emissions > 0 else 50
 
+
 class CarbonCertification(models.Model):
-    establishment = models.ForeignKey('company.Establishment', on_delete=models.CASCADE, null=True, blank=True)
-    production = models.ForeignKey('history.History', on_delete=models.CASCADE, null=True, blank=True)
-    certifier = models.CharField(max_length=100, help_text='e.g., USDA Organic', default='Unknown')
-    certificate_id = models.CharField(max_length=50, unique=True, default='TEMP_ID')
+    establishment = models.ForeignKey("company.Establishment", on_delete=models.CASCADE, null=True, blank=True)
+    production = models.ForeignKey("history.History", on_delete=models.CASCADE, null=True, blank=True)
+    certifier = models.CharField(max_length=100, help_text="e.g., USDA Organic", default="Unknown")
+    certificate_id = models.CharField(max_length=50, unique=True, default="TEMP_ID")
     issue_date = models.DateField(default=timezone.now)
     expiry_date = models.DateField(null=True, blank=True)
-    document = models.FileField(upload_to='certifications/', null=True, blank=True)
+    document = models.FileField(upload_to="certifications/", null=True, blank=True)
     is_usda_soe_verified = models.BooleanField(default=False)
     verification_date = models.DateField(null=True, blank=True)
     verification_details = models.TextField(blank=True)
@@ -561,16 +584,14 @@ class CarbonCertification(models.Model):
         constraints = [
             models.CheckConstraint(
                 check=models.Q(establishment__isnull=False) | models.Q(production__isnull=False),
-                name='either_establishment_or_production_set_certification'
+                name="either_establishment_or_production_set_certification",
             )
         ]
-        indexes = [
-            models.Index(fields=['is_usda_soe_verified']),
-            models.Index(fields=['verification_date'])
-        ]
+        indexes = [models.Index(fields=["is_usda_soe_verified"]), models.Index(fields=["verification_date"])]
 
     def __str__(self):
         return f'{self.certificate_id} ({self.establishment.name if self.establishment else "N/A"})'
+
 
 class CarbonBenchmark(models.Model):
     industry = models.CharField(max_length=100)
@@ -583,38 +604,37 @@ class CarbonBenchmark(models.Model):
     source = models.CharField(max_length=200)
     last_updated = models.DateField(auto_now=True)
     usda_verified = models.BooleanField(default=False)
-    crop_type = models.CharField(max_length=100, blank=True, help_text='Specific crop type if applicable')
-    region = models.CharField(max_length=100, blank=True, help_text='Geographic region if applicable')
+    crop_type = models.CharField(max_length=100, blank=True, help_text="Specific crop type if applicable")
+    region = models.CharField(max_length=100, blank=True, help_text="Geographic region if applicable")
     created_at = models.DateTimeField(auto_now=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ('industry', 'year', 'crop_type', 'region')
+        unique_together = ("industry", "year", "crop_type", "region")
         indexes = [
-            models.Index(fields=['crop_type']),
-            models.Index(fields=['region']),
-            models.Index(fields=['usda_verified'])
+            models.Index(fields=["crop_type"]),
+            models.Index(fields=["region"]),
+            models.Index(fields=["usda_verified"]),
         ]
 
     def __str__(self):
-        return f'Benchmark {self.industry} - {self.year}'
+        return f"Benchmark {self.industry} - {self.year}"
+
 
 class CarbonReport(models.Model):
-    establishment = models.ForeignKey('company.Establishment', on_delete=models.CASCADE, null=True, blank=True)
-    production = models.ForeignKey('history.History', on_delete=models.CASCADE, null=True, blank=True)
-    period_start = models.DateField(default='2023-01-01')
-    period_end = models.DateField(default='2023-12-31')
+    establishment = models.ForeignKey("company.Establishment", on_delete=models.CASCADE, null=True, blank=True)
+    production = models.ForeignKey("history.History", on_delete=models.CASCADE, null=True, blank=True)
+    period_start = models.DateField(default="2023-01-01")
+    period_end = models.DateField(default="2023-12-31")
     total_emissions = models.FloatField(default=0.0)
     total_offsets = models.FloatField(default=0.0)
     net_footprint = models.FloatField(default=0.0)
     carbon_score = models.IntegerField(
-        default=0,
-        validators=[MinValueValidator(0), MaxValueValidator(100)],
-        help_text='Score from 1 to 100'
+        default=0, validators=[MinValueValidator(0), MaxValueValidator(100)], help_text="Score from 1 to 100"
     )
     generated_at = models.DateTimeField(default=timezone.now)
     usda_verified = models.BooleanField(default=False)
-    document = models.FileField(upload_to='carbon_reports/', null=True, blank=True, help_text='Report document file')
+    document = models.FileField(upload_to="carbon_reports/", null=True, blank=True, help_text="Report document file")
     created_at = models.DateTimeField(auto_now=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -622,30 +642,35 @@ class CarbonReport(models.Model):
         constraints = [
             models.CheckConstraint(
                 check=models.Q(establishment__isnull=False) | models.Q(production__isnull=False),
-                name='either_establishment_or_production_set_report'
+                name="either_establishment_or_production_set_report",
             )
         ]
-        indexes = [
-            models.Index(fields=['usda_verified']),
-            models.Index(fields=['carbon_score'])
-        ]
+        indexes = [models.Index(fields=["usda_verified"]), models.Index(fields=["carbon_score"])]
 
     def __str__(self):
         return f'{self.establishment.name if self.establishment else "N/A"} - {self.period_start} to {self.period_end}'
 
+
 class CarbonAuditLog(models.Model):
-    carbon_entry = models.ForeignKey(CarbonEntry, on_delete=models.CASCADE, related_name='audit_logs', null=True, blank=True)
-    certification = models.ForeignKey(CarbonCertification, on_delete=models.CASCADE, related_name='audit_logs', null=True, blank=True)
-    report = models.ForeignKey(CarbonReport, on_delete=models.CASCADE, related_name='audit_logs', null=True, blank=True)
+    carbon_entry = models.ForeignKey(
+        CarbonEntry, on_delete=models.CASCADE, related_name="audit_logs", null=True, blank=True
+    )
+    certification = models.ForeignKey(
+        CarbonCertification, on_delete=models.CASCADE, related_name="audit_logs", null=True, blank=True
+    )
+    report = models.ForeignKey(CarbonReport, on_delete=models.CASCADE, related_name="audit_logs", null=True, blank=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
-    action = models.CharField(max_length=50, choices=[
-        ('create', 'Create'),
-        ('update', 'Update'),
-        ('delete', 'Delete'),
-        ('verify', 'Verify'),
-        ('gaming_detected', 'Gaming Detected'),
-        ('audit_scheduled', 'Audit Scheduled')
-    ])
+    action = models.CharField(
+        max_length=50,
+        choices=[
+            ("create", "Create"),
+            ("update", "Update"),
+            ("delete", "Delete"),
+            ("verify", "Verify"),
+            ("gaming_detected", "Gaming Detected"),
+            ("audit_scheduled", "Audit Scheduled"),
+        ],
+    )
     timestamp = models.DateTimeField(auto_now=True)
     details = models.TextField(blank=True)
     ip_address = models.GenericIPAddressField(null=True, blank=True)
@@ -653,58 +678,54 @@ class CarbonAuditLog(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=['action']),
-            models.Index(fields=['timestamp']),
-            models.Index(fields=['ip_address'])
+            models.Index(fields=["action"]),
+            models.Index(fields=["timestamp"]),
+            models.Index(fields=["ip_address"]),
         ]
 
     def __str__(self):
-        return f'{self.action} by {self.user} at {self.timestamp}'
+        return f"{self.action} by {self.user} at {self.timestamp}"
+
 
 class SustainabilityBadge(models.Model):
-    name = models.CharField(max_length=100, unique=True, help_text='e.g., Gold Tier')
+    name = models.CharField(max_length=100, unique=True, help_text="e.g., Gold Tier")
     description = models.TextField(blank=True)
-    criteria = models.JSONField(default=dict, help_text='Criteria for badge award, e.g., net_footprint < 0')
-    icon = models.FileField(upload_to='badges/', null=True, blank=True)
-    minimum_score = models.IntegerField(default=0, help_text='Minimum carbon score to automatically award this badge')
-    is_automatic = models.BooleanField(default=False, help_text='Whether to automatically award this badge based on score')
-    establishments = models.ManyToManyField('company.Establishment', related_name='badges', blank=True)
-    productions = models.ManyToManyField('history.History', related_name='badges', blank=True)
+    criteria = models.JSONField(default=dict, help_text="Criteria for badge award, e.g., net_footprint < 0")
+    icon = models.FileField(upload_to="badges/", null=True, blank=True)
+    minimum_score = models.IntegerField(default=0, help_text="Minimum carbon score to automatically award this badge")
+    is_automatic = models.BooleanField(
+        default=False, help_text="Whether to automatically award this badge based on score"
+    )
+    establishments = models.ManyToManyField("company.Establishment", related_name="badges", blank=True)
+    productions = models.ManyToManyField("history.History", related_name="badges", blank=True)
     usda_verified = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        indexes = [
-            models.Index(fields=['usda_verified'])
-        ]
+        indexes = [models.Index(fields=["usda_verified"])]
 
     def __str__(self):
         return self.name
 
+
 class MicroOffset(models.Model):
-    STATUS_CHOICES = (
-        ('pending', 'Pending'),
-        ('completed', 'Completed'),
-        ('failed', 'Failed')
-    )
+    STATUS_CHOICES = (("pending", "Pending"), ("completed", "Completed"), ("failed", "Failed"))
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
-    production = models.ForeignKey('history.History', on_delete=models.CASCADE)
+    production = models.ForeignKey("history.History", on_delete=models.CASCADE)
     amount = models.FloatField(validators=[MinValueValidator(0.05), MaxValueValidator(0.10)])
-    provider = models.CharField(max_length=50, default='wren')
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    provider = models.CharField(max_length=50, default="wren")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
     transaction_id = models.CharField(max_length=100, blank=True)
     created_at = models.DateTimeField(auto_now=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        indexes = [
-            models.Index(fields=['status']),
-            models.Index(fields=['created_at'])
-        ]
+        indexes = [models.Index(fields=["status"]), models.Index(fields=["created_at"])]
 
     def __str__(self):
-        return f'Offset {self.amount} by {self.user} for {self.production}'
+        return f"Offset {self.amount} by {self.user} for {self.production}"
+
 
 class GreenPoints(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
@@ -715,16 +736,15 @@ class GreenPoints(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        indexes = [
-            models.Index(fields=['points']),
-            models.Index(fields=['last_scan'])
-        ]
+        indexes = [models.Index(fields=["points"]), models.Index(fields=["last_scan"])]
 
     def __str__(self):
-        return f'{self.user} - {self.points} points'
+        return f"{self.user} - {self.points} points"
+
 
 class CarbonOffsetProject(models.Model):
     """Model for carbon offset projects available in the marketplace"""
+
     name = models.CharField(max_length=255)
     description = models.TextField()
     project_type = models.CharField(max_length=100)
@@ -738,16 +758,18 @@ class CarbonOffsetProject(models.Model):
     def __str__(self):
         return self.name
 
+
 class CarbonOffsetPurchase(models.Model):
     """Model for tracking carbon offset purchases"""
+
     project = models.ForeignKey(CarbonOffsetProject, on_delete=models.CASCADE)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     price_per_ton = models.DecimalField(max_digits=10, decimal_places=2)
     total_price = models.DecimalField(max_digits=10, decimal_places=2)
-    status = models.CharField(max_length=20, default='pending')
+    status = models.CharField(max_length=20, default="pending")
     is_verified = models.BooleanField(default=False)
-    certificate_file = models.FileField(upload_to='certificates/', null=True, blank=True)
+    certificate_file = models.FileField(upload_to="certificates/", null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     certificate_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
@@ -760,8 +782,10 @@ class CarbonOffsetPurchase(models.Model):
             self.total_price = self.amount * self.price_per_ton
         super().save(*args, **kwargs)
 
+
 class CarbonOffsetCertificate(models.Model):
     """Model for carbon offset certificates"""
+
     purchase = models.OneToOneField(CarbonOffsetPurchase, on_delete=models.CASCADE)
     certificate_number = models.CharField(max_length=100, unique=True)
     verification_code = models.CharField(max_length=100, unique=True)
@@ -773,93 +797,102 @@ class CarbonOffsetCertificate(models.Model):
     def __str__(self):
         return self.certificate_number
 
+
 # IoT Device Management Models
+
 
 class IoTDevice(models.Model):
     """Model for tracking IoT devices connected to establishments."""
-    
+
     DEVICE_TYPES = [
-        ('fuel_sensor', 'Fuel Consumption Sensor'),
-        ('weather_station', 'Weather Station'),
-        ('soil_moisture', 'Soil Moisture Sensor'),
-        ('irrigation', 'Irrigation Controller'),
-        ('equipment_monitor', 'Equipment Monitor'),
-        ('gps_tracker', 'GPS Tracker'),
+        ("fuel_sensor", "Fuel Consumption Sensor"),
+        ("weather_station", "Weather Station"),
+        ("soil_moisture", "Soil Moisture Sensor"),
+        ("irrigation", "Irrigation Controller"),
+        ("equipment_monitor", "Equipment Monitor"),
+        ("gps_tracker", "GPS Tracker"),
     ]
-    
+
     STATUS_CHOICES = [
-        ('online', 'Online'),
-        ('offline', 'Offline'),
-        ('maintenance', 'Under Maintenance'),
-        ('error', 'Error State'),
+        ("online", "Online"),
+        ("offline", "Offline"),
+        ("maintenance", "Under Maintenance"),
+        ("error", "Error State"),
     ]
-    
+
     device_id = models.CharField(max_length=100, unique=True, help_text="Unique device identifier")
     device_type = models.CharField(max_length=20, choices=DEVICE_TYPES)
-    establishment = models.ForeignKey('company.Establishment', on_delete=models.CASCADE, related_name='iot_devices')
+    establishment = models.ForeignKey("company.Establishment", on_delete=models.CASCADE, related_name="iot_devices")
     name = models.CharField(max_length=200, help_text="Human-readable device name")
     manufacturer = models.CharField(max_length=100, blank=True)
     model = models.CharField(max_length=100, blank=True)
-    
+
     # Status and monitoring
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='offline')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="offline")
     last_seen = models.DateTimeField(null=True, blank=True)
     battery_level = models.IntegerField(null=True, blank=True, help_text="Battery percentage (0-100)")
     signal_strength = models.CharField(max_length=20, blank=True, help_text="Signal strength indicator")
-    
+
     # Location and configuration
     latitude = models.DecimalField(max_digits=10, decimal_places=8, null=True, blank=True)
     longitude = models.DecimalField(max_digits=11, decimal_places=8, null=True, blank=True)
     configuration = models.JSONField(default=dict, help_text="Device-specific configuration")
-    
+
     # John Deere API Integration
-    john_deere_machine_id = models.CharField(max_length=100, null=True, blank=True, help_text="John Deere machine ID for API integration")
+    john_deere_machine_id = models.CharField(
+        max_length=100, null=True, blank=True, help_text="John Deere machine ID for API integration"
+    )
     last_api_sync = models.DateTimeField(null=True, blank=True, help_text="Last successful API synchronization")
-    api_connection_status = models.CharField(max_length=20, default='disconnected', choices=[
-        ('connected', 'Connected'),
-        ('disconnected', 'Disconnected'),
-        ('error', 'Connection Error'),
-        ('pending', 'Connection Pending'),
-    ], help_text="Status of API connection")
+    api_connection_status = models.CharField(
+        max_length=20,
+        default="disconnected",
+        choices=[
+            ("connected", "Connected"),
+            ("disconnected", "Disconnected"),
+            ("error", "Connection Error"),
+            ("pending", "Connection Pending"),
+        ],
+        help_text="Status of API connection",
+    )
     api_error_message = models.TextField(blank=True, help_text="Last API error message if any")
-    
+
     # Metadata
     installed_date = models.DateTimeField(auto_now_add=True)
     last_maintenance = models.DateTimeField(null=True, blank=True)
     notes = models.TextField(blank=True)
-    
+
     # Data tracking
     total_data_points = models.IntegerField(default=0)
     last_data_received = models.DateTimeField(null=True, blank=True)
-    
+
     class Meta:
-        db_table = 'carbon_iot_device'
-        ordering = ['establishment', 'device_type', 'name']
-        
+        db_table = "carbon_iot_device"
+        ordering = ["establishment", "device_type", "name"]
+
     def __str__(self):
         return f"{self.name} ({self.device_id}) - {self.establishment.name}"
-    
-    def update_status(self, status='online'):
+
+    def update_status(self, status="online"):
         """Update device status and last seen timestamp."""
         self.status = status
         self.last_seen = timezone.now()
-        if status == 'online':
+        if status == "online":
             self.last_data_received = timezone.now()
-        self.save(update_fields=['status', 'last_seen', 'last_data_received'])
-    
+        self.save(update_fields=["status", "last_seen", "last_data_received"])
+
     def increment_data_points(self):
         """Increment the total data points counter."""
         self.total_data_points += 1
         self.last_data_received = timezone.now()
-        self.save(update_fields=['total_data_points', 'last_data_received'])
-    
+        self.save(update_fields=["total_data_points", "last_data_received"])
+
     @property
     def is_online(self):
         """Check if device is considered online (data received within last hour)."""
         if not self.last_seen:
             return False
         return timezone.now() - self.last_seen < timedelta(hours=1)
-    
+
     @property
     def needs_maintenance(self):
         """Check if device needs maintenance based on battery or last maintenance date."""
@@ -872,364 +905,371 @@ class IoTDevice(models.Model):
 
 class IoTDataPoint(models.Model):
     """Model for storing raw IoT data points."""
-    
-    device = models.ForeignKey(IoTDevice, on_delete=models.CASCADE, related_name='data_points')
+
+    device = models.ForeignKey(IoTDevice, on_delete=models.CASCADE, related_name="data_points")
     timestamp = models.DateTimeField()
     data = models.JSONField(help_text="Raw sensor data")
     processed = models.BooleanField(default=False, help_text="Whether this data has been processed into carbon entries")
-    
+
     # Optional carbon entry link if this data point created a carbon entry
     carbon_entry = models.ForeignKey(CarbonEntry, on_delete=models.SET_NULL, null=True, blank=True)
-    
+
     # Data quality indicators
     quality_score = models.FloatField(default=1.0, help_text="Data quality score (0.0-1.0)")
     anomaly_detected = models.BooleanField(default=False)
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
-        db_table = 'carbon_iot_data_point'
-        ordering = ['-timestamp']
+        db_table = "carbon_iot_data_point"
+        ordering = ["-timestamp"]
         indexes = [
-            models.Index(fields=['device', '-timestamp']),
-            models.Index(fields=['processed', '-timestamp']),
+            models.Index(fields=["device", "-timestamp"]),
+            models.Index(fields=["processed", "-timestamp"]),
         ]
-    
+
     def __str__(self):
         return f"{self.device.device_id} - {self.timestamp}"
-    
+
     def mark_processed(self, carbon_entry=None):
         """Mark this data point as processed."""
         self.processed = True
         if carbon_entry:
             self.carbon_entry = carbon_entry
-        self.save(update_fields=['processed', 'carbon_entry'])
+        self.save(update_fields=["processed", "carbon_entry"])
 
 
 class AutomationRule(models.Model):
     """Model for defining automation rules based on IoT data."""
-    
+
     TRIGGER_TYPES = [
-        ('threshold', 'Threshold Trigger'),
-        ('pattern', 'Pattern Recognition'),
-        ('schedule', 'Scheduled Trigger'),
-        ('weather', 'Weather Condition'),
-        ('combination', 'Multiple Conditions'),
+        ("threshold", "Threshold Trigger"),
+        ("pattern", "Pattern Recognition"),
+        ("schedule", "Scheduled Trigger"),
+        ("weather", "Weather Condition"),
+        ("combination", "Multiple Conditions"),
     ]
-    
+
     ACTION_TYPES = [
-        ('create_event', 'Create Carbon Event'),
-        ('send_alert', 'Send Alert'),
-        ('update_status', 'Update Status'),
-        ('trigger_webhook', 'Trigger Webhook'),
-        ('generate_report', 'Generate Report'),
+        ("create_event", "Create Carbon Event"),
+        ("send_alert", "Send Alert"),
+        ("update_status", "Update Status"),
+        ("trigger_webhook", "Trigger Webhook"),
+        ("generate_report", "Generate Report"),
     ]
-    
+
     name = models.CharField(max_length=200)
-    establishment = models.ForeignKey('company.Establishment', on_delete=models.CASCADE, related_name='automation_rules')
-    device_type = models.CharField(max_length=20, choices=IoTDevice.DEVICE_TYPES, blank=True, help_text="Apply to specific device type")
-    
+    establishment = models.ForeignKey(
+        "company.Establishment", on_delete=models.CASCADE, related_name="automation_rules"
+    )
+    device_type = models.CharField(
+        max_length=20, choices=IoTDevice.DEVICE_TYPES, blank=True, help_text="Apply to specific device type"
+    )
+
     # Rule configuration
     trigger_type = models.CharField(max_length=20, choices=TRIGGER_TYPES)
     trigger_config = models.JSONField(help_text="Trigger configuration (thresholds, patterns, etc.)")
     action_type = models.CharField(max_length=20, choices=ACTION_TYPES)
     action_config = models.JSONField(help_text="Action configuration")
-    
+
     # Rule status
     is_active = models.BooleanField(default=True)
     last_triggered = models.DateTimeField(null=True, blank=True)
     trigger_count = models.IntegerField(default=0)
-    
+
     # Metadata
     created_at = models.DateTimeField(auto_now_add=True)
-    created_by = models.ForeignKey('users.User', on_delete=models.CASCADE)
+    created_by = models.ForeignKey("users.User", on_delete=models.CASCADE)
     description = models.TextField(blank=True)
-    
+
     class Meta:
-        db_table = 'carbon_automation_rule'
+        db_table = "carbon_automation_rule"
 
 
 # =============================================================================
 # PERFORMANCE OPTIMIZATION MODELS - Added by Carbon API Optimization
 # =============================================================================
 
+
 class CachedEmissionFactor(models.Model):
     """
     Database cache for emission factors to reduce USDA API calls.
-    
+
     PERFORMANCE: Reduces API calls by 70%, provides offline fallback.
     """
+
     crop_type = models.CharField(max_length=100, db_index=True)
-    region = models.CharField(max_length=10, default='US', db_index=True)
+    region = models.CharField(max_length=10, default="US", db_index=True)
     factors = models.JSONField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
-        db_table = 'carbon_cached_emission_factors'
+        db_table = "carbon_cached_emission_factors"
         indexes = [
-            models.Index(fields=['crop_type', 'region', 'created_at']),
-            models.Index(fields=['created_at']),  # For cleanup
+            models.Index(fields=["crop_type", "region", "created_at"]),
+            models.Index(fields=["created_at"]),  # For cleanup
         ]
-        constraints = [
-            models.UniqueConstraint(
-                fields=['crop_type', 'region'], 
-                name='unique_crop_region_factor'
-            )
-        ]
+        constraints = [models.UniqueConstraint(fields=["crop_type", "region"], name="unique_crop_region_factor")]
+
 
 class OptimizedCarbonCalculation(models.Model):
     """
     Optimized carbon calculation storage with denormalized fields for performance.
     """
+
     production_id = models.CharField(max_length=100, db_index=True)
     event_type = models.CharField(max_length=50, db_index=True)
-    
+
     # Denormalized calculation results for fast queries
     co2e_total = models.DecimalField(max_digits=10, decimal_places=3)
     efficiency_score = models.FloatField(db_index=True)  # For ranking
     calculation_method = models.CharField(max_length=50)
-    
+
     # Performance tracking
     calculation_time_ms = models.IntegerField()
     usda_api_calls = models.IntegerField(default=0)
     cache_hits = models.IntegerField(default=0)
-    
+
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
-    
+
     class Meta:
-        db_table = 'carbon_optimized_calculations'
+        db_table = "carbon_optimized_calculations"
         indexes = [
             # Dashboard queries
-            models.Index(fields=['production_id', 'created_at']),
+            models.Index(fields=["production_id", "created_at"]),
             # Performance analysis
-            models.Index(fields=['event_type', 'efficiency_score']),
+            models.Index(fields=["event_type", "efficiency_score"]),
             # Cleanup queries
-            models.Index(fields=['created_at']),
+            models.Index(fields=["created_at"]),
         ]
-    
+
     def evaluate_trigger(self, data_point):
         """Evaluate if this rule should trigger based on the data point"""
         try:
             trigger_config = self.trigger_config
             data = data_point.data
-            
-            if self.trigger_type == 'threshold':
-                field = trigger_config.get('field')
-                threshold = trigger_config.get('threshold')
-                operator = trigger_config.get('operator', 'gt')  # gt, lt, eq, gte, lte
-            
+
+            if self.trigger_type == "threshold":
+                field = trigger_config.get("field")
+                threshold = trigger_config.get("threshold")
+                operator = trigger_config.get("operator", "gt")  # gt, lt, eq, gte, lte
+
                 if field in data:
                     value = data[field]
-                if operator == 'gt' and value > threshold:
+                if operator == "gt" and value > threshold:
                     return True
-                elif operator == 'lt' and value < threshold:
+                elif operator == "lt" and value < threshold:
                     return True
-                elif operator == 'eq' and value == threshold:
+                elif operator == "eq" and value == threshold:
                     return True
-                elif operator == 'gte' and value >= threshold:
+                elif operator == "gte" and value >= threshold:
                     return True
-                elif operator == 'lte' and value <= threshold:
+                elif operator == "lte" and value <= threshold:
                     return True
-        
+
             return False
-            
+
         except Exception as e:
             logger.error(f"Error evaluating automation rule {self.id}: {e}")
             return False
-    
+
     def execute_action(self, data_point):
         """Execute the configured action"""
         try:
-            if self.action_type == 'create_event':
+            if self.action_type == "create_event":
                 # Create a carbon event based on the IoT data
                 # This would integrate with the event creation system
                 pass
-            elif self.action_type == 'send_alert':
+            elif self.action_type == "send_alert":
                 # Send alert to relevant users
                 pass
             # Add other action implementations
-            
+
             # Update trigger tracking
             self.last_triggered = timezone.now()
             self.trigger_count += 1
-            self.save(update_fields=['last_triggered', 'trigger_count'])
-        
+            self.save(update_fields=["last_triggered", "trigger_count"])
+
         except Exception as e:
             logger.error(f"Error executing automation rule action {self.id}: {e}")
 
 
 # NEW MODELS FOR ENHANCED USDA INTEGRATION
 
+
 class USDAComplianceRecord(models.Model):
     """Model for tracking USDA compliance validation results"""
-    
+
     COMPLIANCE_STATUS_CHOICES = [
-        ('compliant', 'USDA Compliant'),
-        ('non_compliant', 'Non-Compliant'),
-        ('under_review', 'Under Review'),
-        ('pending_validation', 'Pending Validation'),
-        ('validation_error', 'Validation Error'),
+        ("compliant", "USDA Compliant"),
+        ("non_compliant", "Non-Compliant"),
+        ("under_review", "Under Review"),
+        ("pending_validation", "Pending Validation"),
+        ("validation_error", "Validation Error"),
     ]
-    
+
     CONFIDENCE_LEVEL_CHOICES = [
-        ('high', 'High (>90%)'),
-        ('medium', 'Medium (70-90%)'),
-        ('low', 'Low (<70%)'),
+        ("high", "High (>90%)"),
+        ("medium", "Medium (70-90%)"),
+        ("low", "Low (<70%)"),
     ]
-    
+
     # Related records
-    carbon_entry = models.ForeignKey(CarbonEntry, on_delete=models.CASCADE, related_name='usda_compliance_records')
-    establishment = models.ForeignKey('company.Establishment', on_delete=models.CASCADE, null=True, blank=True)
-    production = models.ForeignKey('history.History', on_delete=models.CASCADE, null=True, blank=True)
-    
+    carbon_entry = models.ForeignKey(CarbonEntry, on_delete=models.CASCADE, related_name="usda_compliance_records")
+    establishment = models.ForeignKey("company.Establishment", on_delete=models.CASCADE, null=True, blank=True)
+    production = models.ForeignKey("history.History", on_delete=models.CASCADE, null=True, blank=True)
+
     # Compliance details
-    compliance_status = models.CharField(max_length=20, choices=COMPLIANCE_STATUS_CHOICES, default='pending_validation')
-    confidence_score = models.FloatField(validators=[MinValueValidator(0.0), MaxValueValidator(1.0)], help_text='Confidence score from 0.0 to 1.0')
+    compliance_status = models.CharField(max_length=20, choices=COMPLIANCE_STATUS_CHOICES, default="pending_validation")
+    confidence_score = models.FloatField(
+        validators=[MinValueValidator(0.0), MaxValueValidator(1.0)], help_text="Confidence score from 0.0 to 1.0"
+    )
     confidence_level = models.CharField(max_length=10, choices=CONFIDENCE_LEVEL_CHOICES)
-    
+
     # Validation details
-    validation_method = models.CharField(max_length=50, default='api_validation', help_text='Method used for validation')
-    validation_details = models.JSONField(default=dict, help_text='Detailed validation results')
-    recommendations = models.JSONField(default=list, help_text='USDA compliance recommendations')
-    
+    validation_method = models.CharField(
+        max_length=50, default="api_validation", help_text="Method used for validation"
+    )
+    validation_details = models.JSONField(default=dict, help_text="Detailed validation results")
+    recommendations = models.JSONField(default=list, help_text="USDA compliance recommendations")
+
     # API integration tracking
-    usda_api_used = models.BooleanField(default=False, help_text='Whether USDA API was used for validation')
-    api_response_code = models.IntegerField(null=True, blank=True, help_text='API response status code')
-    api_response_data = models.JSONField(default=dict, help_text='Full API response data')
-    
+    usda_api_used = models.BooleanField(default=False, help_text="Whether USDA API was used for validation")
+    api_response_code = models.IntegerField(null=True, blank=True, help_text="API response status code")
+    api_response_data = models.JSONField(default=dict, help_text="Full API response data")
+
     # Regional factors
-    crop_type = models.CharField(max_length=100, help_text='Crop type used in validation')
-    state = models.CharField(max_length=2, help_text='State code for regional factors')
-    regional_factors_used = models.BooleanField(default=False, help_text='Whether regional emission factors were used')
-    
+    crop_type = models.CharField(max_length=100, help_text="Crop type used in validation")
+    state = models.CharField(max_length=2, help_text="State code for regional factors")
+    regional_factors_used = models.BooleanField(default=False, help_text="Whether regional emission factors were used")
+
     # Metadata
     validated_at = models.DateTimeField(auto_now_add=True)
-    validated_by = models.ForeignKey('users.User', on_delete=models.SET_NULL, null=True, blank=True)
-    notes = models.TextField(blank=True, help_text='Additional validation notes')
-    
+    validated_by = models.ForeignKey("users.User", on_delete=models.SET_NULL, null=True, blank=True)
+    notes = models.TextField(blank=True, help_text="Additional validation notes")
+
     # Audit trail
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
-        db_table = 'carbon_usda_compliance_record'
-        ordering = ['-validated_at']
+        db_table = "carbon_usda_compliance_record"
+        ordering = ["-validated_at"]
         indexes = [
-            models.Index(fields=['compliance_status']),
-            models.Index(fields=['confidence_level']),
-            models.Index(fields=['crop_type', 'state']),
-            models.Index(fields=['validated_at']),
+            models.Index(fields=["compliance_status"]),
+            models.Index(fields=["confidence_level"]),
+            models.Index(fields=["crop_type", "state"]),
+            models.Index(fields=["validated_at"]),
         ]
-    
+
     def __str__(self):
         return f"USDA Compliance - {self.carbon_entry} - {self.compliance_status}"
-    
+
     def save(self, *args, **kwargs):
         # Set confidence level based on score
         if self.confidence_score >= 0.9:
-            self.confidence_level = 'high'
+            self.confidence_level = "high"
         elif self.confidence_score >= 0.7:
-            self.confidence_level = 'medium'
+            self.confidence_level = "medium"
         else:
-            self.confidence_level = 'low'
-        
+            self.confidence_level = "low"
+
         super().save(*args, **kwargs)
-    
+
     @property
     def is_usda_verified(self):
         """Check if this record represents USDA verification"""
-        return self.compliance_status == 'compliant' and self.confidence_score >= 0.9
-    
+        return self.compliance_status == "compliant" and self.confidence_score >= 0.9
+
     @property
     def needs_review(self):
         """Check if this record needs manual review"""
-        return (self.compliance_status in ['non_compliant', 'validation_error'] or 
-                self.confidence_score < 0.7)
+        return self.compliance_status in ["non_compliant", "validation_error"] or self.confidence_score < 0.7
 
 
 class RegionalEmissionFactor(models.Model):
     """Model for storing regional USDA emission factors"""
-    
+
     FACTOR_TYPES = [
-        ('nitrogen', 'Nitrogen Fertilizer'),
-        ('phosphorus', 'Phosphorus Fertilizer'),
-        ('potassium', 'Potassium Fertilizer'),
-        ('diesel', 'Diesel Fuel'),
-        ('gasoline', 'Gasoline Fuel'),
-        ('natural_gas', 'Natural Gas'),
-        ('electricity', 'Electricity'),
-        ('lime', 'Agricultural Lime'),
-        ('custom', 'Custom Factor'),
+        ("nitrogen", "Nitrogen Fertilizer"),
+        ("phosphorus", "Phosphorus Fertilizer"),
+        ("potassium", "Potassium Fertilizer"),
+        ("diesel", "Diesel Fuel"),
+        ("gasoline", "Gasoline Fuel"),
+        ("natural_gas", "Natural Gas"),
+        ("electricity", "Electricity"),
+        ("lime", "Agricultural Lime"),
+        ("custom", "Custom Factor"),
     ]
-    
+
     DATA_SOURCE_CHOICES = [
-        ('usda_api', 'USDA API'),
-        ('usda_manual', 'USDA Manual Entry'),
-        ('regional_study', 'Regional Study'),
-        ('industry_average', 'Industry Average'),
-        ('estimated', 'Estimated Value'),
+        ("usda_api", "USDA API"),
+        ("usda_manual", "USDA Manual Entry"),
+        ("regional_study", "Regional Study"),
+        ("industry_average", "Industry Average"),
+        ("estimated", "Estimated Value"),
     ]
-    
+
     # Geographic scope
-    state = models.CharField(max_length=2, help_text='State code (e.g., CA, TX)')
-    county = models.CharField(max_length=100, blank=True, help_text='County name (optional)')
-    region = models.CharField(max_length=100, blank=True, help_text='Custom region identifier')
-    
+    state = models.CharField(max_length=2, help_text="State code (e.g., CA, TX)")
+    county = models.CharField(max_length=100, blank=True, help_text="County name (optional)")
+    region = models.CharField(max_length=100, blank=True, help_text="Custom region identifier")
+
     # Crop and factor details
-    crop_type = models.CharField(max_length=100, help_text='Crop type this factor applies to')
+    crop_type = models.CharField(max_length=100, help_text="Crop type this factor applies to")
     factor_type = models.CharField(max_length=20, choices=FACTOR_TYPES)
-    factor_name = models.CharField(max_length=100, help_text='Human-readable factor name')
-    
+    factor_name = models.CharField(max_length=100, help_text="Human-readable factor name")
+
     # Emission factor values
-    emission_factor = models.FloatField(help_text='Emission factor value (kg CO2e per unit)')
-    unit = models.CharField(max_length=50, help_text='Unit of measurement (e.g., kg N, liter, kWh)')
-    adjustment_factor = models.FloatField(default=1.0, help_text='Regional adjustment multiplier')
-    
+    emission_factor = models.FloatField(help_text="Emission factor value (kg CO2e per unit)")
+    unit = models.CharField(max_length=50, help_text="Unit of measurement (e.g., kg N, liter, kWh)")
+    adjustment_factor = models.FloatField(default=1.0, help_text="Regional adjustment multiplier")
+
     # Data quality and source
-    data_source = models.CharField(max_length=20, choices=DATA_SOURCE_CHOICES, default='estimated')
-    source_reference = models.CharField(max_length=500, blank=True, help_text='Reference to data source')
+    data_source = models.CharField(max_length=20, choices=DATA_SOURCE_CHOICES, default="estimated")
+    source_reference = models.CharField(max_length=500, blank=True, help_text="Reference to data source")
     confidence_level = models.FloatField(validators=[MinValueValidator(0.0), MaxValueValidator(1.0)], default=0.8)
-    
+
     # USDA verification
-    usda_verified = models.BooleanField(default=False, help_text='Verified by USDA data source')
-    usda_api_id = models.CharField(max_length=100, blank=True, help_text='USDA API identifier if applicable')
-    
+    usda_verified = models.BooleanField(default=False, help_text="Verified by USDA data source")
+    usda_api_id = models.CharField(max_length=100, blank=True, help_text="USDA API identifier if applicable")
+
     # Temporal validity
-    valid_from = models.DateField(help_text='Date from which this factor is valid')
-    valid_until = models.DateField(null=True, blank=True, help_text='Date until which this factor is valid')
-    
+    valid_from = models.DateField(help_text="Date from which this factor is valid")
+    valid_until = models.DateField(null=True, blank=True, help_text="Date until which this factor is valid")
+
     # Usage tracking
-    usage_count = models.IntegerField(default=0, help_text='Number of times this factor has been used')
-    last_used = models.DateTimeField(null=True, blank=True, help_text='Last time this factor was used')
-    
+    usage_count = models.IntegerField(default=0, help_text="Number of times this factor has been used")
+    last_used = models.DateTimeField(null=True, blank=True, help_text="Last time this factor was used")
+
     # Metadata
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.ForeignKey('users.User', on_delete=models.SET_NULL, null=True, blank=True)
-    notes = models.TextField(blank=True, help_text='Additional notes about this factor')
-    
+    created_by = models.ForeignKey("users.User", on_delete=models.SET_NULL, null=True, blank=True)
+    notes = models.TextField(blank=True, help_text="Additional notes about this factor")
+
     class Meta:
-        db_table = 'carbon_regional_emission_factor'
-        ordering = ['state', 'crop_type', 'factor_type']
-        unique_together = ('state', 'crop_type', 'factor_type', 'valid_from')
+        db_table = "carbon_regional_emission_factor"
+        ordering = ["state", "crop_type", "factor_type"]
+        unique_together = ("state", "crop_type", "factor_type", "valid_from")
         indexes = [
-            models.Index(fields=['state', 'crop_type']),
-            models.Index(fields=['factor_type']),
-            models.Index(fields=['usda_verified']),
-            models.Index(fields=['valid_from', 'valid_until']),
-            models.Index(fields=['data_source']),
+            models.Index(fields=["state", "crop_type"]),
+            models.Index(fields=["factor_type"]),
+            models.Index(fields=["usda_verified"]),
+            models.Index(fields=["valid_from", "valid_until"]),
+            models.Index(fields=["data_source"]),
         ]
-    
+
     def __str__(self):
         return f"{self.state} - {self.crop_type} - {self.factor_name}"
-    
+
     def increment_usage(self):
         """Increment usage counter and update last used timestamp"""
         self.usage_count += 1
         self.last_used = timezone.now()
-        self.save(update_fields=['usage_count', 'last_used'])
-    
+        self.save(update_fields=["usage_count", "last_used"])
+
     @property
     def is_current(self):
         """Check if this factor is currently valid"""
@@ -1237,112 +1277,104 @@ class RegionalEmissionFactor(models.Model):
         if self.valid_until:
             return self.valid_from <= today <= self.valid_until
         return self.valid_from <= today
-    
+
     @property
     def adjusted_emission_factor(self):
         """Get the emission factor adjusted for regional conditions"""
         return self.emission_factor * self.adjustment_factor
-    
+
     @classmethod
     def get_factor_for_region(cls, state: str, crop_type: str, factor_type: str, county: str = None):
         """Get the most appropriate emission factor for a region"""
         today = timezone.now().date()
-        
+
         # Try to find exact match first
         queryset = cls.objects.filter(
-            state=state,
-            crop_type__iexact=crop_type,
-            factor_type=factor_type,
-            valid_from__lte=today
-        ).filter(
-            models.Q(valid_until__gte=today) | models.Q(valid_until__isnull=True)
-        )
-        
+            state=state, crop_type__iexact=crop_type, factor_type=factor_type, valid_from__lte=today
+        ).filter(models.Q(valid_until__gte=today) | models.Q(valid_until__isnull=True))
+
         # Prefer county-specific if available
         if county:
             county_specific = queryset.filter(county__iexact=county).first()
             if county_specific:
                 return county_specific
-        
+
         # Fallback to state-level
-        state_level = queryset.filter(county='').first()
+        state_level = queryset.filter(county="").first()
         if state_level:
             return state_level
-        
+
         # Return most recent if no exact match
-        return queryset.order_by('-valid_from').first()
+        return queryset.order_by("-valid_from").first()
 
 
 class USDACalculationAudit(models.Model):
     """Model for auditing USDA calculation processes"""
-    
+
     CALCULATION_TYPES = [
-        ('chemical_event', 'Chemical Event'),
-        ('production_event', 'Production Event'),
-        ('equipment_event', 'Equipment Event'),
-        ('soil_management', 'Soil Management'),
-        ('weather_event', 'Weather Event'),
-        ('pest_management', 'Pest Management'),
-        ('business_event', 'Business Event'),
+        ("chemical_event", "Chemical Event"),
+        ("production_event", "Production Event"),
+        ("equipment_event", "Equipment Event"),
+        ("soil_management", "Soil Management"),
+        ("weather_event", "Weather Event"),
+        ("pest_management", "Pest Management"),
+        ("business_event", "Business Event"),
     ]
-    
+
     # Event and calculation details
     event_type = models.CharField(max_length=20, choices=CALCULATION_TYPES)
-    event_id = models.IntegerField(help_text='ID of the original event')
-    carbon_entry = models.ForeignKey(CarbonEntry, on_delete=models.CASCADE, related_name='usda_audit_logs')
-    
+    event_id = models.IntegerField(help_text="ID of the original event")
+    carbon_entry = models.ForeignKey(CarbonEntry, on_delete=models.CASCADE, related_name="usda_audit_logs")
+
     # Calculation inputs
-    input_data = models.JSONField(help_text='Original event data used in calculation')
-    regional_factors_used = models.JSONField(default=dict, help_text='Regional emission factors used')
-    calculation_method = models.CharField(max_length=100, help_text='Calculation method used')
-    
+    input_data = models.JSONField(help_text="Original event data used in calculation")
+    regional_factors_used = models.JSONField(default=dict, help_text="Regional emission factors used")
+    calculation_method = models.CharField(max_length=100, help_text="Calculation method used")
+
     # USDA compliance tracking
     usda_factors_applied = models.BooleanField(default=False)
     regional_adjustments_applied = models.BooleanField(default=False)
     api_data_used = models.BooleanField(default=False)
-    
+
     # Results
-    calculated_co2e = models.FloatField(help_text='Calculated CO2e amount')
+    calculated_co2e = models.FloatField(help_text="Calculated CO2e amount")
     confidence_score = models.FloatField(validators=[MinValueValidator(0.0), MaxValueValidator(1.0)])
-    benchmark_comparison = models.JSONField(default=dict, help_text='Benchmark comparison results')
-    
+    benchmark_comparison = models.JSONField(default=dict, help_text="Benchmark comparison results")
+
     # Processing metadata
-    calculation_time_ms = models.IntegerField(help_text='Time taken for calculation in milliseconds')
-    processor_version = models.CharField(max_length=50, default='1.0', help_text='Version of calculation engine used')
-    
+    calculation_time_ms = models.IntegerField(help_text="Time taken for calculation in milliseconds")
+    processor_version = models.CharField(max_length=50, default="1.0", help_text="Version of calculation engine used")
+
     # Audit trail
     calculated_at = models.DateTimeField(auto_now_add=True)
-    calculated_by = models.ForeignKey('users.User', on_delete=models.SET_NULL, null=True, blank=True)
-    
+    calculated_by = models.ForeignKey("users.User", on_delete=models.SET_NULL, null=True, blank=True)
+
     class Meta:
-        db_table = 'carbon_usda_calculation_audit'
-        ordering = ['-calculated_at']
+        db_table = "carbon_usda_calculation_audit"
+        ordering = ["-calculated_at"]
         indexes = [
-            models.Index(fields=['event_type', 'event_id']),
-            models.Index(fields=['calculated_at']),
-            models.Index(fields=['usda_factors_applied']),
-            models.Index(fields=['confidence_score']),
+            models.Index(fields=["event_type", "event_id"]),
+            models.Index(fields=["calculated_at"]),
+            models.Index(fields=["usda_factors_applied"]),
+            models.Index(fields=["confidence_score"]),
         ]
-    
+
     def __str__(self):
         return f"USDA Audit - {self.event_type} #{self.event_id} - {self.calculated_at}"
 
+
 class VerificationAudit(models.Model):
     """Track verification audits and results"""
-    
+
     AUDIT_TYPE_CHOICES = [
-        ('random', 'Random Audit'),
-        ('scheduled', 'Scheduled Review'),
-        ('complaint', 'Complaint Investigation')
+        ("random", "Random Audit"),
+        ("scheduled", "Scheduled Review"),
+        ("complaint", "Complaint Investigation"),
     ]
-    
-    RESULT_CHOICES = [
-        ('passed', 'Passed'),
-        ('failed', 'Failed'),
-        ('pending', 'Pending Review')
-    ]
-    
-    carbon_entry = models.ForeignKey(CarbonEntry, on_delete=models.CASCADE, related_name='verification_audits')
+
+    RESULT_CHOICES = [("passed", "Passed"), ("failed", "Failed"), ("pending", "Pending Review")]
+
+    carbon_entry = models.ForeignKey(CarbonEntry, on_delete=models.CASCADE, related_name="verification_audits")
     audit_type = models.CharField(max_length=20, choices=AUDIT_TYPE_CHOICES)
     auditor_name = models.CharField(max_length=200)
     audit_date = models.DateTimeField()
@@ -1350,131 +1382,100 @@ class VerificationAudit(models.Model):
     result = models.CharField(max_length=20, choices=RESULT_CHOICES)
     corrective_actions = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
-        db_table = 'carbon_verification_audit'
-        ordering = ['-audit_date']
+        db_table = "carbon_verification_audit"
+        ordering = ["-audit_date"]
         indexes = [
-            models.Index(fields=['audit_type']),
-            models.Index(fields=['result']),
-            models.Index(fields=['audit_date'])
+            models.Index(fields=["audit_type"]),
+            models.Index(fields=["result"]),
+            models.Index(fields=["audit_date"]),
         ]
-    
+
     def __str__(self):
         return f"Audit {self.carbon_entry} - {self.result}"
 
 
 class ConsumerTrustMetric(models.Model):
     """Track consumer trust metrics for productions"""
-    
+
     production = models.OneToOneField(
-        'history.History',
+        "history.History",
         on_delete=models.CASCADE,
-        related_name='consumer_trust_metric',
-        help_text='Production this metric applies to'
+        related_name="consumer_trust_metric",
+        help_text="Production this metric applies to",
     )
     overall_trust_score = models.FloatField(
         default=0.0,
         validators=[MinValueValidator(0.0), MaxValueValidator(100.0)],
-        help_text='Overall consumer trust score (0-100)'
+        help_text="Overall consumer trust score (0-100)",
     )
     data_completeness_score = models.FloatField(
         default=0.0,
         validators=[MinValueValidator(0.0), MaxValueValidator(100.0)],
-        help_text='Data completeness score (0-100)'
+        help_text="Data completeness score (0-100)",
     )
     verification_score = models.FloatField(
         default=0.0,
         validators=[MinValueValidator(0.0), MaxValueValidator(100.0)],
-        help_text='Third-party verification score (0-100)'
+        help_text="Third-party verification score (0-100)",
     )
     transparency_score = models.FloatField(
         default=0.0,
         validators=[MinValueValidator(0.0), MaxValueValidator(100.0)],
-        help_text='Information transparency score (0-100)'
+        help_text="Information transparency score (0-100)",
     )
     consistency_score = models.FloatField(
         default=0.0,
         validators=[MinValueValidator(0.0), MaxValueValidator(100.0)],
-        help_text='Data consistency over time score (0-100)'
+        help_text="Data consistency over time score (0-100)",
     )
-    engagement_metrics = models.JSONField(
-        default=dict,
-        help_text='Consumer engagement metrics and patterns'
-    )
-    trust_factors = models.JSONField(
-        default=dict,
-        help_text='Factors contributing to trust score'
-    )
-    improvement_areas = models.JSONField(
-        default=list,
-        help_text='Areas where trust can be improved'
-    )
-    last_calculated = models.DateTimeField(
-        auto_now=True,
-        help_text='Last time trust metrics were calculated'
-    )
+    engagement_metrics = models.JSONField(default=dict, help_text="Consumer engagement metrics and patterns")
+    trust_factors = models.JSONField(default=dict, help_text="Factors contributing to trust score")
+    improvement_areas = models.JSONField(default=list, help_text="Areas where trust can be improved")
+    last_calculated = models.DateTimeField(auto_now=True, help_text="Last time trust metrics were calculated")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
-        db_table = 'carbon_consumer_trust_metric'
-        verbose_name = 'Consumer Trust Metric'
-        verbose_name_plural = 'Consumer Trust Metrics'
-    
+        db_table = "carbon_consumer_trust_metric"
+        verbose_name = "Consumer Trust Metric"
+        verbose_name_plural = "Consumer Trust Metrics"
+
     def __str__(self):
         return f"Trust Metric for {self.production} - {self.overall_trust_score:.1f}%"
 
 
 class CarbonIntelligence(models.Model):
     """AI-powered carbon insights and intelligence"""
-    
+
     production = models.OneToOneField(
-        'history.History',
+        "history.History",
         on_delete=models.CASCADE,
-        related_name='carbon_intelligence',
-        help_text='Production this intelligence applies to'
+        related_name="carbon_intelligence",
+        help_text="Production this intelligence applies to",
     )
-    ai_insights = models.JSONField(
-        default=dict,
-        help_text='AI-generated insights about carbon performance'
-    )
-    pattern_analysis = models.JSONField(
-        default=dict,
-        help_text='Analysis of carbon patterns and trends'
-    )
-    predictive_metrics = models.JSONField(
-        default=dict,
-        help_text='Predictive analytics for future carbon performance'
-    )
-    optimization_suggestions = models.JSONField(
-        default=list,
-        help_text='AI-generated optimization suggestions'
-    )
-    risk_assessment = models.JSONField(
-        default=dict,
-        help_text='Carbon risk assessment and mitigation strategies'
-    )
+    ai_insights = models.JSONField(default=dict, help_text="AI-generated insights about carbon performance")
+    pattern_analysis = models.JSONField(default=dict, help_text="Analysis of carbon patterns and trends")
+    predictive_metrics = models.JSONField(default=dict, help_text="Predictive analytics for future carbon performance")
+    optimization_suggestions = models.JSONField(default=list, help_text="AI-generated optimization suggestions")
+    risk_assessment = models.JSONField(default=dict, help_text="Carbon risk assessment and mitigation strategies")
     benchmarking_analysis = models.JSONField(
-        default=dict,
-        help_text='Intelligent benchmarking against similar operations'
+        default=dict, help_text="Intelligent benchmarking against similar operations"
     )
     confidence_score = models.FloatField(
         default=0.0,
         validators=[MinValueValidator(0.0), MaxValueValidator(100.0)],
-        help_text='Confidence in AI analysis (0-100)'
+        help_text="Confidence in AI analysis (0-100)",
     )
-    analysis_date = models.DateTimeField(
-        auto_now=True,
-        help_text='Date of latest AI analysis'
-    )
+    analysis_date = models.DateTimeField(auto_now=True, help_text="Date of latest AI analysis")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
-        db_table = 'carbon_intelligence'
-        verbose_name = 'Carbon Intelligence'
-        verbose_name_plural = 'Carbon Intelligence Records'
-    
+        db_table = "carbon_intelligence"
+        verbose_name = "Carbon Intelligence"
+        verbose_name_plural = "Carbon Intelligence Records"
+
     def __str__(self):
         return f"Carbon Intelligence for {self.production} - {self.confidence_score:.1f}%"

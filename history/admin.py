@@ -1,13 +1,6 @@
 from django.contrib import admin
 
-from .models import (
-    History,
-    ChemicalEvent,
-    WeatherEvent,
-    GeneralEvent,
-    HistoryScan,
-    ProductionEvent,
-)
+from .models import ChemicalEvent, GeneralEvent, History, HistoryScan, ProductionEvent, WeatherEvent
 
 
 class ChemicalEventInline(admin.TabularInline):
@@ -41,7 +34,15 @@ class EventAdmin(admin.ModelAdmin):
 
 
 class HistoryAdmin(admin.ModelAdmin):
-    list_display = ("name", "start_date", "public_views", "unique_visitors", "confidence_score", "transparency_score", "published")
+    list_display = (
+        "name",
+        "start_date",
+        "public_views",
+        "unique_visitors",
+        "confidence_score",
+        "transparency_score",
+        "published",
+    )
     list_filter = (
         "published",
         "start_date",
@@ -60,32 +61,33 @@ class HistoryAdmin(admin.ModelAdmin):
         GeneralEventInline,
         ProductionEventInline,
     ]
-    
+
     # Trust metrics and analytics in readonly fields
-    readonly_fields = ('public_views', 'unique_visitors', 'confidence_score', 'transparency_score', 'updated_at')
-    
+    readonly_fields = ("public_views", "unique_visitors", "confidence_score", "transparency_score", "updated_at")
+
     fieldsets = (
-        ('Basic Information', {
-            'fields': ('name', 'type', 'description', 'published')
-        }),
-        ('Timeline', {
-            'fields': ('start_date', 'finish_date')
-        }),
-        ('Production Details', {
-            'fields': ('product', 'parcel', 'production_amount', 'earning')
-        }),
-        ('Trust Metrics & Analytics', {
-            'fields': ('public_views', 'unique_visitors', 'confidence_score', 'transparency_score', 'reputation', 'updated_at'),
-            'classes': ('collapse',)
-        }),
-        ('Media & QR', {
-            'fields': ('album', 'qr_code'),
-            'classes': ('collapse',)
-        })
+        ("Basic Information", {"fields": ("name", "type", "description", "published")}),
+        ("Timeline", {"fields": ("start_date", "finish_date")}),
+        ("Production Details", {"fields": ("product", "parcel", "production_amount", "earning")}),
+        (
+            "Trust Metrics & Analytics",
+            {
+                "fields": (
+                    "public_views",
+                    "unique_visitors",
+                    "confidence_score",
+                    "transparency_score",
+                    "reputation",
+                    "updated_at",
+                ),
+                "classes": ("collapse",),
+            },
+        ),
+        ("Media & QR", {"fields": ("album", "qr_code"), "classes": ("collapse",)}),
     )
-    
-    actions = ['recalculate_trust_metrics', 'reset_view_counts']
-    
+
+    actions = ["recalculate_trust_metrics", "reset_view_counts"]
+
     def recalculate_trust_metrics(self, request, queryset):
         """Recalculate trust metrics for selected productions"""
         updated = 0
@@ -94,15 +96,17 @@ class HistoryAdmin(admin.ModelAdmin):
                 production.update_trust_metrics()
                 updated += 1
             except Exception as e:
-                self.message_user(request, f'Error updating {production.name}: {str(e)}', level='ERROR')
-        
-        self.message_user(request, f'Successfully updated trust metrics for {updated} productions.')
+                self.message_user(request, f"Error updating {production.name}: {str(e)}", level="ERROR")
+
+        self.message_user(request, f"Successfully updated trust metrics for {updated} productions.")
+
     recalculate_trust_metrics.short_description = "Recalculate trust metrics"
-    
+
     def reset_view_counts(self, request, queryset):
         """Reset view counts for selected productions"""
         count = queryset.update(public_views=0, unique_visitors=0)
-        self.message_user(request, f'Reset view counts for {count} productions.')
+        self.message_user(request, f"Reset view counts for {count} productions.")
+
     reset_view_counts.short_description = "Reset view counts"
 
 

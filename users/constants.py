@@ -5,9 +5,9 @@ PRODUCER = 4
 CERTIFIER = 5
 
 USER_TYPE_CHOICES = (
-      (SUPERUSER, 'Superuser'),
-      (STAFF, 'Staff'),
-      (CONSUMER, 'Consumer'),
-      (PRODUCER, 'Producer'),
-      (CERTIFIER, 'Certifier'),
-  )
+    (SUPERUSER, "Superuser"),
+    (STAFF, "Staff"),
+    (CONSUMER, "Consumer"),
+    (PRODUCER, "Producer"),
+    (CERTIFIER, "Certifier"),
+)

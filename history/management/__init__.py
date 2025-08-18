@@ -1,1 +1,1 @@
-# Django management module 
+# Django management module

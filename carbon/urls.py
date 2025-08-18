@@ -1,123 +1,188 @@
-from django.urls import path, include
+from django.urls import include, path
+
 from rest_framework.routers import DefaultRouter
-from . import views
-from .views import CarbonEstablishmentSummaryViewSet, CarbonProductionSummaryViewSet, PublicProductionViewSet, CarbonOffsetViewSet, CarbonProductionViewSet, calculate_event_carbon_impact, calculate_event_carbon_impact_optimized, AutomationRuleViewSet, BlockchainVerificationViewSet
-from . import views_security_enhanced
+
+from . import views, views_security_enhanced
+from .views import (
+    AutomationRuleViewSet,
+    BlockchainVerificationViewSet,
+    CarbonEstablishmentSummaryViewSet,
+    CarbonOffsetViewSet,
+    CarbonProductionSummaryViewSet,
+    CarbonProductionViewSet,
+    PublicProductionViewSet,
+    calculate_event_carbon_impact,
+    calculate_event_carbon_impact_optimized,
+)
 
 router = DefaultRouter()
 # Database-driven Crop Template System
-router.register(r'crop-types', views.CropTypeViewSet)
-router.register(r'event-templates', views.EventTemplateViewSet)
-router.register(r'sources', views.CarbonSourceViewSet)
-router.register(r'offset-actions', views.CarbonOffsetActionViewSet)
-router.register(r'entries', views.CarbonEntryViewSet)
-router.register(r'certifications', views.CarbonCertificationViewSet)
-router.register(r'benchmarks', views.CarbonBenchmarkViewSet)
-router.register(r'reports', views.CarbonReportViewSet)
-router.register(r'badges', views.SustainabilityBadgeViewSet)
-router.register(r'micro-offsets', views.MicroOffsetViewSet)
-router.register(r'green-points', views.GreenPointsViewSet)
-router.register(r'audit-logs', views.CarbonAuditLogViewSet)
-router.register(r'offset-projects', views.CarbonOffsetProjectViewSet)
-router.register(r'offset-purchases', views.CarbonOffsetPurchaseViewSet)
-router.register(r'offset-certificates', views.CarbonOffsetCertificateViewSet)
-router.register(r'calculator', views.CarbonFootprintCalculatorViewSet, basename='calculator')
-router.register(r'establishments', CarbonEstablishmentSummaryViewSet, basename='carbon-establishment-summary')
-router.register(r'productions', CarbonProductionSummaryViewSet, basename='carbon-production-summary')
-router.register(r'public/productions', PublicProductionViewSet, basename='public-production')
-router.register(r'offsets', CarbonOffsetViewSet, basename='carbon-offset')
-router.register(r'productions-flat', CarbonProductionViewSet, basename='carbon-production-flat')
-router.register(r'iot-devices', views.IoTDeviceViewSet, basename='iot-devices')
-router.register(r'automation-rules', AutomationRuleViewSet, basename='automation-rules')
-router.register(r'blockchain', BlockchainVerificationViewSet, basename='blockchain-verification')
+router.register(r"crop-types", views.CropTypeViewSet)
+router.register(r"event-templates", views.EventTemplateViewSet)
+router.register(r"sources", views.CarbonSourceViewSet)
+router.register(r"offset-actions", views.CarbonOffsetActionViewSet)
+router.register(r"entries", views.CarbonEntryViewSet)
+router.register(r"certifications", views.CarbonCertificationViewSet)
+router.register(r"benchmarks", views.CarbonBenchmarkViewSet)
+router.register(r"reports", views.CarbonReportViewSet)
+router.register(r"badges", views.SustainabilityBadgeViewSet)
+router.register(r"micro-offsets", views.MicroOffsetViewSet)
+router.register(r"green-points", views.GreenPointsViewSet)
+router.register(r"audit-logs", views.CarbonAuditLogViewSet)
+router.register(r"offset-projects", views.CarbonOffsetProjectViewSet)
+router.register(r"offset-purchases", views.CarbonOffsetPurchaseViewSet)
+router.register(r"offset-certificates", views.CarbonOffsetCertificateViewSet)
+router.register(r"calculator", views.CarbonFootprintCalculatorViewSet, basename="calculator")
+router.register(r"establishments", CarbonEstablishmentSummaryViewSet, basename="carbon-establishment-summary")
+router.register(r"productions", CarbonProductionSummaryViewSet, basename="carbon-production-summary")
+router.register(r"public/productions", PublicProductionViewSet, basename="public-production")
+router.register(r"offsets", CarbonOffsetViewSet, basename="carbon-offset")
+router.register(r"productions-flat", CarbonProductionViewSet, basename="carbon-production-flat")
+router.register(r"iot-devices", views.IoTDeviceViewSet, basename="iot-devices")
+router.register(r"automation-rules", AutomationRuleViewSet, basename="automation-rules")
+router.register(r"blockchain", BlockchainVerificationViewSet, basename="blockchain-verification")
 
 urlpatterns = [
-    path('', include(router.urls)),
-    path('calculate-event-impact/', calculate_event_carbon_impact, name='calculate-event-carbon-impact'),
+    path("", include(router.urls)),
+    path("calculate-event-impact/", calculate_event_carbon_impact, name="calculate-event-carbon-impact"),
     # OPTIMIZED Carbon Calculation Endpoint - 95% Performance Improvement
-    path('calculate-event-impact-optimized/', calculate_event_carbon_impact_optimized, name='calculate-event-carbon-impact-optimized'),
-    
+    path(
+        "calculate-event-impact-optimized/",
+        calculate_event_carbon_impact_optimized,
+        name="calculate-event-carbon-impact-optimized",
+    ),
     # Enhanced USDA Integration Endpoints
-    path('enhanced-event-impact/', views.calculate_event_impact, name='enhanced-event-impact'),
-    path('usda-credibility/<int:establishment_id>/', views.get_usda_credibility_info, name='usda-credibility'),
-    path('regional-benchmark/<int:establishment_id>/', views.get_regional_benchmark, name='regional-benchmark'),
-    
+    path("enhanced-event-impact/", views.calculate_event_impact, name="enhanced-event-impact"),
+    path("usda-credibility/<int:establishment_id>/", views.get_usda_credibility_info, name="usda-credibility"),
+    path("regional-benchmark/<int:establishment_id>/", views.get_regional_benchmark, name="regional-benchmark"),
     # NEW USDA API Endpoints (Month 1 Implementation)
-    path('usda/validate-compliance/', views.validate_usda_compliance, name='usda-validate-compliance'),
-    path('usda/regional-factors/<str:state>/', views.get_regional_emission_factors, name='usda-regional-factors'),
-    path('usda/benchmark-comparison/', views.get_usda_benchmark_comparison, name='usda-benchmark-comparison'),
-    path('usda/compliance-history/<int:production_id>/', views.get_usda_compliance_history, name='usda-compliance-history'),
-    path('voice/process-event/', views.process_voice_event, name='process-voice-event'),
-    path('process-voice-event/', views.process_voice_event_ai, name='process-voice-event-ai'),
+    path("usda/validate-compliance/", views.validate_usda_compliance, name="usda-validate-compliance"),
+    path("usda/regional-factors/<str:state>/", views.get_regional_emission_factors, name="usda-regional-factors"),
+    path("usda/benchmark-comparison/", views.get_usda_benchmark_comparison, name="usda-benchmark-comparison"),
+    path(
+        "usda/compliance-history/<int:production_id>/",
+        views.get_usda_compliance_history,
+        name="usda-compliance-history",
+    ),
+    path("voice/process-event/", views.process_voice_event, name="process-voice-event"),
+    path("process-voice-event/", views.process_voice_event_ai, name="process-voice-event-ai"),
     # AI-powered smart event suggestions
-    path('ai-event-suggestions/', views.get_ai_event_suggestions, name='ai-event-suggestions'),
-    
+    path("ai-event-suggestions/", views.get_ai_event_suggestions, name="ai-event-suggestions"),
     # USDA Government Data Integration
-    path('usda/emission-factors/', views.get_real_usda_factors, name='get-usda-emission-factors'),
-    path('usda/nutritional-analysis/', views.get_nutritional_carbon_analysis, name='nutritional-carbon-analysis'),
-    path('usda/complete-analysis/', views.get_complete_usda_analysis, name='complete-usda-analysis'),
-    
-    path('webhooks/john-deere/', views.john_deere_webhook, name='john_deere_webhook'),
-    path('webhooks/weather-station/', views.weather_station_webhook, name='weather_station_webhook'),
+    path("usda/emission-factors/", views.get_real_usda_factors, name="get-usda-emission-factors"),
+    path("usda/nutritional-analysis/", views.get_nutritional_carbon_analysis, name="nutritional-carbon-analysis"),
+    path("usda/complete-analysis/", views.get_complete_usda_analysis, name="complete-usda-analysis"),
+    path("webhooks/john-deere/", views.john_deere_webhook, name="john_deere_webhook"),
+    path("webhooks/weather-station/", views.weather_station_webhook, name="weather_station_webhook"),
     # IoT Device Management
-    path('iot-devices/', views.IoTDeviceViewSet.as_view({'get': 'list', 'post': 'create'}), name='iot-devices'),
-    path('iot-devices/<int:pk>/', views.IoTDeviceViewSet.as_view({'get': 'retrieve', 'put': 'update', 'delete': 'destroy'}), name='iot-device-detail'),
-    path('iot-devices/status/', views.IoTDeviceViewSet.as_view({'get': 'device_status'}), name='iot-device-status'),
-    path('iot-devices/simulate_data/', views.IoTDeviceViewSet.as_view({'post': 'simulate_data'}), name='iot-simulate-data'),
-    path('iot-devices/pending_events/', views.IoTDeviceViewSet.as_view({'get': 'pending_events'}), name='iot-pending-events'),
-    path('iot-devices/approve_event/', views.IoTDeviceViewSet.as_view({'post': 'approve_event'}), name='iot-approve-event'),
-    path('iot-devices/reject_event/', views.IoTDeviceViewSet.as_view({'post': 'reject_event'}), name='iot-reject-event'),
-    
+    path("iot-devices/", views.IoTDeviceViewSet.as_view({"get": "list", "post": "create"}), name="iot-devices"),
+    path(
+        "iot-devices/<int:pk>/",
+        views.IoTDeviceViewSet.as_view({"get": "retrieve", "put": "update", "delete": "destroy"}),
+        name="iot-device-detail",
+    ),
+    path("iot-devices/status/", views.IoTDeviceViewSet.as_view({"get": "device_status"}), name="iot-device-status"),
+    path(
+        "iot-devices/simulate_data/",
+        views.IoTDeviceViewSet.as_view({"post": "simulate_data"}),
+        name="iot-simulate-data",
+    ),
+    path(
+        "iot-devices/pending_events/",
+        views.IoTDeviceViewSet.as_view({"get": "pending_events"}),
+        name="iot-pending-events",
+    ),
+    path(
+        "iot-devices/approve_event/",
+        views.IoTDeviceViewSet.as_view({"post": "approve_event"}),
+        name="iot-approve-event",
+    ),
+    path(
+        "iot-devices/reject_event/", views.IoTDeviceViewSet.as_view({"post": "reject_event"}), name="iot-reject-event"
+    ),
     # John Deere API Integration
-    path('john-deere/auth/', views.john_deere_auth_start, name='john_deere_auth_start'),
-    path('john-deere/callback/', views.john_deere_auth_callback, name='john_deere_auth_callback'),
-    path('john-deere/sync-devices/', views.john_deere_sync_devices, name='john_deere_sync_devices'),
-    path('john-deere/webhook/', views.john_deere_webhook, name='john_deere_webhook'),
-    
+    path("john-deere/auth/", views.john_deere_auth_start, name="john_deere_auth_start"),
+    path("john-deere/callback/", views.john_deere_auth_callback, name="john_deere_auth_callback"),
+    path("john-deere/sync-devices/", views.john_deere_sync_devices, name="john_deere_sync_devices"),
+    path("john-deere/webhook/", views.john_deere_webhook, name="john_deere_webhook"),
     # Weather API endpoints
-    path('weather/current/', views.weather_current_conditions, name='weather_current_conditions'),
-    path('weather/alerts/', views.weather_alerts, name='weather_alerts'),
-    path('weather/recommendations/', views.weather_recommendations, name='weather_recommendations'),
-    path('weather/forecast/', views.weather_forecast, name='weather_forecast'),
-    path('weather/create-alert-event/', views.weather_create_alert_event, name='weather_create_alert_event'),
+    path("weather/current/", views.weather_current_conditions, name="weather_current_conditions"),
+    path("weather/alerts/", views.weather_alerts, name="weather_alerts"),
+    path("weather/recommendations/", views.weather_recommendations, name="weather_recommendations"),
+    path("weather/forecast/", views.weather_forecast, name="weather_forecast"),
+    path("weather/create-alert-event/", views.weather_create_alert_event, name="weather_create_alert_event"),
     # Carbon Cost Intelligence endpoints (simplified, carbon-focused only)
-    path('productions/<int:production_id>/economics/', views.get_production_carbon_economics, name='production_carbon_economics'),
-    path('productions/<int:production_id>/carbon-credits/', views.get_carbon_credit_potential, name='carbon_credit_potential'),
-    path('establishments/<int:establishment_id>/carbon-summary/', views.get_establishment_carbon_summary, name='establishment_carbon_summary'),
+    path(
+        "productions/<int:production_id>/economics/",
+        views.get_production_carbon_economics,
+        name="production_carbon_economics",
+    ),
+    path(
+        "productions/<int:production_id>/carbon-credits/",
+        views.get_carbon_credit_potential,
+        name="carbon_credit_potential",
+    ),
+    path(
+        "establishments/<int:establishment_id>/carbon-summary/",
+        views.get_establishment_carbon_summary,
+        name="establishment_carbon_summary",
+    ),
     # Crop Templates API
-    path('crop-templates/', views.get_crop_templates, name='crop-templates'),
-    path('crop-templates/<str:template_id>/', views.get_crop_template_detail, name='crop-template-detail'),
+    path("crop-templates/", views.get_crop_templates, name="crop-templates"),
+    path("crop-templates/<str:template_id>/", views.get_crop_template_detail, name="crop-template-detail"),
     # Educational content endpoints (Week 2)
-    path('education/usda-methodology/', views.get_usda_methodology_content, name='usda-methodology-content'),
-    path('education/regional-practices/<str:state>/<str:crop_type>/', views.get_regional_farming_practices, name='regional-farming-practices'),
-    path('education/carbon-examples/<str:carbon_value>/', views.get_carbon_impact_examples, name='carbon-impact-examples'),
-    path('education/trust-comparison/', views.get_trust_comparison_data, name='trust-comparison-data'),
+    path("education/usda-methodology/", views.get_usda_methodology_content, name="usda-methodology-content"),
+    path(
+        "education/regional-practices/<str:state>/<str:crop_type>/",
+        views.get_regional_farming_practices,
+        name="regional-farming-practices",
+    ),
+    path(
+        "education/carbon-examples/<str:carbon_value>/", views.get_carbon_impact_examples, name="carbon-impact-examples"
+    ),
+    path("education/trust-comparison/", views.get_trust_comparison_data, name="trust-comparison-data"),
     # Generic educational content endpoint
-    path('education/<str:topic>/', views.get_education_content, name='education-content'),
+    path("education/<str:topic>/", views.get_education_content, name="education-content"),
     # Production Blockchain endpoints (NEW)
-    path('blockchain/batch-verify/', views.batch_verify_productions, name='batch_verify_productions'),
-    path('blockchain/gas-analysis/', views.get_gas_optimization_analysis, name='gas_optimization_analysis'),
-    path('blockchain/mint-credits/', views.mint_carbon_credits_batch, name='mint_carbon_credits_batch'),
-    path('blockchain/service-stats/', views.get_blockchain_service_stats, name='blockchain_service_stats'),
-    path('blockchain/deploy-contract/', views.deploy_carbon_credit_contract, name='deploy_carbon_credit_contract'),
-    
+    path("blockchain/batch-verify/", views.batch_verify_productions, name="batch_verify_productions"),
+    path("blockchain/gas-analysis/", views.get_gas_optimization_analysis, name="gas_optimization_analysis"),
+    path("blockchain/mint-credits/", views.mint_carbon_credits_batch, name="mint_carbon_credits_batch"),
+    path("blockchain/service-stats/", views.get_blockchain_service_stats, name="blockchain_service_stats"),
+    path("blockchain/deploy-contract/", views.deploy_carbon_credit_contract, name="deploy_carbon_credit_contract"),
     # Third-Party Verification API Endpoints (NEW)
-    path('verify-registry-credentials/', views.verify_registry_credentials, name='verify_registry_credentials'),
-    path('entries/<int:carbon_entry_id>/verification-status/', views.get_verification_status, name='get_verification_status'),
-    path('bulk-verify/', views.bulk_verify_entries, name='bulk_verify_entries'),
-    path('methodology-templates/', views.get_methodology_templates, name='get_methodology_templates'),
-    
+    path("verify-registry-credentials/", views.verify_registry_credentials, name="verify_registry_credentials"),
+    path(
+        "entries/<int:carbon_entry_id>/verification-status/",
+        views.get_verification_status,
+        name="get_verification_status",
+    ),
+    path("bulk-verify/", views.bulk_verify_entries, name="bulk_verify_entries"),
+    path("methodology-templates/", views.get_methodology_templates, name="get_methodology_templates"),
     # Enhanced Security Endpoints
-    path('secure/create-carbon-offset/', views_security_enhanced.create_secure_carbon_offset, name='create_secure_carbon_offset'),
-    path('secure/validate-file-upload/', views_security_enhanced.validate_file_upload_security, name='validate_file_upload_security'),
-    path('secure/user-security-status/', views_security_enhanced.get_user_security_status, name='get_user_security_status'),
-    
+    path(
+        "secure/create-carbon-offset/",
+        views_security_enhanced.create_secure_carbon_offset,
+        name="create_secure_carbon_offset",
+    ),
+    path(
+        "secure/validate-file-upload/",
+        views_security_enhanced.validate_file_upload_security,
+        name="validate_file_upload_security",
+    ),
+    path(
+        "secure/user-security-status/",
+        views_security_enhanced.get_user_security_status,
+        name="get_user_security_status",
+    ),
     # Photo Evidence Service Endpoints
-    path('evidence/upload/', views.upload_evidence_photo_enhanced, name='upload_evidence_photo_enhanced'),
-    path('evidence/<int:carbon_entry_id>/photos/', views.get_evidence_photos_enhanced, name='get_evidence_photos_enhanced'),
-    path('evidence/validate/', views.validate_photo_evidence, name='validate_photo_evidence'),
-    
+    path("evidence/upload/", views.upload_evidence_photo_enhanced, name="upload_evidence_photo_enhanced"),
+    path(
+        "evidence/<int:carbon_entry_id>/photos/",
+        views.get_evidence_photos_enhanced,
+        name="get_evidence_photos_enhanced",
+    ),
+    path("evidence/validate/", views.validate_photo_evidence, name="validate_photo_evidence"),
     # Gas Optimization Endpoints
-    path('blockchain/gas-estimate/', views.estimate_gas_costs, name='estimate_gas_costs'),
-    path('blockchain/optimize-transaction/', views.optimize_transaction_gas, name='optimize_transaction_gas'),
-] 
+    path("blockchain/gas-estimate/", views.estimate_gas_costs, name="estimate_gas_costs"),
+    path("blockchain/optimize-transaction/", views.optimize_transaction_gas, name="optimize_transaction_gas"),
+]

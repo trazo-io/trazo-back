@@ -11,12 +11,12 @@ https://docs.djangoproject.com/en/4.1/ref/settings/
 """
 
 import os
-from dotenv import load_dotenv
-from decouple import config
-from celery.schedules import crontab
-from pathlib import Path
 from datetime import timedelta
+from pathlib import Path
+
 from celery.schedules import crontab
+from decouple import config
+from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -28,12 +28,12 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 BASE_TRAZO_URL = config("BASE_TRAZO_URL", default="http://localhost:3000/")
 
 # Import subdomain configuration
-from backend.subdomain_config import get_frontend_urls, APP_SUBDOMAIN, CONSUMER_SUBDOMAIN
+from backend.subdomain_config import APP_SUBDOMAIN, CONSUMER_SUBDOMAIN, get_frontend_urls
 
 # Get environment-specific frontend URLs
 _frontend_urls = get_frontend_urls()
-BASE_APP_URL = config("BASE_APP_URL", default=_frontend_urls['BASE_APP_URL'])
-BASE_CONSUMER_URL = config("BASE_CONSUMER_URL", default=_frontend_urls['BASE_CONSUMER_URL'])
+BASE_APP_URL = config("BASE_APP_URL", default=_frontend_urls["BASE_APP_URL"])
+BASE_CONSUMER_URL = config("BASE_CONSUMER_URL", default=_frontend_urls["BASE_CONSUMER_URL"])
 CSRF_TRUSTED_ORIGINS = config("CSRF_TRUSTED_ORIGINS", default="http://localhost:3000").split(",")
 
 # SECURITY WARNING: keep the secret key used in production secret!
@@ -75,9 +75,9 @@ INSTALLED_APPS = [
     "allauth",
     "allauth.account",
     "allauth.socialaccount",
-    "allauth.socialaccount.providers.google",     # for Google OAuth 2.0
-    "allauth.socialaccount.providers.facebook",   # for Facebook OAuth 2.0
-    "allauth.socialaccount.providers.apple",      # for Apple Sign In
+    "allauth.socialaccount.providers.google",  # for Google OAuth 2.0
+    "allauth.socialaccount.providers.facebook",  # for Facebook OAuth 2.0
+    "allauth.socialaccount.providers.apple",  # for Apple Sign In
     # Celery and Redis
     "django_celery_beat",
     "django_redis",
@@ -104,10 +104,10 @@ MIDDLEWARE = [
     "carbon.middleware.security_middleware.CarbonSecurityMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    'subscriptions.middleware.SubscriptionMiddleware',
+    "subscriptions.middleware.SubscriptionMiddleware",
     "backend.security.middleware.RateLimitHeadersMiddleware",  # Add rate limit headers
     "backend.security.middleware.SecurityEventMiddleware",  # Log security events last
-    'subscriptions.middleware.UsageTrackingMiddleware',
+    "subscriptions.middleware.UsageTrackingMiddleware",
 ]
 
 ROOT_URLCONF = "backend.urls"
@@ -116,29 +116,29 @@ AUTH_USER_MODEL = "users.User"
 
 # Rate Limiting Configuration
 RATELIMIT_ENABLE = True
-RATELIMIT_USE_CACHE = 'default'
-RATELIMIT_VIEW = 'django_ratelimit.exceptions.Ratelimited'
+RATELIMIT_USE_CACHE = "default"
+RATELIMIT_VIEW = "django_ratelimit.exceptions.Ratelimited"
 
 # Security settings for rate limiting
-DJANGO_RATELIMIT_RATELIMITED_RESPONSE = 'Too many requests'
+DJANGO_RATELIMIT_RATELIMITED_RESPONSE = "Too many requests"
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ("users.auth.CustomAuthentication",),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.AnonRateThrottle",
-        "rest_framework.throttling.UserRateThrottle"
+        "rest_framework.throttling.UserRateThrottle",
     ],
     "DEFAULT_THROTTLE_RATES": {
         "anon": "50/hour",
-        "user": "500/hour", 
+        "user": "500/hour",
         "login": "3/minute",
         "signup": "2/minute",
         "password_reset": "3/hour",
         "carbon_calculation": "100/hour",
         "api_sensitive": "30/hour",
         "qr_scan": "300/hour",
-        "blockchain": "20/hour"
+        "blockchain": "20/hour",
     },
 }
 
@@ -191,11 +191,11 @@ USE_I18N = True
 USE_TZ = True
 
 # Celery Configuration
-CELERY_BROKER_URL = 'redis://localhost:6379/0'
-CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
+CELERY_BROKER_URL = "redis://localhost:6379/0"
+CELERY_RESULT_BACKEND = "redis://localhost:6379/0"
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
 
 # Additional Celery Settings
@@ -205,39 +205,39 @@ CELERY_TASK_SOFT_TIME_LIMIT = 25 * 60  # 25 minutes
 CELERY_TASK_ACKS_LATE = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 CELERY_TASK_REJECT_ON_WORKER_LOST = True
-CELERY_TASK_DEFAULT_QUEUE = 'default'
+CELERY_TASK_DEFAULT_QUEUE = "default"
 CELERY_TASK_QUEUES = {
-    'default': {
-        'exchange': 'default',
-        'routing_key': 'default',
+    "default": {
+        "exchange": "default",
+        "routing_key": "default",
     },
-    'carbon': {
-        'exchange': 'carbon',
-        'routing_key': 'carbon',
+    "carbon": {
+        "exchange": "carbon",
+        "routing_key": "carbon",
     },
 }
 
 # Celery Beat Schedule
 CELERY_BEAT_SCHEDULE = {
-    'generate-nightly-reports': {
-        'task': 'carbon.tasks.generate_nightly_reports',
-        'schedule': crontab(hour=0, minute=0),  # Run at midnight
-        'options': {'queue': 'carbon'},
+    "generate-nightly-reports": {
+        "task": "carbon.tasks.generate_nightly_reports",
+        "schedule": crontab(hour=0, minute=0),  # Run at midnight
+        "options": {"queue": "carbon"},
     },
-    'award-sustainability-badges': {
-        'task': 'carbon.tasks.award_sustainability_badges',
-        'schedule': crontab(hour=1, minute=0),  # Run at 1 AM
-        'options': {'queue': 'carbon'},
+    "award-sustainability-badges": {
+        "task": "carbon.tasks.award_sustainability_badges",
+        "schedule": crontab(hour=1, minute=0),  # Run at 1 AM
+        "options": {"queue": "carbon"},
     },
-    'cleanup-old-audit-logs': {
-        'task': 'carbon.tasks.cleanup_old_audit_logs',
-        'schedule': crontab(hour=2, minute=0),  # Run at 2 AM
-        'options': {'queue': 'carbon'},
+    "cleanup-old-audit-logs": {
+        "task": "carbon.tasks.cleanup_old_audit_logs",
+        "schedule": crontab(hour=2, minute=0),  # Run at 2 AM
+        "options": {"queue": "carbon"},
     },
-    'update-industry-benchmarks': {
-        'task': 'carbon.tasks.update_industry_benchmarks',
-        'schedule': crontab(hour=3, minute=0),  # Run at 3 AM
-        'options': {'queue': 'carbon'},
+    "update-industry-benchmarks": {
+        "task": "carbon.tasks.update_industry_benchmarks",
+        "schedule": crontab(hour=3, minute=0),  # Run at 3 AM
+        "options": {"queue": "carbon"},
     },
 }
 
@@ -273,30 +273,30 @@ CHANNEL_LAYERS = {
 }
 
 # CoolFarmTool API configuration for carbon calculations
-COOLFARMTOOL_API_KEY = config('COOLFARMTOOL_API_KEY', default='')
-COOLFARMTOOL_BASE_URL = config('COOLFARMTOOL_BASE_URL', default='https://api.coolfarmtool.org')
+COOLFARMTOOL_API_KEY = config("COOLFARMTOOL_API_KEY", default="")
+COOLFARMTOOL_BASE_URL = config("COOLFARMTOOL_BASE_URL", default="https://api.coolfarmtool.org")
 
 # CoolFarmTool API Configuration
-COOLFARM_API_KEY = os.environ.get('COOLFARM_API_KEY', '')
-COOLFARM_API_URL = os.environ.get('COOLFARM_API_URL', 'https://api.coolfarmtool.org/v1')
+COOLFARM_API_KEY = os.environ.get("COOLFARM_API_KEY", "")
+COOLFARM_API_URL = os.environ.get("COOLFARM_API_URL", "https://api.coolfarmtool.org/v1")
 
 # OpenAI API Configuration for Voice Processing
-OPENAI_API_KEY = config('OPENAI_API_KEY', default='')
-OPENAI_MODEL = config('OPENAI_MODEL', default='gpt-3.5-turbo')
-OPENAI_MAX_TOKENS = config('OPENAI_MAX_TOKENS', default=500, cast=int)
-OPENAI_TEMPERATURE = config('OPENAI_TEMPERATURE', default=0.3, cast=float)
+OPENAI_API_KEY = config("OPENAI_API_KEY", default="")
+OPENAI_MODEL = config("OPENAI_MODEL", default="gpt-3.5-turbo")
+OPENAI_MAX_TOKENS = config("OPENAI_MAX_TOKENS", default=500, cast=int)
+OPENAI_TEMPERATURE = config("OPENAI_TEMPERATURE", default=0.3, cast=float)
 
 # ICR (International Carbon Registry) API Configuration
-ICR_SANDBOX_URL = config('ICR_SANDBOX_URL', default='https://sandbox-api.carbonregistry.com')
-ICR_PRODUCTION_URL = config('ICR_PRODUCTION_URL', default='https://api.carbonregistry.com')
-ICR_API_KEY = config('ICR_API_KEY', default='')
-USE_ICR_SANDBOX = config('USE_ICR_SANDBOX', default=True, cast=bool)
+ICR_SANDBOX_URL = config("ICR_SANDBOX_URL", default="https://sandbox-api.carbonregistry.com")
+ICR_PRODUCTION_URL = config("ICR_PRODUCTION_URL", default="https://api.carbonregistry.com")
+ICR_API_KEY = config("ICR_API_KEY", default="")
+USE_ICR_SANDBOX = config("USE_ICR_SANDBOX", default=True, cast=bool)
 
 # Legacy Registry URLs (for documentation - these APIs don't exist publicly)
-VCS_REGISTRY_URL = config('VCS_REGISTRY_URL', default='https://registry.verra.org/api/v1')
-VCS_API_KEY = config('VCS_API_KEY', default='')
-GOLD_STANDARD_API_URL = config('GOLD_STANDARD_API_URL', default='https://api.goldstandard.org/v1')
-GOLD_STANDARD_API_KEY = config('GOLD_STANDARD_API_KEY', default='')
+VCS_REGISTRY_URL = config("VCS_REGISTRY_URL", default="https://registry.verra.org/api/v1")
+VCS_API_KEY = config("VCS_API_KEY", default="")
+GOLD_STANDARD_API_URL = config("GOLD_STANDARD_API_URL", default="https://api.goldstandard.org/v1")
+GOLD_STANDARD_API_KEY = config("GOLD_STANDARD_API_KEY", default="")
 
 EMAIL_HOST = config("EMAIL_HOST", default="smtp.sendgrid.net")
 EMAIL_HOST_USER = "apikey"
@@ -311,23 +311,23 @@ SERVER_EMAIL = config("FROM_EMAIL_ADDRESS", default="osmunogue@gmail.com")
 BASE_URL = config("BASE_URL", default="http://localhost:8000/")
 
 # Media files
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
 
-# S3 Configuration 
-AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID', default=None)
-AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY', default=None)
-AWS_STORAGE_BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME', default=None)
-AWS_S3_REGION_NAME = config('AWS_S3_REGION_NAME', default='us-east-1')
+# S3 Configuration
+AWS_ACCESS_KEY_ID = config("AWS_ACCESS_KEY_ID", default=None)
+AWS_SECRET_ACCESS_KEY = config("AWS_SECRET_ACCESS_KEY", default=None)
+AWS_STORAGE_BUCKET_NAME = config("AWS_STORAGE_BUCKET_NAME", default=None)
+AWS_S3_REGION_NAME = config("AWS_S3_REGION_NAME", default="us-east-1")
 AWS_S3_VERIFY = True
 AWS_S3_ADDRESSING_STYLE = "virtual"
 AWS_QUERYSTRING_AUTH = False
 AWS_S3_OBJECT_PARAMETERS = {
-    'CacheControl': 'max-age=86400',
+    "CacheControl": "max-age=86400",
 }
 
 # Use S3 for media files
-DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
 
 LOGGING = {
     # Version del logging
@@ -357,7 +357,7 @@ LOGGING = {
             "level": "WARNING",
             "class": "logging.handlers.RotatingFileHandler",
             "filename": os.path.join(BASE_DIR, "logs", "security.log"),
-            "maxBytes": 1024*1024*10,  # 10MB
+            "maxBytes": 1024 * 1024 * 10,  # 10MB
             "backupCount": 5,
             "formatter": "verbose",
         },
@@ -413,13 +413,12 @@ AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
-    
     # SECURITY: Custom enhanced validators for improved security
     {
         "NAME": "backend.security.password_validators.EnhancedMinimumLengthValidator",
         "OPTIONS": {
             "min_length": 12,  # OWASP recommendation: 12+ characters
-        }
+        },
     },
     {
         "NAME": "backend.security.password_validators.PasswordComplexityValidator",
@@ -428,20 +427,20 @@ AUTH_PASSWORD_VALIDATORS = [
             "min_lowercase": 1,
             "min_digits": 1,
             "min_special": 1,
-        }
+        },
     },
     {
         "NAME": "backend.security.password_validators.PasswordEntropyValidator",
         "OPTIONS": {
             "min_entropy": 50,  # Bits of entropy for strong passwords
-        }
+        },
     },
     {
         "NAME": "backend.security.password_validators.BreachedPasswordValidator",
         "OPTIONS": {
             "enabled": not DEBUG,  # Only check in production
             "timeout": 5,
-        }
+        },
     },
     {
         "NAME": "backend.security.password_validators.NoPersonalInformationValidator",
@@ -450,32 +449,32 @@ AUTH_PASSWORD_VALIDATORS = [
         "NAME": "backend.security.password_validators.NoSequentialCharactersValidator",
         "OPTIONS": {
             "max_sequential": 3,
-        }
+        },
     },
 ]
 
 # SECURITY: Password policy settings
 PASSWORD_RESET_TIMEOUT = 3600  # 1 hour (default is 3 days)
 PASSWORD_HASHERS = [
-    'django.contrib.auth.hashers.Argon2PasswordHasher',  # Most secure
-    'django.contrib.auth.hashers.PBKDF2PasswordHasher',
-    'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
-    'django.contrib.auth.hashers.BCryptSHA256PasswordHasher',
+    "django.contrib.auth.hashers.Argon2PasswordHasher",  # Most secure
+    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher",
+    "django.contrib.auth.hashers.BCryptSHA256PasswordHasher",
 ]
 
 # SECURITY: Additional Django Security Settings
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
-X_FRAME_OPTIONS = 'DENY'
+X_FRAME_OPTIONS = "DENY"
 SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0  # 1 year in production
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_HSTS_PRELOAD = True
-SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 
 # SECURITY: Force HTTPS in production
 if not DEBUG:
     SECURE_SSL_REDIRECT = True
-    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # SECURITY: File Upload Security
 FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024  # 5MB
@@ -486,47 +485,47 @@ FILE_UPLOAD_PERMISSIONS = 0o644
 # SECURITY: Session Security
 SESSION_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SAMESITE = 'Strict' if not DEBUG else 'Lax'
+SESSION_COOKIE_SAMESITE = "Strict" if not DEBUG else "Lax"
 SESSION_COOKIE_AGE = 3600  # 1 hour
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 
 # SECURITY: Logging Configuration for Security Events
 LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'security': {
-            'format': '[SECURITY] {levelname} {asctime} {name} {message}',
-            'style': '{',
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "security": {
+            "format": "[SECURITY] {levelname} {asctime} {name} {message}",
+            "style": "{",
         },
-        'verbose': {
-            'format': '{levelname} {asctime} {name} {process:d} {thread:d} {message}',
-            'style': '{',
-        },
-    },
-    'handlers': {
-        'security_file': {
-            'level': 'WARNING',
-            'class': 'logging.FileHandler',
-            'filename': 'logs/security.log',
-            'formatter': 'security',
-        },
-        'console': {
-            'level': 'INFO',
-            'class': 'logging.StreamHandler',
-            'formatter': 'verbose',
+        "verbose": {
+            "format": "{levelname} {asctime} {name} {process:d} {thread:d} {message}",
+            "style": "{",
         },
     },
-    'loggers': {
-        'backend.security': {
-            'handlers': ['security_file', 'console'],
-            'level': 'INFO',
-            'propagate': False,
+    "handlers": {
+        "security_file": {
+            "level": "WARNING",
+            "class": "logging.FileHandler",
+            "filename": "logs/security.log",
+            "formatter": "security",
         },
-        'django.security': {
-            'handlers': ['security_file', 'console'],
-            'level': 'WARNING',
-            'propagate': False,
+        "console": {
+            "level": "INFO",
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+    },
+    "loggers": {
+        "backend.security": {
+            "handlers": ["security_file", "console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "django.security": {
+            "handlers": ["security_file", "console"],
+            "level": "WARNING",
+            "propagate": False,
         },
     },
 }
@@ -540,35 +539,35 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.1/howto/static-files/
 
-STATIC_URL = '/static/'
+STATIC_URL = "/static/"
 STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'static'),
-    os.path.join(BASE_DIR, 'backend', 'static'),
+    os.path.join(BASE_DIR, "static"),
+    os.path.join(BASE_DIR, "backend", "static"),
 ]
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+MEDIA_URL = "/media/"
+MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
 # CORS settings
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
-    "http://app.localhost:3000", 
+    "http://app.localhost:3000",
     "http://consumer.localhost:3000",
     "http://127.0.0.1:3000",
 ]
 CORS_ALLOW_ALL_ORIGINS = DEBUG  # Allow all origins in development only
 CORS_ALLOW_HEADERS = [
-    'accept',
-    'accept-encoding',
-    'authorization',
-    'content-type',
-    'dnt',
-    'origin',
-    'user-agent',
-    'x-csrftoken',
-    'x-requested-with',
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
 ]
 
 # django-allauth settings
@@ -646,22 +645,22 @@ JWT_EXPIRATION_DELTA = timedelta(minutes=15)
 
 # SECURITY: Enhanced cookie security settings for CSRF protection
 SESSION_COOKIE_SECURE = not DEBUG  # Only secure in production (HTTPS only)
-CSRF_COOKIE_SECURE = not DEBUG     # Only secure in production (HTTPS only)
-CSRF_COOKIE_HTTPONLY = False       # Must be False for JavaScript access to CSRF token
-CSRF_COOKIE_SAMESITE = 'Strict' if not DEBUG else 'Lax'  # Strict in production, Lax in dev
-CSRF_COOKIE_DOMAIN = None          # No domain restriction (suitable for subdomains)
-CSRF_TRUSTED_ORIGINS = config("CSRF_TRUSTED_ORIGINS", default="http://localhost:3000,http://app.localhost:3000").split(",")
+CSRF_COOKIE_SECURE = not DEBUG  # Only secure in production (HTTPS only)
+CSRF_COOKIE_HTTPONLY = False  # Must be False for JavaScript access to CSRF token
+CSRF_COOKIE_SAMESITE = "Strict" if not DEBUG else "Lax"  # Strict in production, Lax in dev
+CSRF_COOKIE_DOMAIN = None  # No domain restriction (suitable for subdomains)
+CSRF_TRUSTED_ORIGINS = config("CSRF_TRUSTED_ORIGINS", default="http://localhost:3000,http://app.localhost:3000").split(
+    ","
+)
 
 # Session configuration
 SESSION_COOKIE_AGE = 86400  # 24 hours
 SESSION_SAVE_EVERY_REQUEST = True
 SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SAMESITE = 'Lax'
-SESSION_COOKIE_NAME = 'sessionid'
+SESSION_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_NAME = "sessionid"
 
-FILE_UPLOAD_MAX_MEMORY_SIZE = (
-    1024 * 1024 * 10
-)  # Set to desired size in bytes (10MB in this case)
+FILE_UPLOAD_MAX_MEMORY_SIZE = 1024 * 1024 * 10  # Set to desired size in bytes (10MB in this case)
 
 
 SIMPLE_JWT = {
@@ -692,7 +691,9 @@ SIMPLE_JWT = {
     "AUTH_COOKIE_SECURE": not DEBUG,  # Whether the auth cookies should be secure (https:// only).
     "AUTH_COOKIE_HTTP_ONLY": True,  # Http only cookie flag.It's not fetch by javascript.
     "AUTH_COOKIE_PATH": "/",  # The path of the auth cookie.
-    "AUTH_COOKIE_SAMESITE": "Lax" if DEBUG else "None",  # Whether to set the flag restricting cookie leaks on cross-site requests. This can be 'Lax', 'Strict', or None to disable the flag.
+    "AUTH_COOKIE_SAMESITE": (
+        "Lax" if DEBUG else "None"
+    ),  # Whether to set the flag restricting cookie leaks on cross-site requests. This can be 'Lax', 'Strict', or None to disable the flag.
 }
 
 # Stripe Settings
@@ -743,9 +744,9 @@ FARM_MANAGEMENT_FEATURES_DISABLED = True  # Stay focused on carbon, not farm opt
 
 # Celery Beat Schedule for Blockchain Tasks
 CELERY_BEAT_SCHEDULE = {
-    'batch-submit-monthly-summaries': {
-        'task': 'carbon.tasks.batch_submit_monthly_summaries',
-        'schedule': crontab(hour=2, minute=0, day_of_month=1),  # 2:00 AM UTC on 1st of each month
+    "batch-submit-monthly-summaries": {
+        "task": "carbon.tasks.batch_submit_monthly_summaries",
+        "schedule": crontab(hour=2, minute=0, day_of_month=1),  # 2:00 AM UTC on 1st of each month
     },
 }
 
@@ -765,7 +766,9 @@ APPLE_PRIVATE_KEY = config("APPLE_PRIVATE_KEY", default="")
 # Enhanced Security Configuration
 BLOCKCHAIN_MULTISIG_ENABLED = config("BLOCKCHAIN_MULTISIG_ENABLED", default=False, cast=bool)
 BLOCKCHAIN_REQUIRED_SIGNATURES = config("BLOCKCHAIN_REQUIRED_SIGNATURES", default=2, cast=int)
-BLOCKCHAIN_SIGNERS = config("BLOCKCHAIN_SIGNERS", default="").split(",") if config("BLOCKCHAIN_SIGNERS", default="") else []
+BLOCKCHAIN_SIGNERS = (
+    config("BLOCKCHAIN_SIGNERS", default="").split(",") if config("BLOCKCHAIN_SIGNERS", default="") else []
+)
 
 # AWS Security Configuration
 AWS_ACCESS_KEY_ID = config("AWS_ACCESS_KEY_ID", default="")
@@ -794,6 +797,8 @@ CARBON_AUDIT_ENABLED = config("CARBON_AUDIT_ENABLED", default=True, cast=bool)
 TRUST_SCORE_THRESHOLD = config("TRUST_SCORE_THRESHOLD", default=0.7, cast=float)
 
 # Photo Evidence Configuration
-PHOTO_EVIDENCE_MAX_SIZE = config("PHOTO_EVIDENCE_MAX_SIZE", default=10*1024*1024, cast=int)  # 10MB
-PHOTO_EVIDENCE_ALLOWED_TYPES = config("PHOTO_EVIDENCE_ALLOWED_TYPES", default="image/jpeg,image/png,image/webp").split(",")
+PHOTO_EVIDENCE_MAX_SIZE = config("PHOTO_EVIDENCE_MAX_SIZE", default=10 * 1024 * 1024, cast=int)  # 10MB
+PHOTO_EVIDENCE_ALLOWED_TYPES = config("PHOTO_EVIDENCE_ALLOWED_TYPES", default="image/jpeg,image/png,image/webp").split(
+    ","
+)
 PHOTO_EVIDENCE_COMPRESSION_QUALITY = config("PHOTO_EVIDENCE_COMPRESSION_QUALITY", default=85, cast=int)

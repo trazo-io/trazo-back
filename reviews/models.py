@@ -8,12 +8,8 @@ class Review(models.Model):
     written_review = models.TextField()
     date = models.DateTimeField(auto_now_add=True)
     rating = models.IntegerField()
-    user = models.ForeignKey(
-        "users.User", related_name="reviews", on_delete=models.CASCADE
-    )
-    production = models.ForeignKey(
-        "history.History", related_name="reviews", on_delete=models.CASCADE
-    )
+    user = models.ForeignKey("users.User", related_name="reviews", on_delete=models.CASCADE)
+    production = models.ForeignKey("history.History", related_name="reviews", on_delete=models.CASCADE)
     scan = models.ForeignKey(
         "history.HistoryScan",
         related_name="reviews",

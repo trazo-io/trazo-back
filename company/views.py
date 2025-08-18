@@ -1,35 +1,38 @@
 from datetime import datetime, timedelta
-from rest_framework import viewsets, filters, status
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
-from rest_framework.decorators import action
+
+from django.db.models import Avg, Count, ExpressionWrapper, Q
+from django.db.models.functions import ExtractDay, ExtractMonth, ExtractWeekDay
 from django.shortcuts import get_object_or_404
-from django.db.models import Count, Avg, Q, ExpressionWrapper
-from django.db.models.functions import ExtractWeekDay, ExtractDay, ExtractMonth
 from django.utils import timezone
 
-from .serializers import (
-    RetrieveCompanySerializer,
-    CreateCompanySerializer,
-    UpdateEstablishmentSerializer,
-    RetrieveEstablishmentSerializer,
-    EstablishmentChartSerializer,
-    EstablishmentProductsReputationSerializer,
-    EstablishmentSerializer,
-    EstablishmentDashboardMetricsSerializer,
-)
-from .models import Company, Establishment
-from .constants import ALLOWED_PERIODS
-from users.models import WorksIn
-from users.serializers import WorksInSerializer
-from product.models import Parcel, Product
-from product.serializers import ProductListOptionsSerializer
+from rest_framework import filters, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+from backend.permissions import CompanyNestedViewSet
 from history.models import History, HistoryScan
 from history.serializers import HistoryListOptionsSerializer
+from product.models import Parcel, Product
+from product.serializers import ProductListOptionsSerializer
 from reviews.models import Review
 from reviews.serializers import ListReviewSerializer
-from backend.permissions import CompanyNestedViewSet
 from subscriptions.permissions import HasEstablishmentCreationPermission
+from users.models import WorksIn
+from users.serializers import WorksInSerializer
+
+from .constants import ALLOWED_PERIODS
+from .models import Company, Establishment
+from .serializers import (
+    CreateCompanySerializer,
+    EstablishmentChartSerializer,
+    EstablishmentDashboardMetricsSerializer,
+    EstablishmentProductsReputationSerializer,
+    EstablishmentSerializer,
+    RetrieveCompanySerializer,
+    RetrieveEstablishmentSerializer,
+    UpdateEstablishmentSerializer,
+)
 
 
 class CompanyViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
@@ -50,9 +53,7 @@ class CompanyViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         company = serializer.save()
-        WorksIn.objects.create(
-            user=request.user, company=company, role=WorksIn.COMPANY_ADMIN
-        )
+        WorksIn.objects.create(user=request.user, company=company, role=WorksIn.COMPANY_ADMIN)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["get"])
@@ -66,45 +67,31 @@ class CompanyViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
 
 class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
-    queryset = Establishment.objects.select_related(
-        'company', 'album'
-    ).prefetch_related(
-        'parcels', 'parcels__product'
-    ).all()
+    queryset = (
+        Establishment.objects.select_related("company", "album").prefetch_related("parcels", "parcels__product").all()
+    )
     filter_backends = [filters.OrderingFilter]
     serializer_class = UpdateEstablishmentSerializer
     permission_classes = [IsAuthenticated, HasEstablishmentCreationPermission]
 
     def get_serializer_class(self):
-        if (
-            self.action == "create"
-            or self.action == "update"
-            or self.action == "partial_update"
-        ):
+        if self.action == "create" or self.action == "update" or self.action == "partial_update":
             return UpdateEstablishmentSerializer
         return RetrieveEstablishmentSerializer
-    
+
     def get_serializer_context(self):
         context = super().get_serializer_context()
         context["request"] = self.request
         return context
 
-    def _generate_filter_kwargs(
-        self, period: str, production: str = "", period_filter: str = ""
-    ) -> dict:
+    def _generate_filter_kwargs(self, period: str, production: str = "", period_filter: str = "") -> dict:
         filter_kwargs = {}
         if period == "week":
-            filter_kwargs[f"{period_filter}date__gte"] = datetime.now() - timedelta(
-                days=7
-            )
+            filter_kwargs[f"{period_filter}date__gte"] = datetime.now() - timedelta(days=7)
         elif period == "month":
-            filter_kwargs[f"{period_filter}date__gte"] = datetime.now() - timedelta(
-                days=31
-            )
+            filter_kwargs[f"{period_filter}date__gte"] = datetime.now() - timedelta(days=31)
         elif period == "year":
-            filter_kwargs[f"{period_filter}date__gte"] = datetime.now() - timedelta(
-                days=365
-            )
+            filter_kwargs[f"{period_filter}date__gte"] = datetime.now() - timedelta(days=365)
 
         if production is not None:
             production = get_object_or_404(History, pk=production)
@@ -113,9 +100,7 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         return filter_kwargs
 
     @action(detail=True, methods=["get"])
-    def products(
-        self, request, pk=None, company_pk=None, establishment_pk=None
-    ) -> Response:
+    def products(self, request, pk=None, company_pk=None, establishment_pk=None) -> Response:
         establishment = get_object_or_404(Establishment, pk=pk)
         products = Product.objects.filter(
             histories__parcel__establishment=establishment,
@@ -126,14 +111,10 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             parcel = get_object_or_404(Parcel, pk=parcel)
             products = products.filter(histories__parcel__id=parcel.id)
 
-        return Response(
-            ProductListOptionsSerializer(products.distinct(), many=True).data
-        )
+        return Response(ProductListOptionsSerializer(products.distinct(), many=True).data)
 
     @action(detail=True, methods=["get"])
-    def histories(
-        self, request, pk=None, company_pk=None, establishment_pk=None
-    ) -> Response:
+    def histories(self, request, pk=None, company_pk=None, establishment_pk=None) -> Response:
         establishment = get_object_or_404(Establishment, pk=pk)
         parcel = request.query_params.get("parcel", None)
         product = request.query_params.get("product", None)
@@ -178,9 +159,7 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             )
 
         # Get date kwargs for filter by period
-        filter_kwargs = self._generate_filter_kwargs(
-            period, production, "history__history_scans__"
-        )
+        filter_kwargs = self._generate_filter_kwargs(period, production, "history__history_scans__")
 
         if parcel is not None:
             parcel = get_object_or_404(Parcel, pk=parcel)
@@ -198,17 +177,13 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 **filter_kwargs,
             ).distinct()
             total_histories = histories.annotate(day_of_week=ExtractWeekDay("date"))
-            total_histories = total_histories.values("day_of_week").annotate(
-                count=Count("id", distinct=True)
-            )
+            total_histories = total_histories.values("day_of_week").annotate(count=Count("id", distinct=True))
 
             histories_with_review = histories.exclude(reviews__isnull=True)
-            histories_with_review = histories_with_review.annotate(
-                day_of_week=ExtractWeekDay("date")
+            histories_with_review = histories_with_review.annotate(day_of_week=ExtractWeekDay("date"))
+            histories_with_review = histories_with_review.values("day_of_week").annotate(
+                count=Count("id", distinct=True)
             )
-            histories_with_review = histories_with_review.values(
-                "day_of_week"
-            ).annotate(count=Count("id", distinct=True))
 
             result_dict = {}
             for history in total_histories:
@@ -221,10 +196,7 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 result_dict[history["day_of_week"]]["reviews"] = history["count"]
             today = datetime.now()
             one_week_ago = today - timedelta(days=6)
-            date_range = [
-                one_week_ago + timedelta(days=i)
-                for i in range((today - one_week_ago).days + 1)
-            ]
+            date_range = [one_week_ago + timedelta(days=i) for i in range((today - one_week_ago).days + 1)]
 
             series_result = []
             series_result_reviews = []
@@ -233,15 +205,15 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 day = date.isoweekday() % 7 + 1
                 days_range.append(day)
                 if day in result_dict:
-                    series_result.append(
-                        result_dict[day]["scans"]
-                    ) if "scans" in result_dict[day] else series_result.append(0)
-                    series_result_reviews.append(
-                        result_dict[day]["reviews"]
-                    ) if "reviews" in result_dict[
-                        day
-                    ] else series_result_reviews.append(
-                        0
+                    (
+                        series_result.append(result_dict[day]["scans"])
+                        if "scans" in result_dict[day]
+                        else series_result.append(0)
+                    )
+                    (
+                        series_result_reviews.append(result_dict[day]["reviews"])
+                        if "reviews" in result_dict[day]
+                        else series_result_reviews.append(0)
                     )
                 else:
                     series_result.append(0)
@@ -253,9 +225,7 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 history__published=True,
                 **filter_kwargs,
             ).distinct()
-            total_histories = histories.annotate(
-                day_of_month=ExtractDay("date"), month=ExtractMonth("date")
-            )
+            total_histories = histories.annotate(day_of_month=ExtractDay("date"), month=ExtractMonth("date"))
             total_histories = total_histories.values("day_of_month", "month")
             total_histories = total_histories.annotate(count=Count("id", distinct=True))
 
@@ -263,9 +233,9 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             histories_with_review = histories_with_review.annotate(
                 day_of_month=ExtractDay("date"), month=ExtractMonth("date")
             )
-            histories_with_review = histories_with_review.values(
-                "day_of_month", "month"
-            ).annotate(count=Count("id", distinct=True))
+            histories_with_review = histories_with_review.values("day_of_month", "month").annotate(
+                count=Count("id", distinct=True)
+            )
 
             result_dict = {}
             for history in total_histories:
@@ -286,10 +256,7 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 result_dict[month][day_of_month]["reviews"] = history["count"]
             today = datetime.now()
             one_month_ago = today - timedelta(days=31)
-            date_range = [
-                one_month_ago + timedelta(days=i)
-                for i in range((today - one_month_ago).days + 1)
-            ]
+            date_range = [one_month_ago + timedelta(days=i) for i in range((today - one_month_ago).days + 1)]
 
             series_result = []
             series_result_reviews = []
@@ -299,15 +266,15 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 month = date.month
                 days_range.append(day)
                 if month in result_dict and day in result_dict[month]:
-                    series_result.append(
-                        result_dict[month][day]["scans"]
-                    ) if "scans" in result_dict[month][day] else series_result.append(0)
-                    series_result_reviews.append(
-                        result_dict[month][day]["reviews"]
-                    ) if "reviews" in result_dict[month][
-                        day
-                    ] else series_result_reviews.append(
-                        0
+                    (
+                        series_result.append(result_dict[month][day]["scans"])
+                        if "scans" in result_dict[month][day]
+                        else series_result.append(0)
+                    )
+                    (
+                        series_result_reviews.append(result_dict[month][day]["reviews"])
+                        if "reviews" in result_dict[month][day]
+                        else series_result_reviews.append(0)
                     )
                 else:
                     series_result.append(0)
@@ -323,13 +290,9 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             total_histories = total_histories.annotate(count=Count("id", distinct=True))
 
             histories_with_review = histories.exclude(reviews__isnull=True)
-            histories_with_review = histories_with_review.annotate(
-                month=ExtractMonth("date")
-            )
+            histories_with_review = histories_with_review.annotate(month=ExtractMonth("date"))
             histories_with_review = histories_with_review.values("month")
-            histories_with_review = histories_with_review.annotate(
-                count=Count("id", distinct=True)
-            )
+            histories_with_review = histories_with_review.annotate(count=Count("id", distinct=True))
 
             result_dict = {}
             for history in total_histories:
@@ -347,15 +310,15 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             series_result_reviews = []
             for month in range(1, 13):
                 if month in result_dict:
-                    series_result.append(
-                        result_dict[month]["scans"]
-                    ) if "scans" in result_dict[month] else series_result.append(0)
-                    series_result_reviews.append(
-                        result_dict[month]["reviews"]
-                    ) if "reviews" in result_dict[
-                        month
-                    ] else series_result_reviews.append(
-                        0
+                    (
+                        series_result.append(result_dict[month]["scans"])
+                        if "scans" in result_dict[month]
+                        else series_result.append(0)
+                    )
+                    (
+                        series_result_reviews.append(result_dict[month]["reviews"])
+                        if "reviews" in result_dict[month]
+                        else series_result_reviews.append(0)
                     )
                 else:
                     series_result.append(0)
@@ -367,9 +330,7 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 context={
                     "month_length": len(series_result) if period == "month" else None,
                     "period": period,
-                    "days": days_range
-                    if period == "month" or period == "week"
-                    else None,
+                    "days": days_range if period == "month" or period == "week" else None,
                 },
             ).data
         }
@@ -380,9 +341,7 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         )
 
     @action(detail=True, methods=["get"])
-    def products_reputation(
-        self, request, pk=None, company_pk=None, establishment_pk=None
-    ) -> Response:
+    def products_reputation(self, request, pk=None, company_pk=None, establishment_pk=None) -> Response:
         establishment = get_object_or_404(Establishment, pk=pk)
         parcel = request.query_params.get("parcel", None)
         product = request.query_params.get("product", None)
@@ -395,9 +354,7 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             )
 
         # Get date kwargs for filter by period
-        filter_kwargs = self._generate_filter_kwargs(
-            period, None, "production__history_scans__"
-        )
+        filter_kwargs = self._generate_filter_kwargs(period, None, "production__history_scans__")
 
         if parcel is not None:
             parcel = get_object_or_404(Parcel, pk=parcel)
@@ -437,22 +394,20 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         )
 
     @action(detail=True, methods=["get"])
-    def last_reviews(
-        self, request, pk=None, company_pk=None, establishment_pk=None
-    ) -> Response:
+    def last_reviews(self, request, pk=None, company_pk=None, establishment_pk=None) -> Response:
         establishment = get_object_or_404(Establishment, pk=pk)
         reviews = Review.objects.filter(
             production__parcel__establishment=establishment,
-        ).order_by("-date")[:3]
+        ).order_by(
+            "-date"
+        )[:3]
         return Response(
             ListReviewSerializer(reviews, many=True).data,
             status=status.HTTP_200_OK,
         )
 
     @action(detail=True, methods=["get"])
-    def rating_reviews_percentage(
-        self, request, pk=None, company_pk=None, establishment_pk=None
-    ) -> Response:
+    def rating_reviews_percentage(self, request, pk=None, company_pk=None, establishment_pk=None) -> Response:
         establishment = get_object_or_404(Establishment, pk=pk)
         # Return percentage of positive, neutral and negative reviews for the establishment
 
@@ -468,15 +423,9 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         )
 
         result = {
-            "positive": int(reviews["positive"] / total_reviews * 100)
-            if total_reviews > 0
-            else 0,
-            "neutral": int(reviews["neutral"] / total_reviews * 100)
-            if total_reviews > 0
-            else 0,
-            "negative": int(reviews["negative"] / total_reviews * 100)
-            if total_reviews > 0
-            else 0,
+            "positive": int(reviews["positive"] / total_reviews * 100) if total_reviews > 0 else 0,
+            "neutral": int(reviews["neutral"] / total_reviews * 100) if total_reviews > 0 else 0,
+            "negative": int(reviews["negative"] / total_reviews * 100) if total_reviews > 0 else 0,
         }
 
         return Response(
@@ -491,20 +440,23 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         Based on real backend data: consumer reach, trust scores, carbon data
         """
         establishment = get_object_or_404(Establishment, pk=pk)
-        
+
         # Initialize metrics serializer
         metrics_serializer = EstablishmentDashboardMetricsSerializer()
-        
+
         # Calculate metrics using the serializer method
         metrics_data = metrics_serializer.get_metrics_for_establishment(establishment)
-        
-        return Response({
-            'success': True,
-            'establishment_id': establishment.id,
-            'establishment_name': establishment.name,
-            'metrics': metrics_data,
-            'calculated_at': timezone.now().isoformat()
-        }, status=status.HTTP_200_OK)
+
+        return Response(
+            {
+                "success": True,
+                "establishment_id": establishment.id,
+                "establishment_name": establishment.name,
+                "metrics": metrics_data,
+                "calculated_at": timezone.now().isoformat(),
+            },
+            status=status.HTTP_200_OK,
+        )
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -517,42 +469,62 @@ class PublicEstablishmentViewSet(viewsets.ViewSet):
     Public endpoint for consumer-facing establishment views.
     No authentication required.
     """
+
     permission_classes = []
 
     def retrieve(self, request, pk=None):
         """Get public establishment data by ID"""
         try:
             # Only show active establishments
-            establishment = get_object_or_404(
-                Establishment.objects.select_related('company'), 
-                pk=pk, 
-                is_active=True
-            )
-            
+            establishment = get_object_or_404(Establishment.objects.select_related("company"), pk=pk, is_active=True)
+
             # Use EstablishmentSerializer but filter sensitive data
-            serializer = EstablishmentSerializer(establishment, context={'request': request})
+            serializer = EstablishmentSerializer(establishment, context={"request": request})
             data = serializer.data
-            
+
             # Remove sensitive fields for public view
             public_fields = [
-                'id', 'name', 'description', 'address', 'city', 'state', 'country',
-                'location', 'latitude', 'longitude', 'certifications', 'about', 
-                'main_activities', 'location_highlights', 'custom_message', 'images', 
-                'email', 'phone', 'zip_code', 'crops_grown', 'sustainability_practices', 
-                'employee_count', 'total_acreage', 'year_established', 'establishment_type',
-                'farming_method', 'image', 'water_sources', 'climate_zone', 'soil_types',
-                'conservation_practices', 'irrigation_methods'
+                "id",
+                "name",
+                "description",
+                "address",
+                "city",
+                "state",
+                "country",
+                "location",
+                "latitude",
+                "longitude",
+                "certifications",
+                "about",
+                "main_activities",
+                "location_highlights",
+                "custom_message",
+                "images",
+                "email",
+                "phone",
+                "zip_code",
+                "crops_grown",
+                "sustainability_practices",
+                "employee_count",
+                "total_acreage",
+                "year_established",
+                "establishment_type",
+                "farming_method",
+                "image",
+                "water_sources",
+                "climate_zone",
+                "soil_types",
+                "conservation_practices",
+                "irrigation_methods",
             ]
-            
+
             public_data = {key: data[key] for key in public_fields if key in data}
-            
+
             return Response(public_data, status=status.HTTP_200_OK)
-            
+
         except Establishment.DoesNotExist:
-            return Response({
-                'error': 'Establishment not found or not available publicly'
-            }, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": "Establishment not found or not available publicly"}, status=status.HTTP_404_NOT_FOUND
+            )
         except Exception as e:
-            return Response({
-                'error': f'An error occurred: {str(e)}'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

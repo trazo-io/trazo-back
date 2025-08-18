@@ -1,32 +1,34 @@
-from rest_framework import serializers
 from django.utils import timezone
 
-from .models import (
-    History,
-    CommonEvent,
-    ChemicalEvent,
-    WeatherEvent,
-    GeneralEvent,
-    HistoryScan,
-    ProductionEvent,
-    EquipmentEvent,
-    SoilManagementEvent,
-    PestManagementEvent,
-)
-from .constants import (
-    WEATHER_EVENT_TYPE,
-    PRODUCTION_EVENT_TYPE,
-    CHEMICAL_EVENT_TYPE,
-    GENERAL_EVENT_TYPE,
-    EQUIPMENT_EVENT_TYPE,
-    SOIL_MANAGEMENT_EVENT_TYPE,
-    PEST_MANAGEMENT_EVENT_TYPE,
-)
+from rest_framework import serializers
+
 from common.models import Gallery
-from product.models import Product, Parcel
 from company.models import Establishment
+from product.models import Parcel, Product
 from users.models import User
 from users.serializers import BasicUserSerializer
+
+from .constants import (
+    CHEMICAL_EVENT_TYPE,
+    EQUIPMENT_EVENT_TYPE,
+    GENERAL_EVENT_TYPE,
+    PEST_MANAGEMENT_EVENT_TYPE,
+    PRODUCTION_EVENT_TYPE,
+    SOIL_MANAGEMENT_EVENT_TYPE,
+    WEATHER_EVENT_TYPE,
+)
+from .models import (
+    ChemicalEvent,
+    CommonEvent,
+    EquipmentEvent,
+    GeneralEvent,
+    History,
+    HistoryScan,
+    PestManagementEvent,
+    ProductionEvent,
+    SoilManagementEvent,
+    WeatherEvent,
+)
 
 
 class EventSerializer(serializers.ModelSerializer):
@@ -50,34 +52,34 @@ class EventSerializer(serializers.ModelSerializer):
         """
         try:
             # Check if carbon calculation is already stored in extra_data
-            if hasattr(event, 'extra_data') and event.extra_data and 'carbon_calculation' in event.extra_data:
-                return event.extra_data['carbon_calculation']
-            
+            if hasattr(event, "extra_data") and event.extra_data and "carbon_calculation" in event.extra_data:
+                return event.extra_data["carbon_calculation"]
+
             # OPTIMIZATION: Check if this is being called from a list view context
             # If so, return minimal data to avoid expensive USDA API calls
-            request = self.context.get('request')
-            if request and hasattr(request, 'resolver_match'):
-                view_name = getattr(request.resolver_match, 'url_name', '')
-                if 'list' in view_name or request.method == 'GET' and '/history/' in request.path:
+            request = self.context.get("request")
+            if request and hasattr(request, "resolver_match"):
+                view_name = getattr(request.resolver_match, "url_name", "")
+                if "list" in view_name or request.method == "GET" and "/history/" in request.path:
                     # Return minimal carbon data for list views
                     return {
-                        'co2e': 0.0,
-                        'efficiency_score': 50.0,
-                        'usda_factors_based': False,
-                        'verification_status': 'not_calculated',
-                        'calculation_method': 'list_view_minimal',
-                        'data_source': 'Cached',
-                        'recommendations': [],
-                        'event_type': event.__class__.__name__.lower().replace('event', ''),
-                        'timestamp': event.date.isoformat() if event.date else None,
-                        'note': 'Full calculation available in detail view'
+                        "co2e": 0.0,
+                        "efficiency_score": 50.0,
+                        "usda_factors_based": False,
+                        "verification_status": "not_calculated",
+                        "calculation_method": "list_view_minimal",
+                        "data_source": "Cached",
+                        "recommendations": [],
+                        "event_type": event.__class__.__name__.lower().replace("event", ""),
+                        "timestamp": event.date.isoformat() if event.date else None,
+                        "note": "Full calculation available in detail view",
                     }
-            
+
             # Full calculation only for detail views or when explicitly requested
             from carbon.services.event_carbon_calculator import EventCarbonCalculator
-            
+
             calculator = EventCarbonCalculator()
-            
+
             # Determine event type and calculate accordingly
             if isinstance(event, ChemicalEvent):
                 result = calculator.calculate_chemical_event_impact(event)
@@ -94,45 +96,45 @@ class EventSerializer(serializers.ModelSerializer):
             elif isinstance(event, GeneralEvent):
                 # For general events, use standard minimal calculation
                 result = {
-                    'co2e': 0.1,
-                    'efficiency_score': 50.0,
-                    'usda_factors_based': False,
-                    'verification_status': 'estimated',
-                    'calculation_method': 'general_event_standard',
-                    'data_source': 'Industry Standards',
-                    'recommendations': [],
-                    'event_type': 'general',
-                    'timestamp': event.date.isoformat() if event.date else None
+                    "co2e": 0.1,
+                    "efficiency_score": 50.0,
+                    "usda_factors_based": False,
+                    "verification_status": "estimated",
+                    "calculation_method": "general_event_standard",
+                    "data_source": "Industry Standards",
+                    "recommendations": [],
+                    "event_type": "general",
+                    "timestamp": event.date.isoformat() if event.date else None,
                 }
             else:
                 # Fallback for unknown event types
                 result = {
-                    'co2e': 0.0,
-                    'efficiency_score': 50.0,
-                    'usda_factors_based': False,
-                    'verification_status': 'unknown',
-                    'calculation_method': 'unknown_event_type',
-                    'data_source': 'Unknown',
-                    'recommendations': [],
-                    'event_type': 'unknown',
-                    'timestamp': event.date.isoformat() if event.date else None
+                    "co2e": 0.0,
+                    "efficiency_score": 50.0,
+                    "usda_factors_based": False,
+                    "verification_status": "unknown",
+                    "calculation_method": "unknown_event_type",
+                    "data_source": "Unknown",
+                    "recommendations": [],
+                    "event_type": "unknown",
+                    "timestamp": event.date.isoformat() if event.date else None,
                 }
-            
+
             return result
-            
+
         except Exception as e:
             # Return fallback data if calculation fails
             return {
-                'co2e': 0.0,
-                'efficiency_score': 50.0,
-                'usda_factors_based': False,
-                'verification_status': 'calculation_error',
-                'calculation_method': 'calculation_error',
-                'data_source': 'Error',
-                'recommendations': [],
-                'event_type': 'error',
-                'timestamp': event.date.isoformat() if event.date else None,
-                'error': str(e)
+                "co2e": 0.0,
+                "efficiency_score": 50.0,
+                "usda_factors_based": False,
+                "verification_status": "calculation_error",
+                "calculation_method": "calculation_error",
+                "data_source": "Error",
+                "recommendations": [],
+                "event_type": "error",
+                "timestamp": event.date.isoformat() if event.date else None,
+                "error": str(e),
             }
 
 
@@ -168,9 +170,7 @@ class UpdateWeatherEventSerializer(serializers.ModelSerializer):
     def to_internal_value(self, data):
         type = data.get("type", None)
         if type is None:
-            raise serializers.ValidationError(
-                {"type": ["This field is required."]}, code="required"
-            )
+            raise serializers.ValidationError({"type": ["This field is required."]}, code="required")
         data = data.copy()
         extra_data = {}
         if type == WeatherEvent.FROST:
@@ -195,11 +195,11 @@ class UpdateWeatherEventSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         type = data.get("type", None)
-        
+
         # Ensure extra_data is not None before accessing it
         if instance.extra_data is None:
             instance.extra_data = {}
-        
+
         if type == WeatherEvent.FROST:
             data["lower_temperature"] = instance.extra_data.get("lower_temperature", 0)
             data["way_of_protection"] = instance.extra_data.get("way_of_protection", "")
@@ -214,113 +214,121 @@ class UpdateWeatherEventSerializer(serializers.ModelSerializer):
             data["highest_temperature"] = instance.extra_data.get("highest_temperature", 0)
             data["start_date"] = instance.extra_data.get("start_date", "")
             data["end_date"] = instance.extra_data.get("end_date", "")
-        
+
         data.pop("extra_data", None)  # Use pop with default to avoid KeyError if key doesn't exist
 
         # Calculate production-level USDA verification status
         try:
             from carbon.models import CarbonEntry
-            
+
             carbon_entries = CarbonEntry.objects.filter(production=instance)
             total_entries = carbon_entries.count()
-            
+
             if total_entries > 0:
                 usda_verified_entries = carbon_entries.filter(usda_verified=True).count()
                 usda_factors_based_entries = carbon_entries.filter(usda_factors_based=True).count()
-                
+
                 # Production is USDA verified if majority of entries are USDA verified or factors-based
-                production_usda_verified = (
-                    usda_verified_entries > 0 or 
-                    usda_factors_based_entries >= (total_entries * 0.5)
+                production_usda_verified = usda_verified_entries > 0 or usda_factors_based_entries >= (
+                    total_entries * 0.5
                 )
-                
+
                 # Add to extra_data for frontend
-                if data.get('extra_data') is None:
-                    data['extra_data'] = {}
-                
-                data['extra_data']['usda_verified'] = production_usda_verified
-                data['extra_data']['usda_verification_details'] = {
-                    'total_entries': total_entries,
-                    'usda_verified_entries': usda_verified_entries,
-                    'usda_factors_based_entries': usda_factors_based_entries,
-                    'verification_percentage': round((usda_verified_entries / total_entries * 100), 1) if total_entries > 0 else 0
+                if data.get("extra_data") is None:
+                    data["extra_data"] = {}
+
+                data["extra_data"]["usda_verified"] = production_usda_verified
+                data["extra_data"]["usda_verification_details"] = {
+                    "total_entries": total_entries,
+                    "usda_verified_entries": usda_verified_entries,
+                    "usda_factors_based_entries": usda_factors_based_entries,
+                    "verification_percentage": (
+                        round((usda_verified_entries / total_entries * 100), 1) if total_entries > 0 else 0
+                    ),
                 }
-                
+
                 # Calculate and add carbon totals for dashboard display
                 from django.db.models import Sum
-                total_emissions = carbon_entries.filter(type='emission').aggregate(Sum('co2e_amount'))['co2e_amount__sum'] or 0
-                total_offsets = carbon_entries.filter(type='offset').aggregate(Sum('co2e_amount'))['co2e_amount__sum'] or 0
+
+                total_emissions = (
+                    carbon_entries.filter(type="emission").aggregate(Sum("co2e_amount"))["co2e_amount__sum"] or 0
+                )
+                total_offsets = (
+                    carbon_entries.filter(type="offset").aggregate(Sum("co2e_amount"))["co2e_amount__sum"] or 0
+                )
                 carbon_score = 50  # Default score
-                
+
                 # Calculate carbon score using the model method with industry benchmark
                 if total_emissions > 0 or total_offsets > 0:
-                    from carbon.models import CarbonEntry, CarbonBenchmark
-                    
+                    from carbon.models import CarbonBenchmark, CarbonEntry
+
                     # Get industry benchmark for the production
                     industry_benchmark = None
                     try:
                         # Get crop type from product name
                         product_name = instance.product.name.lower() if instance.product else None
                         crop_type = None
-                        
+
                         if product_name:
                             # Map product names to benchmark crop types
                             crop_mapping = {
-                                'citrus (oranges)': 'orange',
-                                'citrus (lemons)': 'lemon', 
-                                'strawberries': 'strawberry',
-                                'almonds': 'almond',
-                                'grapes': 'grape',
-                                'apples': 'apple',
-                                'avocados': 'avocado',
-                                'tomatoes': 'tomato',
-                                'corn': 'corn',
-                                'soybeans': 'soybean'
+                                "citrus (oranges)": "orange",
+                                "citrus (lemons)": "lemon",
+                                "strawberries": "strawberry",
+                                "almonds": "almond",
+                                "grapes": "grape",
+                                "apples": "apple",
+                                "avocados": "avocado",
+                                "tomatoes": "tomato",
+                                "corn": "corn",
+                                "soybeans": "soybean",
                             }
-                            
+
                             crop_type = crop_mapping.get(product_name, product_name.split()[0])
-                        
+
                         # Look for crop-specific benchmark
                         if crop_type:
                             benchmark = CarbonBenchmark.objects.filter(
                                 crop_type=crop_type,
                                 year=instance.start_date.year if instance.start_date else 2025,
-                                usda_verified=True
+                                usda_verified=True,
                             ).first()
-                            
+
                             if benchmark:
                                 # Convert per-kg benchmark to total production benchmark
                                 # Estimate production weight (default 1000kg if unknown)
                                 estimated_production_kg = 1000  # Default estimate
                                 industry_benchmark = benchmark.average_emissions * estimated_production_kg
-                    
+
                     except Exception as e:
                         print(f"Error getting benchmark for production {instance.id}: {e}")
-                    
-                    carbon_score = CarbonEntry.calculate_carbon_score(total_emissions, total_offsets, industry_benchmark)
-                
-                data['extra_data']['total_emissions'] = float(total_emissions)
-                data['extra_data']['total_offsets'] = float(total_offsets)
-                data['extra_data']['carbon_score'] = carbon_score
+
+                    carbon_score = CarbonEntry.calculate_carbon_score(
+                        total_emissions, total_offsets, industry_benchmark
+                    )
+
+                data["extra_data"]["total_emissions"] = float(total_emissions)
+                data["extra_data"]["total_offsets"] = float(total_offsets)
+                data["extra_data"]["carbon_score"] = carbon_score
             else:
                 # No carbon entries, so not USDA verified
-                if data.get('extra_data') is None:
-                    data['extra_data'] = {}
-                data['extra_data']['usda_verified'] = False
-                data['extra_data']['total_emissions'] = 0.0
-                data['extra_data']['total_offsets'] = 0.0
-                data['extra_data']['carbon_score'] = 50
-                
+                if data.get("extra_data") is None:
+                    data["extra_data"] = {}
+                data["extra_data"]["usda_verified"] = False
+                data["extra_data"]["total_emissions"] = 0.0
+                data["extra_data"]["total_offsets"] = 0.0
+                data["extra_data"]["carbon_score"] = 50
+
         except Exception as e:
             print(f"Error calculating USDA verification for production {instance.id}: {e}")
             # Fallback to existing logic
-            if data.get('extra_data') is None:
-                data['extra_data'] = {}
-            data['extra_data']['usda_verified'] = False
-            data['extra_data']['total_emissions'] = 0.0
-            data['extra_data']['total_offsets'] = 0.0
-            data['extra_data']['carbon_score'] = 50
-        
+            if data.get("extra_data") is None:
+                data["extra_data"] = {}
+            data["extra_data"]["usda_verified"] = False
+            data["extra_data"]["total_emissions"] = 0.0
+            data["extra_data"]["total_offsets"] = 0.0
+            data["extra_data"]["carbon_score"] = 50
+
         return data
 
     def update(self, instance, validated_data):
@@ -414,16 +422,17 @@ class OptimizedHistoryListSerializer(serializers.ModelSerializer):
     Optimized serializer for dashboard list view that avoids expensive operations
     like get_events() and get_members() that cause N+1 queries.
     """
+
     product = serializers.SerializerMethodField()
     parcel = serializers.SerializerMethodField()
     members = serializers.SerializerMethodField()
     crop_type = serializers.SerializerMethodField()
-    
+
     class Meta:
         model = History
         fields = [
             "id",
-            "start_date", 
+            "start_date",
             "finish_date",
             "name",
             "published",
@@ -434,7 +443,7 @@ class OptimizedHistoryListSerializer(serializers.ModelSerializer):
             "qr_code",
             "reputation",
             "is_outdoor",
-            "age_of_plants", 
+            "age_of_plants",
             "number_of_plants",
             "soil_ph",
             "crop_type",
@@ -451,10 +460,10 @@ class OptimizedHistoryListSerializer(serializers.ModelSerializer):
     def get_crop_type(self, history):
         if history.crop_type:
             return {
-                'id': history.crop_type.id,
-                'name': history.crop_type.name,
-                'category': history.crop_type.category,
-                'slug': history.crop_type.slug
+                "id": history.crop_type.id,
+                "name": history.crop_type.name,
+                "category": history.crop_type.category,
+                "slug": history.crop_type.slug,
             }
         return None
 
@@ -465,18 +474,18 @@ class OptimizedHistoryListSerializer(serializers.ModelSerializer):
         """
         # Check if we have cached member data in extra_data
         if history.extra_data and isinstance(history.extra_data, dict):
-            cached_members = history.extra_data.get('cached_members', [])
+            cached_members = history.extra_data.get("cached_members", [])
             if cached_members:
                 return [
                     {
                         "id": member.get("id"),
                         "first_name": member.get("first_name", ""),
                         "last_name": member.get("last_name", ""),
-                        "image": member.get("image")
+                        "image": member.get("image"),
                     }
                     for member in cached_members[:3]  # Limit to 3 members
                 ]
-        
+
         # Return empty list to avoid expensive queries
         # Members will be loaded on demand when needed
         return []
@@ -486,138 +495,146 @@ class OptimizedHistoryListSerializer(serializers.ModelSerializer):
         Override to add computed USDA verification status and enhanced production info
         """
         data = super().to_representation(instance)
-        
+
         # Calculate production-level USDA verification status
         try:
             from carbon.models import CarbonEntry
-            
+
             carbon_entries = CarbonEntry.objects.filter(production=instance)
             total_entries = carbon_entries.count()
-            
+
             if total_entries > 0:
                 usda_verified_entries = carbon_entries.filter(usda_verified=True).count()
                 usda_factors_based_entries = carbon_entries.filter(usda_factors_based=True).count()
-                
+
                 # Production is USDA verified if majority of entries are USDA verified or factors-based
-                production_usda_verified = (
-                    usda_verified_entries > 0 or 
-                    usda_factors_based_entries >= (total_entries * 0.5)
+                production_usda_verified = usda_verified_entries > 0 or usda_factors_based_entries >= (
+                    total_entries * 0.5
                 )
-                
+
                 # Add to extra_data for frontend
-                if data.get('extra_data') is None:
-                    data['extra_data'] = {}
-                
-                data['extra_data']['usda_verified'] = production_usda_verified
-                data['extra_data']['usda_verification_details'] = {
-                    'total_entries': total_entries,
-                    'usda_verified_entries': usda_verified_entries,
-                    'usda_factors_based_entries': usda_factors_based_entries,
-                    'verification_percentage': round((usda_verified_entries / total_entries * 100), 1) if total_entries > 0 else 0
+                if data.get("extra_data") is None:
+                    data["extra_data"] = {}
+
+                data["extra_data"]["usda_verified"] = production_usda_verified
+                data["extra_data"]["usda_verification_details"] = {
+                    "total_entries": total_entries,
+                    "usda_verified_entries": usda_verified_entries,
+                    "usda_factors_based_entries": usda_factors_based_entries,
+                    "verification_percentage": (
+                        round((usda_verified_entries / total_entries * 100), 1) if total_entries > 0 else 0
+                    ),
                 }
-                
+
                 # Calculate and add carbon totals for dashboard display
                 from django.db.models import Sum
-                total_emissions = carbon_entries.filter(type='emission').aggregate(Sum('co2e_amount'))['co2e_amount__sum'] or 0
-                total_offsets = carbon_entries.filter(type='offset').aggregate(Sum('co2e_amount'))['co2e_amount__sum'] or 0
+
+                total_emissions = (
+                    carbon_entries.filter(type="emission").aggregate(Sum("co2e_amount"))["co2e_amount__sum"] or 0
+                )
+                total_offsets = (
+                    carbon_entries.filter(type="offset").aggregate(Sum("co2e_amount"))["co2e_amount__sum"] or 0
+                )
                 carbon_score = 50  # Default score
-                
+
                 # Calculate carbon score using the model method with industry benchmark
                 if total_emissions > 0 or total_offsets > 0:
-                    from carbon.models import CarbonEntry, CarbonBenchmark
-                    
+                    from carbon.models import CarbonBenchmark, CarbonEntry
+
                     # Get industry benchmark for the production
                     industry_benchmark = None
                     try:
                         # Get crop type from product name
                         product_name = instance.product.name.lower() if instance.product else None
                         crop_type = None
-                        
+
                         if product_name:
                             # Map product names to benchmark crop types
                             crop_mapping = {
-                                'citrus (oranges)': 'orange',
-                                'citrus (lemons)': 'lemon', 
-                                'strawberries': 'strawberry',
-                                'almonds': 'almond',
-                                'grapes': 'grape',
-                                'apples': 'apple',
-                                'avocados': 'avocado',
-                                'tomatoes': 'tomato',
-                                'corn': 'corn',
-                                'soybeans': 'soybean'
+                                "citrus (oranges)": "orange",
+                                "citrus (lemons)": "lemon",
+                                "strawberries": "strawberry",
+                                "almonds": "almond",
+                                "grapes": "grape",
+                                "apples": "apple",
+                                "avocados": "avocado",
+                                "tomatoes": "tomato",
+                                "corn": "corn",
+                                "soybeans": "soybean",
                             }
-                            
+
                             crop_type = crop_mapping.get(product_name, product_name.split()[0])
-                        
+
                         # Look for crop-specific benchmark
                         if crop_type:
                             benchmark = CarbonBenchmark.objects.filter(
                                 crop_type=crop_type,
                                 year=instance.start_date.year if instance.start_date else 2025,
-                                usda_verified=True
+                                usda_verified=True,
                             ).first()
-                            
+
                             if benchmark:
                                 # Convert per-kg benchmark to total production benchmark
                                 # Estimate production weight (default 1000kg if unknown)
                                 estimated_production_kg = 1000  # Default estimate
                                 industry_benchmark = benchmark.average_emissions * estimated_production_kg
-                    
+
                     except Exception as e:
                         print(f"Error getting benchmark for production {instance.id}: {e}")
-                    
-                    carbon_score = CarbonEntry.calculate_carbon_score(total_emissions, total_offsets, industry_benchmark)
-                
-                data['extra_data']['total_emissions'] = float(total_emissions)
-                data['extra_data']['total_offsets'] = float(total_offsets)
-                data['extra_data']['carbon_score'] = carbon_score
+
+                    carbon_score = CarbonEntry.calculate_carbon_score(
+                        total_emissions, total_offsets, industry_benchmark
+                    )
+
+                data["extra_data"]["total_emissions"] = float(total_emissions)
+                data["extra_data"]["total_offsets"] = float(total_offsets)
+                data["extra_data"]["carbon_score"] = carbon_score
             else:
                 # No carbon entries, so not USDA verified
-                if data.get('extra_data') is None:
-                    data['extra_data'] = {}
-                data['extra_data']['usda_verified'] = False
-                data['extra_data']['total_emissions'] = 0.0
-                data['extra_data']['total_offsets'] = 0.0
-                data['extra_data']['carbon_score'] = 50
-        
+                if data.get("extra_data") is None:
+                    data["extra_data"] = {}
+                data["extra_data"]["usda_verified"] = False
+                data["extra_data"]["total_emissions"] = 0.0
+                data["extra_data"]["total_offsets"] = 0.0
+                data["extra_data"]["carbon_score"] = 50
+
         except Exception as e:
             print(f"Error calculating USDA verification for production {instance.id}: {e}")
             # Fallback to existing logic
-            if data.get('extra_data') is None:
-                data['extra_data'] = {}
-            data['extra_data']['usda_verified'] = False
-            data['extra_data']['total_emissions'] = 0.0
-            data['extra_data']['total_offsets'] = 0.0
-            data['extra_data']['carbon_score'] = 50
-        
+            if data.get("extra_data") is None:
+                data["extra_data"] = {}
+            data["extra_data"]["usda_verified"] = False
+            data["extra_data"]["total_emissions"] = 0.0
+            data["extra_data"]["total_offsets"] = 0.0
+            data["extra_data"]["carbon_score"] = 50
+
         # Enhance production name to be more descriptive and unique
         try:
-            if data.get('extra_data') is None:
-                data['extra_data'] = {}
-                
+            if data.get("extra_data") is None:
+                data["extra_data"] = {}
+
             # Generate a more meaningful production name
             product_name = instance.product.name if instance.product else "Agricultural Product"
             year = instance.start_date.year if instance.start_date else "2025"
-            
+
             # Get production method from extra_data
-            production_method = data['extra_data'].get('production_method', 'conventional')
-            
+            production_method = data["extra_data"].get("production_method", "conventional")
+
             # Create unique name based on product and method (only if not conventional)
-            if production_method != 'conventional':
+            if production_method != "conventional":
                 enhanced_name = f"{production_method.title()} {product_name} {year}"
             else:
                 enhanced_name = f"{product_name} {year}"
-            
+
             # Override the name field with enhanced version
-            data['name'] = enhanced_name
-            
+            data["name"] = enhanced_name
+
             # Store original name in extra_data for reference
-            data['extra_data']['original_name'] = instance.name
-            
+            data["extra_data"]["original_name"] = instance.name
+
         except Exception as e:
             print(f"Error enhancing production name for {instance.id}: {e}")
-        
+
         return data
 
 
@@ -672,10 +689,10 @@ class HistorySerializer(serializers.ModelSerializer):
     def get_crop_type(self, history):
         if history.crop_type:
             return {
-                'id': history.crop_type.id,
-                'name': history.crop_type.name,
-                'category': history.crop_type.category,
-                'slug': history.crop_type.slug
+                "id": history.crop_type.id,
+                "name": history.crop_type.name,
+                "category": history.crop_type.category,
+                "slug": history.crop_type.slug,
             }
         return None
 
@@ -683,8 +700,8 @@ class HistorySerializer(serializers.ModelSerializer):
         try:
             if not history.album:
                 return []
-            
-            request = self.context.get('request')
+
+            request = self.context.get("request")
             return [
                 request.build_absolute_uri(image.image.url) if request else image.image.url
                 for image in history.album.images.all()
@@ -701,16 +718,16 @@ class HistorySerializer(serializers.ModelSerializer):
         try:
             # First check if we have cached members in extra_data
             if history.extra_data and isinstance(history.extra_data, dict):
-                cached_members = history.extra_data.get('cached_members', [])
+                cached_members = history.extra_data.get("cached_members", [])
                 if cached_members:
                     return cached_members[:3]  # Limit to 3 members
-            
+
             # Fallback to querying involved users
             user_ids = history.get_involved_users()
             if user_ids:
                 members = User.objects.filter(id__in=user_ids).order_by("first_name")[:3]
                 return BasicUserSerializer(members, many=True).data
-            
+
             return []
         except Exception as e:
             print(f"Error getting members for history {history.id}: {str(e)}")
@@ -738,9 +755,7 @@ class ListHistoryClassSerializer(serializers.ModelSerializer):
         return history_scan.date.strftime("%m/%d/%Y")
 
     def get_product(self, history_scan):
-        return (
-            history_scan.history.product.name if history_scan.history.product else None
-        )
+        return history_scan.history.product.name if history_scan.history.product else None
 
     def get_location(self, history_scan):
         if history_scan.city is None and history_scan.country is None:
@@ -791,7 +806,7 @@ class PublicHistoryListSerializer(serializers.ModelSerializer):
     def get_image(self, history):
         if history.album is None or history.album.images.first() is None:
             return None
-        request = self.context.get('request')
+        request = self.context.get("request")
         image = history.album.images.first() if history.album else None
         return request.build_absolute_uri(image.image.url) if request else image.image.url
 
@@ -834,134 +849,148 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         try:
             # Get basic event data without expensive carbon calculations
             events_data = []
-            
+
             # Get events using minimal queries with correct related names
             chemical_events = history.history_chemicalevent_events.only(
-                'id', 'date', 'description', 'commercial_name', 'volume', 'concentration', 'type'
+                "id", "date", "description", "commercial_name", "volume", "concentration", "type"
             )
             production_events = history.history_productionevent_events.only(
-                'id', 'date', 'description', 'type', 'observation'
+                "id", "date", "description", "type", "observation"
             )
             weather_events = history.history_weatherevent_events.only(
-                'id', 'date', 'description', 'type', 'observation'
+                "id", "date", "description", "type", "observation"
             )
             equipment_events = history.history_equipmentevent_events.only(
-                'id', 'date', 'description', 'type', 'equipment_name'
+                "id", "date", "description", "type", "equipment_name"
             )
             soil_events = history.history_soilmanagementevent_events.only(
-                'id', 'date', 'description', 'type', 'amendment_type'
+                "id", "date", "description", "type", "amendment_type"
             )
             pest_events = history.history_pestmanagementevent_events.only(
-                'id', 'date', 'description', 'type', 'pest_species'
+                "id", "date", "description", "type", "pest_species"
             )
             general_events = history.history_generalevent_events.only(
-                'id', 'date', 'description', 'name', 'observation'
+                "id", "date", "description", "name", "observation"
             )
-            
+
             # Create lightweight event data without carbon calculations
             for event in chemical_events:
-                events_data.append({
-                    'id': event.id,
-                    'date': event.date.isoformat() if event.date else None,
-                    'description': event.description or 'Chemical Application',
-                    'observation': getattr(event, 'observation', ''),
-                    'type': 'chemical',
-                    'certified': getattr(event, 'certified', True),
-                    'index': getattr(event, 'index', 0),
-                    'volume': event.volume,
-                    'concentration': event.concentration,
-                    'equipment': event.commercial_name
-                })
-            
+                events_data.append(
+                    {
+                        "id": event.id,
+                        "date": event.date.isoformat() if event.date else None,
+                        "description": event.description or "Chemical Application",
+                        "observation": getattr(event, "observation", ""),
+                        "type": "chemical",
+                        "certified": getattr(event, "certified", True),
+                        "index": getattr(event, "index", 0),
+                        "volume": event.volume,
+                        "concentration": event.concentration,
+                        "equipment": event.commercial_name,
+                    }
+                )
+
             for event in production_events:
-                events_data.append({
-                    'id': event.id,
-                    'date': event.date.isoformat() if event.date else None,
-                    'description': event.description or 'Production Activity',
-                    'observation': event.observation or '',
-                    'type': 'production',
-                    'certified': getattr(event, 'certified', True),
-                    'index': getattr(event, 'index', 0),
-                    'volume': None,
-                    'concentration': None,
-                    'equipment': None
-                })
-            
+                events_data.append(
+                    {
+                        "id": event.id,
+                        "date": event.date.isoformat() if event.date else None,
+                        "description": event.description or "Production Activity",
+                        "observation": event.observation or "",
+                        "type": "production",
+                        "certified": getattr(event, "certified", True),
+                        "index": getattr(event, "index", 0),
+                        "volume": None,
+                        "concentration": None,
+                        "equipment": None,
+                    }
+                )
+
             for event in weather_events:
-                events_data.append({
-                    'id': event.id,
-                    'date': event.date.isoformat() if event.date else None,
-                    'description': event.description or 'Weather Event',
-                    'observation': event.observation or '',
-                    'type': 'weather',
-                    'certified': getattr(event, 'certified', True),
-                    'index': getattr(event, 'index', 0),
-                    'volume': None,
-                    'concentration': None,
-                    'equipment': None
-                })
-            
+                events_data.append(
+                    {
+                        "id": event.id,
+                        "date": event.date.isoformat() if event.date else None,
+                        "description": event.description or "Weather Event",
+                        "observation": event.observation or "",
+                        "type": "weather",
+                        "certified": getattr(event, "certified", True),
+                        "index": getattr(event, "index", 0),
+                        "volume": None,
+                        "concentration": None,
+                        "equipment": None,
+                    }
+                )
+
             for event in equipment_events:
-                events_data.append({
-                    'id': event.id,
-                    'date': event.date.isoformat() if event.date else None,
-                    'description': event.description or 'Equipment Use',
-                    'observation': getattr(event, 'observation', ''),
-                    'type': 'equipment',
-                    'certified': getattr(event, 'certified', True),
-                    'index': getattr(event, 'index', 0),
-                    'volume': None,
-                    'concentration': None,
-                    'equipment': event.equipment_name
-                })
-            
+                events_data.append(
+                    {
+                        "id": event.id,
+                        "date": event.date.isoformat() if event.date else None,
+                        "description": event.description or "Equipment Use",
+                        "observation": getattr(event, "observation", ""),
+                        "type": "equipment",
+                        "certified": getattr(event, "certified", True),
+                        "index": getattr(event, "index", 0),
+                        "volume": None,
+                        "concentration": None,
+                        "equipment": event.equipment_name,
+                    }
+                )
+
             for event in soil_events:
-                events_data.append({
-                    'id': event.id,
-                    'date': event.date.isoformat() if event.date else None,
-                    'description': event.description or 'Soil Management',
-                    'observation': getattr(event, 'observation', ''),
-                    'type': 'soil_management',
-                    'certified': getattr(event, 'certified', True),
-                    'index': getattr(event, 'index', 0),
-                    'volume': None,
-                    'concentration': None,
-                    'equipment': event.amendment_type
-                })
-            
+                events_data.append(
+                    {
+                        "id": event.id,
+                        "date": event.date.isoformat() if event.date else None,
+                        "description": event.description or "Soil Management",
+                        "observation": getattr(event, "observation", ""),
+                        "type": "soil_management",
+                        "certified": getattr(event, "certified", True),
+                        "index": getattr(event, "index", 0),
+                        "volume": None,
+                        "concentration": None,
+                        "equipment": event.amendment_type,
+                    }
+                )
+
             for event in pest_events:
-                events_data.append({
-                    'id': event.id,
-                    'date': event.date.isoformat() if event.date else None,
-                    'description': event.description or 'Pest Management',
-                    'observation': getattr(event, 'observation', ''),
-                    'type': 'pest_management',
-                    'certified': getattr(event, 'certified', True),
-                    'index': getattr(event, 'index', 0),
-                    'volume': None,
-                    'concentration': None,
-                    'equipment': event.pest_species
-                })
-            
+                events_data.append(
+                    {
+                        "id": event.id,
+                        "date": event.date.isoformat() if event.date else None,
+                        "description": event.description or "Pest Management",
+                        "observation": getattr(event, "observation", ""),
+                        "type": "pest_management",
+                        "certified": getattr(event, "certified", True),
+                        "index": getattr(event, "index", 0),
+                        "volume": None,
+                        "concentration": None,
+                        "equipment": event.pest_species,
+                    }
+                )
+
             for event in general_events:
-                events_data.append({
-                    'id': event.id,
-                    'date': event.date.isoformat() if event.date else None,
-                    'description': event.name or event.description or 'General Event',
-                    'observation': event.observation or '',
-                    'type': 'general',
-                    'certified': getattr(event, 'certified', True),
-                    'index': getattr(event, 'index', 0),
-                    'volume': None,
-                    'concentration': None,
-                    'equipment': None
-                })
-            
+                events_data.append(
+                    {
+                        "id": event.id,
+                        "date": event.date.isoformat() if event.date else None,
+                        "description": event.name or event.description or "General Event",
+                        "observation": event.observation or "",
+                        "type": "general",
+                        "certified": getattr(event, "certified", True),
+                        "index": getattr(event, "index", 0),
+                        "volume": None,
+                        "concentration": None,
+                        "equipment": None,
+                    }
+                )
+
             # Sort by index first, then by date
-            events_data.sort(key=lambda x: (x.get('index', 0), x.get('date', '')))
-            
+            events_data.sort(key=lambda x: (x.get("index", 0), x.get("date", "")))
+
             return events_data
-            
+
         except Exception as e:
             print(f"Error getting optimized events: {e}")
             # Return empty list if there's an error
@@ -971,7 +1000,9 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         return history.certificate_percentage
 
     def get_similar_histories(self, history):
-        return PublicHistoryListSerializer(self.context.get("similar_histories", []), many=True, context={'request': self.context.get('request')}).data
+        return PublicHistoryListSerializer(
+            self.context.get("similar_histories", []), many=True, context={"request": self.context.get("request")}
+        ).data
 
     def get_company(self, history):
         return history.parcel.establishment.company.name if history.parcel else None
@@ -984,7 +1015,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
 
     def get_qr_code(self, history):
         if history.qr_code:
-            request = self.context.get('request')
+            request = self.context.get("request")
             return request.build_absolute_uri(history.qr_code.url) if request else history.qr_code.url
         return None
 
@@ -992,8 +1023,8 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         try:
             if not history.album:
                 return []
-            
-            request = self.context.get('request')
+
+            request = self.context.get("request")
             return [
                 request.build_absolute_uri(image.image.url) if request else image.image.url
                 for image in history.album.images.all()

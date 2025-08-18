@@ -1,10 +1,11 @@
 import logging
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone
 
-from .models import Notification, NotificationPreference, NotificationTemplate, NotificationType, NotificationPriority
+from .models import Notification, NotificationPreference, NotificationPriority, NotificationTemplate, NotificationType
 
 User = get_user_model()
 logger = logging.getLogger(__name__)

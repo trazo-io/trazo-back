@@ -1,19 +1,30 @@
 import os
 
-from backend.settings.base import *
 from decouple import config
 
+from backend.settings.base import *
+
 # ALLOWED_HOSTS - check for staging environment
-if os.environ.get('ENVIRONMENT') == 'staging':
+if os.environ.get("ENVIRONMENT") == "staging":
     # Staging-specific allowed hosts
     ALLOWED_HOSTS = [
-        "localhost", ".localhost", "127.0.0.1", "testserver",
+        "localhost",
+        ".localhost",
+        "127.0.0.1",
+        "testserver",
         "staging-alb-1273700937.us-east-2.elb.amazonaws.com",
-        "api-staging.trazo.io"
+        "api-staging.trazo.io",
     ]
 else:
     # Development allowed hosts
-    ALLOWED_HOSTS = ("localhost", ".localhost", "127.0.0.1", "192.168.1.3", "7172-167-60-250-132.ngrok-free.app", "testserver")
+    ALLOWED_HOSTS = (
+        "localhost",
+        ".localhost",
+        "127.0.0.1",
+        "192.168.1.3",
+        "7172-167-60-250-132.ngrok-free.app",
+        "testserver",
+    )
 
 # Database configuration for local development
 # Use PostgreSQL if Docker services are running, fallback to SQLite
@@ -22,30 +33,30 @@ else:
 try:
     import psycopg2
     from decouple import config
-    
+
     DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': config('DATABASE_NAME', default='trazo_dev'),
-            'USER': config('DATABASE_USER', default='postgres'),
-            'PASSWORD': config('DATABASE_PASSWORD', default='postgres'),
-            'HOST': config('DATABASE_HOST', default='localhost'),
-            'PORT': config('DATABASE_PORT', default='5432'),
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": config("DATABASE_NAME", default="trazo_dev"),
+            "USER": config("DATABASE_USER", default="postgres"),
+            "PASSWORD": config("DATABASE_PASSWORD", default="postgres"),
+            "HOST": config("DATABASE_HOST", default="localhost"),
+            "PORT": config("DATABASE_PORT", default="5432"),
         }
     }
-    
+
     # Optimized Redis Cache Configuration for Carbon Calculations
     CACHES = {
         "default": {
             "BACKEND": "django_redis.cache.RedisCache",
-            "LOCATION": config('REDIS_URL', default='redis://localhost:6379/1'),
+            "LOCATION": config("REDIS_URL", default="redis://localhost:6379/1"),
             "OPTIONS": {
                 "CLIENT_CLASS": "django_redis.client.DefaultClient",
                 "CONNECTION_POOL_KWARGS": {
-                    'max_connections': 50,
-                    'retry_on_timeout': True,
-                    'socket_keepalive': True,
-                    'socket_keepalive_options': {},
+                    "max_connections": 50,
+                    "retry_on_timeout": True,
+                    "socket_keepalive": True,
+                    "socket_keepalive_options": {},
                 },
                 "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
                 "SERIALIZER": "django_redis.serializers.json.JSONSerializer",
@@ -54,20 +65,20 @@ try:
             "KEY_PREFIX": "trazo_carbon",
         }
     }
-    
+
     # Carbon calculation cache timeouts
     CARBON_CACHE_TIMEOUTS = {
-        'emission_factors': 3600,  # 1 hour
-        'calculations': 300,       # 5 minutes
-        'dashboard_stats': 600,    # 10 minutes
-        'usda_api_results': 7200,  # 2 hours
-        'circuit_breaker': 300,    # 5 minutes
+        "emission_factors": 3600,  # 1 hour
+        "calculations": 300,  # 5 minutes
+        "dashboard_stats": 600,  # 10 minutes
+        "usda_api_results": 7200,  # 2 hours
+        "circuit_breaker": 300,  # 5 minutes
     }
-    
+
     # Celery Configuration with Redis
-    CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://localhost:6379/0')
-    CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default='redis://localhost:6379/0')
-    
+    CELERY_BROKER_URL = config("CELERY_BROKER_URL", default="redis://localhost:6379/0")
+    CELERY_RESULT_BACKEND = config("CELERY_RESULT_BACKEND", default="redis://localhost:6379/0")
+
     # Email Configuration (MailDev)
     EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
     EMAIL_HOST = "localhost"
@@ -75,16 +86,16 @@ try:
     EMAIL_USE_TLS = False
     EMAIL_HOST_USER = ""
     EMAIL_HOST_PASSWORD = ""
-    
+
 except ImportError:
     # Fallback to SQLite if PostgreSQL is not available
     DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db_dev.sqlite3',
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db_dev.sqlite3",
         }
     }
-    
+
     # File-based cache backend for development (compatible with django_ratelimit)
     CACHES = {
         "default": {
@@ -92,13 +103,13 @@ except ImportError:
             "LOCATION": "/tmp/django_cache",
         }
     }
-    
+
     # Disable Celery and Redis for local development (optional services)
     CELERY_TASK_ALWAYS_EAGER = True  # Run tasks synchronously in development
     CELERY_TASK_EAGER_PROPAGATES = True
-    CELERY_BROKER_URL = 'memory://'  # In-memory broker for development
-    CELERY_RESULT_BACKEND = 'cache+memory://'
-    
+    CELERY_BROKER_URL = "memory://"  # In-memory broker for development
+    CELERY_RESULT_BACKEND = "cache+memory://"
+
     # Use MailDev for email testing (fallback configuration)
     EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
     EMAIL_HOST = "localhost"
@@ -115,24 +126,24 @@ except ImportError:
 # ]
 
 # CSRF trusted origins - check for staging environment
-if os.environ.get('ENVIRONMENT') == 'staging':
+if os.environ.get("ENVIRONMENT") == "staging":
     # Staging-specific CSRF configuration
     CSRF_TRUSTED_ORIGINS = [
         "https://staging-alb-1273700937.us-east-2.elb.amazonaws.com",
         "http://staging-alb-1273700937.us-east-2.elb.amazonaws.com",
-        "https://*.localhost", 
+        "https://*.localhost",
         "http://app.localhost:3000",
-        "http://localhost:3000"  # Add direct localhost support
+        "http://localhost:3000",  # Add direct localhost support
     ]
 else:
-    # Development CSRF configuration  
+    # Development CSRF configuration
     CSRF_TRUSTED_ORIGINS = [
-        "https://*.localhost", 
-        "http://app.localhost:3000", 
+        "https://*.localhost",
+        "http://app.localhost:3000",
         "http://localhost:3000",  # Add direct localhost support
-        "https://7172-167-60-250-132.ngrok-free.app", 
-        "http://localhost:4173", 
-        "http://app.localhost:4173"
+        "https://7172-167-60-250-132.ngrok-free.app",
+        "http://localhost:4173",
+        "http://app.localhost:4173",
     ]
 
 CORS_ORIGIN_ALLOW_ALL = True
@@ -165,16 +176,16 @@ CORS_ALLOWED_ORIGINS = [
 
 # Allow custom consent header for GDPR compliance
 CORS_ALLOW_HEADERS = [
-    'accept',
-    'accept-encoding',
-    'authorization',
-    'content-type',
-    'dnt',
-    'origin',
-    'user-agent',
-    'x-csrftoken',
-    'x-requested-with',
-    'x-analytics-consent',  # Custom header for consent management
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
+    "x-analytics-consent",  # Custom header for consent management
 ]
 
 # Fix for development - allow cross-subdomain cookies and HTTP
@@ -191,13 +202,13 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.AnonRateThrottle",
-        "rest_framework.throttling.UserRateThrottle"
+        "rest_framework.throttling.UserRateThrottle",
     ],
     "DEFAULT_THROTTLE_RATES": {
-        "anon": "1000/hour",          # Very permissive for development
-        "user": "2000/hour",          # Very permissive for development
-        "login": "100/minute",        # Very permissive for development
-        "signup": "50/minute",        # Very permissive for development
+        "anon": "1000/hour",  # Very permissive for development
+        "user": "2000/hour",  # Very permissive for development
+        "login": "100/minute",  # Very permissive for development
+        "signup": "50/minute",  # Very permissive for development
         "password_reset": "50/hour",  # Very permissive for development
         "carbon_calculation": "500/hour",
         "api_sensitive": "200/hour",
@@ -210,9 +221,9 @@ REST_FRAMEWORK = {
 # Enable cross-subdomain cookies for localhost development
 SIMPLE_JWT = {
     **SIMPLE_JWT,  # Inherit base settings
-    'AUTH_COOKIE_DOMAIN': '.localhost',  # Allow cookies across *.localhost
-    'AUTH_COOKIE_SECURE': False,  # Allow HTTP in development
-    'AUTH_COOKIE_SAMESITE': 'None',  # For dev cross-subdomain cookie sharing (requires secure=False)
+    "AUTH_COOKIE_DOMAIN": ".localhost",  # Allow cookies across *.localhost
+    "AUTH_COOKIE_SECURE": False,  # Allow HTTP in development
+    "AUTH_COOKIE_SAMESITE": "None",  # For dev cross-subdomain cookie sharing (requires secure=False)
 }
 
 # Email configuration for development
@@ -230,32 +241,32 @@ DEFAULT_FROM_EMAIL = os.environ.get("FROM_EMAIL_ADDRESS", "info@trazo.io")
 # EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
 # Use local filesystem in development
-DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
+DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
 
 # Note: Using Redis and Celery services from Docker for consistency
 # Cache and Celery are already configured above in the PostgreSQL section
 
 # John Deere API Configuration
-JOHN_DEERE_CLIENT_ID = os.environ.get('JOHN_DEERE_CLIENT_ID', 'test_client_id')
-JOHN_DEERE_CLIENT_SECRET = os.environ.get('JOHN_DEERE_CLIENT_SECRET', 'test_client_secret')
-JOHN_DEERE_REDIRECT_URI = os.environ.get('JOHN_DEERE_REDIRECT_URI', 'http://localhost:8000/carbon/john-deere/callback/')
-JOHN_DEERE_USE_SANDBOX = os.environ.get('JOHN_DEERE_USE_SANDBOX', 'True').lower() == 'true'
+JOHN_DEERE_CLIENT_ID = os.environ.get("JOHN_DEERE_CLIENT_ID", "test_client_id")
+JOHN_DEERE_CLIENT_SECRET = os.environ.get("JOHN_DEERE_CLIENT_SECRET", "test_client_secret")
+JOHN_DEERE_REDIRECT_URI = os.environ.get("JOHN_DEERE_REDIRECT_URI", "http://localhost:8000/carbon/john-deere/callback/")
+JOHN_DEERE_USE_SANDBOX = os.environ.get("JOHN_DEERE_USE_SANDBOX", "True").lower() == "true"
 
 # Weather API Configuration
 # NOAA Weather Service (free, no API key required for US locations)
 NOAA_API_BASE_URL = "https://api.weather.gov"
 
 # OpenWeatherMap (backup service, requires API key)
-OPENWEATHER_API_KEY = os.environ.get('OPENWEATHER_API_KEY', None)
+OPENWEATHER_API_KEY = os.environ.get("OPENWEATHER_API_KEY", None)
 OPENWEATHER_BASE_URL = "https://api.openweathermap.org/data/2.5"
 
 # Weather alert thresholds (can be customized per establishment)
 WEATHER_ALERT_THRESHOLDS = {
-    'high_temp': 85,  # Fahrenheit
-    'low_temp': 35,   # Fahrenheit
-    'high_wind': 20,  # mph
-    'low_humidity': 30,  # percentage
-    'high_humidity': 85  # percentage
+    "high_temp": 85,  # Fahrenheit
+    "low_temp": 35,  # Fahrenheit
+    "high_wind": 20,  # mph
+    "low_humidity": 30,  # percentage
+    "high_humidity": 85,  # percentage
 }
 
 # Override base URLs for development to include proper subdomains
@@ -263,9 +274,9 @@ BASE_APP_URL = "http://app.localhost:3000/"
 BASE_CONSUMER_URL = "http://consumer.localhost:3000/"
 
 # USDA API Configuration - Use environment variables for security
-USDA_NASS_API_KEY = os.environ.get('USDA_NASS_API_KEY', None)
-USDA_ERS_API_KEY = os.environ.get('USDA_ERS_API_KEY', None)
-USDA_FOODDATA_API_KEY = os.environ.get('USDA_FOODDATA_API_KEY', None)
+USDA_NASS_API_KEY = os.environ.get("USDA_NASS_API_KEY", None)
+USDA_ERS_API_KEY = os.environ.get("USDA_ERS_API_KEY", None)
+USDA_FOODDATA_API_KEY = os.environ.get("USDA_FOODDATA_API_KEY", None)
 
 # API Attribution (required by NASS Terms of Service)
 USDA_API_ATTRIBUTION = "This product uses the NASS API but is not endorsed or certified by NASS."

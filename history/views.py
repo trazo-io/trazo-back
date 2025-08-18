@@ -1,71 +1,71 @@
-from django.core.exceptions import ObjectDoesNotExist
-from django.http import Http404
-from django.shortcuts import get_object_or_404
-from django.db.models import Avg, Q, Count, Prefetch
-from django.utils import timezone
-from django.utils.timezone import make_aware
-from django.core.cache import cache
-
-from rest_framework import filters, status, viewsets
-from rest_framework.decorators import action, permission_classes
-from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework.response import Response
-from rest_framework.pagination import PageNumberPagination
-
-from company.models import Company
-from product.models import Product, Parcel
-
-from common.models import Gallery
-from backend.permissions import CompanyNestedViewSet
-from notifications.services import notification_service
-
-from .models import CommonEvent, History, HistoryScan
-from .serializers import (
-    EventSerializer,
-    HistorySerializer,
-    ListHistoryClassSerializer,
-    PublicHistorySerializer,
-    WeatherEventSerializer,
-    ChemicalEventSerializer,
-    ProductionEventSerializer,
-    GeneralEventSerializer,
-    EquipmentEventSerializer,
-    SoilManagementEventSerializer,
-    PestManagementEventSerializer,
-    UpdateWeatherEventSerializer,
-    UpdateChemicalEventSerializer,
-    UpdateProductionEventSerializer,
-    UpdateGeneralEventSerializer,
-    UpdateEquipmentEventSerializer,
-    UpdateSoilManagementEventSerializer,
-    UpdatePestManagementEventSerializer,
-    OptimizedHistoryListSerializer,
-)
-
 import hashlib
 from datetime import datetime, timedelta
-from dateutil import parser as date_parser
 
+from django.core.cache import cache
+from django.core.exceptions import ObjectDoesNotExist
+from django.db.models import Avg, Count, Prefetch, Q
+from django.http import Http404
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from django.utils.timezone import make_aware
+
+from dateutil import parser as date_parser
+from rest_framework import filters, status, viewsets
+from rest_framework.decorators import action, permission_classes
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+
+from backend.permissions import CompanyNestedViewSet
+from common.models import Gallery
+from company.models import Company
+from notifications.services import notification_service
+from product.models import Parcel, Product
 from reviews.models import Review
-from .models import (
-    WeatherEvent,
-    ChemicalEvent,
-    ProductionEvent,
-    GeneralEvent,
-    EquipmentEvent,
-    SoilManagementEvent,
-    PestManagementEvent,
-)
+
 from .constants import (
-    WEATHER_EVENT_TYPE,
-    PRODUCTION_EVENT_TYPE,
-    CHEMICAL_EVENT_TYPE,
-    GENERAL_EVENT_TYPE,
-    EQUIPMENT_EVENT_TYPE,
-    SOIL_MANAGEMENT_EVENT_TYPE,
-    PEST_MANAGEMENT_EVENT_TYPE,
-    EVENT_TYPE_TO_MODEL,
     ALLOWED_PERIODS,
+    CHEMICAL_EVENT_TYPE,
+    EQUIPMENT_EVENT_TYPE,
+    EVENT_TYPE_TO_MODEL,
+    GENERAL_EVENT_TYPE,
+    PEST_MANAGEMENT_EVENT_TYPE,
+    PRODUCTION_EVENT_TYPE,
+    SOIL_MANAGEMENT_EVENT_TYPE,
+    WEATHER_EVENT_TYPE,
+)
+from .models import (
+    ChemicalEvent,
+    CommonEvent,
+    EquipmentEvent,
+    GeneralEvent,
+    History,
+    HistoryScan,
+    PestManagementEvent,
+    ProductionEvent,
+    SoilManagementEvent,
+    WeatherEvent,
+)
+from .serializers import (
+    ChemicalEventSerializer,
+    EquipmentEventSerializer,
+    EventSerializer,
+    GeneralEventSerializer,
+    HistorySerializer,
+    ListHistoryClassSerializer,
+    OptimizedHistoryListSerializer,
+    PestManagementEventSerializer,
+    ProductionEventSerializer,
+    PublicHistorySerializer,
+    SoilManagementEventSerializer,
+    UpdateChemicalEventSerializer,
+    UpdateEquipmentEventSerializer,
+    UpdateGeneralEventSerializer,
+    UpdatePestManagementEventSerializer,
+    UpdateProductionEventSerializer,
+    UpdateSoilManagementEventSerializer,
+    UpdateWeatherEventSerializer,
+    WeatherEventSerializer,
 )
 
 
@@ -427,6 +427,7 @@ class HistoryViewSet(viewsets.ModelViewSet):
     def _create_template_events(self, history, template_events):
         """Helper method to create events from template data"""
         from datetime import datetime
+
         from django.utils import timezone
 
         # Get current event count once
@@ -820,19 +821,19 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
     Enhanced public scan endpoint with 2025 security, privacy & performance standards
     Handles QR scans, page views, and consumer feedback with GDPR compliance
     """
+
     queryset = HistoryScan.objects.select_related(
-        'history', 'history__product', 'history__parcel', 
-        'history__parcel__establishment', 'user'
+        "history", "history__product", "history__parcel", "history__parcel__establishment", "user"
     ).all()
     permission_classes = [AllowAny]
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Import services here to avoid circular imports
-        from .services.privacy_service import PrivacyService
-        from .services.deduplication_service import DeduplicationService
         from .services.bot_detection_service import BotDetectionService
-        
+        from .services.deduplication_service import DeduplicationService
+        from .services.privacy_service import PrivacyService
+
         self.privacy_service = PrivacyService
         self.deduplication_service = DeduplicationService
         self.bot_detection_service = BotDetectionService
@@ -849,7 +850,7 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
         print(f"  - Request data: {request.data}")
         print(f"  - Cookies: {request.COOKIES}")
         print(f"  - Headers: {request.META.keys()}")
-        
+
         try:
             # Input validation
             validation_result = self._validate_scan_request(request)
@@ -857,36 +858,26 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
                 return validation_result
 
             production_id = request.data.get("production_id")
-            
+
             # Get the production/history with validation
             try:
-                history = History.objects.select_related(
-                    'parcel__establishment__company',
-                    'product'
-                ).get(id=production_id)
-                
-                # Check if production is publicly accessible
-                if not history.published:
-                    return Response(
-                        {"error": "Production not publicly accessible"}, 
-                        status=status.HTTP_403_FORBIDDEN
-                    )
-                    
-            except History.DoesNotExist:
-                return Response(
-                    {"error": "Production not found"}, 
-                    status=status.HTTP_404_NOT_FOUND
+                history = History.objects.select_related("parcel__establishment__company", "product").get(
+                    id=production_id
                 )
 
+                # Check if production is publicly accessible
+                if not history.published:
+                    return Response({"error": "Production not publicly accessible"}, status=status.HTTP_403_FORBIDDEN)
+
+            except History.DoesNotExist:
+                return Response({"error": "Production not found"}, status=status.HTTP_404_NOT_FOUND)
+
             # Bot detection and security checks
-            should_block, block_reason = self.bot_detection_service.should_block_request(
-                request, request.data
-            )
-            
+            should_block, block_reason = self.bot_detection_service.should_block_request(request, request.data)
+
             if should_block:
                 return Response(
-                    {"error": "Request rejected", "reason": block_reason}, 
-                    status=status.HTTP_429_TOO_MANY_REQUESTS
+                    {"error": "Request rejected", "reason": block_reason}, status=status.HTTP_429_TOO_MANY_REQUESTS
                 )
 
             # Process privacy and consent data with comprehensive debugging
@@ -894,49 +885,47 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
             print(f"  - Request cookies: {request.COOKIES}")
             print(f"  - All headers: {dict(request.META)}")
             print(f"  - Request data: {request.data}")
-            
+
             privacy_data = self.privacy_service.process_scan_consent(request)
             print(f"🔍 Privacy service returned: {privacy_data}")
-            
+
             # Check for consent requirement
             consent_required = self.privacy_service.is_consent_required(request)
-            consent_given = privacy_data['consent_given']
-            
+            consent_given = privacy_data["consent_given"]
+
             print(f"🔍 Consent validation:")
             print(f"  - Consent required: {consent_required}")
             print(f"  - Consent given: {consent_given}")
             print(f"  - Will block: {consent_required and not consent_given}")
-            
+
             if consent_required and not consent_given:
                 print(f"🚫 Blocking request - consent required but not given")
                 return Response(
                     {
-                        "error": "Analytics consent required", 
+                        "error": "Analytics consent required",
                         "consent_required": True,
-                        "message": "To help improve carbon transparency, please allow analytics tracking"
-                    }, 
-                    status=status.HTTP_428_PRECONDITION_REQUIRED
+                        "message": "To help improve carbon transparency, please allow analytics tracking",
+                    },
+                    status=status.HTTP_428_PRECONDITION_REQUIRED,
                 )
-            
+
             print(f"✅ Consent validation passed - proceeding with scan creation")
 
             # Session deduplication check
             is_duplicate, original_scan, dedup_method = self.deduplication_service.check_comprehensive_duplicate(
-                privacy_data['session_hash'],
-                privacy_data['ip_hash'],
-                production_id
+                privacy_data["session_hash"], privacy_data["ip_hash"], production_id
             )
 
             # Calculate bot score and engagement
             bot_score = self.bot_detection_service.calculate_bot_score(request, request.data)
             is_verified_human = self.bot_detection_service.is_verified_human(request, request.data)
-            
+
             # Calculate engagement score
             engagement_score = self._calculate_engagement_score(request.data)
-            
+
             # Determine scan type
             scan_type = self._determine_scan_type(request.data)
-            
+
             # Determine referrer type
             referrer_type = self._determine_referrer_type(request)
 
@@ -945,30 +934,26 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
 
             # Create enhanced scan with all new fields
             scan_data = {
-                'history': history,
-                'user': user,
-                'comment': request.data.get("comment", ""),
-                
+                "history": history,
+                "user": user,
+                "comment": request.data.get("comment", ""),
                 # Privacy & GDPR fields
                 **privacy_data,
-                
                 # Deduplication fields
-                'is_duplicate': is_duplicate,
-                'original_scan': original_scan,
-                
+                "is_duplicate": is_duplicate,
+                "original_scan": original_scan,
                 # Bot detection & quality fields
-                'bot_score': bot_score,
-                'is_verified_human': is_verified_human,
-                
+                "bot_score": bot_score,
+                "is_verified_human": is_verified_human,
                 # Analytics & engagement fields
-                'scan_type': scan_type,
-                'engagement_score': engagement_score,
-                'referrer_type': referrer_type,
+                "scan_type": scan_type,
+                "engagement_score": engagement_score,
+                "referrer_type": referrer_type,
             }
 
             # Create the scan
             scan = HistoryScan.objects.create(**scan_data)
-            
+
             # Mark as duplicate if needed
             if is_duplicate and original_scan:
                 self.deduplication_service.mark_as_duplicate(original_scan, scan)
@@ -982,7 +967,7 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
                 "id": scan.id,
                 "message": "Scan recorded successfully",
                 "is_duplicate": is_duplicate,
-                "deduplication_method": dedup_method if is_duplicate else None
+                "deduplication_method": dedup_method if is_duplicate else None,
             }
 
             return Response(response_data, status=status.HTTP_201_CREATED)
@@ -990,14 +975,12 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
         except Exception as e:
             # Log error for monitoring (don't expose internal details)
             import logging
+
             logger = logging.getLogger(__name__)
             logger.error(f"Enhanced scan creation failed: {str(e)}", exc_info=True)
-            
-            return Response(
-                {"error": "Failed to record scan"}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-    
+
+            return Response({"error": "Failed to record scan"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     def _validate_scan_request(self, request):
         """
         Validate scan request data and headers
@@ -1005,126 +988,120 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
         # Required fields validation
         production_id = request.data.get("production_id")
         if not production_id:
-            return Response(
-                {"error": "production_id is required"}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
+            return Response({"error": "production_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
         # Validate production_id format
         try:
             int(production_id)
         except (ValueError, TypeError):
-            return Response(
-                {"error": "Invalid production_id format"}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
+            return Response({"error": "Invalid production_id format"}, status=status.HTTP_400_BAD_REQUEST)
+
         # Validate comment length
         comment = request.data.get("comment", "")
         if comment and len(comment) > 1000:  # Reasonable limit
-            return Response(
-                {"error": "Comment too long (max 1000 characters)"}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
+            return Response({"error": "Comment too long (max 1000 characters)"}, status=status.HTTP_400_BAD_REQUEST)
+
         # Basic content validation
         if comment and self._contains_suspicious_content(comment):
-            return Response(
-                {"error": "Comment contains inappropriate content"}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
+            return Response({"error": "Comment contains inappropriate content"}, status=status.HTTP_400_BAD_REQUEST)
+
         return None
-    
+
     def _contains_suspicious_content(self, text):
         """
         Basic content filtering for obvious spam/malicious content
         """
         if not text:
             return False
-            
+
         text_lower = text.lower()
-        
+
         # Check for obvious spam patterns
         spam_indicators = [
-            'http://', 'https://', 'www.',  # URLs
-            'click here', 'buy now', 'free money',  # Spam phrases
-            '<script', '<?php', 'javascript:',  # Code injection attempts
+            "http://",
+            "https://",
+            "www.",  # URLs
+            "click here",
+            "buy now",
+            "free money",  # Spam phrases
+            "<script",
+            "<?php",
+            "javascript:",  # Code injection attempts
         ]
-        
+
         return any(indicator in text_lower for indicator in spam_indicators)
-    
+
     def _determine_scan_type(self, data):
         """
         Determine the type of scan based on request data
         """
         comment = data.get("comment", "")
-        
+
         if comment and len(comment.strip()) > 0:
             # Check if it looks like structured feedback
-            if any(keyword in comment.lower() for keyword in ['reaction:', 'rating:', 'score:']):
-                return 'feedback'
+            if any(keyword in comment.lower() for keyword in ["reaction:", "rating:", "score:"]):
+                return "feedback"
             else:
-                return 'review'
-        
+                return "review"
+
         # Check for social sharing indicators
-        if data.get("shared", False) or data.get("referrer_type") == 'social':
-            return 'share'
-        
-        return 'qr'
-    
+        if data.get("shared", False) or data.get("referrer_type") == "social":
+            return "share"
+
+        return "qr"
+
     def _determine_referrer_type(self, request):
         """
         Determine how the user reached the page
         """
-        referrer = request.META.get('HTTP_REFERER', '')
-        
+        referrer = request.META.get("HTTP_REFERER", "")
+
         if not referrer:
-            return 'direct'
-        
+            return "direct"
+
         referrer_lower = referrer.lower()
-        
+
         # Social media platforms
-        social_platforms = ['facebook', 'twitter', 'instagram', 'linkedin', 'whatsapp', 'telegram']
+        social_platforms = ["facebook", "twitter", "instagram", "linkedin", "whatsapp", "telegram"]
         if any(platform in referrer_lower for platform in social_platforms):
-            return 'social'
-        
+            return "social"
+
         # Search engines
-        search_engines = ['google', 'bing', 'yahoo', 'duckduckgo']
+        search_engines = ["google", "bing", "yahoo", "duckduckgo"]
         if any(engine in referrer_lower for engine in search_engines):
-            return 'search'
-        
+            return "search"
+
         # Email clients (limited detection)
-        if 'mail' in referrer_lower or 'email' in referrer_lower:
-            return 'email'
-        
+        if "mail" in referrer_lower or "email" in referrer_lower:
+            return "email"
+
         # If from same domain, likely QR code or direct link
-        if 'trazo' in referrer_lower:
-            return 'qr'
-        
-        return 'other'
-    
+        if "trazo" in referrer_lower:
+            return "qr"
+
+        return "other"
+
     def _calculate_engagement_score(self, data):
         """
         Calculate engagement score based on available data
         """
         score = 0.0
-        
+
         # Time on page (if provided by frontend)
-        time_on_page = data.get('time_on_page', 0)
+        time_on_page = data.get("time_on_page", 0)
         try:
             time_on_page = float(time_on_page)
             if time_on_page >= 30:  # 30+ seconds
                 score += 0.3
             elif time_on_page >= 10:  # 10+ seconds
                 score += 0.2
-            elif time_on_page >= 5:   # 5+ seconds
+            elif time_on_page >= 5:  # 5+ seconds
                 score += 0.1
         except (ValueError, TypeError):
             pass
-        
+
         # Comment engagement
-        comment = data.get('comment', '')
+        comment = data.get("comment", "")
         if comment and len(comment.strip()) > 0:
             if len(comment) > 50:  # Substantial comment
                 score += 0.4
@@ -1132,9 +1109,9 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
                 score += 0.3
             else:  # Short comment
                 score += 0.2
-        
+
         # Interaction count (if provided by frontend)
-        interactions = data.get('interactions', 0)
+        interactions = data.get("interactions", 0)
         try:
             interactions = int(interactions)
             if interactions >= 5:
@@ -1145,7 +1122,7 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
                 score += 0.1
         except (ValueError, TypeError):
             pass
-        
+
         return min(score, 1.0)
 
     def create_scan_notification(self, history, scanner, scan):
@@ -1172,7 +1149,7 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
                     if scanner != product_owner:
                         # Get product name
                         product_name = history.product.name if history.product else f"Production {history.id}"
-                        
+
                         # Privacy-safe location
                         scan_location = scan.get_location_display() if scan else None
 
@@ -1186,6 +1163,7 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
         except Exception as e:
             # Log error but don't break the scan functionality
             import logging
+
             logger = logging.getLogger(__name__)
             logger.error(f"Error creating scan notification: {e}", exc_info=True)
 
@@ -1196,41 +1174,29 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
         """
         try:
             history_scan = get_object_or_404(HistoryScan, pk=pk)
-            
+
             # Bot detection for comment updates
-            should_block, block_reason = self.bot_detection_service.should_block_request(
-                request, request.data
-            )
-            
+            should_block, block_reason = self.bot_detection_service.should_block_request(request, request.data)
+
             if should_block:
                 return Response(
-                    {"error": "Request rejected", "reason": block_reason}, 
-                    status=status.HTTP_429_TOO_MANY_REQUESTS
+                    {"error": "Request rejected", "reason": block_reason}, status=status.HTTP_429_TOO_MANY_REQUESTS
                 )
-            
+
             comment = request.data.get("comment", None)
             if comment is None:
-                return Response(
-                    {"error": "Comment is required"}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
+                return Response({"error": "Comment is required"}, status=status.HTTP_400_BAD_REQUEST)
+
             # Validate comment
             if len(comment) > 1000:
-                return Response(
-                    {"error": "Comment too long (max 1000 characters)"}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
+                return Response({"error": "Comment too long (max 1000 characters)"}, status=status.HTTP_400_BAD_REQUEST)
+
             if self._contains_suspicious_content(comment):
-                return Response(
-                    {"error": "Comment contains inappropriate content"}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
+                return Response({"error": "Comment contains inappropriate content"}, status=status.HTTP_400_BAD_REQUEST)
+
             # Update comment and recalculate engagement score
             history_scan.comment = comment
-            
+
             # Recalculate engagement based on comment
             if comment and len(comment.strip()) > 0:
                 if len(comment) > 50:
@@ -1239,21 +1205,19 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
                     history_scan.engagement_score = max(history_scan.engagement_score, 0.3)
                 else:
                     history_scan.engagement_score = max(history_scan.engagement_score, 0.2)
-            
+
             history_scan.save()
-            
+
             return Response({"message": "Comment updated successfully"}, status=status.HTTP_200_OK)
-            
+
         except Exception as e:
             import logging
+
             logger = logging.getLogger(__name__)
             logger.error(f"Comment update failed: {str(e)}", exc_info=True)
-            
-            return Response(
-                {"error": "Failed to update comment"}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-    
+
+            return Response({"error": "Failed to update comment"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated])
     def analytics_insights(self, request):
         """
@@ -1263,62 +1227,51 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
         try:
             establishment_id = request.query_params.get("establishment_id")
             if not establishment_id:
-                return Response(
-                    {"error": "establishment_id is required"}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
+                return Response({"error": "establishment_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
             # Verify user has access to this establishment
             from company.models import Establishment
             from users.models import WorksIn
-            
+
             try:
                 establishment = Establishment.objects.get(id=establishment_id)
-                
+
                 # Check if user has access to this establishment's company
                 has_access = WorksIn.objects.filter(
                     user=request.user,
                     company=establishment.company,
-                    role__in=['CA', 'FM']  # Company Admin or Farm Manager
+                    role__in=["CA", "FM"],  # Company Admin or Farm Manager
                 ).exists()
-                
+
                 if not has_access:
-                    return Response(
-                        {"error": "Access denied to this establishment"}, 
-                        status=status.HTTP_403_FORBIDDEN
-                    )
-                    
+                    return Response({"error": "Access denied to this establishment"}, status=status.HTTP_403_FORBIDDEN)
+
             except Establishment.DoesNotExist:
-                return Response(
-                    {"error": "Establishment not found"}, 
-                    status=status.HTTP_404_NOT_FOUND
-                )
-            
+                return Response({"error": "Establishment not found"}, status=status.HTTP_404_NOT_FOUND)
+
             # Get date range
             days = int(request.query_params.get("days", 30))
             days = min(days, 365)  # Limit to 1 year
-            
+
             # Generate privacy-safe analytics
             from .services.analytics_service import AnalyticsService
+
             insights = AnalyticsService.get_establishment_insights(establishment_id, days)
-            
+
             return Response(insights, status=status.HTTP_200_OK)
-            
+
         except Exception as e:
             import logging
+
             logger = logging.getLogger(__name__)
             logger.error(f"Analytics insights failed: {str(e)}", exc_info=True)
-            
-            return Response(
-                {"error": "Failed to generate insights"}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+
+            return Response({"error": "Failed to generate insights"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class HistoryScanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     queryset = HistoryScan.objects.select_related(
-        'history', 'history__product', 'history__parcel',
-        'history__parcel__establishment', 'user'
+        "history", "history__product", "history__parcel", "history__parcel__establishment", "user"
     ).all()
     serializer_class = ListHistoryClassSerializer
 

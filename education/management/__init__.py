@@ -1,1 +1,1 @@
-# Management commands for education module 
+# Management commands for education module

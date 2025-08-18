@@ -1,226 +1,249 @@
-from django.shortcuts import render, get_object_or_404
-from rest_framework import viewsets, status, generics, permissions
+from django.shortcuts import get_object_or_404, render
+
+from rest_framework import generics, permissions, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+
 # Conditional ratelimit import for staging compatibility
 try:
     from django.conf import settings
-    if getattr(settings, 'RATELIMIT_ENABLE', True) and 'django_ratelimit' in getattr(settings, 'INSTALLED_APPS', []):
+
+    if getattr(settings, "RATELIMIT_ENABLE", True) and "django_ratelimit" in getattr(settings, "INSTALLED_APPS", []):
         from django_ratelimit.decorators import ratelimit
     else:
         # Create a no-op decorator when ratelimit is disabled
         def ratelimit(*args, **kwargs):
             def decorator(func):
                 return func
+
             return decorator
+
 except ImportError:
     # Fallback no-op decorator if django_ratelimit is not available
     def ratelimit(*args, **kwargs):
         def decorator(func):
             return func
+
         return decorator
-from django.utils.decorators import method_decorator
-from django.db.models import Sum, Avg, F, Q, Count
-from django.utils import timezone
-from django.core.cache import cache
+
+
+import datetime
+import hashlib
+import json
+import logging
+import math
+import os
+import random
+import traceback
 from datetime import datetime, timedelta
+
+from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.core.cache import cache
+from django.db.models import Avg, Count, F, Q, Sum
+from django.utils import timezone
+from django.utils.decorators import method_decorator
+
+from rest_framework import serializers
+
+from carbon.services.carbon_cost_insights import CarbonCostInsights
+from company.models import Establishment
+from history.models import (
+    ChemicalEvent,
+    EquipmentEvent,
+    GeneralEvent,
+    History,
+    PestManagementEvent,
+    ProductionEvent,
+    SoilManagementEvent,
+    WeatherEvent,
+)
+
 from .models import (
-    CropType, ProductionTemplate, EventTemplate,
-    CarbonSource,
-    CarbonOffsetAction,
-    CarbonEntry,
-    CarbonCertification,
-    CarbonBenchmark,
-    CarbonReport,
+    AutomationRule,
     CarbonAuditLog,
-    SustainabilityBadge,
-    MicroOffset,
-    GreenPoints,
+    CarbonBenchmark,
+    CarbonCertification,
+    CarbonEntry,
+    CarbonOffsetAction,
+    CarbonOffsetCertificate,
     CarbonOffsetProject,
     CarbonOffsetPurchase,
-    CarbonOffsetCertificate,
-    IoTDevice,
+    CarbonReport,
+    CarbonSource,
+    CropType,
+    EventTemplate,
+    GreenPoints,
     IoTDataPoint,
-    AutomationRule
+    IoTDevice,
+    MicroOffset,
+    ProductionTemplate,
+    SustainabilityBadge,
 )
-from history.models import WeatherEvent, ChemicalEvent, ProductionEvent, GeneralEvent, EquipmentEvent, SoilManagementEvent, PestManagementEvent
 from .serializers import (
-    CropTypeSerializer, CropTypeDropdownSerializer, EventTemplateSerializer, CropTemplateDetailSerializer, QuickEventTemplateSerializer,
-    CarbonSourceSerializer,
-    CarbonOffsetActionSerializer,
-    CarbonEntrySerializer,
-    CarbonCertificationSerializer,
-    CarbonBenchmarkSerializer,
-    CarbonReportSerializer,
-    CarbonFootprintSummarySerializer,
-    SustainabilityBadgeSerializer,
-    MicroOffsetSerializer,
-    GreenPointsSerializer,
     CarbonAuditLogSerializer,
+    CarbonBenchmarkSerializer,
+    CarbonCertificationSerializer,
+    CarbonEntrySerializer,
+    CarbonFootprintSummarySerializer,
+    CarbonOffsetActionSerializer,
+    CarbonOffsetCertificateSerializer,
     CarbonOffsetProjectSerializer,
     CarbonOffsetPurchaseSerializer,
-    CarbonOffsetCertificateSerializer
+    CarbonReportSerializer,
+    CarbonSourceSerializer,
+    CropTemplateDetailSerializer,
+    CropTypeDropdownSerializer,
+    CropTypeSerializer,
+    EventTemplateSerializer,
+    GreenPointsSerializer,
+    MicroOffsetSerializer,
+    QuickEventTemplateSerializer,
+    SustainabilityBadgeSerializer,
 )
 from .services import coolfarm_service
-from django.contrib.auth import get_user_model
-from company.models import Establishment
-from history.models import History
+from .services.automation_service import AutomationLevelService
+from .services.blockchain import blockchain_service
 from .services.calculator import calculator
-from .services.verification import verification_service
+from .services.carbon_transparency_service import transparency_service
+from .services.educational_content_service import EducationalContentService
+from .services.enhanced_usda_factors import EnhancedUSDAFactors
+from .services.event_carbon_calculator import EventCarbonCalculator
+from .services.john_deere_api import JohnDeereAPI, get_john_deere_api, is_john_deere_configured
+
 # from .services.certificate import certificate_generator  # Temporarily disabled due to font issues
 from .services.report_generator import report_generator
-from rest_framework import serializers
-import logging
-import random
-import math
-import datetime
-import json
-
-from .services.john_deere_api import JohnDeereAPI, is_john_deere_configured, get_john_deere_api
-from .services.weather_api import WeatherService, get_weather_service, get_current_weather, get_agricultural_recommendations, check_weather_alerts
-from .services.blockchain import blockchain_service
-from .services.automation_service import AutomationLevelService
-import hashlib
-import traceback
-from carbon.services.carbon_cost_insights import CarbonCostInsights
-import os
-from django.conf import settings
-from .services.event_carbon_calculator import EventCarbonCalculator
-from .services.enhanced_usda_factors import EnhancedUSDAFactors
-from .services.educational_content_service import EducationalContentService
-from .services.carbon_transparency_service import transparency_service
+from .services.verification import verification_service
+from .services.weather_api import (
+    WeatherService,
+    check_weather_alerts,
+    get_agricultural_recommendations,
+    get_current_weather,
+    get_weather_service,
+)
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
+
 # Custom permission for company admin/manager
 class IsCompanyAdminOrManager(permissions.BasePermission):
     def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and request.user.role in ['admin', 'manager']
+        return request.user and request.user.is_authenticated and request.user.role in ["admin", "manager"]
+
 
 # Custom permission to check for premium subscription
 class IsPremiumUser(permissions.BasePermission):
     def has_permission(self, request, view):
         # Placeholder logic for checking subscription status
         # In a real implementation, this would check against a subscription model or service
-        if not hasattr(request.user, 'subscription_plan'):
+        if not hasattr(request.user, "subscription_plan"):
             return False
-        return request.user.subscription_plan in ['premium', 'enterprise']
+        return request.user.subscription_plan in ["premium", "enterprise"]
+
 
 # Database-driven Crop Template System ViewSets
 
+
 class CropTypeViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet for crop types - read-only for API consumers"""
+
     queryset = CropType.objects.filter(is_active=True)
     serializer_class = CropTypeSerializer
     permission_classes = [permissions.IsAuthenticated]
-    
+
     def get_serializer_class(self):
-        if self.action == 'retrieve':
+        if self.action == "retrieve":
             return CropTemplateDetailSerializer
-        elif self.action == 'dropdown':
+        elif self.action == "dropdown":
             return CropTypeDropdownSerializer
         return CropTypeSerializer
-    
-    @action(detail=False, methods=['get'])
+
+    @action(detail=False, methods=["get"])
     def dropdown(self, request):
         """Get lightweight crop types data for dropdowns - only essential fields"""
-        queryset = self.get_queryset().only('id', 'name', 'category', 'slug')
+        queryset = self.get_queryset().only("id", "name", "category", "slug")
         serializer = CropTypeDropdownSerializer(queryset, many=True)
         return Response(serializer.data)
-    
-    @action(detail=True, methods=['get'])
+
+    @action(detail=True, methods=["get"])
     def event_templates(self, request, pk=None):
         """Get all event templates for a specific crop type"""
         crop_type = self.get_object()
-        templates = EventTemplate.objects.filter(
-            crop_type=crop_type, 
-            is_active=True
-        ).order_by('timing', 'name')
-        
+        templates = EventTemplate.objects.filter(crop_type=crop_type, is_active=True).order_by("timing", "name")
+
         serializer = EventTemplateSerializer(templates, many=True)
         return Response(serializer.data)
-    
-    @action(detail=True, methods=['get'])
+
+    @action(detail=True, methods=["get"])
     def default_events(self, request, pk=None):
         """Get default enabled event templates for production creation"""
         crop_type = self.get_object()
-        templates = EventTemplate.objects.filter(
-            crop_type=crop_type,
-            is_active=True,
-            is_default_enabled=True
-        ).order_by('timing', 'name')
-        
+        templates = EventTemplate.objects.filter(crop_type=crop_type, is_active=True, is_default_enabled=True).order_by(
+            "timing", "name"
+        )
+
         serializer = EventTemplateSerializer(templates, many=True)
         return Response(serializer.data)
 
 
 class EventTemplateViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet for event templates - read-only for API consumers"""
+
     queryset = EventTemplate.objects.filter(is_active=True)
     serializer_class = EventTemplateSerializer
     permission_classes = [permissions.IsAuthenticated]
-    
+
     def get_queryset(self):
         queryset = super().get_queryset()
-        
+
         # Filter by crop type if provided
-        crop_type_id = self.request.query_params.get('crop_type')
+        crop_type_id = self.request.query_params.get("crop_type")
         if crop_type_id:
             try:
                 crop_type_id = int(crop_type_id)
                 queryset = queryset.filter(crop_type_id=crop_type_id)
             except (ValueError, TypeError):
                 pass
-                
+
         # Filter by event type if provided
-        event_type = self.request.query_params.get('event_type')
+        event_type = self.request.query_params.get("event_type")
         if event_type:
             queryset = queryset.filter(event_type=event_type)
-            
+
         # Filter for quick events (lightweight for dropdown)
-        if self.request.query_params.get('quick'):
+        if self.request.query_params.get("quick"):
             self.serializer_class = QuickEventTemplateSerializer
-            
-        return queryset.order_by('timing', 'name')
-    
-    @action(detail=True, methods=['post'])
+
+        return queryset.order_by("timing", "name")
+
+    @action(detail=True, methods=["post"])
     def use_template(self, request, pk=None):
         """Mark template as used (increment usage counter)"""
         template = self.get_object()
         template.increment_usage()
-        return Response({'message': 'Template usage recorded'})
-    
-    @action(detail=False, methods=['get'])
+        return Response({"message": "Template usage recorded"})
+
+    @action(detail=False, methods=["get"])
     def by_crop_type(self, request):
         """Get templates grouped by crop type for quick event selection"""
-        crop_type_id = request.query_params.get('crop_type_id')
+        crop_type_id = request.query_params.get("crop_type_id")
         if not crop_type_id:
-            return Response(
-                {'error': 'crop_type_id parameter is required'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-            
+            return Response({"error": "crop_type_id parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
             crop_type = CropType.objects.get(id=crop_type_id, is_active=True)
         except CropType.DoesNotExist:
-            return Response(
-                {'error': 'Crop type not found'}, 
-                status=status.HTTP_404_NOT_FOUND
-            )
-            
+            return Response({"error": "Crop type not found"}, status=status.HTTP_404_NOT_FOUND)
+
         # Fix: Use the correct relationship through production_template
-        templates = EventTemplate.objects.filter(
-            production_template__crop_type=crop_type,
-            is_active=True
-        ).order_by('timing', 'name')
-        
+        templates = EventTemplate.objects.filter(production_template__crop_type=crop_type, is_active=True).order_by(
+            "timing", "name"
+        )
+
         serializer = QuickEventTemplateSerializer(templates, many=True)
-        return Response({
-            'crop_type': CropTypeSerializer(crop_type).data,
-            'templates': serializer.data
-        })
+        return Response({"crop_type": CropTypeSerializer(crop_type).data, "templates": serializer.data})
 
 
 class CarbonSourceViewSet(viewsets.ModelViewSet):
@@ -228,14 +251,16 @@ class CarbonSourceViewSet(viewsets.ModelViewSet):
     serializer_class = CarbonSourceSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+
 class CarbonOffsetActionViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = CarbonOffsetAction.objects.all()
     serializer_class = CarbonOffsetActionSerializer
     permission_classes = [permissions.IsAuthenticated]  # Require authentication
 
-@method_decorator(ratelimit(key='user', rate='10/m', method='POST', block=True), name='create')
-@method_decorator(ratelimit(key='user', rate='20/m', method='GET', block=True), name='list')
-@method_decorator(ratelimit(key='user', rate='20/m', method='GET', block=True), name='retrieve')
+
+@method_decorator(ratelimit(key="user", rate="10/m", method="POST", block=True), name="create")
+@method_decorator(ratelimit(key="user", rate="20/m", method="GET", block=True), name="list")
+@method_decorator(ratelimit(key="user", rate="20/m", method="GET", block=True), name="retrieve")
 class CarbonEntryViewSet(viewsets.ModelViewSet):
     queryset = CarbonEntry.objects.all()
     serializer_class = CarbonEntrySerializer
@@ -245,97 +270,85 @@ class CarbonEntryViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if not user.is_authenticated:
             return CarbonEntry.objects.none()
-        
+
         queryset = CarbonEntry.objects.all()
-        
+
         # Apply filters from query parameters
-        establishment_id = self.request.query_params.get('establishment')
-        production_id = self.request.query_params.get('production')
-        year = self.request.query_params.get('year')
-        
+        establishment_id = self.request.query_params.get("establishment")
+        production_id = self.request.query_params.get("production")
+        year = self.request.query_params.get("year")
+
         if establishment_id:
             try:
                 establishment_id = int(establishment_id)
                 queryset = queryset.filter(establishment_id=establishment_id)
             except (ValueError, TypeError):
                 pass
-                
+
         if production_id:
             try:
                 production_id = int(production_id)
                 queryset = queryset.filter(production_id=production_id)
             except (ValueError, TypeError):
                 pass
-                
+
         if year:
             try:
                 year = int(year)
                 queryset = queryset.filter(year=year)
             except (ValueError, TypeError):
                 pass
-                
+
         return queryset
 
-    @ratelimit(key='user', rate='5/m', method='POST', block=True)
-    @action(detail=False, methods=['post'])
+    @ratelimit(key="user", rate="5/m", method="POST", block=True)
+    @action(detail=False, methods=["post"])
     def calculate_emissions(self, request):
         """
         Calculate emissions using CoolFarmTool API
         """
         try:
-            crop_type = request.data.get('crop_type')
-            acreage = float(request.data.get('acreage', 0))
-            inputs = request.data.get('inputs', {})
-            region = request.data.get('region')
+            crop_type = request.data.get("crop_type")
+            acreage = float(request.data.get("acreage", 0))
+            inputs = request.data.get("inputs", {})
+            region = request.data.get("region")
 
             if not crop_type or acreage <= 0:
-                return Response(
-                    {'error': 'Invalid crop type or acreage'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                return Response({"error": "Invalid crop type or acreage"}, status=status.HTTP_400_BAD_REQUEST)
 
             # Calculate emissions using CoolFarmTool service
             result = coolfarm_service.calculate_emissions(
-                crop_type=crop_type,
-                acreage=acreage,
-                inputs=inputs,
-                region=region
+                crop_type=crop_type, acreage=acreage, inputs=inputs, region=region
             )
 
             return Response(result)
 
         except ValueError as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return Response(
-                {'error': 'Failed to calculate emissions'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return Response({"error": "Failed to calculate emissions"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    @ratelimit(key='user', rate='3/m', method='POST', block=True)
-    @action(detail=False, methods=['post'])
+    @ratelimit(key="user", rate="3/m", method="POST", block=True)
+    @action(detail=False, methods=["post"])
     def bulk_create(self, request):
         entries = request.data
         if not isinstance(entries, list):
-            return Response({'error': 'Expected a list of entries'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Expected a list of entries"}, status=status.HTTP_400_BAD_REQUEST)
 
         serializer = self.get_serializer(data=entries, many=True)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-    @ratelimit(key='user', rate='20/m', method='GET', block=True)
-    @action(detail=False, methods=['get'])
+    @ratelimit(key="user", rate="20/m", method="GET", block=True)
+    @action(detail=False, methods=["get"])
     def by_entity(self, request):
-        entity_type = request.query_params.get('entity_type')
-        entity_id = request.query_params.get('entity_id')
-        if entity_type not in ['establishment', 'production'] or not entity_id:
-            return Response({'error': 'Invalid entity type or ID'}, status=status.HTTP_400_BAD_REQUEST)
+        entity_type = request.query_params.get("entity_type")
+        entity_id = request.query_params.get("entity_id")
+        if entity_type not in ["establishment", "production"] or not entity_id:
+            return Response({"error": "Invalid entity type or ID"}, status=status.HTTP_400_BAD_REQUEST)
 
-        if entity_type == 'establishment':
+        if entity_type == "establishment":
             entries = CarbonEntry.objects.filter(establishment_id=entity_id)
         else:  # production
             entries = CarbonEntry.objects.filter(production_id=entity_id)
@@ -350,31 +363,33 @@ class CarbonEntryViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         # Check if the entry is for production-level tracking and restrict to premium users
-        if serializer.validated_data.get('production') and (not hasattr(self.request.user, 'subscription_plan') or self.request.user.subscription_plan not in ['premium', 'enterprise']):
-            raise permissions.PermissionDenied(detail='Production-level tracking is a premium feature. Upgrade your plan.')
-        
+        if serializer.validated_data.get("production") and (
+            not hasattr(self.request.user, "subscription_plan")
+            or self.request.user.subscription_plan not in ["premium", "enterprise"]
+        ):
+            raise permissions.PermissionDenied(
+                detail="Production-level tracking is a premium feature. Upgrade your plan."
+            )
+
         # If raw_amount is provided, calculate emissions using CoolFarmTool
-        raw_amount = self.request.data.get('raw_amount')
+        raw_amount = self.request.data.get("raw_amount")
         if raw_amount is not None:
             try:
-                crop_type = self.request.data.get('crop_type')
+                crop_type = self.request.data.get("crop_type")
                 acreage = float(raw_amount)
-                inputs = self.request.data.get('inputs', {})
-                region = self.request.data.get('region')
+                inputs = self.request.data.get("inputs", {})
+                region = self.request.data.get("region")
 
                 if crop_type:
                     result = coolfarm_service.calculate_emissions(
-                        crop_type=crop_type,
-                        acreage=acreage,
-                        inputs=inputs,
-                        region=region
+                        crop_type=crop_type, acreage=acreage, inputs=inputs, region=region
                     )
-                    serializer.validated_data['amount'] = result['co2e']
+                    serializer.validated_data["amount"] = result["co2e"]
                     # Use USDA factors but not actually USDA verified
-                    serializer.validated_data['usda_factors_based'] = True
-                    serializer.validated_data['usda_verified'] = False  # No actual USDA verification
-                    serializer.validated_data['verification_status'] = 'factors_verified'
-                    serializer.validated_data['data_source'] = 'USDA Agricultural Research Service'
+                    serializer.validated_data["usda_factors_based"] = True
+                    serializer.validated_data["usda_verified"] = False  # No actual USDA verification
+                    serializer.validated_data["verification_status"] = "factors_verified"
+                    serializer.validated_data["data_source"] = "USDA Agricultural Research Service"
             except Exception as e:
                 # Log error but continue with creation
                 logger.error(f"Error calculating emissions: {e}")
@@ -384,8 +399,8 @@ class CarbonEntryViewSet(viewsets.ModelViewSet):
         CarbonAuditLog.objects.create(
             carbon_entry=serializer.instance,
             user=self.request.user,
-            action='create',
-            details=f'Created {serializer.instance.type} entry'
+            action="create",
+            details=f"Created {serializer.instance.type} entry",
         )
 
     def perform_update(self, serializer):
@@ -394,32 +409,37 @@ class CarbonEntryViewSet(viewsets.ModelViewSet):
         CarbonAuditLog.objects.create(
             carbon_entry=serializer.instance,
             user=self.request.user,
-            action='update',
-            details=f'Updated {serializer.instance.type} entry'
+            action="update",
+            details=f"Updated {serializer.instance.type} entry",
         )
 
     def perform_destroy(self, instance):
         # Log the deletion
         CarbonAuditLog.objects.create(
-            carbon_entry=instance,
-            user=self.request.user,
-            action='delete',
-            details=f'Deleted {instance.type} entry'
+            carbon_entry=instance, user=self.request.user, action="delete", details=f"Deleted {instance.type} entry"
         )
         instance.delete()
 
-    @ratelimit(key='user', rate='10/m', method='GET', block=True)
-    @action(detail=False, methods=['get'])
+    @ratelimit(key="user", rate="10/m", method="GET", block=True)
+    @action(detail=False, methods=["get"])
     def summary(self, request):
-        establishment_id = request.query_params.get('establishment')
-        production_id = request.query_params.get('production')
-        year = request.query_params.get('year', timezone.now().year)
+        establishment_id = request.query_params.get("establishment")
+        production_id = request.query_params.get("production")
+        year = request.query_params.get("year", timezone.now().year)
 
         if not establishment_id and not production_id:
-            return Response({'error': 'Either establishment or production ID is required'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Either establishment or production ID is required"}, status=status.HTTP_400_BAD_REQUEST
+            )
 
-        if production_id and (not hasattr(request.user, 'subscription_plan') or request.user.subscription_plan not in ['premium', 'enterprise']):
-            return Response({'error': 'Production-level tracking is a premium feature. Upgrade your plan.'}, status=status.HTTP_403_FORBIDDEN)
+        if production_id and (
+            not hasattr(request.user, "subscription_plan")
+            or request.user.subscription_plan not in ["premium", "enterprise"]
+        ):
+            return Response(
+                {"error": "Production-level tracking is a premium feature. Upgrade your plan."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         queryset = CarbonEntry.objects.all()
         if establishment_id:
@@ -428,17 +448,17 @@ class CarbonEntryViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(production_id=production_id)
         queryset = queryset.filter(year=year)
 
-        total_emissions = queryset.filter(type='emission').aggregate(Sum('co2e_amount'))['co2e_amount__sum'] or 0
+        total_emissions = queryset.filter(type="emission").aggregate(Sum("co2e_amount"))["co2e_amount__sum"] or 0
         # Use effective_amount for offsets to account for trust score discounts
-        total_offsets = queryset.filter(type='offset').aggregate(Sum('effective_amount'))['effective_amount__sum'] or 0
+        total_offsets = queryset.filter(type="offset").aggregate(Sum("effective_amount"))["effective_amount__sum"] or 0
         net_carbon = total_emissions - total_offsets
-        
+
         # Calculate carbon score (0-100 scale)
         carbon_score = 0
         if total_emissions > 0:
             # Base score on offset percentage with diminishing returns
             offset_percentage = min(100, (total_offsets / total_emissions) * 100)
-            
+
             # Score increases with percentage of offsets
             if offset_percentage >= 100:
                 carbon_score = 85  # Base score for carbon neutrality
@@ -446,7 +466,7 @@ class CarbonEntryViewSet(viewsets.ModelViewSet):
                 carbon_score += min(15, ((offset_percentage - 100) / 50) * 15)
             else:
                 carbon_score = offset_percentage * 0.85  # Scale up to 85 max
-        
+
         # Get industry benchmark if available
         industry_benchmark = 0
         if establishment_id:
@@ -454,17 +474,14 @@ class CarbonEntryViewSet(viewsets.ModelViewSet):
                 establishment = Establishment.objects.get(id=establishment_id)
                 # Try to use industry attribute if it exists, otherwise fall back to type
                 industry = None
-                if hasattr(establishment, 'industry') and establishment.industry:
+                if hasattr(establishment, "industry") and establishment.industry:
                     industry = establishment.industry
                 elif establishment.type:
                     industry = establishment.type
-                
+
                 if industry:
                     try:
-                        benchmark = CarbonBenchmark.objects.filter(
-                                        industry=industry,
-                            year=year
-                        ).first()
+                        benchmark = CarbonBenchmark.objects.filter(industry=industry, year=year).first()
                         if benchmark:
                             industry_benchmark = benchmark.average_emissions
                     except Exception:
@@ -473,240 +490,220 @@ class CarbonEntryViewSet(viewsets.ModelViewSet):
                 pass
             except Establishment.DoesNotExist:
                 pass
-                
+
         # Return consistent field names for frontend
         summary_data = {
-            'total_emissions': total_emissions,
-            'total_offsets': total_offsets,
-            'net_carbon': net_carbon,
-            'carbon_score': round(carbon_score),
-            'industry_average': industry_benchmark
+            "total_emissions": total_emissions,
+            "total_offsets": total_offsets,
+            "net_carbon": net_carbon,
+            "carbon_score": round(carbon_score),
+            "industry_average": industry_benchmark,
         }
-        
+
         return Response(summary_data)
 
-    @ratelimit(key='user', rate='5/m', method='POST', block=True)
-    @action(detail=True, methods=['post'])
+    @ratelimit(key="user", rate="5/m", method="POST", block=True)
+    @action(detail=True, methods=["post"])
     def upload_evidence_photo(self, request, pk=None):
         """
         Upload photo evidence for carbon offset verification (MVP-aligned).
-        
+
         Supports secure photo upload with validation for enhanced self-reported verification.
         Part of Trazo's commitment to agricultural carbon transparency.
         """
         try:
             from .services.photo_evidence_service import photo_evidence_service
-            
+
             carbon_entry = self.get_object()
-            
+
             # Check permissions - user must own this entry or be admin
             if carbon_entry.created_by != request.user and not request.user.is_staff:
                 return Response(
-                    {'error': 'Permission denied. You can only upload photos for your own carbon entries.'}, 
-                    status=status.HTTP_403_FORBIDDEN
+                    {"error": "Permission denied. You can only upload photos for your own carbon entries."},
+                    status=status.HTTP_403_FORBIDDEN,
                 )
-            
+
             # Check if entry type allows photo evidence
-            if carbon_entry.type != 'offset':
+            if carbon_entry.type != "offset":
                 return Response(
-                    {'error': 'Photo evidence is only supported for offset entries'}, 
-                    status=status.HTTP_400_BAD_REQUEST
+                    {"error": "Photo evidence is only supported for offset entries"}, status=status.HTTP_400_BAD_REQUEST
                 )
-            
+
             # Get uploaded file
-            if 'photo' not in request.FILES:
-                return Response(
-                    {'error': 'No photo file provided'}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            uploaded_file = request.FILES['photo']
-            
+            if "photo" not in request.FILES:
+                return Response({"error": "No photo file provided"}, status=status.HTTP_400_BAD_REQUEST)
+
+            uploaded_file = request.FILES["photo"]
+
             # Check if entry already has maximum photos
             current_photos = carbon_entry.evidence_photos or []
             if len(current_photos) >= photo_evidence_service.MAX_PHOTOS_PER_ENTRY:
                 return Response(
-                    {'error': f'Maximum {photo_evidence_service.MAX_PHOTOS_PER_ENTRY} photos allowed per entry'}, 
-                    status=status.HTTP_400_BAD_REQUEST
+                    {"error": f"Maximum {photo_evidence_service.MAX_PHOTOS_PER_ENTRY} photos allowed per entry"},
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
-            
+
             # Process and store photo
             file_data = uploaded_file.read()
             result = photo_evidence_service.process_and_store_photo(
                 file_data=file_data,
                 filename=uploaded_file.name,
                 carbon_entry_id=carbon_entry.id,
-                user_id=request.user.id
+                user_id=request.user.id,
             )
-            
-            if not result['success']:
+
+            if not result["success"]:
                 return Response(
-                    {'error': 'Photo upload failed', 'details': result['errors']}, 
-                    status=status.HTTP_400_BAD_REQUEST
+                    {"error": "Photo upload failed", "details": result["errors"]}, status=status.HTTP_400_BAD_REQUEST
                 )
-            
+
             # Update carbon entry evidence
             if not carbon_entry.evidence_photos:
                 carbon_entry.evidence_photos = []
-            
+
             photo_record = {
-                'photo_id': result['photo_id'],
-                'photo_url': result['photo_url'],
-                'original_filename': uploaded_file.name,
-                'upload_timestamp': result['metadata']['upload_timestamp'],
-                'file_hash': result['metadata']['file_hash'],
-                'file_size': result['metadata']['file_size']
+                "photo_id": result["photo_id"],
+                "photo_url": result["photo_url"],
+                "original_filename": uploaded_file.name,
+                "upload_timestamp": result["metadata"]["upload_timestamp"],
+                "file_hash": result["metadata"]["file_hash"],
+                "file_size": result["metadata"]["file_size"],
             }
-            
+
             carbon_entry.evidence_photos.append(photo_record)
             carbon_entry.save()
-            
+
             # Log the photo upload
             CarbonAuditLog.objects.create(
                 carbon_entry=carbon_entry,
                 user=request.user,
-                action='upload_photo_evidence',
-                details=f'Photo evidence uploaded: {uploaded_file.name}'
-            )
-            
-            logger.info(f"Photo evidence uploaded for carbon entry {carbon_entry.id} by user {request.user.id}")
-            
-            return Response({
-                'success': True,
-                'photo_record': photo_record,
-                'total_photos': len(carbon_entry.evidence_photos),
-                'message': 'Photo evidence uploaded successfully'
-            })
-            
-        except Exception as e:
-            logger.error(f"Photo upload error for carbon entry {pk}: {e}")
-            return Response(
-                {'error': 'Upload failed', 'details': str(e)}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                action="upload_photo_evidence",
+                details=f"Photo evidence uploaded: {uploaded_file.name}",
             )
 
-    @ratelimit(key='user', rate='10/m', method='DELETE', block=True) 
-    @action(detail=True, methods=['delete'])
+            logger.info(f"Photo evidence uploaded for carbon entry {carbon_entry.id} by user {request.user.id}")
+
+            return Response(
+                {
+                    "success": True,
+                    "photo_record": photo_record,
+                    "total_photos": len(carbon_entry.evidence_photos),
+                    "message": "Photo evidence uploaded successfully",
+                }
+            )
+
+        except Exception as e:
+            logger.error(f"Photo upload error for carbon entry {pk}: {e}")
+            return Response({"error": "Upload failed", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @ratelimit(key="user", rate="10/m", method="DELETE", block=True)
+    @action(detail=True, methods=["delete"])
     def delete_evidence_photo(self, request, pk=None):
         """
         Delete photo evidence from carbon offset entry.
         """
         try:
             from .services.photo_evidence_service import photo_evidence_service
-            
+
             carbon_entry = self.get_object()
-            
+
             # Check permissions
             if carbon_entry.created_by != request.user and not request.user.is_staff:
-                return Response(
-                    {'error': 'Permission denied'}, 
-                    status=status.HTTP_403_FORBIDDEN
-                )
-            
-            photo_id = request.query_params.get('photo_id')
+                return Response({"error": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
+
+            photo_id = request.query_params.get("photo_id")
             if not photo_id:
-                return Response(
-                    {'error': 'photo_id parameter required'}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
+                return Response({"error": "photo_id parameter required"}, status=status.HTTP_400_BAD_REQUEST)
+
             # Find and remove photo from evidence list
             evidence_photos = carbon_entry.evidence_photos or []
             photo_to_delete = None
             updated_photos = []
-            
+
             for photo in evidence_photos:
-                if photo.get('photo_id') == photo_id:
+                if photo.get("photo_id") == photo_id:
                     photo_to_delete = photo
                 else:
                     updated_photos.append(photo)
-            
+
             if not photo_to_delete:
-                return Response(
-                    {'error': 'Photo not found'}, 
-                    status=status.HTTP_404_NOT_FOUND
-                )
-            
+                return Response({"error": "Photo not found"}, status=status.HTTP_404_NOT_FOUND)
+
             # Delete from storage
-            photo_evidence_service.delete_photo(photo_to_delete['photo_url'])
-            
+            photo_evidence_service.delete_photo(photo_to_delete["photo_url"])
+
             # Update carbon entry
             carbon_entry.evidence_photos = updated_photos
             carbon_entry.save()
-            
+
             # Log the deletion
             CarbonAuditLog.objects.create(
                 carbon_entry=carbon_entry,
                 user=request.user,
-                action='delete_photo_evidence',
-                details=f'Photo evidence deleted: {photo_to_delete.get("original_filename", "unknown")}'
+                action="delete_photo_evidence",
+                details=f'Photo evidence deleted: {photo_to_delete.get("original_filename", "unknown")}',
             )
-            
-            return Response({
-                'success': True,
-                'deleted_photo_id': photo_id,
-                'remaining_photos': len(updated_photos)
-            })
-            
+
+            return Response({"success": True, "deleted_photo_id": photo_id, "remaining_photos": len(updated_photos)})
+
         except Exception as e:
             logger.error(f"Photo deletion error: {e}")
             return Response(
-                {'error': 'Deletion failed', 'details': str(e)}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": "Deletion failed", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    @ratelimit(key='user', rate='20/m', method='GET', block=True)
-    @action(detail=True, methods=['get'])
+    @ratelimit(key="user", rate="20/m", method="GET", block=True)
+    @action(detail=True, methods=["get"])
     def get_evidence_photos(self, request, pk=None):
         """
         Get all photo evidence for a carbon offset entry.
         """
         try:
             carbon_entry = self.get_object()
-            
+
             # Basic permission check - users can view their own or public QR entries
-            if (carbon_entry.created_by != request.user and 
-                not request.user.is_staff and 
-                not request.query_params.get('qr_view')):
-                return Response(
-                    {'error': 'Permission denied'}, 
-                    status=status.HTTP_403_FORBIDDEN
-                )
-            
+            if (
+                carbon_entry.created_by != request.user
+                and not request.user.is_staff
+                and not request.query_params.get("qr_view")
+            ):
+                return Response({"error": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
+
             evidence_photos = carbon_entry.evidence_photos or []
-            
+
             # For QR public view, only return photo URLs without metadata
-            if request.query_params.get('qr_view'):
+            if request.query_params.get("qr_view"):
                 public_photos = [
                     {
-                        'photo_url': photo['photo_url'],
-                        'upload_date': photo.get('upload_timestamp', '').split('T')[0]  # Date only
+                        "photo_url": photo["photo_url"],
+                        "upload_date": photo.get("upload_timestamp", "").split("T")[0],  # Date only
                     }
                     for photo in evidence_photos
                 ]
-                return Response({
-                    'photos': public_photos,
-                    'total_count': len(public_photos),
-                    'verification_level': carbon_entry.verification_level,
-                    'entry_type': carbon_entry.type
-                })
-            
+                return Response(
+                    {
+                        "photos": public_photos,
+                        "total_count": len(public_photos),
+                        "verification_level": carbon_entry.verification_level,
+                        "entry_type": carbon_entry.type,
+                    }
+                )
+
             # Full metadata for entry owner/admin
-            return Response({
-                'photos': evidence_photos,
-                'total_count': len(evidence_photos),
-                'max_photos_allowed': 5,
-                'verification_level': carbon_entry.verification_level,
-                'entry_type': carbon_entry.type,
-                'evidence_requirements_met': carbon_entry.evidence_requirements_met
-            })
-            
+            return Response(
+                {
+                    "photos": evidence_photos,
+                    "total_count": len(evidence_photos),
+                    "max_photos_allowed": 5,
+                    "verification_level": carbon_entry.verification_level,
+                    "entry_type": carbon_entry.type,
+                    "evidence_requirements_met": carbon_entry.evidence_requirements_met,
+                }
+            )
+
         except Exception as e:
             logger.error(f"Get evidence photos error: {e}")
-            return Response(
-                {'error': 'Failed to retrieve photos'}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return Response({"error": "Failed to retrieve photos"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 # Carbon Footprint Calculator and Analysis Endpoints
@@ -716,101 +713,98 @@ class CarbonEntryViewSet(viewsets.ModelViewSet):
 # OPTIMIZED CARBON CALCULATION API - 95% Performance Improvement
 # =============================================================================
 
+import time
+from datetime import timedelta
+from typing import Any, Dict, Optional
+
 from django.core.cache import cache
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
+
 from django_ratelimit.decorators import ratelimit
-import time
-from typing import Dict, Any, Optional
-from datetime import timedelta
 
 # Import optimized models
 from .models import CachedEmissionFactor, OptimizedCarbonCalculation
 
+
 class OptimizedCarbonCalculator:
     """
     High-performance carbon calculator with intelligent caching and connection pooling.
-    
+
     PERFORMANCE IMPROVEMENTS:
     - 95% faster through caching
-    - 80% fewer database queries  
+    - 80% fewer database queries
     - 70% reduction in USDA API calls
     - Sub-200ms response times
     """
-    
+
     _instance = None
     _emission_factors_cache = {}
     _last_cache_update = None
-    
+
     def __new__(cls):
         # Singleton pattern to avoid expensive initialization
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
-    
+
     def __init__(self):
-        if not hasattr(self, 'initialized'):
+        if not hasattr(self, "initialized"):
             # Initialize only once
             self.cache_timeout = 3600  # 1 hour
             self.usda_client = self._get_cached_usda_client()
             self.initialized = True
-    
+
     def _get_cached_usda_client(self):
         """Get USDA client instance (don't cache complex objects)"""
         try:
             from .services.real_usda_integration import RealUSDAAPIClient
+
             return RealUSDAAPIClient()
         except ImportError:
             # Fallback if service not available
             return None
-    
+
     def get_emission_factors(self, crop_type: str, region: str = "US") -> Dict[str, float]:
         """
         Get emission factors with multi-tier caching strategy.
-        
+
         PERFORMANCE: 95% cache hit rate, <10ms response time
         """
         cache_key = f"emission_factors:{crop_type}:{region}"
-        
+
         # L1: Memory cache (fastest)
         if cache_key in self._emission_factors_cache:
             cache_data = self._emission_factors_cache[cache_key]
-            if time.time() - cache_data['timestamp'] < 1800:  # 30 minutes
-                return cache_data['factors']
-        
+            if time.time() - cache_data["timestamp"] < 1800:  # 30 minutes
+                return cache_data["factors"]
+
         # L2: Redis cache
         cached_factors = cache.get(cache_key)
         if cached_factors:
-            self._emission_factors_cache[cache_key] = {
-                'factors': cached_factors,
-                'timestamp': time.time()
-            }
+            self._emission_factors_cache[cache_key] = {"factors": cached_factors, "timestamp": time.time()}
             return cached_factors
-        
+
         # L3: Database cache (for computed factors)
         try:
             from django.utils import timezone
+
             db_factor = CachedEmissionFactor.objects.select_related().get(
-                crop_type=crop_type,
-                region=region,
-                created_at__gte=timezone.now() - timedelta(hours=24)
+                crop_type=crop_type, region=region, created_at__gte=timezone.now() - timedelta(hours=24)
             )
             factors = db_factor.factors
-            
+
             # Update caches
             cache.set(cache_key, factors, self.cache_timeout)
-            self._emission_factors_cache[cache_key] = {
-                'factors': factors,
-                'timestamp': time.time()
-            }
+            self._emission_factors_cache[cache_key] = {"factors": factors, "timestamp": time.time()}
             return factors
-            
+
         except CachedEmissionFactor.DoesNotExist:
             pass
-        
+
         # L4: USDA API (with circuit breaker)
         return self._fetch_from_usda_with_fallback(crop_type, region, cache_key)
-    
+
     def _fetch_from_usda_with_fallback(self, crop_type: str, region: str, cache_key: str) -> Dict[str, float]:
         """Fetch from USDA with circuit breaker and fallback"""
         try:
@@ -818,254 +812,257 @@ class OptimizedCarbonCalculator:
             circuit_breaker_key = f"usda_circuit_breaker:{region}"
             if cache.get(circuit_breaker_key):
                 return self._get_fallback_factors(crop_type)
-            
+
             if self.usda_client:
                 factors = self.usda_client.get_emission_factors(crop_type, region)
-                
+
                 # Cache at all levels
                 cache.set(cache_key, factors, self.cache_timeout)
-                self._emission_factors_cache[cache_key] = {
-                    'factors': factors,
-                    'timestamp': time.time()
-                }
-                
+                self._emission_factors_cache[cache_key] = {"factors": factors, "timestamp": time.time()}
+
                 # Store in database for future caching
                 CachedEmissionFactor.objects.update_or_create(
-                    crop_type=crop_type,
-                    region=region,
-                    defaults={'factors': factors}
+                    crop_type=crop_type, region=region, defaults={"factors": factors}
                 )
-                
+
                 return factors
             else:
                 return self._get_fallback_factors(crop_type)
-            
+
         except Exception as e:
             import logging
+
             logger = logging.getLogger(__name__)
             logger.warning(f"USDA API failed for {crop_type}: {e}")
-            
+
             # Activate circuit breaker
             cache.set(circuit_breaker_key, True, 300)  # 5 minutes
-            
+
             return self._get_fallback_factors(crop_type)
-    
+
     def _get_fallback_factors(self, crop_type: str) -> Dict[str, float]:
         """Fallback emission factors for when USDA API is unavailable"""
         fallback_factors = {
-            'fertilizer': {'nitrogen': 5.87, 'phosphorus': 0.44, 'potassium': 0.54},
-            'fuel': {'diesel': 2.68, 'gasoline': 2.31},
-            'electricity': {'grid': 0.42},
-            'water': {'irrigation': 0.001}
+            "fertilizer": {"nitrogen": 5.87, "phosphorus": 0.44, "potassium": 0.54},
+            "fuel": {"diesel": 2.68, "gasoline": 2.31},
+            "electricity": {"grid": 0.42},
+            "water": {"irrigation": 0.001},
         }
-        
-        return fallback_factors.get(crop_type.lower(), fallback_factors['fertilizer'])
+
+        return fallback_factors.get(crop_type.lower(), fallback_factors["fertilizer"])
 
     def calculate_chemical_impact_optimized(self, processed_event: Dict[str, Any]) -> Dict[str, Any]:
         """Optimized chemical event calculation"""
         # Get emission factors with caching
-        factors = self.get_emission_factors('fertilizer')
-        
+        factors = self.get_emission_factors("fertilizer")
+
         # Fast calculation using processed data
-        volume = processed_event.get('volume', 10)
-        area = processed_event.get('area', 1.0)
-        
+        volume = processed_event.get("volume", 10)
+        area = processed_event.get("area", 1.0)
+
         # Simplified but accurate calculation
-        co2e = volume * area * factors.get('nitrogen', 5.87) * 0.1
+        co2e = volume * area * factors.get("nitrogen", 5.87) * 0.1
         efficiency_score = max(0, min(100, 85 - (co2e * 2)))
-        
+
         return {
-            'co2e': round(co2e, 3),
-            'efficiency_score': round(efficiency_score, 1),
-            'calculation_method': 'optimized_chemical',
-            'usda_verified': True
+            "co2e": round(co2e, 3),
+            "efficiency_score": round(efficiency_score, 1),
+            "calculation_method": "optimized_chemical",
+            "usda_verified": True,
         }
 
     def calculate_production_impact_optimized(self, processed_event: Dict[str, Any]) -> Dict[str, Any]:
         """Optimized production event calculation"""
         # Fast calculation for production events
-        hours = processed_event.get('duration_hours', 2)
-        area = processed_event.get('area_hectares', 1.0)
-        
+        hours = processed_event.get("duration_hours", 2)
+        area = processed_event.get("area_hectares", 1.0)
+
         co2e = hours * area * 0.5  # Base calculation
         efficiency_score = max(20, min(95, 80 - (co2e * 1.5)))
-        
+
         return {
-            'co2e': round(co2e, 3),
-            'efficiency_score': round(efficiency_score, 1),
-            'calculation_method': 'optimized_production',
-            'usda_verified': False
+            "co2e": round(co2e, 3),
+            "efficiency_score": round(efficiency_score, 1),
+            "calculation_method": "optimized_production",
+            "usda_verified": False,
         }
 
     def calculate_equipment_impact_optimized(self, processed_event: Dict[str, Any]) -> Dict[str, Any]:
         """Optimized equipment event calculation"""
-        fuel_amount = processed_event.get('fuel_amount_liters', 5)
-        fuel_type = processed_event.get('fuel_type', 'diesel')
-        
+        fuel_amount = processed_event.get("fuel_amount_liters", 5)
+        fuel_type = processed_event.get("fuel_type", "diesel")
+
         # Get fuel emission factors
-        factors = self.get_emission_factors('fuel')
+        factors = self.get_emission_factors("fuel")
         factor = factors.get(fuel_type, 2.68)
-        
+
         co2e = fuel_amount * factor
         efficiency_score = max(10, min(90, 75 - (co2e * 3)))
-        
+
         return {
-            'co2e': round(co2e, 3),
-            'efficiency_score': round(efficiency_score, 1),
-            'calculation_method': 'optimized_equipment',
-            'usda_verified': True
+            "co2e": round(co2e, 3),
+            "efficiency_score": round(efficiency_score, 1),
+            "calculation_method": "optimized_equipment",
+            "usda_verified": True,
         }
 
     def calculate_general_impact_optimized(self, processed_event: Dict[str, Any]) -> Dict[str, Any]:
         """Optimized general event calculation"""
         # Simple but fast calculation for general events
-        description = processed_event.get('description', '').lower()
-        
+        description = processed_event.get("description", "").lower()
+
         co2e = 0.5  # Base value
-        if 'fuel' in description or 'diesel' in description:
+        if "fuel" in description or "diesel" in description:
             co2e = 2.0
-        elif 'organic' in description or 'compost' in description:
+        elif "organic" in description or "compost" in description:
             co2e = -0.3  # Carbon sequestration
-        
+
         return {
-            'co2e': round(co2e, 3),
-            'efficiency_score': 60.0,
-            'calculation_method': 'optimized_general',
-            'usda_verified': False
+            "co2e": round(co2e, 3),
+            "efficiency_score": 60.0,
+            "calculation_method": "optimized_general",
+            "usda_verified": False,
         }
+
 
 # Initialize calculator singleton
 calculator_instance = OptimizedCarbonCalculator()
 
+
 class OptimizedEventProcessor:
     """
     High-performance event data processor.
-    
+
     ELIMINATES: Expensive regex parsing, repeated validations, string operations
     PERFORMANCE: 90% faster than original MockEvent creation
     """
-    
+
     @classmethod
     def process_event_data(cls, event_type: str, event_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Process event data with optimized parsing.
-        
+
         PERFORMANCE: 90% faster than regex-based MockEvent
         """
         processed = {
-            'event_type': event_type,
-            'description': event_data.get('description', ''),
-            'observation': event_data.get('observation', ''),
+            "event_type": event_type,
+            "description": event_data.get("description", ""),
+            "observation": event_data.get("observation", ""),
         }
-        
+
         # Fast duration processing (avoid regex)
-        duration_raw = event_data.get('duration', '2')
-        processed['duration_hours'] = cls._parse_duration_fast(duration_raw)
-        
-        # Fast amount processing  
-        amount_raw = event_data.get('amount', '1')
-        unit = event_data.get('unit', 'kg')
-        processed['amount_kg'] = cls._parse_amount_fast(amount_raw, unit)
-        
+        duration_raw = event_data.get("duration", "2")
+        processed["duration_hours"] = cls._parse_duration_fast(duration_raw)
+
+        # Fast amount processing
+        amount_raw = event_data.get("amount", "1")
+        unit = event_data.get("unit", "kg")
+        processed["amount_kg"] = cls._parse_amount_fast(amount_raw, unit)
+
         # Event-specific processing
-        if event_type == 'chemical':
+        if event_type == "chemical":
             processed.update(cls._process_chemical_event(event_data))
-        elif event_type == 'production':
+        elif event_type == "production":
             processed.update(cls._process_production_event(event_data))
-        elif event_type == 'equipment':
+        elif event_type == "equipment":
             processed.update(cls._process_equipment_event(event_data))
-        
+
         return processed
-    
+
     @classmethod
     def _parse_duration_fast(cls, duration_str: str) -> float:
         """Fast duration parsing without regex"""
         if isinstance(duration_str, (int, float)):
             return float(duration_str)
-        
+
         duration_str = str(duration_str).lower()
-        
+
         # Extract number (first continuous digit sequence)
-        number_part = ''
+        number_part = ""
         for char in duration_str:
-            if char.isdigit() or char == '.':
+            if char.isdigit() or char == ".":
                 number_part += char
             else:
                 break
-        
+
         if not number_part:
             return 2.0  # Default
-        
+
         base_value = float(number_part)
-        
+
         # Check for time units
-        if 'hour' in duration_str:
+        if "hour" in duration_str:
             return base_value
-        elif 'minute' in duration_str:
+        elif "minute" in duration_str:
             return base_value / 60
         else:
             return base_value  # Assume hours
-    
+
     @classmethod
     def _parse_amount_fast(cls, amount_str: str, unit: str) -> float:
         """Fast amount parsing with unit conversion"""
         UNIT_CONVERSIONS = {
-            'kg': 1.0, 'lbs': 0.453592, 'liters': 1.0, 'l': 1.0, 'gallons': 3.78541,
+            "kg": 1.0,
+            "lbs": 0.453592,
+            "liters": 1.0,
+            "l": 1.0,
+            "gallons": 3.78541,
         }
-        
+
         if isinstance(amount_str, (int, float)):
             base_amount = float(amount_str)
         else:
             # Extract numeric part
-            number_part = ''
+            number_part = ""
             for char in str(amount_str):
-                if char.isdigit() or char == '.':
+                if char.isdigit() or char == ".":
                     number_part += char
                 else:
                     break
             base_amount = float(number_part) if number_part else 1.0
-        
+
         # Convert to kg
         conversion_factor = UNIT_CONVERSIONS.get(unit.lower(), 1.0)
         return base_amount * conversion_factor
-    
+
     @classmethod
     def _process_chemical_event(cls, event_data: Dict[str, Any]) -> Dict[str, Any]:
         """Process chemical event data efficiently"""
         return {
-            'chemical_type': event_data.get('type', 'FE'),
-            'volume': float(event_data.get('volume', 10)),
-            'area': float(event_data.get('area', 1.0)),
-            'concentration': event_data.get('concentration', '10-10-10'),
+            "chemical_type": event_data.get("type", "FE"),
+            "volume": float(event_data.get("volume", 10)),
+            "area": float(event_data.get("area", 1.0)),
+            "concentration": event_data.get("concentration", "10-10-10"),
         }
-    
+
     @classmethod
     def _process_production_event(cls, event_data: Dict[str, Any]) -> Dict[str, Any]:
         """Process production event data efficiently"""
         return {
-            'production_type': event_data.get('type', 'IR'),
-            'area_hectares': float(event_data.get('area_covered', '1.0').split()[0]),
-            'equipment': event_data.get('equipment_used', 'irrigation_system'),
+            "production_type": event_data.get("type", "IR"),
+            "area_hectares": float(event_data.get("area_covered", "1.0").split()[0]),
+            "equipment": event_data.get("equipment_used", "irrigation_system"),
         }
-    
+
     @classmethod
     def _process_equipment_event(cls, event_data: Dict[str, Any]) -> Dict[str, Any]:
         """Process equipment event data efficiently"""
         return {
-            'equipment_type': event_data.get('type', 'FC'),
-            'fuel_type': event_data.get('fuel_type', 'diesel'),
-            'fuel_amount_liters': float(event_data.get('fuel_amount', 5)),
-            'hours_used': float(event_data.get('hours_used', 2)),
+            "equipment_type": event_data.get("type", "FC"),
+            "fuel_type": event_data.get("fuel_type", "diesel"),
+            "fuel_amount_liters": float(event_data.get("fuel_amount", 5)),
+            "hours_used": float(event_data.get("hours_used", 2)),
         }
 
-@api_view(['POST'])
+
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
-@ratelimit(key='user', rate='20/m', method='POST', block=True)  # Increased rate limit
-@method_decorator(cache_page(300), name='dispatch')  # 5-minute cache for identical requests
+@ratelimit(key="user", rate="20/m", method="POST", block=True)  # Increased rate limit
+@method_decorator(cache_page(300), name="dispatch")  # 5-minute cache for identical requests
 def calculate_event_carbon_impact_optimized(request):
     """
     OPTIMIZED carbon calculation endpoint.
-    
+
     PERFORMANCE IMPROVEMENTS:
     - 95% faster response times (3s → 150ms average)
     - 80% fewer database queries (N+1 eliminated)
@@ -1074,91 +1071,95 @@ def calculate_event_carbon_impact_optimized(request):
     - Circuit breaker for external APIs
     """
     start_time = time.time()
-    
+
     try:
         # Fast input validation
-        event_type = request.data.get('event_type')
+        event_type = request.data.get("event_type")
         if not event_type:
-            return Response(
-                {'error': 'event_type is required'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        event_data = request.data.get('event_data', {})
-        
+            return Response({"error": "event_type is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        event_data = request.data.get("event_data", {})
+
         # Generate cache key for identical requests
         cache_key = f"carbon_calc:{hash(str(sorted(request.data.items())))}"
-        
+
         # Check cache first
         cached_result = cache.get(cache_key)
         if cached_result:
-            cached_result['cache_hit'] = True
-            cached_result['response_time_ms'] = (time.time() - start_time) * 1000
+            cached_result["cache_hit"] = True
+            cached_result["response_time_ms"] = (time.time() - start_time) * 1000
             return Response(cached_result, status=status.HTTP_200_OK)
-        
+
         # Optimized event processing (avoid regex parsing)
         processed_event = OptimizedEventProcessor.process_event_data(event_type, event_data)
-        
+
         # Calculate carbon impact with optimized calculator
-        if event_type == 'chemical':
+        if event_type == "chemical":
             result = calculator_instance.calculate_chemical_impact_optimized(processed_event)
-        elif event_type == 'production':
+        elif event_type == "production":
             result = calculator_instance.calculate_production_impact_optimized(processed_event)
-        elif event_type == 'equipment':
+        elif event_type == "equipment":
             result = calculator_instance.calculate_equipment_impact_optimized(processed_event)
         else:
             result = calculator_instance.calculate_general_impact_optimized(processed_event)
-        
+
         # Add performance metrics
         response_time = (time.time() - start_time) * 1000
-        result.update({
-            'cache_hit': False,
-            'response_time_ms': response_time,
-            'calculation_method': f"optimized_v2_{result.get('calculation_method', 'general')}",
-            'usda_cache_status': 'optimized'
-        })
-        
+        result.update(
+            {
+                "cache_hit": False,
+                "response_time_ms": response_time,
+                "calculation_method": f"optimized_v2_{result.get('calculation_method', 'general')}",
+                "usda_cache_status": "optimized",
+            }
+        )
+
         # Cache result for future identical requests
         cache.set(cache_key, result, 300)  # 5 minutes
-        
+
         # Log performance metrics
         try:
             OptimizedCarbonCalculation.objects.create(
                 production_id=f"api_calc_{int(time.time())}",
                 event_type=event_type,
-                co2e_total=result.get('co2e', 0),
-                efficiency_score=result.get('efficiency_score', 50),
-                calculation_method=result.get('calculation_method', 'optimized_v2'),
+                co2e_total=result.get("co2e", 0),
+                efficiency_score=result.get("efficiency_score", 50),
+                calculation_method=result.get("calculation_method", "optimized_v2"),
                 calculation_time_ms=int(response_time),
                 usda_api_calls=0,  # Cached calls
-                cache_hits=1 if cached_result else 0
+                cache_hits=1 if cached_result else 0,
             )
         except Exception:
             pass  # Don't fail the request if logging fails
-        
+
         return Response(result, status=status.HTTP_200_OK)
-        
+
     except Exception as e:
         import logging
+
         logger = logging.getLogger(__name__)
         logger.error(f"Optimized calculator error: {str(e)}")
-        return Response({
-            'error': 'Calculation failed',
-            'co2e': 0.0,
-            'efficiency_score': 50.0,
-            'fallback': True,
-            'response_time_ms': (time.time() - start_time) * 1000
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {
+                "error": "Calculation failed",
+                "co2e": 0.0,
+                "efficiency_score": 50.0,
+                "fallback": True,
+                "response_time_ms": (time.time() - start_time) * 1000,
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 
 # =============================================================================
 # ORIGINAL CARBON CALCULATION API (Maintained for backward compatibility)
 # =============================================================================
 
+
 # Real-time Carbon Calculation API
-@api_view(['POST'])
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
-@ratelimit(key='user', rate='10/m', method='POST', block=True)
+@ratelimit(key="user", rate="10/m", method="POST", block=True)
 def calculate_event_carbon_impact(request):
     """
     Real-time carbon calculation API for event forms.
@@ -1167,219 +1168,220 @@ def calculate_event_carbon_impact(request):
     """
     try:
         from .services.event_carbon_calculator import EventCarbonCalculator
-        
-        event_type = request.data.get('event_type')  # 'chemical', 'production', 'weather', 'general', etc.
-        event_data = request.data.get('event_data', {})
-        
+
+        event_type = request.data.get("event_type")  # 'chemical', 'production', 'weather', 'general', etc.
+        event_data = request.data.get("event_data", {})
+
         if not event_type:
-            return Response(
-                {'error': 'event_type is required'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
+            return Response({"error": "event_type is required"}, status=status.HTTP_400_BAD_REQUEST)
+
         # Create a mock event object with the provided data for calculation
         class MockEvent:
             def __init__(self, event_data):
                 # Basic event properties
-                self.description = event_data.get('description', '')
-                self.observation = event_data.get('observation', '')
-                self.event_id = event_data.get('event_id')
-                
+                self.description = event_data.get("description", "")
+                self.observation = event_data.get("observation", "")
+                self.event_id = event_data.get("event_id")
+
                 # Extract duration and amount from observation or direct fields
-                self.duration = event_data.get('duration')
-                self.amount = event_data.get('amount')
-                self.unit = event_data.get('unit')
-                
+                self.duration = event_data.get("duration")
+                self.amount = event_data.get("amount")
+                self.unit = event_data.get("unit")
+
                 # Parse additional data from observation if not provided directly
                 if not self.duration and self.observation:
                     import re
-                    duration_match = re.search(r'(\d+)\s*hour', self.observation, re.IGNORECASE)
+
+                    duration_match = re.search(r"(\d+)\s*hour", self.observation, re.IGNORECASE)
                     if duration_match:
                         self.duration = int(duration_match.group(1))
-                
+
                 if not self.amount and self.observation:
                     import re
-                    amount_match = re.search(r'(\d+)\s*(kg|lbs?|liters?|l)', self.observation, re.IGNORECASE)
+
+                    amount_match = re.search(r"(\d+)\s*(kg|lbs?|liters?|l)", self.observation, re.IGNORECASE)
                     if amount_match:
                         self.amount = int(amount_match.group(1))
                         self.unit = amount_match.group(2)
-                
+
                 # Set chemical event data (use actual form data)
-                if event_type == 'chemical':
-                    self.type = event_data.get('type', 'FE')  # Use actual type from form
-                    self.commercial_name = event_data.get('commercial_name', '')
-                    self.concentration = event_data.get('concentration', '10-10-10')
-                    self.volume = event_data.get('volume', '10')  # Volume number only
-                    self.volume_unit = event_data.get('volume_unit', 'liters')
-                    self.area = event_data.get('area', '1.0')  # Area number only  
-                    self.area_unit = event_data.get('area_unit', 'hectares')
-                    self.way_of_application = event_data.get('way_of_application', 'broadcast')
-                    self.weather_conditions = event_data.get('weather_conditions', '')
-                    self.soil_moisture = event_data.get('soil_moisture', '')
-                    self.temperature_range = event_data.get('temperature_range', '')
-                    self.wind_speed = event_data.get('wind_speed', '')
-                    self.time_period = event_data.get('time_period', '')
-                
+                if event_type == "chemical":
+                    self.type = event_data.get("type", "FE")  # Use actual type from form
+                    self.commercial_name = event_data.get("commercial_name", "")
+                    self.concentration = event_data.get("concentration", "10-10-10")
+                    self.volume = event_data.get("volume", "10")  # Volume number only
+                    self.volume_unit = event_data.get("volume_unit", "liters")
+                    self.area = event_data.get("area", "1.0")  # Area number only
+                    self.area_unit = event_data.get("area_unit", "hectares")
+                    self.way_of_application = event_data.get("way_of_application", "broadcast")
+                    self.weather_conditions = event_data.get("weather_conditions", "")
+                    self.soil_moisture = event_data.get("soil_moisture", "")
+                    self.temperature_range = event_data.get("temperature_range", "")
+                    self.wind_speed = event_data.get("wind_speed", "")
+                    self.time_period = event_data.get("time_period", "")
+
                 # Map production event data (use actual form data, not defaults)
-                elif event_type == 'production':
-                    self.type = event_data.get('type', 'IR')  # Use actual type from form
+                elif event_type == "production":
+                    self.type = event_data.get("type", "IR")  # Use actual type from form
                     # Map frontend field names to backend field names
-                    duration = event_data.get('duration', '2 hours')
-                    area_covered = event_data.get('area_covered', '1.0 hectares')
-                    equipment_used = event_data.get('equipment_used', 'irrigation_system')
-                    
+                    duration = event_data.get("duration", "2 hours")
+                    area_covered = event_data.get("area_covered", "1.0 hectares")
+                    equipment_used = event_data.get("equipment_used", "irrigation_system")
+
                     # Convert duration to volume estimate for irrigation
-                    if 'hour' in duration:
+                    if "hour" in duration:
                         import re
-                        hours = re.findall(r'\d+', duration)
+
+                        hours = re.findall(r"\d+", duration)
                         estimated_volume = int(hours[0]) * 50 if hours else 100  # 50L per hour estimate
-                        self.volume = f'{estimated_volume} liters'
+                        self.volume = f"{estimated_volume} liters"
                     else:
                         self.volume = duration  # Use as-is if not hours
-                    
+
                     self.area = area_covered  # Map area_covered to area
                     self.equipment = equipment_used  # Map equipment_used to equipment
-                
+
                 # Map equipment event data (use actual form data, not defaults)
-                elif event_type == 'equipment':
-                    self.type = event_data.get('type', 'FC')  # Use actual type from form (FC = Fuel Consumption)
-                    self.fuel_type = event_data.get('fuel_type', 'diesel')
-                    self.fuel_amount = event_data.get('fuel_amount', '5')
-                    self.hours_used = event_data.get('hours_used', '2')
-                    self.equipment_name = event_data.get('equipment_name', 'tractor')
-                    self.area_covered = event_data.get('area_covered', '1 hectare')
-                    self.maintenance_cost = event_data.get('maintenance_cost', '0')
-                
+                elif event_type == "equipment":
+                    self.type = event_data.get("type", "FC")  # Use actual type from form (FC = Fuel Consumption)
+                    self.fuel_type = event_data.get("fuel_type", "diesel")
+                    self.fuel_amount = event_data.get("fuel_amount", "5")
+                    self.hours_used = event_data.get("hours_used", "2")
+                    self.equipment_name = event_data.get("equipment_name", "tractor")
+                    self.area_covered = event_data.get("area_covered", "1 hectare")
+                    self.maintenance_cost = event_data.get("maintenance_cost", "0")
+
                 # Map weather event data (use actual form data, not defaults)
-                elif event_type == 'weather':
-                    self.type = event_data.get('type', 'FR')  # Use actual type from form
-                    self.lower_temperature = event_data.get('lower_temperature')
-                    self.highest_temperature = event_data.get('highest_temperature')
-                    self.water_deficit = event_data.get('water_deficit')
-                    self.duration = event_data.get('duration')
-                    self.way_of_protection = event_data.get('way_of_protection', '')
-                
+                elif event_type == "weather":
+                    self.type = event_data.get("type", "FR")  # Use actual type from form
+                    self.lower_temperature = event_data.get("lower_temperature")
+                    self.highest_temperature = event_data.get("highest_temperature")
+                    self.water_deficit = event_data.get("water_deficit")
+                    self.duration = event_data.get("duration")
+                    self.way_of_protection = event_data.get("way_of_protection", "")
+
                 # Map soil management event data (use actual form data, not defaults)
-                elif event_type == 'soil_management':
-                    self.type = event_data.get('type', 'ST')  # Use actual type from form
-                    self.area = event_data.get('area', '1.0')
-                    self.area_unit = event_data.get('area_unit', 'hectares')
-                    self.soil_ph = event_data.get('soil_ph')
-                    self.organic_matter_percentage = event_data.get('organic_matter_percentage')
-                    self.depth = event_data.get('depth', '15')
-                    self.depth_unit = event_data.get('depth_unit', 'cm')
-                    self.equipment_used = event_data.get('equipment_used', 'plow')
-                
+                elif event_type == "soil_management":
+                    self.type = event_data.get("type", "ST")  # Use actual type from form
+                    self.area = event_data.get("area", "1.0")
+                    self.area_unit = event_data.get("area_unit", "hectares")
+                    self.soil_ph = event_data.get("soil_ph")
+                    self.organic_matter_percentage = event_data.get("organic_matter_percentage")
+                    self.depth = event_data.get("depth", "15")
+                    self.depth_unit = event_data.get("depth_unit", "cm")
+                    self.equipment_used = event_data.get("equipment_used", "plow")
+
                 # Map pest management event data (use actual form data, not defaults)
-                elif event_type == 'pest_management':
-                    self.type = event_data.get('type', 'SC')  # Use actual type from form
-                    self.pest_pressure_level = event_data.get('pest_pressure_level', 'low')
-                    self.pest_species = event_data.get('pest_species', '')
-                    self.damage_percentage = event_data.get('damage_percentage')
-                    self.beneficial_species = event_data.get('beneficial_species', '')
-                    self.release_quantity = event_data.get('release_quantity')
-                    self.trap_count = event_data.get('trap_count')
-                
+                elif event_type == "pest_management":
+                    self.type = event_data.get("type", "SC")  # Use actual type from form
+                    self.pest_pressure_level = event_data.get("pest_pressure_level", "low")
+                    self.pest_species = event_data.get("pest_species", "")
+                    self.damage_percentage = event_data.get("damage_percentage")
+                    self.beneficial_species = event_data.get("beneficial_species", "")
+                    self.release_quantity = event_data.get("release_quantity")
+                    self.trap_count = event_data.get("trap_count")
+
                 # Map business event data (use actual form data, not defaults)
-                elif event_type == 'business':
-                    self.type = event_data.get('type', 'HS')  # Use actual type from form
-                    self.revenue_amount = event_data.get('revenue_amount', 0)
-                    self.quantity_sold = event_data.get('quantity_sold', '')
-                    self.buyer_name = event_data.get('buyer_name', '')
-                    self.carbon_credits_earned = event_data.get('carbon_credits_earned', 0)
-                    self.certification_type = event_data.get('certification_type', '')
-                
+                elif event_type == "business":
+                    self.type = event_data.get("type", "HS")  # Use actual type from form
+                    self.revenue_amount = event_data.get("revenue_amount", 0)
+                    self.quantity_sold = event_data.get("quantity_sold", "")
+                    self.buyer_name = event_data.get("buyer_name", "")
+                    self.carbon_credits_earned = event_data.get("carbon_credits_earned", 0)
+                    self.certification_type = event_data.get("certification_type", "")
+
                 # Mock history/production relationship for crop-specific calculations
                 self.history = None
-                
+
                 # Mock date
                 from django.utils import timezone
+
                 self.date = timezone.now()
-        
+
         # Create calculator instance
         calculator = EventCarbonCalculator()
-        
+
         # Create mock event object
         mock_event = MockEvent(event_data)
-        
+
         # Calculate based on event type using the appropriate method
-        if event_type == 'chemical':
+        if event_type == "chemical":
             calculation_result = calculator.calculate_chemical_event_impact(mock_event)
-        elif event_type == 'production':
+        elif event_type == "production":
             calculation_result = calculator.calculate_production_event_impact(mock_event)
-        elif event_type == 'weather':
+        elif event_type == "weather":
             calculation_result = calculator.calculate_weather_event_impact(mock_event)
-        elif event_type == 'equipment':
+        elif event_type == "equipment":
             calculation_result = calculator.calculate_equipment_event_impact(mock_event)
-        elif event_type == 'soil_management':
+        elif event_type == "soil_management":
             calculation_result = calculator.calculate_soil_management_event_impact(mock_event)
-        elif event_type == 'pest_management':
+        elif event_type == "pest_management":
             calculation_result = calculator.calculate_pest_management_event_impact(mock_event)
-        elif event_type == 'business':
+        elif event_type == "business":
             calculation_result = calculator.calculate_business_event_impact(mock_event)
         else:  # general or unknown
             # For general events, calculate based on observation text analysis
             try:
                 # Try to extract some meaningful data from observation for general events
-                observation = event_data.get('observation', '')
-                name = event_data.get('name', '')
-                
+                observation = event_data.get("observation", "")
+                name = event_data.get("name", "")
+
                 # Basic CO2e estimation based on text content
                 base_co2e = 0.1  # Minimal default
-                
+
                 # Simple keyword-based estimation for general events
                 text_to_analyze = f"{name} {observation}".lower()
-                if any(word in text_to_analyze for word in ['fuel', 'diesel', 'gas', 'transport', 'truck']):
+                if any(word in text_to_analyze for word in ["fuel", "diesel", "gas", "transport", "truck"]):
                     base_co2e = 2.5  # Transport-related
-                elif any(word in text_to_analyze for word in ['electric', 'solar', 'renewable']):
+                elif any(word in text_to_analyze for word in ["electric", "solar", "renewable"]):
                     base_co2e = 0.05  # Low carbon activities
-                elif any(word in text_to_analyze for word in ['organic', 'compost', 'mulch']):
+                elif any(word in text_to_analyze for word in ["organic", "compost", "mulch"]):
                     base_co2e = -0.5  # Sequestration activities
-                
+
                 calculation_result = {
-                    'co2e': base_co2e,
-                    'efficiency_score': 60.0,
-                    'usda_verified': False,
-                    'calculation_method': 'general_event_text_analysis',
-                    'recommendations': [
-                        'Consider categorizing this activity into a specific event type for more accurate carbon tracking',
-                        'Add more specific details about resources used for better calculations'
+                    "co2e": base_co2e,
+                    "efficiency_score": 60.0,
+                    "usda_verified": False,
+                    "calculation_method": "general_event_text_analysis",
+                    "recommendations": [
+                        "Consider categorizing this activity into a specific event type for more accurate carbon tracking",
+                        "Add more specific details about resources used for better calculations",
                     ],
-                    'event_type': event_type,
-                    'timestamp': timezone.now().isoformat()
+                    "event_type": event_type,
+                    "timestamp": timezone.now().isoformat(),
                 }
             except Exception:
                 # Fallback if text analysis fails
                 calculation_result = {
-                    'co2e': 0.1,
-                    'efficiency_score': 50.0,
-                    'usda_verified': False,
-                    'calculation_method': 'general_event_fallback',
-                    'recommendations': [],
-                    'event_type': event_type,
-                    'timestamp': timezone.now().isoformat()
+                    "co2e": 0.1,
+                    "efficiency_score": 50.0,
+                    "usda_verified": False,
+                    "calculation_method": "general_event_fallback",
+                    "recommendations": [],
+                    "event_type": event_type,
+                    "timestamp": timezone.now().isoformat(),
                 }
-        
+
         # Ensure required fields are present
-        calculation_result['event_type'] = event_type
-        calculation_result['timestamp'] = timezone.now().isoformat()
-        
+        calculation_result["event_type"] = event_type
+        calculation_result["timestamp"] = timezone.now().isoformat()
+
         return Response(calculation_result, status=status.HTTP_200_OK)
-        
+
     except Exception as e:
         logger.error(f"Error calculating carbon impact: {str(e)}")
         return Response(
             {
-                'error': 'Failed to calculate carbon impact',
-                'details': str(e),
-                'co2e': 0.0,
-                'efficiency_score': 50.0,
-                'usda_verified': False,
-                'calculation_method': 'error_fallback',
-                'event_type': event_type if 'event_type' in locals() else 'unknown',
-                'timestamp': timezone.now().isoformat()
-            }, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                "error": "Failed to calculate carbon impact",
+                "details": str(e),
+                "co2e": 0.0,
+                "efficiency_score": 50.0,
+                "usda_verified": False,
+                "calculation_method": "error_fallback",
+                "event_type": event_type if "event_type" in locals() else "unknown",
+                "timestamp": timezone.now().isoformat(),
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
 
@@ -1446,18 +1448,18 @@ class CarbonOffsetCertificateViewSet(viewsets.ModelViewSet):
 class CarbonFootprintCalculatorViewSet(viewsets.ViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=["post"])
     def calculate(self, request):
         """Calculate carbon footprint using real calculator service"""
         try:
             from .services.event_carbon_calculator import EventCarbonCalculator
-            
-            event_type = request.data.get('event_type', 'general')
-            event_data = request.data.get('event_data', {})
-            
+
+            event_type = request.data.get("event_type", "general")
+            event_data = request.data.get("event_data", {})
+
             # Create calculator instance
             calculator = EventCarbonCalculator()
-            
+
             # Create a mock event for calculation
             class MockEvent:
                 def __init__(self, data):
@@ -1465,96 +1467,79 @@ class CarbonFootprintCalculatorViewSet(viewsets.ViewSet):
                         setattr(self, key, value)
                     self.history = None
                     self.date = timezone.now()
-            
+
             mock_event = MockEvent(event_data)
-            
+
             # Route to appropriate calculation method
-            if event_type == 'chemical':
+            if event_type == "chemical":
                 result = calculator.calculate_chemical_event_impact(mock_event)
-            elif event_type == 'production':
+            elif event_type == "production":
                 result = calculator.calculate_production_event_impact(mock_event)
-            elif event_type == 'equipment':
+            elif event_type == "equipment":
                 result = calculator.calculate_equipment_event_impact(mock_event)
             else:
-                result = {
-                    'co2e': 0.1,
-                    'efficiency_score': 50.0,
-                    'calculation_method': 'general_estimation'
-                }
-            
+                result = {"co2e": 0.1, "efficiency_score": 50.0, "calculation_method": "general_estimation"}
+
             return Response(result, status=status.HTTP_200_OK)
-            
+
         except Exception as e:
             logger.error(f"Calculator error: {str(e)}")
-            return Response({
-                'error': 'Calculation failed',
-                'co2e': 0.0,
-                'efficiency_score': 50.0
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"error": "Calculation failed", "co2e": 0.0, "efficiency_score": 50.0},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 # Placeholder ViewSets for missing ones referenced in URLs
 class CarbonEstablishmentSummaryViewSet(viewsets.ViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
-    @action(detail=True, methods=['get'])
+    @action(detail=True, methods=["get"])
     def summary(self, request, pk=None):
         """
         Get carbon footprint summary for an establishment
-        
+
         Returns calculated totals from carbon entries with proper error handling
         """
         try:
             establishment_id = pk
-            year = request.GET.get('year', timezone.now().year)
-            
+            year = request.GET.get("year", timezone.now().year)
+
             # Verify establishment exists and user has access
             from company.models import Establishment
+
             try:
                 establishment = Establishment.objects.get(id=establishment_id)
-                
+
                 # Allow access if user is member of the company or staff
-                user_companies = request.user.companies.all() if hasattr(request.user, 'companies') else []
+                user_companies = request.user.companies.all() if hasattr(request.user, "companies") else []
                 company_ids = [c.id for c in user_companies]
-                
-                if (establishment.company.id not in company_ids and not request.user.is_staff):
-                    return Response({
-                        'error': 'Access denied to this establishment'
-                    }, status=status.HTTP_403_FORBIDDEN)
-                    
+
+                if establishment.company.id not in company_ids and not request.user.is_staff:
+                    return Response({"error": "Access denied to this establishment"}, status=status.HTTP_403_FORBIDDEN)
+
             except Establishment.DoesNotExist:
-                return Response({
-                    'error': 'Establishment not found'
-                }, status=status.HTTP_404_NOT_FOUND)
-            
+                return Response({"error": "Establishment not found"}, status=status.HTTP_404_NOT_FOUND)
+
             # Get carbon entries for this establishment
-            entries = CarbonEntry.objects.filter(
-                establishment_id=establishment_id,
-                year=year
-            )
-            
+            entries = CarbonEntry.objects.filter(establishment_id=establishment_id, year=year)
+
             # Calculate totals using co2e_amount (the actual carbon impact)
-            emissions_data = entries.filter(type='emission').aggregate(
-                total=Sum('co2e_amount'),
-                count=Count('id')
-            )
-            
+            emissions_data = entries.filter(type="emission").aggregate(total=Sum("co2e_amount"), count=Count("id"))
+
             # Use effective_amount for offsets to account for trust score discounts
-            offsets_data = entries.filter(type='offset').aggregate(
-                total=Sum('effective_amount'),
-                count=Count('id')
-            )
-            
-            total_emissions = float(emissions_data['total'] or 0)
-            total_offsets = float(offsets_data['total'] or 0)
+            offsets_data = entries.filter(type="offset").aggregate(total=Sum("effective_amount"), count=Count("id"))
+
+            total_emissions = float(emissions_data["total"] or 0)
+            total_offsets = float(offsets_data["total"] or 0)
             net_carbon = total_emissions - total_offsets
-            
+
             # Enhanced carbon score calculation (0-100) with production-ready logic
             carbon_score = 50  # Neutral baseline (was 85, too optimistic)
-            
+
             if total_emissions > 0:
                 offset_percentage = min(100, (total_offsets / total_emissions) * 100)
-                
+
                 if offset_percentage >= 100:
                     # Carbon negative - excellent performance
                     excess_percentage = offset_percentage - 100
@@ -1571,413 +1556,424 @@ class CarbonEstablishmentSummaryViewSet(viewsets.ViewSet):
                 else:
                     # Poor performance (0-24% offset)
                     carbon_score = 10 + (offset_percentage / 25) * 30
-                    
+
             elif total_offsets > 0:
                 carbon_score = 95  # Excellent if only offsets, no emissions
             else:
                 carbon_score = 50  # Neutral if no data
-            
+
             # Get recent entries for debugging
-            recent_entries = entries.order_by('-timestamp')[:5]
+            recent_entries = entries.order_by("-timestamp")[:5]
             entries_debug = []
             for entry in recent_entries:
-                entries_debug.append({
-                    'id': entry.id,
-                    'type': entry.type,
-                    'amount': float(entry.co2e_amount or 0),
-                    'source': entry.source.name if entry.source else None,
-                    'date': entry.timestamp.isoformat()
-                })
-            
+                entries_debug.append(
+                    {
+                        "id": entry.id,
+                        "type": entry.type,
+                        "amount": float(entry.co2e_amount or 0),
+                        "source": entry.source.name if entry.source else None,
+                        "date": entry.timestamp.isoformat(),
+                    }
+                )
+
             # Calculate emissions breakdown by category and source
             emissions_by_category = {}
             emissions_by_source = {}
             offsets_by_action = {}
-            
+
             # Calculate emissions by source and category using co2e_amount
-            for entry in entries.filter(type='emission'):
-                source_name = entry.source.name if entry.source else 'Unknown'
+            for entry in entries.filter(type="emission"):
+                source_name = entry.source.name if entry.source else "Unknown"
                 if source_name not in emissions_by_source:
                     emissions_by_source[source_name] = 0
                 emissions_by_source[source_name] += float(entry.co2e_amount or 0)
-                
+
                 # Also categorize by source category
-                category = entry.source.category if entry.source else 'Other'
+                category = entry.source.category if entry.source else "Other"
                 if category not in emissions_by_category:
                     emissions_by_category[category] = 0
                 emissions_by_category[category] += float(entry.co2e_amount or 0)
-            
+
             # Calculate offsets by action
-            for entry in entries.filter(type='offset'):
-                action_name = entry.source.name if entry.source else 'Unknown Offset'
+            for entry in entries.filter(type="offset"):
+                action_name = entry.source.name if entry.source else "Unknown Offset"
                 if action_name not in offsets_by_action:
                     offsets_by_action[action_name] = 0
                 offsets_by_action[action_name] += float(entry.effective_amount or entry.amount or 0)
-            
+
             # Calculate transparency score for production readiness
             transparency_score = 10  # Base score
             total_entries_count = entries.count()
             usda_verified_count = 0  # Initialize before conditional block
-            
+
             if total_entries_count > 0:
                 # More sophisticated transparency scoring
                 base_score = min(total_entries_count * 0.8, 70)  # Max 70 from entries count
                 verification_bonus = 0
-                
+
                 # Check USDA verification percentage
                 usda_verified_count = entries.filter(usda_verified=True).count()
                 if total_entries_count > 0:
                     verification_ratio = usda_verified_count / total_entries_count
                     verification_bonus = verification_ratio * 30  # Max 30 bonus
-                
+
                 transparency_score = min(base_score + verification_bonus, 100)
-            
+
             # Calculate performance indicators
             offset_ratio = (total_offsets / total_emissions) if total_emissions > 0 else 0
-            
+
             # Prepare enhanced response data
             response_data = {
-                'establishment_id': establishment_id,
-                'year': year,
-                'total_emissions': round(total_emissions, 2),
-                'total_offsets': round(total_offsets, 2),
-                'net_carbon': round(net_carbon, 2),
-                'carbon_score': int(carbon_score),
-                'transparency_score': int(transparency_score),
-                'offset_ratio': round(offset_ratio * 100, 1),  # Percentage
-                'performance_tier': self._get_performance_tier(carbon_score),
-                'entries_count': {
-                    'emissions': emissions_data['count'] or 0,
-                    'offsets': offsets_data['count'] or 0,
-                    'total': total_entries_count,
-                    'usda_verified': usda_verified_count
+                "establishment_id": establishment_id,
+                "year": year,
+                "total_emissions": round(total_emissions, 2),
+                "total_offsets": round(total_offsets, 2),
+                "net_carbon": round(net_carbon, 2),
+                "carbon_score": int(carbon_score),
+                "transparency_score": int(transparency_score),
+                "offset_ratio": round(offset_ratio * 100, 1),  # Percentage
+                "performance_tier": self._get_performance_tier(carbon_score),
+                "entries_count": {
+                    "emissions": emissions_data["count"] or 0,
+                    "offsets": offsets_data["count"] or 0,
+                    "total": total_entries_count,
+                    "usda_verified": usda_verified_count,
                 },
-                'has_data': total_emissions > 0 or total_offsets > 0,
-                'data_quality': {
-                    'completeness': min((total_entries_count / 50) * 100, 100),  # Assume 50 entries = 100% complete
-                    'verification_rate': round((usda_verified_count / max(total_entries_count, 1)) * 100, 1)
+                "has_data": total_emissions > 0 or total_offsets > 0,
+                "data_quality": {
+                    "completeness": min((total_entries_count / 50) * 100, 100),  # Assume 50 entries = 100% complete
+                    "verification_rate": round((usda_verified_count / max(total_entries_count, 1)) * 100, 1),
                 },
-                'recent_entries': entries_debug,
-                'emissionsByCategory': emissions_by_category,
-                'emissionsBySource': emissions_by_source,
-                'offsetsByAction': offsets_by_action,
-                'calculated_at': timezone.now().isoformat(),
-                'data_source': 'carbon_entries',
-                'api_version': '2.0'
+                "recent_entries": entries_debug,
+                "emissionsByCategory": emissions_by_category,
+                "emissionsBySource": emissions_by_source,
+                "offsetsByAction": offsets_by_action,
+                "calculated_at": timezone.now().isoformat(),
+                "data_source": "carbon_entries",
+                "api_version": "2.0",
             }
-            
+
             return Response(response_data, status=status.HTTP_200_OK)
-            
+
         except Exception as e:
             logger.error(f"Error in carbon establishment summary: {str(e)}")
             logger.error(f"Stack trace: {traceback.format_exc()}")
-            return Response({
-                'error': 'Failed to calculate carbon summary',
-                'detail': str(e) if settings.DEBUG else 'Internal server error',
-                'establishment_id': pk,
-                'timestamp': timezone.now().isoformat()
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
+            return Response(
+                {
+                    "error": "Failed to calculate carbon summary",
+                    "detail": str(e) if settings.DEBUG else "Internal server error",
+                    "establishment_id": pk,
+                    "timestamp": timezone.now().isoformat(),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
     def _get_performance_tier(self, carbon_score):
         """Get performance tier based on carbon score"""
         if carbon_score >= 90:
-            return {'tier': 'Excellent', 'color': 'green', 'description': 'Carbon negative or very low impact'}
+            return {"tier": "Excellent", "color": "green", "description": "Carbon negative or very low impact"}
         elif carbon_score >= 75:
-            return {'tier': 'Very Good', 'color': 'light_green', 'description': 'Strong environmental performance'}
+            return {"tier": "Very Good", "color": "light_green", "description": "Strong environmental performance"}
         elif carbon_score >= 60:
-            return {'tier': 'Good', 'color': 'blue', 'description': 'Above average performance'}
+            return {"tier": "Good", "color": "blue", "description": "Above average performance"}
         elif carbon_score >= 40:
-            return {'tier': 'Fair', 'color': 'orange', 'description': 'Room for improvement'}
+            return {"tier": "Fair", "color": "orange", "description": "Room for improvement"}
         else:
-            return {'tier': 'Needs Improvement', 'color': 'red', 'description': 'Significant emission reduction needed'}
+            return {"tier": "Needs Improvement", "color": "red", "description": "Significant emission reduction needed"}
 
-    @action(detail=True, methods=['get'], url_path='entries/paginated')
+    @action(detail=True, methods=["get"], url_path="entries/paginated")
     def entries_paginated(self, request, pk=None):
         """
         Get paginated carbon entries for an establishment
-        
+
         Following the same pattern as the Scans pagination used in AllScans.tsx
         """
         try:
             establishment_id = pk
-            
+
             # Verify establishment exists and user has access
             from company.models import Establishment
+
             try:
                 establishment = Establishment.objects.get(id=establishment_id)
-                
+
                 # Allow access if user is member of the company or staff
-                user_companies = request.user.companies.all() if hasattr(request.user, 'companies') else []
+                user_companies = request.user.companies.all() if hasattr(request.user, "companies") else []
                 company_ids = [c.id for c in user_companies]
-                
-                if (establishment.company.id not in company_ids and not request.user.is_staff):
-                    return Response({
-                        'error': 'Access denied to this establishment'
-                    }, status=status.HTTP_403_FORBIDDEN)
-                    
+
+                if establishment.company.id not in company_ids and not request.user.is_staff:
+                    return Response({"error": "Access denied to this establishment"}, status=status.HTTP_403_FORBIDDEN)
+
             except Establishment.DoesNotExist:
-                return Response({
-                    'error': 'Establishment not found'
-                }, status=status.HTTP_404_NOT_FOUND)
-            
+                return Response({"error": "Establishment not found"}, status=status.HTTP_404_NOT_FOUND)
+
             # Get pagination parameters
-            page = int(request.query_params.get('page', 1))
-            page_size = int(request.query_params.get('page_size', 10))
-            
+            page = int(request.query_params.get("page", 1))
+            page_size = int(request.query_params.get("page_size", 10))
+
             # Get filter parameters
-            entry_type = request.query_params.get('type', '')
-            category = request.query_params.get('category', '')
-            verified_only = request.query_params.get('verified_only', '').lower() == 'true'
-            search = request.query_params.get('search', '')
-            date_from = request.query_params.get('date_from', '')
-            date_to = request.query_params.get('date_to', '')
-            
+            entry_type = request.query_params.get("type", "")
+            category = request.query_params.get("category", "")
+            verified_only = request.query_params.get("verified_only", "").lower() == "true"
+            search = request.query_params.get("search", "")
+            date_from = request.query_params.get("date_from", "")
+            date_to = request.query_params.get("date_to", "")
+
             # Build queryset
             entries = CarbonEntry.objects.filter(establishment_id=establishment_id)
-            
+
             # Apply filters
             if entry_type:
                 entries = entries.filter(type=entry_type)
-            
+
             if verified_only:
                 entries = entries.filter(usda_verified=True)
-            
+
             if search:
                 entries = entries.filter(
-                    Q(description__icontains=search) |
-                    Q(source__name__icontains=search) if entries.model._meta.get_field('source') else Q()
+                    Q(description__icontains=search) | Q(source__name__icontains=search)
+                    if entries.model._meta.get_field("source")
+                    else Q()
                 )
-            
+
             if date_from:
                 from datetime import datetime
-                entries = entries.filter(created_at__gte=datetime.fromisoformat(date_from.replace('Z', '+00:00')))
-            
+
+                entries = entries.filter(created_at__gte=datetime.fromisoformat(date_from.replace("Z", "+00:00")))
+
             if date_to:
                 from datetime import datetime
-                entries = entries.filter(created_at__lte=datetime.fromisoformat(date_to.replace('Z', '+00:00')))
-            
+
+                entries = entries.filter(created_at__lte=datetime.fromisoformat(date_to.replace("Z", "+00:00")))
+
             # Order by creation date (newest first)
-            entries = entries.order_by('-created_at')
-            
+            entries = entries.order_by("-created_at")
+
             # Get total count
             total_count = entries.count()
-            
+
             # Apply pagination
             from django.core.paginator import Paginator
+
             paginator = Paginator(entries, page_size)
-            
+
             try:
                 paginated_entries = paginator.page(page)
             except:
                 # If page is out of range, return last page
                 paginated_entries = paginator.page(paginator.num_pages)
-            
+
             # Serialize the entries
             results = []
             for entry in paginated_entries:
                 entry_data = {
-                    'id': entry.id,
-                    'type': entry.type,
-                    'amount': float(entry.amount or 0),
-                    'verification_status': entry.verification_status if hasattr(entry, 'verification_status') else ('verified' if entry.usda_verified else 'pending'),
-                    'created_at': entry.created_at.isoformat() if entry.created_at else entry.timestamp.isoformat(),
-                    'timestamp': entry.timestamp.isoformat() if entry.timestamp else entry.created_at.isoformat(),
+                    "id": entry.id,
+                    "type": entry.type,
+                    "amount": float(entry.amount or 0),
+                    "verification_status": (
+                        entry.verification_status
+                        if hasattr(entry, "verification_status")
+                        else ("verified" if entry.usda_verified else "pending")
+                    ),
+                    "created_at": entry.created_at.isoformat() if entry.created_at else entry.timestamp.isoformat(),
+                    "timestamp": entry.timestamp.isoformat() if entry.timestamp else entry.created_at.isoformat(),
                 }
-                
+
                 # Add effective amount for offsets
-                if entry.type == 'offset' and hasattr(entry, 'effective_amount'):
-                    entry_data['effective_amount'] = float(entry.effective_amount or entry.amount or 0)
-                
+                if entry.type == "offset" and hasattr(entry, "effective_amount"):
+                    entry_data["effective_amount"] = float(entry.effective_amount or entry.amount or 0)
+
                 # Add source information if available
                 if entry.source:
-                    entry_data['source'] = {
-                        'name': entry.source.name,
-                        'category': entry.source.category
-                    }
-                
+                    entry_data["source"] = {"name": entry.source.name, "category": entry.source.category}
+
                 # Add verification details
-                if hasattr(entry, 'verification_level'):
-                    entry_data['verification_level'] = entry.verification_level
-                
-                if hasattr(entry, 'trust_score'):
-                    entry_data['trust_score'] = float(entry.trust_score) if entry.trust_score else None
-                
+                if hasattr(entry, "verification_level"):
+                    entry_data["verification_level"] = entry.verification_level
+
+                if hasattr(entry, "trust_score"):
+                    entry_data["trust_score"] = float(entry.trust_score) if entry.trust_score else None
+
                 results.append(entry_data)
-            
+
             # Prepare response in Django REST Framework pagination format
             response_data = {
-                'results': results,
-                'count': total_count,
-                'next': f"?page={page + 1}" if paginated_entries.has_next() else None,
-                'previous': f"?page={page - 1}" if paginated_entries.has_previous() else None,
+                "results": results,
+                "count": total_count,
+                "next": f"?page={page + 1}" if paginated_entries.has_next() else None,
+                "previous": f"?page={page - 1}" if paginated_entries.has_previous() else None,
             }
-            
+
             return Response(response_data, status=status.HTTP_200_OK)
-            
+
         except Exception as e:
             logger.error(f"Error in paginated carbon entries: {str(e)}")
             logger.error(f"Stack trace: {traceback.format_exc()}")
-            return Response({
-                'error': 'Failed to retrieve carbon entries',
-                'detail': str(e) if settings.DEBUG else 'Internal server error',
-                'establishment_id': pk,
-                'timestamp': timezone.now().isoformat()
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {
+                    "error": "Failed to retrieve carbon entries",
+                    "detail": str(e) if settings.DEBUG else "Internal server error",
+                    "establishment_id": pk,
+                    "timestamp": timezone.now().isoformat(),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class CarbonProductionSummaryViewSet(viewsets.ViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
-    @action(detail=True, methods=['get'])
+    @action(detail=True, methods=["get"])
     def summary(self, request, pk=None):
-        return Response({'message': 'Production summary'}, status=status.HTTP_200_OK)
+        return Response({"message": "Production summary"}, status=status.HTTP_200_OK)
 
 
 class PublicProductionViewSet(viewsets.ViewSet):
     permission_classes = []
 
-    @action(detail=True, methods=['get'], url_path='qr-summary')
+    @action(detail=True, methods=["get"], url_path="qr-summary")
     def qr_summary(self, request, pk=None):
         try:
             # Phase 1 Optimization: Add caching for QR endpoint
             from django.core.cache import cache
             from django.db import connection
-            from history.models import History
+
             from company.models import Establishment
+            from history.models import History
+
             from .services.blockchain import blockchain_service
-            
+
             # Quick mode for progressive loading (just carbon score)
-            quick_mode = request.GET.get('quick') == 'true'
-            
+            quick_mode = request.GET.get("quick") == "true"
+
             # Cache key for this production
             cache_key = f'qr_summary_{pk}_v2{"_quick" if quick_mode else ""}'
             cached_data = cache.get(cache_key)
-            
+
             if cached_data:
                 # Return cached data with fresh timestamp
-                cached_data['cache_hit'] = True
-                cached_data['timestamp'] = timezone.now().isoformat()
+                cached_data["cache_hit"] = True
+                cached_data["timestamp"] = timezone.now().isoformat()
                 return Response(cached_data, status=status.HTTP_200_OK)
-            
+
             # Optimize database query with select_related and prefetch_related
-            production = History.objects.select_related(
-                'product',
-                'parcel__establishment__company'
-            ).prefetch_related(
-                'carbonentry_set__source'
-            ).get(id=pk, published=True)
+            production = (
+                History.objects.select_related("product", "parcel__establishment__company")
+                .prefetch_related("carbonentry_set__source")
+                .get(id=pk, published=True)
+            )
             establishment = production.parcel.establishment if production.parcel else None
-            
+
             if not establishment:
-                return Response({
-                    'error': 'No establishment found for this production'
-                }, status=status.HTTP_404_NOT_FOUND)
-            
+                return Response(
+                    {"error": "No establishment found for this production"}, status=status.HTTP_404_NOT_FOUND
+                )
+
             # Get crop information for benchmarking
             crop_name = production.product.name if production.product else "unknown"
-            crop_type = crop_name.lower().replace(' ', '_')
-            
+            crop_type = crop_name.lower().replace(" ", "_")
+
             # Get carbon entries for this production
             production_entries = CarbonEntry.objects.filter(production=production)
             establishment_entries = CarbonEntry.objects.filter(establishment=establishment)
-            
+
             # Calculate totals from production-specific entries first, fall back to establishment
             if production_entries.exists():
                 entries = production_entries
             else:
-                entries = establishment_entries.filter(year=production.start_date.year if production.start_date else timezone.now().year)
-            
-            total_emissions = entries.filter(type='emission').aggregate(Sum('co2e_amount'))['co2e_amount__sum'] or 0
+                entries = establishment_entries.filter(
+                    year=production.start_date.year if production.start_date else timezone.now().year
+                )
+
+            total_emissions = entries.filter(type="emission").aggregate(Sum("co2e_amount"))["co2e_amount__sum"] or 0
             # Use effective_amount for offsets to account for trust score discounts
-            total_offsets = entries.filter(type='offset').aggregate(Sum('effective_amount'))['effective_amount__sum'] or 0
+            total_offsets = (
+                entries.filter(type="offset").aggregate(Sum("effective_amount"))["effective_amount__sum"] or 0
+            )
             net_footprint = total_emissions - total_offsets
-            
+
             # Get emissions breakdown by category and source
             emissions_by_category = {}
             emissions_by_source = {}
             offsets_by_action = {}
-            
+
             # Calculate emissions by source
-            for entry in entries.filter(type='emission'):
-                source_name = entry.source.name if entry.source else 'Unknown'
+            for entry in entries.filter(type="emission"):
+                source_name = entry.source.name if entry.source else "Unknown"
                 if source_name not in emissions_by_source:
                     emissions_by_source[source_name] = 0
                 emissions_by_source[source_name] += float(entry.co2e_amount or 0)
-                
+
                 # Also categorize by source category
-                category = entry.source.category if entry.source else 'Other'
+                category = entry.source.category if entry.source else "Other"
                 if category not in emissions_by_category:
                     emissions_by_category[category] = 0
                 emissions_by_category[category] += float(entry.co2e_amount or 0)
-            
+
             # Calculate offsets by action
-            for entry in entries.filter(type='offset'):
-                action_name = entry.source.name if entry.source else 'Unknown Offset'
+            for entry in entries.filter(type="offset"):
+                action_name = entry.source.name if entry.source else "Unknown Offset"
                 if action_name not in offsets_by_action:
                     offsets_by_action[action_name] = 0
                 offsets_by_action[action_name] += float(entry.co2e_amount or 0)
-            
+
             # Get crop-specific benchmark first, then fallback to industry
             industry_percentile = 0
             industry_average = 0
             benchmark_source = "industry_average"
             benchmark = None
-            
+
             try:
                 # First try to get crop-specific benchmark
                 current_year = production.start_date.year if production.start_date else timezone.now().year
-                
+
                 # Try exact crop match first
                 crop_benchmark = CarbonBenchmark.objects.filter(
-                    crop_type=crop_type,
-                    year=current_year,
-                    usda_verified=True
+                    crop_type=crop_type, year=current_year, usda_verified=True
                 ).first()
-                
+
                 if not crop_benchmark and crop_type != "unknown":
                     # Try partial crop name matches
                     crop_keywords = crop_name.lower().split()
                     for keyword in crop_keywords:
                         crop_benchmark = CarbonBenchmark.objects.filter(
-                            crop_type__icontains=keyword,
-                            year=current_year,
-                            usda_verified=True
+                            crop_type__icontains=keyword, year=current_year, usda_verified=True
                         ).first()
                         if crop_benchmark:
                             break
-                
+
                 if crop_benchmark:
                     benchmark = crop_benchmark
                     benchmark_source = f"crop_specific_{crop_benchmark.crop_type}"
                     industry_average = crop_benchmark.average_emissions
                 else:
                     # Fallback to general industry benchmark
-                    industry = getattr(establishment, 'industry', None) or getattr(establishment, 'type', 'agriculture')
+                    industry = getattr(establishment, "industry", None) or getattr(establishment, "type", "agriculture")
                     benchmark = CarbonBenchmark.objects.filter(
-                        industry=industry,
-                        year=current_year,
-                        crop_type=''  # General industry benchmark
+                        industry=industry, year=current_year, crop_type=""  # General industry benchmark
                     ).first()
-                    
+
                     if benchmark:
                         industry_average = benchmark.average_emissions
                         benchmark_source = f"industry_{industry}"
-                
+
                 # Calculate percentile based on benchmark
                 if benchmark and industry_average > 0:
                     # Convert net footprint to per-kg basis if we have production amount
-                    production_amount = getattr(production, 'production_amount', None) or 1000  # Default 1000kg
+                    production_amount = getattr(production, "production_amount", None) or 1000  # Default 1000kg
                     net_footprint_per_kg = net_footprint / production_amount if production_amount > 0 else net_footprint
-                    
+
                     if net_footprint_per_kg <= 0:
                         industry_percentile = 95  # Very good if carbon neutral/negative
                     elif net_footprint_per_kg <= benchmark.min_emissions:
                         industry_percentile = 95  # Top performers
                     elif net_footprint_per_kg >= benchmark.max_emissions:
-                        industry_percentile = 5   # Bottom performers
+                        industry_percentile = 5  # Bottom performers
                     else:
                         # Linear interpolation between min and max
-                        position = (net_footprint_per_kg - benchmark.min_emissions) / (benchmark.max_emissions - benchmark.min_emissions)
+                        position = (net_footprint_per_kg - benchmark.min_emissions) / (
+                            benchmark.max_emissions - benchmark.min_emissions
+                        )
                         industry_percentile = max(5, min(95, int(95 - (position * 90))))
                 else:
                     # No benchmark available - estimate based on carbon score
@@ -1990,20 +1986,20 @@ class PublicProductionViewSet(viewsets.ViewSet):
                             carbon_score_temp = offset_percentage * 0.85
                     elif total_offsets > 0:
                         carbon_score_temp = 95
-                    
+
                     industry_percentile = max(5, min(95, int(carbon_score_temp * 0.9)))
-                    
+
             except Exception as e:
                 print(f"Error calculating crop-specific benchmarks: {e}")
                 industry_percentile = 50
-            
+
             # Calculate carbon score with crop-specific considerations
             carbon_score = 0
             if benchmark:
                 # Use benchmark-based scoring
-                production_amount = getattr(production, 'production_amount', None) or 1000
+                production_amount = getattr(production, "production_amount", None) or 1000
                 net_footprint_per_kg = net_footprint / production_amount if production_amount > 0 else net_footprint
-                
+
                 if net_footprint_per_kg <= 0:
                     carbon_score = 95  # Excellent for carbon neutral/negative
                 elif net_footprint_per_kg <= benchmark.min_emissions:
@@ -2014,7 +2010,9 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     carbon_score = int(90 - (ratio * 20))
                 elif net_footprint_per_kg <= benchmark.max_emissions:
                     # Worse than average: scale from 30-70
-                    ratio = (net_footprint_per_kg - benchmark.average_emissions) / (benchmark.max_emissions - benchmark.average_emissions)
+                    ratio = (net_footprint_per_kg - benchmark.average_emissions) / (
+                        benchmark.max_emissions - benchmark.average_emissions
+                    )
                     carbon_score = int(70 - (ratio * 40))
                 else:
                     # Worse than max: scale from 10-30
@@ -2032,124 +2030,138 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     carbon_score = 95  # High score for carbon negative
                 else:
                     carbon_score = 50  # Default score when no data
-            
+
             carbon_score = max(1, min(100, round(carbon_score)))
-            
+
             # Quick mode: return minimal data for fast loading
             if quick_mode:
                 quick_response = {
-                    'carbonScore': carbon_score,
-                    'totalEmissions': float(total_emissions),
-                    'totalOffsets': float(total_offsets),
-                    'cache_hit': False,
-                    'timestamp': timezone.now().isoformat()
+                    "carbonScore": carbon_score,
+                    "totalEmissions": float(total_emissions),
+                    "totalOffsets": float(total_offsets),
+                    "cache_hit": False,
+                    "timestamp": timezone.now().isoformat(),
                 }
                 # Cache quick response for 5 minutes
                 cache.set(cache_key, quick_response, 300)
                 return Response(quick_response, status=status.HTTP_200_OK)
-            
+
             # Create blockchain verification if not already exists
             blockchain_verification = None
             try:
                 # Prepare carbon data for blockchain
                 carbon_data = {
-                    'production_id': int(pk),
-                    'total_emissions': float(total_emissions),
-                    'total_offsets': float(total_offsets),
-                    'crop_type': crop_name,
-                    'calculation_method': 'crop_specific_usda_benchmarking',
-                    'usda_verified': bool(benchmark and benchmark.usda_verified),
-                    'timestamp': int(production.start_date.timestamp()) if production.start_date else int(timezone.now().timestamp()),
-                    'carbon_score': carbon_score,
-                    'industry_percentile': industry_percentile
+                    "production_id": int(pk),
+                    "total_emissions": float(total_emissions),
+                    "total_offsets": float(total_offsets),
+                    "crop_type": crop_name,
+                    "calculation_method": "crop_specific_usda_benchmarking",
+                    "usda_verified": bool(benchmark and benchmark.usda_verified),
+                    "timestamp": (
+                        int(production.start_date.timestamp())
+                        if production.start_date
+                        else int(timezone.now().timestamp())
+                    ),
+                    "carbon_score": carbon_score,
+                    "industry_percentile": industry_percentile,
                 }
-                
+
                 # Check if blockchain record exists, create if not
                 verification_result = blockchain_service.verify_carbon_record(int(pk))
-                if not verification_result.get('verified', False):
+                if not verification_result.get("verified", False):
                     # Create new blockchain record
                     blockchain_result = blockchain_service.create_carbon_record(int(pk), carbon_data)
                     blockchain_verification = {
-                        'verified': True,
-                        'transaction_hash': blockchain_result.get('transaction_hash'),
-                        'record_hash': blockchain_result.get('record_hash'),
-                        'verification_url': blockchain_result.get('verification_url'),
-                        'network': blockchain_result.get('network', 'ethereum'),
-                        'verification_date': timezone.now().isoformat(),
-                        'mock_data': blockchain_result.get('mock_data', False)
+                        "verified": True,
+                        "transaction_hash": blockchain_result.get("transaction_hash"),
+                        "record_hash": blockchain_result.get("record_hash"),
+                        "verification_url": blockchain_result.get("verification_url"),
+                        "network": blockchain_result.get("network", "ethereum"),
+                        "verification_date": timezone.now().isoformat(),
+                        "mock_data": blockchain_result.get("mock_data", False),
                     }
                 else:
                     # Use existing blockchain record
                     blockchain_verification = {
-                        'verified': verification_result.get('verified', False),
-                        'record_hash': verification_result.get('record_hash'),
-                        'verification_url': f"https://etherscan.io/tx/{verification_result.get('transaction_hash', '')}",
-                        'network': 'ethereum',
-                        'verification_date': timezone.now().isoformat(),
-                        'mock_data': verification_result.get('mock_data', False)
+                        "verified": verification_result.get("verified", False),
+                        "record_hash": verification_result.get("record_hash"),
+                        "verification_url": f"https://etherscan.io/tx/{verification_result.get('transaction_hash', '')}",
+                        "network": "ethereum",
+                        "verification_date": timezone.now().isoformat(),
+                        "mock_data": verification_result.get("mock_data", False),
                     }
-                    
+
                 # Check compliance status
                 compliance_result = blockchain_service.check_compliance(int(pk))
-                blockchain_verification.update({
-                    'compliance_status': compliance_result.get('compliant', False),
-                    'eligible_for_credits': compliance_result.get('eligible_for_credits', False)
-                })
-                
+                blockchain_verification.update(
+                    {
+                        "compliance_status": compliance_result.get("compliant", False),
+                        "eligible_for_credits": compliance_result.get("eligible_for_credits", False),
+                    }
+                )
+
             except Exception as e:
                 print(f"Error with blockchain verification: {e}")
                 # Fallback blockchain verification for demo
                 blockchain_verification = {
-                    'verified': True,
-                    'transaction_hash': f'0x{hashlib.sha256(f"fallback_{pk}".encode()).hexdigest()}',
-                    'verification_url': f'https://etherscan.io/tx/0x{hashlib.sha256(f"fallback_{pk}".encode()).hexdigest()}',
-                    'network': 'ethereum_testnet',
-                    'verification_date': timezone.now().isoformat(),
-                    'compliance_status': True,
-                    'eligible_for_credits': carbon_score >= 70,
-                    'fallback_data': True
+                    "verified": True,
+                    "transaction_hash": f'0x{hashlib.sha256(f"fallback_{pk}".encode()).hexdigest()}',
+                    "verification_url": f'https://etherscan.io/tx/0x{hashlib.sha256(f"fallback_{pk}".encode()).hexdigest()}',
+                    "network": "ethereum_testnet",
+                    "verification_date": timezone.now().isoformat(),
+                    "compliance_status": True,
+                    "eligible_for_credits": carbon_score >= 70,
+                    "fallback_data": True,
                 }
-            
+
             # Get sustainability badges for this establishment/production
             badges = []
             try:
                 establishment_badges = SustainabilityBadge.objects.filter(establishments=establishment)
                 for badge in establishment_badges:
-                    badges.append({
-                        'id': str(badge.id),
-                        'name': badge.name,
-                        'description': badge.description,
-                        'icon': badge.icon or 'leaf'
-                    })
-                    
+                    badges.append(
+                        {
+                            "id": str(badge.id),
+                            "name": badge.name,
+                            "description": badge.description,
+                            "icon": badge.icon or "leaf",
+                        }
+                    )
+
                 # Add crop-specific badges
                 if carbon_score >= 90:
-                    badges.append({
-                        'id': 'excellence',
-                        'name': f'Excellence in {crop_name.title()} Production',
-                        'description': f'Top 10% performer for {crop_name} carbon efficiency',
-                        'icon': 'star'
-                    })
+                    badges.append(
+                        {
+                            "id": "excellence",
+                            "name": f"Excellence in {crop_name.title()} Production",
+                            "description": f"Top 10% performer for {crop_name} carbon efficiency",
+                            "icon": "star",
+                        }
+                    )
                 elif carbon_score >= 70:
-                    badges.append({
-                        'id': 'sustainable',
-                        'name': f'Sustainable {crop_name.title()} Producer',
-                        'description': f'Above average sustainability for {crop_name} production',
-                        'icon': 'leaf'
-                    })
-                    
+                    badges.append(
+                        {
+                            "id": "sustainable",
+                            "name": f"Sustainable {crop_name.title()} Producer",
+                            "description": f"Above average sustainability for {crop_name} production",
+                            "icon": "leaf",
+                        }
+                    )
+
                 # Add blockchain verification badge
-                if blockchain_verification and blockchain_verification.get('verified'):
-                    badges.append({
-                        'id': 'blockchain_verified',
-                        'name': 'Blockchain Verified',
-                        'description': 'Carbon data verified on blockchain for immutable transparency',
-                        'icon': 'shield'
-                    })
-                    
+                if blockchain_verification and blockchain_verification.get("verified"):
+                    badges.append(
+                        {
+                            "id": "blockchain_verified",
+                            "name": "Blockchain Verified",
+                            "description": "Carbon data verified on blockchain for immutable transparency",
+                            "icon": "shield",
+                        }
+                    )
+
             except Exception as e:
                 print(f"Error getting badges: {e}")
-            
+
             # Generate crop-specific relatable footprint
             relatable_footprint = "Carbon neutral production"
             if net_footprint > 0:
@@ -2158,184 +2170,196 @@ class PublicProductionViewSet(viewsets.ViewSet):
             elif net_footprint < 0:
                 trees_equivalent = abs(net_footprint) / 22  # 22 kg CO2 per tree per year
                 relatable_footprint = f"Like planting {trees_equivalent:.1f} trees"
-            
+
             # Get crop-specific recommendations
             recommendations = []
             crop_category = self._get_crop_category_for_recommendations(crop_name)
-            
+
             if carbon_score < 70:
                 base_recommendations = [
                     "Consider implementing drip irrigation to reduce water usage",
                     "Switch to organic fertilizers to lower chemical emissions",
                     "Use renewable energy sources for farm operations",
-                    "Implement cover crops for carbon sequestration"
+                    "Implement cover crops for carbon sequestration",
                 ]
-                
+
                 # Add crop-specific recommendations
-                if crop_category == 'legumes':
+                if crop_category == "legumes":
                     base_recommendations.append("Reduce nitrogen fertilizer use - legumes naturally fix nitrogen")
-                elif crop_category == 'nuts':
+                elif crop_category == "nuts":
                     base_recommendations.append("Implement deficit irrigation strategies to reduce water consumption")
-                elif crop_category == 'herbs':
+                elif crop_category == "herbs":
                     base_recommendations.append("Consider companion planting to reduce pest control needs")
-                elif crop_category == 'grains':
+                elif crop_category == "grains":
                     base_recommendations.append("Implement no-till farming to reduce soil carbon loss")
-                    
+
                 recommendations = base_recommendations[:4]  # Limit to 4 recommendations
             else:
                 recommendations = [
                     f"Excellent {crop_name} production practices!",
                     "Continue current sustainable farming methods",
                     "Consider sharing best practices with other farmers",
-                    "Look into carbon credit opportunities"
+                    "Look into carbon credit opportunities",
                 ]
-            
+
             # Add timeline data from production events (if not quick mode)
             timeline_data = []
             if not quick_mode:
                 # Get production events for timeline
-                from history.models import ProductionEvent, ChemicalEvent, EquipmentEvent
-                
+                from history.models import ChemicalEvent, EquipmentEvent, ProductionEvent
+
                 events = []
                 events.extend(ProductionEvent.objects.filter(history=production).select_related())
-                events.extend(ChemicalEvent.objects.filter(history=production).select_related()) 
+                events.extend(ChemicalEvent.objects.filter(history=production).select_related())
                 events.extend(EquipmentEvent.objects.filter(history=production).select_related())
-                
+
                 # Sort events by date
-                events = sorted(events, key=lambda x: x.event_date if hasattr(x, 'event_date') else x.date)
-                
+                events = sorted(events, key=lambda x: x.event_date if hasattr(x, "event_date") else x.date)
+
                 for idx, event in enumerate(events[:10]):  # Limit to 10 most recent events
                     # Determine event type based on the model class and attributes
-                    event_type = 'production.general'  # Default
-                    if hasattr(event, 'chemical_name'):
-                        if 'pesticide' in str(event.chemical_name).lower():
-                            event_type = 'chemical.pesticide'
-                        elif 'fertilizer' in str(event.chemical_name).lower():
-                            event_type = 'chemical.fertilizer' 
-                        elif 'herbicide' in str(event.chemical_name).lower():
-                            event_type = 'chemical.herbicide'
+                    event_type = "production.general"  # Default
+                    if hasattr(event, "chemical_name"):
+                        if "pesticide" in str(event.chemical_name).lower():
+                            event_type = "chemical.pesticide"
+                        elif "fertilizer" in str(event.chemical_name).lower():
+                            event_type = "chemical.fertilizer"
+                        elif "herbicide" in str(event.chemical_name).lower():
+                            event_type = "chemical.herbicide"
                         else:
-                            event_type = 'chemical.application'
-                    elif hasattr(event, 'operation_type'):
-                        if 'harvest' in str(event.operation_type).lower():
-                            event_type = 'production.harvesting'
-                        elif 'irrigation' in str(event.operation_type).lower():
-                            event_type = 'production.irrigation'
+                            event_type = "chemical.application"
+                    elif hasattr(event, "operation_type"):
+                        if "harvest" in str(event.operation_type).lower():
+                            event_type = "production.harvesting"
+                        elif "irrigation" in str(event.operation_type).lower():
+                            event_type = "production.irrigation"
                         else:
-                            event_type = 'production.operation'
-                    elif hasattr(event, 'equipment_type'):
-                        event_type = 'production.equipment'
-                    
-                    timeline_data.append({
-                        'id': f'event_{idx}_{event.id}',
-                        'type': event_type,
-                        'date': (event.event_date if hasattr(event, 'event_date') else event.date).isoformat(),
-                        'description': getattr(event, 'notes', getattr(event, 'description', '')),
-                        'observation': getattr(event, 'observation', ''),
-                        'certified': getattr(event, 'certified', False),
-                        'index': idx
-                    })
-            
+                            event_type = "production.operation"
+                    elif hasattr(event, "equipment_type"):
+                        event_type = "production.equipment"
+
+                    timeline_data.append(
+                        {
+                            "id": f"event_{idx}_{event.id}",
+                            "type": event_type,
+                            "date": (event.event_date if hasattr(event, "event_date") else event.date).isoformat(),
+                            "description": getattr(event, "notes", getattr(event, "description", "")),
+                            "observation": getattr(event, "observation", ""),
+                            "certified": getattr(event, "certified", False),
+                            "index": idx,
+                        }
+                    )
+
             # Build the response matching the frontend interface with blockchain data
             response_data = {
-                'carbonScore': carbon_score,
-                'totalEmissions': float(total_emissions),
-                'totalOffsets': float(total_offsets),
-                'netFootprint': float(net_footprint),
-                'relatableFootprint': relatable_footprint,
-                'industryPercentile': industry_percentile,
-                'industryAverage': float(industry_average),
-                'isUsdaVerified': getattr(establishment, 'usda_verified', False) if hasattr(establishment, 'usda_verified') else bool(benchmark and benchmark.usda_verified),
-                'cropType': crop_name,
-                'benchmarkSource': benchmark_source,
-                'badges': badges,
-                'recommendations': recommendations,
-                'emissionsByCategory': emissions_by_category,
-                'emissionsBySource': emissions_by_source,
-                'offsetsByAction': offsets_by_action,
-                'socialProof': self._calculate_social_proof(production),
-                'verificationDate': benchmark.last_updated.isoformat() if benchmark else None,
+                "carbonScore": carbon_score,
+                "totalEmissions": float(total_emissions),
+                "totalOffsets": float(total_offsets),
+                "netFootprint": float(net_footprint),
+                "relatableFootprint": relatable_footprint,
+                "industryPercentile": industry_percentile,
+                "industryAverage": float(industry_average),
+                "isUsdaVerified": (
+                    getattr(establishment, "usda_verified", False)
+                    if hasattr(establishment, "usda_verified")
+                    else bool(benchmark and benchmark.usda_verified)
+                ),
+                "cropType": crop_name,
+                "benchmarkSource": benchmark_source,
+                "badges": badges,
+                "recommendations": recommendations,
+                "emissionsByCategory": emissions_by_category,
+                "emissionsBySource": emissions_by_source,
+                "offsetsByAction": offsets_by_action,
+                "socialProof": self._calculate_social_proof(production),
+                "verificationDate": benchmark.last_updated.isoformat() if benchmark else None,
                 # Enhanced blockchain verification data
-                'blockchainVerification': blockchain_verification,
+                "blockchainVerification": blockchain_verification,
                 # Add essential location and establishment data for consumer experience
-                'farmer': {
-                    'name': establishment.name if establishment else 'Unknown Farm',
-                    'location': f"{establishment.city}, {establishment.state}" if establishment and establishment.city else 'Location not available',
-                    'description': establishment.about[:200] if establishment and establishment.about else None,
-                    'id': establishment.id if establishment else None
+                "farmer": {
+                    "name": establishment.name if establishment else "Unknown Farm",
+                    "location": (
+                        f"{establishment.city}, {establishment.state}"
+                        if establishment and establishment.city
+                        else "Location not available"
+                    ),
+                    "description": establishment.about[:200] if establishment and establishment.about else None,
+                    "id": establishment.id if establishment else None,
                 },
-                'timeline': timeline_data,
+                "timeline": timeline_data,
                 # Add basic parcel info for location display (without full polygon for performance)
-                'parcel': {
-                    'name': production.parcel.name if production.parcel else 'Field',
-                    'location': f"{establishment.city}, {establishment.state}" if establishment and establishment.city else None,
-                    'area': float(production.parcel.area) if production.parcel and production.parcel.area else None
-                } if production.parcel else None,
+                "parcel": (
+                    {
+                        "name": production.parcel.name if production.parcel else "Field",
+                        "location": (
+                            f"{establishment.city}, {establishment.state}"
+                            if establishment and establishment.city
+                            else None
+                        ),
+                        "area": float(production.parcel.area) if production.parcel and production.parcel.area else None,
+                    }
+                    if production.parcel
+                    else None
+                ),
                 # Add essential consumer features that were lost when making history API conditional
-                'product': {
-                    'id': production.id,
-                    'name': production.product.name if production.product else 'Product',
-                    'reputation': float(production.reputation) if production.reputation else 4.5
+                "product": {
+                    "id": production.id,
+                    "name": production.product.name if production.product else "Product",
+                    "reputation": float(production.reputation) if production.reputation else 4.5,
                 },
                 # Add images from production album if available
-                'images': self._get_production_images(production),
+                "images": self._get_production_images(production),
                 # Add similar products from the same company (like history API does)
-                'similar_products': self._get_similar_products(production),
+                "similar_products": self._get_similar_products(production),
                 # Track scan if available
-                'history_scan': getattr(production, 'history_scan', None),
+                "history_scan": getattr(production, "history_scan", None),
                 # Performance tracking
-                'cache_hit': False,
-                'timestamp': timezone.now().isoformat()
+                "cache_hit": False,
+                "timestamp": timezone.now().isoformat(),
             }
-            
+
             # Track public view (separate from QR scans) with bot filtering
             production.increment_public_views(request)
-            
+
             # Cache the response for 15 minutes (900 seconds)
             # Production data doesn't change frequently, so caching is safe
             cache.set(cache_key, response_data, 900)
-            
+
             return Response(response_data, status=status.HTTP_200_OK)
-            
+
         except History.DoesNotExist:
-            return Response({
-                'error': 'Production not found or not published'
-            }, status=status.HTTP_404_NOT_FOUND)
+            return Response({"error": "Production not found or not published"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             print(f"Error in qr_summary: {e}")
             import traceback
-            traceback.print_exc()
-            return Response({
-                'error': 'Internal server error',
-                'carbonScore': 50,
-                'totalEmissions': 0.0,
-                'totalOffsets': 0.0,
-                'netFootprint': 0.0,
-                'relatableFootprint': 'Data being calculated',
-                'industryPercentile': 50,
-                'industryAverage': 0.0,
-                'isUsdaVerified': False,
-                'cropType': 'unknown',
-                'benchmarkSource': 'fallback',
-                'badges': [],
-                'recommendations': ['Data will be available soon'],
-                'emissionsByCategory': {},
-                'emissionsBySource': {},
-                'offsetsByAction': {},
-                'socialProof': {
-                    'totalScans': 0,
-                    'totalOffsets': 0.0,
-                    'totalUsers': 0,
-                    'averageRating': 0.0
-                },
-                'verificationDate': None,
-                'blockchainVerification': {
-                    'verified': False,
-                    'error': str(e)
-                }
-            }, status=status.HTTP_200_OK)
 
-    @action(detail=True, methods=['get'], url_path='qr-enhanced')
+            traceback.print_exc()
+            return Response(
+                {
+                    "error": "Internal server error",
+                    "carbonScore": 50,
+                    "totalEmissions": 0.0,
+                    "totalOffsets": 0.0,
+                    "netFootprint": 0.0,
+                    "relatableFootprint": "Data being calculated",
+                    "industryPercentile": 50,
+                    "industryAverage": 0.0,
+                    "isUsdaVerified": False,
+                    "cropType": "unknown",
+                    "benchmarkSource": "fallback",
+                    "badges": [],
+                    "recommendations": ["Data will be available soon"],
+                    "emissionsByCategory": {},
+                    "emissionsBySource": {},
+                    "offsetsByAction": {},
+                    "socialProof": {"totalScans": 0, "totalOffsets": 0.0, "totalUsers": 0, "averageRating": 0.0},
+                    "verificationDate": None,
+                    "blockchainVerification": {"verified": False, "error": str(e)},
+                },
+                status=status.HTTP_200_OK,
+            )
+
+    @action(detail=True, methods=["get"], url_path="qr-enhanced")
     def qr_enhanced_summary(self, request, pk=None):
         """
         Enhanced QR endpoint with Trazo 2025 transparency features.
@@ -2343,276 +2367,283 @@ class PublicProductionViewSet(viewsets.ViewSet):
         """
         try:
             # Progressive loading support
-            quick_mode = request.GET.get('quick') == 'true'
-            
+            quick_mode = request.GET.get("quick") == "true"
+
             # Enhanced cache key with transparency version
             cache_key = f'qr_enhanced_{pk}_v3{"_quick" if quick_mode else ""}'
             cached_data = cache.get(cache_key)
-            
+
             if cached_data:
-                cached_data['cache_hit'] = True
-                cached_data['timestamp'] = timezone.now().isoformat()
+                cached_data["cache_hit"] = True
+                cached_data["timestamp"] = timezone.now().isoformat()
                 return Response(cached_data, status=status.HTTP_200_OK)
-            
+
             # Get production with optimized query
-            production = History.objects.select_related(
-                'product', 'crop_type', 'parcel__establishment__company'
-            ).prefetch_related('carbonentry_set').get(id=pk, published=True)
-            
+            production = (
+                History.objects.select_related("product", "crop_type", "parcel__establishment__company")
+                .prefetch_related("carbonentry_set")
+                .get(id=pk, published=True)
+            )
+
             # Update transparency data if needed
             transparency_service.update_production_transparency_data(production)
-            
+
             # Quick mode: return minimal data for fast loading
             if quick_mode:
                 quick_response = {
-                    'carbonScore': self._legacy_carbon_score(production),  # Fallback score calculation
-                    'carbonGrade': production.carbon_grade or 'C',
-                    'totalEmissions': 0.0,  # Will be populated by full request
-                    'totalOffsets': 0.0,
-                    'cache_hit': False,
-                    'timestamp': timezone.now().isoformat()
+                    "carbonScore": self._legacy_carbon_score(production),  # Fallback score calculation
+                    "carbonGrade": production.carbon_grade or "C",
+                    "totalEmissions": 0.0,  # Will be populated by full request
+                    "totalOffsets": 0.0,
+                    "cache_hit": False,
+                    "timestamp": timezone.now().isoformat(),
                 }
                 cache.set(cache_key, quick_response, 300)  # Cache for 5 minutes
                 return Response(quick_response, status=status.HTTP_200_OK)
-            
+
             # Get establishment
             establishment = production.parcel.establishment if production.parcel else None
             if not establishment:
-                return Response({
-                    'error': 'No establishment found for this production'
-                }, status=status.HTTP_404_NOT_FOUND)
-            
+                return Response(
+                    {"error": "No establishment found for this production"}, status=status.HTTP_404_NOT_FOUND
+                )
+
             # Calculate carbon data using existing logic
             carbon_data = self._get_carbon_summary(production, establishment)
-            
+
             # Get transparency metrics from the production model (now updated)
             transparency_data = {
-                'carbonGrade': production.carbon_grade or 'C',
-                'industryComparison': production.industry_comparison or {},
-                'equivalencyMetrics': production.equivalency_metrics or {},
-                'trustIndicators': production.trust_indicators or {},
-                'improvementRecommendations': production.improvement_recommendations or [],
-                'consumerInsights': production.consumer_insights or {}
+                "carbonGrade": production.carbon_grade or "C",
+                "industryComparison": production.industry_comparison or {},
+                "equivalencyMetrics": production.equivalency_metrics or {},
+                "trustIndicators": production.trust_indicators or {},
+                "improvementRecommendations": production.improvement_recommendations or [],
+                "consumerInsights": production.consumer_insights or {},
             }
-            
+
             # Get blockchain verification (using existing logic)
             blockchain_verification = self._get_blockchain_verification(production, carbon_data)
-            
+
             # Get social proof
             social_proof = self._calculate_social_proof(production)
-            
+
             # Build consumer-safe response (no internal scoring details)
             response_data = {
                 # Consumer-friendly carbon metrics only
-                'carbonScore': min(100, max(0, carbon_data.get('carbon_score', 50))),  # Bounded 0-100
-                'carbonGrade': transparency_data['carbonGrade'],
-                
+                "carbonScore": min(100, max(0, carbon_data.get("carbon_score", 50))),  # Bounded 0-100
+                "carbonGrade": transparency_data["carbonGrade"],
                 # Public transparency features
-                'industryComparison': {
-                    'percentile': transparency_data['industryComparison'].get('percentile', 50),
-                    'better_than_average': transparency_data['industryComparison'].get('better_than_average', False),
-                    'region': transparency_data['industryComparison'].get('region', 'Estimated')
+                "industryComparison": {
+                    "percentile": transparency_data["industryComparison"].get("percentile", 50),
+                    "better_than_average": transparency_data["industryComparison"].get("better_than_average", False),
+                    "region": transparency_data["industryComparison"].get("region", "Estimated"),
                 },
-                'equivalencyMetrics': transparency_data['equivalencyMetrics'],
-                'trustIndicators': transparency_data['trustIndicators'],
-                'consumerInsights': transparency_data['consumerInsights'],
-                
+                "equivalencyMetrics": transparency_data["equivalencyMetrics"],
+                "trustIndicators": transparency_data["trustIndicators"],
+                "consumerInsights": transparency_data["consumerInsights"],
                 # Consumer-friendly fields
-                'industryPercentile': transparency_data['industryComparison'].get('percentile', 50),
-                'relatableFootprint': self._get_primary_equivalency(transparency_data['equivalencyMetrics']),
-                'isUsdaVerified': carbon_data.get('usda_verified', False),
-                'cropType': getattr(production.crop_type, 'name', 'Unknown') if production.crop_type else 'Unknown',
-                'badges': self._generate_consumer_badges(transparency_data, carbon_data),
-                
+                "industryPercentile": transparency_data["industryComparison"].get("percentile", 50),
+                "relatableFootprint": self._get_primary_equivalency(transparency_data["equivalencyMetrics"]),
+                "isUsdaVerified": carbon_data.get("usda_verified", False),
+                "cropType": getattr(production.crop_type, "name", "Unknown") if production.crop_type else "Unknown",
+                "badges": self._generate_consumer_badges(transparency_data, carbon_data),
                 # Public data only
-                'blockchainVerification': blockchain_verification,
-                'socialProof': self._get_consumer_safe_social_proof(production),
-                'farmer': self._get_public_farmer_info(establishment),
-                'product': self._get_product_info(production),
-                'parcel': self._get_public_parcel_info(production),
-                'images': self._get_production_images(production),
-                'timeline': self._get_consumer_timeline(production),
-                
+                "blockchainVerification": blockchain_verification,
+                "socialProof": self._get_consumer_safe_social_proof(production),
+                "farmer": self._get_public_farmer_info(establishment),
+                "product": self._get_product_info(production),
+                "parcel": self._get_public_parcel_info(production),
+                "images": self._get_production_images(production),
+                "timeline": self._get_consumer_timeline(production),
                 # Consumer-safe metadata
-                'cache_hit': False,
-                'timestamp': timezone.now().isoformat(),
-                'api_version': 'consumer_v4'
+                "cache_hit": False,
+                "timestamp": timezone.now().isoformat(),
+                "api_version": "consumer_v4",
             }
-            
+
             # Track public view
             production.increment_public_views(request)
-            
+
             # Cache the response for 15 minutes
             cache.set(cache_key, response_data, 900)
-            
+
             return Response(response_data, status=status.HTTP_200_OK)
-            
+
         except History.DoesNotExist:
-            return Response({
-                'error': 'Production not found or not published'
-            }, status=status.HTTP_404_NOT_FOUND)
+            return Response({"error": "Production not found or not published"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             logger.error(f"Error in qr_enhanced_summary: {str(e)}")
-            return Response({
-                'error': 'Internal server error',
-                'carbonScore': 50,
-                'carbonGrade': 'C',
-                'message': 'Enhanced carbon data being calculated'
-            }, status=status.HTTP_200_OK)
+            return Response(
+                {
+                    "error": "Internal server error",
+                    "carbonScore": 50,
+                    "carbonGrade": "C",
+                    "message": "Enhanced carbon data being calculated",
+                },
+                status=status.HTTP_200_OK,
+            )
 
     def _generate_consumer_badges(self, transparency_data, carbon_data):
         """Generate consumer-friendly badges without internal details"""
         badges = []
-        
-        if transparency_data['trustIndicators'].get('usda_verified'):
-            badges.append({
-                'type': 'government_verified',
-                'label': 'Government Verified',
-                'color': 'blue',
-                'icon': 'shield',
-                'description': 'Verified by USDA standards'
-            })
-        
-        if transparency_data['trustIndicators'].get('blockchain_verified'):
-            badges.append({
-                'type': 'blockchain_secured',
-                'label': 'Blockchain Secured',
-                'color': 'purple',
-                'icon': 'lock',
-                'description': 'Permanently recorded and tamper-proof'
-            })
-        
+
+        if transparency_data["trustIndicators"].get("usda_verified"):
+            badges.append(
+                {
+                    "type": "government_verified",
+                    "label": "Government Verified",
+                    "color": "blue",
+                    "icon": "shield",
+                    "description": "Verified by USDA standards",
+                }
+            )
+
+        if transparency_data["trustIndicators"].get("blockchain_verified"):
+            badges.append(
+                {
+                    "type": "blockchain_secured",
+                    "label": "Blockchain Secured",
+                    "color": "purple",
+                    "icon": "lock",
+                    "description": "Permanently recorded and tamper-proof",
+                }
+            )
+
         # Simple grade-based badges without internal scoring
-        grade = transparency_data.get('carbonGrade', 'C')
-        if grade.startswith('A'):
-            badges.append({
-                'type': 'climate_leader',
-                'label': 'Climate Leader',
-                'color': 'green',
-                'icon': 'leaf',
-                'description': 'Exceptional environmental impact'
-            })
-        elif grade.startswith('B'):
-            badges.append({
-                'type': 'sustainable_choice',
-                'label': 'Sustainable Choice',
-                'color': 'green',
-                'icon': 'leaf',
-                'description': 'Above-average sustainability'
-            })
-        
+        grade = transparency_data.get("carbonGrade", "C")
+        if grade.startswith("A"):
+            badges.append(
+                {
+                    "type": "climate_leader",
+                    "label": "Climate Leader",
+                    "color": "green",
+                    "icon": "leaf",
+                    "description": "Exceptional environmental impact",
+                }
+            )
+        elif grade.startswith("B"):
+            badges.append(
+                {
+                    "type": "sustainable_choice",
+                    "label": "Sustainable Choice",
+                    "color": "green",
+                    "icon": "leaf",
+                    "description": "Above-average sustainability",
+                }
+            )
+
         return badges
-    
+
     def _get_consumer_safe_social_proof(self, production):
         """Get social proof data safe for consumers"""
         try:
             # Return only non-sensitive aggregated data
             return {
-                'transparency_score': 95,  # Static high score for consumer confidence
-                'verification_badges': 3,
-                'data_completeness': 'High',
-                'last_updated': 'Recently verified'
+                "transparency_score": 95,  # Static high score for consumer confidence
+                "verification_badges": 3,
+                "data_completeness": "High",
+                "last_updated": "Recently verified",
             }
         except Exception:
             return {
-                'transparency_score': 90,
-                'verification_badges': 2,
-                'data_completeness': 'Good',
-                'last_updated': 'Verified'
+                "transparency_score": 90,
+                "verification_badges": 2,
+                "data_completeness": "Good",
+                "last_updated": "Verified",
             }
-    
+
     def _get_public_farmer_info(self, establishment):
         """Get farmer info safe for public consumption"""
         if not establishment:
             return None
-            
+
         try:
             company = establishment.company
             return {
-                'name': company.name if company else 'Farm',
-                'location': f"{company.city}, {company.country}" if company and company.city else 'Farm Location',
-                'story': getattr(company, 'sustainability_story', None) or f"{company.name if company else 'This farm'} is committed to sustainable farming practices.",
-                'practices': ['Sustainable Farming', 'Environmental Stewardship'],
-                'year_established': getattr(company, 'year_established', None),
+                "name": company.name if company else "Farm",
+                "location": f"{company.city}, {company.country}" if company and company.city else "Farm Location",
+                "story": getattr(company, "sustainability_story", None)
+                or f"{company.name if company else 'This farm'} is committed to sustainable farming practices.",
+                "practices": ["Sustainable Farming", "Environmental Stewardship"],
+                "year_established": getattr(company, "year_established", None),
                 # Remove: phone, email, detailed address, internal IDs
             }
         except Exception:
             return {
-                'name': 'Farm',
-                'location': 'Farm Location',
-                'story': 'Committed to sustainable farming practices.',
-                'practices': ['Sustainable Farming'],
+                "name": "Farm",
+                "location": "Farm Location",
+                "story": "Committed to sustainable farming practices.",
+                "practices": ["Sustainable Farming"],
             }
-    
+
     def _get_public_parcel_info(self, production):
         """Get parcel info safe for public consumption"""
         if not production.parcel:
             return None
-            
+
         try:
             parcel = production.parcel
             return {
-                'name': parcel.name,
-                'area': f"{parcel.size_ha:.1f} hectares" if parcel.size_ha else "Farm area",
-                'region': f"{parcel.establishment.company.city}, {parcel.establishment.company.country}" if parcel.establishment and parcel.establishment.company else "Region",
-                'organic_status': getattr(parcel, 'organic_certified', False),
+                "name": parcel.name,
+                "area": f"{parcel.size_ha:.1f} hectares" if parcel.size_ha else "Farm area",
+                "region": (
+                    f"{parcel.establishment.company.city}, {parcel.establishment.company.country}"
+                    if parcel.establishment and parcel.establishment.company
+                    else "Region"
+                ),
+                "organic_status": getattr(parcel, "organic_certified", False),
                 # Remove: exact coordinates, internal parcel IDs, detailed farm data
             }
         except Exception:
-            return {
-                'name': 'Parcel',
-                'area': 'Farm area',
-                'region': 'Region',
-                'organic_status': False
-            }
-    
+            return {"name": "Parcel", "area": "Farm area", "region": "Region", "organic_status": False}
+
     def _get_consumer_timeline(self, production):
         """Get timeline events safe for consumers with simplified data"""
         try:
             # Get existing timeline but remove sensitive operational details
             timeline = self._get_carbon_timeline(production)
-            
+
             if not timeline:
                 return []
-            
+
             # Filter and simplify for consumers
             consumer_timeline = []
             for event in timeline:
                 consumer_event = {
-                    'id': event.get('id'),
-                    'type': event.get('type', 'farming_activity'),
-                    'description': event.get('description', 'Farming activity'),
-                    'date': event.get('date'),
-                    'certified': event.get('certified', False),
-                    'category': event.get('category', 'general'),
+                    "id": event.get("id"),
+                    "type": event.get("type", "farming_activity"),
+                    "description": event.get("description", "Farming activity"),
+                    "date": event.get("date"),
+                    "certified": event.get("certified", False),
+                    "category": event.get("category", "general"),
                     # Remove: costs, detailed operational data, internal metrics
                 }
-                
+
                 # Add simplified carbon data if available
-                if event.get('carbon_data'):
-                    carbon_data = event['carbon_data']
-                    consumer_event['carbon_data'] = {
-                        'net_impact': carbon_data.get('net_impact', 0),
-                        'usda_verified': carbon_data.get('usda_verified', False),
-                        'calculation_method': 'EPA/USDA Standard',
+                if event.get("carbon_data"):
+                    carbon_data = event["carbon_data"]
+                    consumer_event["carbon_data"] = {
+                        "net_impact": carbon_data.get("net_impact", 0),
+                        "usda_verified": carbon_data.get("usda_verified", False),
+                        "calculation_method": "EPA/USDA Standard",
                         # Remove: detailed breakdowns, internal calculations
                     }
-                
+
                 consumer_timeline.append(consumer_event)
-            
+
             return consumer_timeline[:20]  # Limit to 20 most recent events
-            
+
         except Exception as e:
             logger.warning(f"Error getting consumer timeline: {str(e)}")
             return []
 
-    @action(detail=True, methods=['get'], url_path='complete')
+    @action(detail=True, methods=["get"], url_path="complete")
     def complete_summary(self, request, pk=None):
         """
         Phase 2 Optimization: Unified endpoint providing all data needed for ProductDetail page.
         Combines carbon metrics, production timeline, establishment details, and map data
         in a single optimized API call.
-        
+
         Expected performance improvement:
         - Requests: 3 → 1 (67% reduction)
         - Load Time: 147ms → ~25ms (83% reduction)
@@ -2621,87 +2652,93 @@ class PublicProductionViewSet(viewsets.ViewSet):
         try:
             from django.core.cache import cache
             from django.db import connection
-            from history.models import History, HistoryScan
+
             from company.models import Establishment
+            from history.models import History, HistoryScan
+
             from .services.blockchain import blockchain_service
-            
+
             # Enhanced cache key for complete endpoint
-            cache_key = f'complete_summary_{pk}_v1'
+            cache_key = f"complete_summary_{pk}_v1"
             cached_data = cache.get(cache_key)
-            
+
             if cached_data:
                 # Return cached data with fresh timestamp
-                cached_data['cache_hit'] = True
-                cached_data['timestamp'] = timezone.now().isoformat()
+                cached_data["cache_hit"] = True
+                cached_data["timestamp"] = timezone.now().isoformat()
                 return Response(cached_data, status=status.HTTP_200_OK)
-            
+
             # Single optimized query with all necessary joins and prefetches
-            production = History.objects.select_related(
-                'product',
-                'parcel__establishment__company',
-                'album'
-            ).prefetch_related(
-                'carbonentry_set__source',
-                'album__images',
-                'history_weatherevent_events',
-                'history_chemicalevent_events',
-                'history_productionevent_events',
-                'history_generalevent_events',
-                'history_equipmentevent_events',
-                'history_soilmanagementevent_events',
-                'history_pestmanagementevent_events',
-                'history_scans'
-            ).get(id=pk, published=True)
-            
+            production = (
+                History.objects.select_related("product", "parcel__establishment__company", "album")
+                .prefetch_related(
+                    "carbonentry_set__source",
+                    "album__images",
+                    "history_weatherevent_events",
+                    "history_chemicalevent_events",
+                    "history_productionevent_events",
+                    "history_generalevent_events",
+                    "history_equipmentevent_events",
+                    "history_soilmanagementevent_events",
+                    "history_pestmanagementevent_events",
+                    "history_scans",
+                )
+                .get(id=pk, published=True)
+            )
+
             establishment = production.parcel.establishment if production.parcel else None
-            
+
             if not establishment:
-                return Response({
-                    'error': 'No establishment found for this production'
-                }, status=status.HTTP_404_NOT_FOUND)
+                return Response(
+                    {"error": "No establishment found for this production"}, status=status.HTTP_404_NOT_FOUND
+                )
 
             # === CARBON DATA CALCULATION (from existing qr_summary logic) ===
-            
+
             # Get crop information for benchmarking
             crop_name = production.product.name if production.product else "unknown"
-            crop_type = crop_name.lower().replace(' ', '_')
-            
+            crop_type = crop_name.lower().replace(" ", "_")
+
             # Get carbon entries for this production
             production_entries = CarbonEntry.objects.filter(production=production)
             establishment_entries = CarbonEntry.objects.filter(establishment=establishment)
-            
+
             # Calculate totals from production-specific entries first, fall back to establishment
             if production_entries.exists():
                 entries = production_entries
             else:
-                entries = establishment_entries.filter(year=production.start_date.year if production.start_date else timezone.now().year)
-            
-            total_emissions = entries.filter(type='emission').aggregate(Sum('co2e_amount'))['co2e_amount__sum'] or 0
-            # Use effective_amount for offsets to account for trust score discounts  
-            total_offsets = entries.filter(type='offset').aggregate(Sum('effective_amount'))['effective_amount__sum'] or 0
+                entries = establishment_entries.filter(
+                    year=production.start_date.year if production.start_date else timezone.now().year
+                )
+
+            total_emissions = entries.filter(type="emission").aggregate(Sum("co2e_amount"))["co2e_amount__sum"] or 0
+            # Use effective_amount for offsets to account for trust score discounts
+            total_offsets = (
+                entries.filter(type="offset").aggregate(Sum("effective_amount"))["effective_amount__sum"] or 0
+            )
             net_footprint = total_emissions - total_offsets
-            
+
             # Get emissions breakdown by category and source
             emissions_by_category = {}
             emissions_by_source = {}
             offsets_by_action = {}
-            
+
             # Calculate emissions by source
-            for entry in entries.filter(type='emission'):
-                source_name = entry.source.name if entry.source else 'Unknown'
+            for entry in entries.filter(type="emission"):
+                source_name = entry.source.name if entry.source else "Unknown"
                 if source_name not in emissions_by_source:
                     emissions_by_source[source_name] = 0
                 emissions_by_source[source_name] += float(entry.co2e_amount or 0)
-                
+
                 # Also categorize by source category
-                category = entry.source.category if entry.source else 'Other'
+                category = entry.source.category if entry.source else "Other"
                 if category not in emissions_by_category:
                     emissions_by_category[category] = 0
                 emissions_by_category[category] += float(entry.co2e_amount or 0)
-            
+
             # Calculate offsets by action - using effective amounts
-            for entry in entries.filter(type='offset'):
-                action_name = entry.source.name if entry.source else 'Unknown Offset'
+            for entry in entries.filter(type="offset"):
+                action_name = entry.source.name if entry.source else "Unknown Offset"
                 if action_name not in offsets_by_action:
                     offsets_by_action[action_name] = 0
                 offsets_by_action[action_name] += float(entry.effective_amount or entry.co2e_amount or 0)
@@ -2710,121 +2747,155 @@ class PublicProductionViewSet(viewsets.ViewSet):
             carbon_score = self._calculate_carbon_score(total_emissions, total_offsets, production, crop_type)
             industry_percentile = self._calculate_industry_percentile(net_footprint, production, crop_type)
             industry_average = self._get_industry_average(crop_type, production)
-            
+
             # === TIMELINE DATA (combined from all event types) ===
             timeline_data = self._get_complete_timeline(production)
-            
+
             # === ESTABLISHMENT AND PARCEL DATA ===
             # Get establishment photo from album
             establishment_photo = None
             if establishment.album and establishment.album.images.exists():
                 first_image = establishment.album.images.first()
                 try:
-                    if first_image and first_image.image and hasattr(first_image.image, 'url') and first_image.image.url:
+                    if (
+                        first_image
+                        and first_image.image
+                        and hasattr(first_image.image, "url")
+                        and first_image.image.url
+                    ):
                         establishment_photo = first_image.image.url
                 except (ValueError, AttributeError):
                     establishment_photo = None
-            
+
             establishment_data = {
-                'id': establishment.id,
-                'name': establishment.name,
-                'description': establishment.description or '',
-                'location': f"{establishment.city}, {establishment.state}" if establishment.city and establishment.state else establishment.address or '',
-                'photo': establishment_photo,
-                'certifications': getattr(establishment, 'certifications', []),
+                "id": establishment.id,
+                "name": establishment.name,
+                "description": establishment.description or "",
+                "location": (
+                    f"{establishment.city}, {establishment.state}"
+                    if establishment.city and establishment.state
+                    else establishment.address or ""
+                ),
+                "photo": establishment_photo,
+                "certifications": getattr(establishment, "certifications", []),
                 # 'email': getattr(establishment, 'email', ''),  # REMOVED - Private contact info
                 # 'phone': getattr(establishment, 'phone', ''),  # REMOVED - Private contact info
                 # Additional establishment fields for modals
-                'address': establishment.address or '',
-                'city': establishment.city or '',
-                'state': establishment.state or '',
-                'country': establishment.country or '',
-                'zone': getattr(establishment, 'zone', ''),
-                'latitude': establishment.latitude,
-                'longitude': establishment.longitude,
+                "address": establishment.address or "",
+                "city": establishment.city or "",
+                "state": establishment.state or "",
+                "country": establishment.country or "",
+                "zone": getattr(establishment, "zone", ""),
+                "latitude": establishment.latitude,
+                "longitude": establishment.longitude,
                 # 'contact_person': getattr(establishment, 'contact_person', ''),  # REMOVED - Private contact info
                 # 'contact_phone': getattr(establishment, 'contact_phone', ''),  # REMOVED - Private contact info
                 # 'contact_email': getattr(establishment, 'contact_email', ''),  # REMOVED - Private contact info
-                'zip_code': getattr(establishment, 'zip_code', ''),
-                'about': getattr(establishment, 'about', ''),
-                'main_activities': getattr(establishment, 'main_activities', ''),
-                'location_highlights': getattr(establishment, 'location_highlights', ''),
-                'custom_message': getattr(establishment, 'custom_message', ''),
-                'is_active': getattr(establishment, 'is_active', True),
-                'crops_grown': getattr(establishment, 'crops_grown', []),
-                'sustainability_practices': getattr(establishment, 'sustainability_practices', []),
+                "zip_code": getattr(establishment, "zip_code", ""),
+                "about": getattr(establishment, "about", ""),
+                "main_activities": getattr(establishment, "main_activities", ""),
+                "location_highlights": getattr(establishment, "location_highlights", ""),
+                "custom_message": getattr(establishment, "custom_message", ""),
+                "is_active": getattr(establishment, "is_active", True),
+                "crops_grown": getattr(establishment, "crops_grown", []),
+                "sustainability_practices": getattr(establishment, "sustainability_practices", []),
                 # 'employee_count': getattr(establishment, 'employee_count', None),  # REMOVED - Business sensitive info
                 # 'total_acreage': getattr(establishment, 'total_acreage', None),  # REMOVED - Business sensitive info
-                'year_established': getattr(establishment, 'year_established', None),
-                'establishment_type': getattr(establishment, 'establishment_type', ''),
-                'farming_method': getattr(establishment, 'farming_method', ''),
+                "year_established": getattr(establishment, "year_established", None),
+                "establishment_type": getattr(establishment, "establishment_type", ""),
+                "farming_method": getattr(establishment, "farming_method", ""),
                 # New operational agricultural fields - keep basic info, remove detailed operational data
                 # 'water_sources': getattr(establishment, 'water_sources', []),  # REMOVED - Operational sensitive info
-                'climate_zone': getattr(establishment, 'climate_zone', ''),  # Keep - not sensitive
+                "climate_zone": getattr(establishment, "climate_zone", ""),  # Keep - not sensitive
                 # 'soil_types': getattr(establishment, 'soil_types', []),  # REMOVED - Operational sensitive info
-                'conservation_practices': getattr(establishment, 'conservation_practices', []),  # Keep - shows sustainability
+                "conservation_practices": getattr(
+                    establishment, "conservation_practices", []
+                ),  # Keep - shows sustainability
                 # 'irrigation_methods': getattr(establishment, 'irrigation_methods', []),  # REMOVED - Operational sensitive info
                 # Company information (from establishment's company)
-                'company': {
-                    'id': establishment.company.id if establishment.company else None,
-                    'name': establishment.company.name if establishment.company else '',
-                    'description': getattr(establishment.company, 'description', '') if establishment.company else '',
-                    'address': getattr(establishment.company, 'address', '') if establishment.company else '',
-                    'city': getattr(establishment.company, 'city', '') if establishment.company else '',
-                    'state': getattr(establishment.company, 'state', '') if establishment.company else '',
-                    'country': getattr(establishment.company, 'country', '') if establishment.company else '',
-                    # 'phone': getattr(establishment.company, 'phone', '') if establishment.company else '',  # REMOVED - Private contact info
-                    # 'email': getattr(establishment.company, 'email', '') if establishment.company else '',  # REMOVED - Private contact info
-                    'website': getattr(establishment.company, 'website', '') if establishment.company else '',
-                    'facebook': getattr(establishment.company, 'facebook', '') if establishment.company else '',
-                    'instagram': getattr(establishment.company, 'instagram', '') if establishment.company else '',
-                    # New agricultural compliance fields
-                    'legal_structure': getattr(establishment.company, 'legal_structure', '') if establishment.company else '',
-                    'primary_commodities': getattr(establishment.company, 'primary_commodities', '') if establishment.company else '',
-                    'sustainability_commitment': getattr(establishment.company, 'sustainability_commitment', '') if establishment.company else '',
-                    'logo': self._get_safe_image_url(establishment.company.logo) if establishment.company and establishment.company.logo else None,
-                    # 'fiscal_id': getattr(establishment.company, 'fiscal_id', '') if establishment.company else '',  # REMOVED - Business sensitive info
-                    # 'contact_email': getattr(establishment.company, 'contact_email', '') if establishment.company else '',  # REMOVED - Private contact info
-                } if establishment.company else None
+                "company": (
+                    {
+                        "id": establishment.company.id if establishment.company else None,
+                        "name": establishment.company.name if establishment.company else "",
+                        "description": (
+                            getattr(establishment.company, "description", "") if establishment.company else ""
+                        ),
+                        "address": getattr(establishment.company, "address", "") if establishment.company else "",
+                        "city": getattr(establishment.company, "city", "") if establishment.company else "",
+                        "state": getattr(establishment.company, "state", "") if establishment.company else "",
+                        "country": getattr(establishment.company, "country", "") if establishment.company else "",
+                        # 'phone': getattr(establishment.company, 'phone', '') if establishment.company else '',  # REMOVED - Private contact info
+                        # 'email': getattr(establishment.company, 'email', '') if establishment.company else '',  # REMOVED - Private contact info
+                        "website": getattr(establishment.company, "website", "") if establishment.company else "",
+                        "facebook": getattr(establishment.company, "facebook", "") if establishment.company else "",
+                        "instagram": getattr(establishment.company, "instagram", "") if establishment.company else "",
+                        # New agricultural compliance fields
+                        "legal_structure": (
+                            getattr(establishment.company, "legal_structure", "") if establishment.company else ""
+                        ),
+                        "primary_commodities": (
+                            getattr(establishment.company, "primary_commodities", "") if establishment.company else ""
+                        ),
+                        "sustainability_commitment": (
+                            getattr(establishment.company, "sustainability_commitment", "")
+                            if establishment.company
+                            else ""
+                        ),
+                        "logo": (
+                            self._get_safe_image_url(establishment.company.logo)
+                            if establishment.company and establishment.company.logo
+                            else None
+                        ),
+                        # 'fiscal_id': getattr(establishment.company, 'fiscal_id', '') if establishment.company else '',  # REMOVED - Business sensitive info
+                        # 'contact_email': getattr(establishment.company, 'contact_email', '') if establishment.company else '',  # REMOVED - Private contact info
+                    }
+                    if establishment.company
+                    else None
+                ),
             }
-            
+
             # === MAP DATA (polygon and metadata) ===
             parcel_data = None
             if production.parcel:
                 parcel_data = {
-                    'id': production.parcel.id,
-                    'name': production.parcel.name,
-                    'area': float(production.parcel.area) if production.parcel.area else None,
-                    'polygon': production.parcel.polygon,
-                    'map_metadata': production.parcel.map_metadata,
+                    "id": production.parcel.id,
+                    "name": production.parcel.name,
+                    "area": float(production.parcel.area) if production.parcel.area else None,
+                    "polygon": production.parcel.polygon,
+                    "map_metadata": production.parcel.map_metadata,
                     # Additional parcel fields for modal
-                    'description': getattr(production.parcel, 'description', ''),
-                    'soil_type': getattr(production.parcel, 'soil_type', ''),
-                    'crop_type': getattr(production.parcel, 'crop_type', ''),
-                    'certification_type': getattr(production.parcel, 'certification_type', ''),
-                    'certified': getattr(production.parcel, 'certified', False),
-                    'unique_code': getattr(production.parcel, 'unique_code', ''),
+                    "description": getattr(production.parcel, "description", ""),
+                    "soil_type": getattr(production.parcel, "soil_type", ""),
+                    "crop_type": getattr(production.parcel, "crop_type", ""),
+                    "certification_type": getattr(production.parcel, "certification_type", ""),
+                    "certified": getattr(production.parcel, "certified", False),
+                    "unique_code": getattr(production.parcel, "unique_code", ""),
                     # 'contact_person': getattr(production.parcel, 'contact_person', ''),  # REMOVED - Private contact info
                     # 'contact_phone': getattr(production.parcel, 'contact_phone', ''),  # REMOVED - Private contact info
                     # 'contact_email': getattr(production.parcel, 'contact_email', ''),  # REMOVED - Private contact info
                     # Agricultural details for carbon calculations and USDA compliance
-                    'agricultural_details': getattr(production.parcel, 'agricultural_details', {}),
+                    "agricultural_details": getattr(production.parcel, "agricultural_details", {}),
                     # Current production info
-                    'current_history': {
-                        'id': production.id,
-                        'name': production.name or f'{production.product.name if production.product else "Production"} {production.start_date.year if production.start_date else ""}',
-                        'start_date': production.start_date.isoformat() if production.start_date else None,
-                        'finish_date': production.finish_date.isoformat() if production.finish_date else None,
-                        'crop_type': production.product.name if production.product else None
-                    } if production else None
+                    "current_history": (
+                        {
+                            "id": production.id,
+                            "name": production.name
+                            or f'{production.product.name if production.product else "Production"} {production.start_date.year if production.start_date else ""}',
+                            "start_date": production.start_date.isoformat() if production.start_date else None,
+                            "finish_date": production.finish_date.isoformat() if production.finish_date else None,
+                            "crop_type": production.product.name if production.product else None,
+                        }
+                        if production
+                        else None
+                    ),
                 }
-            
+
             # === IMAGES DATA ===
             images_data = self._get_production_images(production)
-            
+
             # === SIMILAR PRODUCTS ===
             similar_products = self._get_similar_products(production)
-            
+
             # === SCAN TRACKING (create scan record like history API does) ===
             x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
             if x_forwarded_for:
@@ -2839,12 +2910,13 @@ class PublicProductionViewSet(viewsets.ViewSet):
             if ip_address:
                 try:
                     import requests
+
                     # Using ipapi.co - free tier allows 1000 requests/day
-                    response = requests.get(f'https://ipapi.co/{ip_address}/json/', timeout=2)
+                    response = requests.get(f"https://ipapi.co/{ip_address}/json/", timeout=2)
                     if response.status_code == 200:
                         data = response.json()
-                        city = data.get('city')
-                        country = data.get('country_name')
+                        city = data.get("city")
+                        country = data.get("country_name")
                 except Exception as e:
                     # If geolocation fails, continue without it
                     print(f"IP geolocation failed: {e}")
@@ -2857,121 +2929,108 @@ class PublicProductionViewSet(viewsets.ViewSet):
                 city=city,
                 country=country,
             )
-            
+
             # === BLOCKCHAIN VERIFICATION ===
             carbon_data = {
-                'total_emissions': total_emissions,
-                'total_offsets': total_offsets,
-                'net_footprint': net_footprint,
-                'carbon_score': carbon_score,
+                "total_emissions": total_emissions,
+                "total_offsets": total_offsets,
+                "net_footprint": net_footprint,
+                "carbon_score": carbon_score,
             }
             blockchain_verification = self._get_blockchain_verification(production, carbon_data)
-            
+
             # === SUSTAINABILITY METRICS AND RECOMMENDATIONS ===
             recommendations = self._generate_sustainability_recommendations(
                 crop_name, total_emissions, total_offsets, carbon_score
             )
-            
+
             badges = self._generate_sustainability_badges(
                 carbon_score, industry_percentile, total_offsets, blockchain_verification
             )
-            
+
             # === SOCIAL PROOF DATA ===
             social_proof = self._calculate_social_proof(production)
-            
+
             # === TRUST SCORE CALCULATION ===
             trust_score = self._calculate_trust_score(
-                production, carbon_score, industry_percentile, 
-                blockchain_verification, social_proof
+                production, carbon_score, industry_percentile, blockchain_verification, social_proof
             )
-            
+
             # === UNIFIED RESPONSE DATA ===
             response_data = {
                 # Essential product info
-                'product': {
-                    'id': production.id,
-                    'name': production.product.name if production.product else 'Product',
-                    'reputation': float(production.reputation) if production.reputation else 4.5
+                "product": {
+                    "id": production.id,
+                    "name": production.product.name if production.product else "Product",
+                    "reputation": float(production.reputation) if production.reputation else 4.5,
                 },
-                
                 # Carbon metrics (complete from qr-summary)
-                'carbonScore': carbon_score,
-                'totalEmissions': float(total_emissions),
-                'totalOffsets': float(total_offsets),
-                'netFootprint': float(net_footprint),
-                'relatableFootprint': self._get_relatable_footprint(net_footprint),
-                'industryPercentile': industry_percentile,
-                'industryAverage': industry_average,
-                'isUsdaVerified': self._check_usda_verification(production),
-                'cropType': crop_type,
-                'benchmarkSource': f'crop_specific_{crop_type}',
-                
+                "carbonScore": carbon_score,
+                "totalEmissions": float(total_emissions),
+                "totalOffsets": float(total_offsets),
+                "netFootprint": float(net_footprint),
+                "relatableFootprint": self._get_relatable_footprint(net_footprint),
+                "industryPercentile": industry_percentile,
+                "industryAverage": industry_average,
+                "isUsdaVerified": self._check_usda_verification(production),
+                "cropType": crop_type,
+                "benchmarkSource": f"crop_specific_{crop_type}",
                 # Emissions breakdown
-                'emissionsByCategory': emissions_by_category,
-                'emissionsBySource': emissions_by_source,
-                'offsetsByAction': offsets_by_action,
-                
+                "emissionsByCategory": emissions_by_category,
+                "emissionsBySource": emissions_by_source,
+                "offsetsByAction": offsets_by_action,
                 # Production timeline (combined events)
-                'timeline': timeline_data,
-                'production_events': timeline_data,  # Alias for compatibility
-                'events': timeline_data,  # Alias for compatibility
-                
+                "timeline": timeline_data,
+                "production_events": timeline_data,  # Alias for compatibility
+                "events": timeline_data,  # Alias for compatibility
                 # Establishment info (from history data)
-                'farmer': establishment_data,  # Primary key for carbon API compatibility
-                'establishment': establishment_data,  # Alias for history API compatibility
-                
+                "farmer": establishment_data,  # Primary key for carbon API compatibility
+                "establishment": establishment_data,  # Alias for history API compatibility
                 # Map data (from history API)
-                'parcel': parcel_data,
-                
+                "parcel": parcel_data,
                 # Images
-                'images': images_data,
-                
+                "images": images_data,
                 # Similar products
-                'similar_products': similar_products,
-                'similar_histories': similar_products,  # Alias for history API compatibility
-                
+                "similar_products": similar_products,
+                "similar_histories": similar_products,  # Alias for history API compatibility
                 # Scan tracking
-                'history_scan': history_scan.id,
-                
+                "history_scan": history_scan.id,
                 # Sustainability features
-                'recommendations': recommendations,
-                'badges': badges,
-                'blockchainVerification': blockchain_verification,
-                'socialProof': social_proof,
-                'trustScore': trust_score,
-                
+                "recommendations": recommendations,
+                "badges": badges,
+                "blockchainVerification": blockchain_verification,
+                "socialProof": social_proof,
+                "trustScore": trust_score,
                 # Metadata
-                'verificationDate': timezone.now().isoformat(),
-                'cache_hit': False,
-                'timestamp': timezone.now().isoformat(),
-                'api_version': 'complete_v1'
+                "verificationDate": timezone.now().isoformat(),
+                "cache_hit": False,
+                "timestamp": timezone.now().isoformat(),
+                "api_version": "complete_v1",
             }
-            
+
             # Track public view (separate from QR scans) with bot filtering
             production.increment_public_views(request)
-            
+
             # Cache the complete response for 15 minutes (900 seconds)
             cache.set(cache_key, response_data, 900)
-            
+
             return Response(response_data, status=status.HTTP_200_OK)
-            
+
         except History.DoesNotExist:
-            return Response({
-                'error': 'Production not found or not published'
-            }, status=status.HTTP_404_NOT_FOUND)
+            return Response({"error": "Production not found or not published"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             print(f"Error in complete_summary: {e}")
             import traceback
+
             traceback.print_exc()
-            return Response({
-                'error': 'Internal server error',
-                'message': str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"error": "Internal server error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     def _get_safe_image_url(self, image_field):
         """Safely get image URL, handling cases where image file doesn't exist"""
         try:
-            if image_field and hasattr(image_field, 'url') and image_field.url:
+            if image_field and hasattr(image_field, "url") and image_field.url:
                 return image_field.url
         except (ValueError, AttributeError):
             pass
@@ -2980,35 +3039,35 @@ class PublicProductionViewSet(viewsets.ViewSet):
     def _get_crop_category_for_recommendations(self, crop_name: str) -> str:
         """Helper method to categorize crops for recommendations"""
         crop_lower = crop_name.lower()
-        
-        fruit_keywords = ['orange', 'apple', 'grape', 'lemon', 'lime', 'strawberry', 'blueberry', 'avocado']
-        vegetable_keywords = ['tomato', 'lettuce', 'carrot', 'broccoli', 'spinach', 'cucumber', 'pepper', 'onion']
-        grain_keywords = ['corn', 'wheat', 'rice', 'barley', 'oats']
-        herb_keywords = ['basil', 'oregano', 'thyme', 'rosemary', 'mint']
-        legume_keywords = ['soybean', 'bean', 'chickpea', 'lentil', 'pea']
-        nut_keywords = ['almond', 'walnut', 'pecan', 'hazelnut']
-        
+
+        fruit_keywords = ["orange", "apple", "grape", "lemon", "lime", "strawberry", "blueberry", "avocado"]
+        vegetable_keywords = ["tomato", "lettuce", "carrot", "broccoli", "spinach", "cucumber", "pepper", "onion"]
+        grain_keywords = ["corn", "wheat", "rice", "barley", "oats"]
+        herb_keywords = ["basil", "oregano", "thyme", "rosemary", "mint"]
+        legume_keywords = ["soybean", "bean", "chickpea", "lentil", "pea"]
+        nut_keywords = ["almond", "walnut", "pecan", "hazelnut"]
+
         for keyword in fruit_keywords:
             if keyword in crop_lower:
-                return 'fruits'
+                return "fruits"
         for keyword in vegetable_keywords:
             if keyword in crop_lower:
-                return 'vegetables'
+                return "vegetables"
         for keyword in grain_keywords:
             if keyword in crop_lower:
-                return 'grains'
+                return "grains"
         for keyword in herb_keywords:
             if keyword in crop_lower:
-                return 'herbs'
+                return "herbs"
         for keyword in legume_keywords:
             if keyword in crop_lower:
-                return 'legumes'
+                return "legumes"
         for keyword in nut_keywords:
             if keyword in crop_lower:
-                return 'nuts'
-                
-        return 'general'
-    
+                return "nuts"
+
+        return "general"
+
     def _get_production_images(self, production):
         """Get images from production album for consumer display with intelligent fallbacks"""
         try:
@@ -3019,153 +3078,162 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     # Build absolute URL for image with proper error handling
                     image_url = None
                     try:
-                        if image.image and hasattr(image.image, 'url') and image.image.url:
+                        if image.image and hasattr(image.image, "url") and image.image.url:
                             from django.conf import settings
-                            if image.image.url.startswith('http'):
+
+                            if image.image.url.startswith("http"):
                                 image_url = image.image.url
                             else:
                                 # Build absolute URL
-                                base_url = getattr(settings, 'MEDIA_URL_BASE', 'http://localhost:8000')
+                                base_url = getattr(settings, "MEDIA_URL_BASE", "http://localhost:8000")
                                 image_url = f"{base_url.rstrip('/')}{image.image.url}"
                     except (ValueError, AttributeError):
                         # Skip images without valid files
                         continue
-                    
+
                     # Only append if we have a valid image URL
                     if image_url:
-                        images.append({
-                            'id': image.id,
-                            'image': image_url,
-                            'name': getattr(image, 'name', '') or ''
-                        })
-                
+                        images.append({"id": image.id, "image": image_url, "name": getattr(image, "name", "") or ""})
+
                 # Only return if we found valid images
                 if images:
                     return images
-            
+
             # If no production images, try parcel images
             if production.parcel and production.parcel.album and production.parcel.album.images.exists():
                 images = []
                 for image in production.parcel.album.images.all()[:3]:  # Limit to 3 parcel images
                     image_url = None
                     try:
-                        if image.image and hasattr(image.image, 'url') and image.image.url:
+                        if image.image and hasattr(image.image, "url") and image.image.url:
                             from django.conf import settings
-                            if image.image.url.startswith('http'):
+
+                            if image.image.url.startswith("http"):
                                 image_url = image.image.url
                             else:
-                                base_url = getattr(settings, 'MEDIA_URL_BASE', 'http://localhost:8000')
+                                base_url = getattr(settings, "MEDIA_URL_BASE", "http://localhost:8000")
                                 image_url = f"{base_url.rstrip('/')}{image.image.url}"
                     except (ValueError, AttributeError):
                         # Skip images without valid files
                         continue
-                    
+
                     # Only append if we have a valid image URL
                     if image_url:
-                        images.append({
-                            'id': f"parcel_{image.id}",
-                            'image': image_url,
-                            'name': f"Field: {getattr(image, 'name', '') or production.parcel.name}"
-                        })
-                
+                        images.append(
+                            {
+                                "id": f"parcel_{image.id}",
+                                "image": image_url,
+                                "name": f"Field: {getattr(image, 'name', '') or production.parcel.name}",
+                            }
+                        )
+
                 # Only return if we found valid images
                 if images:
                     return images
-            
+
             # If no parcel images, try establishment images
-            if (production.parcel and production.parcel.establishment and 
-                production.parcel.establishment.album and 
-                production.parcel.establishment.album.images.exists()):
+            if (
+                production.parcel
+                and production.parcel.establishment
+                and production.parcel.establishment.album
+                and production.parcel.establishment.album.images.exists()
+            ):
                 images = []
                 for image in production.parcel.establishment.album.images.all()[:2]:  # Limit to 2 establishment images
                     image_url = None
                     try:
-                        if image.image and hasattr(image.image, 'url') and image.image.url:
+                        if image.image and hasattr(image.image, "url") and image.image.url:
                             from django.conf import settings
-                            if image.image.url.startswith('http'):
+
+                            if image.image.url.startswith("http"):
                                 image_url = image.image.url
                             else:
-                                base_url = getattr(settings, 'MEDIA_URL_BASE', 'http://localhost:8000')
+                                base_url = getattr(settings, "MEDIA_URL_BASE", "http://localhost:8000")
                                 image_url = f"{base_url.rstrip('/')}{image.image.url}"
                     except (ValueError, AttributeError):
                         # Skip images without valid files
                         continue
-                    
+
                     # Only append if we have a valid image URL
                     if image_url:
-                        images.append({
-                            'id': f"establishment_{image.id}",
-                            'image': image_url,
-                            'name': f"Farm: {getattr(image, 'name', '') or production.parcel.establishment.name}"
-                        })
-                
+                        images.append(
+                            {
+                                "id": f"establishment_{image.id}",
+                                "image": image_url,
+                                "name": f"Farm: {getattr(image, 'name', '') or production.parcel.establishment.name}",
+                            }
+                        )
+
                 # Only return if we found valid images
                 if images:
                     return images
-            
+
             # If no real images available, provide crop-specific placeholder images
             crop_name = production.product.name.lower() if production.product else "unknown"
-            crop_type = crop_name.replace(' ', '_')
-            
+            crop_type = crop_name.replace(" ", "_")
+
             # Map crop types to placeholder images
             crop_placeholders = {
-                'tree_fruit': 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=800&h=600&fit=crop&crop=center',
-                'orange': 'https://images.unsplash.com/photo-1547514701-42782101795e?w=800&h=600&fit=crop&crop=center',
-                'valencia_orange': 'https://images.unsplash.com/photo-1547514701-42782101795e?w=800&h=600&fit=crop&crop=center',
-                'lettuce': 'https://images.unsplash.com/photo-1622206151226-18ca2c9ab4a1?w=800&h=600&fit=crop&crop=center',
-                'apple': 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=800&h=600&fit=crop&crop=center',
-                'tomato': 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=800&h=600&fit=crop&crop=center',
-                'corn': 'https://images.unsplash.com/photo-1551754655-cd27e38d2076?w=800&h=600&fit=crop&crop=center',
-                'wheat': 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?w=800&h=600&fit=crop&crop=center',
-                'carrot': 'https://images.unsplash.com/photo-1598170845058-32b9d6a5da37?w=800&h=600&fit=crop&crop=center',
-                'potato': 'https://images.unsplash.com/photo-1518977676601-b53f82aba655?w=800&h=600&fit=crop&crop=center',
-                'strawberry': 'https://images.unsplash.com/photo-1543528176-61b239494933?w=800&h=600&fit=crop&crop=center',
-                'premium_organic_strawberry': 'https://images.unsplash.com/photo-1543528176-61b239494933?w=800&h=600&fit=crop&crop=center',
-                'avocado': 'https://images.unsplash.com/photo-1519162808019-7de1683fa2ad?w=800&h=600&fit=crop&crop=center',
-                'organic_hass_avocado': 'https://images.unsplash.com/photo-1519162808019-7de1683fa2ad?w=800&h=600&fit=crop&crop=center',
-                'almond': 'https://images.unsplash.com/photo-1508061253366-f7da158b6d46?w=800&h=600&fit=crop&crop=center',
-                'premium_nonpareil_almond': 'https://images.unsplash.com/photo-1508061253366-f7da158b6d46?w=800&h=600&fit=crop&crop=center',
+                "tree_fruit": "https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=800&h=600&fit=crop&crop=center",
+                "orange": "https://images.unsplash.com/photo-1547514701-42782101795e?w=800&h=600&fit=crop&crop=center",
+                "valencia_orange": "https://images.unsplash.com/photo-1547514701-42782101795e?w=800&h=600&fit=crop&crop=center",
+                "lettuce": "https://images.unsplash.com/photo-1622206151226-18ca2c9ab4a1?w=800&h=600&fit=crop&crop=center",
+                "apple": "https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=800&h=600&fit=crop&crop=center",
+                "tomato": "https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=800&h=600&fit=crop&crop=center",
+                "corn": "https://images.unsplash.com/photo-1551754655-cd27e38d2076?w=800&h=600&fit=crop&crop=center",
+                "wheat": "https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?w=800&h=600&fit=crop&crop=center",
+                "carrot": "https://images.unsplash.com/photo-1598170845058-32b9d6a5da37?w=800&h=600&fit=crop&crop=center",
+                "potato": "https://images.unsplash.com/photo-1518977676601-b53f82aba655?w=800&h=600&fit=crop&crop=center",
+                "strawberry": "https://images.unsplash.com/photo-1543528176-61b239494933?w=800&h=600&fit=crop&crop=center",
+                "premium_organic_strawberry": "https://images.unsplash.com/photo-1543528176-61b239494933?w=800&h=600&fit=crop&crop=center",
+                "avocado": "https://images.unsplash.com/photo-1519162808019-7de1683fa2ad?w=800&h=600&fit=crop&crop=center",
+                "organic_hass_avocado": "https://images.unsplash.com/photo-1519162808019-7de1683fa2ad?w=800&h=600&fit=crop&crop=center",
+                "almond": "https://images.unsplash.com/photo-1508061253366-f7da158b6d46?w=800&h=600&fit=crop&crop=center",
+                "premium_nonpareil_almond": "https://images.unsplash.com/photo-1508061253366-f7da158b6d46?w=800&h=600&fit=crop&crop=center",
             }
-            
+
             # Get specific placeholder or default to generic farm image
             placeholder_url = crop_placeholders.get(
-                crop_type, 
+                crop_type,
                 crop_placeholders.get(
                     crop_name,
-                    'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=800&h=600&fit=crop&crop=center'  # Generic farm
-                )
+                    "https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=800&h=600&fit=crop&crop=center",  # Generic farm
+                ),
             )
-            
+
             # Return placeholder image with descriptive information
-            return [{
-                'id': 'placeholder_1',
-                'image': placeholder_url,
-                'name': f'Representative {crop_name.title()} Farm'
-            }]
-            
+            return [
+                {"id": "placeholder_1", "image": placeholder_url, "name": f"Representative {crop_name.title()} Farm"}
+            ]
+
         except Exception as e:
             # Fallback to a generic agriculture image if everything fails
-            return [{
-                'id': 'fallback_1',
-                'image': 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=800&h=600&fit=crop&crop=center',
-                'name': 'Sustainable Agriculture'
-            }]
-    
+            return [
+                {
+                    "id": "fallback_1",
+                    "image": "https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=800&h=600&fit=crop&crop=center",
+                    "name": "Sustainable Agriculture",
+                }
+            ]
+
     def _get_similar_products(self, production):
         """Get similar products from the same company (matching history API logic)"""
         try:
             if not production.parcel or not production.parcel.establishment:
                 return []
-            
+
             from history.models import History
-            similar_histories = History.objects.filter(
-                parcel__establishment__company=production.parcel.establishment.company,
-                published=True,
-            ).exclude(id=production.id).select_related(
-                'product', 
-                'parcel__establishment'
-            ).order_by('-id')[:5]  # Same logic as history API
-            
+
+            similar_histories = (
+                History.objects.filter(
+                    parcel__establishment__company=production.parcel.establishment.company,
+                    published=True,
+                )
+                .exclude(id=production.id)
+                .select_related("product", "parcel__establishment")
+                .order_by("-id")[:5]
+            )  # Same logic as history API
+
             similar_products = []
             for history in similar_histories:
                 # Get first image if available with absolute URL
@@ -3173,28 +3241,34 @@ class PublicProductionViewSet(viewsets.ViewSet):
                 if history.album and history.album.images.exists():
                     first_image = history.album.images.first()
                     try:
-                        if first_image and first_image.image and hasattr(first_image.image, 'url') and first_image.image.url:
+                        if (
+                            first_image
+                            and first_image.image
+                            and hasattr(first_image.image, "url")
+                            and first_image.image.url
+                        ):
                             # Build absolute URL for image
                             from django.conf import settings
-                            if first_image.image.url.startswith('http'):
+
+                            if first_image.image.url.startswith("http"):
                                 image_url = first_image.image.url
                             else:
                                 # Build absolute URL
-                                base_url = getattr(settings, 'MEDIA_URL_BASE', 'http://localhost:8000')
+                                base_url = getattr(settings, "MEDIA_URL_BASE", "http://localhost:8000")
                                 image_url = f"{base_url.rstrip('/')}{first_image.image.url}"
                     except (ValueError, AttributeError):
                         # Skip images without valid files
                         image_url = None
-                
-                similar_products.append({
-                    'id': history.id,
-                    'product': {
-                        'name': history.product.name if history.product else 'Product'
-                    },
-                    'reputation': float(history.reputation) if history.reputation else 4.5,
-                    'image': image_url
-                })
-            
+
+                similar_products.append(
+                    {
+                        "id": history.id,
+                        "product": {"name": history.product.name if history.product else "Product"},
+                        "reputation": float(history.reputation) if history.reputation else 4.5,
+                        "image": image_url,
+                    }
+                )
+
             return similar_products
         except Exception:
             return []
@@ -3203,106 +3277,97 @@ class PublicProductionViewSet(viewsets.ViewSet):
         """Normalize crop name to handle plural/singular matching"""
         if not crop_name:
             return ""
-        
+
         # Convert to lowercase and remove spaces/underscores
-        normalized = crop_name.lower().replace(' ', '_').replace('-', '_')
-        
+        normalized = crop_name.lower().replace(" ", "_").replace("-", "_")
+
         # Common plural to singular mappings for agricultural products
         plural_to_singular = {
-            'strawberries': 'strawberry',
-            'blueberries': 'blueberry',
-            'raspberries': 'raspberry',
-            'blackberries': 'blackberry',
-            'cranberries': 'cranberry',
-            'cherries': 'cherry',
-            'grapes': 'grape',
-            'apples': 'apple',
-            'oranges': 'orange',
-            'lemons': 'lemon',
-            'limes': 'lime',
-            'peaches': 'peach',
-            'pears': 'pear',
-            'bananas': 'banana',
-            'avocados': 'avocado',
-            'tomatoes': 'tomato',
-            'potatoes': 'potato',
-            'onions': 'onion',
-            'carrots': 'carrot',
-            'peppers': 'pepper',
-            'cucumbers': 'cucumber',
-            'lettuce': 'lettuce',
-            'spinach': 'spinach',
-            'broccoli': 'broccoli',
-            'cauliflower': 'cauliflower',
-            'beans': 'bean',
-            'peas': 'pea',
-            'soybeans': 'soybean',
-            'corn': 'corn',
-            'wheat': 'wheat',
-            'rice': 'rice',
-            'oats': 'oat',
-            'barley': 'barley',
-            'almonds': 'almond',
-            'walnuts': 'walnut',
-            'pecans': 'pecan',
-            'pistachios': 'pistachio',
+            "strawberries": "strawberry",
+            "blueberries": "blueberry",
+            "raspberries": "raspberry",
+            "blackberries": "blackberry",
+            "cranberries": "cranberry",
+            "cherries": "cherry",
+            "grapes": "grape",
+            "apples": "apple",
+            "oranges": "orange",
+            "lemons": "lemon",
+            "limes": "lime",
+            "peaches": "peach",
+            "pears": "pear",
+            "bananas": "banana",
+            "avocados": "avocado",
+            "tomatoes": "tomato",
+            "potatoes": "potato",
+            "onions": "onion",
+            "carrots": "carrot",
+            "peppers": "pepper",
+            "cucumbers": "cucumber",
+            "lettuce": "lettuce",
+            "spinach": "spinach",
+            "broccoli": "broccoli",
+            "cauliflower": "cauliflower",
+            "beans": "bean",
+            "peas": "pea",
+            "soybeans": "soybean",
+            "corn": "corn",
+            "wheat": "wheat",
+            "rice": "rice",
+            "oats": "oat",
+            "barley": "barley",
+            "almonds": "almond",
+            "walnuts": "walnut",
+            "pecans": "pecan",
+            "pistachios": "pistachio",
         }
-        
+
         # Check if it's a known plural form
         if normalized in plural_to_singular:
             return plural_to_singular[normalized]
-        
+
         # Handle generic plural endings
-        if normalized.endswith('ies'):
+        if normalized.endswith("ies"):
             # berries -> berry, cherries -> cherry
-            return normalized[:-3] + 'y'
-        elif normalized.endswith('es') and len(normalized) > 3:
+            return normalized[:-3] + "y"
+        elif normalized.endswith("es") and len(normalized) > 3:
             # tomatoes -> tomato, potatoes -> potato
             return normalized[:-2]
-        elif normalized.endswith('s') and len(normalized) > 2:
+        elif normalized.endswith("s") and len(normalized) > 2:
             # apples -> apple, grapes -> grape
             return normalized[:-1]
-        
+
         return normalized
 
     def _find_crop_benchmark(self, crop_name, year, usda_verified=True):
         """Find crop benchmark with flexible matching for plural/singular forms"""
         if not crop_name:
             return None
-            
+
         # First try exact match
-        benchmark = CarbonBenchmark.objects.filter(
-            crop_type=crop_name,
-            year=year,
-            usda_verified=usda_verified
-        ).first()
-        
+        benchmark = CarbonBenchmark.objects.filter(crop_type=crop_name, year=year, usda_verified=usda_verified).first()
+
         if benchmark:
             return benchmark
-        
+
         # Try normalized version
         normalized_crop = self._normalize_crop_name(crop_name)
         if normalized_crop != crop_name:
             benchmark = CarbonBenchmark.objects.filter(
-                crop_type=normalized_crop,
-                year=year,
-                usda_verified=usda_verified
+                crop_type=normalized_crop, year=year, usda_verified=usda_verified
             ).first()
-            
+
             if benchmark:
                 return benchmark
-        
+
         # Try reverse matching - check if any benchmark crop names match our normalized name
         # This handles cases where benchmark has plural but product has singular
-        all_benchmarks = CarbonBenchmark.objects.filter(
-            year=year,
-            usda_verified=usda_verified
-        )
-        
+        all_benchmarks = CarbonBenchmark.objects.filter(year=year, usda_verified=usda_verified)
+
         for benchmark in all_benchmarks:
             if self._normalize_crop_name(benchmark.crop_type) == normalized_crop:
                 return benchmark
-        
+
         return None
 
     def _calculate_carbon_score(self, total_emissions, total_offsets, production, crop_type):
@@ -3311,12 +3376,16 @@ class PublicProductionViewSet(viewsets.ViewSet):
             # Try to get benchmark for more accurate scoring with flexible matching
             year = production.start_date.year if production.start_date else timezone.now().year
             benchmark = self._find_crop_benchmark(crop_type, year, usda_verified=True)
-            
+
             if benchmark:
                 # Use benchmark-based scoring
-                production_amount = getattr(production, 'production_amount', None) or 1000
-                net_footprint_per_kg = (total_emissions - total_offsets) / production_amount if production_amount > 0 else (total_emissions - total_offsets)
-                
+                production_amount = getattr(production, "production_amount", None) or 1000
+                net_footprint_per_kg = (
+                    (total_emissions - total_offsets) / production_amount
+                    if production_amount > 0
+                    else (total_emissions - total_offsets)
+                )
+
                 if net_footprint_per_kg <= 0:
                     return 95  # Excellent for carbon neutral/negative
                 elif net_footprint_per_kg <= benchmark.min_emissions:
@@ -3327,7 +3396,9 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     return int(90 - (ratio * 20))
                 elif net_footprint_per_kg <= benchmark.max_emissions:
                     # Worse than average: scale from 30-70
-                    ratio = (net_footprint_per_kg - benchmark.average_emissions) / (benchmark.max_emissions - benchmark.average_emissions)
+                    ratio = (net_footprint_per_kg - benchmark.average_emissions) / (
+                        benchmark.max_emissions - benchmark.average_emissions
+                    )
                     return int(70 - (ratio * 40))
                 else:
                     # Worse than max: scale from 10-30
@@ -3353,21 +3424,23 @@ class PublicProductionViewSet(viewsets.ViewSet):
         try:
             year = production.start_date.year if production.start_date else timezone.now().year
             benchmark = self._find_crop_benchmark(crop_type, year, usda_verified=True)
-            
+
             if benchmark and benchmark.average_emissions > 0:
                 # Convert net footprint to per-kg basis if we have production amount
-                production_amount = getattr(production, 'production_amount', None) or 1000
+                production_amount = getattr(production, "production_amount", None) or 1000
                 net_footprint_per_kg = net_footprint / production_amount if production_amount > 0 else net_footprint
-                
+
                 if net_footprint_per_kg <= 0:
                     return 95  # Very good if carbon neutral/negative
                 elif net_footprint_per_kg <= benchmark.min_emissions:
                     return 95  # Top performers
                 elif net_footprint_per_kg >= benchmark.max_emissions:
-                    return 5   # Bottom performers
+                    return 5  # Bottom performers
                 else:
                     # Linear interpolation between min and max
-                    position = (net_footprint_per_kg - benchmark.min_emissions) / (benchmark.max_emissions - benchmark.min_emissions)
+                    position = (net_footprint_per_kg - benchmark.min_emissions) / (
+                        benchmark.max_emissions - benchmark.min_emissions
+                    )
                     return max(5, min(95, int(95 - (position * 90))))
             else:
                 # No benchmark available - estimate based on carbon score
@@ -3381,15 +3454,13 @@ class PublicProductionViewSet(viewsets.ViewSet):
         try:
             year = production.start_date.year if production.start_date else timezone.now().year
             benchmark = self._find_crop_benchmark(crop_type, year, usda_verified=True)
-            
+
             if benchmark:
                 return benchmark.average_emissions
             else:
                 # Fallback to general agriculture average
                 general_benchmark = CarbonBenchmark.objects.filter(
-                    industry='agriculture',
-                    year=year,
-                    crop_type=''
+                    industry="agriculture", year=year, crop_type=""
                 ).first()
                 return general_benchmark.average_emissions if general_benchmark else 0.0
         except Exception:
@@ -3399,51 +3470,57 @@ class PublicProductionViewSet(viewsets.ViewSet):
         """Get complete timeline data from all event types with carbon calculations"""
         try:
             timeline_events = []
-            
+
             # Get all event types and combine them
             from history.models import (
-                WeatherEvent, ProductionEvent, ChemicalEvent, 
-                GeneralEvent, EquipmentEvent, SoilManagementEvent, PestManagementEvent
+                ChemicalEvent,
+                EquipmentEvent,
+                GeneralEvent,
+                PestManagementEvent,
+                ProductionEvent,
+                SoilManagementEvent,
+                WeatherEvent,
             )
+
             from .models import CarbonEntry
-            
+
             event_types = [
-                (production.history_weatherevent_events.all(), 'weather'),
-                (production.history_productionevent_events.all(), 'production'),
-                (production.history_chemicalevent_events.all(), 'chemical'),
-                (production.history_generalevent_events.all(), 'general'),
-                (production.history_equipmentevent_events.all(), 'equipment'),
-                (production.history_soilmanagementevent_events.all(), 'soil_management'),
-                (production.history_pestmanagementevent_events.all(), 'pest_management'),
+                (production.history_weatherevent_events.all(), "weather"),
+                (production.history_productionevent_events.all(), "production"),
+                (production.history_chemicalevent_events.all(), "chemical"),
+                (production.history_generalevent_events.all(), "general"),
+                (production.history_equipmentevent_events.all(), "equipment"),
+                (production.history_soilmanagementevent_events.all(), "soil_management"),
+                (production.history_pestmanagementevent_events.all(), "pest_management"),
             ]
-            
+
             for events, event_category in event_types:
                 for event in events:
                     # Build basic event data
                     event_data = {
-                        'id': event.id,
-                        'type': event_category,
-                        'description': getattr(event, 'description', '') or getattr(event, 'name', ''),
-                        'observation': getattr(event, 'observation', ''),
-                        'date': event.date.isoformat() if event.date else None,
-                        'certified': getattr(event, 'certified', True),
-                        'index': getattr(event, 'index', 0),
-                        'volume': getattr(event, 'volume', None),
-                        'concentration': getattr(event, 'concentration', None),
-                        'area': getattr(event, 'area', None),
-                        'equipment': getattr(event, 'commercial_name', None) or getattr(event, 'equipment', None)
+                        "id": event.id,
+                        "type": event_category,
+                        "description": getattr(event, "description", "") or getattr(event, "name", ""),
+                        "observation": getattr(event, "observation", ""),
+                        "date": event.date.isoformat() if event.date else None,
+                        "certified": getattr(event, "certified", True),
+                        "index": getattr(event, "index", 0),
+                        "volume": getattr(event, "volume", None),
+                        "concentration": getattr(event, "concentration", None),
+                        "area": getattr(event, "area", None),
+                        "equipment": getattr(event, "commercial_name", None) or getattr(event, "equipment", None),
                     }
-                    
+
                     # Add carbon calculation data if available
                     carbon_data = self._get_event_carbon_data(event, event_category, production)
                     if carbon_data:
-                        event_data['carbon_data'] = carbon_data
-                    
+                        event_data["carbon_data"] = carbon_data
+
                     timeline_events.append(event_data)
-            
+
             # Sort by date
-            timeline_events.sort(key=lambda x: x['date'] or '1900-01-01')
-            
+            timeline_events.sort(key=lambda x: x["date"] or "1900-01-01")
+
             return timeline_events
         except Exception as e:
             print(f"Error getting timeline: {e}")
@@ -3453,42 +3530,43 @@ class PublicProductionViewSet(viewsets.ViewSet):
         """Get carbon calculation data for a specific event"""
         try:
             from .models import CarbonEntry
-            
+
             # First, try to get from event's extra_data field (stored during event creation)
-            if hasattr(event, 'extra_data') and event.extra_data:
-                carbon_calc = event.extra_data.get('carbon_calculation')
+            if hasattr(event, "extra_data") and event.extra_data:
+                carbon_calc = event.extra_data.get("carbon_calculation")
                 if carbon_calc:
                     return {
-                        'co2e': float(carbon_calc.get('co2e', 0)),
-                        'efficiency_score': float(carbon_calc.get('efficiency_score', 0)),
-                        'usda_verified': carbon_calc.get('usda_factors_based', False),
-                        'calculation_method': carbon_calc.get('calculation_method', 'USDA Agricultural Emission Factors'),
-                        'verification_confidence': carbon_calc.get('confidence_level', 'medium'),
-                        'cost_analysis': carbon_calc.get('cost_analysis') if carbon_calc.get('cost_analysis') else None
+                        "co2e": float(carbon_calc.get("co2e", 0)),
+                        "efficiency_score": float(carbon_calc.get("efficiency_score", 0)),
+                        "usda_verified": carbon_calc.get("usda_factors_based", False),
+                        "calculation_method": carbon_calc.get(
+                            "calculation_method", "USDA Agricultural Emission Factors"
+                        ),
+                        "verification_confidence": carbon_calc.get("confidence_level", "medium"),
+                        "cost_analysis": carbon_calc.get("cost_analysis") if carbon_calc.get("cost_analysis") else None,
                     }
-            
+
             # Second, try to find related CarbonEntry records
-            carbon_entries = CarbonEntry.objects.filter(
-                production=production,
-                extra_data__event_id=event.id
-            ).order_by('-created_at')
-            
+            carbon_entries = CarbonEntry.objects.filter(production=production, extra_data__event_id=event.id).order_by(
+                "-created_at"
+            )
+
             if carbon_entries.exists():
                 carbon_entry = carbon_entries.first()
                 extra_data = carbon_entry.extra_data or {}
-                
+
                 return {
-                    'co2e': float(carbon_entry.co2e_amount or carbon_entry.amount),
-                    'efficiency_score': float(extra_data.get('efficiency_score', 75)),
-                    'usda_verified': carbon_entry.usda_factors_based,
-                    'calculation_method': carbon_entry.data_source or 'USDA Agricultural Emission Factors',
-                    'verification_confidence': extra_data.get('confidence_level', 'high'),
-                    'cost_analysis': extra_data.get('cost_analysis') if extra_data.get('cost_analysis') else None
+                    "co2e": float(carbon_entry.co2e_amount or carbon_entry.amount),
+                    "efficiency_score": float(extra_data.get("efficiency_score", 75)),
+                    "usda_verified": carbon_entry.usda_factors_based,
+                    "calculation_method": carbon_entry.data_source or "USDA Agricultural Emission Factors",
+                    "verification_confidence": extra_data.get("confidence_level", "high"),
+                    "cost_analysis": extra_data.get("cost_analysis") if extra_data.get("cost_analysis") else None,
                 }
-            
+
             # Third, try to calculate on-the-fly for events without stored calculations
             return self._calculate_event_carbon_on_demand(event, event_category, production)
-            
+
         except Exception as e:
             print(f"Error getting carbon data for event {event.id}: {e}")
             return None
@@ -3497,48 +3575,52 @@ class PublicProductionViewSet(viewsets.ViewSet):
         """Calculate carbon impact on-demand for events that don't have stored calculations"""
         try:
             from .services.event_carbon_calculator import EventCarbonCalculator
-            
+
             calculator = EventCarbonCalculator()
-            
+
             # Prepare event data for calculation
             event_data = {
-                'type': event_category,
-                'date': event.date.isoformat() if event.date else None,
-                'volume': getattr(event, 'volume', None),
-                'concentration': getattr(event, 'concentration', None),
-                'area': getattr(event, 'area', None),
-                'equipment': getattr(event, 'commercial_name', None) or getattr(event, 'equipment', None),
-                'description': getattr(event, 'description', '') or getattr(event, 'name', ''),
-                'observation': getattr(event, 'observation', ''),
-                'parcel_id': production.parcel.id if production.parcel else None,
-                'establishment_id': production.parcel.establishment.id if production.parcel and production.parcel.establishment else None
+                "type": event_category,
+                "date": event.date.isoformat() if event.date else None,
+                "volume": getattr(event, "volume", None),
+                "concentration": getattr(event, "concentration", None),
+                "area": getattr(event, "area", None),
+                "equipment": getattr(event, "commercial_name", None) or getattr(event, "equipment", None),
+                "description": getattr(event, "description", "") or getattr(event, "name", ""),
+                "observation": getattr(event, "observation", ""),
+                "parcel_id": production.parcel.id if production.parcel else None,
+                "establishment_id": (
+                    production.parcel.establishment.id
+                    if production.parcel and production.parcel.establishment
+                    else None
+                ),
             }
-            
+
             # Calculate based on event category
             result = None
-            if event_category == 'chemical':
+            if event_category == "chemical":
                 result = calculator.calculate_chemical_impact(event_data)
-            elif event_category == 'production':
+            elif event_category == "production":
                 result = calculator.calculate_production_impact(event_data)
-            elif event_category == 'equipment':
+            elif event_category == "equipment":
                 result = calculator.calculate_equipment_impact(event_data)
-            elif event_category == 'soil_management':
+            elif event_category == "soil_management":
                 result = calculator.calculate_soil_management_impact(event_data)
-            elif event_category == 'pest_management':
+            elif event_category == "pest_management":
                 result = calculator.calculate_pest_management_impact(event_data)
-            
+
             if result:
                 return {
-                    'co2e': float(result.get('co2e', 0)),
-                    'efficiency_score': float(result.get('efficiency_score', 70)),
-                    'usda_verified': result.get('usda_verified', False),
-                    'calculation_method': result.get('calculation_method', 'USDA Agricultural Emission Factors'),
-                    'verification_confidence': 'medium',  # On-demand calculations have medium confidence
-                    'cost_analysis': result.get('cost_analysis') if result.get('cost_analysis') else None
+                    "co2e": float(result.get("co2e", 0)),
+                    "efficiency_score": float(result.get("efficiency_score", 70)),
+                    "usda_verified": result.get("usda_verified", False),
+                    "calculation_method": result.get("calculation_method", "USDA Agricultural Emission Factors"),
+                    "verification_confidence": "medium",  # On-demand calculations have medium confidence
+                    "cost_analysis": result.get("cost_analysis") if result.get("cost_analysis") else None,
                 }
-            
+
             return None
-            
+
         except Exception as e:
             print(f"Error calculating carbon on-demand for event {event.id}: {e}")
             return None
@@ -3549,111 +3631,128 @@ class PublicProductionViewSet(viewsets.ViewSet):
             # Check if production has blockchain verification
             # This would integrate with your blockchain service
             return {
-                'verified': True,  # Placeholder - implement actual verification logic
-                'transaction_hash': None,
-                'verification_date': timezone.now().isoformat(),
-                'certifying_body': 'USDA SOE'
+                "verified": True,  # Placeholder - implement actual verification logic
+                "transaction_hash": None,
+                "verification_date": timezone.now().isoformat(),
+                "certifying_body": "USDA SOE",
             }
         except Exception:
-            return {
-                'verified': False,
-                'error': 'Verification service unavailable'
-            }
+            return {"verified": False, "error": "Verification service unavailable"}
 
     def _generate_sustainability_recommendations(self, crop_name, total_emissions, total_offsets, carbon_score):
         """Generate sustainability recommendations based on crop and performance"""
         try:
             recommendations = []
-            
+
             # Base recommendations by crop category
             crop_category = self._get_crop_category_for_recommendations(crop_name)
-            
-            if crop_category == 'fruits':
-                recommendations.extend([
-                    'Consider implementing integrated pest management to reduce chemical inputs',
-                    'Explore drip irrigation systems to optimize water usage',
-                    'Look into organic certification opportunities'
-                ])
-            elif crop_category == 'vegetables':
-                recommendations.extend([
-                    'Implement crop rotation to improve soil health',
-                    'Consider cover cropping during off-seasons',
-                    'Explore precision agriculture techniques'
-                ])
-            elif crop_category == 'grains':
-                recommendations.extend([
-                    'Consider no-till farming practices to sequester carbon',
-                    'Implement precision fertilizer application',
-                    'Explore renewable energy options for processing'
-                ])
+
+            if crop_category == "fruits":
+                recommendations.extend(
+                    [
+                        "Consider implementing integrated pest management to reduce chemical inputs",
+                        "Explore drip irrigation systems to optimize water usage",
+                        "Look into organic certification opportunities",
+                    ]
+                )
+            elif crop_category == "vegetables":
+                recommendations.extend(
+                    [
+                        "Implement crop rotation to improve soil health",
+                        "Consider cover cropping during off-seasons",
+                        "Explore precision agriculture techniques",
+                    ]
+                )
+            elif crop_category == "grains":
+                recommendations.extend(
+                    [
+                        "Consider no-till farming practices to sequester carbon",
+                        "Implement precision fertilizer application",
+                        "Explore renewable energy options for processing",
+                    ]
+                )
             else:
-                recommendations.extend([
-                    'Implement sustainable farming practices',
-                    'Consider renewable energy adoption',
-                    'Explore carbon offset opportunities'
-                ])
-            
+                recommendations.extend(
+                    [
+                        "Implement sustainable farming practices",
+                        "Consider renewable energy adoption",
+                        "Explore carbon offset opportunities",
+                    ]
+                )
+
             # Performance-based recommendations
             if carbon_score < 50:
-                recommendations.append('Focus on reducing emissions through energy efficiency improvements')
+                recommendations.append("Focus on reducing emissions through energy efficiency improvements")
             elif carbon_score < 70:
-                recommendations.append('Consider investing in carbon offset projects')
+                recommendations.append("Consider investing in carbon offset projects")
             else:
-                recommendations.append('Share your sustainable practices with other farmers')
-            
+                recommendations.append("Share your sustainable practices with other farmers")
+
             return recommendations[:5]  # Limit to 5 recommendations
         except Exception:
-            return ['Explore sustainable farming practices to improve your carbon footprint']
+            return ["Explore sustainable farming practices to improve your carbon footprint"]
 
-    def _generate_sustainability_badges(self, carbon_score, industry_percentile, total_offsets, blockchain_verification):
+    def _generate_sustainability_badges(
+        self, carbon_score, industry_percentile, total_offsets, blockchain_verification
+    ):
         """Generate sustainability badges based on performance"""
         try:
             badges = []
-            
+
             if carbon_score >= 90:
-                badges.append({
-                    'id': 'carbon_champion',
-                    'name': 'Carbon Champion',
-                    'description': 'Exceptional carbon performance',
-                    'icon': 'leaf',
-                    'color': 'green'
-                })
+                badges.append(
+                    {
+                        "id": "carbon_champion",
+                        "name": "Carbon Champion",
+                        "description": "Exceptional carbon performance",
+                        "icon": "leaf",
+                        "color": "green",
+                    }
+                )
             elif carbon_score >= 70:
-                badges.append({
-                    'id': 'eco_friendly',
-                    'name': 'Eco Friendly',
-                    'description': 'Above average sustainability',
-                    'icon': 'eco',
-                    'color': 'blue'
-                })
-            
+                badges.append(
+                    {
+                        "id": "eco_friendly",
+                        "name": "Eco Friendly",
+                        "description": "Above average sustainability",
+                        "icon": "eco",
+                        "color": "blue",
+                    }
+                )
+
             if industry_percentile >= 80:
-                badges.append({
-                    'id': 'industry_leader',
-                    'name': 'Industry Leader',
-                    'description': 'Top 20% in industry',
-                    'icon': 'star',
-                    'color': 'gold'
-                })
-            
+                badges.append(
+                    {
+                        "id": "industry_leader",
+                        "name": "Industry Leader",
+                        "description": "Top 20% in industry",
+                        "icon": "star",
+                        "color": "gold",
+                    }
+                )
+
             if total_offsets > 0:
-                badges.append({
-                    'id': 'carbon_offset',
-                    'name': 'Carbon Offset',
-                    'description': 'Actively offsetting emissions',
-                    'icon': 'balance',
-                    'color': 'purple'
-                })
-            
-            if blockchain_verification.get('verified'):
-                badges.append({
-                    'id': 'verified',
-                    'name': 'Verified',
-                    'description': 'Blockchain verified data',
-                    'icon': 'verified',
-                    'color': 'blue'
-                })
-            
+                badges.append(
+                    {
+                        "id": "carbon_offset",
+                        "name": "Carbon Offset",
+                        "description": "Actively offsetting emissions",
+                        "icon": "balance",
+                        "color": "purple",
+                    }
+                )
+
+            if blockchain_verification.get("verified"):
+                badges.append(
+                    {
+                        "id": "verified",
+                        "name": "Verified",
+                        "description": "Blockchain verified data",
+                        "icon": "verified",
+                        "color": "blue",
+                    }
+                )
+
             return badges
         except Exception:
             return []
@@ -3663,61 +3762,62 @@ class PublicProductionViewSet(viewsets.ViewSet):
         try:
             from history.models import HistoryScan
             from reviews.models import Review
-            
+
             # Update trust metrics before returning (ensures fresh calculations)
             production.update_trust_metrics()
-            
+
             # Get scan statistics (for internal use only - not exposed to consumers)
             total_scans = HistoryScan.objects.filter(history=production).count()
-            
+
             # Get actual review count
             review_count = Review.objects.filter(production=production).count()
-            
+
             # Get average rating from reviews
             reviews = Review.objects.filter(production=production)
             if reviews.exists():
                 avg_rating = sum(r.rating for r in reviews) / reviews.count()
             else:
                 avg_rating = float(production.reputation) if production.reputation > 0 else 0.0
-            
+
             # Consumer-friendly social proof without exposing scan counts
             # Instead, focus on trust indicators and community engagement
             return {
                 # Remove scan counts - internal analytics only
                 # 'totalScans': total_scans,  # REMOVED - not for consumers
-                'reviewsCount': review_count,  # Keep review count - it's community feedback
-                'averageRating': avg_rating,
+                "reviewsCount": review_count,  # Keep review count - it's community feedback
+                "averageRating": avg_rating,
                 # Convert scan engagement to trust levels without exposing numbers
-                'communityEngagement': 'high' if total_scans >= 100 else ('medium' if total_scans >= 25 else 'growing'),
-                'verifiedByConsumers': total_scans >= 10,  # Boolean trust indicator
+                "communityEngagement": "high" if total_scans >= 100 else ("medium" if total_scans >= 25 else "growing"),
+                "verifiedByConsumers": total_scans >= 10,  # Boolean trust indicator
                 # 'companyScans': company_scans,  # REMOVED - internal analytics
                 # Enhanced trust metrics - removed analytics, kept qualitative indicators
                 # 'confidenceScore': production.confidence_score,  # REMOVED - Internal scoring
                 # 'transparencyScore': production.transparency_score,  # REMOVED - Internal scoring
                 # 'publicViews': production.public_views,  # REMOVED - Private analytics
                 # 'uniqueVisitors': production.unique_visitors,  # REMOVED - Private analytics
-                'farmHistoryYears': production.get_farm_history_years()
+                "farmHistoryYears": production.get_farm_history_years(),
             }
         except Exception as e:
             # Log the error for debugging
             import logging
+
             logger = logging.getLogger(__name__)
             logger.error(f"Error calculating social proof for production {production.id}: {str(e)}")
-            
+
             return {
                 # 'totalScans': 0,  # REMOVED - Private analytics
-                'reviewsCount': 0,  # Actual review count - OK for consumers
+                "reviewsCount": 0,  # Actual review count - OK for consumers
                 # 'totalOffsets': 0.0,  # Keep this - it's transparency data
                 # 'totalUsers': 0,  # REMOVED - Private analytics
-                'averageRating': 0.0,  # Community feedback - OK for consumers
+                "averageRating": 0.0,  # Community feedback - OK for consumers
                 # 'companyScans': 0,  # REMOVED - Private analytics
                 # 'confidenceScore': 0.0,  # REMOVED - Internal scoring
                 # 'transparencyScore': 0.0,  # REMOVED - Internal scoring
                 # 'publicViews': 0,  # REMOVED - Private analytics
                 # 'uniqueVisitors': 0,  # REMOVED - Private analytics
-                'communityEngagement': 'growing',  # Qualitative trust indicator
-                'verifiedByConsumers': False,  # Boolean trust indicator
-                'farmHistoryYears': 0
+                "communityEngagement": "growing",  # Qualitative trust indicator
+                "verifiedByConsumers": False,  # Boolean trust indicator
+                "farmHistoryYears": 0,
             }
 
     def _get_relatable_footprint(self, net_footprint):
@@ -3742,21 +3842,24 @@ class PublicProductionViewSet(viewsets.ViewSet):
             return True  # Placeholder - implement actual verification check
         except Exception:
             return False
-    
-    def _calculate_trust_score(self, production, carbon_score, industry_percentile, blockchain_verification, social_proof):
+
+    def _calculate_trust_score(
+        self, production, carbon_score, industry_percentile, blockchain_verification, social_proof
+    ):
         """Calculate comprehensive trust score based on multiple factors"""
         try:
             from history.models import HistoryScan
+
             trust_score = 40  # Base score
-            
+
             # USDA Verification (25 points)
             if self._check_usda_verification(production):
                 trust_score += 25
-            
+
             # Blockchain Verification (20 points)
-            if blockchain_verification and blockchain_verification.get('verified'):
+            if blockchain_verification and blockchain_verification.get("verified"):
                 trust_score += 20
-            
+
             # Reputation/Rating (10 points)
             reputation = float(production.reputation) if production.reputation else 4.5
             if reputation >= 4.0:
@@ -3765,7 +3868,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                 trust_score += 7
             elif reputation >= 3.0:
                 trust_score += 4
-            
+
             # Carbon Performance (15 points)
             if carbon_score >= 80:
                 trust_score += 15
@@ -3775,7 +3878,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                 trust_score += 8
             elif carbon_score >= 50:
                 trust_score += 5
-            
+
             # Industry Performance (10 points)
             if industry_percentile >= 80:
                 trust_score += 10
@@ -3783,7 +3886,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                 trust_score += 7
             elif industry_percentile >= 40:
                 trust_score += 4
-            
+
             # Social Proof/Community Trust (10 points)
             # Get scan count internally for trust calculation (not exposed to consumers)
             total_scans = HistoryScan.objects.filter(history=production).count()
@@ -3795,14 +3898,14 @@ class PublicProductionViewSet(viewsets.ViewSet):
                 trust_score += 5
             elif total_scans >= 10:
                 trust_score += 3
-            
+
             # Data Completeness Bonus (5 points)
             # Award points for complete data transparency
             data_completeness = 0
             if production.start_date and production.finish_date:
                 data_completeness += 1
-            if hasattr(production, 'timeline') or hasattr(production, 'events'):
-                events = getattr(production, 'timeline', getattr(production, 'events', []))
+            if hasattr(production, "timeline") or hasattr(production, "events"):
+                events = getattr(production, "timeline", getattr(production, "events", []))
                 if events and len(events) > 5:
                     data_completeness += 1
             if production.parcel and production.parcel.polygon:
@@ -3813,45 +3916,67 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     data_completeness += 1
                 if establishment.description or establishment.about:
                     data_completeness += 1
-            
+
             trust_score += data_completeness  # Up to 5 bonus points
-            
+
             # Cap at 100%
             trust_score = min(trust_score, 100)
-            
+
             return {
-                'overall': trust_score,
-                'breakdown': {
-                    'usda_verification': 25 if self._check_usda_verification(production) else 0,
-                    'blockchain_verification': 20 if blockchain_verification and blockchain_verification.get('verified') else 0,
-                    'reputation': 10 if reputation >= 4.0 else (7 if reputation >= 3.5 else (4 if reputation >= 3.0 else 0)),
-                    'carbon_performance': 15 if carbon_score >= 80 else (12 if carbon_score >= 70 else (8 if carbon_score >= 60 else (5 if carbon_score >= 50 else 0))),
-                    'industry_performance': 10 if industry_percentile >= 80 else (7 if industry_percentile >= 60 else (4 if industry_percentile >= 40 else 0)),
-                    'social_proof': 10 if total_scans >= 100 else (7 if total_scans >= 50 else (5 if total_scans >= 25 else (3 if total_scans >= 10 else 0))),
-                    'data_completeness': data_completeness
+                "overall": trust_score,
+                "breakdown": {
+                    "usda_verification": 25 if self._check_usda_verification(production) else 0,
+                    "blockchain_verification": (
+                        20 if blockchain_verification and blockchain_verification.get("verified") else 0
+                    ),
+                    "reputation": (
+                        10 if reputation >= 4.0 else (7 if reputation >= 3.5 else (4 if reputation >= 3.0 else 0))
+                    ),
+                    "carbon_performance": (
+                        15
+                        if carbon_score >= 80
+                        else (
+                            12
+                            if carbon_score >= 70
+                            else (8 if carbon_score >= 60 else (5 if carbon_score >= 50 else 0))
+                        )
+                    ),
+                    "industry_performance": (
+                        10
+                        if industry_percentile >= 80
+                        else (7 if industry_percentile >= 60 else (4 if industry_percentile >= 40 else 0))
+                    ),
+                    "social_proof": (
+                        10
+                        if total_scans >= 100
+                        else (7 if total_scans >= 50 else (5 if total_scans >= 25 else (3 if total_scans >= 10 else 0)))
+                    ),
+                    "data_completeness": data_completeness,
                 },
-                'factors': {
-                    'usda_verified': self._check_usda_verification(production),
-                    'blockchain_verified': blockchain_verification and blockchain_verification.get('verified'),
-                    'reputation_score': reputation,
-                    'carbon_score': carbon_score,
-                    'industry_percentile': industry_percentile,
+                "factors": {
+                    "usda_verified": self._check_usda_verification(production),
+                    "blockchain_verified": blockchain_verification and blockchain_verification.get("verified"),
+                    "reputation_score": reputation,
+                    "carbon_score": carbon_score,
+                    "industry_percentile": industry_percentile,
                     # 'total_scans': total_scans,  # REMOVED - internal analytics
-                    'community_engagement': 'high' if total_scans >= 100 else ('medium' if total_scans >= 25 else 'growing'),
-                    'data_completeness_score': data_completeness
-                }
+                    "community_engagement": (
+                        "high" if total_scans >= 100 else ("medium" if total_scans >= 25 else "growing")
+                    ),
+                    "data_completeness_score": data_completeness,
+                },
             }
         except Exception as e:
             logger.error(f"Error calculating trust score: {e}")
             return {
-                'overall': 50,  # Default safe score
-                'breakdown': {},
-                'factors': {},
-                'error': 'Trust score calculation failed'
+                "overall": 50,  # Default safe score
+                "breakdown": {},
+                "factors": {},
+                "error": "Trust score calculation failed",
             }
 
     # Helper methods for enhanced QR endpoint
-    
+
     def _legacy_carbon_score(self, production):
         """Calculate legacy carbon score for backward compatibility."""
         try:
@@ -3859,182 +3984,195 @@ class PublicProductionViewSet(viewsets.ViewSet):
             carbon_entries = CarbonEntry.objects.filter(production=production)
             if not carbon_entries.exists():
                 return 50
-            
-            total_emissions = carbon_entries.filter(type='emission').aggregate(
-                Sum('amount'))['amount__sum'] or 0
-            total_offsets = carbon_entries.filter(type='offset').aggregate(
-                Sum('effective_amount'))['effective_amount__sum'] or 0
-            
+
+            total_emissions = carbon_entries.filter(type="emission").aggregate(Sum("amount"))["amount__sum"] or 0
+            total_offsets = (
+                carbon_entries.filter(type="offset").aggregate(Sum("effective_amount"))["effective_amount__sum"] or 0
+            )
+
             return CarbonEntry.calculate_carbon_score(total_emissions, total_offsets)
         except:
             return 50
-    
+
     def _get_carbon_summary(self, production, establishment):
         """Get carbon data summary for production."""
         try:
             carbon_entries = CarbonEntry.objects.filter(production=production)
-            
-            total_emissions = carbon_entries.filter(type='emission').aggregate(
-                Sum('amount'))['amount__sum'] or 0
-            total_offsets = carbon_entries.filter(type='offset').aggregate(
-                Sum('effective_amount'))['effective_amount__sum'] or 0
+
+            total_emissions = carbon_entries.filter(type="emission").aggregate(Sum("amount"))["amount__sum"] or 0
+            total_offsets = (
+                carbon_entries.filter(type="offset").aggregate(Sum("effective_amount"))["effective_amount__sum"] or 0
+            )
             net_footprint = total_emissions - total_offsets
-            
+
             carbon_score = CarbonEntry.calculate_carbon_score(total_emissions, total_offsets)
             usda_verified = carbon_entries.filter(usda_verified=True).exists()
-            
+
             return {
-                'carbon_score': carbon_score,
-                'total_emissions': float(total_emissions),
-                'total_offsets': float(total_offsets),
-                'net_footprint': float(net_footprint),
-                'usda_verified': usda_verified
+                "carbon_score": carbon_score,
+                "total_emissions": float(total_emissions),
+                "total_offsets": float(total_offsets),
+                "net_footprint": float(net_footprint),
+                "usda_verified": usda_verified,
             }
         except:
             return {
-                'carbon_score': 50,
-                'total_emissions': 0.0,
-                'total_offsets': 0.0,
-                'net_footprint': 0.0,
-                'usda_verified': False
+                "carbon_score": 50,
+                "total_emissions": 0.0,
+                "total_offsets": 0.0,
+                "net_footprint": 0.0,
+                "usda_verified": False,
             }
-    
+
     def _get_blockchain_verification(self, production, carbon_data):
         """Get blockchain verification data."""
         try:
             from .services.blockchain import blockchain_service
+
             verification_result = blockchain_service.verify_carbon_record(production.id)
-            
-            if verification_result.get('verified', False):
+
+            if verification_result.get("verified", False):
                 return {
-                    'verified': True,
-                    'record_hash': verification_result.get('record_hash'),
-                    'verification_url': f"https://etherscan.io/tx/{verification_result.get('transaction_hash', '')}",
-                    'network': 'ethereum',
-                    'verification_date': timezone.now().isoformat()
+                    "verified": True,
+                    "record_hash": verification_result.get("record_hash"),
+                    "verification_url": f"https://etherscan.io/tx/{verification_result.get('transaction_hash', '')}",
+                    "network": "ethereum",
+                    "verification_date": timezone.now().isoformat(),
                 }
             else:
                 # Fallback verification for demo
                 import hashlib
+
                 return {
-                    'verified': True,
-                    'transaction_hash': f'0x{hashlib.sha256(f"fallback_{production.id}".encode()).hexdigest()}',
-                    'verification_url': f'https://etherscan.io/tx/0x{hashlib.sha256(f"fallback_{production.id}".encode()).hexdigest()}',
-                    'network': 'ethereum_testnet',
-                    'verification_date': timezone.now().isoformat(),
-                    'fallback_data': True
+                    "verified": True,
+                    "transaction_hash": f'0x{hashlib.sha256(f"fallback_{production.id}".encode()).hexdigest()}',
+                    "verification_url": f'https://etherscan.io/tx/0x{hashlib.sha256(f"fallback_{production.id}".encode()).hexdigest()}',
+                    "network": "ethereum_testnet",
+                    "verification_date": timezone.now().isoformat(),
+                    "fallback_data": True,
                 }
         except:
-            return {
-                'verified': False,
-                'error': 'Blockchain verification unavailable'
-            }
-    
+            return {"verified": False, "error": "Blockchain verification unavailable"}
+
     def _get_primary_equivalency(self, equivalency_metrics):
         """Get primary equivalency for legacy relatableFootprint field."""
         try:
-            primary_metric = equivalency_metrics.get('primary_metric', {})
+            primary_metric = equivalency_metrics.get("primary_metric", {})
             if primary_metric:
-                value = primary_metric.get('value', 0)
-                description = primary_metric.get('description', 'Unknown equivalency')
+                value = primary_metric.get("value", 0)
+                description = primary_metric.get("description", "Unknown equivalency")
                 return f"{value} {description}"
             return "Carbon neutral production"
         except:
             return "Data being calculated"
-    
+
     def _generate_enhanced_badges(self, transparency_data, carbon_data):
         """Generate badges based on transparency and carbon data."""
         badges = []
-        
+
         # Carbon grade badges
-        grade = transparency_data.get('carbonGrade', 'C')
-        if grade in ['A+', 'A', 'A-']:
-            badges.append({
-                'id': 'excellence',
-                'name': f'Carbon Excellence ({grade})',
-                'description': 'Exceptional carbon performance',
-                'icon': 'star'
-            })
-        elif grade in ['B+', 'B']:
-            badges.append({
-                'id': 'sustainable',
-                'name': f'Sustainable Producer ({grade})',
-                'description': 'Above average sustainability',
-                'icon': 'leaf'
-            })
-        
+        grade = transparency_data.get("carbonGrade", "C")
+        if grade in ["A+", "A", "A-"]:
+            badges.append(
+                {
+                    "id": "excellence",
+                    "name": f"Carbon Excellence ({grade})",
+                    "description": "Exceptional carbon performance",
+                    "icon": "star",
+                }
+            )
+        elif grade in ["B+", "B"]:
+            badges.append(
+                {
+                    "id": "sustainable",
+                    "name": f"Sustainable Producer ({grade})",
+                    "description": "Above average sustainability",
+                    "icon": "leaf",
+                }
+            )
+
         # Trust badges
-        trust_indicators = transparency_data.get('trustIndicators', {})
-        if trust_indicators.get('overall_score', 0) >= 80:
-            badges.append({
-                'id': 'verified_transparent',
-                'name': 'Verified & Transparent',
-                'description': 'High standards of verification and transparency',
-                'icon': 'shield'
-            })
-        
+        trust_indicators = transparency_data.get("trustIndicators", {})
+        if trust_indicators.get("overall_score", 0) >= 80:
+            badges.append(
+                {
+                    "id": "verified_transparent",
+                    "name": "Verified & Transparent",
+                    "description": "High standards of verification and transparency",
+                    "icon": "shield",
+                }
+            )
+
         # USDA verification badge
-        if carbon_data.get('usda_verified', False):
-            badges.append({
-                'id': 'usda_verified',
-                'name': 'USDA Verified',
-                'description': 'Carbon calculations verified by USDA standards',
-                'icon': 'certificate'
-            })
-        
+        if carbon_data.get("usda_verified", False):
+            badges.append(
+                {
+                    "id": "usda_verified",
+                    "name": "USDA Verified",
+                    "description": "Carbon calculations verified by USDA standards",
+                    "icon": "certificate",
+                }
+            )
+
         return badges
-    
+
     def _get_farmer_info(self, establishment):
         """Get farmer/establishment information."""
         if not establishment:
-            return {'name': 'Unknown Farm', 'location': 'Location not available'}
-        
+            return {"name": "Unknown Farm", "location": "Location not available"}
+
         return {
-            'name': establishment.name,
-            'location': f"{establishment.city}, {establishment.state}" if establishment.city else 'Location not available',
-            'description': establishment.about[:200] if establishment.about else None,
-            'id': establishment.id
+            "name": establishment.name,
+            "location": (
+                f"{establishment.city}, {establishment.state}" if establishment.city else "Location not available"
+            ),
+            "description": establishment.about[:200] if establishment.about else None,
+            "id": establishment.id,
         }
-    
+
     def _get_product_info(self, production):
         """Get product information."""
         return {
-            'id': production.id,
-            'name': production.product.name if production.product else 'Product',
-            'reputation': float(production.reputation) if production.reputation else 4.5
+            "id": production.id,
+            "name": production.product.name if production.product else "Product",
+            "reputation": float(production.reputation) if production.reputation else 4.5,
         }
-    
+
     def _get_parcel_info(self, production):
         """Get parcel information."""
         if not production.parcel:
             return None
-        
+
         establishment = production.parcel.establishment
         return {
-            'name': production.parcel.name,
-            'location': f"{establishment.city}, {establishment.state}" if establishment and establishment.city else None,
-            'area': float(production.parcel.area) if production.parcel.area else None
+            "name": production.parcel.name,
+            "location": (
+                f"{establishment.city}, {establishment.state}" if establishment and establishment.city else None
+            ),
+            "area": float(production.parcel.area) if production.parcel.area else None,
         }
-    
+
     def _get_carbon_timeline(self, production):
         """Get carbon timeline data for visualization."""
         try:
             # Get carbon events from production
-            carbon_entries = CarbonEntry.objects.filter(production=production).order_by('timestamp')
+            carbon_entries = CarbonEntry.objects.filter(production=production).order_by("timestamp")
             timeline = []
-            
+
             for idx, entry in enumerate(carbon_entries[:10]):  # Limit to 10 entries
-                timeline.append({
-                    'id': f'carbon_{idx}_{entry.id}',
-                    'type': 'carbon.emission' if entry.type == 'emission' else 'carbon.offset',
-                    'date': entry.timestamp.isoformat(),
-                    'description': entry.description or f'{entry.type.title()} entry',
-                    'amount': float(entry.amount),
-                    'source': entry.source.name if entry.source else 'Unknown source',
-                    'verified': entry.usda_verified,
-                    'index': idx
-                })
-            
+                timeline.append(
+                    {
+                        "id": f"carbon_{idx}_{entry.id}",
+                        "type": "carbon.emission" if entry.type == "emission" else "carbon.offset",
+                        "date": entry.timestamp.isoformat(),
+                        "description": entry.description or f"{entry.type.title()} entry",
+                        "amount": float(entry.amount),
+                        "source": entry.source.name if entry.source else "Unknown source",
+                        "verified": entry.usda_verified,
+                        "index": idx,
+                    }
+                )
+
             return timeline
         except:
             return []
@@ -4043,52 +4181,52 @@ class PublicProductionViewSet(viewsets.ViewSet):
 class CarbonOffsetViewSet(viewsets.ViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
-    @action(detail=False, methods=['get'], url_path='certified_projects')
+    @action(detail=False, methods=["get"], url_path="certified_projects")
     def certified_projects(self, request):
         """
         Get available certified carbon offset projects for purchase.
         Returns certified projects from database with proper formatting.
         """
         from .models import CarbonOffsetProject
-        
+
         # Get all available projects from database
         projects = CarbonOffsetProject.objects.all()
-        
+
         # Format projects for frontend
         formatted_projects = []
         for project in projects:
             # Parse project type for verification badge
             verification_badges = {
-                'Reforestation': {'color': 'green', 'text': 'VCS Verified', 'icon': 'shield'},
-                'Soil Carbon': {'color': 'blue', 'text': 'CAR Verified', 'icon': 'certificate'},
-                'Renewable Energy': {'color': 'yellow', 'text': 'Gold Standard', 'icon': 'star'},
-                'Methane Reduction': {'color': 'purple', 'text': 'ACR Verified', 'icon': 'award'},
-                'Grassland Management': {'color': 'teal', 'text': 'VCS Verified', 'icon': 'leaf'},
-                'Forest Management': {'color': 'green', 'text': 'CAR Verified', 'icon': 'shield'},
+                "Reforestation": {"color": "green", "text": "VCS Verified", "icon": "shield"},
+                "Soil Carbon": {"color": "blue", "text": "CAR Verified", "icon": "certificate"},
+                "Renewable Energy": {"color": "yellow", "text": "Gold Standard", "icon": "star"},
+                "Methane Reduction": {"color": "purple", "text": "ACR Verified", "icon": "award"},
+                "Grassland Management": {"color": "teal", "text": "VCS Verified", "icon": "leaf"},
+                "Forest Management": {"color": "green", "text": "CAR Verified", "icon": "shield"},
             }
-            
-            badge = verification_badges.get(project.project_type, {
-                'color': 'gray', 'text': 'Verified', 'icon': 'certificate'
-            })
-            
+
+            badge = verification_badges.get(
+                project.project_type, {"color": "gray", "text": "Verified", "icon": "certificate"}
+            )
+
             # Parse location for country/region
-            location_parts = project.location.split(', ')
-            country = location_parts[-1] if location_parts else 'Unknown'
-            region = location_parts[0] if len(location_parts) > 1 else 'Unknown'
-            
+            location_parts = project.location.split(", ")
+            country = location_parts[-1] if location_parts else "Unknown"
+            region = location_parts[0] if len(location_parts) > 1 else "Unknown"
+
             # Generate registry URL based on certification standard
             registry_urls = {
-                'VCS (Verra)': f'https://registry.verra.org/project/{project.id}',
-                'Climate Action Reserve': f'https://thereserve2.apx.com/mymodule/reg/prjView.asp?id={project.id}',
-                'Gold Standard': f'https://registry.goldstandard.org/projects/{project.id}',
-                'American Carbon Registry': f'https://acr2.apx.com/myModule/rpt/myrpt.asp?r=111&h={project.id}',
+                "VCS (Verra)": f"https://registry.verra.org/project/{project.id}",
+                "Climate Action Reserve": f"https://thereserve2.apx.com/mymodule/reg/prjView.asp?id={project.id}",
+                "Gold Standard": f"https://registry.goldstandard.org/projects/{project.id}",
+                "American Carbon Registry": f"https://acr2.apx.com/myModule/rpt/myrpt.asp?r=111&h={project.id}",
             }
-            
+
             formatted_project = {
                 "id": str(project.id),
                 "name": project.name,
                 "description": project.description,
-                "project_type": project.project_type.lower().replace(' ', '_'),
+                "project_type": project.project_type.lower().replace(" ", "_"),
                 "verification_standard": project.certification_standard,
                 "verification_badge": badge,
                 "country": country,
@@ -4100,15 +4238,20 @@ class CarbonOffsetViewSet(viewsets.ViewSet):
                 "co_benefits": ["environmental_protection", "community_development", "sustainable_development"],
                 "featured": project.id % 2 == 1,  # Make every other project featured
                 "trazo_verified": True,
-                "registry_url": registry_urls.get(project.certification_standard, f'https://registry.example.com/project/{project.id}')
+                "registry_url": registry_urls.get(
+                    project.certification_standard, f"https://registry.example.com/project/{project.id}"
+                ),
             }
             formatted_projects.append(formatted_project)
-        
-        return Response({
-            'projects': formatted_projects,
-            'total_projects': len(formatted_projects),
-            'message': 'Certified projects from database'
-        }, status=status.HTTP_200_OK)
+
+        return Response(
+            {
+                "projects": formatted_projects,
+                "total_projects": len(formatted_projects),
+                "message": "Certified projects from database",
+            },
+            status=status.HTTP_200_OK,
+        )
 
     def create(self, request):
         """
@@ -4131,98 +4274,94 @@ class CarbonOffsetViewSet(viewsets.ViewSet):
         """
         try:
             data = request.data
-            
+
             # Validate required fields
-            required_fields = ['amount', 'source_id', 'type', 'year']
+            required_fields = ["amount", "source_id", "type", "year"]
             for field in required_fields:
                 if field not in data:
-                    return Response(
-                        {'error': f'Missing required field: {field}'}, 
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-            
-            amount = float(data['amount'])
-            source_id = data['source_id']
-            year = int(data['year'])
-            production_id = data.get('production')
-            verification_level = data.get('verification_level', 'self_reported')
-            
+                    return Response({"error": f"Missing required field: {field}"}, status=status.HTTP_400_BAD_REQUEST)
+
+            amount = float(data["amount"])
+            source_id = data["source_id"]
+            year = int(data["year"])
+            production_id = data.get("production")
+            verification_level = data.get("verification_level", "self_reported")
+
             # Validate amount
             if amount <= 0:
-                return Response(
-                    {'error': 'Amount must be greater than 0'}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                return Response({"error": "Amount must be greater than 0"}, status=status.HTTP_400_BAD_REQUEST)
 
             # Import verification service
             from .services.verification_service import VerificationService
+
             verification_service = VerificationService()
 
             # Check verification requirements based on amount
-            if amount >= 1000 and verification_level != 'certified_project':
-                return Response({
-                    'error': 'High-value offsets (≥1000 kg CO₂e) require certified project verification',
-                    'required_verification_level': 'certified_project',
-                    'amount_threshold': 1000
-                }, status=status.HTTP_400_BAD_REQUEST)
+            if amount >= 1000 and verification_level != "certified_project":
+                return Response(
+                    {
+                        "error": "High-value offsets (≥1000 kg CO₂e) require certified project verification",
+                        "required_verification_level": "certified_project",
+                        "amount_threshold": 1000,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
-            if amount >= 100 and not data.get('additionality_evidence'):
-                return Response({
-                    'error': 'Medium-value offsets (≥100 kg CO₂e) require additionality evidence',
-                    'required_fields': ['additionality_evidence'],
-                    'amount_threshold': 100
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
+            if amount >= 100 and not data.get("additionality_evidence"):
+                return Response(
+                    {
+                        "error": "Medium-value offsets (≥100 kg CO₂e) require additionality evidence",
+                        "required_fields": ["additionality_evidence"],
+                        "amount_threshold": 100,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
             # Get or create offset source
             offset_source, created = CarbonSource.objects.get_or_create(
                 name=source_id,
                 defaults={
-                    'category': 'offset',
-                    'default_emission_factor': -1.0,  # Negative for offset
-                    'unit': 'kg CO2e',
-                    'description': f'Carbon offset project: {source_id}',
-                    'usda_verified': True if source_id in ['no_till', 'cover_crop', 'reforestation'] else False
-                }
+                    "category": "offset",
+                    "default_emission_factor": -1.0,  # Negative for offset
+                    "unit": "kg CO2e",
+                    "description": f"Carbon offset project: {source_id}",
+                    "usda_verified": True if source_id in ["no_till", "cover_crop", "reforestation"] else False,
+                },
             )
-            
+
             # Determine establishment
             establishment = None
             production = None
-            establishment_id = data.get('establishment')
-            
+            establishment_id = data.get("establishment")
+
             if production_id:
                 try:
                     from history.models import History
+
                     production = History.objects.get(id=production_id)
                     establishment = production.establishment
                 except History.DoesNotExist:
-                    return Response(
-                        {'error': 'Production not found'}, 
-                        status=status.HTTP_404_NOT_FOUND
-                    )
+                    return Response({"error": "Production not found"}, status=status.HTTP_404_NOT_FOUND)
             elif establishment_id:
                 # Handle establishment ID from payload
                 try:
                     from company.models import Establishment
+
                     establishment = Establishment.objects.get(id=establishment_id)
-                    
+
                     # Verify user has access to this establishment
                     user_companies = request.user.companies.all()
                     if establishment.company not in user_companies:
                         return Response(
-                            {'error': 'Access denied to this establishment'}, 
-                            status=status.HTTP_403_FORBIDDEN
+                            {"error": "Access denied to this establishment"}, status=status.HTTP_403_FORBIDDEN
                         )
                 except Establishment.DoesNotExist:
-                    return Response(
-                        {'error': 'Establishment not found'}, 
-                        status=status.HTTP_404_NOT_FOUND
-                    )
+                    return Response({"error": "Establishment not found"}, status=status.HTTP_404_NOT_FOUND)
             else:
                 # If no production or establishment specified, try to get user's establishment
-                if hasattr(request.user, 'establishment'):
+                if hasattr(request.user, "establishment"):
                     establishment = request.user.establishment
-                elif hasattr(request.user, 'company') and request.user.company:
+                elif hasattr(request.user, "company") and request.user.company:
                     # Get first establishment from user's company
                     establishment = request.user.company.establishments.first()
                 else:
@@ -4230,174 +4369,171 @@ class CarbonOffsetViewSet(viewsets.ViewSet):
                     user_companies = request.user.companies.all()
                     if user_companies.exists():
                         establishment = user_companies.first().establishment_set.first()
-                
+
                 if not establishment:
-                    return Response(
-                        {'error': 'No establishment found for user'}, 
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-            
+                    return Response({"error": "No establishment found for user"}, status=status.HTTP_400_BAD_REQUEST)
+
             # Create carbon entry with verification fields
             carbon_entry = CarbonEntry.objects.create(
                 establishment=establishment,
                 production=production,
                 created_by=request.user,
-                type='offset',
+                type="offset",
                 source=offset_source,
                 amount=amount,
                 year=year,
-                description=f'Carbon offset from {source_id} project: {amount} kg CO2e',
+                description=f"Carbon offset from {source_id} project: {amount} kg CO2e",
                 usda_verified=offset_source.usda_verified,
                 usda_factors_based=True,
-                verification_status='verified',
-                data_source=f'User-created offset: {source_id}',
+                verification_status="verified",
+                data_source=f"User-created offset: {source_id}",
                 # Verification system fields
                 verification_level=verification_level,
-                additionality_evidence=data.get('additionality_evidence', ''),
-                permanence_plan=data.get('permanence_plan', ''),
-                baseline_data=data.get('baseline_data', {}),
-                methodology_template=data.get('methodology_template', ''),
-                registry_verification_id=data.get('registry_verification_id', ''),
+                additionality_evidence=data.get("additionality_evidence", ""),
+                permanence_plan=data.get("permanence_plan", ""),
+                baseline_data=data.get("baseline_data", {}),
+                methodology_template=data.get("methodology_template", ""),
+                registry_verification_id=data.get("registry_verification_id", ""),
                 evidence_requirements_met=self._check_evidence_requirements(data),
                 documentation_complete=self._check_documentation_complete(data),
                 # Evidence files
-                evidence_photos=data.get('evidence_photos', []),
-                evidence_documents=data.get('evidence_documents', []),
+                evidence_photos=data.get("evidence_photos", []),
+                evidence_documents=data.get("evidence_documents", []),
                 # Required fields with default values (only valid model fields)
                 trust_score=0.5,  # Will be calculated in save()
-                audit_status='pending',
-                additionality_verified=False
+                audit_status="pending",
+                additionality_verified=False,
             )
 
             # Run verification check
             verification_result = verification_service.verify_offset_entry(carbon_entry)
 
             # Handle anti-gaming violations
-            if verification_result.get('anti_gaming_flags'):
+            if verification_result.get("anti_gaming_flags"):
                 # Log gaming attempt for monitoring
                 CarbonAuditLog.objects.create(
                     carbon_entry=carbon_entry,
                     user=request.user,
-                    action='gaming_detected',
-                    details=f'Anti-gaming flags detected: {", ".join(verification_result["anti_gaming_flags"])}'
+                    action="gaming_detected",
+                    details=f'Anti-gaming flags detected: {", ".join(verification_result["anti_gaming_flags"])}',
                 )
-                
+
                 # If high-risk gaming detected, reject the offset
                 high_risk_flags = [
-                    'high_cumulative_threshold_exceeded',
-                    'rapid_submission_pattern', 
-                    'unrealistic_offset_ratio',
-                    'exceeds_acreage_capacity'
+                    "high_cumulative_threshold_exceeded",
+                    "rapid_submission_pattern",
+                    "unrealistic_offset_ratio",
+                    "exceeds_acreage_capacity",
                 ]
-                
-                if any(flag in verification_result['anti_gaming_flags'] for flag in high_risk_flags):
-                    return Response({
-                        'error': 'Offset creation blocked due to anti-gaming policy violations',
-                        'violations': verification_result['anti_gaming_flags'],
-                        'requirements': verification_result['requirements'],
-                        'message': 'Please use certified projects or upgrade verification level for large offset claims',
-                        'cumulative_limit_info': {
-                            'monthly_self_reported_limit': '500 kg CO2e',
-                            'requires_verification_upgrade': True,
-                            'certified_projects_recommended': True
-                        }
-                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                if any(flag in verification_result["anti_gaming_flags"] for flag in high_risk_flags):
+                    return Response(
+                        {
+                            "error": "Offset creation blocked due to anti-gaming policy violations",
+                            "violations": verification_result["anti_gaming_flags"],
+                            "requirements": verification_result["requirements"],
+                            "message": "Please use certified projects or upgrade verification level for large offset claims",
+                            "cumulative_limit_info": {
+                                "monthly_self_reported_limit": "500 kg CO2e",
+                                "requires_verification_upgrade": True,
+                                "certified_projects_recommended": True,
+                            },
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
             # Industry-standard conservative crediting with buffer pool deduction
             # Following Indigo Ag and Agoro Carbon Alliance practices (10-20% buffer)
             buffer_pool_percentage = 0.15  # 15% buffer pool
-            if carbon_entry.verification_level == 'self_reported':
+            if carbon_entry.verification_level == "self_reported":
                 buffer_pool_percentage = 0.20  # 20% buffer for self-reported
-            elif carbon_entry.verification_level == 'certified_project':
+            elif carbon_entry.verification_level == "certified_project":
                 buffer_pool_percentage = 0.10  # 10% buffer for certified projects
 
             # Apply buffer pool deduction to effective amount
             carbon_entry.effective_amount = carbon_entry.effective_amount * (1 - buffer_pool_percentage)
 
             # Update audit status based on verification
-            if verification_result['audit_required']:
-                carbon_entry.audit_status = 'scheduled'
-            elif verification_result['approved']:
-                carbon_entry.audit_status = 'passed'
+            if verification_result["audit_required"]:
+                carbon_entry.audit_status = "scheduled"
+            elif verification_result["approved"]:
+                carbon_entry.audit_status = "passed"
             else:
-                carbon_entry.audit_status = 'failed'
+                carbon_entry.audit_status = "failed"
 
             carbon_entry.save()
-            
+
             # Create audit log
             CarbonAuditLog.objects.create(
                 carbon_entry=carbon_entry,
                 user=request.user,
-                action='create',
-                details=f'Created carbon offset: {amount} kg CO2e from {source_id} project'
+                action="create",
+                details=f"Created carbon offset: {amount} kg CO2e from {source_id} project",
             )
-            
-            return Response({
-                'success': True,
-                'carbon_entry_id': carbon_entry.id,
-                'amount': amount,
-                'source': source_id,
-                'establishment_id': establishment.id if establishment else None,
-                'production_id': production.id if production else None,
-                # Verification system response
-                'verification_result': verification_result,
-                'verification_level': carbon_entry.verification_level,
-                'trust_score': carbon_entry.trust_score,
-                'effective_amount': carbon_entry.effective_amount,
-                'audit_status': carbon_entry.audit_status,
-                'verification_badge': carbon_entry.verification_badge
-            }, status=status.HTTP_201_CREATED)
-            
-        except ValueError as e:
+
             return Response(
-                {'error': f'Invalid data format: {str(e)}'}, 
-                status=status.HTTP_400_BAD_REQUEST
+                {
+                    "success": True,
+                    "carbon_entry_id": carbon_entry.id,
+                    "amount": amount,
+                    "source": source_id,
+                    "establishment_id": establishment.id if establishment else None,
+                    "production_id": production.id if production else None,
+                    # Verification system response
+                    "verification_result": verification_result,
+                    "verification_level": carbon_entry.verification_level,
+                    "trust_score": carbon_entry.trust_score,
+                    "effective_amount": carbon_entry.effective_amount,
+                    "audit_status": carbon_entry.audit_status,
+                    "verification_badge": carbon_entry.verification_badge,
+                },
+                status=status.HTTP_201_CREATED,
             )
+
+        except ValueError as e:
+            return Response({"error": f"Invalid data format: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             logger.error(f"Error creating carbon offset: {str(e)}")
-            return Response(
-                {'error': 'Failed to create carbon offset'}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return Response({"error": "Failed to create carbon offset"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def _check_evidence_requirements(self, data):
         """Check if evidence requirements are met based on verification level and amount"""
-        verification_level = data.get('verification_level', 'self_reported')
-        amount = float(data.get('amount', 0))
-        
-        if verification_level == 'certified_project':
-            return bool(data.get('registry_verification_id'))
+        verification_level = data.get("verification_level", "self_reported")
+        amount = float(data.get("amount", 0))
+
+        if verification_level == "certified_project":
+            return bool(data.get("registry_verification_id"))
         elif amount >= 100:
-            return bool(data.get('additionality_evidence'))
-        
+            return bool(data.get("additionality_evidence"))
+
         return True  # Basic requirements met for self-reported
 
     def _check_documentation_complete(self, data):
         """Check if documentation is complete for the verification level"""
-        verification_level = data.get('verification_level', 'self_reported')
-        amount = float(data.get('amount', 0))
-        
+        verification_level = data.get("verification_level", "self_reported")
+        amount = float(data.get("amount", 0))
+
         required_docs = []
-        
+
         if amount >= 1000:
-            required_docs.extend(['permanence_plan', 'additionality_evidence'])
+            required_docs.extend(["permanence_plan", "additionality_evidence"])
         elif amount >= 100:
-            required_docs.append('additionality_evidence')
-            
-        if verification_level == 'certified_project':
-            required_docs.append('registry_verification_id')
-        
+            required_docs.append("additionality_evidence")
+
+        if verification_level == "certified_project":
+            required_docs.append("registry_verification_id")
+
         for doc in required_docs:
             if not data.get(doc):
                 return False
-                
+
         return True
 
 
 class ProductionSerializer(serializers.ModelSerializer):
     class Meta:
         model = History
-        fields = ['id', 'name', 'start_date', 'finish_date', 'published']
+        fields = ["id", "name", "start_date", "finish_date", "published"]
 
 
 class CarbonProductionViewSet(viewsets.ReadOnlyModelViewSet):
@@ -4407,7 +4543,7 @@ class CarbonProductionViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 # IoT Integration and Automation Endpoints
-@api_view(['POST'])
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def john_deere_webhook(request):
     """
@@ -4416,87 +4552,78 @@ def john_deere_webhook(request):
     """
     try:
         data = request.data
-        
+
         # Validate required fields
-        required_fields = ['device_id', 'establishment_id', 'fuel_liters', 'timestamp', 'equipment_type']
+        required_fields = ["device_id", "establishment_id", "fuel_liters", "timestamp", "equipment_type"]
         for field in required_fields:
             if field not in data:
-                return Response(
-                        {'error': f'Missing required field: {field}'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-        
-        establishment_id = data['establishment_id']
-        fuel_liters = float(data['fuel_liters'])
-        equipment_type = data['equipment_type']
-        device_id = data['device_id']
-        timestamp = data['timestamp']
-        
+                return Response({"error": f"Missing required field: {field}"}, status=status.HTTP_400_BAD_REQUEST)
+
+        establishment_id = data["establishment_id"]
+        fuel_liters = float(data["fuel_liters"])
+        equipment_type = data["equipment_type"]
+        device_id = data["device_id"]
+        timestamp = data["timestamp"]
+
         # Verify establishment exists
         try:
             establishment = Establishment.objects.get(id=establishment_id)
         except Establishment.DoesNotExist:
-            return Response(
-                {'error': 'Establishment not found'}, 
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
+            return Response({"error": "Establishment not found"}, status=status.HTTP_404_NOT_FOUND)
+
         # Calculate carbon emissions (diesel: 2.7 kg CO2e/liter)
         co2e_emissions = fuel_liters * 2.7
-        
+
         # Find or create a CarbonSource for IoT-generated fuel consumption events
-        source_name = f'{equipment_type.title()} Fuel Consumption'
+        source_name = f"{equipment_type.title()} Fuel Consumption"
         carbon_source, created = CarbonSource.objects.get_or_create(
             name=source_name,
             defaults={
-                'category': 'fuel',
-                'default_emission_factor': 2.7,  # Diesel emission factor
-                'unit': 'kg CO2e/L',
-                'description': f'Automatically created for IoT device: {device_id}'
-            }
+                "category": "fuel",
+                "default_emission_factor": 2.7,  # Diesel emission factor
+                "unit": "kg CO2e/L",
+                "description": f"Automatically created for IoT device: {device_id}",
+            },
         )
-        
+
         # Create carbon entry automatically
         carbon_entry = CarbonEntry.objects.create(
             establishment_id=establishment_id,
-            type='emission',
+            type="emission",
             source=carbon_source,  # Use CarbonSource instance instead of string
             amount=co2e_emissions,
             year=timezone.now().year,
-            description=f'Auto-logged from IoT device {device_id}: {fuel_liters}L fuel consumed',
+            description=f"Auto-logged from IoT device {device_id}: {fuel_liters}L fuel consumed",
             iot_device_id=device_id,
-            created_by=request.user
+            created_by=request.user,
         )
-        
+
         # Log the IoT data ingestion
         CarbonAuditLog.objects.create(
             carbon_entry=carbon_entry,
             user=request.user,
-            action='iot_create',
-            details=f'IoT device {device_id} auto-created fuel consumption event: {fuel_liters}L = {co2e_emissions:.2f} kg CO2e'
+            action="iot_create",
+            details=f"IoT device {device_id} auto-created fuel consumption event: {fuel_liters}L = {co2e_emissions:.2f} kg CO2e",
         )
-        
-        return Response({
-            'status': 'success',
-            'carbon_entry_id': carbon_entry.id,
-            'co2e_calculated': co2e_emissions,
-            'message': f'Successfully processed {fuel_liters}L fuel consumption from {equipment_type}'
-        }, status=status.HTTP_201_CREATED)
+
+        return Response(
+            {
+                "status": "success",
+                "carbon_entry_id": carbon_entry.id,
+                "co2e_calculated": co2e_emissions,
+                "message": f"Successfully processed {fuel_liters}L fuel consumption from {equipment_type}",
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
     except ValueError as e:
-        return Response(
-            {'error': f'Invalid data format: {str(e)}'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        return Response({"error": f"Invalid data format: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         logger.error(f"Error processing John Deere webhook: {str(e)}")
-        return Response(
-            {'error': 'Failed to process IoT data'}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        return Response({"error": "Failed to process IoT data"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@api_view(['POST'])
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def weather_station_webhook(request):
     """
@@ -4505,277 +4632,252 @@ def weather_station_webhook(request):
     """
     try:
         data = request.data
-        
+
         # Validate required fields
-        required_fields = ['station_id', 'establishment_id', 'temperature', 'humidity', 'wind_speed', 'timestamp']
+        required_fields = ["station_id", "establishment_id", "temperature", "humidity", "wind_speed", "timestamp"]
         for field in required_fields:
             if field not in data:
-                return Response(
-                        {'error': f'Missing required field: {field}'}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-        
-        establishment_id = data['establishment_id']
-        temperature = float(data['temperature'])
-        humidity = float(data['humidity'])
-        wind_speed = float(data['wind_speed'])
-        station_id = data['station_id']
-        
+                return Response({"error": f"Missing required field: {field}"}, status=status.HTTP_400_BAD_REQUEST)
+
+        establishment_id = data["establishment_id"]
+        temperature = float(data["temperature"])
+        humidity = float(data["humidity"])
+        wind_speed = float(data["wind_speed"])
+        station_id = data["station_id"]
+
         # Verify establishment exists
         try:
             establishment = Establishment.objects.get(id=establishment_id)
         except Establishment.DoesNotExist:
-            return Response(
-                {'error': 'Establishment not found'}, 
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
+            return Response({"error": "Establishment not found"}, status=status.HTTP_404_NOT_FOUND)
+
         # Generate weather-based recommendations
         recommendations = []
-        
+
         # High temperature alert (>35°C)
         if temperature > 35:
-            recommendations.append({
-                'type': 'weather_alert',
-                'priority': 'high',
-                'message': f'High temperature alert: {temperature}°C - Consider crop protection measures',
-                'suggested_actions': [
-                    'Increase irrigation frequency',
-                    'Apply shade cloth if available',
-                    'Monitor plant stress indicators'
-                ]
-            })
-        
+            recommendations.append(
+                {
+                    "type": "weather_alert",
+                    "priority": "high",
+                    "message": f"High temperature alert: {temperature}°C - Consider crop protection measures",
+                    "suggested_actions": [
+                        "Increase irrigation frequency",
+                        "Apply shade cloth if available",
+                        "Monitor plant stress indicators",
+                    ],
+                }
+            )
+
         # High wind alert (>25 km/h)
         if wind_speed > 25:
-            recommendations.append({
-                'type': 'weather_alert',
-                'priority': 'medium',
-                'message': f'High wind alert: {wind_speed} km/h - Avoid chemical applications',
-                'suggested_actions': [
-                    'Postpone spraying operations',
-                    'Secure loose equipment',
-                    'Check irrigation systems for damage'
-                ]
-            })
-        
+            recommendations.append(
+                {
+                    "type": "weather_alert",
+                    "priority": "medium",
+                    "message": f"High wind alert: {wind_speed} km/h - Avoid chemical applications",
+                    "suggested_actions": [
+                        "Postpone spraying operations",
+                        "Secure loose equipment",
+                        "Check irrigation systems for damage",
+                    ],
+                }
+            )
+
         # Low humidity alert (<30%)
         if humidity < 30:
-            recommendations.append({
-                'type': 'weather_alert',
-                'priority': 'medium',
-                'message': f'Low humidity alert: {humidity}% - Increase irrigation',
-                'suggested_actions': [
-                    'Increase irrigation duration',
-                    'Monitor soil moisture levels',
-                    'Consider misting systems'
-                ]
-            })
-        
+            recommendations.append(
+                {
+                    "type": "weather_alert",
+                    "priority": "medium",
+                    "message": f"Low humidity alert: {humidity}% - Increase irrigation",
+                    "suggested_actions": [
+                        "Increase irrigation duration",
+                        "Monitor soil moisture levels",
+                        "Consider misting systems",
+                    ],
+                }
+            )
+
         # Log weather data processing
         CarbonAuditLog.objects.create(
             user=request.user,
-            action='weather_processed',
-            details=f'Weather station {station_id} data processed: {temperature}°C, {humidity}% humidity, {wind_speed} km/h wind'
+            action="weather_processed",
+            details=f"Weather station {station_id} data processed: {temperature}°C, {humidity}% humidity, {wind_speed} km/h wind",
         )
-        
-        return Response({
-            'status': 'success',
-            'recommendations': recommendations,
-            'weather_data': {
-                'temperature': temperature,
-                'humidity': humidity,
-                'wind_speed': wind_speed
-            },
-            'message': f'Weather data processed successfully with {len(recommendations)} recommendations'
-        }, status=status.HTTP_200_OK)
-        
-    except ValueError as e:
+
         return Response(
-            {'error': f'Invalid data format: {str(e)}'}, 
-            status=status.HTTP_400_BAD_REQUEST
+            {
+                "status": "success",
+                "recommendations": recommendations,
+                "weather_data": {"temperature": temperature, "humidity": humidity, "wind_speed": wind_speed},
+                "message": f"Weather data processed successfully with {len(recommendations)} recommendations",
+            },
+            status=status.HTTP_200_OK,
         )
+
+    except ValueError as e:
+        return Response({"error": f"Invalid data format: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         logger.error(f"Error processing weather station webhook: {str(e)}")
-        return Response(
-            {'error': 'Failed to process weather data'}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        return Response({"error": "Failed to process weather data"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class IoTDeviceViewSet(viewsets.ViewSet):
     """
     ViewSet for IoT device management and monitoring.
     """
+
     permission_classes = [permissions.IsAuthenticated]
 
     def list(self, request):
         """List all IoT devices for an establishment."""
-        establishment_id = request.query_params.get('establishment_id')
+        establishment_id = request.query_params.get("establishment_id")
 
         if not establishment_id:
-            return Response(
-                {'error': 'establishment_id is required'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
+            return Response({"error": "establishment_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
             devices = IoTDevice.objects.filter(establishment_id=establishment_id)
             device_data = []
-            
+
             for device in devices:
                 device_info = {
-                    'id': device.id,
-                    'device_id': device.device_id,
-                    'device_type': device.device_type,
-                    'name': device.name,
-                    'manufacturer': device.manufacturer,
-                    'model': device.model,
-                    'status': device.status,
-                    'battery_level': device.battery_level,
-                    'location': {
-                        'lat': float(device.latitude) if device.latitude else None,
-                        'lng': float(device.longitude) if device.longitude else None
+                    "id": device.id,
+                    "device_id": device.device_id,
+                    "device_type": device.device_type,
+                    "name": device.name,
+                    "manufacturer": device.manufacturer,
+                    "model": device.model,
+                    "status": device.status,
+                    "battery_level": device.battery_level,
+                    "location": {
+                        "lat": float(device.latitude) if device.latitude else None,
+                        "lng": float(device.longitude) if device.longitude else None,
                     },
-                    'installed_date': device.installed_date.isoformat(),
-                    'last_seen': device.last_seen.isoformat() if device.last_seen else None,
-                    'configuration': device.configuration,
-                    'notes': device.notes,
-                    'needs_maintenance': device.needs_maintenance,
-                    'total_data_points': device.total_data_points
+                    "installed_date": device.installed_date.isoformat(),
+                    "last_seen": device.last_seen.isoformat() if device.last_seen else None,
+                    "configuration": device.configuration,
+                    "notes": device.notes,
+                    "needs_maintenance": device.needs_maintenance,
+                    "total_data_points": device.total_data_points,
                 }
                 device_data.append(device_info)
-            
-            return Response({
-                'devices': device_data,
-                'total_count': len(device_data)
-            }, status=status.HTTP_200_OK)
-            
+
+            return Response({"devices": device_data, "total_count": len(device_data)}, status=status.HTTP_200_OK)
+
         except Exception as e:
             logger.error(f"Error listing IoT devices: {str(e)}")
             return Response(
-                {'error': 'Failed to list devices', 'details': str(e)}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": "Failed to list devices", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
     def create(self, request):
         """Register a new IoT device."""
         try:
             data = request.data
-            
+
             # Validate required fields
-            required_fields = ['device_id', 'device_type', 'establishment_id', 'name']
+            required_fields = ["device_id", "device_type", "establishment_id", "name"]
             for field in required_fields:
                 if field not in data:
-                    return Response(
-                        {'error': f'Missing required field: {field}'},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-            
+                    return Response({"error": f"Missing required field: {field}"}, status=status.HTTP_400_BAD_REQUEST)
+
             # Check if device_id already exists
-            if IoTDevice.objects.filter(device_id=data['device_id']).exists():
-                return Response(
-                        {'error': 'Device ID already exists'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-        
+            if IoTDevice.objects.filter(device_id=data["device_id"]).exists():
+                return Response({"error": "Device ID already exists"}, status=status.HTTP_400_BAD_REQUEST)
+
             # Verify establishment exists
             try:
-                establishment = Establishment.objects.get(id=data['establishment_id'])
+                establishment = Establishment.objects.get(id=data["establishment_id"])
             except Establishment.DoesNotExist:
-                return Response(
-                    {'error': 'Establishment not found'}, 
-                    status=status.HTTP_404_NOT_FOUND
-                )
-            
+                return Response({"error": "Establishment not found"}, status=status.HTTP_404_NOT_FOUND)
+
             # Create the device
             device = IoTDevice.objects.create(
-                device_id=data['device_id'],
-                device_type=data['device_type'],
+                device_id=data["device_id"],
+                device_type=data["device_type"],
                 establishment=establishment,
-                name=data['name'],
-                manufacturer=data.get('manufacturer', ''),
-                model=data.get('model', ''),
-                latitude=data.get('latitude'),
-                longitude=data.get('longitude'),
-                configuration=data.get('configuration', {}),
-                notes=data.get('notes', ''),
-                status='offline'  # Default to offline until first data received
+                name=data["name"],
+                manufacturer=data.get("manufacturer", ""),
+                model=data.get("model", ""),
+                latitude=data.get("latitude"),
+                longitude=data.get("longitude"),
+                configuration=data.get("configuration", {}),
+                notes=data.get("notes", ""),
+                status="offline",  # Default to offline until first data received
             )
-            
+
             # Log device registration
             CarbonAuditLog.objects.create(
                 user=request.user,
-                action='create',
-                details=f'Registered new IoT device: {device.device_id} ({device.name})'
+                action="create",
+                details=f"Registered new IoT device: {device.device_id} ({device.name})",
             )
-            
-            return Response({
-                'id': device.id,
-                'device_id': device.device_id,
-                'message': f'Device {device.name} registered successfully',
-                'status': 'registered'
-            }, status=status.HTTP_201_CREATED)
-            
+
+            return Response(
+                {
+                    "id": device.id,
+                    "device_id": device.device_id,
+                    "message": f"Device {device.name} registered successfully",
+                    "status": "registered",
+                },
+                status=status.HTTP_201_CREATED,
+            )
+
         except Exception as e:
             logger.error(f"Error creating IoT device: {str(e)}")
             return Response(
-                {'error': 'Failed to register device', 'details': str(e)}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": "Failed to register device", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
     def retrieve(self, request, pk=None):
         """Get details of a specific IoT device."""
         try:
             device = IoTDevice.objects.get(id=pk)
-            
+
             # Get recent data points
-            recent_data = IoTDataPoint.objects.filter(
-                device=device
-            ).order_by('-timestamp')[:10]
-            
+            recent_data = IoTDataPoint.objects.filter(device=device).order_by("-timestamp")[:10]
+
             device_data = {
-                'id': device.id,
-                'device_id': device.device_id,
-                'device_type': device.device_type,
-                'name': device.name,
-                'manufacturer': device.manufacturer,
-                'model': device.model,
-                'status': device.status,
-                'battery_level': device.battery_level,
-                'location': {
-                    'lat': float(device.latitude) if device.latitude else None,
-                    'lng': float(device.longitude) if device.longitude else None
+                "id": device.id,
+                "device_id": device.device_id,
+                "device_type": device.device_type,
+                "name": device.name,
+                "manufacturer": device.manufacturer,
+                "model": device.model,
+                "status": device.status,
+                "battery_level": device.battery_level,
+                "location": {
+                    "lat": float(device.latitude) if device.latitude else None,
+                    "lng": float(device.longitude) if device.longitude else None,
                 },
-                'installed_date': device.installed_date.isoformat(),
-                'last_seen': device.last_seen.isoformat() if device.last_seen else None,
-                'last_maintenance': device.last_maintenance.isoformat() if device.last_maintenance else None,
-                'configuration': device.configuration,
-                'notes': device.notes,
-                'needs_maintenance': device.needs_maintenance,
-                'total_data_points': device.total_data_points,
-                'recent_data': [
+                "installed_date": device.installed_date.isoformat(),
+                "last_seen": device.last_seen.isoformat() if device.last_seen else None,
+                "last_maintenance": device.last_maintenance.isoformat() if device.last_maintenance else None,
+                "configuration": device.configuration,
+                "notes": device.notes,
+                "needs_maintenance": device.needs_maintenance,
+                "total_data_points": device.total_data_points,
+                "recent_data": [
                     {
-                        'timestamp': dp.timestamp.isoformat(),
-                        'data': dp.data,
-                        'quality_score': dp.quality_score,
-                        'processed': dp.processed
-                    } for dp in recent_data
-                ]
+                        "timestamp": dp.timestamp.isoformat(),
+                        "data": dp.data,
+                        "quality_score": dp.quality_score,
+                        "processed": dp.processed,
+                    }
+                    for dp in recent_data
+                ],
             }
-            
+
             return Response(device_data, status=status.HTTP_200_OK)
-            
+
         except IoTDevice.DoesNotExist:
-            return Response(
-                {'error': 'Device not found'}, 
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"error": "Device not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             logger.error(f"Error retrieving IoT device: {str(e)}")
             return Response(
-                {'error': 'Failed to retrieve device', 'details': str(e)}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": "Failed to retrieve device", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
     def update(self, request, pk=None):
@@ -4783,46 +4885,51 @@ class IoTDeviceViewSet(viewsets.ViewSet):
         try:
             device = IoTDevice.objects.get(id=pk)
             data = request.data
-            
+
             # Update allowed fields
             updatable_fields = [
-                'name', 'manufacturer', 'model', 'latitude', 'longitude',
-                'configuration', 'notes', 'status'
+                "name",
+                "manufacturer",
+                "model",
+                "latitude",
+                "longitude",
+                "configuration",
+                "notes",
+                "status",
             ]
-            
+
             updated_fields = []
             for field in updatable_fields:
                 if field in data:
                     setattr(device, field, data[field])
                     updated_fields.append(field)
-            
+
             if updated_fields:
                 device.save(update_fields=updated_fields)
-                
+
                 # Log device update
                 CarbonAuditLog.objects.create(
                     user=request.user,
-                    action='update',
-                    details=f'Updated IoT device {device.device_id}: {", ".join(updated_fields)}'
+                    action="update",
+                    details=f'Updated IoT device {device.device_id}: {", ".join(updated_fields)}',
                 )
-            
-            return Response({
-                'id': device.id,
-                'device_id': device.device_id,
-                'message': f'Device {device.name} updated successfully',
-                'updated_fields': updated_fields
-            }, status=status.HTTP_200_OK)
-            
-        except IoTDevice.DoesNotExist:
+
             return Response(
-                {'error': 'Device not found'}, 
-                status=status.HTTP_404_NOT_FOUND
+                {
+                    "id": device.id,
+                    "device_id": device.device_id,
+                    "message": f"Device {device.name} updated successfully",
+                    "updated_fields": updated_fields,
+                },
+                status=status.HTTP_200_OK,
             )
+
+        except IoTDevice.DoesNotExist:
+            return Response({"error": "Device not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             logger.error(f"Error updating IoT device: {str(e)}")
             return Response(
-                {'error': 'Failed to update device', 'details': str(e)}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": "Failed to update device", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
     def destroy(self, request, pk=None):
@@ -4831,191 +4938,172 @@ class IoTDeviceViewSet(viewsets.ViewSet):
             device = IoTDevice.objects.get(id=pk)
             device_name = device.name
             device_id = device.device_id
-            
+
             # Log device deletion before deleting
             CarbonAuditLog.objects.create(
-                user=request.user,
-                action='delete',
-                details=f'Deleted IoT device: {device_id} ({device_name})'
+                user=request.user, action="delete", details=f"Deleted IoT device: {device_id} ({device_name})"
             )
-            
+
             device.delete()
-            
-            return Response({
-                'message': f'Device {device_name} deleted successfully'
-            }, status=status.HTTP_200_OK)
-            
+
+            return Response({"message": f"Device {device_name} deleted successfully"}, status=status.HTTP_200_OK)
+
         except IoTDevice.DoesNotExist:
-            return Response(
-                {'error': 'Device not found'}, 
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"error": "Device not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             logger.error(f"Error deleting IoT device: {str(e)}")
             return Response(
-                {'error': 'Failed to delete device', 'details': str(e)}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": "Failed to delete device", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=["get"])
     def device_status(self, request):
         """Get status of all IoT devices for an establishment."""
-        establishment_id = request.query_params.get('establishment_id')
-        
+        establishment_id = request.query_params.get("establishment_id")
+
         if not establishment_id:
-            return Response(
-                {'error': 'establishment_id is required'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
+            return Response({"error": "establishment_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
             # Query real IoT devices from database
             devices = IoTDevice.objects.filter(establishment_id=establishment_id)
-            
+
             device_data = []
             for device in devices:
                 # Count data points for today
                 today = timezone.now().date()
-                data_points_today = IoTDataPoint.objects.filter(
-                    device=device,
-                    timestamp__date=today
-                ).count()
-                
+                data_points_today = IoTDataPoint.objects.filter(device=device, timestamp__date=today).count()
+
                 # Determine signal strength based on last seen
-                signal_strength = 'offline'
+                signal_strength = "offline"
                 if device.last_seen:
                     time_diff = timezone.now() - device.last_seen
                     if time_diff < timedelta(minutes=5):
-                        signal_strength = 'excellent'
+                        signal_strength = "excellent"
                     elif time_diff < timedelta(minutes=15):
-                        signal_strength = 'strong'
+                        signal_strength = "strong"
                     elif time_diff < timedelta(hours=1):
-                        signal_strength = 'weak'
+                        signal_strength = "weak"
                     else:
-                        signal_strength = 'offline'
-                
+                        signal_strength = "offline"
+
                 # Build device status object
                 device_info = {
-                    'device_id': device.device_id,
-                    'device_type': device.device_type,
-                    'equipment': f"{device.manufacturer} {device.model}".strip() or device.name,
-                    'status': device.status,
-                    'last_update': device.last_seen.isoformat() if device.last_seen else None,
-                    'battery_level': device.battery_level or 0,
-                    'signal_strength': signal_strength,
-                    'data_points_today': data_points_today,
-                    'location': {
-                        'lat': float(device.latitude) if device.latitude else None,
-                        'lng': float(device.longitude) if device.longitude else None
+                    "device_id": device.device_id,
+                    "device_type": device.device_type,
+                    "equipment": f"{device.manufacturer} {device.model}".strip() or device.name,
+                    "status": device.status,
+                    "last_update": device.last_seen.isoformat() if device.last_seen else None,
+                    "battery_level": device.battery_level or 0,
+                    "signal_strength": signal_strength,
+                    "data_points_today": data_points_today,
+                    "location": {
+                        "lat": float(device.latitude) if device.latitude else None,
+                        "lng": float(device.longitude) if device.longitude else None,
                     },
-                    'name': device.name,
-                    'manufacturer': device.manufacturer,
-                    'model': device.model,
-                    'installed_date': device.installed_date.isoformat(),
-                    'needs_maintenance': device.needs_maintenance,
-                    'total_data_points': device.total_data_points,
-                    'last_data_received': device.last_data_received.isoformat() if device.last_data_received else None
+                    "name": device.name,
+                    "manufacturer": device.manufacturer,
+                    "model": device.model,
+                    "installed_date": device.installed_date.isoformat(),
+                    "needs_maintenance": device.needs_maintenance,
+                    "total_data_points": device.total_data_points,
+                    "last_data_received": device.last_data_received.isoformat() if device.last_data_received else None,
                 }
                 device_data.append(device_info)
-            
+
             # Calculate summary statistics
             total_devices = len(device_data)
-            online_devices = len([d for d in device_data if d['status'] == 'online'])
-            offline_devices = len([d for d in device_data if d['status'] == 'offline'])
-            maintenance_devices = len([d for d in device_data if d.get('needs_maintenance', False)])
-            low_battery_devices = len([d for d in device_data if d['battery_level'] and d['battery_level'] < 20])
-            
-            return Response({
-                'establishment_id': establishment_id,
-                'devices': device_data,
-                'summary': {
-                    'total_devices': total_devices,
-                    'online_devices': online_devices,
-                    'offline_devices': offline_devices,
-                    'maintenance_devices': maintenance_devices,
-                    'low_battery_devices': low_battery_devices,
-                    'total_data_points_today': sum(d['data_points_today'] for d in device_data)
+            online_devices = len([d for d in device_data if d["status"] == "online"])
+            offline_devices = len([d for d in device_data if d["status"] == "offline"])
+            maintenance_devices = len([d for d in device_data if d.get("needs_maintenance", False)])
+            low_battery_devices = len([d for d in device_data if d["battery_level"] and d["battery_level"] < 20])
+
+            return Response(
+                {
+                    "establishment_id": establishment_id,
+                    "devices": device_data,
+                    "summary": {
+                        "total_devices": total_devices,
+                        "online_devices": online_devices,
+                        "offline_devices": offline_devices,
+                        "maintenance_devices": maintenance_devices,
+                        "low_battery_devices": low_battery_devices,
+                        "total_data_points_today": sum(d["data_points_today"] for d in device_data),
+                    },
+                    "last_updated": timezone.now().isoformat(),
                 },
-                'last_updated': timezone.now().isoformat()
-            }, status=status.HTTP_200_OK)
-            
+                status=status.HTTP_200_OK,
+            )
+
         except Exception as e:
             logger.error(f"Error fetching IoT device status: {str(e)}")
             return Response(
-                {'error': 'Failed to fetch device status', 'details': str(e)}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": "Failed to fetch device status", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=["get"])
     def device_types(self, request):
         """Get available device types for registration."""
-        return Response({
-            'device_types': [
-                {'value': choice[0], 'label': choice[1]} 
-                for choice in IoTDevice.DEVICE_TYPES
-            ]
-        }, status=status.HTTP_200_OK)
+        return Response(
+            {"device_types": [{"value": choice[0], "label": choice[1]} for choice in IoTDevice.DEVICE_TYPES]},
+            status=status.HTTP_200_OK,
+        )
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=["post"])
     def simulate_data(self, request):
         """Simulate IoT data for testing purposes - creates data points that go through the approval workflow."""
-        establishment_id = request.data.get('establishment_id')
-        device_type = request.data.get('device_type', 'fuel_sensor')
-        
+        establishment_id = request.data.get("establishment_id")
+        device_type = request.data.get("device_type", "fuel_sensor")
+
         if not establishment_id:
-            return Response(
-                {'error': 'establishment_id is required'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
+            return Response({"error": "establishment_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
             # Verify establishment exists
             try:
                 establishment = Establishment.objects.get(id=establishment_id)
             except Establishment.DoesNotExist:
-                return Response(
-                    {'error': 'Establishment not found'}, 
-                    status=status.HTTP_404_NOT_FOUND
-                )
-            
-            if device_type == 'fuel_sensor':
+                return Response({"error": "Establishment not found"}, status=status.HTTP_404_NOT_FOUND)
+
+            if device_type == "fuel_sensor":
                 # Get or create the fuel sensor device
                 device, created = IoTDevice.objects.get_or_create(
-                    device_id='JD_TRACTOR_SIM_001',
+                    device_id="JD_TRACTOR_SIM_001",
                     establishment=establishment,
                     defaults={
-                        'device_type': 'fuel_sensor',
-                        'name': 'John Deere 6120M Tractor (Simulator)',
-                        'manufacturer': 'John Deere',
-                        'model': '6120M',
-                        'status': 'online',
-                        'battery_level': 85,
-                        'signal_strength': 'strong',
-                        'latitude': 34.0522,
-                        'longitude': -118.2437,
-                        'last_maintenance': timezone.now() - datetime.timedelta(days=30)
-                    }
+                        "device_type": "fuel_sensor",
+                        "name": "John Deere 6120M Tractor (Simulator)",
+                        "manufacturer": "John Deere",
+                        "model": "6120M",
+                        "status": "online",
+                        "battery_level": 85,
+                        "signal_strength": "strong",
+                        "latitude": 34.0522,
+                        "longitude": -118.2437,
+                        "last_maintenance": timezone.now() - datetime.timedelta(days=30),
+                    },
                 )
-                
+
                 # Create realistic fuel consumption data
                 fuel_liters = round(12.5 + (timezone.now().hour * 0.8), 2)
                 engine_hours = round(timezone.now().hour * 1.2, 1)
-                
+
                 simulated_data = {
-                    'fuel_liters': fuel_liters,
-                    'engine_hours': engine_hours,
-                    'fuel_efficiency': round(fuel_liters / max(engine_hours, 0.1), 2),
-                    'equipment_type': 'tractor',
-                    'operation_type': 'field_operations',
-                    'area_covered': round(random.uniform(0.5, 2.0), 1),  # hectares
-                    'gps_location': {
-                        'lat': 34.0522 + random.uniform(-0.001, 0.001),
-                        'lng': -118.2437 + random.uniform(-0.001, 0.001)
+                    "fuel_liters": fuel_liters,
+                    "engine_hours": engine_hours,
+                    "fuel_efficiency": round(fuel_liters / max(engine_hours, 0.1), 2),
+                    "equipment_type": "tractor",
+                    "operation_type": "field_operations",
+                    "area_covered": round(random.uniform(0.5, 2.0), 1),  # hectares
+                    "gps_location": {
+                        "lat": 34.0522 + random.uniform(-0.001, 0.001),
+                        "lng": -118.2437 + random.uniform(-0.001, 0.001),
                     },
-                    'timestamp': timezone.now().isoformat(),
-                    'device_id': device.device_id
+                    "timestamp": timezone.now().isoformat(),
+                    "device_id": device.device_id,
                 }
-                
+
                 # Create IoT data point (not carbon entry directly)
                 data_point = IoTDataPoint.objects.create(
                     device=device,
@@ -5023,63 +5111,66 @@ class IoTDeviceViewSet(viewsets.ViewSet):
                     data=simulated_data,
                     processed=False,  # Will be processed through approval workflow
                     quality_score=0.95,  # High quality simulated data
-                    anomaly_detected=False
+                    anomaly_detected=False,
                 )
-                
+
                 # Update device stats
                 device.increment_data_points()
-                
-                return Response({
-                    'status': 'success',
-                    'message': f'Simulated fuel sensor data created: {fuel_liters}L fuel consumption',
-                    'data_point_id': data_point.id,
-                    'simulated_data': simulated_data,
-                    'workflow': 'Data point created - check Pending Events for approval',
-                    'note': 'This data will appear in Pending Events and can be approved to create carbon entries'
-                }, status=status.HTTP_201_CREATED)
-                
-            elif device_type == 'weather_station':
+
+                return Response(
+                    {
+                        "status": "success",
+                        "message": f"Simulated fuel sensor data created: {fuel_liters}L fuel consumption",
+                        "data_point_id": data_point.id,
+                        "simulated_data": simulated_data,
+                        "workflow": "Data point created - check Pending Events for approval",
+                        "note": "This data will appear in Pending Events and can be approved to create carbon entries",
+                    },
+                    status=status.HTTP_201_CREATED,
+                )
+
+            elif device_type == "weather_station":
                 # Get or create the weather station device
                 device, created = IoTDevice.objects.get_or_create(
-                    device_id='WS_SIM_001',
+                    device_id="WS_SIM_001",
                     establishment=establishment,
                     defaults={
-                        'device_type': 'weather_station',
-                        'name': 'Davis Vantage Pro2 (Simulator)',
-                        'manufacturer': 'Davis Instruments',
-                        'model': 'Vantage Pro2',
-                        'status': 'online',
-                        'battery_level': 92,
-                        'signal_strength': 'excellent',
-                        'latitude': 34.0525,
-                        'longitude': -118.2435,
-                        'last_maintenance': timezone.now() - datetime.timedelta(days=15)
-                    }
+                        "device_type": "weather_station",
+                        "name": "Davis Vantage Pro2 (Simulator)",
+                        "manufacturer": "Davis Instruments",
+                        "model": "Vantage Pro2",
+                        "status": "online",
+                        "battery_level": 92,
+                        "signal_strength": "excellent",
+                        "latitude": 34.0525,
+                        "longitude": -118.2435,
+                        "last_maintenance": timezone.now() - datetime.timedelta(days=15),
+                    },
                 )
-                
+
                 # Create realistic weather data
                 # Realistic weather patterns for California citrus region
                 base_temp = 22  # Base temperature in Celsius
                 hour = timezone.now().hour
                 temp_variation = 8 * math.sin((hour - 6) * math.pi / 12)  # Daily temperature cycle
                 temperature = round(base_temp + temp_variation + random.uniform(-2, 2), 1)
-                
+
                 # Humidity inversely related to temperature
                 humidity = round(70 - (temperature - 20) * 2 + random.uniform(-10, 10), 1)
                 humidity = max(20, min(95, humidity))  # Keep within realistic bounds
-                
+
                 simulated_data = {
-                    'temperature': temperature,
-                    'humidity': humidity,
-                    'wind_speed': round(random.uniform(5, 25) if 8 <= hour <= 18 else random.uniform(2, 12), 1),
-                    'pressure': round(1013 + random.uniform(-15, 15), 1),
-                    'solar_radiation': round(random.uniform(0, 1200) if 6 <= hour <= 19 else 0, 1),
-                    'rainfall': round(random.uniform(0, 2) if random.random() < 0.1 else 0, 1),  # 10% chance of rain
-                    'uv_index': round(random.uniform(0, 11) if 8 <= hour <= 17 else 0, 1),
-                    'timestamp': timezone.now().isoformat(),
-                    'station_id': device.device_id
+                    "temperature": temperature,
+                    "humidity": humidity,
+                    "wind_speed": round(random.uniform(5, 25) if 8 <= hour <= 18 else random.uniform(2, 12), 1),
+                    "pressure": round(1013 + random.uniform(-15, 15), 1),
+                    "solar_radiation": round(random.uniform(0, 1200) if 6 <= hour <= 19 else 0, 1),
+                    "rainfall": round(random.uniform(0, 2) if random.random() < 0.1 else 0, 1),  # 10% chance of rain
+                    "uv_index": round(random.uniform(0, 11) if 8 <= hour <= 17 else 0, 1),
+                    "timestamp": timezone.now().isoformat(),
+                    "station_id": device.device_id,
                 }
-                
+
                 # Create IoT data point
                 data_point = IoTDataPoint.objects.create(
                     device=device,
@@ -5087,552 +5178,536 @@ class IoTDeviceViewSet(viewsets.ViewSet):
                     data=simulated_data,
                     processed=False,
                     quality_score=0.98,  # Very high quality weather data
-                    anomaly_detected=False
+                    anomaly_detected=False,
                 )
-                
+
                 # Update device stats
                 device.increment_data_points()
-                
-                return Response({
-                    'status': 'success',
-                    'message': f'Simulated weather station data created: {temperature}°C, {humidity}% humidity',
-                    'data_point_id': data_point.id,
-                    'simulated_data': simulated_data,
-                    'workflow': 'Weather data created - may trigger automation rules',
-                    'note': 'Weather data typically triggers recommendations rather than direct carbon entries'
-                }, status=status.HTTP_201_CREATED)
-            
+
+                return Response(
+                    {
+                        "status": "success",
+                        "message": f"Simulated weather station data created: {temperature}°C, {humidity}% humidity",
+                        "data_point_id": data_point.id,
+                        "simulated_data": simulated_data,
+                        "workflow": "Weather data created - may trigger automation rules",
+                        "note": "Weather data typically triggers recommendations rather than direct carbon entries",
+                    },
+                    status=status.HTTP_201_CREATED,
+                )
+
             else:
-                return Response({
-                    'error': f'Unsupported device type: {device_type}',
-                    'supported_types': ['fuel_sensor', 'weather_station']
-                }, status=status.HTTP_400_BAD_REQUEST)
-                
+                return Response(
+                    {
+                        "error": f"Unsupported device type: {device_type}",
+                        "supported_types": ["fuel_sensor", "weather_station"],
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         except Exception as e:
             logger.error(f"Error simulating IoT data: {str(e)}")
-            return Response({
-                'error': 'Failed to simulate IoT data',
-                'details': str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"error": "Failed to simulate IoT data", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class AutomationRuleViewSet(viewsets.ViewSet):
     """
     ViewSet for managing automation rules that generate events from IoT data.
     """
+
     permission_classes = [permissions.IsAuthenticated]
 
     def list(self, request):
         """List automation rules for an establishment."""
-        establishment_id = request.query_params.get('establishment_id')
-        
+        establishment_id = request.query_params.get("establishment_id")
+
         if not establishment_id:
-            return Response(
-                {'error': 'establishment_id is required'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
+            return Response({"error": "establishment_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
             rules = AutomationRule.objects.filter(establishment_id=establishment_id)
-            
+
             rule_data = []
             for rule in rules:
                 rule_info = {
-                    'id': rule.id,
-                    'name': rule.name,
-                    'device_type': rule.device_type,
-                    'trigger_type': rule.trigger_type,
-                    'trigger_config': rule.trigger_config,
-                    'action_type': rule.action_type,
-                    'action_config': rule.action_config,
-                    'is_active': rule.is_active,
-                    'last_triggered': rule.last_triggered.isoformat() if rule.last_triggered else None,
-                    'trigger_count': rule.trigger_count,
-                    'description': rule.description,
-                    'created_at': rule.created_at.isoformat()
+                    "id": rule.id,
+                    "name": rule.name,
+                    "device_type": rule.device_type,
+                    "trigger_type": rule.trigger_type,
+                    "trigger_config": rule.trigger_config,
+                    "action_type": rule.action_type,
+                    "action_config": rule.action_config,
+                    "is_active": rule.is_active,
+                    "last_triggered": rule.last_triggered.isoformat() if rule.last_triggered else None,
+                    "trigger_count": rule.trigger_count,
+                    "description": rule.description,
+                    "created_at": rule.created_at.isoformat(),
                 }
                 rule_data.append(rule_info)
-        
-            return Response({
-                'rules': rule_data,
-                'total_count': len(rule_data)
-            }, status=status.HTTP_200_OK)
-            
+
+            return Response({"rules": rule_data, "total_count": len(rule_data)}, status=status.HTTP_200_OK)
+
         except Exception as e:
             logger.error(f"Error listing automation rules: {str(e)}")
             return Response(
-                {'error': 'Failed to list automation rules', 'details': str(e)}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": "Failed to list automation rules", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
     def create(self, request):
         """Create a new automation rule."""
         try:
             data = request.data
-            
+
             # Validate required fields
-            required_fields = ['name', 'establishment_id', 'trigger_type', 'trigger_config', 'action_type', 'action_config']
+            required_fields = [
+                "name",
+                "establishment_id",
+                "trigger_type",
+                "trigger_config",
+                "action_type",
+                "action_config",
+            ]
             for field in required_fields:
                 if field not in data:
-                    return Response(
-                        {'error': f'Missing required field: {field}'},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
+                    return Response({"error": f"Missing required field: {field}"}, status=status.HTTP_400_BAD_REQUEST)
 
             # Verify establishment exists
             try:
-                establishment = Establishment.objects.get(id=data['establishment_id'])
+                establishment = Establishment.objects.get(id=data["establishment_id"])
             except Establishment.DoesNotExist:
-                return Response(
-                    {'error': 'Establishment not found'}, 
-                    status=status.HTTP_404_NOT_FOUND
-                )
-            
+                return Response({"error": "Establishment not found"}, status=status.HTTP_404_NOT_FOUND)
+
             # Create the automation rule
             rule = AutomationRule.objects.create(
-                name=data['name'],
+                name=data["name"],
                 establishment=establishment,
-                device_type=data.get('device_type', ''),
-                trigger_type=data['trigger_type'],
-                trigger_config=data['trigger_config'],
-                action_type=data['action_type'],
-                action_config=data['action_config'],
-                description=data.get('description', ''),
+                device_type=data.get("device_type", ""),
+                trigger_type=data["trigger_type"],
+                trigger_config=data["trigger_config"],
+                action_type=data["action_type"],
+                action_config=data["action_config"],
+                description=data.get("description", ""),
                 created_by=request.user,
-                is_active=data.get('is_active', True)
+                is_active=data.get("is_active", True),
             )
-            
+
             # Log rule creation
             CarbonAuditLog.objects.create(
-                user=request.user,
-                action='create',
-                details=f'Created automation rule: {rule.name}'
+                user=request.user, action="create", details=f"Created automation rule: {rule.name}"
             )
-            
-            return Response({
-                'id': rule.id,
-                'name': rule.name,
-                'message': f'Automation rule {rule.name} created successfully'
-            }, status=status.HTTP_201_CREATED)
-            
+
+            return Response(
+                {"id": rule.id, "name": rule.name, "message": f"Automation rule {rule.name} created successfully"},
+                status=status.HTTP_201_CREATED,
+            )
+
         except Exception as e:
             logger.error(f"Error creating automation rule: {str(e)}")
             return Response(
-                {'error': 'Failed to create automation rule', 'details': str(e)}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": "Failed to create automation rule", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=["get"])
     def pending_events(self, request):
         """Get pending events that need user approval before creation."""
-        establishment_id = request.query_params.get('establishment_id')
-        auto_process = request.query_params.get('auto_process', 'true').lower() == 'true'
-        
+        establishment_id = request.query_params.get("establishment_id")
+        auto_process = request.query_params.get("auto_process", "true").lower() == "true"
+
         if not establishment_id:
-            return Response(
-                {'error': 'establishment_id is required'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
+            return Response({"error": "establishment_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
             # Get establishment for automation level checking
             establishment = Establishment.objects.get(id=establishment_id)
             automation_service = AutomationLevelService()
-            
+
             # Get unprocessed IoT data points that could generate events
             unprocessed_data = IoTDataPoint.objects.filter(
                 device__establishment_id=establishment_id,
                 processed=False,
-                timestamp__gte=timezone.now() - timedelta(hours=24)  # Last 24 hours
-            ).order_by('-timestamp')[:20]
-            
+                timestamp__gte=timezone.now() - timedelta(hours=24),  # Last 24 hours
+            ).order_by("-timestamp")[:20]
+
             pending_events = []
             auto_processed_count = 0
-            
+
             for data_point in unprocessed_data:
                 device = data_point.device
-                
+
                 # Generate event suggestions based on device type and data
-                if device.device_type == 'fuel_sensor' and 'fuel_liters' in data_point.data:
-                    fuel_liters = data_point.data['fuel_liters']
+                if device.device_type == "fuel_sensor" and "fuel_liters" in data_point.data:
+                    fuel_liters = data_point.data["fuel_liters"]
                     co2e_emissions = fuel_liters * 2.7  # Diesel emission factor
-                    
+
                     # Calculate confidence score based on data quality and patterns
                     confidence = self._calculate_fuel_confidence(data_point, fuel_liters)
-                    
+
                     event_data = {
-                        'id': f'fuel_{data_point.id}',
-                        'data_point_id': data_point.id,
-                        'device_id': device.device_id,
-                        'device_name': device.name,
-                        'event_type': 'fuel_consumption',
-                        'suggested_carbon_entry': {
-                            'type': 'emission',
-                            'source': f'{device.name} Fuel Consumption',
-                            'amount': co2e_emissions,
-                            'description': f'Fuel consumption: {fuel_liters}L from {device.name}',
-                            'raw_data': data_point.data
+                        "id": f"fuel_{data_point.id}",
+                        "data_point_id": data_point.id,
+                        "device_id": device.device_id,
+                        "device_name": device.name,
+                        "event_type": "fuel_consumption",
+                        "suggested_carbon_entry": {
+                            "type": "emission",
+                            "source": f"{device.name} Fuel Consumption",
+                            "amount": co2e_emissions,
+                            "description": f"Fuel consumption: {fuel_liters}L from {device.name}",
+                            "raw_data": data_point.data,
                         },
-                        'timestamp': data_point.timestamp.isoformat(),
-                        'confidence': confidence,
-                        'auto_approve_recommended': confidence > 0.9
+                        "timestamp": data_point.timestamp.isoformat(),
+                        "confidence": confidence,
+                        "auto_approve_recommended": confidence > 0.9,
                     }
-                    
+
                     # Plan-Based Smart Auto-Approval Logic
                     should_auto_approve = automation_service.should_auto_approve_event(data_point, confidence)
-                    
+
                     if auto_process and should_auto_approve:
                         # Auto-approve based on subscription plan automation level
                         try:
-                            self._auto_approve_event(data_point, event_data['suggested_carbon_entry'], request.user)
+                            self._auto_approve_event(data_point, event_data["suggested_carbon_entry"], request.user)
                             auto_processed_count += 1
                             continue  # Don't add to pending list
                         except Exception as e:
                             logger.error(f"Error auto-approving event: {str(e)}")
                             # Fall through to manual approval
-                    
+
                     # Add to pending events for manual approval
                     pending_events.append(event_data)
-                
-                elif device.device_type == 'soil_moisture' and 'soil_moisture_percent' in data_point.data:
-                    moisture = data_point.data['soil_moisture_percent']
-                    
+
+                elif device.device_type == "soil_moisture" and "soil_moisture_percent" in data_point.data:
+                    moisture = data_point.data["soil_moisture_percent"]
+
                     if moisture < 30:  # Low moisture threshold
                         confidence = self._calculate_moisture_confidence(data_point, moisture)
-                        
+
                         event_data = {
-                            'id': f'irrigation_{data_point.id}',
-                            'data_point_id': data_point.id,
-                            'device_id': device.device_id,
-                            'device_name': device.name,
-                            'event_type': 'irrigation_needed',
-                            'suggested_action': {
-                                'type': 'irrigation',
-                                'priority': 'high' if moisture < 20 else 'medium',
-                                'description': f'Low soil moisture detected: {moisture}% - Irrigation recommended',
-                                'estimated_water_needed': '50-100L per hectare'
+                            "id": f"irrigation_{data_point.id}",
+                            "data_point_id": data_point.id,
+                            "device_id": device.device_id,
+                            "device_name": device.name,
+                            "event_type": "irrigation_needed",
+                            "suggested_action": {
+                                "type": "irrigation",
+                                "priority": "high" if moisture < 20 else "medium",
+                                "description": f"Low soil moisture detected: {moisture}% - Irrigation recommended",
+                                "estimated_water_needed": "50-100L per hectare",
                             },
-                            'timestamp': data_point.timestamp.isoformat(),
-                            'confidence': confidence,
-                            'auto_approve_recommended': False  # Always require approval for irrigation
+                            "timestamp": data_point.timestamp.isoformat(),
+                            "confidence": confidence,
+                            "auto_approve_recommended": False,  # Always require approval for irrigation
                         }
-                        
+
                         pending_events.append(event_data)
-                
-                elif device.device_type == 'weather_station':
+
+                elif device.device_type == "weather_station":
                     # Weather data typically generates recommendations, not carbon entries
                     weather_data = data_point.data
                     recommendations = self._generate_weather_recommendations(weather_data)
-                    
+
                     if recommendations:
                         confidence = 0.85  # Weather recommendations have high confidence
-                        
+
                         event_data = {
-                            'id': f'weather_{data_point.id}',
-                            'data_point_id': data_point.id,
-                            'device_id': device.device_id,
-                            'device_name': device.name,
-                            'event_type': 'weather_alert',
-                            'suggested_action': recommendations[0],  # Take first recommendation
-                            'timestamp': data_point.timestamp.isoformat(),
-                            'confidence': confidence,
-                            'auto_approve_recommended': False  # Weather alerts need human review
+                            "id": f"weather_{data_point.id}",
+                            "data_point_id": data_point.id,
+                            "device_id": device.device_id,
+                            "device_name": device.name,
+                            "event_type": "weather_alert",
+                            "suggested_action": recommendations[0],  # Take first recommendation
+                            "timestamp": data_point.timestamp.isoformat(),
+                            "confidence": confidence,
+                            "auto_approve_recommended": False,  # Weather alerts need human review
                         }
-                        
+
                         pending_events.append(event_data)
-            
+
             # Get automation statistics for the establishment
             automation_stats = automation_service.get_automation_stats_for_establishment(establishment)
-            
-            return Response({
-                'establishment_id': establishment_id,
-                'pending_events': pending_events,
-                'total_count': len(pending_events),
-                'auto_processed_count': auto_processed_count,
-                'automation_info': {
-                    'target_automation_level': automation_stats['target_automation_level'],
-                    'actual_automation_rate': automation_stats['actual_automation_rate'],
-                    'carbon_tracking_mode': automation_stats['carbon_tracking_mode'],
-                    'compliance_status': automation_stats['compliance_status']
+
+            return Response(
+                {
+                    "establishment_id": establishment_id,
+                    "pending_events": pending_events,
+                    "total_count": len(pending_events),
+                    "auto_processed_count": auto_processed_count,
+                    "automation_info": {
+                        "target_automation_level": automation_stats["target_automation_level"],
+                        "actual_automation_rate": automation_stats["actual_automation_rate"],
+                        "carbon_tracking_mode": automation_stats["carbon_tracking_mode"],
+                        "compliance_status": automation_stats["compliance_status"],
+                    },
+                    "workflow_info": {
+                        "auto_approval_threshold": 0.9,
+                        "manual_approval_threshold": 0.7,
+                        "review_threshold": 0.5,
+                    },
+                    "last_updated": timezone.now().isoformat(),
                 },
-                'workflow_info': {
-                    'auto_approval_threshold': 0.9,
-                    'manual_approval_threshold': 0.7,
-                    'review_threshold': 0.5
-                },
-                'last_updated': timezone.now().isoformat()
-            }, status=status.HTTP_200_OK)
-            
+                status=status.HTTP_200_OK,
+            )
+
         except Exception as e:
             logger.error(f"Error fetching pending events: {str(e)}")
             return Response(
-                {'error': 'Failed to fetch pending events', 'details': str(e)}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": "Failed to fetch pending events", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
     def _calculate_fuel_confidence(self, data_point, fuel_liters):
         """Calculate confidence score for fuel consumption events."""
         confidence = 0.5  # Base confidence
-        
+
         # Data quality factors
         if data_point.quality_score > 0.9:
             confidence += 0.2
         elif data_point.quality_score > 0.7:
             confidence += 0.1
-        
+
         # Realistic fuel consumption (5-50L per session)
         if 5 <= fuel_liters <= 50:
             confidence += 0.2
         elif fuel_liters > 50:
             confidence -= 0.1  # High consumption needs review
-        
+
         # Device status
-        if data_point.device.status == 'online':
+        if data_point.device.status == "online":
             confidence += 0.1
-        
+
         # Time consistency (working hours)
         hour = data_point.timestamp.hour
         if 6 <= hour <= 18:  # Normal working hours
             confidence += 0.1
-        
+
         return min(1.0, confidence)
-    
+
     def _calculate_moisture_confidence(self, data_point, moisture):
         """Calculate confidence score for soil moisture events."""
         confidence = 0.6  # Base confidence for soil data
-        
+
         # Data quality
         if data_point.quality_score > 0.9:
             confidence += 0.15
-        
+
         # Realistic moisture levels
         if 10 <= moisture <= 60:
             confidence += 0.1
-        
+
         # Critical levels get higher confidence
         if moisture < 20:
             confidence += 0.1
-        
+
         return min(1.0, confidence)
-    
+
     def _generate_weather_recommendations(self, weather_data):
         """Generate weather-based recommendations."""
         recommendations = []
-        
-        temperature = weather_data.get('temperature', 0)
-        wind_speed = weather_data.get('wind_speed', 0)
-        humidity = weather_data.get('humidity', 50)
-        
+
+        temperature = weather_data.get("temperature", 0)
+        wind_speed = weather_data.get("wind_speed", 0)
+        humidity = weather_data.get("humidity", 50)
+
         # High temperature alert
         if temperature > 35:
-            recommendations.append({
-                'type': 'weather_alert',
-                'priority': 'high',
-                'description': f'High temperature alert: {temperature}°C - Consider crop protection measures',
-                'suggested_actions': [
-                    'Increase irrigation frequency',
-                    'Apply shade cloth if available',
-                    'Monitor plant stress indicators'
-                ]
-            })
-        
+            recommendations.append(
+                {
+                    "type": "weather_alert",
+                    "priority": "high",
+                    "description": f"High temperature alert: {temperature}°C - Consider crop protection measures",
+                    "suggested_actions": [
+                        "Increase irrigation frequency",
+                        "Apply shade cloth if available",
+                        "Monitor plant stress indicators",
+                    ],
+                }
+            )
+
         # High wind alert
         if wind_speed > 25:
-            recommendations.append({
-                'type': 'weather_alert',
-                'priority': 'medium',
-                'description': f'High wind alert: {wind_speed} km/h - Avoid chemical applications',
-                'suggested_actions': [
-                    'Postpone spraying operations',
-                    'Secure loose equipment',
-                    'Check irrigation systems for damage'
-                ]
-            })
-        
+            recommendations.append(
+                {
+                    "type": "weather_alert",
+                    "priority": "medium",
+                    "description": f"High wind alert: {wind_speed} km/h - Avoid chemical applications",
+                    "suggested_actions": [
+                        "Postpone spraying operations",
+                        "Secure loose equipment",
+                        "Check irrigation systems for damage",
+                    ],
+                }
+            )
+
         # Low humidity alert
         if humidity < 30:
-            recommendations.append({
-                'type': 'weather_alert',
-                'priority': 'medium',
-                'description': f'Low humidity alert: {humidity}% - Increase irrigation',
-                'suggested_actions': [
-                    'Increase irrigation duration',
-                    'Monitor soil moisture levels',
-                    'Consider misting systems'
-                ]
-            })
-        
+            recommendations.append(
+                {
+                    "type": "weather_alert",
+                    "priority": "medium",
+                    "description": f"Low humidity alert: {humidity}% - Increase irrigation",
+                    "suggested_actions": [
+                        "Increase irrigation duration",
+                        "Monitor soil moisture levels",
+                        "Consider misting systems",
+                    ],
+                }
+            )
+
         return recommendations
-    
+
     def _auto_approve_event(self, data_point, event_data, user):
         """Automatically approve and create carbon entry for high-confidence events."""
         # Find or create a CarbonSource
-        source_name = event_data.get('source', 'IoT Device Data')
+        source_name = event_data.get("source", "IoT Device Data")
         carbon_source, created = CarbonSource.objects.get_or_create(
             name=source_name,
             defaults={
-                'category': 'equipment',
-                'default_emission_factor': 2.7,
-                'unit': 'kg CO2e/L',
-                'description': f'Auto-created for IoT device: {data_point.device.device_id}'
-            }
+                "category": "equipment",
+                "default_emission_factor": 2.7,
+                "unit": "kg CO2e/L",
+                "description": f"Auto-created for IoT device: {data_point.device.device_id}",
+            },
         )
-        
+
         # Create the carbon entry
         carbon_entry = CarbonEntry.objects.create(
             establishment=data_point.device.establishment,
-            type=event_data['type'],
+            type=event_data["type"],
             source=carbon_source,
-            amount=event_data['amount'],
+            amount=event_data["amount"],
             year=timezone.now().year,
-            description=event_data['description'],
+            description=event_data["description"],
             iot_device_id=data_point.device.device_id,
-            created_by=user
+            created_by=user,
         )
-        
+
         # Mark data point as processed
         data_point.processed = True
         data_point.processed_at = timezone.now()
         data_point.carbon_entry = carbon_entry
         data_point.save()
-        
+
         # Update device stats
         data_point.device.increment_data_points()
-        
+
         # Log the auto-approval
         CarbonAuditLog.objects.create(
             carbon_entry=carbon_entry,
             user=user,
-            action='iot_auto_approve',
-            details=f'Auto-approved IoT event from {data_point.device.device_id}: {event_data["amount"]:.2f} kg CO2e (confidence: high)'
+            action="iot_auto_approve",
+            details=f'Auto-approved IoT event from {data_point.device.device_id}: {event_data["amount"]:.2f} kg CO2e (confidence: high)',
         )
-        
+
         return carbon_entry
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=["post"])
     def approve_event(self, request):
         """Approve a pending event and create the carbon entry."""
         try:
             data = request.data
-            data_point_id = data.get('data_point_id')
-            event_data = data.get('event_data')
-            
+            data_point_id = data.get("data_point_id")
+            event_data = data.get("event_data")
+
             if not data_point_id or not event_data:
                 return Response(
-                    {'error': 'data_point_id and event_data are required'},
-                    status=status.HTTP_400_BAD_REQUEST
+                    {"error": "data_point_id and event_data are required"}, status=status.HTTP_400_BAD_REQUEST
                 )
-            
+
             # Get the data point
             try:
                 data_point = IoTDataPoint.objects.get(id=data_point_id)
             except IoTDataPoint.DoesNotExist:
-                return Response(
-                    {'error': 'Data point not found'}, 
-                    status=status.HTTP_404_NOT_FOUND
-                )
-            
+                return Response({"error": "Data point not found"}, status=status.HTTP_404_NOT_FOUND)
+
             # Use the same auto-approval logic for manual approvals
             carbon_entry = self._auto_approve_event(data_point, event_data, request.user)
-            
+
             # Update audit log to reflect manual approval
-            CarbonAuditLog.objects.filter(
-                carbon_entry=carbon_entry,
-                action='iot_auto_approve'
-            ).update(
-                action='iot_manual_approve',
-                details=f'Manually approved IoT event from {data_point.device.device_id}: {event_data["amount"]:.2f} kg CO2e'
+            CarbonAuditLog.objects.filter(carbon_entry=carbon_entry, action="iot_auto_approve").update(
+                action="iot_manual_approve",
+                details=f'Manually approved IoT event from {data_point.device.device_id}: {event_data["amount"]:.2f} kg CO2e',
             )
-        
-            return Response({
-                'carbon_entry_id': carbon_entry.id,
-                'message': 'Event approved and carbon entry created successfully',
-                'co2e_amount': carbon_entry.co2e_amount or carbon_entry.amount
-            }, status=status.HTTP_201_CREATED)
-            
+
+            return Response(
+                {
+                    "carbon_entry_id": carbon_entry.id,
+                    "message": "Event approved and carbon entry created successfully",
+                    "co2e_amount": carbon_entry.co2e_amount or carbon_entry.amount,
+                },
+                status=status.HTTP_201_CREATED,
+            )
+
         except Exception as e:
             logger.error(f"Error approving event: {str(e)}")
             return Response(
-                {'error': 'Failed to approve event', 'details': str(e)}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": "Failed to approve event", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=["post"])
     def reject_event(self, request):
         """Reject a pending event and mark data point as processed without creating entry."""
         try:
-            data_point_id = request.data.get('data_point_id')
-            reason = request.data.get('reason', 'User rejected')
-            
+            data_point_id = request.data.get("data_point_id")
+            reason = request.data.get("reason", "User rejected")
+
             if not data_point_id:
-                return Response(
-                    {'error': 'data_point_id is required'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
+                return Response({"error": "data_point_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
             # Get the data point
             try:
                 data_point = IoTDataPoint.objects.get(id=data_point_id)
             except IoTDataPoint.DoesNotExist:
-                return Response(
-                    {'error': 'Data point not found'}, 
-                    status=status.HTTP_404_NOT_FOUND
-                )
-            
+                return Response({"error": "Data point not found"}, status=status.HTTP_404_NOT_FOUND)
+
             # Mark as processed without creating carbon entry
             data_point.processed = True
             data_point.processed_at = timezone.now()
             data_point.save()
-            
+
             # Log the rejection
             CarbonAuditLog.objects.create(
                 user=request.user,
-                action='iot_reject',
-                details=f'Rejected IoT event from {data_point.device.device_id}: {reason}'
+                action="iot_reject",
+                details=f"Rejected IoT event from {data_point.device.device_id}: {reason}",
             )
-            
-            return Response({
-                'message': 'Event rejected successfully',
-                'reason': reason
-            }, status=status.HTTP_200_OK)
-            
+
+            return Response({"message": "Event rejected successfully", "reason": reason}, status=status.HTTP_200_OK)
+
         except Exception as e:
             logger.error(f"Error rejecting event: {str(e)}")
             return Response(
-                {'error': 'Failed to reject event', 'details': str(e)}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": "Failed to reject event", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-    
-    @action(detail=False, methods=['get'])
+
+    @action(detail=False, methods=["get"])
     def automation_stats(self, request):
         """Get automation statistics for an establishment"""
-        establishment_id = request.query_params.get('establishment_id')
-        days = int(request.query_params.get('days', 30))
-        
+        establishment_id = request.query_params.get("establishment_id")
+        days = int(request.query_params.get("days", 30))
+
         if not establishment_id:
-            return Response(
-                {'error': 'establishment_id is required'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
+            return Response({"error": "establishment_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
             establishment = Establishment.objects.get(id=establishment_id)
             automation_service = AutomationLevelService()
-            
+
             stats = automation_service.get_automation_stats_for_establishment(establishment, days)
-            
+
             return Response(stats, status=status.HTTP_200_OK)
-            
+
         except Establishment.DoesNotExist:
-            return Response(
-                {'error': 'Establishment not found'}, 
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"error": "Establishment not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             logger.error(f"Error getting automation stats: {str(e)}")
             return Response(
-                {'error': 'Failed to get automation statistics', 'details': str(e)}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": "Failed to get automation statistics", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
 
@@ -5641,323 +5716,316 @@ class AutomationRuleViewSet(viewsets.ViewSet):
 
 # John Deere API Integration Views
 
-@api_view(['GET'])
+
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def john_deere_auth_start(request):
     """
     Start John Deere OAuth authentication flow.
-    
+
     Returns authorization URL for user to complete OAuth consent.
     """
     try:
         from carbon.services.john_deere_api import get_john_deere_api, is_john_deere_configured
-        
+
         if not is_john_deere_configured():
-            return Response({
-                'error': 'John Deere API not configured',
-                'message': 'Please configure JOHN_DEERE_CLIENT_ID and JOHN_DEERE_CLIENT_SECRET'
-            }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        
+            return Response(
+                {
+                    "error": "John Deere API not configured",
+                    "message": "Please configure JOHN_DEERE_CLIENT_ID and JOHN_DEERE_CLIENT_SECRET",
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
         # Generate state parameter for CSRF protection
         state = f"{request.user.id}_{timezone.now().timestamp()}"
-        
+
         api = get_john_deere_api()
         auth_url = api.get_authorization_url(state=state)
-        
+
         # Store state in session for validation
-        request.session['john_deere_oauth_state'] = state
-        
-        return Response({
-            'authorization_url': auth_url,
-            'state': state,
-            'message': 'Redirect user to authorization_url to complete OAuth flow'
-        })
-        
+        request.session["john_deere_oauth_state"] = state
+
+        return Response(
+            {
+                "authorization_url": auth_url,
+                "state": state,
+                "message": "Redirect user to authorization_url to complete OAuth flow",
+            }
+        )
+
     except Exception as e:
         logger.error(f"Failed to start John Deere OAuth: {e}")
-        return Response({
-            'error': 'OAuth initialization failed',
-            'message': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {"error": "OAuth initialization failed", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def john_deere_auth_callback(request):
     """
     Handle John Deere OAuth callback and exchange code for token.
-    
+
     Expected query parameters:
     - code: Authorization code from John Deere
     - state: State parameter for CSRF protection
     """
     try:
         from carbon.services.john_deere_api import get_john_deere_api
-        
+
         # Get parameters from callback
-        authorization_code = request.GET.get('code')
-        state = request.GET.get('state')
-        error = request.GET.get('error')
-        
+        authorization_code = request.GET.get("code")
+        state = request.GET.get("state")
+        error = request.GET.get("error")
+
         if error:
-            return Response({
-                'error': 'OAuth authorization failed',
-                'message': f'John Deere returned error: {error}'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response(
+                {"error": "OAuth authorization failed", "message": f"John Deere returned error: {error}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         if not authorization_code:
-            return Response({
-                'error': 'Missing authorization code',
-                'message': 'No authorization code received from John Deere'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response(
+                {"error": "Missing authorization code", "message": "No authorization code received from John Deere"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         # Validate state parameter
-        expected_state = request.session.get('john_deere_oauth_state')
+        expected_state = request.session.get("john_deere_oauth_state")
         if not state or state != expected_state:
-            return Response({
-                'error': 'Invalid state parameter',
-                'message': 'CSRF protection failed - invalid state'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response(
+                {"error": "Invalid state parameter", "message": "CSRF protection failed - invalid state"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         # Exchange code for token
         api = get_john_deere_api()
         token_data = api.exchange_code_for_token(authorization_code)
-        
+
         # Clean up session
-        if 'john_deere_oauth_state' in request.session:
-            del request.session['john_deere_oauth_state']
-        
-        return Response({
-            'success': True,
-            'message': 'John Deere authentication successful',
-            'token_expires_in': token_data.get('expires_in'),
-            'next_step': 'Call /carbon/john-deere/sync-devices/ to sync your equipment'
-        })
-        
+        if "john_deere_oauth_state" in request.session:
+            del request.session["john_deere_oauth_state"]
+
+        return Response(
+            {
+                "success": True,
+                "message": "John Deere authentication successful",
+                "token_expires_in": token_data.get("expires_in"),
+                "next_step": "Call /carbon/john-deere/sync-devices/ to sync your equipment",
+            }
+        )
+
     except Exception as e:
         logger.error(f"Failed to complete John Deere OAuth: {e}")
-        return Response({
-            'error': 'OAuth completion failed',
-            'message': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {"error": "OAuth completion failed", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
-@api_view(['POST'])
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def john_deere_sync_devices(request):
     """
     Sync John Deere machines with IoT devices.
-    
+
     This endpoint fetches machines from John Deere API and creates/updates
     corresponding IoT device records.
     """
     try:
-        from carbon.services.john_deere_api import get_john_deere_api
         from carbon.models import IoTDevice
-        
-        establishment_id = request.data.get('establishment_id')
+        from carbon.services.john_deere_api import get_john_deere_api
+
+        establishment_id = request.data.get("establishment_id")
         if not establishment_id:
-            return Response({
-                'error': 'establishment_id is required'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response({"error": "establishment_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
             establishment = Establishment.objects.get(id=establishment_id)
         except Establishment.DoesNotExist:
-            return Response({
-                'error': 'Establishment not found'
-            }, status=status.HTTP_404_NOT_FOUND)
-        
+            return Response({"error": "Establishment not found"}, status=status.HTTP_404_NOT_FOUND)
+
         api = get_john_deere_api()
-        
+
         # Get organizations (farms) from John Deere
         organizations = api.get_organizations()
         if not organizations:
-            return Response({
-                'error': 'No John Deere organizations found',
-                'message': 'Make sure your John Deere account has access to farm data'
-            }, status=status.HTTP_404_NOT_FOUND)
-        
+            return Response(
+                {
+                    "error": "No John Deere organizations found",
+                    "message": "Make sure your John Deere account has access to farm data",
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
         synced_devices = []
         errors = []
-        
+
         # Sync machines from all organizations
         for org in organizations:
-            org_id = org.get('id')
+            org_id = org.get("id")
             machines = api.get_machines(org_id)
-            
+
             for machine in machines:
                 try:
-                    machine_id = machine.get('id')
-                    machine_name = machine.get('name', f"Machine {machine_id}")
-                    machine_model = machine.get('model', '')
-                    
+                    machine_id = machine.get("id")
+                    machine_name = machine.get("name", f"Machine {machine_id}")
+                    machine_model = machine.get("model", "")
+
                     # Create or update IoT device
                     device, created = IoTDevice.objects.get_or_create(
                         john_deere_machine_id=machine_id,
                         establishment=establishment,
                         defaults={
-                            'device_id': f"jd_{machine_id}",
-                            'device_type': 'fuel_sensor',  # Default type for John Deere equipment
-                            'name': machine_name,
-                            'manufacturer': 'John Deere',
-                            'model': machine_model,
-                            'api_connection_status': 'pending'
-                        }
+                            "device_id": f"jd_{machine_id}",
+                            "device_type": "fuel_sensor",  # Default type for John Deere equipment
+                            "name": machine_name,
+                            "manufacturer": "John Deere",
+                            "model": machine_model,
+                            "api_connection_status": "pending",
+                        },
                     )
-                    
+
                     # Sync machine status with device
                     sync_success = api.sync_machine_with_iot_device(machine_id, device)
-                    
-                    synced_devices.append({
-                        'device_id': device.device_id,
-                        'machine_id': machine_id,
-                        'name': machine_name,
-                        'created': created,
-                        'sync_success': sync_success,
-                        'status': device.status
-                    })
-                    
+
+                    synced_devices.append(
+                        {
+                            "device_id": device.device_id,
+                            "machine_id": machine_id,
+                            "name": machine_name,
+                            "created": created,
+                            "sync_success": sync_success,
+                            "status": device.status,
+                        }
+                    )
+
                 except Exception as e:
-                    errors.append({
-                        'machine_id': machine.get('id'),
-                        'error': str(e)
-                    })
-        
-        return Response({
-            'success': True,
-            'message': f'Synced {len(synced_devices)} devices',
-            'synced_devices': synced_devices,
-            'errors': errors if errors else None,
-            'organizations_found': len(organizations)
-        })
-        
+                    errors.append({"machine_id": machine.get("id"), "error": str(e)})
+
+        return Response(
+            {
+                "success": True,
+                "message": f"Synced {len(synced_devices)} devices",
+                "synced_devices": synced_devices,
+                "errors": errors if errors else None,
+                "organizations_found": len(organizations),
+            }
+        )
+
     except Exception as e:
         logger.error(f"Failed to sync John Deere devices: {e}")
-        return Response({
-            'error': 'Device sync failed',
-            'message': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {"error": "Device sync failed", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def weather_current_conditions(request):
     """
     Get current weather conditions for an establishment.
-    
+
     Query Parameters:
     - establishment_id: ID of the establishment
     - lat: Latitude (optional, overrides establishment location)
     - lng: Longitude (optional, overrides establishment location)
     """
     try:
-        establishment_id = request.GET.get('establishment_id')
-        lat = request.GET.get('lat')
-        lng = request.GET.get('lng')
-        
+        establishment_id = request.GET.get("establishment_id")
+        lat = request.GET.get("lat")
+        lng = request.GET.get("lng")
+
         if not establishment_id and not (lat and lng):
-            return Response({
-                'error': 'Either establishment_id or lat/lng coordinates required'
-            }, status=400)
-        
+            return Response({"error": "Either establishment_id or lat/lng coordinates required"}, status=400)
+
         # Get coordinates from establishment if not provided
         if not (lat and lng):
             try:
                 establishment = Establishment.objects.get(id=establishment_id)
                 lat = establishment.latitude
                 lng = establishment.longitude
-                
+
                 if not (lat and lng):
-                    return Response({
-                        'error': 'Establishment does not have location coordinates'
-                    }, status=400)
+                    return Response({"error": "Establishment does not have location coordinates"}, status=400)
             except Establishment.DoesNotExist:
-                return Response({
-                    'error': 'Establishment not found'
-                }, status=404)
-        
+                return Response({"error": "Establishment not found"}, status=404)
+
         # Get weather data
         weather_service = get_weather_service()
         weather_data = weather_service.get_current_conditions(float(lat), float(lng))
-        
-        return Response({
-            'status': 'success',
-            'establishment_id': establishment_id,
-            'location': {'lat': float(lat), 'lng': float(lng)},
-            'weather': weather_data,
-            'timestamp': timezone.now().isoformat()
-        })
-        
+
+        return Response(
+            {
+                "status": "success",
+                "establishment_id": establishment_id,
+                "location": {"lat": float(lat), "lng": float(lng)},
+                "weather": weather_data,
+                "timestamp": timezone.now().isoformat(),
+            }
+        )
+
     except Exception as e:
         logger.error(f"Weather conditions error: {e}")
-        return Response({
-            'error': f'Failed to get weather conditions: {str(e)}'
-        }, status=500)
+        return Response({"error": f"Failed to get weather conditions: {str(e)}"}, status=500)
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def weather_alerts(request):
     """
     Get active weather alerts for an establishment.
-    
+
     Query Parameters:
     - establishment_id: ID of the establishment
     - lat: Latitude (optional, overrides establishment location)
     - lng: Longitude (optional, overrides establishment location)
     """
     try:
-        establishment_id = request.GET.get('establishment_id')
-        lat = request.GET.get('lat')
-        lng = request.GET.get('lng')
-        
+        establishment_id = request.GET.get("establishment_id")
+        lat = request.GET.get("lat")
+        lng = request.GET.get("lng")
+
         if not establishment_id and not (lat and lng):
-            return Response({
-                'error': 'Either establishment_id or lat/lng coordinates required'
-            }, status=400)
-        
+            return Response({"error": "Either establishment_id or lat/lng coordinates required"}, status=400)
+
         # Get coordinates from establishment if not provided
         if not (lat and lng):
             try:
                 establishment = Establishment.objects.get(id=establishment_id)
                 lat = establishment.latitude
                 lng = establishment.longitude
-                
+
                 if not (lat and lng):
-                    return Response({
-                        'error': 'Establishment does not have location coordinates'
-                    }, status=400)
+                    return Response({"error": "Establishment does not have location coordinates"}, status=400)
             except Establishment.DoesNotExist:
-                return Response({
-                    'error': 'Establishment not found'
-                }, status=404)
-        
+                return Response({"error": "Establishment not found"}, status=404)
+
         # Get weather alerts
         alerts = check_weather_alerts(float(lat), float(lng))
-        
-        return Response({
-            'status': 'success',
-            'establishment_id': establishment_id,
-            'location': {'lat': float(lat), 'lng': float(lng)},
-            'alerts': alerts,
-            'alert_count': len(alerts),
-            'timestamp': timezone.now().isoformat()
-        })
-        
+
+        return Response(
+            {
+                "status": "success",
+                "establishment_id": establishment_id,
+                "location": {"lat": float(lat), "lng": float(lng)},
+                "alerts": alerts,
+                "alert_count": len(alerts),
+                "timestamp": timezone.now().isoformat(),
+            }
+        )
+
     except Exception as e:
         logger.error(f"Weather alerts error: {e}")
-        return Response({
-            'error': f'Failed to get weather alerts: {str(e)}'
-        }, status=500)
+        return Response({"error": f"Failed to get weather alerts: {str(e)}"}, status=500)
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def weather_recommendations(request):
     """
     Get agricultural recommendations based on current weather conditions.
-    
+
     Query Parameters:
     - establishment_id: ID of the establishment
     - lat: Latitude (optional, overrides establishment location)
@@ -5965,16 +6033,14 @@ def weather_recommendations(request):
     - establishment_type: Type of agricultural operation (optional)
     """
     try:
-        establishment_id = request.GET.get('establishment_id')
-        lat = request.GET.get('lat')
-        lng = request.GET.get('lng')
-        establishment_type = request.GET.get('establishment_type')
-        
+        establishment_id = request.GET.get("establishment_id")
+        lat = request.GET.get("lat")
+        lng = request.GET.get("lng")
+        establishment_type = request.GET.get("establishment_type")
+
         if not establishment_id and not (lat and lng):
-            return Response({
-                'error': 'Either establishment_id or lat/lng coordinates required'
-            }, status=400)
-        
+            return Response({"error": "Either establishment_id or lat/lng coordinates required"}, status=400)
+
         # Get coordinates and type from establishment if not provided
         if not (lat and lng) or not establishment_type:
             try:
@@ -5982,159 +6048,146 @@ def weather_recommendations(request):
                 if not (lat and lng):
                     lat = establishment.latitude
                     lng = establishment.longitude
-                
+
                 if not establishment_type:
-                    establishment_type = getattr(establishment, 'establishment_type', 'general')
-                
+                    establishment_type = getattr(establishment, "establishment_type", "general")
+
                 if not (lat and lng):
-                    return Response({
-                        'error': 'Establishment does not have location coordinates'
-                    }, status=400)
+                    return Response({"error": "Establishment does not have location coordinates"}, status=400)
             except Establishment.DoesNotExist:
-                return Response({
-                    'error': 'Establishment not found'
-                }, status=404)
-        
+                return Response({"error": "Establishment not found"}, status=404)
+
         # Get agricultural recommendations
-        recommendations = get_agricultural_recommendations(
-            float(lat), 
-            float(lng), 
-            establishment_type
-        )
-        
+        recommendations = get_agricultural_recommendations(float(lat), float(lng), establishment_type)
+
         # Categorize recommendations by priority
-        critical_recommendations = [r for r in recommendations if r.get('priority') == 'critical']
-        high_recommendations = [r for r in recommendations if r.get('priority') == 'high']
-        medium_recommendations = [r for r in recommendations if r.get('priority') == 'medium']
-        low_recommendations = [r for r in recommendations if r.get('priority') == 'low']
-        
-        return Response({
-            'status': 'success',
-            'establishment_id': establishment_id,
-            'location': {'lat': float(lat), 'lng': float(lng)},
-            'establishment_type': establishment_type,
-            'recommendations': {
-                'critical': critical_recommendations,
-                'high': high_recommendations,
-                'medium': medium_recommendations,
-                'low': low_recommendations,
-                'total_count': len(recommendations)
-            },
-            'summary': {
-                'critical_count': len(critical_recommendations),
-                'high_count': len(high_recommendations),
-                'medium_count': len(medium_recommendations),
-                'low_count': len(low_recommendations),
-                'requires_immediate_action': len(critical_recommendations) + len(high_recommendations) > 0
-            },
-            'timestamp': timezone.now().isoformat()
-        })
-        
+        critical_recommendations = [r for r in recommendations if r.get("priority") == "critical"]
+        high_recommendations = [r for r in recommendations if r.get("priority") == "high"]
+        medium_recommendations = [r for r in recommendations if r.get("priority") == "medium"]
+        low_recommendations = [r for r in recommendations if r.get("priority") == "low"]
+
+        return Response(
+            {
+                "status": "success",
+                "establishment_id": establishment_id,
+                "location": {"lat": float(lat), "lng": float(lng)},
+                "establishment_type": establishment_type,
+                "recommendations": {
+                    "critical": critical_recommendations,
+                    "high": high_recommendations,
+                    "medium": medium_recommendations,
+                    "low": low_recommendations,
+                    "total_count": len(recommendations),
+                },
+                "summary": {
+                    "critical_count": len(critical_recommendations),
+                    "high_count": len(high_recommendations),
+                    "medium_count": len(medium_recommendations),
+                    "low_count": len(low_recommendations),
+                    "requires_immediate_action": len(critical_recommendations) + len(high_recommendations) > 0,
+                },
+                "timestamp": timezone.now().isoformat(),
+            }
+        )
+
     except Exception as e:
         logger.error(f"Weather recommendations error: {e}")
-        return Response({
-            'error': f'Failed to get weather recommendations: {str(e)}'
-        }, status=500)
+        return Response({"error": f"Failed to get weather recommendations: {str(e)}"}, status=500)
 
 
-@api_view(['POST'])
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def weather_create_alert_event(request):
     """
     Create an IoT event based on weather conditions and recommendations.
-    
+
     This endpoint allows automatic creation of weather-based events
     that can trigger carbon calculations and recommendations.
     """
     try:
         data = request.data
-        establishment_id = data.get('establishment_id')
-        weather_data = data.get('weather_data')
-        recommendations = data.get('recommendations', [])
-        
+        establishment_id = data.get("establishment_id")
+        weather_data = data.get("weather_data")
+        recommendations = data.get("recommendations", [])
+
         if not establishment_id:
-            return Response({
-                'error': 'establishment_id is required'
-            }, status=400)
-        
+            return Response({"error": "establishment_id is required"}, status=400)
+
         if not weather_data:
-            return Response({
-                'error': 'weather_data is required'
-            }, status=400)
-        
+            return Response({"error": "weather_data is required"}, status=400)
+
         try:
             establishment = Establishment.objects.get(id=establishment_id)
         except Establishment.DoesNotExist:
-            return Response({
-                'error': 'Establishment not found'
-            }, status=404)
-        
+            return Response({"error": "Establishment not found"}, status=404)
+
         # Create weather alert event
         event_data = {
-            'establishment_id': establishment_id,
-            'event_type': 'weather_alert',
-            'description': f"Weather alert: {weather_data.get('description', 'Weather conditions require attention')}",
-            'metadata': {
-                'weather_conditions': weather_data,
-                'recommendations': recommendations,
-                'alert_type': 'automated_weather_monitoring',
-                'source': 'weather_api'
+            "establishment_id": establishment_id,
+            "event_type": "weather_alert",
+            "description": f"Weather alert: {weather_data.get('description', 'Weather conditions require attention')}",
+            "metadata": {
+                "weather_conditions": weather_data,
+                "recommendations": recommendations,
+                "alert_type": "automated_weather_monitoring",
+                "source": "weather_api",
             },
-            'confidence': 0.85,  # High confidence for weather data
-            'requires_approval': len([r for r in recommendations if r.get('priority') in ['critical', 'high']]) > 0
+            "confidence": 0.85,  # High confidence for weather data
+            "requires_approval": len([r for r in recommendations if r.get("priority") in ["critical", "high"]]) > 0,
         }
-        
+
         # Create IoT data point for weather event
         device, created = IoTDevice.objects.get_or_create(
             establishment=establishment,
             name=f"Weather Station - {establishment.name}",
             defaults={
-                'device_type': 'weather_station',
-                'status': 'online',
-                'battery_level': 100,
-                'last_seen': timezone.now()
-            }
+                "device_type": "weather_station",
+                "status": "online",
+                "battery_level": 100,
+                "last_seen": timezone.now(),
+            },
         )
-        
+
         data_point = IoTDataPoint.objects.create(
             device=device,
-            data_type='weather_alert',
+            data_type="weather_alert",
             value=json.dumps(weather_data),
             quality_score=0.9,  # High quality for official weather data
-            metadata=event_data['metadata'],
-            confidence=event_data['confidence']
+            metadata=event_data["metadata"],
+            confidence=event_data["confidence"],
         )
-        
+
         # Process through unified IoT workflow
-        if event_data['confidence'] > 0.9 and not event_data['requires_approval']:
+        if event_data["confidence"] > 0.9 and not event_data["requires_approval"]:
             # Auto-approve weather events with high confidence
             # Note: Weather events typically don't create carbon entries directly
             # but may trigger recommendations for carbon-reducing actions
             logger.info(f"Auto-approved weather event for establishment {establishment_id}")
-            
-        return Response({
-            'status': 'success',
-            'message': 'Weather alert event created successfully',
-            'data_point_id': data_point.id,
-            'device_id': device.id,
-            'requires_approval': event_data['requires_approval'],
-            'confidence': event_data['confidence'],
-            'recommendations_count': len(recommendations)
-        }, status=201)
-        
+
+        return Response(
+            {
+                "status": "success",
+                "message": "Weather alert event created successfully",
+                "data_point_id": data_point.id,
+                "device_id": device.id,
+                "requires_approval": event_data["requires_approval"],
+                "confidence": event_data["confidence"],
+                "recommendations_count": len(recommendations),
+            },
+            status=201,
+        )
+
     except Exception as e:
         logger.error(f"Weather alert event creation error: {e}")
-        return Response({
-            'error': f'Failed to create weather alert event: {str(e)}'
-        }, status=500)
+        return Response({"error": f"Failed to create weather alert event: {str(e)}"}, status=500)
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def weather_forecast(request):
     """
     Get weather forecast for an establishment.
-    
+
     Query Parameters:
     - establishment_id: ID of the establishment
     - lat: Latitude (optional, overrides establishment location)
@@ -6142,265 +6195,235 @@ def weather_forecast(request):
     - days: Number of days to forecast (default: 7, max: 14)
     """
     try:
-        establishment_id = request.GET.get('establishment_id')
-        lat = request.GET.get('lat')
-        lng = request.GET.get('lng')
-        days = int(request.GET.get('days', 7))
-        
+        establishment_id = request.GET.get("establishment_id")
+        lat = request.GET.get("lat")
+        lng = request.GET.get("lng")
+        days = int(request.GET.get("days", 7))
+
         # Limit forecast days
         days = min(days, 14)
-        
+
         if not establishment_id and not (lat and lng):
-            return Response({
-                'error': 'Either establishment_id or lat/lng coordinates required'
-            }, status=400)
-        
+            return Response({"error": "Either establishment_id or lat/lng coordinates required"}, status=400)
+
         # Get coordinates from establishment if not provided
         if not (lat and lng):
             try:
                 establishment = Establishment.objects.get(id=establishment_id)
                 lat = establishment.latitude
                 lng = establishment.longitude
-                
+
                 if not (lat and lng):
-                    return Response({
-                        'error': 'Establishment does not have location coordinates'
-                    }, status=400)
+                    return Response({"error": "Establishment does not have location coordinates"}, status=400)
             except Establishment.DoesNotExist:
-                return Response({
-                    'error': 'Establishment not found'
-                }, status=404)
-        
+                return Response({"error": "Establishment not found"}, status=404)
+
         # Get weather forecast
         weather_service = get_weather_service()
         forecast_data = weather_service.get_forecast(float(lat), float(lng), days)
-        
-        return Response({
-            'status': 'success',
-            'establishment_id': establishment_id,
-            'location': {'lat': float(lat), 'lng': float(lng)},
-            'forecast': forecast_data,
-            'forecast_days': days,
-            'timestamp': timezone.now().isoformat()
-        })
-        
+
+        return Response(
+            {
+                "status": "success",
+                "establishment_id": establishment_id,
+                "location": {"lat": float(lat), "lng": float(lng)},
+                "forecast": forecast_data,
+                "forecast_days": days,
+                "timestamp": timezone.now().isoformat(),
+            }
+        )
+
     except Exception as e:
         logger.error(f"Weather forecast error: {e}")
-        return Response({
-            'error': f'Failed to get weather forecast: {str(e)}'
-        }, status=500)
+        return Response({"error": f"Failed to get weather forecast: {str(e)}"}, status=500)
 
 
 class BlockchainVerificationViewSet(viewsets.ViewSet):
     """
     ViewSet for blockchain-based carbon verification and credit management.
     """
+
     permission_classes = [permissions.IsAuthenticated]
 
-    @action(detail=False, methods=['post'], url_path='verify-production')
+    @action(detail=False, methods=["post"], url_path="verify-production")
     def verify_production(self, request):
         """
         Create blockchain verification record for a production's carbon data.
         """
         try:
-            production_id = request.data.get('production_id')
-            producer_id = request.data.get('producer_id')
-            crop_type = request.data.get('crop_type', 'general')
-            
+            production_id = request.data.get("production_id")
+            producer_id = request.data.get("producer_id")
+            crop_type = request.data.get("crop_type", "general")
+
             if not production_id:
-                return Response({
-                    'error': 'production_id is required'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
+                return Response({"error": "production_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
             # Get carbon data for the production
             try:
                 production = History.objects.get(id=production_id)
             except History.DoesNotExist:
-                return Response({
-                    'error': 'Production not found'
-                }, status=status.HTTP_404_NOT_FOUND)
-            
+                return Response({"error": "Production not found"}, status=status.HTTP_404_NOT_FOUND)
+
             # Get carbon summary data
             public_view = PublicProductionViewSet()
             carbon_data = public_view._calculate_carbon_summary(production_id)
-            
+
             # Add additional data needed for blockchain
-            carbon_data.update({
-                'production_id': production_id,
-                'producer_id': producer_id or production.establishment.id,
-                'crop_type': crop_type,
-                'timestamp': int(timezone.now().timestamp())
-            })
-            
+            carbon_data.update(
+                {
+                    "production_id": production_id,
+                    "producer_id": producer_id or production.establishment.id,
+                    "crop_type": crop_type,
+                    "timestamp": int(timezone.now().timestamp()),
+                }
+            )
+
             # Create blockchain record
             blockchain_result = blockchain_service.create_carbon_record(production_id, carbon_data)
-            
-            if blockchain_result.get('blockchain_verified'):
-                return Response({
-                    'status': 'success',
-                    'message': 'Production verified on blockchain',
-                    'verification_data': blockchain_result,
-                    'carbon_data': carbon_data
-                }, status=status.HTTP_201_CREATED)
+
+            if blockchain_result.get("blockchain_verified"):
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "Production verified on blockchain",
+                        "verification_data": blockchain_result,
+                        "carbon_data": carbon_data,
+                    },
+                    status=status.HTTP_201_CREATED,
+                )
             else:
-                return Response({
-                    'status': 'partial_success',
-                    'message': 'Verification completed in mock mode',
-                    'verification_data': blockchain_result,
-                    'carbon_data': carbon_data
-                }, status=status.HTTP_200_OK)
-                
+                return Response(
+                    {
+                        "status": "partial_success",
+                        "message": "Verification completed in mock mode",
+                        "verification_data": blockchain_result,
+                        "carbon_data": carbon_data,
+                    },
+                    status=status.HTTP_200_OK,
+                )
+
         except Exception as e:
             logger.error(f"Blockchain verification error: {e}")
-            return Response({
-                'error': f'Failed to verify production: {str(e)}'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"error": f"Failed to verify production: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
-    @action(detail=False, methods=['get'], url_path='verify-record/(?P<production_id>[^/.]+)')
+    @action(detail=False, methods=["get"], url_path="verify-record/(?P<production_id>[^/.]+)")
     def verify_record(self, request, production_id=None):
         """
         Verify existing blockchain record for a production.
         """
         try:
             if not production_id:
-                return Response({
-                    'error': 'production_id is required'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
+                return Response({"error": "production_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
             # Verify record on blockchain
             verification_result = blockchain_service.verify_carbon_record(int(production_id))
-            
-            return Response({
-                'status': 'success',
-                'production_id': production_id,
-                'verification': verification_result
-            })
-            
+
+            return Response({"status": "success", "production_id": production_id, "verification": verification_result})
+
         except Exception as e:
             logger.error(f"Record verification error: {e}")
-            return Response({
-                'error': f'Failed to verify record: {str(e)}'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"error": f"Failed to verify record: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
-    @action(detail=False, methods=['get'], url_path='compliance-check/(?P<production_id>[^/.]+)')
+    @action(detail=False, methods=["get"], url_path="compliance-check/(?P<production_id>[^/.]+)")
     def compliance_check(self, request, production_id=None):
         """
         Check USDA compliance status for a production.
         """
         try:
             if not production_id:
-                return Response({
-                    'error': 'production_id is required'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
+                return Response({"error": "production_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
             # Check compliance on blockchain
             compliance_result = blockchain_service.check_compliance(int(production_id))
-            
-            return Response({
-                'status': 'success',
-                'production_id': production_id,
-                'compliance': compliance_result
-            })
-            
+
+            return Response({"status": "success", "production_id": production_id, "compliance": compliance_result})
+
         except Exception as e:
             logger.error(f"Compliance check error: {e}")
-            return Response({
-                'error': f'Failed to check compliance: {str(e)}'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"error": f"Failed to check compliance: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
-    @action(detail=False, methods=['post'], url_path='issue-credits')
+    @action(detail=False, methods=["post"], url_path="issue-credits")
     def issue_credits(self, request):
         """
         Issue carbon credits for verified sustainable practices.
         """
         try:
-            production_id = request.data.get('production_id')
-            credits_amount = request.data.get('credits_amount')
-            
+            production_id = request.data.get("production_id")
+            credits_amount = request.data.get("credits_amount")
+
             if not production_id or not credits_amount:
-                return Response({
-                    'error': 'production_id and credits_amount are required'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
+                return Response(
+                    {"error": "production_id and credits_amount are required"}, status=status.HTTP_400_BAD_REQUEST
+                )
+
             # Issue credits on blockchain
-            credits_result = blockchain_service.issue_carbon_credits(
-                int(production_id), 
-                float(credits_amount)
+            credits_result = blockchain_service.issue_carbon_credits(int(production_id), float(credits_amount))
+
+            return Response(
+                {"status": "success", "message": "Carbon credits issued successfully", "credits": credits_result}
             )
-            
-            return Response({
-                'status': 'success',
-                'message': 'Carbon credits issued successfully',
-                'credits': credits_result
-            })
-            
+
         except Exception as e:
             logger.error(f"Credits issuance error: {e}")
-            return Response({
-                'error': f'Failed to issue credits: {str(e)}'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"error": f"Failed to issue credits: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
-    @action(detail=False, methods=['get'], url_path='summary/(?P<production_id>[^/.]+)')
+    @action(detail=False, methods=["get"], url_path="summary/(?P<production_id>[^/.]+)")
     def blockchain_summary(self, request, production_id=None):
         """
         Get comprehensive carbon summary with blockchain verification.
         """
         try:
             if not production_id:
-                return Response({
-                    'error': 'production_id is required'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
+                return Response({"error": "production_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
             # Get comprehensive summary with blockchain data
             summary = blockchain_service.get_carbon_summary_with_blockchain(int(production_id))
-            
-            return Response({
-                'status': 'success',
-                'production_id': production_id,
-                'summary': summary
-            })
-            
+
+            return Response({"status": "success", "production_id": production_id, "summary": summary})
+
         except Exception as e:
             logger.error(f"Blockchain summary error: {e}")
-            return Response({
-                'error': f'Failed to get blockchain summary: {str(e)}'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"error": f"Failed to get blockchain summary: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
-    @action(detail=False, methods=['post'], url_path='batch-process')
+    @action(detail=False, methods=["post"], url_path="batch-process")
     def batch_process(self, request):
         """
         Process multiple productions for blockchain verification.
         """
         try:
-            production_ids = request.data.get('production_ids', [])
-            
+            production_ids = request.data.get("production_ids", [])
+
             if not production_ids or not isinstance(production_ids, list):
-                return Response({
-                    'error': 'production_ids list is required'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
+                return Response({"error": "production_ids list is required"}, status=status.HTTP_400_BAD_REQUEST)
+
             # Process batch
             batch_result = blockchain_service.batch_process_carbon_entries(production_ids)
-            
-            return Response({
-                'status': 'success',
-                'message': 'Batch processing completed',
-                'results': batch_result
-            })
-            
+
+            return Response({"status": "success", "message": "Batch processing completed", "results": batch_result})
+
         except Exception as e:
             logger.error(f"Batch processing error: {e}")
-            return Response({
-                'error': f'Failed to process batch: {str(e)}'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"error": f"Failed to process batch: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_production_carbon_economics(request, production_id):
     """
     Get cached carbon economics without triggering USDA API calls
-    
+
     Returns carbon credit potential, efficiency tips, and premium pricing eligibility
     using cached carbon data to avoid performance issues.
     """
@@ -6408,244 +6431,218 @@ def get_production_carbon_economics(request, production_id):
         # Verify user has access to this production
         # First get the production, then check access through company membership
         production = History.objects.get(id=production_id)
-        
+
         # Check if user has access through company membership or ownership
         from users.models import WorksIn
-        user_companies = WorksIn.objects.filter(user=request.user).values_list('company_id', flat=True)
-        
+
+        user_companies = WorksIn.objects.filter(user=request.user).values_list("company_id", flat=True)
+
         if production.parcel.establishment.company.id not in user_companies:
-            return Response({
-                'success': False,
-                'error': 'Production not found or access denied'
-            }, status=404)
-        
+            return Response({"success": False, "error": "Production not found or access denied"}, status=404)
+
         # Use cached carbon data from CarbonEntry instead of real-time calculations
-        from carbon.models import CarbonEntry
         from django.db.models import Sum
-        
+
+        from carbon.models import CarbonEntry
+
         carbon_entries = CarbonEntry.objects.filter(production=production)
-        
+
         if not carbon_entries.exists():
-            return Response({
-                'success': True,
-                'production_id': production_id,
-                'data': {
-                    'carbon_credit_potential': {'credits_available': 0, 'estimated_value': 0, 'market_rate': 25.0},
-                    'efficiency_tips': ['Add events to calculate carbon impact'],
-                    'premium_eligibility': {'eligible': False, 'premium_percentage': '0%'},
-                    'next_actions': ['Create agricultural events to track carbon footprint']
-                },
-                'cache_used': True,
-                'timestamp': timezone.now().isoformat()
-            })
-        
+            return Response(
+                {
+                    "success": True,
+                    "production_id": production_id,
+                    "data": {
+                        "carbon_credit_potential": {"credits_available": 0, "estimated_value": 0, "market_rate": 25.0},
+                        "efficiency_tips": ["Add events to calculate carbon impact"],
+                        "premium_eligibility": {"eligible": False, "premium_percentage": "0%"},
+                        "next_actions": ["Create agricultural events to track carbon footprint"],
+                    },
+                    "cache_used": True,
+                    "timestamp": timezone.now().isoformat(),
+                }
+            )
+
         # Calculate economics from cached data
-        total_emissions = carbon_entries.aggregate(
-            total=Sum('co2e_amount')
-        )['total'] or 0
-        
-        total_offsets = carbon_entries.filter(
-            co2e_amount__lt=0
-        ).aggregate(
-            total=Sum('co2e_amount')
-        )['total'] or 0
-        
+        total_emissions = carbon_entries.aggregate(total=Sum("co2e_amount"))["total"] or 0
+
+        total_offsets = carbon_entries.filter(co2e_amount__lt=0).aggregate(total=Sum("co2e_amount"))["total"] or 0
+
         # Simple economics calculation without USDA API calls
         economics_data = {
-            'carbon_credit_potential': {
-                'credits_available': abs(total_offsets) * 0.8,  # 80% of offsets eligible
-                'estimated_value': abs(total_offsets) * 25.0,   # $25/ton
-                'market_rate': 25.0
+            "carbon_credit_potential": {
+                "credits_available": abs(total_offsets) * 0.8,  # 80% of offsets eligible
+                "estimated_value": abs(total_offsets) * 25.0,  # $25/ton
+                "market_rate": 25.0,
             },
-            'efficiency_tips': [
-                'Optimize nitrogen application timing',
-                'Consider cover crops for soil health',
-                'Evaluate precision agriculture tools'
+            "efficiency_tips": [
+                "Optimize nitrogen application timing",
+                "Consider cover crops for soil health",
+                "Evaluate precision agriculture tools",
             ],
-            'premium_eligibility': {
-                'eligible': total_emissions < 1000,  # Simple threshold
-                'premium_percentage': '10-15%' if total_emissions < 1000 else '5-10%'
+            "premium_eligibility": {
+                "eligible": total_emissions < 1000,  # Simple threshold
+                "premium_percentage": "10-15%" if total_emissions < 1000 else "5-10%",
             },
-            'next_actions': [
-                'Review carbon calculation accuracy',
-                'Consider additional offset opportunities'
-            ]
+            "next_actions": ["Review carbon calculation accuracy", "Consider additional offset opportunities"],
         }
-        
-        return Response({
-            'success': True,
-            'production_id': production_id,
-            'production_name': production.name,
-            'data': economics_data,
-            'cache_used': True,
-            'timestamp': timezone.now().isoformat()
-        })
-        
+
+        return Response(
+            {
+                "success": True,
+                "production_id": production_id,
+                "production_name": production.name,
+                "data": economics_data,
+                "cache_used": True,
+                "timestamp": timezone.now().isoformat(),
+            }
+        )
+
     except History.DoesNotExist:
-        return Response({
-            'success': False,
-            'error': 'Production not found'
-        }, status=404)
+        return Response({"success": False, "error": "Production not found"}, status=404)
     except Exception as e:
         logger.error(f"Error getting cached carbon economics: {e}")
-        return Response({
-            'success': False,
-            'error': str(e)
-        }, status=500)
+        return Response({"success": False, "error": str(e)}, status=500)
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_establishment_carbon_summary(request, establishment_id):
     """
     Get carbon cost summary for entire establishment
-    
+
     Provides overview of carbon credit potential across all productions
     in the establishment.
     """
     try:
         # Verify user has access to this establishment
         from company.models import Establishment
-        establishment = Establishment.objects.get(
-            id=establishment_id,
-            company__owner=request.user
-        )
-        
+
+        establishment = Establishment.objects.get(id=establishment_id, company__owner=request.user)
+
         insights_service = CarbonCostInsights()
         summary_data = insights_service.get_establishment_carbon_summary(establishment_id)
-        
-        return Response({
-            'success': True,
-            'establishment_id': establishment_id,
-            'data': summary_data
-        })
-        
+
+        return Response({"success": True, "establishment_id": establishment_id, "data": summary_data})
+
     except Establishment.DoesNotExist:
-        return Response({
-            'success': False,
-            'error': 'Establishment not found or access denied'
-        }, status=404)
+        return Response({"success": False, "error": "Establishment not found or access denied"}, status=404)
     except Exception as e:
-        return Response({
-            'success': False,
-            'error': str(e)
-        }, status=500)
+        return Response({"success": False, "error": str(e)}, status=500)
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_carbon_credit_potential(request, production_id):
     """
     Get simple carbon credit potential for a production
-    
+
     Lightweight endpoint for just carbon credit calculations
     without the full economics data.
     """
     try:
-        production = History.objects.get(
-            id=production_id,
-            parcel__establishment__company__owner=request.user
-        )
-        
+        production = History.objects.get(id=production_id, parcel__establishment__company__owner=request.user)
+
         insights_service = CarbonCostInsights()
         credit_data = insights_service.calculate_carbon_credit_potential(production)
-        
-        return Response({
-            'success': True,
-            'production_id': production_id,
-            'carbon_credits': credit_data
-        })
-        
-    except History.DoesNotExist:
-        return Response({
-            'success': False,
-            'error': 'Production not found or access denied'
-        }, status=404)
-    except Exception as e:
-        return Response({
-            'success': False,
-            'error': str(e)
-        }, status=500)
 
-@api_view(['GET'])
+        return Response({"success": True, "production_id": production_id, "carbon_credits": credit_data})
+
+    except History.DoesNotExist:
+        return Response({"success": False, "error": "Production not found or access denied"}, status=404)
+    except Exception as e:
+        return Response({"success": False, "error": str(e)}, status=500)
+
+
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_crop_templates(request):
     """Get available production templates from database"""
     try:
         # Get crop type filter if provided
-        crop_type_id = request.GET.get('crop_type')
-        
+        crop_type_id = request.GET.get("crop_type")
+
         queryset = ProductionTemplate.objects.filter(is_active=True)
-        
+
         if crop_type_id:
             queryset = queryset.filter(crop_type_id=crop_type_id)
-        
+
         # Transform data for frontend consumption
         crop_templates = []
         for template in queryset:
             events_count = template.event_templates.count()
-            
+
             template_data = {
-                'id': template.crop_type.slug,  # Keep backward compatibility
-                'template_id': template.id,     # New field for actual template ID
-                'name': template.name,
-                'crop_type': template.crop_type.category.lower().replace(' ', '_'),
-                'crop_type_name': template.crop_type.name,
-                'description': template.description,
-                'events_count': events_count,
-                'carbon_potential': float(template.projected_emissions_reduction) if template.projected_emissions_reduction else 0,
-                'avg_revenue': 1200.0,  # Default estimated cost per acre
-                'setup_time_minutes': 8,  # Estimated time savings
-                'usage_count': template.usage_count,
-                'carbon_benchmark': {
-                    'emissions_range': f"0-1200 USD/acre",
-                    'industry_average': 1200.0,
-                    'best_practice': 960.0
+                "id": template.crop_type.slug,  # Keep backward compatibility
+                "template_id": template.id,  # New field for actual template ID
+                "name": template.name,
+                "crop_type": template.crop_type.category.lower().replace(" ", "_"),
+                "crop_type_name": template.crop_type.name,
+                "description": template.description,
+                "events_count": events_count,
+                "carbon_potential": (
+                    float(template.projected_emissions_reduction) if template.projected_emissions_reduction else 0
+                ),
+                "avg_revenue": 1200.0,  # Default estimated cost per acre
+                "setup_time_minutes": 8,  # Estimated time savings
+                "usage_count": template.usage_count,
+                "carbon_benchmark": {
+                    "emissions_range": f"0-1200 USD/acre",
+                    "industry_average": 1200.0,
+                    "best_practice": 960.0,
                 },
-                'events_preview': [
+                "events_preview": [
                     {
-                        'name': event.name,
-                        'type': event.event_type,
-                        'timing': event.timing,
-                        'carbon_impact': float(event.carbon_impact) if event.carbon_impact else 0
+                        "name": event.name,
+                        "type": event.event_type,
+                        "timing": event.timing,
+                        "carbon_impact": float(event.carbon_impact) if event.carbon_impact else 0,
                     }
                     for event in template.event_templates.all()[:3]  # First 3 events
                 ],
-                'sustainability_practices': [],  # Will be populated from template data
-                'roi_projection': {
-                    'carbon_credits_value': float(template.projected_emissions_reduction) * 15 if template.projected_emissions_reduction else 0,
-                    'premium_pricing': template.premium_pricing_potential,
-                    'cost_savings': '15-25%'
+                "sustainability_practices": [],  # Will be populated from template data
+                "roi_projection": {
+                    "carbon_credits_value": (
+                        float(template.projected_emissions_reduction) * 15
+                        if template.projected_emissions_reduction
+                        else 0
+                    ),
+                    "premium_pricing": template.premium_pricing_potential,
+                    "cost_savings": "15-25%",
                 },
-                'system_type': template.farming_approach,
-                'management_intensity': template.complexity_level,
-                'is_verified': template.usda_reviewed,
-                'source': template.compliance_notes
+                "system_type": template.farming_approach,
+                "management_intensity": template.complexity_level,
+                "is_verified": template.usda_reviewed,
+                "source": template.compliance_notes,
             }
             crop_templates.append(template_data)
-        
+
         # Sort by popularity and carbon potential
-        crop_templates.sort(key=lambda x: (x['usage_count'], x['carbon_potential']), reverse=True)
-        
-        return Response({
-            'templates': crop_templates,
-            'total_count': len(crop_templates),
-            'categories': list(set(t['crop_type'] for t in crop_templates)),
-            'metadata': {
-                'generated_at': timezone.now().isoformat(),
-                'version': '2.0',
-                'source': 'USDA-verified database templates'
-            }
-        }, status=status.HTTP_200_OK)
-        
+        crop_templates.sort(key=lambda x: (x["usage_count"], x["carbon_potential"]), reverse=True)
+
+        return Response(
+            {
+                "templates": crop_templates,
+                "total_count": len(crop_templates),
+                "categories": list(set(t["crop_type"] for t in crop_templates)),
+                "metadata": {
+                    "generated_at": timezone.now().isoformat(),
+                    "version": "2.0",
+                    "source": "USDA-verified database templates",
+                },
+            },
+            status=status.HTTP_200_OK,
+        )
+
     except Exception as e:
         logger.error(f"Error loading production templates: {str(e)}")
-        return Response({
-            'error': 'Failed to load production templates',
-            'detail': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {"error": "Failed to load production templates", "detail": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
-@api_view(['GET'])
+
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_crop_template_detail(request, template_id):
     """Get detailed information for a specific production template"""
@@ -6654,146 +6651,139 @@ def get_crop_template_detail(request, template_id):
         template = None
         try:
             crop_type = CropType.objects.get(slug=template_id)
-            template = ProductionTemplate.objects.filter(
-                crop_type=crop_type, 
-                is_active=True
-            ).first()
+            template = ProductionTemplate.objects.filter(crop_type=crop_type, is_active=True).first()
         except CropType.DoesNotExist:
             # Try to find by template ID directly
             try:
                 template = ProductionTemplate.objects.get(id=template_id, is_active=True)
             except (ProductionTemplate.DoesNotExist, ValueError):
                 pass
-        
+
         if not template:
-            return Response({
-                'error': f'Template {template_id} not found'
-            }, status=status.HTTP_404_NOT_FOUND)
-        
+            return Response({"error": f"Template {template_id} not found"}, status=status.HTTP_404_NOT_FOUND)
+
         # Get all events for this template
-        events = template.event_templates.all().order_by('order_sequence')
-        
+        events = template.event_templates.all().order_by("order_sequence")
+
         events_data = []
         for event in events:
             event_info = {
-                'id': event.id,
-                'name': event.name,
-                'event_type': event.event_type,
-                'description': event.description,
-                'timing': event.timing,
-                'order_sequence': event.order_sequence,
-                'carbon_impact': float(event.carbon_impact) if event.carbon_impact else 0,
-                'cost_estimate': float(event.cost_estimate) if event.cost_estimate else 0,
-                'labor_hours': float(event.labor_hours) if event.labor_hours else 0,
-                'usda_practice_code': event.usda_practice_code,
-                'is_required': event.is_required,
-                'typical_amounts': event.typical_amounts,
-                'efficiency_tips': event.efficiency_tips or ''
+                "id": event.id,
+                "name": event.name,
+                "event_type": event.event_type,
+                "description": event.description,
+                "timing": event.timing,
+                "order_sequence": event.order_sequence,
+                "carbon_impact": float(event.carbon_impact) if event.carbon_impact else 0,
+                "cost_estimate": float(event.cost_estimate) if event.cost_estimate else 0,
+                "labor_hours": float(event.labor_hours) if event.labor_hours else 0,
+                "usda_practice_code": event.usda_practice_code,
+                "is_required": event.is_required,
+                "typical_amounts": event.typical_amounts,
+                "efficiency_tips": event.efficiency_tips or "",
             }
             events_data.append(event_info)
-        
+
         # Get related carbon sources (if any)
         carbon_sources = []
-        
+
         # Get USDA benchmark if available
         benchmark_data = None
         try:
             benchmark = CarbonBenchmark.objects.filter(crop_type=template.crop_type.name).first()
             if benchmark:
                 benchmark_data = {
-                    'crop_type': benchmark.crop_type,
-                    'region': benchmark.region,
-                    'average_emissions': benchmark.average_emissions,
-                    'min_emissions': benchmark.min_emissions,
-                    'max_emissions': benchmark.max_emissions,
-                    'usda_verified': benchmark.usda_verified
+                    "crop_type": benchmark.crop_type,
+                    "region": benchmark.region,
+                    "average_emissions": benchmark.average_emissions,
+                    "min_emissions": benchmark.min_emissions,
+                    "max_emissions": benchmark.max_emissions,
+                    "usda_verified": benchmark.usda_verified,
                 }
         except:
             pass
-        
+
         detailed_template = {
-            'id': template_id,
-            'template_id': template.id,
-            'name': template.name,
-            'description': template.description,
-            'crop_type': template.crop_type.category.lower().replace(' ', '_'),
-            'crop_type_name': template.crop_type.name,
-            'system_type': template.farming_approach,
-            'management_intensity': template.complexity_level,
-            'irrigation_system': 'drip',  # Default
-            'fertility_program': 'balanced',  # Default
-            'pest_management': 'integrated',  # Default
-            'events': events_data,
-            'carbon_sources': carbon_sources,
-            'benchmark': benchmark_data,
-            'carbon_credit_potential': float(template.projected_emissions_reduction) if template.projected_emissions_reduction else 0,
-            'estimated_revenue': 1200.0,  # Default estimated cost per acre
-            'sustainability_opportunities': [],  # Will be populated from template data
-            'efficiency_tips': [event['efficiency_tips'] for event in events_data if event['efficiency_tips']],
-            'premium_pricing_potential': '10-25%',
-            'typical_costs': 1200.0,  # Default estimated cost per acre
-            'target_yield': {'estimate': '400-600 boxes/acre'},  # Default
-            'labor_hours_per_acre': 25.0,  # Default
-            'sustainability_score': 75,  # Default
-            'source': template.compliance_notes,
-            'is_verified': template.usda_reviewed,
-            'roi_analysis': {
-                'setup_time_saved': '37 minutes',
-                'carbon_credits_annual': float(template.projected_emissions_reduction) if template.projected_emissions_reduction else 0,
-                'premium_pricing': '10-25%',
-                'efficiency_savings': '15-25%'
-            }
+            "id": template_id,
+            "template_id": template.id,
+            "name": template.name,
+            "description": template.description,
+            "crop_type": template.crop_type.category.lower().replace(" ", "_"),
+            "crop_type_name": template.crop_type.name,
+            "system_type": template.farming_approach,
+            "management_intensity": template.complexity_level,
+            "irrigation_system": "drip",  # Default
+            "fertility_program": "balanced",  # Default
+            "pest_management": "integrated",  # Default
+            "events": events_data,
+            "carbon_sources": carbon_sources,
+            "benchmark": benchmark_data,
+            "carbon_credit_potential": (
+                float(template.projected_emissions_reduction) if template.projected_emissions_reduction else 0
+            ),
+            "estimated_revenue": 1200.0,  # Default estimated cost per acre
+            "sustainability_opportunities": [],  # Will be populated from template data
+            "efficiency_tips": [event["efficiency_tips"] for event in events_data if event["efficiency_tips"]],
+            "premium_pricing_potential": "10-25%",
+            "typical_costs": 1200.0,  # Default estimated cost per acre
+            "target_yield": {"estimate": "400-600 boxes/acre"},  # Default
+            "labor_hours_per_acre": 25.0,  # Default
+            "sustainability_score": 75,  # Default
+            "source": template.compliance_notes,
+            "is_verified": template.usda_reviewed,
+            "roi_analysis": {
+                "setup_time_saved": "37 minutes",
+                "carbon_credits_annual": (
+                    float(template.projected_emissions_reduction) if template.projected_emissions_reduction else 0
+                ),
+                "premium_pricing": "10-25%",
+                "efficiency_savings": "15-25%",
+            },
         }
-        
+
         return Response(detailed_template, status=status.HTTP_200_OK)
-        
+
     except Exception as e:
         logger.error(f"Error loading template detail {template_id}: {str(e)}")
-        return Response({
-            'error': 'Failed to load template details',
-            'detail': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {"error": "Failed to load template details", "detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
-@api_view(['POST'])
+
+@api_view(["POST"])
 def calculate_event_impact(request):
     """
     Calculate carbon impact for a specific event.
     Enhanced with regional USDA factors and benchmark comparisons.
     """
     try:
-        event_id = request.data.get('event_id')
-        event_type = request.data.get('event_type', 'chemical')  # Default to chemical
-        
+        event_id = request.data.get("event_id")
+        event_type = request.data.get("event_type", "chemical")  # Default to chemical
+
         if not event_id:
-            return Response(
-                {'error': 'event_id is required'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
+            return Response({"error": "event_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
         # Get the appropriate event based on type
         event = None
-        if event_type == 'chemical':
+        if event_type == "chemical":
             event = get_object_or_404(ChemicalEvent, id=event_id)
-        elif event_type == 'production':
+        elif event_type == "production":
             event = get_object_or_404(ProductionEvent, id=event_id)
-        elif event_type == 'weather':
+        elif event_type == "weather":
             event = get_object_or_404(WeatherEvent, id=event_id)
-        elif event_type == 'equipment':
+        elif event_type == "equipment":
             event = get_object_or_404(EquipmentEvent, id=event_id)
-        elif event_type == 'soil':
+        elif event_type == "soil":
             event = get_object_or_404(SoilManagementEvent, id=event_id)
-        elif event_type == 'pest':
+        elif event_type == "pest":
             event = get_object_or_404(PestManagementEvent, id=event_id)
-        elif event_type == 'general':
+        elif event_type == "general":
             event = get_object_or_404(GeneralEvent, id=event_id)
         else:
-            return Response(
-                {'error': f'Unsupported event type: {event_type}'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
+            return Response({"error": f"Unsupported event type: {event_type}"}, status=status.HTTP_400_BAD_REQUEST)
+
         calculator = EventCarbonCalculator()
-        
+
         # Calculate carbon impact based on event type
         if isinstance(event, ChemicalEvent):
             result = calculator.calculate_chemical_event_impact(event)
@@ -6810,37 +6800,35 @@ def calculate_event_impact(request):
         elif isinstance(event, GeneralEvent):
             result = calculator.calculate_business_event_impact(event)
         else:
-            return Response(
-                {'error': f'Unsupported event instance: {type(event)}'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
+            return Response({"error": f"Unsupported event instance: {type(event)}"}, status=status.HTTP_400_BAD_REQUEST)
+
         # Add event metadata
-        result.update({
-            'event_id': event.id,
-            'event_type': event_type,
-            'timestamp': event.date.isoformat() if event.date else None,
-        })
-        
-        return Response(result, status=status.HTTP_200_OK)
-        
-    except (ChemicalEvent.DoesNotExist, ProductionEvent.DoesNotExist, 
-            WeatherEvent.DoesNotExist, EquipmentEvent.DoesNotExist,
-            SoilManagementEvent.DoesNotExist, PestManagementEvent.DoesNotExist,
-            GeneralEvent.DoesNotExist):
-        return Response(
-            {'error': 'Event not found'}, 
-            status=status.HTTP_404_NOT_FOUND
+        result.update(
+            {
+                "event_id": event.id,
+                "event_type": event_type,
+                "timestamp": event.date.isoformat() if event.date else None,
+            }
         )
+
+        return Response(result, status=status.HTTP_200_OK)
+
+    except (
+        ChemicalEvent.DoesNotExist,
+        ProductionEvent.DoesNotExist,
+        WeatherEvent.DoesNotExist,
+        EquipmentEvent.DoesNotExist,
+        SoilManagementEvent.DoesNotExist,
+        PestManagementEvent.DoesNotExist,
+        GeneralEvent.DoesNotExist,
+    ):
+        return Response({"error": "Event not found"}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         logger.error(f"Error calculating event impact: {str(e)}")
-        return Response(
-            {'error': 'Internal server error'}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        return Response({"error": "Internal server error"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 def get_usda_credibility_info(request, establishment_id):
     """
     Get USDA credibility information for consumer-facing displays.
@@ -6849,33 +6837,29 @@ def get_usda_credibility_info(request, establishment_id):
     try:
         establishment = get_object_or_404(Establishment, id=establishment_id)
         enhanced_usda = EnhancedUSDAFactors()
-        
+
         # Get credibility data
         credibility_data = enhanced_usda.get_usda_credibility_data(establishment)
-        
+
         # Add establishment context
-        credibility_data.update({
-            'establishment_name': establishment.name,
-            'establishment_location': f"{getattr(establishment, 'city', 'Unknown')}, {getattr(establishment, 'state', 'Unknown')}",
-            'regional_optimization': credibility_data.get('regional_specificity', False)
-        })
-        
-        return Response(credibility_data, status=status.HTTP_200_OK)
-        
-    except Establishment.DoesNotExist:
-        return Response(
-            {'error': 'Establishment not found'}, 
-            status=status.HTTP_404_NOT_FOUND
+        credibility_data.update(
+            {
+                "establishment_name": establishment.name,
+                "establishment_location": f"{getattr(establishment, 'city', 'Unknown')}, {getattr(establishment, 'state', 'Unknown')}",
+                "regional_optimization": credibility_data.get("regional_specificity", False),
+            }
         )
+
+        return Response(credibility_data, status=status.HTTP_200_OK)
+
+    except Establishment.DoesNotExist:
+        return Response({"error": "Establishment not found"}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         logger.error(f"Error getting USDA credibility info: {str(e)}")
-        return Response(
-            {'error': 'Internal server error'}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        return Response({"error": "Internal server error"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 def get_regional_benchmark(request, establishment_id):
     """
     Get regional benchmark comparison for an establishment.
@@ -6884,93 +6868,103 @@ def get_regional_benchmark(request, establishment_id):
     try:
         establishment = get_object_or_404(Establishment, id=establishment_id)
         enhanced_usda = EnhancedUSDAFactors()
-        
+
         # Get establishment's recent carbon performance (simplified)
         # In a real implementation, this would aggregate recent events
-        farm_carbon_intensity = float(request.GET.get('carbon_intensity', 1.0))
-        crop_type = request.GET.get('crop_type', 'tree_fruit')
-        
+        farm_carbon_intensity = float(request.GET.get("carbon_intensity", 1.0))
+        crop_type = request.GET.get("crop_type", "tree_fruit")
+
         # Extract state from establishment location
-        location = getattr(establishment, 'location', '')
-        state = 'CA'  # Default to California
-        
+        location = getattr(establishment, "location", "")
+        state = "CA"  # Default to California
+
         if location:
             location_upper = location.upper()
             # Common state mappings
             state_mappings = {
-                'CALIFORNIA': 'CA', 'CA': 'CA',
-                'IOWA': 'IA', 'IA': 'IA', 
-                'ILLINOIS': 'IL', 'IL': 'IL',
-                'FLORIDA': 'FL', 'FL': 'FL',
-                'TEXAS': 'TX', 'TX': 'TX',
-                'NEBRASKA': 'NE', 'NE': 'NE',
-                'KANSAS': 'KS', 'KS': 'KS'
+                "CALIFORNIA": "CA",
+                "CA": "CA",
+                "IOWA": "IA",
+                "IA": "IA",
+                "ILLINOIS": "IL",
+                "IL": "IL",
+                "FLORIDA": "FL",
+                "FL": "FL",
+                "TEXAS": "TX",
+                "TX": "TX",
+                "NEBRASKA": "NE",
+                "NE": "NE",
+                "KANSAS": "KS",
+                "KS": "KS",
             }
-            
+
             # Check for state names or codes in the location string
             for state_name, state_code in state_mappings.items():
                 if state_name in location_upper:
                     state = state_code
                     break
-            
+
             # Check for common California cities/regions if no state found
-            if state == 'CA':  # Still default
-                ca_indicators = ['FRESNO', 'SACRAMENTO', 'BAKERSFIELD', 'MODESTO', 'STOCKTON', 
-                                'SALINAS', 'SANTA', 'SAN', 'LOS ANGELES', 'RIVERSIDE', 'CENTRAL VALLEY']
+            if state == "CA":  # Still default
+                ca_indicators = [
+                    "FRESNO",
+                    "SACRAMENTO",
+                    "BAKERSFIELD",
+                    "MODESTO",
+                    "STOCKTON",
+                    "SALINAS",
+                    "SANTA",
+                    "SAN",
+                    "LOS ANGELES",
+                    "RIVERSIDE",
+                    "CENTRAL VALLEY",
+                ]
                 if any(indicator in location_upper for indicator in ca_indicators):
-                    state = 'CA'
-        
+                    state = "CA"
+
         # Get benchmark comparison
-        benchmark = enhanced_usda.get_usda_benchmark_comparison(
-            farm_carbon_intensity, crop_type, state
-        )
-        
+        benchmark = enhanced_usda.get_usda_benchmark_comparison(farm_carbon_intensity, crop_type, state)
+
         # Add context
-        benchmark.update({
-            'establishment_name': establishment.name,
-            'crop_type': crop_type,
-            'state': state,
-            'location': location,
-            'carbon_intensity': farm_carbon_intensity
-        })
-        
-        return Response(benchmark, status=status.HTTP_200_OK)
-        
-    except Establishment.DoesNotExist:
-        return Response(
-            {'error': 'Establishment not found'}, 
-            status=status.HTTP_404_NOT_FOUND
-        )
-    except Exception as e:
-        logger.error(f"Error getting regional benchmark: {str(e)}")
-        return Response(
-            {'error': 'Internal server error'}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        benchmark.update(
+            {
+                "establishment_name": establishment.name,
+                "crop_type": crop_type,
+                "state": state,
+                "location": location,
+                "carbon_intensity": farm_carbon_intensity,
+            }
         )
 
-@api_view(['GET'])
+        return Response(benchmark, status=status.HTTP_200_OK)
+
+    except Establishment.DoesNotExist:
+        return Response({"error": "Establishment not found"}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        logger.error(f"Error getting regional benchmark: {str(e)}")
+        return Response({"error": "Internal server error"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET"])
 def get_usda_methodology_content(request):
     """
     Get educational content about USDA methodology.
     Supports different user levels: beginner, intermediate, advanced
     """
     try:
-        user_level = request.GET.get('level', 'beginner')
-        
+        user_level = request.GET.get("level", "beginner")
+
         education_service = EducationalContentService()
         content = education_service.get_usda_methodology_content(user_level)
-        
+
         return Response(content, status=status.HTTP_200_OK)
-        
+
     except Exception as e:
         logger.error(f"Error getting USDA methodology content: {str(e)}")
-        return Response(
-            {'error': 'Unable to load educational content'}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        return Response({"error": "Unable to load educational content"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 def get_regional_farming_practices(request, state, crop_type):
     """
     Get regional farming practice information for educational purposes.
@@ -6979,18 +6973,17 @@ def get_regional_farming_practices(request, state, crop_type):
     try:
         education_service = EducationalContentService()
         practices = education_service.get_regional_farming_practices(state.upper(), crop_type.lower())
-        
+
         return Response(practices, status=status.HTTP_200_OK)
-        
+
     except Exception as e:
         logger.error(f"Error getting regional practices: {str(e)}")
         return Response(
-            {'error': 'Unable to load regional practice information'}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {"error": "Unable to load regional practice information"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 def get_carbon_impact_examples(request, carbon_value):
     """
     Get relatable examples for carbon impact values.
@@ -6998,30 +6991,29 @@ def get_carbon_impact_examples(request, carbon_value):
     """
     try:
         carbon_float = float(carbon_value)
-        
+
         education_service = EducationalContentService()
         examples = education_service.get_carbon_impact_examples(carbon_float)
-        
-        return Response({
-            'carbon_value': carbon_float,
-            'examples': examples,
-            'category': 'low' if carbon_float < 0.5 else 'medium' if carbon_float < 2.0 else 'high'
-        }, status=status.HTTP_200_OK)
-        
-    except ValueError:
+
         return Response(
-            {'error': 'Invalid carbon value provided'}, 
-            status=status.HTTP_400_BAD_REQUEST
+            {
+                "carbon_value": carbon_float,
+                "examples": examples,
+                "category": "low" if carbon_float < 0.5 else "medium" if carbon_float < 2.0 else "high",
+            },
+            status=status.HTTP_200_OK,
         )
+
+    except ValueError:
+        return Response({"error": "Invalid carbon value provided"}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         logger.error(f"Error getting carbon examples: {str(e)}")
         return Response(
-            {'error': 'Unable to load carbon impact examples'}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {"error": "Unable to load carbon impact examples"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 def get_trust_comparison_data(request):
     """
     Get data for trust comparison widget.
@@ -7030,286 +7022,271 @@ def get_trust_comparison_data(request):
     try:
         education_service = EducationalContentService()
         comparison_data = education_service.get_trust_comparison_data()
-        
+
         return Response(comparison_data, status=status.HTTP_200_OK)
-        
+
     except Exception as e:
         logger.error(f"Error getting trust comparison data: {str(e)}")
-        return Response(
-            {'error': 'Unable to load trust comparison data'}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        return Response({"error": "Unable to load trust comparison data"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 def get_education_content(request, topic):
     """
     Generic educational content endpoint that handles different topics.
-    Supports topics: carbon-scoring, regional-benchmarks, trust-indicators, 
+    Supports topics: carbon-scoring, regional-benchmarks, trust-indicators,
     farming-practices, carbon-examples, verification-process, sustainability-metrics
     """
     try:
-        user_level = request.GET.get('level', 'beginner')
-        context = request.GET.get('context')
-        source = request.GET.get('source')
-        
+        user_level = request.GET.get("level", "beginner")
+        context = request.GET.get("context")
+        source = request.GET.get("source")
+
         # Parse context if provided
         context_data = {}
         if context:
             try:
                 import json
+
                 context_data = json.loads(context)
             except json.JSONDecodeError:
                 pass
-        
+
         education_service = EducationalContentService()
-        
+
         # Route to appropriate content based on topic
-        if topic == 'usda-methodology':
+        if topic == "usda-methodology":
             content = education_service.get_usda_methodology_content(user_level)
-        elif topic == 'carbon-scoring':
+        elif topic == "carbon-scoring":
             content = education_service.get_carbon_scoring_content(user_level, context_data)
-        elif topic == 'regional-benchmarks':
+        elif topic == "regional-benchmarks":
             content = education_service.get_regional_benchmarks_content(user_level, context_data)
-        elif topic == 'trust-indicators':
+        elif topic == "trust-indicators":
             content = education_service.get_trust_indicators_content(user_level, context_data)
-        elif topic == 'farming-practices':
+        elif topic == "farming-practices":
             content = education_service.get_farming_practices_content(user_level, context_data)
-        elif topic == 'carbon-examples':
+        elif topic == "carbon-examples":
             content = education_service.get_carbon_examples_content(user_level, context_data)
-        elif topic == 'verification-process':
+        elif topic == "verification-process":
             content = education_service.get_verification_process_content(user_level, context_data)
-        elif topic == 'sustainability-metrics':
+        elif topic == "sustainability-metrics":
             content = education_service.get_sustainability_metrics_content(user_level, context_data)
         else:
-            return Response(
-                {'error': f'Unknown educational topic: {topic}'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
+            return Response({"error": f"Unknown educational topic: {topic}"}, status=status.HTTP_400_BAD_REQUEST)
+
         return Response(content, status=status.HTTP_200_OK)
-        
+
     except Exception as e:
         logger.error(f"Error getting educational content for topic {topic}: {str(e)}")
-        return Response(
-            {'error': 'Unable to load educational content'}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        return Response({"error": "Unable to load educational content"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 # NEW USDA INTEGRATION ENDPOINTS
 
-@api_view(['POST'])
+
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def validate_usda_compliance(request):
     """NEW ENDPOINT: Validate calculation against USDA standards"""
     try:
         data = request.data
-        
+
         # Extract required parameters
-        crop_type = data.get('crop_type')
-        state = data.get('state')
-        co2e = data.get('co2e', 0)
-        area_hectares = data.get('area_hectares', 1)
-        
+        crop_type = data.get("crop_type")
+        state = data.get("state")
+        co2e = data.get("co2e", 0)
+        area_hectares = data.get("area_hectares", 1)
+
         if not crop_type or not state:
             return Response(
-                {'error': 'crop_type and state are required parameters'},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "crop_type and state are required parameters"}, status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         # Initialize enhanced USDA service
         enhanced_usda = EnhancedUSDAFactors()
-        
+
         # Prepare calculation data for validation
         calculation_data = {
-            'crop_type': crop_type,
-            'state': state,
-            'co2e': float(co2e),
-            'area_hectares': float(area_hectares),
-            'usda_factors_based': data.get('usda_factors_based', True),
-            'method': data.get('method', 'standard')
+            "crop_type": crop_type,
+            "state": state,
+            "co2e": float(co2e),
+            "area_hectares": float(area_hectares),
+            "usda_factors_based": data.get("usda_factors_based", True),
+            "method": data.get("method", "standard"),
         }
-        
+
         # Validate against USDA standards
         validation_result = enhanced_usda.validate_against_usda_standards(calculation_data)
-        
+
         # Return validation result
-        return Response({
-            'status': 'success',
-            'validation_result': validation_result.to_dict(),
-            'timestamp': timezone.now().isoformat()
-        })
-        
-    except Exception as e:
-        logger.error(f"USDA compliance validation error: {e}")
         return Response(
-            {'error': f'Validation failed: {str(e)}'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {
+                "status": "success",
+                "validation_result": validation_result.to_dict(),
+                "timestamp": timezone.now().isoformat(),
+            }
         )
 
+    except Exception as e:
+        logger.error(f"USDA compliance validation error: {e}")
+        return Response({"error": f"Validation failed: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-@api_view(['GET'])
+
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_regional_emission_factors(request, state):
     """NEW ENDPOINT: Get regional emission factors for a state"""
     try:
-        crop_type = request.query_params.get('crop_type', 'corn')
-        county = request.query_params.get('county')
-        
+        crop_type = request.query_params.get("crop_type", "corn")
+        county = request.query_params.get("county")
+
         # Initialize enhanced USDA service
         enhanced_usda = EnhancedUSDAFactors()
-        
+
         # Get real-time emission factors
         emission_factors = enhanced_usda.get_real_time_emission_factors(crop_type, state)
-        
+
         # Get regional factors for comparison
         regional_factors = enhanced_usda.get_regional_factors(crop_type, state, county)
-        
+
         # Get metadata
         metadata = enhanced_usda.get_enhanced_calculation_metadata(crop_type, state)
-        
-        return Response({
-            'state': state,
-            'crop_type': crop_type,
-            'county': county,
-            'emission_factors': emission_factors,
-            'regional_factors': regional_factors,
-            'metadata': metadata,
-            'timestamp': timezone.now().isoformat()
-        })
-        
+
+        return Response(
+            {
+                "state": state,
+                "crop_type": crop_type,
+                "county": county,
+                "emission_factors": emission_factors,
+                "regional_factors": regional_factors,
+                "metadata": metadata,
+                "timestamp": timezone.now().isoformat(),
+            }
+        )
+
     except Exception as e:
         logger.error(f"Error getting regional emission factors: {e}")
         return Response(
-            {'error': f'Failed to get emission factors: {str(e)}'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {"error": f"Failed to get emission factors: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_usda_benchmark_comparison(request):
     """NEW ENDPOINT: Get USDA benchmark comparison for farm performance"""
     try:
-        farm_carbon_intensity = float(request.query_params.get('carbon_intensity', 0))
-        crop_type = request.query_params.get('crop_type', 'corn')
-        state = request.query_params.get('state', 'CA')
-        
+        farm_carbon_intensity = float(request.query_params.get("carbon_intensity", 0))
+        crop_type = request.query_params.get("crop_type", "corn")
+        state = request.query_params.get("state", "CA")
+
         if farm_carbon_intensity <= 0:
             return Response(
-                {'error': 'carbon_intensity parameter is required and must be greater than 0'},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "carbon_intensity parameter is required and must be greater than 0"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        
+
         # Add caching to prevent repeated USDA API calls
-        cache_key = f'usda_benchmark_{crop_type}_{state}_{int(farm_carbon_intensity*1000)}_v2'
+        cache_key = f"usda_benchmark_{crop_type}_{state}_{int(farm_carbon_intensity*1000)}_v2"
         cached_result = cache.get(cache_key)
-        
+
         if cached_result:
             logger.info(f"✅ Returning cached USDA benchmark for {crop_type} in {state}")
-            cached_result['cache_hit'] = True
-            cached_result['timestamp'] = timezone.now().isoformat()
+            cached_result["cache_hit"] = True
+            cached_result["timestamp"] = timezone.now().isoformat()
             return Response(cached_result)
-        
+
         logger.info(f"🔄 Fetching fresh USDA benchmark for {crop_type} in {state}")
-        
+
         # Initialize enhanced USDA service
         enhanced_usda = EnhancedUSDAFactors()
-        
+
         # Get benchmark comparison
-        benchmark_comparison = enhanced_usda.get_usda_benchmark_comparison(
-            farm_carbon_intensity, crop_type, state
-        )
-        
+        benchmark_comparison = enhanced_usda.get_usda_benchmark_comparison(farm_carbon_intensity, crop_type, state)
+
         result = {
-            'farm_carbon_intensity': farm_carbon_intensity,
-            'crop_type': crop_type,
-            'state': state,
-            'benchmark_comparison': benchmark_comparison,
-            'timestamp': timezone.now().isoformat(),
-            'cache_hit': False
+            "farm_carbon_intensity": farm_carbon_intensity,
+            "crop_type": crop_type,
+            "state": state,
+            "benchmark_comparison": benchmark_comparison,
+            "timestamp": timezone.now().isoformat(),
+            "cache_hit": False,
         }
-        
+
         # Cache for 20 minutes
         cache.set(cache_key, result, 1200)
         logger.info(f"✅ Cached USDA benchmark for {crop_type} in {state} for 20 minutes")
-        
+
         return Response(result)
-        
+
     except ValueError:
-        return Response(
-            {'error': 'carbon_intensity must be a valid number'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+        return Response({"error": "carbon_intensity must be a valid number"}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         logger.error(f"Error getting USDA benchmark comparison: {e}")
         return Response(
-            {'error': f'Failed to get benchmark comparison: {str(e)}'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {"error": f"Failed to get benchmark comparison: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
 
-@api_view(['POST'])
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def process_voice_event(request):
     """NEW ENDPOINT: Enhanced voice event processing with confidence-based auto-approval"""
     try:
         voice_data = request.data
-        
+
         # Validate required fields
-        required_fields = ['transcript', 'crop_type']
+        required_fields = ["transcript", "crop_type"]
         for field in required_fields:
             if field not in voice_data:
-                return Response(
-                    {'error': f'{field} is required'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-        
+                return Response({"error": f"{field} is required"}, status=status.HTTP_400_BAD_REQUEST)
+
         # Enhanced natural language processing would go here
         # For now, simulate confidence-based processing
-        transcript = voice_data['transcript']
-        crop_type = voice_data['crop_type']
-        language = voice_data.get('language', 'en-US')
-        
+        transcript = voice_data["transcript"]
+        crop_type = voice_data["crop_type"]
+        language = voice_data.get("language", "en-US")
+
         # Simulate parsing with confidence score
         confidence = 0.85  # This would come from actual NLP processing
-        
+
         parsed_event = {
-            'event_type': 'fertilization',  # This would be detected from transcript
-            'amount': '50 kg',  # This would be extracted from transcript
-            'area': '2 hectares',  # This would be extracted from transcript
-            'confidence': confidence,
-            'transcript': transcript,
-            'language': language,
-            'crop_type': crop_type
+            "event_type": "fertilization",  # This would be detected from transcript
+            "amount": "50 kg",  # This would be extracted from transcript
+            "area": "2 hectares",  # This would be extracted from transcript
+            "confidence": confidence,
+            "transcript": transcript,
+            "language": language,
+            "crop_type": crop_type,
         }
-        
+
         # Auto-create if high confidence
         if confidence > 0.85:
             # Here you would create the actual event
-            return Response({
-                'status': 'auto_created',
-                'event_data': parsed_event,
-                'confidence': confidence,
-                'message': 'Event created automatically due to high confidence'
-            })
-        
-        return Response({
-            'status': 'confirmation_required',
-            'parsed_data': parsed_event,
-            'confidence': confidence,
-            'message': 'Manual confirmation required due to lower confidence'
-        })
-        
-    except Exception as e:
-        logger.error(f"Error processing voice event: {e}")
+            return Response(
+                {
+                    "status": "auto_created",
+                    "event_data": parsed_event,
+                    "confidence": confidence,
+                    "message": "Event created automatically due to high confidence",
+                }
+            )
+
         return Response(
-            {'error': f'Voice processing failed: {str(e)}'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {
+                "status": "confirmation_required",
+                "parsed_data": parsed_event,
+                "confidence": confidence,
+                "message": "Manual confirmation required due to lower confidence",
+            }
         )
 
+    except Exception as e:
+        logger.error(f"Error processing voice event: {e}")
+        return Response({"error": f"Voice processing failed: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-@api_view(['POST'])
+
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def process_voice_event_ai(request):
     """
@@ -7317,33 +7294,30 @@ def process_voice_event_ai(request):
     This endpoint uses OpenAI GPT for intelligent voice processing.
     """
     try:
-        transcript = request.data.get('transcript', '')
-        crop_type = request.data.get('crop_type', '')
-        language = request.data.get('language', 'en-US')
-        
+        transcript = request.data.get("transcript", "")
+        crop_type = request.data.get("crop_type", "")
+        language = request.data.get("language", "en-US")
+
         if not transcript or not crop_type:
-            return Response(
-                {'error': 'transcript and crop_type are required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
+            return Response({"error": "transcript and crop_type are required"}, status=status.HTTP_400_BAD_REQUEST)
+
         # Import here to avoid circular imports
         from .services.ai_voice_processor import process_voice_input_with_ai
-        
+
         # Process with AI
         result = process_voice_input_with_ai(transcript, crop_type, language)
-        
+
         return Response(result, status=status.HTTP_200_OK)
-        
+
     except Exception as e:
         logger.error(f"Error in AI voice processing: {e}")
         return Response(
-            {'error': 'Failed to process voice input with AI', 'details': str(e)},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {"error": "Failed to process voice input with AI", "details": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_ai_event_suggestions(request):
     """
@@ -7351,18 +7325,15 @@ def get_ai_event_suggestions(request):
     Uses OpenAI GPT to provide intelligent, context-aware agricultural recommendations.
     """
     try:
-        crop_type = request.GET.get('crop_type', '')
-        location = request.GET.get('location', '')
-        season = request.GET.get('season', '')
-        recent_events_str = request.GET.get('recent_events', '[]')
-        farm_context_str = request.GET.get('farm_context', '{}')
-        
+        crop_type = request.GET.get("crop_type", "")
+        location = request.GET.get("location", "")
+        season = request.GET.get("season", "")
+        recent_events_str = request.GET.get("recent_events", "[]")
+        farm_context_str = request.GET.get("farm_context", "{}")
+
         if not crop_type:
-            return Response(
-                {'error': 'crop_type parameter is required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
+            return Response({"error": "crop_type parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
+
         # Parse JSON parameters
         try:
             recent_events = json.loads(recent_events_str) if recent_events_str else []
@@ -7370,11 +7341,12 @@ def get_ai_event_suggestions(request):
         except json.JSONDecodeError:
             recent_events = []
             farm_context = {}
-        
+
         # Import here to avoid circular imports
-        from .services.ai_voice_processor import generate_ai_event_suggestions
         import asyncio
-        
+
+        from .services.ai_voice_processor import generate_ai_event_suggestions
+
         # Generate AI suggestions (handle async function)
         if asyncio.iscoroutinefunction(generate_ai_event_suggestions):
             # Run async function in sync context
@@ -7387,7 +7359,7 @@ def get_ai_event_suggestions(request):
                         location=location or None,
                         season=season or None,
                         recent_events=recent_events,
-                        farm_context=farm_context
+                        farm_context=farm_context,
                     )
                 )
             finally:
@@ -7399,627 +7371,619 @@ def get_ai_event_suggestions(request):
                 location=location or None,
                 season=season or None,
                 recent_events=recent_events,
-                farm_context=farm_context
+                farm_context=farm_context,
             )
-        
+
         return Response(result, status=status.HTTP_200_OK)
-        
+
     except Exception as e:
         logger.error(f"Error generating AI event suggestions: {e}")
         return Response(
-            {
-                'error': 'Failed to generate AI event suggestions',
-                'details': str(e),
-                'fallback_available': True
-            },
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {"error": "Failed to generate AI event suggestions", "details": str(e), "fallback_available": True},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_usda_compliance_history(request, production_id):
     """NEW ENDPOINT: Get USDA compliance history for a production"""
     try:
         from .models import USDAComplianceRecord
-        
+
         # Get production
         try:
             production = History.objects.get(id=production_id)
         except History.DoesNotExist:
-            return Response(
-                {'error': 'Production not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
+            return Response({"error": "Production not found"}, status=status.HTTP_404_NOT_FOUND)
+
         # Check permissions
         if production.establishment.company != request.user.company:
-            return Response(
-                {'error': 'Permission denied'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        
+            return Response({"error": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
+
         # Get compliance records
-        compliance_records = USDAComplianceRecord.objects.filter(
-            production=production
-        ).order_by('-validated_at')
-        
+        compliance_records = USDAComplianceRecord.objects.filter(production=production).order_by("-validated_at")
+
         # Serialize compliance data
         compliance_data = []
         for record in compliance_records:
-            compliance_data.append({
-                'id': record.id,
-                'compliance_status': record.compliance_status,
-                'confidence_score': record.confidence_score,
-                'confidence_level': record.confidence_level,
-                'validation_method': record.validation_method,
-                'validation_details': record.validation_details,
-                'recommendations': record.recommendations,
-                'usda_api_used': record.usda_api_used,
-                'crop_type': record.crop_type,
-                'state': record.state,
-                'regional_factors_used': record.regional_factors_used,
-                'validated_at': record.validated_at.isoformat(),
-                'is_usda_verified': record.is_usda_verified,
-                'needs_review': record.needs_review
-            })
-        
+            compliance_data.append(
+                {
+                    "id": record.id,
+                    "compliance_status": record.compliance_status,
+                    "confidence_score": record.confidence_score,
+                    "confidence_level": record.confidence_level,
+                    "validation_method": record.validation_method,
+                    "validation_details": record.validation_details,
+                    "recommendations": record.recommendations,
+                    "usda_api_used": record.usda_api_used,
+                    "crop_type": record.crop_type,
+                    "state": record.state,
+                    "regional_factors_used": record.regional_factors_used,
+                    "validated_at": record.validated_at.isoformat(),
+                    "is_usda_verified": record.is_usda_verified,
+                    "needs_review": record.needs_review,
+                }
+            )
+
         # Calculate summary statistics
         total_records = len(compliance_data)
-        compliant_records = len([r for r in compliance_data if r['compliance_status'] == 'compliant'])
-        avg_confidence = sum(r['confidence_score'] for r in compliance_data) / total_records if total_records > 0 else 0
-        
-        return Response({
-            'production_id': production_id,
-            'production_name': production.name,
-            'compliance_records': compliance_data,
-            'summary': {
-                'total_records': total_records,
-                'compliant_records': compliant_records,
-                'compliance_rate': (compliant_records / total_records * 100) if total_records > 0 else 0,
-                'average_confidence': round(avg_confidence, 3),
-                'usda_verified_count': len([r for r in compliance_data if r['is_usda_verified']])
+        compliant_records = len([r for r in compliance_data if r["compliance_status"] == "compliant"])
+        avg_confidence = sum(r["confidence_score"] for r in compliance_data) / total_records if total_records > 0 else 0
+
+        return Response(
+            {
+                "production_id": production_id,
+                "production_name": production.name,
+                "compliance_records": compliance_data,
+                "summary": {
+                    "total_records": total_records,
+                    "compliant_records": compliant_records,
+                    "compliance_rate": (compliant_records / total_records * 100) if total_records > 0 else 0,
+                    "average_confidence": round(avg_confidence, 3),
+                    "usda_verified_count": len([r for r in compliance_data if r["is_usda_verified"]]),
+                },
             }
-        })
-        
+        )
+
     except Exception as e:
         logger.error(f"Error getting USDA compliance history: {e}")
         return Response(
-            {'error': f'Failed to get compliance history: {str(e)}'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {"error": f"Failed to get compliance history: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
-@api_view(['POST'])
+
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def batch_verify_productions(request):
     """NEW ENDPOINT: Batch verify multiple productions with gas optimization"""
     try:
         from .services.production_blockchain import production_blockchain_service
-        
-        production_ids = request.data.get('production_ids', [])
+
+        production_ids = request.data.get("production_ids", [])
         if not production_ids:
-            return Response({
-                'error': 'production_ids required'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response({"error": "production_ids required"}, status=status.HTTP_400_BAD_REQUEST)
+
         if len(production_ids) > 100:  # Reasonable limit
-            return Response({
-                'error': 'Maximum 100 productions per batch'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response({"error": "Maximum 100 productions per batch"}, status=status.HTTP_400_BAD_REQUEST)
+
         # Perform batch verification
         result = production_blockchain_service.batch_verify_productions(production_ids)
-        
-        return Response({
-            'status': 'completed',
-            'successful_verifications': result.successful_verifications,
-            'failed_verifications': result.failed_verifications,
-            'total_gas_used': result.total_gas_used,
-            'total_cost_usd': result.total_cost_usd,
-            'transaction_hashes': result.transaction_hashes,
-            'processing_time': result.processing_time,
-            'success_rate': len(result.successful_verifications) / len(production_ids) * 100 if production_ids else 0
-        })
-        
+
+        return Response(
+            {
+                "status": "completed",
+                "successful_verifications": result.successful_verifications,
+                "failed_verifications": result.failed_verifications,
+                "total_gas_used": result.total_gas_used,
+                "total_cost_usd": result.total_cost_usd,
+                "transaction_hashes": result.transaction_hashes,
+                "processing_time": result.processing_time,
+                "success_rate": (
+                    len(result.successful_verifications) / len(production_ids) * 100 if production_ids else 0
+                ),
+            }
+        )
+
     except Exception as e:
         logger.error(f"Batch verification failed: {e}")
-        return Response({
-            'error': 'Batch verification failed',
-            'details': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {"error": "Batch verification failed", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_gas_optimization_analysis(request):
     """NEW ENDPOINT: Get gas optimization analysis for planned operations"""
     try:
         from .services.production_blockchain import production_blockchain_service
-        
-        operation_type = request.GET.get('operation_type', 'verify')
-        batch_size = int(request.GET.get('batch_size', 10))
-        
-        if operation_type not in ['verify', 'mint', 'retire']:
-            return Response({
-                'error': 'Invalid operation_type. Must be verify, mint, or retire'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
+
+        operation_type = request.GET.get("operation_type", "verify")
+        batch_size = int(request.GET.get("batch_size", 10))
+
+        if operation_type not in ["verify", "mint", "retire"]:
+            return Response(
+                {"error": "Invalid operation_type. Must be verify, mint, or retire"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
         if batch_size < 1 or batch_size > 100:
-            return Response({
-                'error': 'batch_size must be between 1 and 100'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response({"error": "batch_size must be between 1 and 100"}, status=status.HTTP_400_BAD_REQUEST)
+
         # Get gas optimization analysis
         analysis = production_blockchain_service.get_gas_optimization_analysis(operation_type, batch_size)
-        
-        return Response({
-            'operation_type': operation_type,
-            'requested_batch_size': batch_size,
-            'estimated_gas': analysis.estimated_gas,
-            'optimized_gas_price': analysis.optimized_gas_price,
-            'estimated_cost_usd': analysis.estimated_cost_usd,
-            'recommended_batch_size': analysis.recommended_batch_size,
-            'network_congestion': analysis.network_congestion,
-            'cost_per_item': analysis.estimated_cost_usd / batch_size if batch_size > 0 else 0
-        })
-        
+
+        return Response(
+            {
+                "operation_type": operation_type,
+                "requested_batch_size": batch_size,
+                "estimated_gas": analysis.estimated_gas,
+                "optimized_gas_price": analysis.optimized_gas_price,
+                "estimated_cost_usd": analysis.estimated_cost_usd,
+                "recommended_batch_size": analysis.recommended_batch_size,
+                "network_congestion": analysis.network_congestion,
+                "cost_per_item": analysis.estimated_cost_usd / batch_size if batch_size > 0 else 0,
+            }
+        )
+
     except Exception as e:
         logger.error(f"Gas optimization analysis failed: {e}")
-        return Response({
-            'error': 'Gas optimization analysis failed',
-            'details': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {"error": "Gas optimization analysis failed", "details": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 
-@api_view(['POST'])
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def mint_carbon_credits_batch(request):
     """NEW ENDPOINT: Batch mint carbon credit NFTs"""
     try:
         from .services.production_blockchain import production_blockchain_service
-        
-        credit_data_list = request.data.get('credits', [])
+
+        credit_data_list = request.data.get("credits", [])
         if not credit_data_list:
-            return Response({
-                'error': 'credits array required'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response({"error": "credits array required"}, status=status.HTTP_400_BAD_REQUEST)
+
         if len(credit_data_list) > 50:  # Smart contract limit
-            return Response({
-                'error': 'Maximum 50 credits per batch'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response({"error": "Maximum 50 credits per batch"}, status=status.HTTP_400_BAD_REQUEST)
+
         # Validate credit data structure
-        required_fields = ['farmer_address', 'production_id', 'co2e_amount']
+        required_fields = ["farmer_address", "production_id", "co2e_amount"]
         for i, credit_data in enumerate(credit_data_list):
             for field in required_fields:
                 if field not in credit_data:
-                    return Response({
-                        'error': f'Missing {field} in credit {i}'
-                    }, status=status.HTTP_400_BAD_REQUEST)
-        
+                    return Response({"error": f"Missing {field} in credit {i}"}, status=status.HTTP_400_BAD_REQUEST)
+
         # Perform batch minting
         result = production_blockchain_service.mint_carbon_credits_batch(credit_data_list)
-        
-        return Response({
-            'status': 'completed',
-            'successful_mints': result.successful_verifications,
-            'failed_mints': result.failed_verifications,
-            'total_gas_used': result.total_gas_used,
-            'total_cost_usd': result.total_cost_usd,
-            'transaction_hashes': result.transaction_hashes,
-            'processing_time': result.processing_time,
-            'success_rate': len(result.successful_verifications) / len(credit_data_list) * 100 if credit_data_list else 0
-        })
-        
+
+        return Response(
+            {
+                "status": "completed",
+                "successful_mints": result.successful_verifications,
+                "failed_mints": result.failed_verifications,
+                "total_gas_used": result.total_gas_used,
+                "total_cost_usd": result.total_cost_usd,
+                "transaction_hashes": result.transaction_hashes,
+                "processing_time": result.processing_time,
+                "success_rate": (
+                    len(result.successful_verifications) / len(credit_data_list) * 100 if credit_data_list else 0
+                ),
+            }
+        )
+
     except Exception as e:
         logger.error(f"Batch minting failed: {e}")
-        return Response({
-            'error': 'Batch minting failed',
-            'details': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {"error": "Batch minting failed", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_blockchain_service_stats(request):
     """NEW ENDPOINT: Get blockchain service performance statistics"""
     try:
         from .services.production_blockchain import production_blockchain_service
-        
+
         stats = production_blockchain_service.get_service_stats()
-        
-        return Response({
-            'service_stats': stats,
-            'network_info': {
-                'name': stats['network'],
-                'is_mainnet': stats['is_mainnet'],
-                'mock_mode': stats['mock_mode']
-            },
-            'performance': {
-                'transaction_count': stats['transaction_count'],
-                'total_gas_used': stats['total_gas_used'],
-                'failed_transactions': stats['failed_transactions'],
-                'success_rate': stats['success_rate']
-            },
-            'contracts': stats['contracts_loaded']
-        })
-        
+
+        return Response(
+            {
+                "service_stats": stats,
+                "network_info": {
+                    "name": stats["network"],
+                    "is_mainnet": stats["is_mainnet"],
+                    "mock_mode": stats["mock_mode"],
+                },
+                "performance": {
+                    "transaction_count": stats["transaction_count"],
+                    "total_gas_used": stats["total_gas_used"],
+                    "failed_transactions": stats["failed_transactions"],
+                    "success_rate": stats["success_rate"],
+                },
+                "contracts": stats["contracts_loaded"],
+            }
+        )
+
     except Exception as e:
         logger.error(f"Failed to get service stats: {e}")
-        return Response({
-            'error': 'Failed to get service stats',
-            'details': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {"error": "Failed to get service stats", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
-@api_view(['POST'])
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def deploy_carbon_credit_contract(request):
     """NEW ENDPOINT: Deploy carbon credit contract (admin only)"""
     if not request.user.is_staff:
-        return Response({
-            'error': 'Admin access required'
-        }, status=status.HTTP_403_FORBIDDEN)
-    
+        return Response({"error": "Admin access required"}, status=status.HTTP_403_FORBIDDEN)
+
     try:
         from .services.production_blockchain import production_blockchain_service
-        
+
         contract_address = production_blockchain_service.deploy_carbon_credit_contract()
-        
+
         if contract_address:
-            return Response({
-                'status': 'deployed',
-                'contract_address': contract_address,
-                'network': production_blockchain_service.network_name,
-                'explorer_url': f"{production_blockchain_service.explorer_url}/address/{contract_address}"
-            })
+            return Response(
+                {
+                    "status": "deployed",
+                    "contract_address": contract_address,
+                    "network": production_blockchain_service.network_name,
+                    "explorer_url": f"{production_blockchain_service.explorer_url}/address/{contract_address}",
+                }
+            )
         else:
-            return Response({
-                'error': 'Contract deployment failed'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+            return Response({"error": "Contract deployment failed"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     except Exception as e:
         logger.error(f"Contract deployment failed: {e}")
-        return Response({
-            'error': 'Contract deployment failed',
-            'details': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {"error": "Contract deployment failed", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
 
 # Add this new endpoint at the end of the file before the last closing
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])  
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def get_real_usda_factors(request):
     """NEW ENDPOINT: Get real-time USDA emission factors using actual government APIs"""
     try:
-        crop_type = request.query_params.get('crop_type', 'corn')
-        state = request.query_params.get('state', 'IA')
-        
+        crop_type = request.query_params.get("crop_type", "corn")
+        state = request.query_params.get("state", "IA")
+
         # Add aggressive caching to prevent repeated USDA API calls
-        cache_key = f'usda_factors_{crop_type}_{state}_v2'
+        cache_key = f"usda_factors_{crop_type}_{state}_v2"
         cached_result = cache.get(cache_key)
-        
+
         if cached_result:
             logger.info(f"✅ Returning cached USDA factors for {crop_type} in {state}")
-            cached_result['cache_hit'] = True
-            cached_result['timestamp'] = timezone.now().isoformat()
+            cached_result["cache_hit"] = True
+            cached_result["timestamp"] = timezone.now().isoformat()
             return Response(cached_result)
-        
+
         logger.info(f"🔄 Fetching fresh USDA factors for {crop_type} in {state}")
-        
+
         # Import real USDA integration
-        from .services.real_usda_integration import get_real_usda_carbon_data, RealUSDAAPIClient
         from .services.enhanced_usda_factors import EnhancedUSDAFactors
-        
+        from .services.real_usda_integration import RealUSDAAPIClient, get_real_usda_carbon_data
+
         # Get real-time factors using enhanced service
         enhanced_usda = EnhancedUSDAFactors()
         real_factors = enhanced_usda.get_real_time_emission_factors(crop_type, state)
-        
+
         # Get real USDA client for additional data
         usda_client = RealUSDAAPIClient()
-        
+
         # Get real benchmark data
         benchmark_yield = usda_client.get_benchmark_yield(crop_type, state)
-        
+
         # Test farm practices for demonstration
         demo_practices = {
-            'inputs': {
-                'nitrogen_kg': 150,
-                'phosphorus_kg': 50, 
-                'diesel_liters': 80
-            },
-            'area_hectares': 100,
-            'yield_per_hectare': 9000
+            "inputs": {"nitrogen_kg": 150, "phosphorus_kg": 50, "diesel_liters": 80},
+            "area_hectares": 100,
+            "yield_per_hectare": 9000,
         }
-        
+
         # Get complete carbon calculation with real data
         carbon_calculation = get_real_usda_carbon_data(crop_type, state, demo_practices)
-        
+
         # Get credibility data
         try:
             credibility_data = enhanced_usda.get_usda_credibility_data(None)
         except Exception as e:
             logger.warning(f"Could not get credibility data: {e}")
-            credibility_data = {
-                'usda_based': True,
-                'confidence_level': 'high',
-                'credibility_score': 85
-            }
-        
+            credibility_data = {"usda_based": True, "confidence_level": "high", "credibility_score": 85}
+
         result = {
-            'success': True,
-            'crop_type': crop_type,
-            'state': state,
-            'api_status': {
-                'nass_configured': bool(usda_client.nass_api_key),
-                'ers_configured': bool(usda_client.ers_api_key),
-                'data_source': 'Real USDA APIs'
+            "success": True,
+            "crop_type": crop_type,
+            "state": state,
+            "api_status": {
+                "nass_configured": bool(usda_client.nass_api_key),
+                "ers_configured": bool(usda_client.ers_api_key),
+                "data_source": "Real USDA APIs",
             },
-            'emission_factors': real_factors,
-            'benchmark_data': {
-                'regional_yield': benchmark_yield,
-                'unit': 'bushels/acre' if benchmark_yield else None,
-                'kg_per_hectare': round(benchmark_yield * 62.8) if benchmark_yield else None
+            "emission_factors": real_factors,
+            "benchmark_data": {
+                "regional_yield": benchmark_yield,
+                "unit": "bushels/acre" if benchmark_yield else None,
+                "kg_per_hectare": round(benchmark_yield * 62.8) if benchmark_yield else None,
             },
-            'carbon_calculation': carbon_calculation,
-            'usda_credibility': credibility_data,
-            'api_attribution': getattr(settings, 'USDA_API_ATTRIBUTION', ''),
-            'timestamp': timezone.now().isoformat(),
-            'real_data': True,
-            'cache_hit': False
+            "carbon_calculation": carbon_calculation,
+            "usda_credibility": credibility_data,
+            "api_attribution": getattr(settings, "USDA_API_ATTRIBUTION", ""),
+            "timestamp": timezone.now().isoformat(),
+            "real_data": True,
+            "cache_hit": False,
         }
-        
+
         # Cache for 30 minutes to prevent repeated API calls
         cache.set(cache_key, result, 1800)
         logger.info(f"✅ Cached USDA factors for {crop_type} in {state} for 30 minutes")
-        
+
         return Response(result)
-        
+
     except Exception as e:
         logger.error(f"Error getting real USDA factors: {e}")
-        return Response({
-            'success': False,
-            'error': f'Failed to get USDA factors: {str(e)}',
-            'timestamp': timezone.now().isoformat(),
-            'cache_hit': False
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {
+                "success": False,
+                "error": f"Failed to get USDA factors: {str(e)}",
+                "timestamp": timezone.now().isoformat(),
+                "cache_hit": False,
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 
-@api_view(['GET'])  
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def test_usda_apis(request):
     """NEW ENDPOINT: Test all USDA API connections and return status"""
     try:
         from .services.real_usda_integration import RealUSDAAPIClient
-        
+
         usda_client = RealUSDAAPIClient()
-        
+
         # Test NASS API
         nass_test = None
         nass_error = None
         try:
-            nass_data = usda_client.get_nass_crop_data('corn', 'IA', 2023)
+            nass_data = usda_client.get_nass_crop_data("corn", "IA", 2023)
             nass_test = {
-                'status': 'success' if nass_data else 'no_data',
-                'records_found': len(nass_data.get('data', [])) if nass_data else 0,
-                'sample_data': nass_data.get('data', [{}])[0] if nass_data and nass_data.get('data') else None
+                "status": "success" if nass_data else "no_data",
+                "records_found": len(nass_data.get("data", [])) if nass_data else 0,
+                "sample_data": nass_data.get("data", [{}])[0] if nass_data and nass_data.get("data") else None,
             }
         except Exception as e:
             nass_error = str(e)
-            nass_test = {'status': 'error', 'error': nass_error}
-        
+            nass_test = {"status": "error", "error": nass_error}
+
         # Test benchmark calculation
         benchmark_test = None
         try:
-            benchmark = usda_client.get_benchmark_yield('corn', 'IA')
+            benchmark = usda_client.get_benchmark_yield("corn", "IA")
             benchmark_test = {
-                'status': 'success' if benchmark else 'no_data',
-                'value': benchmark,
-                'unit': 'bushels/acre'
+                "status": "success" if benchmark else "no_data",
+                "value": benchmark,
+                "unit": "bushels/acre",
             }
         except Exception as e:
-            benchmark_test = {'status': 'error', 'error': str(e)}
-        
+            benchmark_test = {"status": "error", "error": str(e)}
+
         # Test carbon calculation
         carbon_test = None
         try:
             farm_practices = {
-                'inputs': {'nitrogen_kg': 150, 'diesel_liters': 80},
-                'area_hectares': 100, 
-                'yield_per_hectare': 9000
+                "inputs": {"nitrogen_kg": 150, "diesel_liters": 80},
+                "area_hectares": 100,
+                "yield_per_hectare": 9000,
             }
-            carbon_result = usda_client.calculate_carbon_intensity('corn', 'IA', farm_practices)
+            carbon_result = usda_client.calculate_carbon_intensity("corn", "IA", farm_practices)
             carbon_test = {
-                'status': 'success' if not carbon_result.get('error') else 'error',
-                'carbon_intensity': carbon_result.get('carbon_intensity', 0),
-                'confidence_level': carbon_result.get('confidence_level', 'unknown')
+                "status": "success" if not carbon_result.get("error") else "error",
+                "carbon_intensity": carbon_result.get("carbon_intensity", 0),
+                "confidence_level": carbon_result.get("confidence_level", "unknown"),
             }
         except Exception as e:
-            carbon_test = {'status': 'error', 'error': str(e)}
-        
-        return Response({
-            'api_keys_configured': {
-                'nass': bool(usda_client.nass_api_key),
-                'ers': bool(usda_client.ers_api_key)
-            },
-            'tests': {
-                'nass_data_fetch': nass_test,
-                'benchmark_calculation': benchmark_test, 
-                'carbon_calculation': carbon_test
-            },
-            'overall_status': 'operational' if all([
-                nass_test and nass_test.get('status') == 'success',
-                benchmark_test and benchmark_test.get('status') == 'success',
-                carbon_test and carbon_test.get('status') == 'success'
-            ]) else 'partial',
-            'timestamp': timezone.now().isoformat()
-        })
-        
+            carbon_test = {"status": "error", "error": str(e)}
+
+        return Response(
+            {
+                "api_keys_configured": {"nass": bool(usda_client.nass_api_key), "ers": bool(usda_client.ers_api_key)},
+                "tests": {
+                    "nass_data_fetch": nass_test,
+                    "benchmark_calculation": benchmark_test,
+                    "carbon_calculation": carbon_test,
+                },
+                "overall_status": (
+                    "operational"
+                    if all(
+                        [
+                            nass_test and nass_test.get("status") == "success",
+                            benchmark_test and benchmark_test.get("status") == "success",
+                            carbon_test and carbon_test.get("status") == "success",
+                        ]
+                    )
+                    else "partial"
+                ),
+                "timestamp": timezone.now().isoformat(),
+            }
+        )
+
     except Exception as e:
         logger.error(f"Error testing USDA APIs: {e}")
-        return Response({
-            'error': f'API test failed: {str(e)}',
-            'timestamp': timezone.now().isoformat()
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {"error": f"API test failed: {str(e)}", "timestamp": timezone.now().isoformat()},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_nutritional_carbon_analysis(request):
     """NEW ENDPOINT: Get nutritional analysis and carbon efficiency for crops using FoodData Central API"""
     try:
-        crop_type = request.query_params.get('crop_type', 'corn')
-        
+        crop_type = request.query_params.get("crop_type", "corn")
+
         from .services.real_usda_integration import RealUSDAAPIClient
-        
+
         usda_client = RealUSDAAPIClient()
-        
+
         # Get nutritional data from FoodData Central
         nutritional_data = usda_client.get_nutritional_carbon_factors(crop_type)
-        
+
         if not nutritional_data:
-            return Response({
-                'success': False,
-                'error': 'No nutritional data found for this crop',
-                'crop_type': crop_type
-            }, status=status.HTTP_404_NOT_FOUND)
-        
-        return Response({
-            'success': True,
-            'crop_type': crop_type,
-            'nutritional_analysis': nutritional_data,
-            'api_source': 'USDA FoodData Central',
-            'timestamp': timezone.now().isoformat()
-        })
-        
+            return Response(
+                {"success": False, "error": "No nutritional data found for this crop", "crop_type": crop_type},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(
+            {
+                "success": True,
+                "crop_type": crop_type,
+                "nutritional_analysis": nutritional_data,
+                "api_source": "USDA FoodData Central",
+                "timestamp": timezone.now().isoformat(),
+            }
+        )
+
     except Exception as e:
         logger.error(f"Error getting nutritional carbon analysis: {e}")
-        return Response({
-            'success': False,
-            'error': f'Failed to get nutritional analysis: {str(e)}',
-            'timestamp': timezone.now().isoformat()
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {
+                "success": False,
+                "error": f"Failed to get nutritional analysis: {str(e)}",
+                "timestamp": timezone.now().isoformat(),
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_complete_usda_analysis(request):
     """NEW ENDPOINT: Get complete analysis using all three USDA APIs together"""
     try:
-        crop_type = request.query_params.get('crop_type', 'corn')
-        state = request.query_params.get('state', 'IA')
-        
+        crop_type = request.query_params.get("crop_type", "corn")
+        state = request.query_params.get("state", "IA")
+
         # Get user's establishment data if available
-        area_hectares = float(request.query_params.get('area_hectares', 100))
-        yield_per_hectare = float(request.query_params.get('yield_per_hectare', 9000))
-        nitrogen_kg = float(request.query_params.get('nitrogen_kg', 150))
-        phosphorus_kg = float(request.query_params.get('phosphorus_kg', 50))
-        diesel_liters = float(request.query_params.get('diesel_liters', 80))
-        
+        area_hectares = float(request.query_params.get("area_hectares", 100))
+        yield_per_hectare = float(request.query_params.get("yield_per_hectare", 9000))
+        nitrogen_kg = float(request.query_params.get("nitrogen_kg", 150))
+        phosphorus_kg = float(request.query_params.get("phosphorus_kg", 50))
+        diesel_liters = float(request.query_params.get("diesel_liters", 80))
+
         farm_practices = {
-            'area_hectares': area_hectares,
-            'yield_per_hectare': yield_per_hectare,
-            'inputs': {
-                'nitrogen_kg': nitrogen_kg,
-                'phosphorus_kg': phosphorus_kg,
-                'diesel_liters': diesel_liters
-            }
+            "area_hectares": area_hectares,
+            "yield_per_hectare": yield_per_hectare,
+            "inputs": {"nitrogen_kg": nitrogen_kg, "phosphorus_kg": phosphorus_kg, "diesel_liters": diesel_liters},
         }
-        
+
         from .services.real_usda_integration import get_real_usda_carbon_data
-        
+
         # Get complete analysis with all APIs
         complete_result = get_real_usda_carbon_data(crop_type, state, farm_practices)
-        
-        return Response({
-            'success': True,
-            'analysis': complete_result,
-            'input_parameters': {
-                'crop_type': crop_type,
-                'state': state,
-                'farm_practices': farm_practices
-            },
-            'timestamp': timezone.now().isoformat()
-        })
-        
+
+        return Response(
+            {
+                "success": True,
+                "analysis": complete_result,
+                "input_parameters": {"crop_type": crop_type, "state": state, "farm_practices": farm_practices},
+                "timestamp": timezone.now().isoformat(),
+            }
+        )
+
     except Exception as e:
         logger.error(f"Error getting complete USDA analysis: {e}")
-        return Response({
-            'success': False,
-            'error': f'Failed to get complete analysis: {str(e)}',
-            'timestamp': timezone.now().isoformat()
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {
+                "success": False,
+                "error": f"Failed to get complete analysis: {str(e)}",
+                "timestamp": timezone.now().isoformat(),
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def test_fooddata_central_api(request):
     """NEW ENDPOINT: Test FoodData Central API specifically"""
     try:
-        crop_type = request.query_params.get('crop_type', 'corn')
-        
+        crop_type = request.query_params.get("crop_type", "corn")
+
         from .services.real_usda_integration import RealUSDAAPIClient
-        
+
         usda_client = RealUSDAAPIClient()
-        
+
         # Test FoodData Central API configuration
         api_configured = bool(usda_client.fooddata_api_key)
-        
+
         if not api_configured:
-            return Response({
-                'api_configured': False,
-                'error': 'FoodData Central API key not configured'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response(
+                {"api_configured": False, "error": "FoodData Central API key not configured"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         # Test food composition data fetch
         food_data = usda_client.get_food_composition_data(crop_type)
-        
+
         # Test nutritional analysis
         nutritional_analysis = usda_client.get_nutritional_carbon_factors(crop_type)
-        
+
         test_results = {
-            'api_configured': api_configured,
-            'api_endpoint': usda_client.fooddata_base_url,
-            'test_crop': crop_type,
-            'food_search_test': {
-                'status': 'success' if food_data and 'foods' in food_data else 'failed',
-                'foods_found': len(food_data.get('foods', [])) if food_data else 0,
-                'sample_food': food_data.get('foods', [{}])[0] if food_data and food_data.get('foods') else None
+            "api_configured": api_configured,
+            "api_endpoint": usda_client.fooddata_base_url,
+            "test_crop": crop_type,
+            "food_search_test": {
+                "status": "success" if food_data and "foods" in food_data else "failed",
+                "foods_found": len(food_data.get("foods", [])) if food_data else 0,
+                "sample_food": food_data.get("foods", [{}])[0] if food_data and food_data.get("foods") else None,
             },
-            'nutritional_analysis_test': {
-                'status': 'success' if nutritional_analysis else 'failed',
-                'has_nutrients': bool(nutritional_analysis.get('nutritional_data')) if nutritional_analysis else False,
-                'has_efficiency': bool(nutritional_analysis.get('carbon_efficiency')) if nutritional_analysis else False,
-                'efficiency_rating': nutritional_analysis.get('carbon_efficiency', {}).get('efficiency_rating') if nutritional_analysis else None
+            "nutritional_analysis_test": {
+                "status": "success" if nutritional_analysis else "failed",
+                "has_nutrients": bool(nutritional_analysis.get("nutritional_data")) if nutritional_analysis else False,
+                "has_efficiency": (
+                    bool(nutritional_analysis.get("carbon_efficiency")) if nutritional_analysis else False
+                ),
+                "efficiency_rating": (
+                    nutritional_analysis.get("carbon_efficiency", {}).get("efficiency_rating")
+                    if nutritional_analysis
+                    else None
+                ),
             },
-            'timestamp': timezone.now().isoformat()
+            "timestamp": timezone.now().isoformat(),
         }
-        
+
         overall_status = (
-            test_results['food_search_test']['status'] == 'success' and 
-            test_results['nutritional_analysis_test']['status'] == 'success'
+            test_results["food_search_test"]["status"] == "success"
+            and test_results["nutritional_analysis_test"]["status"] == "success"
         )
-        
-        return Response({
-            'overall_status': 'operational' if overall_status else 'failed',
-            'test_results': test_results
-        })
-        
+
+        return Response({"overall_status": "operational" if overall_status else "failed", "test_results": test_results})
+
     except Exception as e:
         logger.error(f"Error testing FoodData Central API: {e}")
-        return Response({
-            'overall_status': 'error',
-            'error': f'API test failed: {str(e)}',
-            'timestamp': timezone.now().isoformat()
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {"overall_status": "error", "error": f"API test failed: {str(e)}", "timestamp": timezone.now().isoformat()},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
-@api_view(['POST'])
+
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def verify_registry_credentials(request):
     """
     Verify carbon offset registry credentials against third-party APIs
-    
+
     POST /carbon/verify-registry-credentials/
     {
         "registry_verification_id": "VCS-1001",
@@ -8028,154 +7992,161 @@ def verify_registry_credentials(request):
     }
     """
     try:
-        from .services.registry_integration import RegistryIntegrationService
         from .models import CarbonEntry
-        
+        from .services.registry_integration import RegistryIntegrationService
+
         data = request.data
-        registry_id = data.get('registry_verification_id')
-        registry_type = data.get('registry_type', 'vcs').lower()
-        carbon_entry_id = data.get('carbon_entry_id')
-        
+        registry_id = data.get("registry_verification_id")
+        registry_type = data.get("registry_type", "vcs").lower()
+        carbon_entry_id = data.get("carbon_entry_id")
+
         if not registry_id:
-            return Response({
-                'error': 'registry_verification_id is required'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response({"error": "registry_verification_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
         # Initialize registry service
         registry_service = RegistryIntegrationService()
-        
+
         # Validate credentials
         validation_result = registry_service.validate_project_credentials(registry_id, registry_type)
-        
-        if validation_result['verified']:
+
+        if validation_result["verified"]:
             # Get project URL
             project_url = registry_service.get_registry_project_url(registry_id, registry_type)
-            
+
             # Update carbon entry if provided
             if carbon_entry_id:
                 try:
                     carbon_entry = CarbonEntry.objects.get(id=carbon_entry_id, created_by=request.user)
                     carbon_entry.registry_verification_id = registry_id
                     carbon_entry.third_party_verification_url = project_url
-                    carbon_entry.verification_level = 'certified_project'
+                    carbon_entry.verification_level = "certified_project"
                     carbon_entry.trust_score = 1.0
-                    carbon_entry.effective_amount = (carbon_entry.co2e_amount or carbon_entry.amount) * carbon_entry.trust_score
+                    carbon_entry.effective_amount = (
+                        carbon_entry.co2e_amount or carbon_entry.amount
+                    ) * carbon_entry.trust_score
                     # carbon_entry.verification_date = timezone.now()  # Field does not exist
                     carbon_entry.save()
-                    
+
                     # Log the verification update
                     CarbonAuditLog.objects.create(
                         carbon_entry=carbon_entry,
                         user=request.user,
-                        action='registry_verified',
-                        details=f'Registry verification completed: {registry_type.upper()} {registry_id}'
+                        action="registry_verified",
+                        details=f"Registry verification completed: {registry_type.upper()} {registry_id}",
                     )
-                    
+
                 except CarbonEntry.DoesNotExist:
-                    return Response({
-                        'error': 'Carbon entry not found or access denied'
-                    }, status=status.HTTP_404_NOT_FOUND)
-            
-            return Response({
-                'verified': True,
-                'registry': registry_type.upper(),
-                'registry_verification_id': registry_id,
-                'project_url': project_url,
-                'verification_details': validation_result,
-                'carbon_entry_updated': bool(carbon_entry_id),
-                'message': f'Registry verification successful for {registry_type.upper()} project {registry_id}'
-            }, status=status.HTTP_200_OK)
-        
+                    return Response(
+                        {"error": "Carbon entry not found or access denied"}, status=status.HTTP_404_NOT_FOUND
+                    )
+
+            return Response(
+                {
+                    "verified": True,
+                    "registry": registry_type.upper(),
+                    "registry_verification_id": registry_id,
+                    "project_url": project_url,
+                    "verification_details": validation_result,
+                    "carbon_entry_updated": bool(carbon_entry_id),
+                    "message": f"Registry verification successful for {registry_type.upper()} project {registry_id}",
+                },
+                status=status.HTTP_200_OK,
+            )
+
         else:
-            return Response({
-                'verified': False,
-                'registry': registry_type.upper(),
-                'registry_verification_id': registry_id,
-                'error': validation_result.get('error', 'Verification failed'),
-                'supported_registries': ['VCS', 'Gold Standard', 'CAR', 'ACR'],
-                'message': f'Registry verification failed for {registry_type.upper()} project {registry_id}'
-            }, status=status.HTTP_400_BAD_REQUEST)
-            
+            return Response(
+                {
+                    "verified": False,
+                    "registry": registry_type.upper(),
+                    "registry_verification_id": registry_id,
+                    "error": validation_result.get("error", "Verification failed"),
+                    "supported_registries": ["VCS", "Gold Standard", "CAR", "ACR"],
+                    "message": f"Registry verification failed for {registry_type.upper()} project {registry_id}",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
     except Exception as e:
         logger.error(f"Registry verification error: {e}")
-        return Response({
-            'error': 'Registry verification service unavailable',
-            'details': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {"error": "Registry verification service unavailable", "details": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_verification_status(request, carbon_entry_id):
     """
     Get comprehensive verification status for a carbon entry
-    
+
     GET /carbon/entries/{id}/verification-status/
     """
     try:
         from .services.verification_service import VerificationService
-        
+
         # Get carbon entry
         carbon_entry = CarbonEntry.objects.get(id=carbon_entry_id, created_by=request.user)
-        
+
         # Run verification check
         verification_service = VerificationService()
         verification_result = verification_service.verify_offset_entry(carbon_entry)
-        
+
         # Get audit logs
-        audit_logs = CarbonAuditLog.objects.filter(
-            carbon_entry=carbon_entry
-        ).order_by('-created_at')[:10]
-        
+        audit_logs = CarbonAuditLog.objects.filter(carbon_entry=carbon_entry).order_by("-created_at")[:10]
+
         # Format audit logs
         formatted_logs = []
         for log in audit_logs:
-            formatted_logs.append({
-                'id': log.id,
-                'action': log.action,
-                'details': log.details,
-                'created_at': log.created_at.isoformat(),
-                'user': log.user.email if log.user else None
-            })
-        
-        return Response({
-            'carbon_entry_id': carbon_entry.id,
-            'verification_status': {
-                'verification_level': carbon_entry.verification_level,
-                'trust_score': carbon_entry.trust_score,
-                'effective_amount': carbon_entry.effective_amount,
-                'audit_status': carbon_entry.audit_status,
-                'registry_verification_id': carbon_entry.registry_verification_id,
-                'third_party_verification_url': carbon_entry.third_party_verification_url
+            formatted_logs.append(
+                {
+                    "id": log.id,
+                    "action": log.action,
+                    "details": log.details,
+                    "created_at": log.created_at.isoformat(),
+                    "user": log.user.email if log.user else None,
+                }
+            )
+
+        return Response(
+            {
+                "carbon_entry_id": carbon_entry.id,
+                "verification_status": {
+                    "verification_level": carbon_entry.verification_level,
+                    "trust_score": carbon_entry.trust_score,
+                    "effective_amount": carbon_entry.effective_amount,
+                    "audit_status": carbon_entry.audit_status,
+                    "registry_verification_id": carbon_entry.registry_verification_id,
+                    "third_party_verification_url": carbon_entry.third_party_verification_url,
+                },
+                "verification_result": verification_result,
+                "audit_trail": formatted_logs,
+                "verification_badge": carbon_entry.verification_badge,
+                "evidence_summary": {
+                    "photos_count": len(carbon_entry.evidence_photos or []),
+                    "documents_count": len(carbon_entry.evidence_documents or []),
+                    "gps_coordinates": bool(getattr(carbon_entry, "gps_coordinates", False)),
+                },
             },
-            'verification_result': verification_result,
-            'audit_trail': formatted_logs,
-            'verification_badge': carbon_entry.verification_badge,
-            'evidence_summary': {
-                'photos_count': len(carbon_entry.evidence_photos or []),
-                'documents_count': len(carbon_entry.evidence_documents or []),
-                'gps_coordinates': bool(getattr(carbon_entry, "gps_coordinates", False))
-            }
-        }, status=status.HTTP_200_OK)
-        
+            status=status.HTTP_200_OK,
+        )
+
     except CarbonEntry.DoesNotExist:
-        return Response({
-            'error': 'Carbon entry not found or access denied'
-        }, status=status.HTTP_404_NOT_FOUND)
+        return Response({"error": "Carbon entry not found or access denied"}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         logger.error(f"Verification status error: {e}")
-        return Response({
-            'error': 'Failed to get verification status',
-            'details': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {"error": "Failed to get verification status", "details": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 
-@api_view(['POST'])
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def bulk_verify_entries(request):
     """
     Bulk verify multiple carbon entries
-    
+
     POST /carbon/bulk-verify/
     {
         "carbon_entry_ids": [1, 2, 3],
@@ -8183,386 +8154,408 @@ def bulk_verify_entries(request):
     }
     """
     try:
-        from .services.verification_service import VerificationService
         from .services.audit_scheduler import AuditScheduler
-        
+        from .services.verification_service import VerificationService
+
         data = request.data
-        entry_ids = data.get('carbon_entry_ids', [])
-        verification_action = data.get('verification_action', 'schedule_audit')
-        
+        entry_ids = data.get("carbon_entry_ids", [])
+        verification_action = data.get("verification_action", "schedule_audit")
+
         if not entry_ids:
-            return Response({
-                'error': 'carbon_entry_ids is required'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response({"error": "carbon_entry_ids is required"}, status=status.HTTP_400_BAD_REQUEST)
+
         # Get carbon entries
-        carbon_entries = CarbonEntry.objects.filter(
-            id__in=entry_ids,
-            created_by=request.user
-        )
-        
+        carbon_entries = CarbonEntry.objects.filter(id__in=entry_ids, created_by=request.user)
+
         if carbon_entries.count() != len(entry_ids):
-            return Response({
-                'error': 'Some carbon entries not found or access denied'
-            }, status=status.HTTP_404_NOT_FOUND)
-        
+            return Response(
+                {"error": "Some carbon entries not found or access denied"}, status=status.HTTP_404_NOT_FOUND
+            )
+
         # Initialize services
         verification_service = VerificationService()
         audit_scheduler = AuditScheduler()
-        
+
         results = []
-        
+
         for entry in carbon_entries:
             try:
-                if verification_action == 'schedule_audit':
+                if verification_action == "schedule_audit":
                     # Schedule audit
                     audit_result = audit_scheduler.schedule_audit(entry)
-                    results.append({
-                        'carbon_entry_id': entry.id,
-                        'success': True,
-                        'action': 'audit_scheduled',
-                        'audit_date': audit_result.get('audit_date'),
-                        'message': f'Audit scheduled for entry {entry.id}'
-                    })
-                    
-                elif verification_action == 'verify_registry':
+                    results.append(
+                        {
+                            "carbon_entry_id": entry.id,
+                            "success": True,
+                            "action": "audit_scheduled",
+                            "audit_date": audit_result.get("audit_date"),
+                            "message": f"Audit scheduled for entry {entry.id}",
+                        }
+                    )
+
+                elif verification_action == "verify_registry":
                     # Verify registry credentials
                     if entry.registry_verification_id:
                         verification_result = verification_service.verify_offset_entry(entry)
-                        registry_verified = verification_result.get('registry_validation', {}).get('verified', False)
-                        
-                        results.append({
-                            'carbon_entry_id': entry.id,
-                            'success': registry_verified,
-                            'action': 'registry_verified',
-                            'registry_result': verification_result.get('registry_validation', {}),
-                            'message': f'Registry verification {"successful" if registry_verified else "failed"} for entry {entry.id}'
-                        })
+                        registry_verified = verification_result.get("registry_validation", {}).get("verified", False)
+
+                        results.append(
+                            {
+                                "carbon_entry_id": entry.id,
+                                "success": registry_verified,
+                                "action": "registry_verified",
+                                "registry_result": verification_result.get("registry_validation", {}),
+                                "message": f'Registry verification {"successful" if registry_verified else "failed"} for entry {entry.id}',
+                            }
+                        )
                     else:
-                        results.append({
-                            'carbon_entry_id': entry.id,
-                            'success': False,
-                            'action': 'registry_verification_skipped',
-                            'message': f'No registry verification ID for entry {entry.id}'
-                        })
-                        
-                elif verification_action == 'validate_evidence':
+                        results.append(
+                            {
+                                "carbon_entry_id": entry.id,
+                                "success": False,
+                                "action": "registry_verification_skipped",
+                                "message": f"No registry verification ID for entry {entry.id}",
+                            }
+                        )
+
+                elif verification_action == "validate_evidence":
                     # Validate evidence requirements
                     verification_result = verification_service.verify_offset_entry(entry)
-                    evidence_complete = verification_result.get('evidence_complete', False)
-                    
-                    results.append({
-                        'carbon_entry_id': entry.id,
-                        'success': evidence_complete,
-                        'action': 'evidence_validated',
-                        'evidence_result': {
-                            'complete': evidence_complete,
-                            'requirements': verification_result.get('requirements', [])
-                        },
-                        'message': f'Evidence validation {"passed" if evidence_complete else "failed"} for entry {entry.id}'
-                    })
-                    
+                    evidence_complete = verification_result.get("evidence_complete", False)
+
+                    results.append(
+                        {
+                            "carbon_entry_id": entry.id,
+                            "success": evidence_complete,
+                            "action": "evidence_validated",
+                            "evidence_result": {
+                                "complete": evidence_complete,
+                                "requirements": verification_result.get("requirements", []),
+                            },
+                            "message": f'Evidence validation {"passed" if evidence_complete else "failed"} for entry {entry.id}',
+                        }
+                    )
+
                 else:
-                    results.append({
-                        'carbon_entry_id': entry.id,
-                        'success': False,
-                        'action': 'unknown_action',
-                        'message': f'Unknown verification action: {verification_action}'
-                    })
-                    
+                    results.append(
+                        {
+                            "carbon_entry_id": entry.id,
+                            "success": False,
+                            "action": "unknown_action",
+                            "message": f"Unknown verification action: {verification_action}",
+                        }
+                    )
+
             except Exception as e:
                 logger.error(f"Bulk verification error for entry {entry.id}: {e}")
-                results.append({
-                    'carbon_entry_id': entry.id,
-                    'success': False,
-                    'action': verification_action,
-                    'error': str(e),
-                    'message': f'Verification failed for entry {entry.id}'
-                })
-        
+                results.append(
+                    {
+                        "carbon_entry_id": entry.id,
+                        "success": False,
+                        "action": verification_action,
+                        "error": str(e),
+                        "message": f"Verification failed for entry {entry.id}",
+                    }
+                )
+
         # Summary statistics
-        successful_count = sum(1 for r in results if r['success'])
+        successful_count = sum(1 for r in results if r["success"])
         failed_count = len(results) - successful_count
-        
-        return Response({
-            'bulk_verification_summary': {
-                'total_entries': len(results),
-                'successful': successful_count,
-                'failed': failed_count,
-                'verification_action': verification_action
+
+        return Response(
+            {
+                "bulk_verification_summary": {
+                    "total_entries": len(results),
+                    "successful": successful_count,
+                    "failed": failed_count,
+                    "verification_action": verification_action,
+                },
+                "results": results,
+                "message": f"Bulk verification completed: {successful_count} successful, {failed_count} failed",
             },
-            'results': results,
-            'message': f'Bulk verification completed: {successful_count} successful, {failed_count} failed'
-        }, status=status.HTTP_200_OK)
-        
+            status=status.HTTP_200_OK,
+        )
+
     except Exception as e:
         logger.error(f"Bulk verification error: {e}")
-        return Response({
-            'error': 'Bulk verification failed',
-            'details': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {"error": "Bulk verification failed", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_methodology_templates(request):
     """
     Get available methodology templates for carbon offset calculation
-    
+
     GET /carbon/methodology-templates/
     """
     try:
         from .services.registry_integration import RegistryIntegrationService
-        
+
         registry_service = RegistryIntegrationService()
-        
+
         # Get all available methodology templates
         methodology_types = [
-            'no_till', 'cover_crop', 'reforestation', 'composting', 
-            'renewable_energy', 'methane_capture'
+            "no_till",
+            "cover_crop",
+            "reforestation",
+            "composting",
+            "renewable_energy",
+            "methane_capture",
         ]
-        
+
         templates = {}
         for methodology_type in methodology_types:
             template = registry_service.get_methodology_template(methodology_type)
             if template:
                 templates[methodology_type] = template
-        
-        return Response({
-            'methodology_templates': templates,
-            'supported_methodologies': list(templates.keys()),
-            'registry_standards': {
-                'VCS': 'Verified Carbon Standard',
-                'Gold Standard': 'Gold Standard Foundation',
-                'CAR': 'Climate Action Reserve',
-                'ACR': 'American Carbon Registry'
+
+        return Response(
+            {
+                "methodology_templates": templates,
+                "supported_methodologies": list(templates.keys()),
+                "registry_standards": {
+                    "VCS": "Verified Carbon Standard",
+                    "Gold Standard": "Gold Standard Foundation",
+                    "CAR": "Climate Action Reserve",
+                    "ACR": "American Carbon Registry",
+                },
+                "message": f"Retrieved {len(templates)} methodology templates",
             },
-            'message': f'Retrieved {len(templates)} methodology templates'
-        }, status=status.HTTP_200_OK)
-        
+            status=status.HTTP_200_OK,
+        )
+
     except Exception as e:
         logger.error(f"Methodology templates error: {e}")
-        return Response({
-            'error': 'Failed to get methodology templates',
-            'details': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {"error": "Failed to get methodology templates", "details": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 
 # Enhanced Photo Evidence Service Endpoints
 
-@api_view(['POST'])
+
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
-@method_decorator(ratelimit(key='user', rate='20/m', method='POST', block=True))
+@method_decorator(ratelimit(key="user", rate="20/m", method="POST", block=True))
 def upload_evidence_photo_enhanced(request):
     """
     Enhanced photo evidence upload with comprehensive validation and processing
-    
+
     POST /carbon/evidence/upload/
     """
     try:
         from .services.photo_evidence_service import PhotoEvidenceService
-        
+
         photo_service = PhotoEvidenceService()
-        
-        carbon_entry_id = request.data.get('carbon_entry_id')
-        photo_file = request.FILES.get('photo')
-        
+
+        carbon_entry_id = request.data.get("carbon_entry_id")
+        photo_file = request.FILES.get("photo")
+
         if not carbon_entry_id or not photo_file:
-            return Response({
-                'error': 'carbon_entry_id and photo file are required'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response(
+                {"error": "carbon_entry_id and photo file are required"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
         # Get carbon entry and verify permissions
         carbon_entry = get_object_or_404(CarbonEntry, id=carbon_entry_id)
-        
+
         # Check if user has permission to upload evidence
-        if (carbon_entry.created_by != request.user and 
-            not carbon_entry.establishment.company.users.filter(id=request.user.id).exists()):
-            return Response({
-                'error': 'Permission denied'
-            }, status=status.HTTP_403_FORBIDDEN)
-        
+        if (
+            carbon_entry.created_by != request.user
+            and not carbon_entry.establishment.company.users.filter(id=request.user.id).exists()
+        ):
+            return Response({"error": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
+
         # Process photo upload
         result = photo_service.upload_evidence_photo(
             carbon_entry=carbon_entry,
             photo_file=photo_file,
             uploaded_by=request.user,
-            description=request.data.get('description', ''),
-            metadata=request.data.get('metadata', {})
+            description=request.data.get("description", ""),
+            metadata=request.data.get("metadata", {}),
         )
-        
-        return Response({
-            'success': True,
-            'photo_id': result['photo_id'],
-            'photo_url': result['photo_url'],
-            'metadata': result['metadata'],
-            'validation_status': result['validation_status'],
-            'message': 'Photo evidence uploaded successfully'
-        }, status=status.HTTP_201_CREATED)
-        
+
+        return Response(
+            {
+                "success": True,
+                "photo_id": result["photo_id"],
+                "photo_url": result["photo_url"],
+                "metadata": result["metadata"],
+                "validation_status": result["validation_status"],
+                "message": "Photo evidence uploaded successfully",
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
     except Exception as e:
         logger.error(f"Enhanced photo upload error: {e}")
-        return Response({
-            'error': 'Photo upload failed',
-            'details': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {"error": "Photo upload failed", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_evidence_photos_enhanced(request, carbon_entry_id):
     """
     Enhanced photo evidence retrieval with metadata and validation status
-    
+
     GET /carbon/evidence/<carbon_entry_id>/photos/
     """
     try:
         from .services.photo_evidence_service import PhotoEvidenceService
-        
+
         photo_service = PhotoEvidenceService()
-        
+
         # Get carbon entry and verify permissions
         carbon_entry = get_object_or_404(CarbonEntry, id=carbon_entry_id)
-        
+
         # Check permissions
-        if (carbon_entry.created_by != request.user and 
-            not carbon_entry.establishment.company.users.filter(id=request.user.id).exists()):
-            return Response({
-                'error': 'Permission denied'
-            }, status=status.HTTP_403_FORBIDDEN)
-        
+        if (
+            carbon_entry.created_by != request.user
+            and not carbon_entry.establishment.company.users.filter(id=request.user.id).exists()
+        ):
+            return Response({"error": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
+
         # Get photo evidence
         photos = photo_service.get_evidence_photos(carbon_entry)
-        
-        return Response({
-            'photos': photos,
-            'total_count': len(photos),
-            'validation_summary': photo_service.get_validation_summary(carbon_entry),
-            'message': f'Retrieved {len(photos)} evidence photos'
-        }, status=status.HTTP_200_OK)
-        
+
+        return Response(
+            {
+                "photos": photos,
+                "total_count": len(photos),
+                "validation_summary": photo_service.get_validation_summary(carbon_entry),
+                "message": f"Retrieved {len(photos)} evidence photos",
+            },
+            status=status.HTTP_200_OK,
+        )
+
     except Exception as e:
         logger.error(f"Enhanced photo retrieval error: {e}")
-        return Response({
-            'error': 'Photo retrieval failed',
-            'details': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {"error": "Photo retrieval failed", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
-@api_view(['POST'])
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def validate_photo_evidence(request):
     """
     Validate photo evidence for carbon entry
-    
+
     POST /carbon/evidence/validate/
     """
     try:
         from .services.photo_evidence_service import PhotoEvidenceService
-        
+
         photo_service = PhotoEvidenceService()
-        
-        carbon_entry_id = request.data.get('carbon_entry_id')
+
+        carbon_entry_id = request.data.get("carbon_entry_id")
         if not carbon_entry_id:
-            return Response({
-                'error': 'carbon_entry_id is required'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response({"error": "carbon_entry_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
         carbon_entry = get_object_or_404(CarbonEntry, id=carbon_entry_id)
-        
+
         # Validate all evidence photos
         validation_result = photo_service.validate_all_evidence(carbon_entry)
-        
-        return Response({
-            'validation_result': validation_result,
-            'is_valid': validation_result['overall_valid'],
-            'message': 'Photo evidence validation completed'
-        }, status=status.HTTP_200_OK)
-        
+
+        return Response(
+            {
+                "validation_result": validation_result,
+                "is_valid": validation_result["overall_valid"],
+                "message": "Photo evidence validation completed",
+            },
+            status=status.HTTP_200_OK,
+        )
+
     except Exception as e:
         logger.error(f"Photo validation error: {e}")
-        return Response({
-            'error': 'Photo validation failed',
-            'details': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {"error": "Photo validation failed", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 # Gas Optimization Endpoints
 
-@api_view(['POST'])
+
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def estimate_gas_costs(request):
     """
     Estimate gas costs for blockchain operations
-    
+
     POST /carbon/blockchain/gas-estimate/
     """
     try:
         from .services.gas_optimized_blockchain import GasOptimizedBlockchainService
-        
+
         gas_service = GasOptimizedBlockchainService()
-        
-        operation_type = request.data.get('operation_type')
-        operation_data = request.data.get('operation_data', {})
-        
+
+        operation_type = request.data.get("operation_type")
+        operation_data = request.data.get("operation_data", {})
+
         if not operation_type:
-            return Response({
-                'error': 'operation_type is required'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response({"error": "operation_type is required"}, status=status.HTTP_400_BAD_REQUEST)
+
         # Estimate gas costs
         estimation = gas_service.estimate_gas_costs(operation_type, operation_data)
-        
-        return Response({
-            'gas_estimation': estimation,
-            'recommended_strategy': gas_service.get_recommended_gas_strategy(),
-            'current_gas_prices': gas_service.get_current_gas_prices(),
-            'message': 'Gas estimation completed'
-        }, status=status.HTTP_200_OK)
-        
+
+        return Response(
+            {
+                "gas_estimation": estimation,
+                "recommended_strategy": gas_service.get_recommended_gas_strategy(),
+                "current_gas_prices": gas_service.get_current_gas_prices(),
+                "message": "Gas estimation completed",
+            },
+            status=status.HTTP_200_OK,
+        )
+
     except Exception as e:
         logger.error(f"Gas estimation error: {e}")
-        return Response({
-            'error': 'Gas estimation failed',
-            'details': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {"error": "Gas estimation failed", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
-@api_view(['POST'])
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def optimize_transaction_gas(request):
     """
     Optimize transaction gas usage
-    
+
     POST /carbon/blockchain/optimize-transaction/
     """
     try:
         from .services.gas_optimized_blockchain import GasOptimizedBlockchainService
-        
+
         gas_service = GasOptimizedBlockchainService()
-        
-        transactions = request.data.get('transactions', [])
-        strategy = request.data.get('strategy', 'STANDARD')
-        
+
+        transactions = request.data.get("transactions", [])
+        strategy = request.data.get("strategy", "STANDARD")
+
         if not transactions:
-            return Response({
-                'error': 'transactions array is required'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response({"error": "transactions array is required"}, status=status.HTTP_400_BAD_REQUEST)
+
         # Optimize transactions
         optimization_result = gas_service.optimize_transactions(transactions, strategy)
-        
-        return Response({
-            'optimization_result': optimization_result,
-            'gas_savings': optimization_result.get('estimated_savings', 0),
-            'optimized_transactions': optimization_result.get('optimized_transactions', []),
-            'message': 'Transaction optimization completed'
-        }, status=status.HTTP_200_OK)
-        
+
+        return Response(
+            {
+                "optimization_result": optimization_result,
+                "gas_savings": optimization_result.get("estimated_savings", 0),
+                "optimized_transactions": optimization_result.get("optimized_transactions", []),
+                "message": "Transaction optimization completed",
+            },
+            status=status.HTTP_200_OK,
+        )
+
     except Exception as e:
         logger.error(f"Transaction optimization error: {e}")
-        return Response({
-            'error': 'Transaction optimization failed',
-            'details': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+        return Response(
+            {"error": "Transaction optimization failed", "details": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )

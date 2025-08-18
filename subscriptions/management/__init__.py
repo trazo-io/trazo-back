@@ -1,1 +1,1 @@
-# Management commands for subscriptions app 
+# Management commands for subscriptions app

@@ -1,15 +1,15 @@
-import qrcode
-from django.conf import settings
 from io import BytesIO
+
+from django.conf import settings
+from django.core.files.base import ContentFile
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import Avg
-from django.core.validators import MinValueValidator, MaxValueValidator
-from common.models import Gallery
 
-from django.core.files.base import ContentFile
+import qrcode
+
 from backend.security.qr_security import generate_secure_qr_url
-
-
+from common.models import Gallery
 from product.models import Parcel
 
 
@@ -33,31 +33,25 @@ class History(models.Model):
     description = models.TextField(blank=True, null=True)
     production_amount = models.FloatField(default=0)
     qr_code = models.ImageField(upload_to="qr_codes", blank=True)
-    album = models.ForeignKey(
-        "common.Gallery", on_delete=models.CASCADE, blank=True, null=True
-    )
-    reputation = models.FloatField(
-        default=0, validators=[MinValueValidator(0), MaxValueValidator(5)]
-    )
-    
+    album = models.ForeignKey("common.Gallery", on_delete=models.CASCADE, blank=True, null=True)
+    reputation = models.FloatField(default=0, validators=[MinValueValidator(0), MaxValueValidator(5)])
+
     # Trust metrics for enhanced transparency
     confidence_score = models.FloatField(
-        default=0, validators=[MinValueValidator(0), MaxValueValidator(100)],
-        help_text="Statistical confidence in carbon calculations (0-100%)"
+        default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        help_text="Statistical confidence in carbon calculations (0-100%)",
     )
     transparency_score = models.FloatField(
-        default=0, validators=[MinValueValidator(0), MaxValueValidator(100)],
-        help_text="Overall transparency rating (0-100%)"
+        default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        help_text="Overall transparency rating (0-100%)",
     )
-    public_views = models.PositiveIntegerField(
-        default=0, help_text="Total public page views (QR + direct + search)"
-    )
+    public_views = models.PositiveIntegerField(default=0, help_text="Total public page views (QR + direct + search)")
     unique_visitors = models.PositiveIntegerField(
         default=0, help_text="Estimated unique visitors (session-based tracking)"
     )
-    updated_at = models.DateTimeField(
-        auto_now=True, help_text="Last time production data was updated"
-    )
+    updated_at = models.DateTimeField(auto_now=True, help_text="Last time production data was updated")
     product = models.ForeignKey(
         "product.Product",
         on_delete=models.CASCADE,
@@ -79,11 +73,15 @@ class History(models.Model):
     operator = models.ForeignKey(
         "users.User", on_delete=models.SET_NULL, blank=True, null=True, related_name="productions_operated"
     )
-    
+
     # Crop type for this production (migrated from Parcel)
     crop_type = models.ForeignKey(
-        "carbon.CropType", on_delete=models.SET_NULL, blank=True, null=True, 
-        related_name="productions", help_text="Crop type for this production"
+        "carbon.CropType",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="productions",
+        help_text="Crop type for this production",
     )
 
     def __str__(self) -> str:
@@ -91,11 +89,7 @@ class History(models.Model):
             "[ "
             + str(self.start_date.strftime("%m/%d/%Y"))
             + " - "
-            + (
-                str(self.finish_date.strftime("%m/%d/%Y"))
-                if self.finish_date
-                else "present"
-            )
+            + (str(self.finish_date.strftime("%m/%d/%Y")) if self.finish_date else "present")
             + " ]"
             + " - "
             + self.product.name
@@ -107,21 +101,9 @@ class History(models.Model):
         users = (
             self.history_weatherevent_events.all()
             .values_list("created_by", flat=True)
-            .union(
-                self.history_chemicalevent_events.all().values_list(
-                    "created_by", flat=True
-                )
-            )
-            .union(
-                self.history_productionevent_events.all().values_list(
-                    "created_by", flat=True
-                )
-            )
-            .union(
-                self.history_generalevent_events.all().values_list(
-                    "created_by", flat=True
-                )
-            )
+            .union(self.history_chemicalevent_events.all().values_list("created_by", flat=True))
+            .union(self.history_productionevent_events.all().values_list("created_by", flat=True))
+            .union(self.history_generalevent_events.all().values_list("created_by", flat=True))
         )
         return users
 
@@ -133,94 +115,96 @@ class History(models.Model):
             # If there are no reviews, the default reputation is 0
             self.reputation = 0.00
         self.save()
-    
+
     def calculate_confidence_score(self):
         """
         Calculate statistical confidence in carbon calculations (0-100%)
         Based on data completeness, measurement precision, verification status
         """
         score = 0
-        
+
         # Data completeness (40 points)
-        required_fields = ['start_date', 'finish_date', 'production_amount', 'parcel', 'product']
+        required_fields = ["start_date", "finish_date", "production_amount", "parcel", "product"]
         completed_fields = sum(1 for field in required_fields if getattr(self, field))
         score += (completed_fields / len(required_fields)) * 40
-        
+
         # Events documentation (30 points)
         total_events = (
-            self.history_productionevent_events.count() +
-            self.history_chemicalevent_events.count() +
-            self.history_weatherevent_events.count() +
-            self.history_generalevent_events.count()
+            self.history_productionevent_events.count()
+            + self.history_chemicalevent_events.count()
+            + self.history_weatherevent_events.count()
+            + self.history_generalevent_events.count()
         )
         if total_events > 0:
             score += min(total_events * 3, 30)  # 3 points per event, max 30
-        
+
         # USDA verification (20 points)
-        if hasattr(self, 'carbon_entries') and self.carbon_entries.filter(usda_verified=True).exists():
+        if hasattr(self, "carbon_entries") and self.carbon_entries.filter(usda_verified=True).exists():
             score += 20
-        
+
         # Recent updates (10 points)
         from django.utils import timezone
+
         if self.updated_at and (timezone.now() - self.updated_at).days < 30:
             score += 10
-        
+
         return min(round(score, 1), 100.0)
-    
+
     def calculate_transparency_score(self):
         """
         Calculate overall transparency rating (0-100%)
         Based on documentation completeness, public accessibility, third-party verifications
         """
         score = 0
-        
+
         # Basic information completeness (25 points)
         if self.name and self.description:
             score += 15
         if self.album and self.album.images.exists():
             score += 10
-        
+
         # Event documentation with images (25 points)
         events_with_images = 0
         total_events = (
-            self.history_productionevent_events.count() +
-            self.history_chemicalevent_events.count() +
-            self.history_generalevent_events.count()
+            self.history_productionevent_events.count()
+            + self.history_chemicalevent_events.count()
+            + self.history_generalevent_events.count()
         )
-        
+
         for event in self.history_productionevent_events.all():
-            if hasattr(event, 'images') and event.images.exists():
+            if hasattr(event, "images") and event.images.exists():
                 events_with_images += 1
-        
+
         if total_events > 0:
             score += (events_with_images / total_events) * 25
-        
+
         # Public accessibility (25 points)
         if self.published:
             score += 15
         if self.qr_code:
             score += 10
-        
+
         # Third-party verification (25 points)
-        if hasattr(self, 'carbon_entries') and self.carbon_entries.exists():
+        if hasattr(self, "carbon_entries") and self.carbon_entries.exists():
             score += 10
-        if hasattr(self, 'reviews') and self.reviews.count() > 0:
+        if hasattr(self, "reviews") and self.reviews.count() > 0:
             score += 10
-        if hasattr(self, 'blockchain_verification') and self.blockchain_verification:
+        if hasattr(self, "blockchain_verification") and self.blockchain_verification:
             score += 5
-        
+
         return min(round(score, 1), 100.0)
-    
+
     def get_farm_history_years(self):
         """
         Calculate years the farm has been operating based on establishment year
         """
         if self.parcel and self.parcel.establishment and self.parcel.establishment.year_established:
             from datetime import datetime
+
             current_year = datetime.now().year
             return max(0, current_year - self.parcel.establishment.year_established)
         return 0
-    
+
     def update_trust_metrics(self):
         """
         Update all trust metrics (confidence_score, transparency_score)
@@ -229,81 +213,95 @@ class History(models.Model):
         self.confidence_score = self.calculate_confidence_score()
         self.transparency_score = self.calculate_transparency_score()
         # Note: public_views is updated separately via view tracking
-        self.save(update_fields=['confidence_score', 'transparency_score'])
-    
+        self.save(update_fields=["confidence_score", "transparency_score"])
+
     def increment_public_views(self, request=None, skip_bot_check=False):
         """
         Increment public view counter (separate from QR scans)
         with bot filtering and unique visitor tracking
-        
+
         Args:
             request: Django request object for user agent analysis
             skip_bot_check: Skip bot detection (for testing)
         """
-        from django.db.models import F
         import logging
-        
+
+        from django.db.models import F
+
         logger = logging.getLogger(__name__)
-        
+
         # Bot detection - skip if likely a bot/crawler
         if request and not skip_bot_check:
-            user_agent = request.META.get('HTTP_USER_AGENT', '').lower()
+            user_agent = request.META.get("HTTP_USER_AGENT", "").lower()
             bot_indicators = [
-                'bot', 'crawler', 'spider', 'scraper', 'facebook', 'twitter',
-                'linkedinbot', 'whatsapp', 'telegram', 'googlebot', 'bingbot',
-                'slackbot', 'discordbot', 'applebot', 'yandexbot', 'baiduspider'
+                "bot",
+                "crawler",
+                "spider",
+                "scraper",
+                "facebook",
+                "twitter",
+                "linkedinbot",
+                "whatsapp",
+                "telegram",
+                "googlebot",
+                "bingbot",
+                "slackbot",
+                "discordbot",
+                "applebot",
+                "yandexbot",
+                "baiduspider",
             ]
-            
+
             if any(indicator in user_agent for indicator in bot_indicators):
                 logger.info(f"Skipping view increment for bot: {user_agent[:100]}")
-                return {'views_incremented': False, 'unique_visitor': False, 'reason': 'bot_detected'}
-        
+                return {"views_incremented": False, "unique_visitor": False, "reason": "bot_detected"}
+
         try:
             # Check if this is a unique visitor (session-based)
             is_unique_visitor = False
-            if request and hasattr(request, 'session'):
-                session_key = f'viewed_production_{self.id}'
+            if request and hasattr(request, "session"):
+                session_key = f"viewed_production_{self.id}"
                 if not request.session.get(session_key):
                     is_unique_visitor = True
                     request.session[session_key] = True
                     request.session.save()
-            
+
             # Atomic increment to prevent race conditions
-            update_fields = {'public_views': F('public_views') + 1}
+            update_fields = {"public_views": F("public_views") + 1}
             if is_unique_visitor:
-                update_fields['unique_visitors'] = F('unique_visitors') + 1
-            
+                update_fields["unique_visitors"] = F("unique_visitors") + 1
+
             History.objects.filter(id=self.id).update(**update_fields)
-            self.refresh_from_db(fields=['public_views', 'unique_visitors'])
-            
+            self.refresh_from_db(fields=["public_views", "unique_visitors"])
+
             logger.debug(
                 f"Incremented public views for production {self.id} to {self.public_views}"
                 f"{' (unique visitor)' if is_unique_visitor else ''}"
             )
-            
+
             return {
-                'views_incremented': True, 
-                'unique_visitor': is_unique_visitor,
-                'total_views': self.public_views,
-                'unique_visitors': self.unique_visitors
+                "views_incremented": True,
+                "unique_visitor": is_unique_visitor,
+                "total_views": self.public_views,
+                "unique_visitors": self.unique_visitors,
             }
-            
+
         except Exception as e:
             logger.error(f"Error incrementing public views for production {self.id}: {str(e)}")
-            return {'views_incremented': False, 'unique_visitor': False, 'reason': 'error', 'error': str(e)}
+            return {"views_incremented": False, "unique_visitor": False, "reason": "error", "error": str(e)}
 
     def save(self, *args, **kwargs):
         # Save first to get ID if this is a new object
         if not self.id:
             super().save(*args, **kwargs)
-        
+
         # Generate secure QR URL with HMAC signature
         secure_url = generate_secure_qr_url(
             f"{settings.BASE_CONSUMER_URL}production/{self.id}",
             self.id,
-            expiry_hours=24 * 365  # 1 year expiry for production QR codes
+            expiry_hours=24 * 365,  # 1 year expiry for production QR codes
         )
-        
+
         qr = qrcode.QRCode(
             version=1,
             error_correction=qrcode.constants.ERROR_CORRECT_L,
@@ -334,9 +332,10 @@ class History(models.Model):
         return 0
 
     def finish(self, history_data, images):
-        from django.utils import timezone
         from datetime import datetime
-        
+
+        from django.utils import timezone
+
         if images is not None:
             gallery = Gallery.objects.create()
             for image_data in images:
@@ -350,13 +349,13 @@ class History(models.Model):
         finish_date = history_data["finish_date"]
         if isinstance(finish_date, str):
             # Parse string datetime and make it timezone-aware
-            finish_date = datetime.fromisoformat(finish_date.replace('Z', '+00:00'))
+            finish_date = datetime.fromisoformat(finish_date.replace("Z", "+00:00"))
             if finish_date.tzinfo is None:
                 finish_date = timezone.make_aware(finish_date)
         elif isinstance(finish_date, datetime) and finish_date.tzinfo is None:
             # Make naive datetime timezone-aware
             finish_date = timezone.make_aware(finish_date)
-        
+
         self.finish_date = finish_date
         self.observation = history_data["observation"]
         self.published = True
@@ -366,37 +365,23 @@ class History(models.Model):
 
     def get_events(self):
         from .serializers import (
-            WeatherEventSerializer,
             ChemicalEventSerializer,
-            ProductionEventSerializer,
-            GeneralEventSerializer,
             EquipmentEventSerializer,
-            SoilManagementEventSerializer,
+            GeneralEventSerializer,
             PestManagementEventSerializer,
+            ProductionEventSerializer,
+            SoilManagementEventSerializer,
+            WeatherEventSerializer,
         )
 
         events = (
-            WeatherEventSerializer(
-                self.history_weatherevent_events.all(), many=True
-            ).data
-            + ChemicalEventSerializer(
-                self.history_chemicalevent_events.all(), many=True
-            ).data
-            + ProductionEventSerializer(
-                self.history_productionevent_events.all(), many=True
-            ).data
-            + GeneralEventSerializer(
-                self.history_generalevent_events.all(), many=True
-            ).data
-            + EquipmentEventSerializer(
-                self.history_equipmentevent_events.all(), many=True
-            ).data
-            + SoilManagementEventSerializer(
-                self.history_soilmanagementevent_events.all(), many=True
-            ).data
-            + PestManagementEventSerializer(
-                self.history_pestmanagementevent_events.all(), many=True
-            ).data
+            WeatherEventSerializer(self.history_weatherevent_events.all(), many=True).data
+            + ChemicalEventSerializer(self.history_chemicalevent_events.all(), many=True).data
+            + ProductionEventSerializer(self.history_productionevent_events.all(), many=True).data
+            + GeneralEventSerializer(self.history_generalevent_events.all(), many=True).data
+            + EquipmentEventSerializer(self.history_equipmentevent_events.all(), many=True).data
+            + SoilManagementEventSerializer(self.history_soilmanagementevent_events.all(), many=True).data
+            + PestManagementEventSerializer(self.history_pestmanagementevent_events.all(), many=True).data
         )
         return sorted(events, key=lambda event: event["index"])
 
@@ -404,9 +389,7 @@ class History(models.Model):
 class CommonEvent(models.Model):
     description = models.TextField()
     date = models.DateTimeField()
-    album = models.ForeignKey(
-        "common.Gallery", on_delete=models.CASCADE, blank=True, null=True
-    )
+    album = models.ForeignKey("common.Gallery", on_delete=models.CASCADE, blank=True, null=True)
     history = models.ForeignKey(
         History,
         on_delete=models.CASCADE,
@@ -415,9 +398,7 @@ class CommonEvent(models.Model):
         related_name="%(app_label)s_%(class)s_events",
     )
     index = models.IntegerField(default=0)
-    created_by = models.ForeignKey(
-        "users.User", on_delete=models.CASCADE, blank=True, null=True
-    )
+    created_by = models.ForeignKey("users.User", on_delete=models.CASCADE, blank=True, null=True)
 
     class Meta:
         abstract = True
@@ -426,11 +407,7 @@ class CommonEvent(models.Model):
         if self.history is None:
             return "-"
         if self.history.parcel is not None:
-            return (
-                self.history.parcel.name
-                + " - "
-                + self.history.parcel.establishment.name
-            )
+            return self.history.parcel.name + " - " + self.history.parcel.establishment.name
         else:
             return self.history.name
 
@@ -477,9 +454,7 @@ class ChemicalEvent(CommonEvent):
         (HERBICIDE, "Herbicide"),
     )
 
-    type = models.CharField(
-        max_length=2, choices=CHEMICAL_EVENTS, blank=True, null=True
-    )
+    type = models.CharField(max_length=2, choices=CHEMICAL_EVENTS, blank=True, null=True)
     commercial_name = models.CharField(max_length=60, blank=True, null=True)
     volume = models.CharField(max_length=60, blank=True, null=True)
     concentration = models.CharField(max_length=60, blank=True, null=True)
@@ -519,186 +494,121 @@ class HistoryScan(models.Model):
     Enhanced QR scan tracking with 2025 privacy, performance & security standards
     Supports dual functionality: page view analytics + consumer feedback collection
     """
-    
+
     # EXISTING CORE FIELDS
     history = models.ForeignKey(
         History,
         on_delete=models.CASCADE,
         related_name="history_scans",
     )
-    user = models.ForeignKey(
-        "users.User", on_delete=models.CASCADE, blank=True, null=True
-    )
+    user = models.ForeignKey("users.User", on_delete=models.CASCADE, blank=True, null=True)
     date = models.DateTimeField(auto_now_add=True)
     comment = models.TextField(blank=True, null=True)
-    
+
     # PRIVACY & GDPR COMPLIANCE (2025 Standard)
     ip_hash = models.CharField(
-        max_length=64, 
-        db_index=True, 
-        blank=True, 
+        max_length=64,
+        db_index=True,
+        blank=True,
         null=True,
-        help_text="SHA-256 hash of IP address for privacy-safe analytics"
+        help_text="SHA-256 hash of IP address for privacy-safe analytics",
     )
-    consent_given = models.BooleanField(
-        default=False, 
-        help_text="GDPR consent for analytics tracking"
-    )
-    consent_timestamp = models.DateTimeField(
-        null=True, 
-        blank=True, 
-        help_text="When consent was given"
-    )
-    data_retention_until = models.DateTimeField(
-        null=True, 
-        blank=True, 
-        help_text="Auto-cleanup date (GDPR compliance)"
-    )
-    
+    consent_given = models.BooleanField(default=False, help_text="GDPR consent for analytics tracking")
+    consent_timestamp = models.DateTimeField(null=True, blank=True, help_text="When consent was given")
+    data_retention_until = models.DateTimeField(null=True, blank=True, help_text="Auto-cleanup date (GDPR compliance)")
+
     # ENHANCED GEOLOCATION (Privacy-safe)
-    country_code = models.CharField(
-        max_length=2, 
-        blank=True, 
-        help_text="ISO country code (privacy-safe)"
-    )
-    region = models.CharField(
-        max_length=100, 
-        blank=True, 
-        help_text="State/region only (no city for privacy)"
-    )
-    
+    country_code = models.CharField(max_length=2, blank=True, help_text="ISO country code (privacy-safe)")
+    region = models.CharField(max_length=100, blank=True, help_text="State/region only (no city for privacy)")
+
     # LEGACY FIELDS (Deprecated - use privacy-safe alternatives above)
-    ip_address = models.CharField(
-        max_length=45, 
-        blank=True, 
-        null=True, 
-        help_text="DEPRECATED: Use ip_hash instead"
-    )
-    city = models.CharField(
-        max_length=100, 
-        blank=True, 
-        null=True, 
-        help_text="DEPRECATED: Use region instead"
-    )
-    country = models.CharField(
-        max_length=100, 
-        blank=True, 
-        null=True, 
-        help_text="DEPRECATED: Use country_code instead"
-    )
-    
+    ip_address = models.CharField(max_length=45, blank=True, null=True, help_text="DEPRECATED: Use ip_hash instead")
+    city = models.CharField(max_length=100, blank=True, null=True, help_text="DEPRECATED: Use region instead")
+    country = models.CharField(max_length=100, blank=True, null=True, help_text="DEPRECATED: Use country_code instead")
+
     # SESSION & DEDUPLICATION
     session_hash = models.CharField(
-        max_length=64, 
-        db_index=True, 
-        blank=True,
-        help_text="Privacy-safe browser fingerprint for deduplication"
+        max_length=64, db_index=True, blank=True, help_text="Privacy-safe browser fingerprint for deduplication"
     )
-    is_duplicate = models.BooleanField(
-        default=False, 
-        help_text="Mark duplicate scans within timeframe"
-    )
+    is_duplicate = models.BooleanField(default=False, help_text="Mark duplicate scans within timeframe")
     original_scan = models.ForeignKey(
-        'self', 
-        null=True, 
-        blank=True, 
+        "self",
+        null=True,
+        blank=True,
         on_delete=models.SET_NULL,
-        help_text="Link to original scan if this is a duplicate"
+        help_text="Link to original scan if this is a duplicate",
     )
-    
+
     # BOT DETECTION & QUALITY CONTROL
-    bot_score = models.FloatField(
-        default=0.0, 
-        help_text="Bot probability (0.0=human, 1.0=bot)"
-    )
-    is_verified_human = models.BooleanField(
-        default=False, 
-        help_text="Passed human verification checks"
-    )
-    user_agent_hash = models.CharField(
-        max_length=64, 
-        blank=True, 
-        help_text="Hashed user agent for pattern analysis"
-    )
-    
+    bot_score = models.FloatField(default=0.0, help_text="Bot probability (0.0=human, 1.0=bot)")
+    is_verified_human = models.BooleanField(default=False, help_text="Passed human verification checks")
+    user_agent_hash = models.CharField(max_length=64, blank=True, help_text="Hashed user agent for pattern analysis")
+
     # ENGAGEMENT & ANALYTICS
     scan_type = models.CharField(
-        max_length=20, 
+        max_length=20,
         choices=[
-            ('qr', 'QR Code Scan'),
-            ('feedback', 'Feedback Only'),
-            ('review', 'Full Review'),
-            ('share', 'Social Share')
-        ], 
-        default='qr',
-        help_text="Type of interaction"
+            ("qr", "QR Code Scan"),
+            ("feedback", "Feedback Only"),
+            ("review", "Full Review"),
+            ("share", "Social Share"),
+        ],
+        default="qr",
+        help_text="Type of interaction",
     )
-    engagement_score = models.FloatField(
-        default=0.0, 
-        help_text="Engagement quality (time spent, interactions)"
-    )
+    engagement_score = models.FloatField(default=0.0, help_text="Engagement quality (time spent, interactions)")
     referrer_type = models.CharField(
-        max_length=50, 
+        max_length=50,
         blank=True,
         choices=[
-            ('qr', 'QR Code'),
-            ('direct', 'Direct Link'),
-            ('social', 'Social Media'),
-            ('search', 'Search Engine'),
-            ('email', 'Email'),
-            ('other', 'Other')
+            ("qr", "QR Code"),
+            ("direct", "Direct Link"),
+            ("social", "Social Media"),
+            ("search", "Search Engine"),
+            ("email", "Email"),
+            ("other", "Other"),
         ],
-        default='qr',
-        help_text="How user reached the page"
+        default="qr",
+        help_text="How user reached the page",
     )
-    
+
     # PERFORMANCE INDEXES
     class Meta:
         indexes = [
             # Time-series queries for dashboard analytics
-            models.Index(fields=['date', 'history'], name='historyscan_date_history_idx'),
-            
+            models.Index(fields=["date", "history"], name="historyscan_date_history_idx"),
             # Session deduplication queries
-            models.Index(fields=['session_hash', 'date'], name='historyscan_session_date_idx'),
-            
+            models.Index(fields=["session_hash", "date"], name="historyscan_session_date_idx"),
             # Rate limiting by IP hash
-            models.Index(fields=['ip_hash', 'date'], name='historyscan_ip_date_idx'),
-            
+            models.Index(fields=["ip_hash", "date"], name="historyscan_ip_date_idx"),
             # GDPR cleanup queries
-            models.Index(fields=['data_retention_until'], name='historyscan_retention_idx'),
-            
+            models.Index(fields=["data_retention_until"], name="historyscan_retention_idx"),
             # Quality filtering (exclude bots/duplicates)
-            models.Index(fields=['is_duplicate', 'bot_score'], name='historyscan_quality_idx'),
-            
+            models.Index(fields=["is_duplicate", "bot_score"], name="historyscan_quality_idx"),
             # Consent management
-            models.Index(fields=['consent_given', 'date'], name='historyscan_consent_idx'),
-            
+            models.Index(fields=["consent_given", "date"], name="historyscan_consent_idx"),
             # Analytics queries by scan type
-            models.Index(fields=['scan_type', 'date'], name='historyscan_type_date_idx'),
+            models.Index(fields=["scan_type", "date"], name="historyscan_type_date_idx"),
         ]
         verbose_name = "History Scan"
         verbose_name_plural = "History Scans"
-    
+
     def __str__(self):
         return f"Scan {self.id} - {self.history} - {self.date.strftime('%Y-%m-%d')}"
-    
+
     def is_privacy_compliant(self):
         """Check if scan data follows privacy best practices"""
         return bool(
-            self.ip_hash and  # Uses hashed IP, not raw
-            not self.ip_address and  # No raw IP stored
-            self.consent_given and  # Has user consent
-            self.data_retention_until  # Has cleanup date
+            self.ip_hash  # Uses hashed IP, not raw
+            and not self.ip_address  # No raw IP stored
+            and self.consent_given  # Has user consent
+            and self.data_retention_until  # Has cleanup date
         )
-    
+
     def is_high_quality(self):
         """Check if scan is high quality (human, not duplicate, engaged)"""
-        return bool(
-            not self.is_duplicate and
-            self.bot_score < 0.3 and
-            self.engagement_score > 0.1
-        )
-    
+        return bool(not self.is_duplicate and self.bot_score < 0.3 and self.engagement_score > 0.1)
+
     def get_location_display(self):
         """Get privacy-safe location display"""
         if self.country_code and self.region:
@@ -715,15 +625,15 @@ class HistoryScan(models.Model):
 
 class EquipmentEvent(CommonEvent):
     """Events related to equipment maintenance, repairs, and fuel consumption"""
-    
+
     # Equipment event types
     MAINTENANCE = "MN"
-    REPAIR = "RE" 
+    REPAIR = "RE"
     CALIBRATION = "CA"
     FUEL_CONSUMPTION = "FC"
     BREAKDOWN = "BD"
     INSPECTION = "EI"
-    
+
     EQUIPMENT_TYPE_CHOICES = [
         (MAINTENANCE, "Maintenance"),
         (REPAIR, "Repair"),
@@ -732,10 +642,8 @@ class EquipmentEvent(CommonEvent):
         (BREAKDOWN, "Breakdown"),
         (INSPECTION, "Inspection"),
     ]
-    
-    type = models.CharField(
-        max_length=2, choices=EQUIPMENT_TYPE_CHOICES, default=MAINTENANCE
-    )
+
+    type = models.CharField(max_length=2, choices=EQUIPMENT_TYPE_CHOICES, default=MAINTENANCE)
     equipment_name = models.CharField(max_length=100, blank=True)
     fuel_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     fuel_type = models.CharField(max_length=50, blank=True)  # diesel, gasoline, etc.
@@ -743,7 +651,7 @@ class EquipmentEvent(CommonEvent):
     hours_used = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     area_covered = models.CharField(max_length=100, blank=True)
     extra_data = models.JSONField(blank=True, null=True)
-    
+
     class Meta:
         verbose_name = "Equipment Event"
         verbose_name_plural = "Equipment Events"
@@ -751,7 +659,7 @@ class EquipmentEvent(CommonEvent):
 
 class SoilManagementEvent(CommonEvent):
     """Events related to soil testing, amendments, and organic matter management"""
-    
+
     # Soil management event types
     SOIL_TEST = "ST"
     PH_ADJUSTMENT = "PA"
@@ -759,7 +667,7 @@ class SoilManagementEvent(CommonEvent):
     COVER_CROP = "CC"
     TILLAGE = "TI"
     COMPOSTING = "CO"
-    
+
     SOIL_TYPE_CHOICES = [
         (SOIL_TEST, "Soil Test"),
         (PH_ADJUSTMENT, "pH Adjustment"),
@@ -768,10 +676,8 @@ class SoilManagementEvent(CommonEvent):
         (TILLAGE, "Tillage"),
         (COMPOSTING, "Composting"),
     ]
-    
-    type = models.CharField(
-        max_length=2, choices=SOIL_TYPE_CHOICES, default=SOIL_TEST
-    )
+
+    type = models.CharField(max_length=2, choices=SOIL_TYPE_CHOICES, default=SOIL_TEST)
     soil_ph = models.DecimalField(max_digits=4, decimal_places=2, null=True, blank=True)
     organic_matter_percentage = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     amendment_type = models.CharField(max_length=100, blank=True)
@@ -779,16 +685,15 @@ class SoilManagementEvent(CommonEvent):
     test_results = models.JSONField(null=True, blank=True)  # Store complex test data
     carbon_sequestration_potential = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
     extra_data = models.JSONField(blank=True, null=True)
-    
+
     class Meta:
         verbose_name = "Soil Management Event"
         verbose_name_plural = "Soil Management Events"
 
 
-
 class PestManagementEvent(CommonEvent):
     """Events related to pest monitoring, beneficial insect releases, and IPM practices"""
-    
+
     # Pest management event types
     SCOUTING = "SC"
     BENEFICIAL_RELEASE = "BR"
@@ -796,7 +701,7 @@ class PestManagementEvent(CommonEvent):
     PEST_IDENTIFICATION = "PI"
     THRESHOLD_ASSESSMENT = "TA"
     IPM_IMPLEMENTATION = "IP"
-    
+
     PEST_TYPE_CHOICES = [
         (SCOUTING, "Scouting"),
         (BENEFICIAL_RELEASE, "Beneficial Release"),
@@ -805,10 +710,8 @@ class PestManagementEvent(CommonEvent):
         (THRESHOLD_ASSESSMENT, "Threshold Assessment"),
         (IPM_IMPLEMENTATION, "IPM Implementation"),
     ]
-    
-    type = models.CharField(
-        max_length=2, choices=PEST_TYPE_CHOICES, default=SCOUTING
-    )
+
+    type = models.CharField(max_length=2, choices=PEST_TYPE_CHOICES, default=SCOUTING)
     pest_species = models.CharField(max_length=200, blank=True)
     pest_pressure_level = models.CharField(max_length=50, blank=True)  # Low, Medium, High
     beneficial_species = models.CharField(max_length=200, blank=True)
@@ -818,7 +721,7 @@ class PestManagementEvent(CommonEvent):
     action_threshold_met = models.BooleanField(default=False)
     ipm_strategy = models.TextField(blank=True)
     extra_data = models.JSONField(blank=True, null=True)
-    
+
     class Meta:
         verbose_name = "Pest Management Event"
         verbose_name_plural = "Pest Management Events"

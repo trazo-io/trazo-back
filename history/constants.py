@@ -1,11 +1,11 @@
 from .models import (
-    WeatherEvent,
     ChemicalEvent,
-    ProductionEvent,
-    GeneralEvent,
     EquipmentEvent,
-    SoilManagementEvent,
+    GeneralEvent,
     PestManagementEvent,
+    ProductionEvent,
+    SoilManagementEvent,
+    WeatherEvent,
 )
 
 WEATHER_EVENT_TYPE = 0

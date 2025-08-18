@@ -1,14 +1,10 @@
+from django.urls import include, path
+
 from rest_framework.routers import SimpleRouter
-from .views import (
-    UserViewSet,
-    LoginViewSet,
-    RegistrationViewSet,
-    CustomTokenRefreshView,
-    APILogoutView,
-)
-from .social_auth import SocialAuthView, OAuthConfigView
 from rest_framework_simplejwt.views import TokenRefreshView
-from django.urls import path, include
+
+from .social_auth import OAuthConfigView, SocialAuthView
+from .views import APILogoutView, CustomTokenRefreshView, LoginViewSet, RegistrationViewSet, UserViewSet
 
 routes = SimpleRouter()
 
@@ -26,7 +22,6 @@ urlpatterns = [
     path("auth/logout/", APILogoutView.as_view(), name="logout"),
     path("auth/social/", SocialAuthView.as_view(), name="social_auth"),
     path("auth/oauth-config/", OAuthConfigView.as_view(), name="oauth_config"),
-    
     # Company invitation system
     path("", include("users.urls_invitation")),
 ]

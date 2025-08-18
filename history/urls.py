@@ -1,12 +1,8 @@
-from django.urls import path, include
-from rest_framework import routers
-from .views import (
-    HistoryViewSet,
-    EventViewSet,
-    HistoryScanViewSet,
-    PublicHistoryScanViewSet,
-)
+from django.urls import include, path
 
+from rest_framework import routers
+
+from .views import EventViewSet, HistoryScanViewSet, HistoryViewSet, PublicHistoryScanViewSet
 
 router = routers.DefaultRouter()
 

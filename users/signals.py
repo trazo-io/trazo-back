@@ -1,12 +1,14 @@
+import logging
+from smtplib import SMTPException
+from urllib.parse import quote
+
+from django.conf import settings
 from django.db.models.signals import post_save
 from django.dispatch import receiver
-from .models import VerificationCode, User
-from django.conf import settings
-from smtplib import SMTPException
-import logging
-from .utils import send_invitation_to_user, send_welcome_email, send_verification_email
-from .constants import PRODUCER, CONSUMER
-from urllib.parse import quote
+
+from .constants import CONSUMER, PRODUCER
+from .models import User, VerificationCode
+from .utils import send_invitation_to_user, send_verification_email, send_welcome_email
 
 logger = logging.getLogger(__name__)
 
@@ -31,10 +33,10 @@ def create_verification_code(sender, instance, created, **kwargs):
             # For regular signups: send both welcome and verification emails
             code = generate_verification_code()
             VerificationCode.objects.create(user=instance, code=code)
-            
+
             # Properly encode the email for URLs
             encoded_email = quote(instance.email)
-            
+
             verification_link = ""
             user_type = int(instance.user_type)
             if user_type == PRODUCER:
@@ -46,16 +48,10 @@ def create_verification_code(sender, instance, created, **kwargs):
             try:
                 # Send welcome email
                 send_welcome_email(instance)
-                
+
                 # Send verification email with new template
-                send_verification_email(
-                    user=instance,
-                    verification_code=code,
-                    verification_link=verification_link
-                )
-                
+                send_verification_email(user=instance, verification_code=code, verification_link=verification_link)
+
                 logger.info(f"Welcome and verification emails sent to new user: {instance.email}")
             except SMTPException as e:
-                logger.error(
-                    f"Could not send emails to user: {instance.email}, Error: {e}"
-                )
+                logger.error(f"Could not send emails to user: {instance.email}, Error: {e}")

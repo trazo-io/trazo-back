@@ -2,10 +2,10 @@
 """Django's command-line utility for administrative tasks."""
 import os
 import sys
-
-from dotenv import load_dotenv
 from pathlib import Path
+
 from decouple import config
+from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 

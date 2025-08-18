@@ -1,7 +1,8 @@
-from django.urls import path, include
-from rest_framework import routers
-from .views import ReviewsViewSet
+from django.urls import include, path
 
+from rest_framework import routers
+
+from .views import ReviewsViewSet
 
 router = routers.DefaultRouter()
 

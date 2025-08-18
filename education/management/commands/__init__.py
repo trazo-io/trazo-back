@@ -1,1 +1,1 @@
-# Education management commands 
+# Education management commands

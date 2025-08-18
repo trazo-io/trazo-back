@@ -8,11 +8,13 @@ https://docs.djangoproject.com/en/4.1/howto/deployment/asgi/
 """
 
 import os
+from pathlib import Path
+
 import django
 from django.core.asgi import get_asgi_application
+
 from decouple import config
 from dotenv import load_dotenv
-from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(os.path.join(BASE_DIR, ".env"))
@@ -32,14 +34,13 @@ django_asgi_app = get_asgi_application()
 # Import channels after Django is setup
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.security.websocket import AllowedHostsOriginValidator
-from notifications.middleware import JWTAuthMiddlewareStack
-from backend.routing import websocket_urlpatterns
 
-application = ProtocolTypeRouter({
-    "http": django_asgi_app,
-    "websocket": AllowedHostsOriginValidator(
-        JWTAuthMiddlewareStack(
-            URLRouter(websocket_urlpatterns)
-        )
-    ),
-})
+from backend.routing import websocket_urlpatterns
+from notifications.middleware import JWTAuthMiddlewareStack
+
+application = ProtocolTypeRouter(
+    {
+        "http": django_asgi_app,
+        "websocket": AllowedHostsOriginValidator(JWTAuthMiddlewareStack(URLRouter(websocket_urlpatterns))),
+    }
+)

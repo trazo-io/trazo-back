@@ -13,30 +13,31 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
-from django.contrib import admin
-from django.urls import path, include
+
 from django.conf import settings
 from django.conf.urls.static import static
-from django.middleware.csrf import get_token
-from django.views.decorators.csrf import ensure_csrf_cookie
+from django.contrib import admin
 from django.http import JsonResponse
+from django.middleware.csrf import get_token
+from django.urls import include, path
+from django.views.decorators.csrf import ensure_csrf_cookie
+
 
 @ensure_csrf_cookie
 def get_csrf_token(request):
     """
     Global CSRF token endpoint.
-    
+
     This endpoint ensures the CSRF cookie is set and returns the token
     for use in AJAX requests across the entire application.
     """
-    return JsonResponse({
-        'csrf_token': get_token(request),
-        'message': 'CSRF token set successfully'
-    })
+    return JsonResponse({"csrf_token": get_token(request), "message": "CSRF token set successfully"})
+
 
 def simple_test(request):
     """Simple test endpoint that doesn't require database"""
     return JsonResponse({"status": "ok", "message": "Django is working"})
+
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -51,11 +52,11 @@ urlpatterns = [
     path("api/", include("reviews.urls")),
     path("api/", include("common.urls")),
     path("api/", include("subscriptions.urls")),
-    path('api/carbon/', include('carbon.urls')),
-    path('api/support/', include('support.urls')),
-    path('api/education/', include('education.urls')),
-    path('api/notifications/', include('notifications.urls')),
-    path('api/security/', include('backend.security.urls')),
+    path("api/carbon/", include("carbon.urls")),
+    path("api/support/", include("support.urls")),
+    path("api/education/", include("education.urls")),
+    path("api/notifications/", include("notifications.urls")),
+    path("api/security/", include("backend.security.urls")),
     # Health check endpoints for container orchestration
     path("", include("health.urls")),
     path("test/", simple_test, name="simple_test"),  # Simple test endpoint

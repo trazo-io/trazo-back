@@ -6,8 +6,8 @@ from .models import Company, Establishment
 class EstablishmentInline(admin.TabularInline):
     model = Establishment
     extra = 0  # No extra empty forms
-    fields = ('name', 'city', 'state')
-    
+    fields = ("name", "city", "state")
+
 
 class CompanyAdmin(admin.ModelAdmin):
     list_display = ("name", "city", "state")

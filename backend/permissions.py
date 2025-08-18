@@ -1,14 +1,13 @@
-from rest_framework import permissions, viewsets
 from django.shortcuts import get_object_or_404
+
+from rest_framework import permissions, viewsets
 
 from company.models import Company
 
 
 class IsSuperUser(permissions.BasePermission):
     def has_permission(self, request, view):
-        return bool(
-            request.user and request.user.is_authenticated and request.user.is_superuser
-        )
+        return bool(request.user and request.user.is_authenticated and request.user.is_superuser)
 
 
 class AuthPermission(permissions.BasePermission):
@@ -44,8 +43,6 @@ class CompanyNestedViewSet(viewsets.GenericViewSet):
         if company_pk is not None:
             self.company = get_object_or_404(Company, pk=company_pk)
         if establishment_pk := kwargs.get("establishment_pk"):
-            self.establishment = get_object_or_404(
-                self.company.establishment_set.all(), pk=establishment_pk
-            )
+            self.establishment = get_object_or_404(self.company.establishment_set.all(), pk=establishment_pk)
 
         super().initial(request, *args, **kwargs)

@@ -8,27 +8,42 @@ This module contains background tasks for:
 - Report generation
 """
 
-from celery import shared_task
-from django.db.models import Sum, Avg, Count
-from .models import CarbonEntry, CarbonReport, CarbonBenchmark, SustainabilityBadge, CarbonAuditLog, IoTDevice, IoTDataPoint, Establishment, ProductionTemplate
-from django.utils import timezone
-from datetime import timedelta, datetime
-from django.contrib.auth import get_user_model
-from django.conf import settings
-import logging
-from .services.weather_api import WeatherService, get_weather_service
-from .services.john_deere_api import get_john_deere_api
-from company.models import Establishment, Company
-from product.models import Product
-from .services.blockchain import BlockchainService
-from .services.real_usda_integration import RealUSDAAPIClient
-from .services.usda_cache_service import specialized_cache, CacheStrategy
-from .services.api_circuit_breaker import usda_circuit_breakers
 import hashlib
 import json
+import logging
+from datetime import datetime, timedelta
+
+from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.db.models import Avg, Count, Sum
+from django.utils import timezone
+
+from celery import shared_task
+
+from company.models import Company, Establishment
+from product.models import Product
+
+from .models import (
+    CarbonAuditLog,
+    CarbonBenchmark,
+    CarbonEntry,
+    CarbonReport,
+    Establishment,
+    IoTDataPoint,
+    IoTDevice,
+    ProductionTemplate,
+    SustainabilityBadge,
+)
+from .services.api_circuit_breaker import usda_circuit_breakers
+from .services.blockchain import BlockchainService
+from .services.john_deere_api import get_john_deere_api
+from .services.real_usda_integration import RealUSDAAPIClient
+from .services.usda_cache_service import CacheStrategy, specialized_cache
+from .services.weather_api import WeatherService, get_weather_service
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+
 
 @shared_task
 def update_carbon_summaries():
@@ -38,8 +53,9 @@ def update_carbon_summaries():
     current_year = timezone.now().year
     # Placeholder logic for updating summaries
     # This will be expanded with detailed aggregation logic
-    print(f'Updating carbon summaries for year {current_year}')
-    return f'Updated summaries for {current_year}'
+    print(f"Updating carbon summaries for year {current_year}")
+    return f"Updated summaries for {current_year}"
+
 
 @shared_task
 def generate_carbon_report(report_id):
@@ -49,41 +65,42 @@ def generate_carbon_report(report_id):
     try:
         report = CarbonReport.objects.get(id=report_id)
         # Placeholder for report generation logic (e.g., PDF creation)
-        print(f'Generating report {report_id} for {report.year}')
+        print(f"Generating report {report_id} for {report.year}")
         # Update report status or save generated file path
-        report.document = 'path/to/generated/report.pdf'  # Placeholder
+        report.document = "path/to/generated/report.pdf"  # Placeholder
         report.save()
-        return f'Report {report_id} generated'
+        return f"Report {report_id} generated"
     except CarbonReport.DoesNotExist:
-        return f'Report {report_id} not found'
+        return f"Report {report_id} not found"
+
 
 @shared_task
 def generate_nightly_reports():
     """Generate carbon reports for all establishments and productions."""
     yesterday = timezone.now().date() - timedelta(days=1)
-    
+
     # Generate establishment reports
     establishments = Establishment.objects.all()
     for establishment in establishments:
-        entries = CarbonEntry.objects.filter(
-            establishment=establishment,
-            timestamp__date=yesterday
-        )
-        
-        total_emissions = entries.filter(type='emission').aggregate(Sum('co2e_amount'))['co2e_amount__sum'] or 0
-        total_offsets = entries.filter(type='offset').aggregate(Sum('co2e_amount'))['co2e_amount__sum'] or 0
+        entries = CarbonEntry.objects.filter(establishment=establishment, timestamp__date=yesterday)
+
+        total_emissions = entries.filter(type="emission").aggregate(Sum("co2e_amount"))["co2e_amount__sum"] or 0
+        total_offsets = entries.filter(type="offset").aggregate(Sum("co2e_amount"))["co2e_amount__sum"] or 0
         net_footprint = total_emissions - total_offsets
-        
+
         # Calculate carbon score
-        industry_average = CarbonBenchmark.objects.filter(
-            year=yesterday.year
-        ).aggregate(Avg('average_emissions'))['average_emissions__avg'] or 0
-        
+        industry_average = (
+            CarbonBenchmark.objects.filter(year=yesterday.year).aggregate(Avg("average_emissions"))[
+                "average_emissions__avg"
+            ]
+            or 0
+        )
+
         carbon_score = 100
         if industry_average > 0:
             ratio = net_footprint / industry_average
             carbon_score = max(1, min(100, int(100 * (1 - ratio))))
-        
+
         # Create report
         CarbonReport.objects.create(
             establishment=establishment,
@@ -93,90 +110,83 @@ def generate_nightly_reports():
             total_offsets=total_offsets,
             net_footprint=net_footprint,
             carbon_score=carbon_score,
-            generated_at=timezone.now()
+            generated_at=timezone.now(),
         )
+
 
 @shared_task
 def award_sustainability_badges():
     """Award sustainability badges based on carbon performance."""
     # Get all establishments with carbon entries
-    establishments = Establishment.objects.filter(
-        carbonentry__isnull=False
-    ).distinct()
-    
+    establishments = Establishment.objects.filter(carbonentry__isnull=False).distinct()
+
     # Also get all productions with carbon entries
-    productions = ProductionTemplate.objects.filter(
-        carbonentry__isnull=False
-    ).distinct()
-    
+    productions = ProductionTemplate.objects.filter(carbonentry__isnull=False).distinct()
+
     # Get all automatic badges
     automatic_badges = SustainabilityBadge.objects.filter(is_automatic=True)
-    
+
     # Process establishments
     for establishment in establishments:
         # Get latest year with entries
-        latest_year = CarbonEntry.objects.filter(
-            establishment=establishment
-        ).order_by('-year').values_list('year', flat=True).first()
-        
+        latest_year = (
+            CarbonEntry.objects.filter(establishment=establishment)
+            .order_by("-year")
+            .values_list("year", flat=True)
+            .first()
+        )
+
         if not latest_year:
             continue
-        
+
         # Calculate carbon score for this establishment
         entries = CarbonEntry.objects.filter(establishment=establishment, year=latest_year)
-        total_emissions = entries.filter(type='emission').aggregate(Sum('co2e_amount'))['co2e_amount__sum'] or 0
-        total_offsets = entries.filter(type='offset').aggregate(Sum('co2e_amount'))['co2e_amount__sum'] or 0
-        
+        total_emissions = entries.filter(type="emission").aggregate(Sum("co2e_amount"))["co2e_amount__sum"] or 0
+        total_offsets = entries.filter(type="offset").aggregate(Sum("co2e_amount"))["co2e_amount__sum"] or 0
+
         # Get industry benchmark if available
         industry_benchmark = 0
-        if hasattr(establishment, 'industry'):
-            benchmark = CarbonBenchmark.objects.filter(
-                industry=establishment.industry,
-                year=latest_year
-            ).first()
+        if hasattr(establishment, "industry"):
+            benchmark = CarbonBenchmark.objects.filter(industry=establishment.industry, year=latest_year).first()
             if benchmark:
                 industry_benchmark = benchmark.average_emissions
-        
+
         # Calculate carbon score
         carbon_score = CarbonEntry.calculate_carbon_score(
-            total_emissions=total_emissions,
-            total_offsets=total_offsets,
-            industry_benchmark=industry_benchmark
+            total_emissions=total_emissions, total_offsets=total_offsets, industry_benchmark=industry_benchmark
         )
-        
+
         # Award badges based on score
         for badge in automatic_badges:
             if carbon_score >= badge.minimum_score:
                 badge.establishments.add(establishment)
-    
+
     # Process productions
     for production in productions:
         # Calculate carbon score for this production
         entries = CarbonEntry.objects.filter(production=production)
-        total_emissions = entries.filter(type='emission').aggregate(Sum('co2e_amount'))['co2e_amount__sum'] or 0
-        total_offsets = entries.filter(type='offset').aggregate(Sum('co2e_amount'))['co2e_amount__sum'] or 0
-        
+        total_emissions = entries.filter(type="emission").aggregate(Sum("co2e_amount"))["co2e_amount__sum"] or 0
+        total_offsets = entries.filter(type="offset").aggregate(Sum("co2e_amount"))["co2e_amount__sum"] or 0
+
         # Get industry benchmark if available
         industry_benchmark = 0
-        if hasattr(production.establishment, 'industry'):
+        if hasattr(production.establishment, "industry"):
             benchmark = CarbonBenchmark.objects.filter(
-                industry=production.establishment.industry,
-                year=production.year
+                industry=production.establishment.industry, year=production.year
             ).first()
             if benchmark:
                 industry_benchmark = benchmark.average_emissions
-        
+
         # Calculate carbon score
         carbon_score = CarbonEntry.calculate_carbon_score(
-            total_emissions=total_emissions,
-            total_offsets=total_offsets,
-            industry_benchmark=industry_benchmark
+            total_emissions=total_emissions, total_offsets=total_offsets, industry_benchmark=industry_benchmark
         )
-        
+
         # Award badges based on score
         for badge in automatic_badges:
             if carbon_score >= badge.minimum_score:
                 badge.productions.add(production)
+
 
 @shared_task
 def cleanup_old_audit_logs():
@@ -184,118 +194,105 @@ def cleanup_old_audit_logs():
     one_year_ago = timezone.now() - timedelta(days=365)
     CarbonAuditLog.objects.filter(timestamp__lt=one_year_ago).delete()
 
+
 @shared_task
 def update_industry_benchmarks():
     """Update industry benchmarks based on recent data."""
     current_year = timezone.now().year
-    
+
     # Calculate average emissions by industry
-    benchmarks = CarbonEntry.objects.filter(
-        year=current_year,
-        type='emission'
-    ).values('establishment__industry').annotate(
-        average_emissions=Avg('co2e_amount')
+    benchmarks = (
+        CarbonEntry.objects.filter(year=current_year, type="emission")
+        .values("establishment__industry")
+        .annotate(average_emissions=Avg("co2e_amount"))
     )
-    
+
     # Update or create benchmarks
     for benchmark in benchmarks:
         CarbonBenchmark.objects.update_or_create(
             year=current_year,
-            industry=benchmark['establishment__industry'],
-            defaults={
-                'average_emissions': benchmark['average_emissions'],
-                'updated_at': timezone.now()
-            }
+            industry=benchmark["establishment__industry"],
+            defaults={"average_emissions": benchmark["average_emissions"], "updated_at": timezone.now()},
         )
+
 
 @shared_task
 def monitor_weather_conditions():
     """
     Monitor weather conditions for all establishments and create alerts when needed.
-    
+
     This task runs every hour to check weather conditions for all establishments
     that have weather monitoring enabled and creates appropriate alerts and
     recommendations.
     """
     logger.info("Starting weather monitoring task")
-    
+
     try:
         weather_service = get_weather_service()
         establishments_processed = 0
         alerts_created = 0
-        
+
         # Get all establishments with location data
-        establishments = Establishment.objects.filter(
-            latitude__isnull=False,
-            longitude__isnull=False
-        ).exclude(
-            latitude=0,
-            longitude=0
+        establishments = Establishment.objects.filter(latitude__isnull=False, longitude__isnull=False).exclude(
+            latitude=0, longitude=0
         )
-        
+
         logger.info(f"Monitoring weather for {establishments.count()} establishments")
-        
+
         for establishment in establishments:
             try:
                 # Get current weather conditions
                 weather_data = weather_service.get_current_conditions(
-                    float(establishment.latitude),
-                    float(establishment.longitude)
+                    float(establishment.latitude), float(establishment.longitude)
                 )
-                
+
                 if not weather_data:
                     logger.warning(f"No weather data for establishment {establishment.id}")
                     continue
-                
+
                 # Check if weather conditions warrant an alert
                 should_alert = weather_service.should_trigger_alert(weather_data)
-                
+
                 if should_alert:
                     # Generate agricultural recommendations
                     recommendations = weather_service.generate_agricultural_recommendations(
-                        weather_data,
-                        getattr(establishment, 'establishment_type', 'general')
+                        weather_data, getattr(establishment, "establishment_type", "general")
                     )
-                    
+
                     # Create weather alert event
-                    alert_created = create_weather_alert_event.delay(
-                        establishment.id,
-                        weather_data,
-                        recommendations
-                    )
-                    
+                    alert_created = create_weather_alert_event.delay(establishment.id, weather_data, recommendations)
+
                     if alert_created:
                         alerts_created += 1
                         logger.info(f"Weather alert created for establishment {establishment.id}")
-                
+
                 establishments_processed += 1
-                
+
             except Exception as e:
                 logger.error(f"Error processing weather for establishment {establishment.id}: {e}")
                 continue
-        
-        logger.info(f"Weather monitoring completed: {establishments_processed} processed, {alerts_created} alerts created")
-        
+
+        logger.info(
+            f"Weather monitoring completed: {establishments_processed} processed, {alerts_created} alerts created"
+        )
+
         return {
-            'status': 'success',
-            'establishments_processed': establishments_processed,
-            'alerts_created': alerts_created,
-            'timestamp': timezone.now().isoformat()
+            "status": "success",
+            "establishments_processed": establishments_processed,
+            "alerts_created": alerts_created,
+            "timestamp": timezone.now().isoformat(),
         }
-        
+
     except Exception as e:
         logger.error(f"Weather monitoring task failed: {e}")
-        return {
-            'status': 'error',
-            'error': str(e),
-            'timestamp': timezone.now().isoformat()
-        }
+        return {"status": "error", "error": str(e), "timestamp": timezone.now().isoformat()}
+
 
 @shared_task
 def create_weather_alert_event(establishment_id, weather_data, recommendations):
     """
     Create a weather alert event for a specific establishment.
-    
+
     Args:
         establishment_id: ID of the establishment
         weather_data: Current weather conditions
@@ -303,180 +300,176 @@ def create_weather_alert_event(establishment_id, weather_data, recommendations):
     """
     try:
         establishment = Establishment.objects.get(id=establishment_id)
-        
+
         # Get or create weather station device
         device, created = IoTDevice.objects.get_or_create(
             establishment=establishment,
-            device_type='weather_station',
+            device_type="weather_station",
             defaults={
-                'device_id': f'weather_station_{establishment_id}',
-                'name': f'Weather Station - {establishment.name}',
-                'status': 'online',
-                'battery_level': 100,
-                'last_seen': timezone.now()
-            }
+                "device_id": f"weather_station_{establishment_id}",
+                "name": f"Weather Station - {establishment.name}",
+                "status": "online",
+                "battery_level": 100,
+                "last_seen": timezone.now(),
+            },
         )
-        
+
         # Determine alert priority based on recommendations
-        critical_count = len([r for r in recommendations if r.get('priority') == 'critical'])
-        high_count = len([r for r in recommendations if r.get('priority') == 'high'])
-        
+        critical_count = len([r for r in recommendations if r.get("priority") == "critical"])
+        high_count = len([r for r in recommendations if r.get("priority") == "high"])
+
         requires_approval = critical_count > 0 or high_count > 0
         confidence = 0.95 if not requires_approval else 0.85
-        
+
         # Create weather data point
         data_point = IoTDataPoint.objects.create(
             device=device,
             timestamp=timezone.now(),
             data={
-                'weather_conditions': weather_data,
-                'recommendations': recommendations,
-                'alert_type': 'automated_weather_monitoring',
-                'source': 'weather_monitoring_task',
-                'requires_approval': requires_approval,
-                'critical_count': critical_count,
-                'high_count': high_count
+                "weather_conditions": weather_data,
+                "recommendations": recommendations,
+                "alert_type": "automated_weather_monitoring",
+                "source": "weather_monitoring_task",
+                "requires_approval": requires_approval,
+                "critical_count": critical_count,
+                "high_count": high_count,
             },
             quality_score=0.95,  # High quality for official weather data
-            processed=False
+            processed=False,
         )
-        
+
         # Update device status
-        device.update_status('online')
+        device.update_status("online")
         device.increment_data_points()
-        
+
         logger.info(f"Weather alert event created: {data_point.id} for establishment {establishment_id}")
-        
+
         return {
-            'status': 'success',
-            'data_point_id': data_point.id,
-            'device_id': device.id,
-            'requires_approval': requires_approval,
-            'confidence': confidence
+            "status": "success",
+            "data_point_id": data_point.id,
+            "device_id": device.id,
+            "requires_approval": requires_approval,
+            "confidence": confidence,
         }
-        
+
     except Establishment.DoesNotExist:
         logger.error(f"Establishment {establishment_id} not found")
-        return {'status': 'error', 'error': 'Establishment not found'}
+        return {"status": "error", "error": "Establishment not found"}
     except Exception as e:
         logger.error(f"Error creating weather alert event: {e}")
-        return {'status': 'error', 'error': str(e)}
+        return {"status": "error", "error": str(e)}
+
 
 @shared_task
 def sync_john_deere_devices():
     """
     Sync data from John Deere API for all connected devices.
-    
+
     This task runs every 30 minutes to fetch the latest data from
     John Deere equipment and create appropriate IoT data points.
     """
     logger.info("Starting John Deere device sync task")
-    
+
     try:
         john_deere_api = get_john_deere_api()
         if not john_deere_api:
             logger.warning("John Deere API not configured, skipping sync")
-            return {'status': 'skipped', 'reason': 'API not configured'}
-        
+            return {"status": "skipped", "reason": "API not configured"}
+
         devices_synced = 0
         data_points_created = 0
-        
+
         # Get all IoT devices with John Deere machine IDs
         devices = IoTDevice.objects.filter(
-            john_deere_machine_id__isnull=False,
-            api_connection_status='connected'
-        ).exclude(john_deere_machine_id='')
-        
+            john_deere_machine_id__isnull=False, api_connection_status="connected"
+        ).exclude(john_deere_machine_id="")
+
         logger.info(f"Syncing {devices.count()} John Deere devices")
-        
+
         for device in devices:
             try:
                 # Get machine data from John Deere API
                 machine_data = john_deere_api.get_machine_fuel_data(device.john_deere_machine_id)
-                
+
                 if machine_data:
                     # Create IoT data point
                     data_point = IoTDataPoint.objects.create(
                         device=device,
                         timestamp=timezone.now(),
                         data={
-                            'fuel_consumption': machine_data,
-                            'source': 'john_deere_api_sync',
-                            'machine_id': device.john_deere_machine_id,
-                            'sync_type': 'scheduled'
+                            "fuel_consumption": machine_data,
+                            "source": "john_deere_api_sync",
+                            "machine_id": device.john_deere_machine_id,
+                            "sync_type": "scheduled",
                         },
                         quality_score=0.95,
-                        processed=False
+                        processed=False,
                     )
-                    
+
                     data_points_created += 1
-                    
+
                     # Update device status
                     device.last_api_sync = timezone.now()
-                    device.api_connection_status = 'connected'
-                    device.update_status('online')
+                    device.api_connection_status = "connected"
+                    device.update_status("online")
                     device.increment_data_points()
                     device.save()
-                    
+
                     logger.info(f"Synced data for device {device.id}: {data_point.id}")
-                
+
                 devices_synced += 1
-                
+
             except Exception as e:
                 logger.error(f"Error syncing device {device.id}: {e}")
-                
+
                 # Update device error status
-                device.api_connection_status = 'error'
+                device.api_connection_status = "error"
                 device.api_error_message = str(e)
                 device.save()
-                
+
                 continue
-        
+
         logger.info(f"John Deere sync completed: {devices_synced} devices, {data_points_created} data points")
-        
+
         return {
-            'status': 'success',
-            'devices_synced': devices_synced,
-            'data_points_created': data_points_created,
-            'timestamp': timezone.now().isoformat()
+            "status": "success",
+            "devices_synced": devices_synced,
+            "data_points_created": data_points_created,
+            "timestamp": timezone.now().isoformat(),
         }
-        
+
     except Exception as e:
         logger.error(f"John Deere sync task failed: {e}")
-        return {
-            'status': 'error',
-            'error': str(e),
-            'timestamp': timezone.now().isoformat()
-        }
+        return {"status": "error", "error": str(e), "timestamp": timezone.now().isoformat()}
+
 
 @shared_task
 def process_pending_iot_data():
     """
     Process pending IoT data points and create carbon entries where appropriate.
-    
+
     This task runs every 15 minutes to process unprocessed IoT data points
     through the unified workflow.
     """
     logger.info("Starting IoT data processing task")
-    
+
     try:
         # Get unprocessed data points
         pending_data_points = IoTDataPoint.objects.filter(
-            processed=False,
-            timestamp__gte=timezone.now() - timedelta(hours=24)  # Only process recent data
-        ).order_by('timestamp')
-        
+            processed=False, timestamp__gte=timezone.now() - timedelta(hours=24)  # Only process recent data
+        ).order_by("timestamp")
+
         logger.info(f"Processing {pending_data_points.count()} pending data points")
-        
+
         processed_count = 0
         auto_approved_count = 0
         manual_approval_count = 0
-        
+
         for data_point in pending_data_points:
             try:
                 # Determine confidence score based on data quality and type
                 confidence = calculate_data_point_confidence(data_point)
-                
+
                 if confidence > 0.9:
                     # High confidence - auto-approve and create carbon entry if applicable
                     if should_create_carbon_entry(data_point):
@@ -484,182 +477,179 @@ def process_pending_iot_data():
                         if carbon_entry:
                             data_point.carbon_entry = carbon_entry
                             auto_approved_count += 1
-                    
+
                     data_point.processed = True
                     data_point.save()
-                    
+
                 elif confidence > 0.7:
                     # Medium confidence - mark for manual approval
                     # Data point remains unprocessed for manual review
                     manual_approval_count += 1
-                    
+
                 else:
                     # Low confidence - mark as processed but flag for review
                     data_point.processed = True
                     data_point.anomaly_detected = True
                     data_point.save()
-                
+
                 processed_count += 1
-                
+
             except Exception as e:
                 logger.error(f"Error processing data point {data_point.id}: {e}")
                 continue
-        
-        logger.info(f"IoT data processing completed: {processed_count} processed, {auto_approved_count} auto-approved, {manual_approval_count} pending manual approval")
-        
+
+        logger.info(
+            f"IoT data processing completed: {processed_count} processed, {auto_approved_count} auto-approved, {manual_approval_count} pending manual approval"
+        )
+
         return {
-            'status': 'success',
-            'processed_count': processed_count,
-            'auto_approved_count': auto_approved_count,
-            'manual_approval_count': manual_approval_count,
-            'timestamp': timezone.now().isoformat()
+            "status": "success",
+            "processed_count": processed_count,
+            "auto_approved_count": auto_approved_count,
+            "manual_approval_count": manual_approval_count,
+            "timestamp": timezone.now().isoformat(),
         }
-        
+
     except Exception as e:
         logger.error(f"IoT data processing task failed: {e}")
-        return {
-            'status': 'error',
-            'error': str(e),
-            'timestamp': timezone.now().isoformat()
-        }
+        return {"status": "error", "error": str(e), "timestamp": timezone.now().isoformat()}
+
 
 def calculate_data_point_confidence(data_point):
     """
     Calculate confidence score for an IoT data point.
-    
+
     Args:
         data_point: IoTDataPoint instance
-        
+
     Returns:
         float: Confidence score (0.0-1.0)
     """
     base_confidence = data_point.quality_score
-    
+
     # Adjust based on device status
-    if data_point.device.status == 'online':
+    if data_point.device.status == "online":
         base_confidence += 0.1
-    elif data_point.device.status == 'offline':
+    elif data_point.device.status == "offline":
         base_confidence -= 0.2
-    
+
     # Adjust based on data recency
     age_hours = (timezone.now() - data_point.timestamp).total_seconds() / 3600
     if age_hours < 1:
         base_confidence += 0.05
     elif age_hours > 24:
         base_confidence -= 0.1
-    
+
     # Adjust based on device type
-    if data_point.device.device_type in ['fuel_sensor', 'weather_station']:
+    if data_point.device.device_type in ["fuel_sensor", "weather_station"]:
         base_confidence += 0.05  # Higher confidence for reliable sensor types
-    
+
     return min(max(base_confidence, 0.0), 1.0)  # Clamp to 0.0-1.0
+
 
 def should_create_carbon_entry(data_point):
     """
     Determine if a data point should create a carbon entry.
-    
+
     Args:
         data_point: IoTDataPoint instance
-        
+
     Returns:
         bool: True if carbon entry should be created
     """
     data = data_point.data
-    
+
     # Fuel consumption data should create carbon entries
-    if 'fuel_consumption' in data:
+    if "fuel_consumption" in data:
         return True
-    
+
     # Weather alerts typically don't create carbon entries directly
-    if 'weather_conditions' in data:
+    if "weather_conditions" in data:
         return False
-    
+
     # Equipment usage data should create carbon entries
-    if data_point.device.device_type == 'fuel_sensor':
+    if data_point.device.device_type == "fuel_sensor":
         return True
-    
+
     return False
+
 
 def create_carbon_entry_from_data_point(data_point):
     """
     Create a carbon entry from an IoT data point.
-    
+
     Args:
         data_point: IoTDataPoint instance
-        
+
     Returns:
         CarbonEntry instance or None
     """
     try:
         data = data_point.data
-        
-        if 'fuel_consumption' in data:
-            fuel_data = data['fuel_consumption']
-            fuel_amount = fuel_data.get('fuel_used', 0)
-            
+
+        if "fuel_consumption" in data:
+            fuel_data = data["fuel_consumption"]
+            fuel_amount = fuel_data.get("fuel_used", 0)
+
             if fuel_amount > 0:
                 # Calculate CO2e emissions (diesel: ~2.7 kg CO2e per liter)
                 co2e_amount = fuel_amount * 2.7
-                
+
                 carbon_entry = CarbonEntry.objects.create(
                     establishment=data_point.device.establishment,
-                    type='emission',
+                    type="emission",
                     amount=co2e_amount,
                     co2e_amount=co2e_amount,
                     year=timezone.now().year,
                     description=f"Automated fuel consumption entry from {data_point.device.name}",
                     iot_device_id=data_point.device.device_id,
-                    timestamp=data_point.timestamp
+                    timestamp=data_point.timestamp,
                 )
-                
+
                 logger.info(f"Created carbon entry {carbon_entry.id} from data point {data_point.id}")
                 return carbon_entry
-        
+
         return None
-        
+
     except Exception as e:
         logger.error(f"Error creating carbon entry from data point {data_point.id}: {e}")
         return None
+
 
 @shared_task
 def cleanup_old_iot_data():
     """
     Clean up old IoT data points to prevent database bloat.
-    
+
     This task runs daily to remove IoT data points older than 90 days
     that have been processed and don't have associated carbon entries.
     """
     logger.info("Starting IoT data cleanup task")
-    
+
     try:
         cutoff_date = timezone.now() - timedelta(days=90)
-        
+
         # Delete old processed data points without carbon entries
         old_data_points = IoTDataPoint.objects.filter(
-            timestamp__lt=cutoff_date,
-            processed=True,
-            carbon_entry__isnull=True
+            timestamp__lt=cutoff_date, processed=True, carbon_entry__isnull=True
         )
-        
+
         deleted_count = old_data_points.count()
         old_data_points.delete()
-        
+
         logger.info(f"Cleaned up {deleted_count} old IoT data points")
-        
+
         return {
-            'status': 'success',
-            'deleted_count': deleted_count,
-            'cutoff_date': cutoff_date.isoformat(),
-            'timestamp': timezone.now().isoformat()
+            "status": "success",
+            "deleted_count": deleted_count,
+            "cutoff_date": cutoff_date.isoformat(),
+            "timestamp": timezone.now().isoformat(),
         }
-        
+
     except Exception as e:
         logger.error(f"IoT data cleanup task failed: {e}")
-        return {
-            'status': 'error',
-            'error': str(e),
-            'timestamp': timezone.now().isoformat()
-        }
+        return {"status": "error", "error": str(e), "timestamp": timezone.now().isoformat()}
+
 
 @shared_task(bind=True)
 def batch_submit_monthly_summaries(self):
@@ -670,114 +660,108 @@ def batch_submit_monthly_summaries(self):
     """
     try:
         blockchain_service = BlockchainService()
-        
+
         # Get last month's date range
         today = timezone.now().date()
         first_day_current_month = today.replace(day=1)
         last_day_previous_month = first_day_current_month - timedelta(days=1)
         first_day_previous_month = last_day_previous_month.replace(day=1)
-        
+
         logger.info(f"Processing monthly summaries for period: {first_day_previous_month} to {last_day_previous_month}")
-        
+
         # Get companies with active blockchain subscriptions
-        companies_with_blockchain = Company.objects.filter(
-            blockchain_subscription_status=True
-        )
-        
+        companies_with_blockchain = Company.objects.filter(blockchain_subscription_status=True)
+
         total_summaries = 0
         successful_summaries = 0
         failed_summaries = 0
-        
+
         for company in companies_with_blockchain:
             logger.info(f"Processing company: {company.name} (ID: {company.id})")
-            
+
             # Get all productions for this company in the previous month
             productions = ProductionTemplate.objects.filter(
                 parcel__establishment__company=company,
                 created_at__date__gte=first_day_previous_month,
-                created_at__date__lte=last_day_previous_month
+                created_at__date__lte=last_day_previous_month,
             )
-            
+
             for production in productions:
                 try:
                     # Get carbon entries for this production in the previous month
                     carbon_entries = CarbonEntry.objects.filter(
                         production=production,
                         timestamp__date__gte=first_day_previous_month,
-                        timestamp__date__lte=last_day_previous_month
+                        timestamp__date__lte=last_day_previous_month,
                     )
-                    
+
                     if not carbon_entries.exists():
                         logger.info(f"No carbon entries for production {production.id}, skipping")
                         continue
-                    
+
                     # Calculate monthly summary
-                    summary_data = carbon_entries.aggregate(
-                        total_co2e=Sum('co2e_amount'),
-                        entry_count=Count('id')
-                    )
-                    
-                    total_co2e = summary_data['total_co2e'] or 0
-                    entry_count = summary_data['entry_count'] or 0
-                    
+                    summary_data = carbon_entries.aggregate(total_co2e=Sum("co2e_amount"), entry_count=Count("id"))
+
+                    total_co2e = summary_data["total_co2e"] or 0
+                    entry_count = summary_data["entry_count"] or 0
+
                     # Collect IoT data
                     iot_data = collect_iot_data(production.id)
-                    
+
                     # Create hash of raw data for integrity
                     raw_data = {
-                        'production_id': production.id,
-                        'company_id': company.id,
-                        'period_start': first_day_previous_month.isoformat(),
-                        'period_end': last_day_previous_month.isoformat(),
-                        'total_co2e': float(total_co2e),
-                        'entry_count': entry_count,
-                        'entries': list(carbon_entries.values('id', 'co2e_amount', 'activity_type', 'timestamp')),
-                        'iot_data': iot_data
+                        "production_id": production.id,
+                        "company_id": company.id,
+                        "period_start": first_day_previous_month.isoformat(),
+                        "period_end": last_day_previous_month.isoformat(),
+                        "total_co2e": float(total_co2e),
+                        "entry_count": entry_count,
+                        "entries": list(carbon_entries.values("id", "co2e_amount", "activity_type", "timestamp")),
+                        "iot_data": iot_data,
                     }
-                    
-                    data_hash = hashlib.sha256(
-                        json.dumps(raw_data, sort_keys=True, default=str).encode()
-                    ).hexdigest()
-                    
+
+                    data_hash = hashlib.sha256(json.dumps(raw_data, sort_keys=True, default=str).encode()).hexdigest()
+
                     # Submit to blockchain
                     logger.info(f"Submitting monthly summary for production {production.id}")
-                    
+
                     blockchain_result = blockchain_service.submit_monthly_summary(
                         producer_id=company.id,
                         production_id=production.id,
                         total_co2e=total_co2e,
                         data_hash=data_hash,
-                        raw_data=raw_data
+                        raw_data=raw_data,
                     )
-                    
-                    if blockchain_result and blockchain_result.get('success'):
+
+                    if blockchain_result and blockchain_result.get("success"):
                         successful_summaries += 1
                         logger.info(f"Successfully submitted summary for production {production.id}")
                         logger.info(f"Transaction hash: {blockchain_result.get('transaction_hash')}")
                     else:
                         failed_summaries += 1
                         logger.error(f"Failed to submit summary for production {production.id}: {blockchain_result}")
-                        
+
                     total_summaries += 1
-                    
+
                 except Exception as e:
                     failed_summaries += 1
                     logger.error(f"Error processing production {production.id}: {str(e)}")
                     continue
-        
+
         logger.info(f"Monthly summary batch complete: {successful_summaries}/{total_summaries} successful")
-        
+
         return {
-            'status': 'completed',
-            'total_summaries': total_summaries,
-            'successful_summaries': successful_summaries,
-            'failed_summaries': failed_summaries,
-            'processed_period': f"{first_day_previous_month} to {last_day_previous_month}"
+            "status": "completed",
+            "total_summaries": total_summaries,
+            "successful_summaries": successful_summaries,
+            "failed_summaries": failed_summaries,
+            "processed_period": f"{first_day_previous_month} to {last_day_previous_month}",
         }
-        
+
     except Exception as e:
         logger.error(f"Error in batch_submit_monthly_summaries: {str(e)}")
         raise self.retry(countdown=60, max_retries=3)
+
 
 @shared_task
 def collect_iot_data(production_id):
@@ -792,36 +776,33 @@ def collect_iot_data(production_id):
         # - Satellite imagery APIs
         # - Weather stations
         # - Farm equipment telemetry
-        
+
         iot_data = {
-            'soil_moisture': {
-                'average': 65.5,  # percentage
-                'readings_count': 30,
-                'last_reading': timezone.now().isoformat()
+            "soil_moisture": {
+                "average": 65.5,  # percentage
+                "readings_count": 30,
+                "last_reading": timezone.now().isoformat(),
             },
-            'weather': {
-                'avg_temperature': 22.5,  # celsius
-                'total_rainfall': 45.2,   # mm
-                'avg_humidity': 58.3      # percentage
+            "weather": {
+                "avg_temperature": 22.5,  # celsius
+                "total_rainfall": 45.2,  # mm
+                "avg_humidity": 58.3,  # percentage
             },
-            'satellite_imagery': {
-                'ndvi_score': 0.75,  # Normalized Difference Vegetation Index
-                'cloud_coverage': 15,  # percentage
-                'image_date': timezone.now().isoformat()
+            "satellite_imagery": {
+                "ndvi_score": 0.75,  # Normalized Difference Vegetation Index
+                "cloud_coverage": 15,  # percentage
+                "image_date": timezone.now().isoformat(),
             },
-            'equipment_usage': {
-                'tractor_hours': 12.5,
-                'irrigation_hours': 48.0,
-                'fuel_consumption': 85.3  # liters
-            }
+            "equipment_usage": {"tractor_hours": 12.5, "irrigation_hours": 48.0, "fuel_consumption": 85.3},  # liters
         }
-        
+
         logger.info(f"Collected IoT data for production {production_id}")
         return iot_data
-        
+
     except Exception as e:
         logger.error(f"Error collecting IoT data for production {production_id}: {str(e)}")
         return {}
+
 
 @shared_task
 def verify_blockchain_compliance(production_id):
@@ -830,32 +811,29 @@ def verify_blockchain_compliance(production_id):
     """
     try:
         blockchain_service = BlockchainService()
-        
+
         production = ProductionTemplate.objects.get(id=production_id)
         company = production.parcel.establishment.company
-        
+
         # Only process if company has blockchain subscription
         if not company.blockchain_subscription_status:
             logger.info(f"Company {company.name} does not have blockchain subscription, skipping verification")
-            return {'status': 'skipped', 'reason': 'no_blockchain_subscription'}
-        
+            return {"status": "skipped", "reason": "no_blockchain_subscription"}
+
         # Verify compliance on blockchain
         compliance_result = blockchain_service.verify_compliance(production_id)
-        
+
         logger.info(f"Compliance verification for production {production_id}: {compliance_result}")
-        
-        return {
-            'status': 'completed',
-            'production_id': production_id,
-            'compliance_result': compliance_result
-        }
-        
+
+        return {"status": "completed", "production_id": production_id, "compliance_result": compliance_result}
+
     except ProductionTemplate.DoesNotExist:
         logger.error(f"Production {production_id} not found")
-        return {'status': 'error', 'message': 'Production not found'}
+        return {"status": "error", "message": "Production not found"}
     except Exception as e:
         logger.error(f"Error verifying compliance for production {production_id}: {str(e)}")
-        return {'status': 'error', 'message': str(e)}
+        return {"status": "error", "message": str(e)}
+
 
 @shared_task
 def issue_carbon_credits(production_id, credits_amount):
@@ -864,49 +842,51 @@ def issue_carbon_credits(production_id, credits_amount):
     """
     try:
         blockchain_service = BlockchainService()
-        
+
         production = ProductionTemplate.objects.get(id=production_id)
         company = production.parcel.establishment.company
-        
+
         # Only process if company has blockchain subscription
         if not company.blockchain_subscription_status:
             logger.info(f"Company {company.name} does not have blockchain subscription, skipping credit issuance")
-            return {'status': 'skipped', 'reason': 'no_blockchain_subscription'}
-        
+            return {"status": "skipped", "reason": "no_blockchain_subscription"}
+
         # Issue credits on blockchain
         credits_result = blockchain_service.issue_credits(production_id, credits_amount)
-        
+
         logger.info(f"Credits issued for production {production_id}: {credits_result}")
-        
+
         return {
-            'status': 'completed',
-            'production_id': production_id,
-            'credits_amount': credits_amount,
-            'credits_result': credits_result
+            "status": "completed",
+            "production_id": production_id,
+            "credits_amount": credits_amount,
+            "credits_result": credits_result,
         }
-        
+
     except ProductionTemplate.DoesNotExist:
         logger.error(f"Production {production_id} not found")
-        return {'status': 'error', 'message': 'Production not found'}
+        return {"status": "error", "message": "Production not found"}
     except Exception as e:
         logger.error(f"Error issuing credits for production {production_id}: {str(e)}")
-        return {'status': 'error', 'message': str(e)}
+        return {"status": "error", "message": str(e)}
+
 
 @shared_task
 def schedule_monthly_audits():
     """Monthly task to schedule random audits"""
     try:
         from .services.audit_scheduler import AuditScheduler
-        
+
         scheduler = AuditScheduler()
         result = scheduler.schedule_random_audits()
-        
+
         logger.info(f"Monthly audit scheduling completed: {result}")
         return f"Scheduled {result['count']} audits"
-        
+
     except Exception as e:
         logger.error(f"Error in schedule_monthly_audits: {e}")
         return f"Error scheduling audits: {str(e)}"
+
 
 @shared_task
 def process_pending_verifications():
@@ -914,22 +894,20 @@ def process_pending_verifications():
     try:
         from .models import CarbonEntry
         from .services.verification_service import VerificationService
-        
+
         verification_service = VerificationService()
         pending_entries = CarbonEntry.objects.filter(
-            type='offset',
-            verification_level='self_reported',
-            audit_status='pending'
+            type="offset", verification_level="self_reported", audit_status="pending"
         )
 
         processed_count = 0
         for entry in pending_entries:
             try:
                 result = verification_service.verify_offset_entry(entry)
-                if result['approved']:
-                    entry.audit_status = 'passed'
+                if result["approved"]:
+                    entry.audit_status = "passed"
                 else:
-                    entry.audit_status = 'failed'
+                    entry.audit_status = "failed"
                 entry.save()
                 processed_count += 1
             except Exception as e:
@@ -937,10 +915,11 @@ def process_pending_verifications():
 
         logger.info(f"Processed {processed_count} verification requests")
         return f"Processed {processed_count} verification requests"
-        
+
     except Exception as e:
         logger.error(f"Error in process_pending_verifications: {e}")
         return f"Error processing verifications: {str(e)}"
+
 
 @shared_task
 def check_overdue_audits():
@@ -948,17 +927,16 @@ def check_overdue_audits():
     try:
         from .models import VerificationAudit
         from .services.audit_scheduler import AuditScheduler
-        
+
         # Find audits that are overdue (more than 7 days past audit_date)
         overdue_date = timezone.now() - timedelta(days=7)
-        overdue_audits = VerificationAudit.objects.filter(
-            result='pending',
-            audit_date__lt=overdue_date
-        ).select_related('carbon_entry', 'carbon_entry__created_by')
+        overdue_audits = VerificationAudit.objects.filter(result="pending", audit_date__lt=overdue_date).select_related(
+            "carbon_entry", "carbon_entry__created_by"
+        )
 
         scheduler = AuditScheduler()
         reminder_count = 0
-        
+
         for audit in overdue_audits:
             try:
                 # Send reminder notification
@@ -969,29 +947,26 @@ def check_overdue_audits():
 
         logger.info(f"Sent {reminder_count} audit reminders")
         return f"Sent {reminder_count} audit reminders"
-        
+
     except Exception as e:
         logger.error(f"Error in check_overdue_audits: {e}")
         return f"Error checking overdue audits: {str(e)}"
+
 
 @shared_task
 def update_trust_scores():
     """Update trust scores for all offset entries based on verification level"""
     try:
         from .models import CarbonEntry
-        
-        trust_scores = {
-            'self_reported': 0.5,
-            'certified_project': 1.0
-        }
-        
+
+        trust_scores = {"self_reported": 0.5, "certified_project": 1.0}
+
         updated_count = 0
         for verification_level, trust_score in trust_scores.items():
-            entries = CarbonEntry.objects.filter(
-                type='offset',
-                verification_level=verification_level
-            ).exclude(trust_score=trust_score)
-            
+            entries = CarbonEntry.objects.filter(type="offset", verification_level=verification_level).exclude(
+                trust_score=trust_score
+            )
+
             for entry in entries:
                 entry.trust_score = trust_score
                 entry.effective_amount = entry.amount * trust_score
@@ -1000,10 +975,11 @@ def update_trust_scores():
 
         logger.info(f"Updated trust scores for {updated_count} entries")
         return f"Updated trust scores for {updated_count} entries"
-        
+
     except Exception as e:
         logger.error(f"Error in update_trust_scores: {e}")
         return f"Error updating trust scores: {str(e)}"
+
 
 @shared_task
 def validate_registry_verifications():
@@ -1011,51 +987,46 @@ def validate_registry_verifications():
     try:
         from .models import CarbonEntry
         from .services.registry_integration import RegistryIntegrationService
-        
+
         registry_service = RegistryIntegrationService()
-        
+
         # Find entries with registry verification IDs that need validation
         entries_to_validate = CarbonEntry.objects.filter(
-            type='offset',
-            verification_level='certified_project',
-            registry_verification_id__isnull=False
-        ).exclude(registry_verification_id='')
+            type="offset", verification_level="certified_project", registry_verification_id__isnull=False
+        ).exclude(registry_verification_id="")
 
         validated_count = 0
         failed_count = 0
-        
+
         for entry in entries_to_validate:
             try:
                 # Attempt to validate with VCS first, then Gold Standard
-                validation_result = registry_service.validate_project_credentials(
-                    entry.registry_verification_id, 
-                    'vcs'
-                )
-                
-                if not validation_result['verified']:
+                validation_result = registry_service.validate_project_credentials(entry.registry_verification_id, "vcs")
+
+                if not validation_result["verified"]:
                     validation_result = registry_service.validate_project_credentials(
-                        entry.registry_verification_id, 
-                        'gold_standard'
+                        entry.registry_verification_id, "gold_standard"
                     )
-                
-                if validation_result['verified']:
+
+                if validation_result["verified"]:
                     entry.third_party_verification_url = registry_service.get_registry_project_url(
-                        entry.registry_verification_id, 
-                        'vcs' if 'vcs' in validation_result else 'gold_standard'
+                        entry.registry_verification_id, "vcs" if "vcs" in validation_result else "gold_standard"
                     )
                     entry.save()
                     validated_count += 1
                 else:
                     failed_count += 1
-                    logger.warning(f"Failed to validate registry ID {entry.registry_verification_id} for entry {entry.id}")
-                    
+                    logger.warning(
+                        f"Failed to validate registry ID {entry.registry_verification_id} for entry {entry.id}"
+                    )
+
             except Exception as e:
                 logger.error(f"Error validating registry for entry {entry.id}: {e}")
                 failed_count += 1
 
         logger.info(f"Registry validation completed: {validated_count} validated, {failed_count} failed")
         return f"Registry validation: {validated_count} validated, {failed_count} failed"
-        
+
     except Exception as e:
         logger.error(f"Error in validate_registry_verifications: {e}")
         return f"Error validating registries: {str(e)}"
@@ -1063,11 +1034,12 @@ def validate_registry_verifications():
 
 # USDA API Cache Management Tasks
 
+
 @shared_task
-def refresh_usda_cache_data(crop_type: str, state: str, year: int = None, data_type: str = 'yield'):
+def refresh_usda_cache_data(crop_type: str, state: str, year: int = None, data_type: str = "yield"):
     """
     Background task to refresh stale USDA cache data
-    
+
     Args:
         crop_type: Type of crop (e.g., 'corn', 'soybeans')
         state: State abbreviation (e.g., 'IA', 'IL')
@@ -1076,42 +1048,42 @@ def refresh_usda_cache_data(crop_type: str, state: str, year: int = None, data_t
     """
     try:
         logger.info(f"Starting background refresh for {crop_type} {state} {data_type}")
-        
+
         usda_client = RealUSDAAPIClient()
-        
-        if data_type == 'yield':
+
+        if data_type == "yield":
             # Refresh NASS yield data
             data = usda_client.get_nass_crop_data(crop_type, state, year)
             if data:
                 cache_identifier = f"{crop_type.lower()}_{state.upper()}_{year or 'current'}"
                 specialized_cache.cache_manager.set_cached_data(
-                    'nass_yield',
+                    "nass_yield",
                     cache_identifier,
                     data,
                     CacheStrategy.STATIC_DATA,
-                    params={'year': year} if year else None
+                    params={"year": year} if year else None,
                 )
                 logger.info(f"Refreshed NASS yield data for {crop_type} {state}")
-                return {'success': True, 'data_type': 'nass_yield', 'records': len(data.get('data', []))}
-        
-        elif data_type == 'benchmark':
+                return {"success": True, "data_type": "nass_yield", "records": len(data.get("data", []))}
+
+        elif data_type == "benchmark":
             # Refresh benchmark data
             benchmark = usda_client.get_benchmark_yield(crop_type, state)
             if benchmark:
                 specialized_cache.cache_benchmark_data(crop_type, state, benchmark)
                 logger.info(f"Refreshed benchmark data for {crop_type} {state}: {benchmark}")
-                return {'success': True, 'data_type': 'benchmark', 'value': benchmark}
-        
-        elif data_type == 'carbon_calculation':
+                return {"success": True, "data_type": "benchmark", "value": benchmark}
+
+        elif data_type == "carbon_calculation":
             # This would require farm_practices data, so we skip individual calculation refresh
             logger.info(f"Carbon calculation refresh skipped - requires specific farm practices")
-            return {'success': True, 'data_type': 'carbon_calculation', 'action': 'skipped'}
-        
-        return {'success': False, 'error': f'Unknown data type: {data_type}'}
-        
+            return {"success": True, "data_type": "carbon_calculation", "action": "skipped"}
+
+        return {"success": False, "error": f"Unknown data type: {data_type}"}
+
     except Exception as e:
         logger.error(f"Failed to refresh USDA cache data: {e}")
-        return {'success': False, 'error': str(e)}
+        return {"success": False, "error": str(e)}
 
 
 @shared_task
@@ -1122,25 +1094,25 @@ def preload_common_usda_data():
     """
     try:
         logger.info("Starting USDA data preloading task")
-        
+
         # Preload common datasets
         results = specialized_cache.cache_manager.preload_common_data()
-        
+
         successful_loads = sum(1 for success in results.values() if success)
         total_loads = len(results)
-        
+
         logger.info(f"USDA preloading completed: {successful_loads}/{total_loads} successful")
-        
+
         return {
-            'success': True,
-            'preloaded_datasets': successful_loads,
-            'total_attempts': total_loads,
-            'details': results
+            "success": True,
+            "preloaded_datasets": successful_loads,
+            "total_attempts": total_loads,
+            "details": results,
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to preload USDA data: {e}")
-        return {'success': False, 'error': str(e)}
+        return {"success": False, "error": str(e)}
 
 
 @shared_task
@@ -1151,24 +1123,20 @@ def cleanup_expired_usda_cache():
     """
     try:
         logger.info("Starting USDA cache cleanup task")
-        
+
         # Cleanup expired entries
         cleaned_count = specialized_cache.cache_manager.cleanup_expired_cache()
-        
+
         # Get current cache statistics
         stats = specialized_cache.cache_manager.get_cache_stats()
-        
+
         logger.info(f"USDA cache cleanup completed: {cleaned_count} entries cleaned")
-        
-        return {
-            'success': True,
-            'cleaned_entries': cleaned_count,
-            'cache_stats': stats
-        }
-        
+
+        return {"success": True, "cleaned_entries": cleaned_count, "cache_stats": stats}
+
     except Exception as e:
         logger.error(f"Failed to cleanup USDA cache: {e}")
-        return {'success': False, 'error': str(e)}
+        return {"success": False, "error": str(e)}
 
 
 @shared_task
@@ -1179,40 +1147,40 @@ def monitor_api_health():
     """
     try:
         logger.info("Starting API health monitoring")
-        
+
         # Get circuit breaker health status
         health_status = usda_circuit_breakers.health_check()
-        
+
         # Log any unhealthy APIs
-        if health_status['unhealthy_apis']:
+        if health_status["unhealthy_apis"]:
             logger.warning(f"Unhealthy APIs detected: {health_status['unhealthy_apis']}")
-        
-        if health_status['degraded_apis']:
+
+        if health_status["degraded_apis"]:
             logger.warning(f"Degraded APIs detected: {health_status['degraded_apis']}")
-        
+
         # Get detailed statistics
         detailed_stats = usda_circuit_breakers.get_all_stats()
-        
+
         # Check for APIs with high failure rates
         for api_name, stats in detailed_stats.items():
-            if stats['recent_failure_rate'] > 50:
+            if stats["recent_failure_rate"] > 50:
                 logger.error(f"High failure rate for {api_name}: {stats['recent_failure_rate']:.1f}%")
-            elif stats['recent_failure_rate'] > 25:
+            elif stats["recent_failure_rate"] > 25:
                 logger.warning(f"Elevated failure rate for {api_name}: {stats['recent_failure_rate']:.1f}%")
-        
+
         return {
-            'success': True,
-            'overall_status': health_status['overall_status'],
-            'healthy_apis': len(health_status['healthy_apis']),
-            'degraded_apis': len(health_status['degraded_apis']),
-            'unhealthy_apis': len(health_status['unhealthy_apis']),
-            'total_success_rate': health_status['total_success_rate'],
-            'detailed_stats': detailed_stats
+            "success": True,
+            "overall_status": health_status["overall_status"],
+            "healthy_apis": len(health_status["healthy_apis"]),
+            "degraded_apis": len(health_status["degraded_apis"]),
+            "unhealthy_apis": len(health_status["unhealthy_apis"]),
+            "total_success_rate": health_status["total_success_rate"],
+            "detailed_stats": detailed_stats,
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to monitor API health: {e}")
-        return {'success': False, 'error': str(e)}
+        return {"success": False, "error": str(e)}
 
 
 @shared_task
@@ -1223,27 +1191,25 @@ def reset_circuit_breakers_if_needed():
     """
     try:
         logger.info("Checking circuit breakers for potential reset")
-        
+
         stats = usda_circuit_breakers.get_all_stats()
         reset_apis = []
-        
+
         for api_name, api_stats in stats.items():
             # Reset if circuit has been open for more than 30 minutes
-            if (api_stats['state'] == 'open' and 
-                api_stats['last_failure_time'] and
-                api_stats['last_failure_time'] < (timezone.now() - timedelta(minutes=30)).isoformat()):
-                
+            if (
+                api_stats["state"] == "open"
+                and api_stats["last_failure_time"]
+                and api_stats["last_failure_time"] < (timezone.now() - timedelta(minutes=30)).isoformat()
+            ):
+
                 breaker = usda_circuit_breakers.get_breaker(api_name)
                 breaker.reset()
                 reset_apis.append(api_name)
                 logger.info(f"Reset circuit breaker for {api_name} after extended downtime")
-        
-        return {
-            'success': True,
-            'reset_apis': reset_apis,
-            'total_resets': len(reset_apis)
-        }
-        
+
+        return {"success": True, "reset_apis": reset_apis, "total_resets": len(reset_apis)}
+
     except Exception as e:
         logger.error(f"Failed to reset circuit breakers: {e}")
-        return {'success': False, 'error': str(e)} 
+        return {"success": False, "error": str(e)}
