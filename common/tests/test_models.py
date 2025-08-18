@@ -20,8 +20,12 @@ import boto3
 try:
     from moto import mock_s3
 except ImportError:
-    # Fallback for newer moto versions
-    from moto.s3 import mock_s3
+    try:
+        # Fallback for newer moto versions
+        from moto.s3 import mock_s3
+    except ImportError:
+        # Use mock_aws for latest moto versions
+        from moto import mock_aws as mock_s3
 from PIL import Image
 
 from common.models import Gallery, GalleryImage

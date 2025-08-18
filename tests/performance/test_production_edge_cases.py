@@ -45,15 +45,15 @@ sys.path.insert(0, "/Users/oscarmunoz/dev/trazo/trazo-back")
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.settings.dev")
 django.setup()
 
-from backend.services.secrets_manager import SecureSecretsManager
-from carbon.models import CarbonEntry, CarbonSource, EmissionFactor
+from backend.services.secrets_manager import ProductionSecretsManager
+from carbon.models import CarbonEntry, CarbonSource, CachedEmissionFactor
 from carbon.services.api_circuit_breaker import APICircuitBreaker
-from carbon.services.circuit_breaker_enhanced import CircuitBreakerService
+from carbon.services.circuit_breaker_enhanced import EnhancedCircuitBreaker
 from carbon.services.enhanced_error_handling import EnhancedErrorHandler
-from carbon.services.multisig_blockchain_enhanced import EnhancedMultiSigBlockchainService
-from carbon.services.real_usda_integration import USDAIntegrationService
-from carbon.services.secure_key_management import SecureKeyManagement
-from common.services.enhanced_logging import SecurityAuditLogger
+from carbon.services.multisig_blockchain_enhanced import MultiSigBlockchainService
+from carbon.services.real_usda_integration import RealUSDAAPIClient
+from carbon.services.secure_key_management import SecureKeyManager
+from common.services.enhanced_logging import EnhancedLogger
 from common.services.external_api_manager import ExternalAPIManager
 
 

@@ -29,7 +29,8 @@ from rest_framework.test import APIClient, APITestCase
 
 from company.models import Company, Establishment
 from history.models import History
-from product.models import CropTemplate, Parcel, ProductCertification
+from product.models import Parcel
+# Skip CropTemplate and ProductCertification imports - models not implemented in product.models
 from subscriptions.models import Subscription
 from users.models import User, WorksIn
 

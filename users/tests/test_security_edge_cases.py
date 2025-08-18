@@ -36,10 +36,10 @@ sys.path.insert(0, "/Users/oscarmunoz/dev/trazo/trazo-back")
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.settings.dev")
 django.setup()
 
-from backend.services.secrets_manager import SecureSecretsManager
+from backend.services.secrets_manager import ProductionSecretsManager
 from carbon.models import CarbonEntry
-from carbon.services.secure_key_management import SecureKeyManagement
-from common.services.enhanced_logging import SecurityAuditLogger
+from carbon.services.secure_key_management import SecureKeyManager
+from common.services.enhanced_logging import EnhancedLogger
 from company.models import Company, Establishment
 from users.models import User
 

@@ -37,17 +37,17 @@ from carbon.models import (
     SustainabilityBadge,
     USDAComplianceRecord,
 )
-from carbon.services.blockchain import BlockchainService
-from carbon.services.carbon_calculator import CarbonCalculator
+from carbon.services.blockchain import BlockchainCarbonService
+from carbon.services.calculator import CarbonFootprintCalculator
 from carbon.services.circuit_breaker_enhanced import CircuitBreakerManager
 from carbon.services.coolfarm_service import CoolFarmService
-from carbon.services.emission_factors import (
-    EmissionFactorsService,
-    get_electricity_factor,
-    get_fertilizer_factor,
-    get_fuel_factor,
-    get_irrigation_factor,
-)
+# Skip emission factor function imports - functions not implemented
+# from carbon.services.emission_factors import (
+#     get_electricity_factor,
+#     get_fertilizer_factor,
+#     get_fuel_factor,
+#     get_irrigation_factor,
+# )
 from company.models import Company, Establishment
 from history.models import History
 from product.models import Parcel

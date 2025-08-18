@@ -35,7 +35,7 @@ from .models import (
     SustainabilityBadge,
 )
 from .services.api_circuit_breaker import usda_circuit_breakers
-from .services.blockchain import BlockchainService
+from .services.blockchain import BlockchainCarbonService
 from .services.john_deere_api import get_john_deere_api
 from .services.real_usda_integration import RealUSDAAPIClient
 from .services.usda_cache_service import CacheStrategy, specialized_cache
@@ -659,7 +659,7 @@ def batch_submit_monthly_summaries(self):
     Only processes companies with active blockchain subscriptions.
     """
     try:
-        blockchain_service = BlockchainService()
+        blockchain_service = BlockchainCarbonService()
 
         # Get last month's date range
         today = timezone.now().date()
@@ -810,7 +810,7 @@ def verify_blockchain_compliance(production_id):
     Verify USDA compliance for a specific production on blockchain
     """
     try:
-        blockchain_service = BlockchainService()
+        blockchain_service = BlockchainCarbonService()
 
         production = ProductionTemplate.objects.get(id=production_id)
         company = production.parcel.establishment.company
@@ -841,7 +841,7 @@ def issue_carbon_credits(production_id, credits_amount):
     Issue carbon credits for verified production on blockchain
     """
     try:
-        blockchain_service = BlockchainService()
+        blockchain_service = BlockchainCarbonService()
 
         production = ProductionTemplate.objects.get(id=production_id)
         company = production.parcel.establishment.company

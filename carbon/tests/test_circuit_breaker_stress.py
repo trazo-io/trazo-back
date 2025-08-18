@@ -29,7 +29,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.settings.dev")
 django.setup()
 
 from carbon.services.api_circuit_breaker import APICircuitBreaker
-from carbon.services.circuit_breaker_enhanced import CircuitBreakerService
+from carbon.services.circuit_breaker_enhanced import EnhancedCircuitBreaker
 from common.services.external_api_manager import ExternalAPIManager
 
 
