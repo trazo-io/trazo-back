@@ -21,6 +21,11 @@ from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from botocore.exceptions import ClientError, BotoCoreError, NoCredentialsError
 from .aws_utils import SecureAWSClient
+from rest_framework import status
+from rest_framework.pagination import PageNumberPagination
+from django.db.models import Q
+from company.models import Establishment
+from product.models import Parcel
 
 logger = logging.getLogger(__name__)
 
@@ -459,3 +464,190 @@ def get_presigned_read_urls_batch(request):
             'presigned_urls': presigned_urls,
             'batch_size': len(valid_s3_urls)
         })
+
+
+class GlobalSearchPagination(PageNumberPagination):
+    """Custom pagination for search results"""
+    page_size = 20
+    page_size_query_param = 'limit'
+    max_page_size = 50
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def global_search(request):
+    """
+    Global search endpoint for establishments and parcels.
+    
+    Query Parameters:
+    - q: Search query string (required, min 2 characters)
+    - types: Comma-separated list of types to search ('establishment', 'parcel')
+    - limit: Number of results per page (default: 20, max: 50)
+    - offset: Starting offset for pagination
+    
+    Returns:
+    - results: List of search results with type, name, description, metadata
+    - count: Total number of results
+    - next/previous: Pagination URLs
+    """
+    try:
+        # Get search parameters
+        query = request.GET.get('q', '').strip()
+        types = request.GET.get('types', 'establishment,parcel').split(',')
+        
+        # Validate query
+        if not query or len(query) < 2:
+            return Response({
+                'error': 'Query parameter "q" is required and must be at least 2 characters long'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get user's companies for permission filtering
+        user_companies = []
+        if hasattr(request.user, 'companies') and request.user.companies.exists():
+            user_companies = request.user.companies.all()
+        elif hasattr(request.user, 'usercompany_set'):
+            user_companies = [uc.company for uc in request.user.usercompany_set.all()]
+        
+        if not user_companies:
+            return Response({
+                'results': [],
+                'count': 0,
+                'message': 'No companies associated with user'
+            })
+        
+        company_ids = [company.id for company in user_companies]
+        results = []
+        
+        # Search establishments
+        if 'establishment' in types:
+            establishment_query = Q(
+                (Q(name__icontains=query) |
+                 Q(description__icontains=query) |
+                 Q(address__icontains=query) |
+                 Q(city__icontains=query) |
+                 Q(zone__icontains=query) |
+                 Q(state__icontains=query)) &
+                Q(company_id__in=company_ids) &
+                Q(is_active=True)
+            )
+            
+            establishments = Establishment.objects.filter(establishment_query).select_related('company', 'album')[:25]
+            
+            for establishment in establishments:
+                # Get location string
+                location_parts = [establishment.city, establishment.state]
+                location = ', '.join(filter(None, location_parts))
+                
+                # Get image URL
+                image_url = None
+                if establishment.album and hasattr(establishment.album, 'images') and establishment.album.images.exists():
+                    first_image = establishment.album.images.first()
+                    if first_image and first_image.image:
+                        image_url = first_image.image.url
+                
+                # Calculate carbon score (simplified - you may want to implement proper calculation)
+                carbon_score = None
+                if hasattr(establishment, 'parcels'):
+                    parcel_count = establishment.parcels.count()
+                    if parcel_count > 0:
+                        # Simplified carbon score calculation
+                        carbon_score = parcel_count * 25.5  # Example calculation
+                
+                results.append({
+                    'id': establishment.id,
+                    'type': 'establishment',
+                    'name': establishment.name,
+                    'description': establishment.description,
+                    'location': location,
+                    'image_url': image_url,
+                    'carbon_score': carbon_score,
+                    'area': f"{establishment.total_acreage} acres" if establishment.total_acreage else None,
+                    'status': 'Active' if establishment.is_active else 'Inactive',
+                    'establishment_id': establishment.id,
+                    'company_id': establishment.company_id,
+                    'created_at': establishment.company.created_at.isoformat() if hasattr(establishment.company, 'created_at') else None,
+                    'updated_at': establishment.company.updated_at.isoformat() if hasattr(establishment.company, 'updated_at') else None,
+                })
+        
+        # Search parcels
+        if 'parcel' in types:
+            parcel_query = Q(
+                (Q(name__icontains=query) |
+                 Q(description__icontains=query) |
+                 Q(address__icontains=query) |
+                 Q(soil_type__icontains=query) |
+                 Q(unique_code__icontains=query)) &
+                Q(establishment__company_id__in=company_ids)
+            )
+            
+            parcels = Parcel.objects.filter(parcel_query).select_related('establishment', 'establishment__company', 'album', 'product')[:25]
+            
+            for parcel in parcels:
+                # Get location (parcel address or establishment location)
+                if parcel.address:
+                    location = parcel.address
+                else:
+                    location_parts = [parcel.establishment.city, parcel.establishment.state]
+                    location = ', '.join(filter(None, location_parts))
+                
+                # Get image URL
+                image_url = None
+                if parcel.album and hasattr(parcel.album, 'images') and parcel.album.images.exists():
+                    first_image = parcel.album.images.first()
+                    if first_image and first_image.image:
+                        image_url = first_image.image.url
+                
+                # Get carbon score from current history if available
+                carbon_score = None
+                if parcel.current_history and hasattr(parcel.current_history, 'carbon_footprint'):
+                    carbon_score = parcel.current_history.carbon_footprint
+                
+                results.append({
+                    'id': parcel.id,
+                    'type': 'parcel',
+                    'name': parcel.name,
+                    'description': parcel.description,
+                    'location': location,
+                    'image_url': image_url,
+                    'carbon_score': carbon_score,
+                    'area': f"{parcel.area} hectares" if parcel.area else None,
+                    'status': 'Certified' if parcel.certified else 'Standard',
+                    'establishment_id': parcel.establishment_id,
+                    'company_id': parcel.establishment.company_id,
+                    'created_at': None,  # Parcel model doesn't have created_at
+                    'updated_at': None,  # Parcel model doesn't have updated_at
+                })
+        
+        # Sort results by relevance (exact matches first, then partial matches)
+        query_lower = query.lower()
+        
+        def relevance_score(result):
+            name_lower = result['name'].lower()
+            if name_lower == query_lower:
+                return 3  # Exact match
+            elif name_lower.startswith(query_lower):
+                return 2  # Starts with query
+            elif query_lower in name_lower:
+                return 1  # Contains query
+            else:
+                return 0  # Description/other field match
+        
+        results.sort(key=relevance_score, reverse=True)
+        
+        # Apply pagination
+        paginator = GlobalSearchPagination()
+        paginated_results = paginator.paginate_queryset(results, request)
+        
+        return Response({
+            'results': paginated_results,
+            'count': len(results),
+            'next': paginator.get_next_link(),
+            'previous': paginator.get_previous_link(),
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in global search: {str(e)}")
+        return Response({
+            'error': 'Internal server error during search',
+            'detail': str(e) if settings.DEBUG else 'Search temporarily unavailable'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

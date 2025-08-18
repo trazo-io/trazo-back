@@ -1362,3 +1362,119 @@ class VerificationAudit(models.Model):
     
     def __str__(self):
         return f"Audit {self.carbon_entry} - {self.result}"
+
+
+class ConsumerTrustMetric(models.Model):
+    """Track consumer trust metrics for productions"""
+    
+    production = models.OneToOneField(
+        'history.History',
+        on_delete=models.CASCADE,
+        related_name='consumer_trust_metric',
+        help_text='Production this metric applies to'
+    )
+    overall_trust_score = models.FloatField(
+        default=0.0,
+        validators=[MinValueValidator(0.0), MaxValueValidator(100.0)],
+        help_text='Overall consumer trust score (0-100)'
+    )
+    data_completeness_score = models.FloatField(
+        default=0.0,
+        validators=[MinValueValidator(0.0), MaxValueValidator(100.0)],
+        help_text='Data completeness score (0-100)'
+    )
+    verification_score = models.FloatField(
+        default=0.0,
+        validators=[MinValueValidator(0.0), MaxValueValidator(100.0)],
+        help_text='Third-party verification score (0-100)'
+    )
+    transparency_score = models.FloatField(
+        default=0.0,
+        validators=[MinValueValidator(0.0), MaxValueValidator(100.0)],
+        help_text='Information transparency score (0-100)'
+    )
+    consistency_score = models.FloatField(
+        default=0.0,
+        validators=[MinValueValidator(0.0), MaxValueValidator(100.0)],
+        help_text='Data consistency over time score (0-100)'
+    )
+    engagement_metrics = models.JSONField(
+        default=dict,
+        help_text='Consumer engagement metrics and patterns'
+    )
+    trust_factors = models.JSONField(
+        default=dict,
+        help_text='Factors contributing to trust score'
+    )
+    improvement_areas = models.JSONField(
+        default=list,
+        help_text='Areas where trust can be improved'
+    )
+    last_calculated = models.DateTimeField(
+        auto_now=True,
+        help_text='Last time trust metrics were calculated'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'carbon_consumer_trust_metric'
+        verbose_name = 'Consumer Trust Metric'
+        verbose_name_plural = 'Consumer Trust Metrics'
+    
+    def __str__(self):
+        return f"Trust Metric for {self.production} - {self.overall_trust_score:.1f}%"
+
+
+class CarbonIntelligence(models.Model):
+    """AI-powered carbon insights and intelligence"""
+    
+    production = models.OneToOneField(
+        'history.History',
+        on_delete=models.CASCADE,
+        related_name='carbon_intelligence',
+        help_text='Production this intelligence applies to'
+    )
+    ai_insights = models.JSONField(
+        default=dict,
+        help_text='AI-generated insights about carbon performance'
+    )
+    pattern_analysis = models.JSONField(
+        default=dict,
+        help_text='Analysis of carbon patterns and trends'
+    )
+    predictive_metrics = models.JSONField(
+        default=dict,
+        help_text='Predictive analytics for future carbon performance'
+    )
+    optimization_suggestions = models.JSONField(
+        default=list,
+        help_text='AI-generated optimization suggestions'
+    )
+    risk_assessment = models.JSONField(
+        default=dict,
+        help_text='Carbon risk assessment and mitigation strategies'
+    )
+    benchmarking_analysis = models.JSONField(
+        default=dict,
+        help_text='Intelligent benchmarking against similar operations'
+    )
+    confidence_score = models.FloatField(
+        default=0.0,
+        validators=[MinValueValidator(0.0), MaxValueValidator(100.0)],
+        help_text='Confidence in AI analysis (0-100)'
+    )
+    analysis_date = models.DateTimeField(
+        auto_now=True,
+        help_text='Date of latest AI analysis'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'carbon_intelligence'
+        verbose_name = 'Carbon Intelligence'
+        verbose_name_plural = 'Carbon Intelligence Records'
+    
+    def __str__(self):
+        return f"Carbon Intelligence for {self.production} - {self.confidence_score:.1f}%"

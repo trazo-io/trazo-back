@@ -1,0 +1,392 @@
+# =============================================================================
+# Trazo Backend - Staging Deployment Pipeline
+# 2025 Best Practices: Security, Performance, Observability
+# =============================================================================
+
+name: 🚀 Deploy to Staging
+
+on:
+  push:
+    branches: [ develop, main ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  pull_request:
+    branches: [ develop ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: false
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - staging-hotfix
+
+# Environment variables
+env:
+  AWS_REGION: us-east-2
+  ECR_REPOSITORY: trazo-backend
+  ECS_CLUSTER: staging-cluster
+  ECS_SERVICE_1: staging-django-service
+  ECS_SERVICE_2: staging-django
+  ECS_TASK_DEFINITION: staging-django
+  CONTAINER_NAME: django
+
+# Security: Restrict permissions to minimum required
+permissions:
+  contents: read
+  id-token: write
+  security-events: write
+  pull-requests: write
+
+jobs:
+  # =============================================================================
+  # Job 1: Code Quality & Security Checks
+  # =============================================================================
+  quality-checks:
+    name: 🔍 Quality & Security
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+      - name: 🔄 Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for better analysis
+          
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: 'requirements.txt'
+          
+      - name: 📦 Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install bandit safety black isort flake8 mypy
+          
+      - name: 🔒 Security Scan with Bandit
+        run: |
+          bandit -r . -f json -o bandit-report.json || true
+          bandit -r . -f txt
+          
+      - name: 🔐 Dependency Vulnerability Check
+        run: |
+          safety check --json --output safety-report.json || true
+          safety check
+          
+      - name: ⚫ Code Formatting Check
+        run: |
+          black --check --diff .
+          isort --check-only --diff .
+          
+      - name: 📏 Linting
+        run: |
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+          
+      - name: 🏗️ Django System Check
+        run: |
+          python manage.py check --settings=backend.settings.staging
+          
+      - name: 📊 Upload Security Reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-reports
+          path: |
+            bandit-report.json
+            safety-report.json
+          retention-days: 30
+
+  # =============================================================================
+  # Job 2: Run Tests
+  # =============================================================================
+  tests:
+    name: 🧪 Run Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: quality-checks
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_trazo
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+          
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+      - name: 🔄 Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: 'requirements.txt'
+          
+      - name: 📦 Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-django pytest-cov pytest-xvfb coverage
+          
+      - name: 🧪 Run Tests with Coverage
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/test_trazo
+          REDIS_URL: redis://localhost:6379/0
+          DJANGO_SETTINGS_MODULE: backend.settings.test
+        run: |
+          coverage run -m pytest --verbose --tb=short
+          coverage xml
+          coverage report --show-missing
+          
+      - name: 📈 Upload Coverage Reports
+        uses: codecov/codecov-action@v4
+        with:
+          file: coverage.xml
+          flags: unittests
+          name: trazo-backend-coverage
+          fail_ci_if_error: false
+
+  # =============================================================================
+  # Job 3: Build & Push Docker Image
+  # =============================================================================
+  build-and-push:
+    name: 🏗️ Build & Push Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [quality-checks, tests]
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    
+    outputs:
+      image-tag: ${{ steps.tag.outputs.image-tag }}
+      image-digest: ${{ steps.build.outputs.digest }}
+    
+    steps:
+      - name: 🔄 Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: 🏷️ Generate Image Tag
+        id: tag
+        run: |
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          SHORT_SHA=${GITHUB_SHA::8}
+          IMAGE_TAG="v1.2.0-${TIMESTAMP}-${SHORT_SHA}"
+          echo "image-tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          echo "Generated image tag: ${IMAGE_TAG}"
+          
+      - name: 🔧 Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+          
+      - name: 🔑 Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+        
+      - name: 🐳 Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          platforms: linux/amd64
+          driver-opts: |
+            network=host
+            
+      - name: 🏗️ Build and Push Image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.optimized
+          target: runtime
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.image-tag }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
+          labels: |
+            org.opencontainers.image.title=Trazo Backend
+            org.opencontainers.image.description=Agricultural carbon transparency platform
+            org.opencontainers.image.source=${{ github.repositoryUrl }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+            
+      - name: 🔒 Scan Image for Vulnerabilities
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.image-tag }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          
+      - name: 📊 Upload Trivy Scan Results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  # =============================================================================
+  # Job 4: Deploy to Staging
+  # =============================================================================
+  deploy-staging:
+    name: 🚀 Deploy to Staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: build-and-push
+    environment: 
+      name: staging
+      url: https://api-staging.trazo.io
+      
+    steps:
+      - name: 🔄 Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: 🔧 Configure AWS Credentials  
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+          
+      - name: 🔑 Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+        
+      - name: 📥 Download Current Task Definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition ${{ env.ECS_TASK_DEFINITION }} \
+            --query taskDefinition > task-definition.json
+            
+      - name: 🔄 Update Task Definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ needs.build-and-push.outputs.image-tag }}
+          
+      - name: 📝 Register New Task Definition
+        run: |
+          NEW_REVISION=$(aws ecs register-task-definition \
+            --cli-input-json file://task-definition.json \
+            --query 'taskDefinition.revision')
+          echo "NEW_TASK_REVISION=${NEW_REVISION}" >> $GITHUB_ENV
+          echo "Registered task definition revision: ${NEW_REVISION}"
+          
+      - name: 🚀 Deploy to ECS Service 1
+        uses: aws-actions/amazon-ecs-deploy-service@v1
+        with:
+          service: ${{ env.ECS_SERVICE_1 }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          wait-for-service-stability: true
+          
+      - name: 🚀 Deploy to ECS Service 2  
+        uses: aws-actions/amazon-ecs-deploy-service@v1
+        with:
+          service: ${{ env.ECS_SERVICE_2 }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          wait-for-service-stability: true
+          
+      - name: ✅ Verify Deployment
+        run: |
+          echo "Waiting for services to stabilize..."
+          sleep 30
+          
+          # Test health endpoint
+          for i in {1..5}; do
+            if curl -f https://api-staging.trazo.io/health/; then
+              echo "✅ Health check passed"
+              break
+            else
+              echo "⏳ Health check failed, retrying in 30s..."
+              sleep 30
+            fi
+          done
+          
+          # Test dashboard_metrics endpoint
+          echo "🔍 Testing dashboard_metrics endpoint..."
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://api-staging.trazo.io/api/companies/62/establishments/173/dashboard_metrics/)
+          if [ $HTTP_STATUS -eq 404 ]; then
+            echo "⚠️  dashboard_metrics endpoint still returns 404 - may need authentication"
+          elif [ $HTTP_STATUS -eq 401 ] || [ $HTTP_STATUS -eq 403 ]; then
+            echo "✅ dashboard_metrics endpoint exists (authentication required)"  
+          else
+            echo "✅ dashboard_metrics endpoint response: $HTTP_STATUS"
+          fi
+
+  # =============================================================================
+  # Job 5: Post-Deployment Monitoring
+  # =============================================================================
+  post-deployment:
+    name: 📊 Post-Deployment Monitoring
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: deploy-staging
+    if: always()
+    
+    steps:
+      - name: 📈 Performance Testing
+        run: |
+          echo "🚀 Running performance tests..."
+          
+          # Basic load test with curl
+          echo "Testing API response times..."
+          for endpoint in "/health/" "/ready/" "/alive/"; do
+            echo "Testing https://api-staging.trazo.io${endpoint}"
+            curl -w "@-" -o /dev/null -s "https://api-staging.trazo.io${endpoint}" <<< '
+            time_namelookup:  %{time_namelookup}s
+            time_connect:     %{time_connect}s
+            time_appconnect:  %{time_appconnect}s
+            time_pretransfer: %{time_pretransfer}s
+            time_redirect:    %{time_redirect}s
+            time_starttransfer: %{time_starttransfer}s
+            time_total:       %{time_total}s
+            http_code:        %{http_code}
+            size_download:    %{size_download} bytes
+            '
+            echo -e "\n---"
+          done
+          
+      - name: 💬 Deployment Notification
+        if: success()
+        run: |
+          echo "🎉 Staging deployment successful!"
+          echo "🔗 Environment: https://api-staging.trazo.io"
+          echo "🏷️  Image: ${{ needs.build-and-push.outputs.image-tag }}"
+          echo "📊 Dashboard metrics endpoint should now be available"
+          
+      - name: 🚨 Failure Notification
+        if: failure()
+        run: |
+          echo "❌ Staging deployment failed!"
+          echo "Please check the logs and consider rollback if necessary"

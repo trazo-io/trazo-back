@@ -20,7 +20,6 @@ from django.conf.urls.static import static
 from django.middleware.csrf import get_token
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.http import JsonResponse
-from common.views import health_check
 
 @ensure_csrf_cookie
 def get_csrf_token(request):
@@ -57,7 +56,8 @@ urlpatterns = [
     path('api/education/', include('education.urls')),
     path('api/notifications/', include('notifications.urls')),
     path('api/security/', include('backend.security.urls')),
-    path("health/", health_check, name="health_check"),
+    # Health check endpoints for container orchestration
+    path("", include("health.urls")),
     path("test/", simple_test, name="simple_test"),  # Simple test endpoint
 ]
 

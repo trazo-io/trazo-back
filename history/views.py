@@ -816,62 +816,341 @@ class HistoryViewSet(viewsets.ModelViewSet):
 
 
 class PublicHistoryScanViewSet(viewsets.ModelViewSet):
+    """
+    Enhanced public scan endpoint with 2025 security, privacy & performance standards
+    Handles QR scans, page views, and consumer feedback with GDPR compliance
+    """
     queryset = HistoryScan.objects.select_related(
         'history', 'history__product', 'history__parcel', 
         'history__parcel__establishment', 'user'
     ).all()
     permission_classes = [AllowAny]
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Import services here to avoid circular imports
+        from .services.privacy_service import PrivacyService
+        from .services.deduplication_service import DeduplicationService
+        from .services.bot_detection_service import BotDetectionService
+        
+        self.privacy_service = PrivacyService
+        self.deduplication_service = DeduplicationService
+        self.bot_detection_service = BotDetectionService
 
     def create(self, request):
         """
-        Create a new scan when someone visits a production page
+        Enhanced scan creation with 2025 privacy, security & performance standards
+        Supports: QR scans, feedback collection, bot detection, deduplication
         """
+        print(f"🚀 SCAN CREATE METHOD CALLED - VERY START")
+        print(f"  - Method: {request.method}")
+        print(f"  - Path: {request.path}")
+        print(f"  - User-Agent: {request.META.get('HTTP_USER_AGENT', 'None')}")
+        print(f"  - Request data: {request.data}")
+        print(f"  - Cookies: {request.COOKIES}")
+        print(f"  - Headers: {request.META.keys()}")
+        
         try:
+            # Input validation
+            validation_result = self._validate_scan_request(request)
+            if validation_result:
+                return validation_result
+
             production_id = request.data.get("production_id")
-            if not production_id:
-                return Response({"error": "production_id is required"}, status=status.HTTP_400_BAD_REQUEST)
-
-            # Get the production/history
+            
+            # Get the production/history with validation
             try:
-                history = History.objects.get(id=production_id)
+                history = History.objects.select_related(
+                    'parcel__establishment__company',
+                    'product'
+                ).get(id=production_id)
+                
+                # Check if production is publicly accessible
+                if not history.published:
+                    return Response(
+                        {"error": "Production not publicly accessible"}, 
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+                    
             except History.DoesNotExist:
-                return Response({"error": "Production not found"}, status=status.HTTP_404_NOT_FOUND)
+                return Response(
+                    {"error": "Production not found"}, 
+                    status=status.HTTP_404_NOT_FOUND
+                )
 
-            # Get user if authenticated
-            user = request.user if request.user.is_authenticated else None
+            # Bot detection and security checks
+            should_block, block_reason = self.bot_detection_service.should_block_request(
+                request, request.data
+            )
+            
+            if should_block:
+                return Response(
+                    {"error": "Request rejected", "reason": block_reason}, 
+                    status=status.HTTP_429_TOO_MANY_REQUESTS
+                )
 
-            # Get IP address and location info
-            ip_address = self.get_client_ip(request)
+            # Process privacy and consent data with comprehensive debugging
+            print(f"🔍 Backend consent validation for request:")
+            print(f"  - Request cookies: {request.COOKIES}")
+            print(f"  - All headers: {dict(request.META)}")
+            print(f"  - Request data: {request.data}")
+            
+            privacy_data = self.privacy_service.process_scan_consent(request)
+            print(f"🔍 Privacy service returned: {privacy_data}")
+            
+            # Check for consent requirement
+            consent_required = self.privacy_service.is_consent_required(request)
+            consent_given = privacy_data['consent_given']
+            
+            print(f"🔍 Consent validation:")
+            print(f"  - Consent required: {consent_required}")
+            print(f"  - Consent given: {consent_given}")
+            print(f"  - Will block: {consent_required and not consent_given}")
+            
+            if consent_required and not consent_given:
+                print(f"🚫 Blocking request - consent required but not given")
+                return Response(
+                    {
+                        "error": "Analytics consent required", 
+                        "consent_required": True,
+                        "message": "To help improve carbon transparency, please allow analytics tracking"
+                    }, 
+                    status=status.HTTP_428_PRECONDITION_REQUIRED
+                )
+            
+            print(f"✅ Consent validation passed - proceeding with scan creation")
 
-            # Create the scan
-            scan = HistoryScan.objects.create(
-                history=history,
-                user=user,
-                ip_address=ip_address,
-                city=request.data.get("city"),
-                country=request.data.get("country"),
+            # Session deduplication check
+            is_duplicate, original_scan, dedup_method = self.deduplication_service.check_comprehensive_duplicate(
+                privacy_data['session_hash'],
+                privacy_data['ip_hash'],
+                production_id
             )
 
-            # Trigger notification (moved notification logic here)
-            self.create_scan_notification(history, user)
+            # Calculate bot score and engagement
+            bot_score = self.bot_detection_service.calculate_bot_score(request, request.data)
+            is_verified_human = self.bot_detection_service.is_verified_human(request, request.data)
+            
+            # Calculate engagement score
+            engagement_score = self._calculate_engagement_score(request.data)
+            
+            # Determine scan type
+            scan_type = self._determine_scan_type(request.data)
+            
+            # Determine referrer type
+            referrer_type = self._determine_referrer_type(request)
 
-            return Response({"id": scan.id, "message": "Scan created successfully"}, status=status.HTTP_201_CREATED)
+            # Get authenticated user
+            user = request.user if request.user.is_authenticated else None
+
+            # Create enhanced scan with all new fields
+            scan_data = {
+                'history': history,
+                'user': user,
+                'comment': request.data.get("comment", ""),
+                
+                # Privacy & GDPR fields
+                **privacy_data,
+                
+                # Deduplication fields
+                'is_duplicate': is_duplicate,
+                'original_scan': original_scan,
+                
+                # Bot detection & quality fields
+                'bot_score': bot_score,
+                'is_verified_human': is_verified_human,
+                
+                # Analytics & engagement fields
+                'scan_type': scan_type,
+                'engagement_score': engagement_score,
+                'referrer_type': referrer_type,
+            }
+
+            # Create the scan
+            scan = HistoryScan.objects.create(**scan_data)
+            
+            # Mark as duplicate if needed
+            if is_duplicate and original_scan:
+                self.deduplication_service.mark_as_duplicate(original_scan, scan)
+
+            # Trigger notifications (only for high-quality, non-duplicate scans)
+            if not is_duplicate and bot_score < 0.5:
+                self.create_scan_notification(history, user, scan)
+
+            # Return success response with minimal data
+            response_data = {
+                "id": scan.id,
+                "message": "Scan recorded successfully",
+                "is_duplicate": is_duplicate,
+                "deduplication_method": dedup_method if is_duplicate else None
+            }
+
+            return Response(response_data, status=status.HTTP_201_CREATED)
 
         except Exception as e:
-            return Response({"error": f"Failed to create scan: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-    def get_client_ip(self, request):
-        """Get client IP address from request"""
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(",")[0]
-        else:
-            ip = request.META.get("REMOTE_ADDR")
-        return ip
-
-    def create_scan_notification(self, history, scanner):
+            # Log error for monitoring (don't expose internal details)
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Enhanced scan creation failed: {str(e)}", exc_info=True)
+            
+            return Response(
+                {"error": "Failed to record scan"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    def _validate_scan_request(self, request):
         """
-        Create notification for production scan
+        Validate scan request data and headers
+        """
+        # Required fields validation
+        production_id = request.data.get("production_id")
+        if not production_id:
+            return Response(
+                {"error": "production_id is required"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate production_id format
+        try:
+            int(production_id)
+        except (ValueError, TypeError):
+            return Response(
+                {"error": "Invalid production_id format"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate comment length
+        comment = request.data.get("comment", "")
+        if comment and len(comment) > 1000:  # Reasonable limit
+            return Response(
+                {"error": "Comment too long (max 1000 characters)"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Basic content validation
+        if comment and self._contains_suspicious_content(comment):
+            return Response(
+                {"error": "Comment contains inappropriate content"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        return None
+    
+    def _contains_suspicious_content(self, text):
+        """
+        Basic content filtering for obvious spam/malicious content
+        """
+        if not text:
+            return False
+            
+        text_lower = text.lower()
+        
+        # Check for obvious spam patterns
+        spam_indicators = [
+            'http://', 'https://', 'www.',  # URLs
+            'click here', 'buy now', 'free money',  # Spam phrases
+            '<script', '<?php', 'javascript:',  # Code injection attempts
+        ]
+        
+        return any(indicator in text_lower for indicator in spam_indicators)
+    
+    def _determine_scan_type(self, data):
+        """
+        Determine the type of scan based on request data
+        """
+        comment = data.get("comment", "")
+        
+        if comment and len(comment.strip()) > 0:
+            # Check if it looks like structured feedback
+            if any(keyword in comment.lower() for keyword in ['reaction:', 'rating:', 'score:']):
+                return 'feedback'
+            else:
+                return 'review'
+        
+        # Check for social sharing indicators
+        if data.get("shared", False) or data.get("referrer_type") == 'social':
+            return 'share'
+        
+        return 'qr'
+    
+    def _determine_referrer_type(self, request):
+        """
+        Determine how the user reached the page
+        """
+        referrer = request.META.get('HTTP_REFERER', '')
+        
+        if not referrer:
+            return 'direct'
+        
+        referrer_lower = referrer.lower()
+        
+        # Social media platforms
+        social_platforms = ['facebook', 'twitter', 'instagram', 'linkedin', 'whatsapp', 'telegram']
+        if any(platform in referrer_lower for platform in social_platforms):
+            return 'social'
+        
+        # Search engines
+        search_engines = ['google', 'bing', 'yahoo', 'duckduckgo']
+        if any(engine in referrer_lower for engine in search_engines):
+            return 'search'
+        
+        # Email clients (limited detection)
+        if 'mail' in referrer_lower or 'email' in referrer_lower:
+            return 'email'
+        
+        # If from same domain, likely QR code or direct link
+        if 'trazo' in referrer_lower:
+            return 'qr'
+        
+        return 'other'
+    
+    def _calculate_engagement_score(self, data):
+        """
+        Calculate engagement score based on available data
+        """
+        score = 0.0
+        
+        # Time on page (if provided by frontend)
+        time_on_page = data.get('time_on_page', 0)
+        try:
+            time_on_page = float(time_on_page)
+            if time_on_page >= 30:  # 30+ seconds
+                score += 0.3
+            elif time_on_page >= 10:  # 10+ seconds
+                score += 0.2
+            elif time_on_page >= 5:   # 5+ seconds
+                score += 0.1
+        except (ValueError, TypeError):
+            pass
+        
+        # Comment engagement
+        comment = data.get('comment', '')
+        if comment and len(comment.strip()) > 0:
+            if len(comment) > 50:  # Substantial comment
+                score += 0.4
+            elif len(comment) > 20:  # Medium comment
+                score += 0.3
+            else:  # Short comment
+                score += 0.2
+        
+        # Interaction count (if provided by frontend)
+        interactions = data.get('interactions', 0)
+        try:
+            interactions = int(interactions)
+            if interactions >= 5:
+                score += 0.3
+            elif interactions >= 2:
+                score += 0.2
+            elif interactions >= 1:
+                score += 0.1
+        except (ValueError, TypeError):
+            pass
+        
+        return min(score, 1.0)
+
+    def create_scan_notification(self, history, scanner, scan):
+        """
+        Enhanced notification creation with scan quality filtering
         """
         try:
             if history.parcel and history.parcel.establishment:
@@ -893,27 +1172,147 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
                     if scanner != product_owner:
                         # Get product name
                         product_name = history.product.name if history.product else f"Production {history.id}"
+                        
+                        # Privacy-safe location
+                        scan_location = scan.get_location_display() if scan else None
 
-                        # Create notification
+                        # Create notification with enhanced context
                         notification_service.create_product_scan_notification(
                             product_owner=product_owner,
                             scanner=scanner,
                             product_name=product_name,
-                            scan_location=None,  # Could add city/country here if needed
+                            scan_location=scan_location,
                         )
         except Exception as e:
             # Log error but don't break the scan functionality
-            print(f"Error creating scan notification: {e}")
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error creating scan notification: {e}", exc_info=True)
 
     @action(detail=True, methods=["post"], permission_classes=[AllowAny])
     def comment(self, request, pk=None):
-        history_scan = get_object_or_404(HistoryScan, pk=pk)
-        comment = request.data.get("comment", None)
-        if comment is None:
-            return Response({"error": "Comment is required"}, status=status.HTTP_400_BAD_REQUEST)
-        history_scan.comment = comment
-        history_scan.save()
-        return Response(status=status.HTTP_200_OK)
+        """
+        Enhanced comment endpoint with validation and bot protection
+        """
+        try:
+            history_scan = get_object_or_404(HistoryScan, pk=pk)
+            
+            # Bot detection for comment updates
+            should_block, block_reason = self.bot_detection_service.should_block_request(
+                request, request.data
+            )
+            
+            if should_block:
+                return Response(
+                    {"error": "Request rejected", "reason": block_reason}, 
+                    status=status.HTTP_429_TOO_MANY_REQUESTS
+                )
+            
+            comment = request.data.get("comment", None)
+            if comment is None:
+                return Response(
+                    {"error": "Comment is required"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Validate comment
+            if len(comment) > 1000:
+                return Response(
+                    {"error": "Comment too long (max 1000 characters)"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if self._contains_suspicious_content(comment):
+                return Response(
+                    {"error": "Comment contains inappropriate content"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Update comment and recalculate engagement score
+            history_scan.comment = comment
+            
+            # Recalculate engagement based on comment
+            if comment and len(comment.strip()) > 0:
+                if len(comment) > 50:
+                    history_scan.engagement_score = max(history_scan.engagement_score, 0.4)
+                elif len(comment) > 20:
+                    history_scan.engagement_score = max(history_scan.engagement_score, 0.3)
+                else:
+                    history_scan.engagement_score = max(history_scan.engagement_score, 0.2)
+            
+            history_scan.save()
+            
+            return Response({"message": "Comment updated successfully"}, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Comment update failed: {str(e)}", exc_info=True)
+            
+            return Response(
+                {"error": "Failed to update comment"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated])
+    def analytics_insights(self, request):
+        """
+        Get privacy-safe analytics insights for producers
+        Requires authentication and establishment ownership
+        """
+        try:
+            establishment_id = request.query_params.get("establishment_id")
+            if not establishment_id:
+                return Response(
+                    {"error": "establishment_id is required"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Verify user has access to this establishment
+            from company.models import Establishment
+            from users.models import WorksIn
+            
+            try:
+                establishment = Establishment.objects.get(id=establishment_id)
+                
+                # Check if user has access to this establishment's company
+                has_access = WorksIn.objects.filter(
+                    user=request.user,
+                    company=establishment.company,
+                    role__in=['CA', 'FM']  # Company Admin or Farm Manager
+                ).exists()
+                
+                if not has_access:
+                    return Response(
+                        {"error": "Access denied to this establishment"}, 
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+                    
+            except Establishment.DoesNotExist:
+                return Response(
+                    {"error": "Establishment not found"}, 
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get date range
+            days = int(request.query_params.get("days", 30))
+            days = min(days, 365)  # Limit to 1 year
+            
+            # Generate privacy-safe analytics
+            from .services.analytics_service import AnalyticsService
+            insights = AnalyticsService.get_establishment_insights(establishment_id, days)
+            
+            return Response(insights, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Analytics insights failed: {str(e)}", exc_info=True)
+            
+            return Response(
+                {"error": "Failed to generate insights"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class HistoryScanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):

@@ -6,6 +6,7 @@ from rest_framework.decorators import action
 from django.shortcuts import get_object_or_404
 from django.db.models import Count, Avg, Q, ExpressionWrapper
 from django.db.models.functions import ExtractWeekDay, ExtractDay, ExtractMonth
+from django.utils import timezone
 
 from .serializers import (
     RetrieveCompanySerializer,
@@ -15,6 +16,7 @@ from .serializers import (
     EstablishmentChartSerializer,
     EstablishmentProductsReputationSerializer,
     EstablishmentSerializer,
+    EstablishmentDashboardMetricsSerializer,
 )
 from .models import Company, Establishment
 from .constants import ALLOWED_PERIODS
@@ -481,6 +483,28 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             result,
             status=status.HTTP_200_OK,
         )
+
+    @action(detail=True, methods=["get"])
+    def dashboard_metrics(self, request, pk=None, company_pk=None) -> Response:
+        """
+        Get accurate dashboard metrics for SmartUsageCard
+        Based on real backend data: consumer reach, trust scores, carbon data
+        """
+        establishment = get_object_or_404(Establishment, pk=pk)
+        
+        # Initialize metrics serializer
+        metrics_serializer = EstablishmentDashboardMetricsSerializer()
+        
+        # Calculate metrics using the serializer method
+        metrics_data = metrics_serializer.get_metrics_for_establishment(establishment)
+        
+        return Response({
+            'success': True,
+            'establishment_id': establishment.id,
+            'establishment_name': establishment.name,
+            'metrics': metrics_data,
+            'calculated_at': timezone.now().isoformat()
+        }, status=status.HTTP_200_OK)
 
     def get_serializer_context(self):
         context = super().get_serializer_context()

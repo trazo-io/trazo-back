@@ -151,13 +151,30 @@ CORS_ALLOW_CREDENTIALS = True
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",  # Enable direct localhost support
+    "http://localhost:3001",  # Enable port 3001 for Vite dev server
     "http://app.localhost:3000",
+    "http://app.localhost:3001",
     "http://consumer.localhost:3000",
+    "http://consumer.localhost:3001",  # Enable port 3001 for consumer app
     "http://app.192.168.1.3:3000",
     "https://7172-167-60-250-132.ngrok-free.app",
     "http://127.0.0.1:3000",  # Also add 127.0.0.1 support
     "http://localhost:4173",  # For production build testing
     "http://app.localhost:4173",  # For production build testing with subdomain
+]
+
+# Allow custom consent header for GDPR compliance
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+    'x-analytics-consent',  # Custom header for consent management
 ]
 
 # Fix for development - allow cross-subdomain cookies and HTTP

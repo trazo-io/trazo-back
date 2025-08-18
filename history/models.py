@@ -515,6 +515,12 @@ class GeneralEvent(CommonEvent):
 
 
 class HistoryScan(models.Model):
+    """
+    Enhanced QR scan tracking with 2025 privacy, performance & security standards
+    Supports dual functionality: page view analytics + consumer feedback collection
+    """
+    
+    # EXISTING CORE FIELDS
     history = models.ForeignKey(
         History,
         on_delete=models.CASCADE,
@@ -524,10 +530,187 @@ class HistoryScan(models.Model):
         "users.User", on_delete=models.CASCADE, blank=True, null=True
     )
     date = models.DateTimeField(auto_now_add=True)
-    ip_address = models.CharField(max_length=45, blank=True, null=True, help_text="IP address (IPv4/IPv6)")
-    city = models.CharField(max_length=100, blank=True, null=True, help_text="Scanner city")
-    country = models.CharField(max_length=100, blank=True, null=True, help_text="Scanner country")
     comment = models.TextField(blank=True, null=True)
+    
+    # PRIVACY & GDPR COMPLIANCE (2025 Standard)
+    ip_hash = models.CharField(
+        max_length=64, 
+        db_index=True, 
+        blank=True, 
+        null=True,
+        help_text="SHA-256 hash of IP address for privacy-safe analytics"
+    )
+    consent_given = models.BooleanField(
+        default=False, 
+        help_text="GDPR consent for analytics tracking"
+    )
+    consent_timestamp = models.DateTimeField(
+        null=True, 
+        blank=True, 
+        help_text="When consent was given"
+    )
+    data_retention_until = models.DateTimeField(
+        null=True, 
+        blank=True, 
+        help_text="Auto-cleanup date (GDPR compliance)"
+    )
+    
+    # ENHANCED GEOLOCATION (Privacy-safe)
+    country_code = models.CharField(
+        max_length=2, 
+        blank=True, 
+        help_text="ISO country code (privacy-safe)"
+    )
+    region = models.CharField(
+        max_length=100, 
+        blank=True, 
+        help_text="State/region only (no city for privacy)"
+    )
+    
+    # LEGACY FIELDS (Deprecated - use privacy-safe alternatives above)
+    ip_address = models.CharField(
+        max_length=45, 
+        blank=True, 
+        null=True, 
+        help_text="DEPRECATED: Use ip_hash instead"
+    )
+    city = models.CharField(
+        max_length=100, 
+        blank=True, 
+        null=True, 
+        help_text="DEPRECATED: Use region instead"
+    )
+    country = models.CharField(
+        max_length=100, 
+        blank=True, 
+        null=True, 
+        help_text="DEPRECATED: Use country_code instead"
+    )
+    
+    # SESSION & DEDUPLICATION
+    session_hash = models.CharField(
+        max_length=64, 
+        db_index=True, 
+        blank=True,
+        help_text="Privacy-safe browser fingerprint for deduplication"
+    )
+    is_duplicate = models.BooleanField(
+        default=False, 
+        help_text="Mark duplicate scans within timeframe"
+    )
+    original_scan = models.ForeignKey(
+        'self', 
+        null=True, 
+        blank=True, 
+        on_delete=models.SET_NULL,
+        help_text="Link to original scan if this is a duplicate"
+    )
+    
+    # BOT DETECTION & QUALITY CONTROL
+    bot_score = models.FloatField(
+        default=0.0, 
+        help_text="Bot probability (0.0=human, 1.0=bot)"
+    )
+    is_verified_human = models.BooleanField(
+        default=False, 
+        help_text="Passed human verification checks"
+    )
+    user_agent_hash = models.CharField(
+        max_length=64, 
+        blank=True, 
+        help_text="Hashed user agent for pattern analysis"
+    )
+    
+    # ENGAGEMENT & ANALYTICS
+    scan_type = models.CharField(
+        max_length=20, 
+        choices=[
+            ('qr', 'QR Code Scan'),
+            ('feedback', 'Feedback Only'),
+            ('review', 'Full Review'),
+            ('share', 'Social Share')
+        ], 
+        default='qr',
+        help_text="Type of interaction"
+    )
+    engagement_score = models.FloatField(
+        default=0.0, 
+        help_text="Engagement quality (time spent, interactions)"
+    )
+    referrer_type = models.CharField(
+        max_length=50, 
+        blank=True,
+        choices=[
+            ('qr', 'QR Code'),
+            ('direct', 'Direct Link'),
+            ('social', 'Social Media'),
+            ('search', 'Search Engine'),
+            ('email', 'Email'),
+            ('other', 'Other')
+        ],
+        default='qr',
+        help_text="How user reached the page"
+    )
+    
+    # PERFORMANCE INDEXES
+    class Meta:
+        indexes = [
+            # Time-series queries for dashboard analytics
+            models.Index(fields=['date', 'history'], name='historyscan_date_history_idx'),
+            
+            # Session deduplication queries
+            models.Index(fields=['session_hash', 'date'], name='historyscan_session_date_idx'),
+            
+            # Rate limiting by IP hash
+            models.Index(fields=['ip_hash', 'date'], name='historyscan_ip_date_idx'),
+            
+            # GDPR cleanup queries
+            models.Index(fields=['data_retention_until'], name='historyscan_retention_idx'),
+            
+            # Quality filtering (exclude bots/duplicates)
+            models.Index(fields=['is_duplicate', 'bot_score'], name='historyscan_quality_idx'),
+            
+            # Consent management
+            models.Index(fields=['consent_given', 'date'], name='historyscan_consent_idx'),
+            
+            # Analytics queries by scan type
+            models.Index(fields=['scan_type', 'date'], name='historyscan_type_date_idx'),
+        ]
+        verbose_name = "History Scan"
+        verbose_name_plural = "History Scans"
+    
+    def __str__(self):
+        return f"Scan {self.id} - {self.history} - {self.date.strftime('%Y-%m-%d')}"
+    
+    def is_privacy_compliant(self):
+        """Check if scan data follows privacy best practices"""
+        return bool(
+            self.ip_hash and  # Uses hashed IP, not raw
+            not self.ip_address and  # No raw IP stored
+            self.consent_given and  # Has user consent
+            self.data_retention_until  # Has cleanup date
+        )
+    
+    def is_high_quality(self):
+        """Check if scan is high quality (human, not duplicate, engaged)"""
+        return bool(
+            not self.is_duplicate and
+            self.bot_score < 0.3 and
+            self.engagement_score > 0.1
+        )
+    
+    def get_location_display(self):
+        """Get privacy-safe location display"""
+        if self.country_code and self.region:
+            return f"{self.region}, {self.country_code.upper()}"
+        elif self.country_code:
+            return self.country_code.upper()
+        # Fallback to legacy data if new data not available
+        elif self.city and self.country:
+            return f"{self.city}, {self.country}"
+        elif self.country:
+            return self.country
+        return "Unknown"
 
 
 class EquipmentEvent(CommonEvent):
