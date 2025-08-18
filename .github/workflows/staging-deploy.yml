@@ -7,7 +7,7 @@ name: 🚀 Deploy to Staging
 
 on:
   push:
-    branches: [ develop, main ]
+    branches: [ develop ]
     paths-ignore:
       - '**.md'
       - 'docs/**'
@@ -67,7 +67,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install bandit safety black isort flake8 mypy
+          pip install bandit safety black isort flake8 mypy --no-deps
           
       - name: 🔒 Security Scan with Bandit
         run: |
@@ -151,7 +151,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-django pytest-cov pytest-xvfb coverage
+          pip install pytest pytest-django pytest-cov coverage --no-deps
           
       - name: 🧪 Run Tests with Coverage
         env:
