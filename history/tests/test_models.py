@@ -37,7 +37,7 @@ from product.models import Parcel
 from subscriptions.models import Subscription
 from users.models import User, WorksIn
 
-from .models import History, HistoryTranslation, QRCodeData
+from history.models import History, HistoryTranslation, QRCodeData
 
 User = get_user_model()
 

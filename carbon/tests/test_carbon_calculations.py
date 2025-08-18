@@ -31,15 +31,11 @@ from carbon.models import (
     CarbonEntry,
     CarbonReport,
     CarbonSource,
-    CarbonVerification,
-    EstablishmentCarbonFootprint,
     IoTDevice,
-    IoTReading,
-    JohnDeereIntegration,
-    ProducerCommunityVerification,
+    IoTDataPoint,
     ProductionTemplate,
     SustainabilityBadge,
-    USDACompliance,
+    USDAComplianceRecord,
 )
 from carbon.services.blockchain import BlockchainService
 from carbon.services.carbon_calculator import CarbonCalculator

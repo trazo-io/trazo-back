@@ -32,7 +32,7 @@ from history.models import History
 from product.models import Parcel
 from users.models import User, WorksIn
 
-from .models import Review, ReviewModeration, ReviewResponse
+from reviews.models import Review, ReviewModeration, ReviewResponse
 
 User = get_user_model()
 

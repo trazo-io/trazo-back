@@ -36,7 +36,7 @@ from company.models import Company, Establishment
 from subscriptions.models import Plan, Subscription
 from users.models import User, WorksIn
 
-from .models import SupportAttachment, SupportMessage, SupportSLA, SupportTicket
+from support.models import SupportAttachment, SupportMessage, SupportSLA, SupportTicket
 
 User = get_user_model()
 

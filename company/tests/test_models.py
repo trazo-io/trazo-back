@@ -32,7 +32,7 @@ from product.models import Parcel
 from subscriptions.models import Plan, Subscription
 from users.models import User, WorksIn
 
-from .models import Company, Establishment
+from company.models import Company, Establishment
 
 User = get_user_model()
 

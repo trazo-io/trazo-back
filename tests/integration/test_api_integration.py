@@ -13,7 +13,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
-from carbon.models import CarbonCalculation
+from carbon.models import OptimizedCarbonCalculation
 from company.models import Company, Establishment
 from history.models import History, HistoryScan
 from product.models import Parcel, Product

@@ -31,7 +31,7 @@ from company.models import Company, Establishment
 from subscriptions.models import Subscription
 from users.models import User, WorksIn
 
-from .models import (
+from education.models import (
     EducationBookmark,
     EducationCategory,
     EducationCertificate,

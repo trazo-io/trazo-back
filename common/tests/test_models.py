@@ -16,7 +16,11 @@ from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 
 import boto3
-from moto import mock_s3
+try:
+    from moto import mock_s3
+except ImportError:
+    # Fallback for newer moto versions
+    from moto.s3 import mock_s3
 from PIL import Image
 
 from common.models import Gallery, GalleryImage

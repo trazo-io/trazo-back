@@ -32,7 +32,7 @@ from history.models import History
 from subscriptions.models import Subscription
 from users.models import User, WorksIn
 
-from .models import CropTemplate, Parcel, ProductCertification
+from product.models import CropTemplate, Parcel, ProductCertification
 
 User = get_user_model()
 
