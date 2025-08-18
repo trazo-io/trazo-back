@@ -89,8 +89,8 @@ jobs:
           
       - name: 🔒 Security Scan with Bandit
         run: |
-          poetry run bandit -r . -f json -o bandit-report.json -c .bandit
-          poetry run bandit -r . -f txt -c .bandit
+          poetry run bandit -r . -f json -o bandit-report.json --exclude ./tests,./migrations,./.venv,./venv,./node_modules,./static,./media
+          poetry run bandit -r . -f txt --exclude ./tests,./migrations,./.venv,./venv,./node_modules,./static,./media
           
       - name: 🔐 Dependency Vulnerability Check
         run: |
