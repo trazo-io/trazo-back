@@ -34,9 +34,8 @@ from rest_framework.test import APIClient, APITestCase
 
 from company.models import Company, Establishment
 from subscriptions.models import Plan, Subscription
-from users.models import User, WorksIn
-
 from support.models import SupportAttachment, SupportMessage, SupportSLA, SupportTicket
+from users.models import User, WorksIn
 
 User = get_user_model()
 

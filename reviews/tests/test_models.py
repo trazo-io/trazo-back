@@ -30,9 +30,8 @@ from rest_framework.test import APIClient, APITestCase
 from company.models import Company, Establishment
 from history.models import History
 from product.models import Parcel
-from users.models import User, WorksIn
-
 from reviews.models import Review, ReviewModeration, ReviewResponse
+from users.models import User, WorksIn
 
 User = get_user_model()
 

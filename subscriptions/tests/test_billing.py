@@ -17,7 +17,7 @@ from django.utils import timezone
 
 from company.models import Company, Establishment
 from subscriptions.middleware import SubscriptionMiddleware
-from subscriptions.models import Subscription, Plan
+from subscriptions.models import Plan, Subscription
 from subscriptions.services import BillingService, SubscriptionService
 
 User = get_user_model()

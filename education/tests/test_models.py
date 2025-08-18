@@ -28,9 +28,6 @@ from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
 from company.models import Company, Establishment
-from subscriptions.models import Subscription
-from users.models import User, WorksIn
-
 from education.models import (
     EducationBookmark,
     EducationCategory,
@@ -40,6 +37,8 @@ from education.models import (
     FarmerQuestionAnswer,
     UserEducationProgress,
 )
+from subscriptions.models import Subscription
+from users.models import User, WorksIn
 
 User = get_user_model()
 

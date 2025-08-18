@@ -16,6 +16,7 @@ from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 
 import boto3
+
 try:
     from moto import mock_s3
 except ImportError:

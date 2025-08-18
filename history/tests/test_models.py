@@ -33,11 +33,10 @@ from rest_framework.test import APIClient, APITestCase
 
 from carbon.models import CarbonEntry, CarbonSource
 from company.models import Company, Establishment
+from history.models import History, HistoryTranslation, QRCodeData
 from product.models import Parcel
 from subscriptions.models import Subscription
 from users.models import User, WorksIn
-
-from history.models import History, HistoryTranslation, QRCodeData
 
 User = get_user_model()
 

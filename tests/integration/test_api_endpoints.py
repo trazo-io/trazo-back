@@ -4,10 +4,12 @@ Test API Endpoints
 Simulate what the frontend calls to verify fresh data
 """
 
-import pytest
 from datetime import timedelta
+
 from django.test import TestCase
 from django.utils import timezone
+
+import pytest
 
 from carbon.models import IoTDataPoint, IoTDevice
 from company.models import Establishment
@@ -26,15 +28,15 @@ class TestAPIEndpoints(TestCase):
         """Test IoT device status API endpoint"""
         # Mock what the frontend calls
         # GET /carbon/iot-devices/device_status/?establishment_id=14
-        
+
         # Skip if no test data exists
         establishments = Establishment.objects.all()
         if not establishments.exists():
             self.skipTest("No establishments found for testing")
-            
+
         establishment = establishments.first()
         devices = IoTDevice.objects.filter(establishment=establishment)
-        
+
         # Test device status logic
         online_devices = 0
         for device in devices:
@@ -42,7 +44,7 @@ class TestAPIEndpoints(TestCase):
                 time_diff = timezone.now() - device.last_seen
                 if time_diff < timedelta(minutes=15):
                     online_devices += 1
-        
+
         # Verify basic functionality
         self.assertIsInstance(online_devices, int)
 
@@ -52,13 +54,12 @@ class TestAPIEndpoints(TestCase):
         establishments = Establishment.objects.all()
         if not establishments.exists():
             self.skipTest("No establishments found for testing")
-            
+
         establishment = establishments.first()
         recent_data = IoTDataPoint.objects.filter(
-            device__establishment=establishment, 
-            timestamp__gte=timezone.now() - timedelta(hours=2)
+            device__establishment=establishment, timestamp__gte=timezone.now() - timedelta(hours=2)
         ).order_by("-timestamp")[:10]
-        
+
         # Verify query works
         self.assertIsNotNone(recent_data)
 
@@ -67,15 +68,16 @@ class TestAPIEndpoints(TestCase):
         establishments = Establishment.objects.all()
         if not establishments.exists():
             self.skipTest("No establishments found for testing")
-            
+
         establishment = establishments.first()
-        
+
         # Test basic establishment access
         self.assertIsNotNone(establishment)
-        
+
         # Skip automation service test if not available
         try:
             from carbon.services.automation_service import AutomationLevelService
+
             service = AutomationLevelService()
             stats = service.get_automation_stats_for_establishment(establishment)
             self.assertIsInstance(stats, dict)
