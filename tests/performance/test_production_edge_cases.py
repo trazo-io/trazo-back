@@ -46,7 +46,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.settings.dev")
 django.setup()
 
 from backend.services.secrets_manager import ProductionSecretsManager
-from carbon.models import CarbonEntry, CarbonSource, CachedEmissionFactor
+from carbon.models import CachedEmissionFactor, CarbonEntry, CarbonSource
 from carbon.services.api_circuit_breaker import APICircuitBreaker
 from carbon.services.circuit_breaker_enhanced import EnhancedCircuitBreaker
 from carbon.services.enhanced_error_handling import EnhancedErrorHandler

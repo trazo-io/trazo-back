@@ -30,7 +30,7 @@ sys.path.insert(0, "/Users/oscarmunoz/dev/trazo/trazo-back")
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.settings.dev")
 django.setup()
 
-from carbon.models import CarbonEntry, CarbonSource, CachedEmissionFactor
+from carbon.models import CachedEmissionFactor, CarbonEntry, CarbonSource
 from company.models import Company, Establishment
 from history.models import History
 
