@@ -87,7 +87,7 @@ class ReviewModelTestCase(TestCase):
             user_type="consumer",
         )
 
-        self.company = Company.objects.create(name="Review Test Farm", owner=self.producer)
+        self.company = Company.objects.create(name="Review Test Farm")
 
         self.establishment = Establishment.objects.create(
             name="Review Test Field", company=self.company, description="Sustainable organic farm"
@@ -295,7 +295,7 @@ class ReviewModerationTestCase(TestCase):
 
         self.moderator = User.objects.create_user(email="moderator@test.com", password="testpass123", is_staff=True)
 
-        self.company = Company.objects.create(name="Moderation Test Farm", owner=self.producer)
+        self.company = Company.objects.create(name="Moderation Test Farm")
 
         self.establishment = Establishment.objects.create(name="Moderation Test Field", company=self.company)
 
@@ -422,7 +422,7 @@ class ReviewResponseTestCase(TestCase):
             email="producer@test.com", password="testpass123", user_type="producer"
         )
 
-        self.company = Company.objects.create(name="Response Test Farm", owner=self.producer)
+        self.company = Company.objects.create(name="Response Test Farm")
 
         self.establishment = Establishment.objects.create(name="Response Test Field", company=self.company)
 
@@ -534,7 +534,7 @@ class ReviewAPITestCase(APITestCase):
             email="producer@test.com", password="testpass123", user_type="producer"
         )
 
-        self.company = Company.objects.create(name="API Test Farm", owner=self.producer)
+        self.company = Company.objects.create(name="API Test Farm")
 
         self.establishment = Establishment.objects.create(name="API Test Field", company=self.company)
 
@@ -609,7 +609,7 @@ class ReviewAPITestCase(APITestCase):
         """Test listing reviews filtered by establishment."""
         # Create reviews for different establishments
         other_producer = User.objects.create_user(email="other@test.com", password="testpass123")
-        other_company = Company.objects.create(name="Other Farm", owner=other_producer)
+        other_company = Company.objects.create(name="Other Farm")
         other_establishment = Establishment.objects.create(name="Other Field", company=other_company)
 
         # Review for main establishment
@@ -694,7 +694,7 @@ class ReviewAnalyticsTestCase(TestCase):
     def setUp(self):
         self.producer = User.objects.create_user(email="producer@test.com", password="testpass123")
 
-        self.company = Company.objects.create(name="Analytics Test Farm", owner=self.producer)
+        self.company = Company.objects.create(name="Analytics Test Farm")
 
         self.establishment = Establishment.objects.create(name="Analytics Test Field", company=self.company)
 
@@ -831,7 +831,7 @@ class ReviewPerformanceTestCase(TestCase):
     def setUp(self):
         self.producer = User.objects.create_user(email="performance@test.com", password="testpass123")
 
-        self.company = Company.objects.create(name="Performance Test Farm", owner=self.producer)
+        self.company = Company.objects.create(name="Performance Test Farm")
 
         self.establishment = Establishment.objects.create(name="Performance Test Field", company=self.company)
 

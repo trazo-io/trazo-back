@@ -143,7 +143,7 @@ class TestCompanyRelationships(TransactionTestCase):
         """Set up test data"""
         self.user = User.objects.create_user(email="test@example.com", password="testpass123")
 
-        self.company = Company.objects.create(name="Test Company", country="USA", created_by=self.user)
+        self.company = Company.objects.create(name="Test Company", country="USA")
 
         self.establishment = Establishment.objects.create(
             company=self.company, name="Test Farm", address="123 Farm Road", country="USA", created_by=self.user
@@ -192,7 +192,7 @@ class TestCompanyRelationships(TransactionTestCase):
     def test_multiple_companies(self):
         """Test user with multiple companies"""
         # Create second company
-        company2 = Company.objects.create(name="Second Company", country="USA", created_by=self.user)
+        company2 = Company.objects.create(name="Second Company", country="USA")
 
         # Add user to both companies
         WorksIn.objects.create(user=self.user, company=self.company, role=WorksIn.COMPANY_ADMIN)
@@ -212,7 +212,7 @@ class TestWorksInModel(TransactionTestCase):
         """Set up test data"""
         self.user = User.objects.create_user(email="test@example.com", password="testpass123")
 
-        self.company = Company.objects.create(name="Test Company", country="USA", created_by=self.user)
+        self.company = Company.objects.create(name="Test Company", country="USA")
 
         self.establishment = Establishment.objects.create(
             company=self.company, name="Test Farm", address="123 Farm Road", country="USA", created_by=self.user
@@ -399,7 +399,7 @@ class TestUserPermissions(TransactionTestCase):
 
         self.regular_user = User.objects.create_user(email="user@example.com", password="testpass123", is_active=True)
 
-        self.company = Company.objects.create(name="Test Company", country="USA", created_by=self.admin_user)
+        self.company = Company.objects.create(name="Test Company", country="USA")
 
         # Make admin user company admin
         WorksIn.objects.create(user=self.admin_user, company=self.company, role=WorksIn.COMPANY_ADMIN)
@@ -472,7 +472,7 @@ class TestUserIntegrations(TransactionTestCase):
         """Set up test data"""
         self.user = User.objects.create_user(email="test@example.com", password="testpass123", is_active=True)
 
-        self.company = Company.objects.create(name="Test Company", country="USA", created_by=self.user)
+        self.company = Company.objects.create(name="Test Company", country="USA")
 
     def test_user_subscription_integration(self):
         """Test user subscription integration"""

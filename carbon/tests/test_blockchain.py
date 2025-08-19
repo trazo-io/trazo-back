@@ -95,10 +95,10 @@ class TestBlockchainCarbonVerification(TransactionTestCase):
         """Set up test data"""
         self.user = User.objects.create_user(email="test@example.com", password="testpass123")
 
-        self.company = Company.objects.create(name="Test Company", country="USA", created_by=self.user)
+        self.company = Company.objects.create(name="Test Company", country="USA")
 
         self.establishment = Establishment.objects.create(
-            company=self.company, name="Test Establishment", address="123 Test St", country="USA", created_by=self.user
+            company=self.company, name="Test Establishment", address="123 Test St", country="USA"
         )
 
         self.carbon_source = CarbonSource.objects.create(
@@ -250,10 +250,10 @@ class TestBlockchainBatchOperations(TransactionTestCase):
         """Set up test data"""
         self.user = User.objects.create_user(email="test@example.com", password="testpass123")
 
-        self.company = Company.objects.create(name="Test Company", country="USA", created_by=self.user)
+        self.company = Company.objects.create(name="Test Company", country="USA")
 
         self.establishment = Establishment.objects.create(
-            company=self.company, name="Test Establishment", address="123 Test St", country="USA", created_by=self.user
+            company=self.company, name="Test Establishment", address="123 Test St", country="USA"
         )
 
         self.carbon_source = CarbonSource.objects.create(

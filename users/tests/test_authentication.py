@@ -30,11 +30,11 @@ class TestUserModel(TransactionTestCase):
         )
 
         self.assertEqual(user.email, "test@example.com")
-        self.assertEqual(user.username, "test@example.com")  # Should use email as username
+        self.assertIsNone(user.username)  # Username field is disabled, email is the unique identifier
         self.assertTrue(user.check_password("testpass123"))
         self.assertFalse(user.is_staff)
         self.assertFalse(user.is_superuser)
-        self.assertTrue(user.is_active)
+        self.assertFalse(user.is_active)  # Default is False, user must verify email first
 
     def test_user_creation_duplicate_email(self):
         """Test that duplicate emails are not allowed"""
@@ -225,10 +225,10 @@ class TestAuthorization(TransactionTestCase):
         self.viewer_user = User.objects.create_user(email="viewer@example.com", password="testpass123")
 
         # Create company and establishment
-        self.company = Company.objects.create(name="Test Company", country="USA", created_by=self.admin_user)
+        self.company = Company.objects.create(name="Test Company", country="USA")
 
         self.establishment = Establishment.objects.create(
-            company=self.company, name="Test Farm", address="123 Farm Road", country="USA", created_by=self.admin_user
+            company=self.company, name="Test Farm", address="123 Farm Road", country="USA"
         )
 
         # Create role assignments

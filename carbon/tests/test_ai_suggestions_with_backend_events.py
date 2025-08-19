@@ -9,6 +9,7 @@ import sys
 from datetime import datetime, timedelta
 
 import django
+import pytest
 
 # Setup Django
 sys.path.append("/Users/oscarmunoz/dev/trazo/trazo-back")
@@ -18,6 +19,8 @@ django.setup()
 from carbon.services.ai_voice_processor import _fetch_recent_events_from_db, generate_ai_event_suggestions
 
 
+@pytest.mark.django_db
+@pytest.mark.asyncio
 async def test_recent_events_fetching():
     """Test fetching recent events from database"""
     print("🔍 Testing Recent Events Fetching from Database...")
@@ -45,6 +48,8 @@ async def test_recent_events_fetching():
         return []
 
 
+@pytest.mark.django_db
+@pytest.mark.asyncio
 async def test_ai_suggestions_with_backend_events():
     """Test AI suggestions with backend-fetched events"""
     print("\n🤖 Testing AI Suggestions with Backend Events...")
@@ -99,6 +104,8 @@ async def test_ai_suggestions_with_backend_events():
             print(f"   ❌ Error: {e}")
 
 
+@pytest.mark.django_db
+@pytest.mark.asyncio
 async def test_backend_integration():
     """Test the complete backend integration"""
     print("\n🔗 Testing Complete Backend Integration...")

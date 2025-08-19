@@ -366,7 +366,7 @@ class TestCarbonEntryModel(TransactionTestCase):
         """Set up test data"""
         self.user = User.objects.create_user(email="test@example.com", password="testpass123")
 
-        self.company = Company.objects.create(name="Test Company", country="USA", created_by=self.user)
+        self.company = Company.objects.create(name="Test Company", country="USA")
 
         self.establishment = Establishment.objects.create(
             company=self.company, name="Test Farm", address="123 Farm Road", country="USA", created_by=self.user
@@ -474,7 +474,7 @@ class TestCarbonCertificationModel(TransactionTestCase):
         """Set up test data"""
         self.user = User.objects.create_user(email="test@example.com", password="testpass123")
 
-        self.company = Company.objects.create(name="Test Company", country="USA", created_by=self.user)
+        self.company = Company.objects.create(name="Test Company", country="USA")
 
         self.establishment = Establishment.objects.create(
             company=self.company, name="Test Farm", address="123 Farm Road", country="USA", created_by=self.user
@@ -512,7 +512,7 @@ class TestIoTDeviceModel(TransactionTestCase):
         """Set up test data"""
         self.user = User.objects.create_user(email="test@example.com", password="testpass123")
 
-        self.company = Company.objects.create(name="Test Company", country="USA", created_by=self.user)
+        self.company = Company.objects.create(name="Test Company", country="USA")
 
         self.establishment = Establishment.objects.create(
             company=self.company, name="Test Farm", address="123 Farm Road", country="USA", created_by=self.user
@@ -628,7 +628,7 @@ class TestIoTDataPointModel(TransactionTestCase):
         """Set up test data"""
         self.user = User.objects.create_user(email="test@example.com", password="testpass123")
 
-        self.company = Company.objects.create(name="Test Company", country="USA", created_by=self.user)
+        self.company = Company.objects.create(name="Test Company", country="USA")
 
         self.establishment = Establishment.objects.create(
             company=self.company, name="Test Farm", address="123 Farm Road", country="USA", created_by=self.user
@@ -811,7 +811,7 @@ class TestUSDAComplianceRecordModel(TransactionTestCase):
         """Set up test data"""
         self.user = User.objects.create_user(email="test@example.com", password="testpass123")
 
-        self.company = Company.objects.create(name="Test Company", country="USA", created_by=self.user)
+        self.company = Company.objects.create(name="Test Company", country="USA")
 
         self.establishment = Establishment.objects.create(
             company=self.company, name="Test Farm", address="123 Farm Road", country="USA", created_by=self.user
@@ -1061,7 +1061,7 @@ class TestCarbonIntegrations(TransactionTestCase):
         """Set up test data for integration tests"""
         self.user = User.objects.create_user(email="test@example.com", password="testpass123")
 
-        self.company = Company.objects.create(name="Test Company", country="USA", created_by=self.user)
+        self.company = Company.objects.create(name="Test Company", country="USA")
 
         self.establishment = Establishment.objects.create(
             company=self.company, name="Test Farm", address="123 Farm Road", country="USA", created_by=self.user

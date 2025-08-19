@@ -64,7 +64,7 @@ class HistoryModelTestCase(TestCase):
             email="farmer@test.com", password="testpass123", first_name="John", last_name="Farmer"
         )
 
-        self.company = Company.objects.create(name="Test Farm Co.", owner=self.user)
+        self.company = Company.objects.create(name="Test Farm Co.")
 
         self.establishment = Establishment.objects.create(name="North Field", company=self.company)
 
@@ -260,7 +260,7 @@ class QRCodeDataTestCase(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="farmer@test.com", password="testpass123")
 
-        self.company = Company.objects.create(name="QR Test Farm", owner=self.user)
+        self.company = Company.objects.create(name="QR Test Farm")
 
         self.establishment = Establishment.objects.create(name="QR Test Field", company=self.company)
 
@@ -349,7 +349,7 @@ class HistoryViewSetTestCase(APITestCase):
         )
 
         # Create company and establishment
-        self.company = Company.objects.create(name="API Test Farm", owner=self.farmer)
+        self.company = Company.objects.create(name="API Test Farm")
 
         self.establishment = Establishment.objects.create(name="API Test Field", company=self.company)
 
@@ -391,7 +391,7 @@ class HistoryViewSetTestCase(APITestCase):
         """Test that users only see histories they have access to."""
         # Create history for different company
         other_user = User.objects.create_user(email="other@test.com", password="testpass123")
-        other_company = Company.objects.create(name="Other Company", owner=other_user)
+        other_company = Company.objects.create(name="Other Company")
         other_establishment = Establishment.objects.create(name="Other Establishment", company=other_company)
         other_history = History.objects.create(
             title="Other History",
@@ -490,7 +490,7 @@ class HistoryImageHandlingTestCase(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="farmer@test.com", password="testpass123")
 
-        self.company = Company.objects.create(name="Image Test Farm", owner=self.user)
+        self.company = Company.objects.create(name="Image Test Farm")
 
         self.establishment = Establishment.objects.create(name="Image Test Field", company=self.company)
 
@@ -559,7 +559,7 @@ class VoiceEventProcessingTestCase(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="farmer@test.com", password="testpass123")
 
-        self.company = Company.objects.create(name="Voice Test Farm", owner=self.user)
+        self.company = Company.objects.create(name="Voice Test Farm")
 
         self.establishment = Establishment.objects.create(name="Voice Test Field", company=self.company)
 
@@ -623,7 +623,7 @@ class HistoryAnalyticsTestCase(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="farmer@test.com", password="testpass123")
 
-        self.company = Company.objects.create(name="Analytics Test Farm", owner=self.user)
+        self.company = Company.objects.create(name="Analytics Test Farm")
 
         self.establishment = Establishment.objects.create(name="Analytics Test Field", company=self.company)
 
@@ -688,7 +688,7 @@ class HistoryIntegrationTestCase(TransactionTestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="farmer@test.com", password="testpass123")
 
-        self.company = Company.objects.create(name="Integration Test Farm", owner=self.user)
+        self.company = Company.objects.create(name="Integration Test Farm")
 
         self.establishment = Establishment.objects.create(name="Integration Test Field", company=self.company)
 

@@ -80,6 +80,7 @@ moto = "^5.1.6"
 locust = "^2.15.1"
 safety = "^2.3.5"
 django-debug-toolbar = "^4.1.0"
+pytest-asyncio = "^1.1.0"
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "backend.settings.dev"
@@ -105,6 +106,7 @@ addopts = [
     "--reuse-db",
     "--nomigrations"
 ]
+asyncio_mode = "auto"
 markers = [
     "unit: Unit tests",
     "integration: Integration tests", 

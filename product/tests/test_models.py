@@ -71,7 +71,7 @@ class ParcelModelTestCase(TestCase):
             email="farmer@test.com", password="testpass123", first_name="John", last_name="Farmer"
         )
 
-        self.company = Company.objects.create(name="Test Farm Co.", owner=self.user)
+        self.company = Company.objects.create(name="Test Farm Co.")
 
         self.establishment = Establishment.objects.create(
             name="North Field Farm", company=self.company, latitude=Decimal("36.7378"), longitude=Decimal("-119.7871")
@@ -356,7 +356,7 @@ class ProductCertificationTestCase(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="farmer@test.com", password="testpass123")
 
-        self.company = Company.objects.create(name="Certified Farm", owner=self.user)
+        self.company = Company.objects.create(name="Certified Farm")
 
         self.establishment = Establishment.objects.create(name="Certified Field", company=self.company)
 
@@ -458,7 +458,7 @@ class ParcelViewSetTestCase(APITestCase):
         )
 
         # Create company and establishment
-        self.company = Company.objects.create(name="API Test Farm", owner=self.owner)
+        self.company = Company.objects.create(name="API Test Farm")
 
         self.establishment = Establishment.objects.create(name="API Test Field", company=self.company)
 
@@ -494,7 +494,7 @@ class ParcelViewSetTestCase(APITestCase):
         """Test that users only see parcels they have access to."""
         # Create parcel for different company
         other_user = User.objects.create_user(email="other@test.com", password="testpass123")
-        other_company = Company.objects.create(name="Other Company", owner=other_user)
+        other_company = Company.objects.create(name="Other Company")
         other_establishment = Establishment.objects.create(name="Other Establishment", company=other_company)
         other_parcel = Parcel.objects.create(name="Other Parcel", establishment=other_establishment, area=15.0)
 
@@ -614,7 +614,7 @@ class ParcelGeospatialTestCase(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="gis@test.com", password="testpass123")
 
-        self.company = Company.objects.create(name="GIS Test Farm", owner=self.user)
+        self.company = Company.objects.create(name="GIS Test Farm")
 
         self.establishment = Establishment.objects.create(
             name="GIS Test Field", company=self.company, latitude=Decimal("36.7378"), longitude=Decimal("-119.7871")
@@ -697,7 +697,7 @@ class ParcelAnalyticsTestCase(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="analytics@test.com", password="testpass123")
 
-        self.company = Company.objects.create(name="Analytics Farm", owner=self.user)
+        self.company = Company.objects.create(name="Analytics Farm")
 
         self.establishment = Establishment.objects.create(name="Analytics Field", company=self.company)
 
@@ -759,7 +759,7 @@ class ParcelPerformanceTestCase(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="performance@test.com", password="testpass123")
 
-        self.company = Company.objects.create(name="Large Farm Co.", owner=self.user)
+        self.company = Company.objects.create(name="Large Farm Co.")
 
         self.establishment = Establishment.objects.create(name="Large Field", company=self.company)
 
@@ -838,7 +838,7 @@ class ParcelIntegrationTestCase(TransactionTestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="integration@test.com", password="testpass123")
 
-        self.company = Company.objects.create(name="Integration Farm", owner=self.user)
+        self.company = Company.objects.create(name="Integration Farm")
 
         self.establishment = Establishment.objects.create(name="Integration Field", company=self.company)
 

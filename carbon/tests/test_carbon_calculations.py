@@ -220,7 +220,7 @@ class CarbonCalculatorTestCase(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="farmer@test.com", password="testpass123")
 
-        self.company = Company.objects.create(name="Carbon Test Farm", owner=self.user)
+        self.company = Company.objects.create(name="Carbon Test Farm")
 
         self.establishment = Establishment.objects.create(
             name="Carbon Test Field",
@@ -403,7 +403,7 @@ class BlockchainVerificationTestCase(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="blockchain@test.com", password="testpass123")
 
-        self.company = Company.objects.create(name="Blockchain Test Farm", owner=self.user)
+        self.company = Company.objects.create(name="Blockchain Test Farm")
 
         self.establishment = Establishment.objects.create(name="Blockchain Test Field", company=self.company)
 
@@ -527,7 +527,7 @@ class IoTIntegrationTestCase(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="iot@test.com", password="testpass123")
 
-        self.company = Company.objects.create(name="IoT Test Farm", owner=self.user)
+        self.company = Company.objects.create(name="IoT Test Farm")
 
         self.establishment = Establishment.objects.create(name="IoT Test Field", company=self.company)
 
@@ -785,7 +785,7 @@ class CarbonReportingTestCase(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="reporting@test.com", password="testpass123")
 
-        self.company = Company.objects.create(name="Reporting Test Farm", owner=self.user)
+        self.company = Company.objects.create(name="Reporting Test Farm")
 
         self.establishment = Establishment.objects.create(name="Reporting Test Field", company=self.company)
 
@@ -878,7 +878,7 @@ class USDAComplianceTestCase(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="compliance@test.com", password="testpass123")
 
-        self.company = Company.objects.create(name="Compliance Test Farm", owner=self.user)
+        self.company = Company.objects.create(name="Compliance Test Farm")
 
         self.establishment = Establishment.objects.create(name="Compliance Test Field", company=self.company)
 
