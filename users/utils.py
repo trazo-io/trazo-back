@@ -180,6 +180,45 @@ def send_password_reset_email(user, reset_token, reset_link):
         return False
 
 
+def send_company_join_welcome_email(user, company, role):
+    """
+    Send welcome email to user who joined a company via company code
+    """
+    try:
+        # Role display mapping
+        role_display_map = {"CA": "Company Admin", "DS": "Domain Supervisor", "DW": "Domain Worker", "DE": "Dealer"}
+        
+        # Determine dashboard URL based on environment
+        if hasattr(settings, 'BASE_APP_URL'):
+            dashboard_url = f"{settings.BASE_APP_URL}admin/dashboard"
+        else:
+            dashboard_url = f"{settings.BASE_URL}/admin/dashboard"
+
+        context = {
+            "user": user,
+            "company": company,
+            "role": role,
+            "role_display": role_display_map.get(role, role),
+            "dashboard_url": dashboard_url,
+            "BASE_URL": settings.BASE_URL,
+        }
+
+        msg_plain = render_to_string("emails/welcome.txt", context)  # Use existing welcome plain text
+        msg_html = render_to_string("emails/company_join_welcome.html", context)
+        subject = f"Welcome to {company.name} on Trazo"
+
+        return send_mail(
+            subject,
+            msg_plain,
+            "info@trazo.io",
+            [user.email],
+            html_message=msg_html,
+        )
+    except Exception as e:
+        logger.error(f"Failed to send company join welcome email to {user.email}: {str(e)}")
+        return False
+
+
 def send_invitation_email(
     invitee_email, invitee_name, inviter, company, role, invitation_link, invitation_message=None
 ):
@@ -187,6 +226,19 @@ def send_invitation_email(
     Send invitation email to user being invited to join a company
     """
     try:
+        # Check if this is a company transfer (existing user)
+        from django.contrib.auth import get_user_model
+        from .models import WorksIn
+        
+        User = get_user_model()
+        is_company_transfer = False
+        
+        existing_user = User.objects.filter(email=invitee_email).first()
+        if existing_user:
+            # Check if user has membership in another company
+            other_membership = WorksIn.objects.filter(user=existing_user).exclude(company=company).exists()
+            is_company_transfer = other_membership
+
         # Role display mapping
         role_display_map = {"CA": "Company Admin", "DS": "Domain Supervisor", "DW": "Domain Worker", "DE": "Dealer"}
 
@@ -201,9 +253,16 @@ def send_invitation_email(
             "BASE_URL": settings.BASE_URL,
         }
 
-        msg_plain = render_to_string("emails/invitation.txt", context)
-        msg_html = render_to_string("emails/invitation.html", context)
-        subject = f"You're Invited to Join {company.name} on Trazo"
+        # Choose appropriate template based on invitation type
+        if is_company_transfer:
+            template_name = "emails/company_transfer_invitation.html"
+            subject = f"Company Transfer Invitation - Join {company.name} on Trazo"
+        else:
+            template_name = "emails/invitation.html"
+            subject = f"You're Invited to Join {company.name} on Trazo"
+
+        msg_plain = render_to_string("emails/invitation.txt", context)  # Keep same plain text template
+        msg_html = render_to_string(template_name, context)  # Use appropriate HTML template
         print(f"Email settings debug for invitation to {invitee_email}:")
         print(f"  DEFAULT_FROM_EMAIL: {settings.DEFAULT_FROM_EMAIL}")
         print(f"  SERVER_EMAIL: {settings.SERVER_EMAIL}")

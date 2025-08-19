@@ -60,6 +60,23 @@ class Company(models.Model):
     def get_absolute_url(self) -> str:
         return reverse("company-detail", kwargs={"id": self.id})
 
+    def save(self, *args, **kwargs):
+        # Generate invitation code if not provided
+        if not self.invitation_code:
+            self.invitation_code = self.generate_invitation_code()
+        super().save(*args, **kwargs)
+
+    def generate_invitation_code(self):
+        """Generate a unique company invitation code"""
+        import secrets
+        import string
+        
+        while True:
+            # Generate a readable code (6 characters, uppercase + digits)
+            code = "".join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6))
+            if not Company.objects.filter(invitation_code=code).exists():
+                return code
+
     # Subscription-related methods
     @property
     def subscription_plan(self):

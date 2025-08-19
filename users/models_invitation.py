@@ -101,13 +101,25 @@ class CompanyInvitation(models.Model):
         return self.status == self.STATUS_PENDING and not self.is_expired()
 
     def accept(self, user):
-        """Accept the invitation and add user to company"""
+        """Accept the invitation and add user to company (handles company transfers)"""
         if not self.can_be_accepted():
             raise ValueError("Invitation cannot be accepted")
 
-        # Create WorksIn relationship
         from users.models import WorksIn
 
+        # Handle company transfer: remove user from any existing companies
+        existing_memberships = WorksIn.objects.filter(user=user).exclude(company=self.company)
+        if existing_memberships.exists():
+            # Log company transfer for audit trail
+            import logging
+            logger = logging.getLogger(__name__)
+            old_companies = [membership.company.name for membership in existing_memberships]
+            logger.info(f"Company transfer: User {user.email} moving from {', '.join(old_companies)} to {self.company.name}")
+            
+            # Remove existing memberships (company transfer)
+            existing_memberships.delete()
+
+        # Create new WorksIn relationship
         works_in, created = WorksIn.objects.get_or_create(user=user, company=self.company, defaults={"role": self.role})
 
         # If WorksIn already existed, update the role
@@ -140,6 +152,21 @@ class CompanyInvitation(models.Model):
         from django.urls import reverse
 
         return reverse("accept_invitation", kwargs={"invitation_code": self.invitation_code})
+
+    def is_company_transfer(self):
+        """Check if this invitation involves transferring an existing user to a new company"""
+        try:
+            from users.models import WorksIn
+            User = get_user_model()
+            
+            existing_user = User.objects.filter(email=self.email).first()
+            if existing_user:
+                # Check if user has membership in another company
+                other_membership = WorksIn.objects.filter(user=existing_user).exclude(company=self.company).exists()
+                return other_membership
+            return False
+        except Exception:
+            return False
 
     @classmethod
     def expire_old_invitations(cls):

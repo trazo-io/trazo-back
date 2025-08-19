@@ -71,6 +71,12 @@ def create_invitation(request):
                 return Response(
                     {"error": "User is already a member of this company"}, status=status.HTTP_400_BAD_REQUEST
                 )
+            
+            # Check if user has membership in another company
+            other_membership = WorksIn.objects.filter(user=existing_user).exclude(company=user_company).first()
+            if other_membership:
+                # This will be a company transfer invitation
+                logger.info(f"Creating company transfer invitation for {email} from {other_membership.company.name} to {user_company.name}")
 
         # Check for existing pending invitation
         existing_invitation = CompanyInvitation.objects.filter(
@@ -195,7 +201,25 @@ def get_invitation_details(request, invitation_code):
 def accept_invitation(request, invitation_code):
     """
     Accept a company invitation (can be used by authenticated or unauthenticated users)
+    Enhanced with rate limiting and security measures
     """
+    # Rate limiting for invitation acceptance attempts
+    from django.core.cache import cache
+    
+    client_ip = request.META.get('HTTP_X_FORWARDED_FOR', request.META.get('REMOTE_ADDR', ''))
+    rate_limit_key = f"invitation_accept_attempts:{client_ip}"
+    attempts = cache.get(rate_limit_key, 0)
+    
+    if attempts >= 5:  # Max 5 attempts per hour per IP
+        logger.warning(f"Rate limit exceeded for invitation acceptance from IP: {client_ip}")
+        return Response(
+            {"error": "Too many invitation attempts. Please try again later."}, 
+            status=status.HTTP_429_TOO_MANY_REQUESTS
+        )
+    
+    # Increment attempt counter
+    cache.set(rate_limit_key, attempts + 1, timeout=3600)  # 1 hour timeout
+    
     try:
         invitation = get_object_or_404(CompanyInvitation, invitation_code=invitation_code)
 

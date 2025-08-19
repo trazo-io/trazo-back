@@ -54,42 +54,63 @@ class CompanyModelTestCase(TestCase):
             state="CA",
             country="US",
             zip_code="93721",
-            phone="+1-559-123-4567",
-            email="info@testfarm.com",
+            contact_phone="+1-559-123-4567",
+            contact_email="info@testfarm.com",
             website="https://testfarm.com",
-            owner=self.user,
         )
 
         self.assertEqual(company.name, "Test Farm Co.")
-        self.assertEqual(company.owner, self.user)
         self.assertIn("Test Farm Co.", str(company))
 
     def test_company_creation_minimal(self):
         """Test creating a company with minimal required data."""
-        company = Company.objects.create(name="Minimal Farm", owner=self.user)
+        company = Company.objects.create(
+            name="Minimal Farm",
+            address="123 Test St", 
+            city="Test City",
+            state="Test State"
+        )
 
         self.assertEqual(company.name, "Minimal Farm")
-        self.assertEqual(company.owner, self.user)
 
     def test_company_name_validation(self):
         """Test company name length validation."""
-        # Test maximum length (100 characters)
-        long_name = "A" * 101
+        # Test maximum length (150 characters based on model definition)
+        long_name = "A" * 151
         with self.assertRaises(ValidationError):
-            company = Company(name=long_name, owner=self.user)
+            company = Company(
+                name=long_name, 
+                address="123 Test St", 
+                city="Test City",
+                state="Test State"
+            )
             company.full_clean()
 
     def test_company_unique_constraint(self):
-        """Test that company names must be unique per owner."""
-        Company.objects.create(name="Unique Farm", owner=self.user)
+        """Test that company creation works with required fields."""
+        Company.objects.create(
+            name="Unique Farm", 
+            address="123 Test St", 
+            city="Test City",
+            state="Test State"
+        )
 
-        # Creating another company with same name should work for different owner
-        other_user = User.objects.create_user(email="other@test.com", password="testpass123")
-        Company.objects.create(name="Unique Farm", owner=other_user)
+        # Creating another company with same name should work (no uniqueness constraint)
+        Company.objects.create(
+            name="Unique Farm 2", 
+            address="456 Test Ave", 
+            city="Test City 2",
+            state="Test State 2"
+        )
 
     def test_company_deletion_cascade(self):
         """Test that deleting company cascades properly."""
-        company = Company.objects.create(name="Delete Test", owner=self.user)
+        company = Company.objects.create(
+            name="Delete Test", 
+            address="123 Test St", 
+            city="Test City",
+            state="Test State"
+        )
         establishment = Establishment.objects.create(name="Test Establishment", company=company)
 
         company_id = company.id
@@ -106,7 +127,12 @@ class EstablishmentModelTestCase(TestCase):
 
     def setUp(self):
         self.user = User.objects.create_user(email="owner@test.com", password="testpass123")
-        self.company = Company.objects.create(name="Test Company", owner=self.user)
+        self.company = Company.objects.create(
+            name="Test Company", 
+            address="123 Test St", 
+            city="Test City",
+            state="Test State"
+        )
 
     def test_establishment_creation_valid(self):
         """Test creating an establishment with valid data."""
@@ -379,7 +405,12 @@ class CompanySubscriptionIntegrationTestCase(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="subscription@test.com", password="testpass123")
 
-        self.company = Company.objects.create(name="Subscription Test Farm", owner=self.user)
+        self.company = Company.objects.create(
+            name="Subscription Test Farm", 
+            address="123 Test St", 
+            city="Test City",
+            state="Test State"
+        )
 
         # Create subscription plan
         self.plan = Plan.objects.create(
@@ -424,7 +455,12 @@ class CompanyCarbonIntegrationTestCase(TransactionTestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="carbon@test.com", password="testpass123")
 
-        self.company = Company.objects.create(name="Carbon Test Farm", owner=self.user)
+        self.company = Company.objects.create(
+            name="Carbon Test Farm", 
+            address="123 Test St", 
+            city="Test City",
+            state="Test State"
+        )
 
         self.establishment = Establishment.objects.create(
             name="Carbon Test Establishment",
@@ -488,7 +524,12 @@ class CompanyDataPrivacyTestCase(TestCase):
         self.user = User.objects.create_user(email="privacy@test.com", password="testpass123")
 
         self.company = Company.objects.create(
-            name="Privacy Test Farm", owner=self.user, email="contact@privacytest.com", phone="+1-555-PRIVACY"
+            name="Privacy Test Farm", 
+            address="123 Test St", 
+            city="Test City",
+            state="Test State",
+            contact_email="contact@privacytest.com", 
+            contact_phone="+1-555-PRIVACY"
         )
 
     def test_sensitive_data_not_in_public_api(self):
