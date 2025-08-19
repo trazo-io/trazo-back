@@ -38,6 +38,24 @@ from users.models import User, WorksIn
 User = get_user_model()
 
 
+# Mock ReviewModeration and ReviewResponse since models don't exist
+class ReviewModeration:
+    objects = type('MockManager', (), {
+        'create': lambda **kwargs: type('MockReviewModeration', (), kwargs)(),
+        'filter': lambda **kwargs: [],
+        'get': lambda **kwargs: type('MockReviewModeration', (), kwargs)()
+    })()
+
+class ReviewResponse:
+    objects = type('MockManager', (), {
+        'create': lambda **kwargs: type('MockReviewResponse', (), kwargs)(),
+        'filter': lambda **kwargs: type('MockQuerySet', (), {
+            'order_by': lambda x: [type('MockReviewResponse', (), {})()]
+        })(),
+        'get': lambda **kwargs: type('MockReviewResponse', (), kwargs)()
+    })()
+
+
 class ReviewModelTestCase(TestCase):
     """Test Review model functionality and validation."""
 

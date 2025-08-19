@@ -51,7 +51,7 @@ class SecurityEdgeCaseTests:
         self.logger = logging.getLogger(__name__)
         self.test_results = {}
         self.client = Client()
-        self.audit_logger = SecurityAuditLogger()
+        self.audit_logger = EnhancedLogger()
         self.created_users = []
         self.created_objects = []
 
@@ -98,7 +98,7 @@ class SecurityEdgeCaseTests:
         """Test API key security under various edge cases"""
         print("  Testing API key security edge cases...")
 
-        key_manager = SecureKeyManagement()
+        key_manager = SecureKeyManager()
 
         # Test key rotation under concurrent access
         def concurrent_key_rotation(service_name):

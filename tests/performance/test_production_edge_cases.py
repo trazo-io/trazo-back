@@ -108,7 +108,7 @@ class ProductionEdgeCaseTests:
         with patch("boto3.client") as mock_boto:
             mock_boto.side_effect = Exception("AWS service unavailable")
             try:
-                secrets_manager = SecureSecretsManager()
+                secrets_manager = ProductionSecretsManager()
                 # Should fall back to environment variables
                 assert hasattr(secrets_manager, "fallback_enabled")
                 print("    ✓ AWS failure handled with fallback")
@@ -119,7 +119,7 @@ class ProductionEdgeCaseTests:
         with patch("web3.Web3") as mock_web3:
             mock_web3.side_effect = ConnectionError("Blockchain node unreachable")
             try:
-                blockchain_service = EnhancedMultiSigBlockchainService()
+                blockchain_service = MultiSigBlockchainService()
                 # Should initialize with offline mode
                 assert hasattr(blockchain_service, "offline_mode")
                 print("    ✓ Blockchain failure handled with offline mode")
@@ -130,7 +130,7 @@ class ProductionEdgeCaseTests:
         with patch("requests.get") as mock_get:
             mock_get.side_effect = ConnectTimeout("USDA API unreachable")
             try:
-                usda_service = USDAIntegrationService()
+                usda_service = RealUSDAAPIClient()
                 # Should initialize with cached data
                 assert hasattr(usda_service, "cache_fallback")
                 print("    ✓ USDA API failure handled with cache fallback")
@@ -229,12 +229,12 @@ class ProductionEdgeCaseTests:
 
             elif var_name == "USDA_API_KEY":
                 # Should use cached emission factors
-                usda_service = USDAIntegrationService()
+                usda_service = RealUSDAAPIClient()
                 assert hasattr(usda_service, "use_cached_factors")
 
             elif var_name == "BLOCKCHAIN_PRIVATE_KEY":
                 # Should operate in read-only mode
-                blockchain_service = EnhancedMultiSigBlockchainService()
+                blockchain_service = MultiSigBlockchainService()
                 assert hasattr(blockchain_service, "read_only_mode")
 
             print(f"    ✓ Missing {var_name} handled gracefully")
@@ -294,7 +294,7 @@ class ProductionEdgeCaseTests:
 
     def _test_error_aggregation(self):
         """Test system's ability to aggregate and report errors"""
-        audit_logger = SecurityAuditLogger()
+        audit_logger = EnhancedLogger()
 
         # Generate multiple errors
         for i in range(10):
@@ -857,7 +857,7 @@ class ProductionEdgeCaseTests:
 
     def _test_api_key_security(self):
         """Test API key security measures"""
-        key_manager = SecureKeyManagement()
+        key_manager = SecureKeyManager()
 
         # Test key rotation
         try:
