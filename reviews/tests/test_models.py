@@ -31,6 +31,7 @@ from company.models import Company, Establishment
 from history.models import History
 from product.models import Parcel
 from reviews.models import Review
+
 # Skip ReviewModeration and ReviewResponse imports - models not implemented
 from users.models import User, WorksIn
 

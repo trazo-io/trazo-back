@@ -41,6 +41,7 @@ from carbon.services.blockchain import BlockchainCarbonService
 from carbon.services.calculator import CarbonFootprintCalculator
 from carbon.services.circuit_breaker_enhanced import CircuitBreakerManager
 from carbon.services.coolfarm_service import CoolFarmService
+
 # Skip emission factor function imports - functions not implemented
 # from carbon.services.emission_factors import (
 #     get_electricity_factor,

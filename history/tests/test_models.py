@@ -34,6 +34,7 @@ from rest_framework.test import APIClient, APITestCase
 from carbon.models import CarbonEntry, CarbonSource
 from company.models import Company, Establishment
 from history.models import History
+
 # Skip HistoryTranslation and QRCodeData imports - models not implemented
 from product.models import Parcel
 from subscriptions.models import Subscription
