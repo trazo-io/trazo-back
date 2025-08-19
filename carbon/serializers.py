@@ -2,6 +2,9 @@ from django.utils import timezone
 
 from rest_framework import serializers
 
+from company.models import Establishment
+from history.models import History
+
 from .models import (
     CarbonAuditLog,
     CarbonBenchmark,
@@ -14,10 +17,8 @@ from .models import (
     CarbonReport,
     CarbonSource,
     CropType,
-    Establishment,
     EventTemplate,
     GreenPoints,
-    History,
     MicroOffset,
     ProductionTemplate,
     SustainabilityBadge,
