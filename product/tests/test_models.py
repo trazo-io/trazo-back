@@ -40,18 +40,27 @@ User = get_user_model()
 
 # Mock CropTemplate and ProductCertification since models don't exist
 class CropTemplate:
-    objects = type('MockManager', (), {
-        'create': lambda **kwargs: type('MockCropTemplate', (), kwargs)(),
-        'filter': lambda **kwargs: [],
-        'get': lambda **kwargs: type('MockCropTemplate', (), kwargs)()
-    })()
+    objects = type(
+        "MockManager",
+        (),
+        {
+            "create": lambda **kwargs: type("MockCropTemplate", (), kwargs)(),
+            "filter": lambda **kwargs: [],
+            "get": lambda **kwargs: type("MockCropTemplate", (), kwargs)(),
+        },
+    )()
+
 
 class ProductCertification:
-    objects = type('MockManager', (), {
-        'create': lambda **kwargs: type('MockProductCertification', (), kwargs)(),
-        'filter': lambda **kwargs: [],
-        'get': lambda **kwargs: type('MockProductCertification', (), kwargs)()
-    })()
+    objects = type(
+        "MockManager",
+        (),
+        {
+            "create": lambda **kwargs: type("MockProductCertification", (), kwargs)(),
+            "filter": lambda **kwargs: [],
+            "get": lambda **kwargs: type("MockProductCertification", (), kwargs)(),
+        },
+    )()
 
 
 class ParcelModelTestCase(TestCase):

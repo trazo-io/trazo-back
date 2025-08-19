@@ -45,11 +45,15 @@ User = get_user_model()
 
 # Mock QRCodeData since model doesn't exist
 class QRCodeData:
-    objects = type('MockManager', (), {
-        'create': lambda **kwargs: type('MockQRCodeData', (), kwargs)(),
-        'filter': lambda **kwargs: type('MockQuerySet', (), {'delete': lambda: None})(),
-        'get': lambda **kwargs: type('MockQRCodeData', (), kwargs)()
-    })()
+    objects = type(
+        "MockManager",
+        (),
+        {
+            "create": lambda **kwargs: type("MockQRCodeData", (), kwargs)(),
+            "filter": lambda **kwargs: type("MockQuerySet", (), {"delete": lambda: None})(),
+            "get": lambda **kwargs: type("MockQRCodeData", (), kwargs)(),
+        },
+    )()
 
 
 class HistoryModelTestCase(TestCase):

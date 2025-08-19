@@ -50,22 +50,28 @@ from carbon.services.coolfarm_service import CoolFarmService
 #     get_irrigation_factor,
 # )
 
+
 # Mock emission factor functions since they don't exist
 def get_fertilizer_factor(fertilizer_type):
     """Mock fertilizer factor function"""
     return {"value": 11.0, "unit": "kg CO2e per kg N", "usda_verified": True}
 
+
 def get_fuel_factor(fuel_type):
     """Mock fuel factor function"""
     return {"value": 2.68, "unit": "kg CO2e per liter", "usda_verified": True}
+
 
 def get_electricity_factor(region):
     """Mock electricity factor function"""
     return {"value": 0.5, "unit": "kg CO2e per kWh", "usda_verified": True}
 
+
 def get_irrigation_factor(irrigation_type):
     """Mock irrigation factor function"""
     return {"value": 0.3, "unit": "kg CO2e per hectare", "usda_verified": True}
+
+
 from company.models import Company, Establishment
 from history.models import History
 from product.models import Parcel
@@ -74,7 +80,7 @@ from users.models import User, WorksIn
 User = get_user_model()
 
 
-# Skip EmissionFactorsTestCase - emission factor functions not implemented  
+# Skip EmissionFactorsTestCase - emission factor functions not implemented
 class EmissionFactorsTestCase(TestCase):
     """Test USDA-verified emission factors and calculations."""
 
@@ -85,7 +91,7 @@ class EmissionFactorsTestCase(TestCase):
         # Note: EmissionFactorsService is not yet implemented
         # self.emission_service = EmissionFactorsService()
         self.emission_service = None  # EmissionFactorsService not yet implemented
-    
+
     # Mock emission factor functions as instance methods
     def get_fertilizer_factor(self, fertilizer_type):
         """Mock fertilizer factor function"""
@@ -97,7 +103,7 @@ class EmissionFactorsTestCase(TestCase):
             "potassium": {"value": 0.7, "unit": "kg CO2e per kg K2O", "usda_verified": True},
         }
         return factors.get(fertilizer_type, {"value": 11.0, "unit": "kg CO2e per kg N", "usda_verified": True})
-    
+
     def get_fuel_factor(self, fuel_type):
         """Mock fuel factor function"""
         factors = {
@@ -105,7 +111,7 @@ class EmissionFactorsTestCase(TestCase):
             "gasoline": {"value": 2.31, "unit": "kg CO2e per liter", "usda_verified": True},
         }
         return factors.get(fuel_type, {"value": 2.68, "unit": "kg CO2e per liter", "usda_verified": True})
-    
+
     def get_electricity_factor(self, region):
         """Mock electricity factor function"""
         factors = {
@@ -113,7 +119,7 @@ class EmissionFactorsTestCase(TestCase):
             "US_AVERAGE": {"value": 0.5, "unit": "kg CO2e per kWh", "usda_verified": True},
         }
         return factors.get(region, {"value": 0.5, "unit": "kg CO2e per kWh", "usda_verified": True})
-    
+
     def get_irrigation_factor(self, irrigation_type):
         """Mock irrigation factor function"""
         factors = {
@@ -135,7 +141,7 @@ class EmissionFactorsTestCase(TestCase):
         self.assertEqual(factor["value"], 1.0)
         self.assertEqual(factor["unit"], "kg CO2e per kg P2O5")
         self.assertTrue(factor["usda_verified"])
-    
+
     def test_get_fertilizer_factor_potassium(self):
         """Test potassium fertilizer emission factor"""
         factor = self.get_fertilizer_factor("potassium")
@@ -189,10 +195,10 @@ class EmissionFactorsTestCase(TestCase):
         """Test that emission factors are cached properly"""
         # First call should hit the service
         factor1 = self.get_fertilizer_factor("nitrogen")
-        
+
         # Second call should use cache
         factor2 = self.get_fertilizer_factor("nitrogen")
-        
+
         # Factors should be identical
         self.assertEqual(factor1, factor2)
 
@@ -200,7 +206,7 @@ class EmissionFactorsTestCase(TestCase):
         """Test handling of invalid emission factor types"""
         with self.assertRaises(ValueError):
             self.get_fertilizer_factor("invalid_fertilizer_type")
-    
+
     def test_emission_factor_metadata(self):
         """Test emission factor metadata includes source information"""
         factor = self.get_fertilizer_factor("nitrogen")
