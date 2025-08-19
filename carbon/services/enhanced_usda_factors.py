@@ -6,9 +6,8 @@ Enhanced with real-time USDA API integration and compliance validation.
 """
 
 import hashlib
-import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from django.conf import settings
@@ -18,7 +17,7 @@ from django.utils import timezone
 import requests
 
 from .emission_factors import emission_factors
-from .real_usda_integration import RealUSDAAPIClient, get_real_usda_carbon_data
+from .real_usda_integration import RealUSDAAPIClient
 
 logger = logging.getLogger(__name__)
 

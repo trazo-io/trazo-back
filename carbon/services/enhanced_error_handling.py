@@ -3,18 +3,15 @@ Enhanced Error Handling and Fallback Mechanisms for Trazo
 Provides comprehensive error handling, retry logic, and fallback mechanisms
 """
 
-import asyncio
-import json
 import logging
 import time
 import traceback
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from functools import wraps
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional
 
-from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
 

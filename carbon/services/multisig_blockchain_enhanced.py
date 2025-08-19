@@ -5,8 +5,8 @@ Implements production-grade security for critical blockchain operations
 
 import json
 import logging
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import timedelta
+from typing import Any, Dict, List, Optional
 
 from django.conf import settings
 from django.core.cache import cache
@@ -14,8 +14,7 @@ from django.utils import timezone
 
 from backend.services.secrets_manager import secrets_manager
 
-from .blockchain import BlockchainCarbonService, BlockchainOperationError
-from .secure_key_management import get_secure_blockchain_key
+from .blockchain import BlockchainCarbonService
 
 logger = logging.getLogger(__name__)
 
@@ -33,13 +32,9 @@ except ImportError:
 class MultiSigError(Exception):
     """Raised when multi-signature operations fail"""
 
-    pass
-
 
 class InsufficientSignaturesError(Exception):
     """Raised when insufficient signatures are provided"""
-
-    pass
 
 
 class MultiSigBlockchainService(BlockchainCarbonService):

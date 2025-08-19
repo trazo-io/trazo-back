@@ -9,19 +9,15 @@ Usage: poetry run python manage.py test_photo_verification --dry-run
 """
 
 import logging
-import tempfile
 from io import BytesIO
 
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
-from django.utils import timezone
 
 from PIL import Image
 
-from carbon.models import CarbonEntry, CarbonSource
 from carbon.services.photo_evidence_service import photo_evidence_service
 from carbon.services.verification_service import VerificationService
-from company.models import Establishment
 
 logger = logging.getLogger(__name__)
 User = get_user_model()

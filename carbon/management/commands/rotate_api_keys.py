@@ -3,8 +3,6 @@ Django management command for API key rotation
 Usage: python manage.py rotate_api_keys [service_name] [--new-key=KEY] [--check-only] [--force]
 """
 
-import json
-
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 

@@ -8,7 +8,7 @@ from django.dispatch import receiver
 
 from .constants import CONSUMER, PRODUCER
 from .models import User, VerificationCode
-from .utils import send_invitation_to_user, send_verification_email, send_welcome_email
+from .utils import send_verification_email, send_welcome_email
 
 logger = logging.getLogger(__name__)
 

@@ -1,3 +1,5 @@
+import logging
+
 from django.contrib.auth.models import update_last_login
 from django.core.exceptions import ObjectDoesNotExist
 
@@ -5,8 +7,9 @@ from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.settings import api_settings
 
-from .constants import PRODUCER, USER_TYPE_CHOICES
 from .models import User, WorksIn
+
+logger = logging.getLogger(__name__)
 
 
 class WorksInSerializer(serializers.ModelSerializer):
@@ -113,56 +116,58 @@ class RegisterSerializer(BasicUserSerializer):
         """Validate company code exists with enhanced security"""
         if value:  # Only validate if code is provided
             import logging
-            from company.models import Company
+
             from django.core.cache import cache
-            from django.utils import timezone
-            from datetime import timedelta
-            
+
+            from company.models import Company
+
             logger = logging.getLogger(__name__)
-            
+
             # Normalize the code (uppercase, strip whitespace)
             value = value.upper().strip()
-            
+
             # Basic format validation (6-8 characters, alphanumeric)
             if not value.isalnum() or len(value) < 6 or len(value) > 8:
                 logger.warning(f"Invalid company code format attempted: {value}")
                 raise serializers.ValidationError("Company code must be 6-8 alphanumeric characters")
-            
+
             # Rate limiting for code validation attempts
-            request = self.context.get('request')
+            request = self.context.get("request")
             if request:
-                client_ip = request.META.get('HTTP_X_FORWARDED_FOR', request.META.get('REMOTE_ADDR', ''))
+                client_ip = request.META.get("HTTP_X_FORWARDED_FOR", request.META.get("REMOTE_ADDR", ""))
                 rate_limit_key = f"company_code_attempts:{client_ip}"
                 attempts = cache.get(rate_limit_key, 0)
-                
+
                 if attempts >= 10:  # Max 10 attempts per hour per IP
                     logger.warning(f"Rate limit exceeded for company code validation from IP: {client_ip}")
                     raise serializers.ValidationError("Too many validation attempts. Please try again later.")
-                
+
                 # Increment attempt counter
                 cache.set(rate_limit_key, attempts + 1, timeout=3600)  # 1 hour timeout
-            
+
             # Check if company exists
             try:
                 company = Company.objects.filter(invitation_code=value).first()
                 if not company:
-                    logger.warning(f"Invalid company code attempted: {value} from IP: {client_ip if request else 'Unknown'}")
+                    logger.warning(
+                        f"Invalid company code attempted: {value} from IP: {client_ip if request else 'Unknown'}"
+                    )
                     raise serializers.ValidationError("Invalid company code")
-                
+
                 # Check if company is active (additional security)
-                if not getattr(company, 'is_active', True):
+                if not getattr(company, "is_active", True):
                     logger.warning(f"Inactive company code attempted: {value} for company: {company.name}")
                     raise serializers.ValidationError("Company code is no longer valid")
-                    
+
                 logger.info(f"Valid company code used: {value} for company: {company.name}")
-                
+
             except Exception as e:
                 if "Invalid company code" in str(e) or "Company code is no longer valid" in str(e):
                     raise  # Re-raise validation errors
                 else:
                     logger.error(f"Unexpected error during company code validation: {str(e)}")
                     raise serializers.ValidationError("Unable to validate company code. Please try again.")
-        
+
         return value
 
     class Meta:
@@ -181,10 +186,10 @@ class RegisterSerializer(BasicUserSerializer):
 
     def create(self, validated_data):
         from django.db import transaction
-        
+
         # Extract company code before creating user
         company_code = validated_data.pop("company_code", None)
-        
+
         # Convert user_type string to integer if needed
         user_type = validated_data.get("user_type")
         if isinstance(user_type, str):
@@ -204,67 +209,68 @@ class RegisterSerializer(BasicUserSerializer):
             # Create user and join company in a single transaction
             with transaction.atomic():
                 user = User.objects.create_user(**validated_data)
-                
+
                 # Handle company code joining after user creation
                 if company_code:
                     self._join_company_with_code(user, company_code)
-                
+
         return user
-    
+
     def _join_company_with_code(self, user, company_code):
         """Join user to company using company invitation code"""
         from company.models import Company
-        
+
         try:
             # Find company by invitation code
             company = Company.objects.filter(invitation_code=company_code).first()
-            
+
             if not company:
                 raise serializers.ValidationError({"company_code": "Invalid company code"})
-            
+
             # Check if user already belongs to this company
             existing_membership = WorksIn.objects.filter(user=user, company=company).first()
             if existing_membership:
                 logger.warning(f"User {user.email} already belongs to company {company.name}")
                 return  # User already in company, nothing to do
-            
+
             # Check if user belongs to another company (should we transfer?)
             other_membership = WorksIn.objects.filter(user=user).exclude(company=company).first()
             if other_membership:
                 # For company code joins, we don't auto-transfer - require explicit invitation
-                logger.warning(f"User {user.email} attempted company code join but already belongs to {other_membership.company.name}")
-                raise serializers.ValidationError({
-                    "company_code": f"You already belong to {other_membership.company.name}. Contact your admin for a company transfer invitation."
-                })
-            
+                logger.warning(
+                    f"User {user.email} attempted company code join but already belongs to {other_membership.company.name}"
+                )
+                raise serializers.ValidationError(
+                    {
+                        "company_code": f"You already belong to {other_membership.company.name}. Contact your admin for a company transfer invitation."
+                    }
+                )
+
             # Create WorksIn relationship with default role (Domain Worker)
             works_in = WorksIn.objects.create(
-                user=user,
-                company=company,
-                role=WorksIn.DOMAIN_WORKER  # Default role for code-based joins
+                user=user, company=company, role=WorksIn.DOMAIN_WORKER  # Default role for code-based joins
             )
-            
+
             # Send welcome email for company join
             try:
                 from .utils import send_company_join_welcome_email
+
                 send_company_join_welcome_email(user, company, works_in.role)
-                logger = logging.getLogger(__name__)
                 logger.info(f"Company join welcome email sent to {user.email} for {company.name}")
             except Exception as email_error:
                 # Log email error but don't fail user creation
-                logger = logging.getLogger(__name__)
                 logger.warning(f"Failed to send welcome email to {user.email}: {str(email_error)}")
-            
+
         except serializers.ValidationError:
             # Re-raise validation errors to prevent user creation with invalid codes
             raise
         except Exception as e:
             # Log unexpected errors and prevent user creation
-            import logging
-            logger = logging.getLogger(__name__)
             logger.error(f"Failed to join user {user.email} to company with code {company_code}: {str(e)}")
             # Prevent user creation if company join fails to avoid orphaned accounts
-            raise serializers.ValidationError({"company_code": "Unable to join company. Please verify the code and try again."})
+            raise serializers.ValidationError(
+                {"company_code": "Unable to join company. Please verify the code and try again."}
+            )
 
 
 class CompanyInvitationSerializer(serializers.ModelSerializer):

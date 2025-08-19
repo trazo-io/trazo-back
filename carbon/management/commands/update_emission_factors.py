@@ -17,7 +17,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
-from carbon.models import CarbonEntry, CarbonSource, USDAComplianceRecord
+from carbon.models import CarbonEntry, CarbonSource
 from carbon.services.emission_factors import EmissionFactorsRegistry
 from carbon.services.event_carbon_calculator import EventCarbonCalculator
 
@@ -288,4 +288,3 @@ class Command(BaseCommand):
         """Create a detailed summary report of the update process"""
         # This could generate a detailed CSV or JSON report
         # For now, just log the summary
-        pass

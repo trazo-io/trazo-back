@@ -44,14 +44,7 @@ from django.views.decorators.csrf import csrf_protect
 from company.models import Establishment
 from history.models import History
 
-from .models import (
-    CarbonAuditLog,
-    CarbonEntry,
-    CarbonOffsetCertificate,
-    CarbonOffsetProject,
-    CarbonOffsetPurchase,
-    CarbonSource,
-)
+from .models import CarbonAuditLog, CarbonEntry, CarbonOffsetProject, CarbonOffsetPurchase, CarbonSource
 from .services.backend_security_validation import SecurityViolationError, backend_security_validator
 from .services.certificate import get_certificate_generator
 from .services.verification import verification_service

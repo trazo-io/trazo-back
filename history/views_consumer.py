@@ -3,11 +3,9 @@ Consumer-specific API ViewSets for dynamic dashboard data
 """
 
 from datetime import datetime, timedelta
-from decimal import Decimal
 
 from django.contrib.auth import get_user_model
-from django.db import models
-from django.db.models import Avg, Count, F, Max, Min, Q, Sum
+from django.db.models import Max, Min
 from django.utils import timezone
 
 from rest_framework import permissions, status, viewsets
@@ -15,27 +13,15 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from backend.constants import EngagementMilestones, get_carbon_score_from_co2e
-from carbon.models import CarbonEntry
-from company.models import Establishment
 
 from .models import History, HistoryScan
-from .models_consumer import (
-    UserFavorite,
-    UserImpactSummary,
-    UserLocalRecommendation,
-    UserProductComparison,
-    UserShoppingGoal,
-    UserShoppingInsight,
-)
+from .models_consumer import UserFavorite, UserImpactSummary, UserProductComparison, UserShoppingGoal
 from .serializers_consumer import (
     EnhancedHistoryScanSerializer,
-    ProductComparisonResultSerializer,
     ProductComparisonSerializer,
     UserFavoriteSerializer,
     UserImpactSummarySerializer,
-    UserLocalRecommendationSerializer,
     UserShoppingGoalSerializer,
-    UserShoppingInsightSerializer,
 )
 
 User = get_user_model()

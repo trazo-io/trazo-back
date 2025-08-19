@@ -4,8 +4,6 @@ Provides comprehensive circuit breaker pattern for all external API calls
 Addresses production readiness requirement for API resilience
 """
 
-import hashlib
-import json
 import logging
 import threading
 import time
@@ -13,9 +11,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from functools import wraps
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, Optional
 
-from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
 
@@ -76,8 +73,6 @@ class CircuitBreakerError(Exception):
 
 class FallbackNotAvailableError(Exception):
     """Raised when fallback mechanism is not available"""
-
-    pass
 
 
 class EnhancedCircuitBreaker:

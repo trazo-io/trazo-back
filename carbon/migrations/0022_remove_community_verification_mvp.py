@@ -2,7 +2,6 @@
 # Removes community verification level and optimizes for 2-tier system
 
 from django.db import migrations, models
-import django.core.validators
 
 
 def convert_community_verified_to_self_reported(apps, schema_editor):
@@ -33,7 +32,6 @@ def reverse_migration(apps, schema_editor):
     """Reverse migration - this cannot fully restore community verification data."""
     # We cannot restore the original community verification data
     # as attestations will be lost, so this is intentionally minimal
-    pass
 
 
 class Migration(migrations.Migration):

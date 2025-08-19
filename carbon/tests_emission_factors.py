@@ -6,13 +6,12 @@ emission factors and prevent future data inconsistencies.
 """
 
 import unittest
-from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
 
 from carbon.services.calculator import CarbonFootprintCalculator
-from carbon.services.emission_factors import EmissionFactorsRegistry, emission_factors
+from carbon.services.emission_factors import emission_factors
 from carbon.services.enhanced_usda_factors import EnhancedUSDAFactors
 from carbon.services.event_carbon_calculator import EventCarbonCalculator
 

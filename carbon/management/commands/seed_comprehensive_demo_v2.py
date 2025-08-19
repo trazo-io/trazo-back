@@ -3,11 +3,8 @@ Comprehensive demo data seeder v2 - Simulates real-world agricultural operation
 with proper event-to-carbon-entry flow, diverse carbon sources, and production-ready data
 """
 
-import datetime
 import json
 import random
-import time
-import uuid
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
@@ -16,18 +13,13 @@ from django.db import connection, models, transaction
 from django.utils import timezone
 
 from carbon.models import (
-    AutomationRule,
-    CarbonBenchmark,
     CarbonCertification,
     CarbonEntry,
     CarbonOffsetProject,
     CarbonOffsetPurchase,
-    CarbonReport,
     CarbonSource,
-    CropType,
     IoTDataPoint,
     IoTDevice,
-    ProductionTemplate,
     SustainabilityBadge,
 )
 from carbon.services.event_carbon_calculator import EventCarbonCalculator
@@ -41,7 +33,6 @@ from history.models import (
     PestManagementEvent,
     ProductionEvent,
     SoilManagementEvent,
-    WeatherEvent,
 )
 from product.models import Parcel, Product
 from reviews.models import Review

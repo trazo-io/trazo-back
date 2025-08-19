@@ -4,8 +4,6 @@ Provides scheduled tasks for monitoring and rotating API keys
 """
 
 import logging
-from datetime import timedelta
-from typing import Any, Dict
 
 from django.conf import settings
 from django.utils import timezone
@@ -15,7 +13,6 @@ logger = logging.getLogger(__name__)
 # Import Celery conditionally
 try:
     from celery import shared_task
-    from celery.schedules import crontab
 
     CELERY_AVAILABLE = True
 except ImportError:

@@ -12,15 +12,12 @@ Test Coverage:
 - Performance optimization for review queries
 """
 
-import json
-from datetime import datetime, timedelta
-from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from datetime import datetime
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db.models import Avg, Count, Q
-from django.test import TestCase, TransactionTestCase
+from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
@@ -33,7 +30,7 @@ from product.models import Parcel
 from reviews.models import Review
 
 # Skip ReviewModeration and ReviewResponse imports - models not implemented
-from users.models import User, WorksIn
+from users.models import User
 
 User = get_user_model()
 

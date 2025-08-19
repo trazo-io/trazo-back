@@ -6,7 +6,7 @@ Provides resilient blockchain interactions with comprehensive failure handling
 import json
 import logging
 import time
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 from django.conf import settings
 from django.core.cache import cache
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 # Import Web3 safely
 try:
     from web3 import Web3
-    from web3.exceptions import BlockNotFound, ContractLogicError, TransactionNotFound
+    from web3.exceptions import TransactionNotFound
 
     WEB3_AVAILABLE = True
 except ImportError:

@@ -3,12 +3,9 @@ Simple command to create basic carbon entries for demo productions
 """
 
 import random
-import uuid
-from datetime import datetime, timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
-from django.utils import timezone
 
 from carbon.models import CarbonEntry, CarbonSource
 from company.models import Company

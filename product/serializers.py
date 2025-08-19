@@ -1,10 +1,8 @@
-from django.conf import settings
-
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
 
 from common.models import Gallery
-from common.serializers import GalleryImageSerializer, GallerySerializer
+from common.serializers import GallerySerializer
 from users.models import User
 from users.serializers import BasicUserSerializer
 

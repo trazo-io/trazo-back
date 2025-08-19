@@ -8,11 +8,11 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
-from django.db import connection, transaction
+from django.db import connection
 from django.utils import timezone
 
 from carbon.models import CarbonEntry, CarbonOffsetProject, CarbonOffsetPurchase, CarbonSource
-from company.models import Company, Establishment
+from company.models import Establishment
 
 User = get_user_model()
 

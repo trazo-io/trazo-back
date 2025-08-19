@@ -10,11 +10,10 @@ Tests weather API integration endpoints and services including:
 - API endpoint functionality
 """
 
-import json
 from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
-from django.test import RequestFactory, TestCase, TransactionTestCase
+from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 
 from rest_framework.test import APIClient

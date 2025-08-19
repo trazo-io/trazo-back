@@ -12,20 +12,14 @@ Features tested:
 """
 
 import json
-import time
-from decimal import Decimal
-from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
-from django.urls import reverse
 
-from carbon.models import CarbonEntry, CarbonReport
 from carbon.services.production_blockchain import (
     BatchVerificationResult,
     CreditType,
     GasOptimizationResult,
-    GasOptimizer,
     production_blockchain_service,
 )
 

@@ -6,7 +6,6 @@ Run this after adding the new trust metric fields to populate them with calculat
 import logging
 
 from django.core.management.base import BaseCommand
-from django.utils import timezone
 
 from history.models import History
 

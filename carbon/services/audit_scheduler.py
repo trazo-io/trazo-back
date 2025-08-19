@@ -48,7 +48,6 @@ class AuditScheduler:
 
     def schedule_random_audits(self) -> Dict[str, Any]:
         """Schedule random audits for 10% of monthly offsets"""
-        from ..models import VerificationAudit
 
         try:
             # Get offsets from last month

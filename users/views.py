@@ -1,11 +1,8 @@
-from datetime import timedelta
-
 from django.middleware import csrf
 from django.utils import timezone
 
-from rest_framework import filters, generics, status, viewsets
-from rest_framework.decorators import action, api_view
-from rest_framework.decorators import permission_classes as permission_classes_decorator
+from rest_framework import filters, status, viewsets
+from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
@@ -36,12 +33,8 @@ except ImportError:
 
 
 import logging
-from datetime import datetime, timedelta
 
 from django.conf import settings
-from django.shortcuts import get_object_or_404
-from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import csrf_exempt
 
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
@@ -194,8 +187,6 @@ class UserViewSet(viewsets.ModelViewSet):
         """
         # Use the conditional ratelimit already defined at module level
         from urllib.parse import quote
-
-        from django.utils.decorators import method_decorator
 
         from .constants import CONSUMER, PRODUCER
         from .signals import generate_verification_code

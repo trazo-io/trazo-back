@@ -7,7 +7,7 @@ import unittest
 
 from django.test import TestCase
 
-from carbon.services.emission_factors import EmissionFactorsRegistry, emission_factors
+from carbon.services.emission_factors import emission_factors
 
 
 class TestEmissionFactorAccuracy(TestCase):

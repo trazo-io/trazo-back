@@ -1,23 +1,17 @@
 from django.shortcuts import get_object_or_404
 
-from rest_framework import filters, mixins, permissions, viewsets
+from rest_framework import filters, mixins, viewsets
 from rest_framework.decorators import action
-from rest_framework.parsers import FileUploadParser, FormParser, MultiPartParser
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from backend.permissions import CompanyNestedViewSet
-from common.models import Gallery, GalleryImage
 from history.serializers import HistorySerializer
 from subscriptions.permissions import HasParcelCreationPermission
 
 from .models import Parcel, Product
-from .serializers import (
-    CreateParcelSerializer,
-    ProductListOptionsSerializer,
-    ProductListSerializer,
-    RetrieveParcelSerializer,
-)
+from .serializers import CreateParcelSerializer, ProductListSerializer, RetrieveParcelSerializer
 
 
 class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):

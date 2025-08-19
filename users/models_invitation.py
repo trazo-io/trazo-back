@@ -112,10 +112,13 @@ class CompanyInvitation(models.Model):
         if existing_memberships.exists():
             # Log company transfer for audit trail
             import logging
+
             logger = logging.getLogger(__name__)
             old_companies = [membership.company.name for membership in existing_memberships]
-            logger.info(f"Company transfer: User {user.email} moving from {', '.join(old_companies)} to {self.company.name}")
-            
+            logger.info(
+                f"Company transfer: User {user.email} moving from {', '.join(old_companies)} to {self.company.name}"
+            )
+
             # Remove existing memberships (company transfer)
             existing_memberships.delete()
 
@@ -157,8 +160,9 @@ class CompanyInvitation(models.Model):
         """Check if this invitation involves transferring an existing user to a new company"""
         try:
             from users.models import WorksIn
+
             User = get_user_model()
-            
+
             existing_user = User.objects.filter(email=self.email).first()
             if existing_user:
                 # Check if user has membership in another company

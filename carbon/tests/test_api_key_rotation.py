@@ -3,11 +3,8 @@ Tests for API Key Rotation Service
 Comprehensive testing of automated API key rotation functionality
 """
 
-import json
-import time
-import unittest
-from datetime import datetime, timedelta
-from unittest.mock import MagicMock, Mock, patch
+from datetime import timedelta
+from unittest.mock import Mock, patch
 
 from django.core.cache import cache
 from django.test import TestCase, override_settings
@@ -15,9 +12,7 @@ from django.utils import timezone
 
 from carbon.services.api_key_rotation import (
     APIKeyRotationService,
-    KeyRotationError,
     KeyValidationError,
-    api_key_rotation_service,
     check_rotation_status,
     emergency_rotate_all_keys,
     rotate_usda_keys,

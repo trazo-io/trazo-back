@@ -9,7 +9,6 @@ from django.db import models
 from django.utils import timezone
 
 from carbon.models import (
-    AutomationRule,
     CarbonBenchmark,
     CarbonCertification,
     CarbonEntry,
@@ -17,10 +16,7 @@ from carbon.models import (
     CarbonOffsetPurchase,
     CarbonReport,
     CarbonSource,
-    CropType,
-    IoTDataPoint,
     IoTDevice,
-    ProductionTemplate,
     SustainabilityBadge,
 )
 from company.models import Company, Establishment
@@ -38,7 +34,6 @@ from history.models import (
 from product.models import Parcel, Product
 from reviews.models import Review
 from subscriptions.models import Plan, Subscription
-from users.constants import PRODUCER
 from users.models import WorksIn
 
 User = get_user_model()
@@ -2295,7 +2290,6 @@ transparency platform, perfect for convincing potential users to subscribe!
 
     def update_todo_status(self):
         """Update todo status to show completion"""
-        from django.core.management import call_command
 
         try:
             # Mark all todos as completed

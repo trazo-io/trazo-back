@@ -22,7 +22,6 @@ from django.core.mail import send_mail
 
 from company.models import Company
 from users.constants import CONSUMER, PRODUCER
-from users.models_invitation import CompanyInvitation
 from users.utils import send_invitation_email, send_verification_email, send_welcome_email
 
 User = get_user_model()

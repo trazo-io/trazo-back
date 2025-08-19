@@ -11,9 +11,8 @@ This module contains background tasks for:
 import hashlib
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db.models import Avg, Count, Sum
 from django.utils import timezone
@@ -21,7 +20,6 @@ from django.utils import timezone
 from celery import shared_task
 
 from company.models import Company, Establishment
-from product.models import Product
 
 from .models import (
     CarbonAuditLog,
@@ -39,7 +37,7 @@ from .services.blockchain import BlockchainCarbonService
 from .services.john_deere_api import get_john_deere_api
 from .services.real_usda_integration import RealUSDAAPIClient
 from .services.usda_cache_service import CacheStrategy, specialized_cache
-from .services.weather_api import WeatherService, get_weather_service
+from .services.weather_api import get_weather_service
 
 User = get_user_model()
 logger = logging.getLogger(__name__)

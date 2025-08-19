@@ -8,7 +8,6 @@ works correctly and can process agricultural voice inputs.
 """
 
 import os
-import sys
 
 import django
 

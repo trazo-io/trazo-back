@@ -9,11 +9,10 @@ import json
 import logging
 import threading
 import time
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime
+from typing import Any, Dict, Optional
 
 from django.conf import settings
-from django.core.cache import cache
 from django.utils import timezone
 
 import requests
@@ -23,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 # Import dependencies with fallbacks for testing
 try:
-    from .secure_key_management import get_secure_usda_keys, secure_key_manager
+    from .secure_key_management import get_secure_usda_keys
 except ImportError:
     logger.warning("Secure key management not available")
 
@@ -38,13 +37,7 @@ except ImportError:
     secrets_manager = None
 
 try:
-    from .usda_cache_service import (
-        CacheStrategy,
-        USDADataCacheManager,
-        USDASpecializedCache,
-        specialized_cache,
-        usda_cache,
-    )
+    from .usda_cache_service import CacheStrategy, specialized_cache
 
     # Create mock cache strategy for fallback
     class MockCacheStrategy:

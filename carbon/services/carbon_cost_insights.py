@@ -5,16 +5,15 @@ Provides lightweight cost intelligence focused ONLY on carbon-related insights.
 Avoids complex farm management features to stay focused on carbon transparency mission.
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-from django.db.models import Avg, Q, Sum
+from django.db.models import Avg, Sum
 from django.utils import timezone
 
 from carbon.models import CarbonEntry
 from history.models import History  # Production is actually History model
-from product.models import Parcel
 
 
 class CarbonCostInsights:

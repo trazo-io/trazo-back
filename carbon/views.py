@@ -1,6 +1,6 @@
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404
 
-from rest_framework import generics, permissions, status, viewsets
+from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -33,7 +33,6 @@ import hashlib
 import json
 import logging
 import math
-import os
 import random
 import traceback
 from datetime import datetime, timedelta
@@ -41,7 +40,7 @@ from datetime import datetime, timedelta
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.db.models import Avg, Count, F, Q, Sum
+from django.db.models import Count, Q, Sum
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 
@@ -86,7 +85,6 @@ from .serializers import (
     CarbonBenchmarkSerializer,
     CarbonCertificationSerializer,
     CarbonEntrySerializer,
-    CarbonFootprintSummarySerializer,
     CarbonOffsetActionSerializer,
     CarbonOffsetCertificateSerializer,
     CarbonOffsetProjectSerializer,
@@ -105,23 +103,13 @@ from .serializers import (
 from .services import coolfarm_service
 from .services.automation_service import AutomationLevelService
 from .services.blockchain import blockchain_service
-from .services.calculator import calculator
 from .services.carbon_transparency_service import transparency_service
 from .services.educational_content_service import EducationalContentService
 from .services.enhanced_usda_factors import EnhancedUSDAFactors
 from .services.event_carbon_calculator import EventCarbonCalculator
-from .services.john_deere_api import JohnDeereAPI, get_john_deere_api, is_john_deere_configured
 
 # from .services.certificate import certificate_generator  # Temporarily disabled due to font issues
-from .services.report_generator import report_generator
-from .services.verification import verification_service
-from .services.weather_api import (
-    WeatherService,
-    check_weather_alerts,
-    get_agricultural_recommendations,
-    get_current_weather,
-    get_weather_service,
-)
+from .services.weather_api import check_weather_alerts, get_agricultural_recommendations, get_weather_service
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -715,7 +703,7 @@ class CarbonEntryViewSet(viewsets.ModelViewSet):
 
 import time
 from datetime import timedelta
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from django.core.cache import cache
 from django.utils.decorators import method_decorator
@@ -1836,9 +1824,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
         try:
             # Phase 1 Optimization: Add caching for QR endpoint
             from django.core.cache import cache
-            from django.db import connection
 
-            from company.models import Establishment
             from history.models import History
 
             from .services.blockchain import blockchain_service
@@ -2651,12 +2637,8 @@ class PublicProductionViewSet(viewsets.ViewSet):
         """
         try:
             from django.core.cache import cache
-            from django.db import connection
 
-            from company.models import Establishment
             from history.models import History, HistoryScan
-
-            from .services.blockchain import blockchain_service
 
             # Enhanced cache key for complete endpoint
             cache_key = f"complete_summary_{pk}_v1"
@@ -2920,7 +2902,6 @@ class PublicProductionViewSet(viewsets.ViewSet):
                 except Exception as e:
                     # If geolocation fails, continue without it
                     print(f"IP geolocation failed: {e}")
-                    pass
 
             history_scan = HistoryScan.objects.create(
                 history=production,
@@ -3472,17 +3453,6 @@ class PublicProductionViewSet(viewsets.ViewSet):
             timeline_events = []
 
             # Get all event types and combine them
-            from history.models import (
-                ChemicalEvent,
-                EquipmentEvent,
-                GeneralEvent,
-                PestManagementEvent,
-                ProductionEvent,
-                SoilManagementEvent,
-                WeatherEvent,
-            )
-
-            from .models import CarbonEntry
 
             event_types = [
                 (production.history_weatherevent_events.all(), "weather"),

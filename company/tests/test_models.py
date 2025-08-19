@@ -12,15 +12,11 @@ Test Coverage:
 - Integration with carbon calculations
 """
 
-import json
-import os
-import tempfile
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError
 from django.test import TestCase, TransactionTestCase
 from django.urls import reverse
 
@@ -29,7 +25,6 @@ from rest_framework.test import APIClient, APITestCase
 
 from carbon.models import CarbonEntry
 from company.models import Company, Establishment
-from product.models import Parcel
 from subscriptions.models import Plan, Subscription
 from users.models import User, WorksIn
 
@@ -65,10 +60,7 @@ class CompanyModelTestCase(TestCase):
     def test_company_creation_minimal(self):
         """Test creating a company with minimal required data."""
         company = Company.objects.create(
-            name="Minimal Farm",
-            address="123 Test St", 
-            city="Test City",
-            state="Test State"
+            name="Minimal Farm", address="123 Test St", city="Test City", state="Test State"
         )
 
         self.assertEqual(company.name, "Minimal Farm")
@@ -78,38 +70,20 @@ class CompanyModelTestCase(TestCase):
         # Test maximum length (150 characters based on model definition)
         long_name = "A" * 151
         with self.assertRaises(ValidationError):
-            company = Company(
-                name=long_name, 
-                address="123 Test St", 
-                city="Test City",
-                state="Test State"
-            )
+            company = Company(name=long_name, address="123 Test St", city="Test City", state="Test State")
             company.full_clean()
 
     def test_company_unique_constraint(self):
         """Test that company creation works with required fields."""
-        Company.objects.create(
-            name="Unique Farm", 
-            address="123 Test St", 
-            city="Test City",
-            state="Test State"
-        )
+        Company.objects.create(name="Unique Farm", address="123 Test St", city="Test City", state="Test State")
 
         # Creating another company with same name should work (no uniqueness constraint)
-        Company.objects.create(
-            name="Unique Farm 2", 
-            address="456 Test Ave", 
-            city="Test City 2",
-            state="Test State 2"
-        )
+        Company.objects.create(name="Unique Farm 2", address="456 Test Ave", city="Test City 2", state="Test State 2")
 
     def test_company_deletion_cascade(self):
         """Test that deleting company cascades properly."""
         company = Company.objects.create(
-            name="Delete Test", 
-            address="123 Test St", 
-            city="Test City",
-            state="Test State"
+            name="Delete Test", address="123 Test St", city="Test City", state="Test State"
         )
         establishment = Establishment.objects.create(name="Test Establishment", company=company)
 
@@ -128,10 +102,7 @@ class EstablishmentModelTestCase(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="owner@test.com", password="testpass123")
         self.company = Company.objects.create(
-            name="Test Company", 
-            address="123 Test St", 
-            city="Test City",
-            state="Test State"
+            name="Test Company", address="123 Test St", city="Test City", state="Test State"
         )
 
     def test_establishment_creation_valid(self):
@@ -406,10 +377,7 @@ class CompanySubscriptionIntegrationTestCase(APITestCase):
         self.user = User.objects.create_user(email="subscription@test.com", password="testpass123")
 
         self.company = Company.objects.create(
-            name="Subscription Test Farm", 
-            address="123 Test St", 
-            city="Test City",
-            state="Test State"
+            name="Subscription Test Farm", address="123 Test St", city="Test City", state="Test State"
         )
 
         # Create subscription plan
@@ -456,10 +424,7 @@ class CompanyCarbonIntegrationTestCase(TransactionTestCase):
         self.user = User.objects.create_user(email="carbon@test.com", password="testpass123")
 
         self.company = Company.objects.create(
-            name="Carbon Test Farm", 
-            address="123 Test St", 
-            city="Test City",
-            state="Test State"
+            name="Carbon Test Farm", address="123 Test St", city="Test City", state="Test State"
         )
 
         self.establishment = Establishment.objects.create(
@@ -524,12 +489,12 @@ class CompanyDataPrivacyTestCase(TestCase):
         self.user = User.objects.create_user(email="privacy@test.com", password="testpass123")
 
         self.company = Company.objects.create(
-            name="Privacy Test Farm", 
-            address="123 Test St", 
+            name="Privacy Test Farm",
+            address="123 Test St",
             city="Test City",
             state="Test State",
-            contact_email="contact@privacytest.com", 
-            contact_phone="+1-555-PRIVACY"
+            contact_email="contact@privacytest.com",
+            contact_phone="+1-555-PRIVACY",
         )
 
     def test_sensitive_data_not_in_public_api(self):

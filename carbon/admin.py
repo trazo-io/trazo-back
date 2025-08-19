@@ -1,27 +1,17 @@
 from django.contrib import admin
-from django.db.models import Count
 from django.utils.html import format_html
 
 from .models import (
-    AutomationRule,
     CarbonAuditLog,
     CarbonBenchmark,
     CarbonCertification,
     CarbonEntry,
     CarbonOffsetAction,
-    CarbonOffsetCertificate,
-    CarbonOffsetProject,
-    CarbonOffsetPurchase,
     CarbonReport,
     CarbonSource,
     CropType,
     EventTemplate,
-    GreenPoints,
-    IoTDataPoint,
-    IoTDevice,
-    MicroOffset,
     ProductionTemplate,
-    SustainabilityBadge,
 )
 
 # Register your models here.

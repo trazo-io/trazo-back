@@ -3,48 +3,32 @@ Comprehensive Test Suite for Carbon App
 Tests carbon calculation models, USDA integration, IoT devices, and verification systems
 """
 
-import json
 import unittest
-import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
-from django.core.exceptions import ValidationError
 from django.db import IntegrityError
-from django.test import Client, TestCase, TransactionTestCase, override_settings
-from django.urls import reverse
+from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 
 from carbon.models import (
-    AutomationRule,
-    CarbonAuditLog,
     CarbonBenchmark,
     CarbonCertification,
     CarbonEntry,
-    CarbonOffsetAction,
-    CarbonOffsetCertificate,
     CarbonOffsetProject,
     CarbonOffsetPurchase,
-    CarbonReport,
     CarbonSource,
     CropType,
     EventTemplate,
     GreenPoints,
     IoTDataPoint,
     IoTDevice,
-    MicroOffset,
     ProductionTemplate,
     RegionalEmissionFactor,
-    SustainabilityBadge,
-    USDACalculationAudit,
     USDAComplianceRecord,
-    VerificationAudit,
 )
 from company.models import Company, Establishment
-from history.models import History
-from subscriptions.models import Subscription
 
 User = get_user_model()
 

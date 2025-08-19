@@ -1,39 +1,14 @@
 import datetime
-import random
-import uuid
 
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from carbon.models import (
-    AutomationRule,
-    CarbonBenchmark,
-    CarbonCertification,
-    CarbonEntry,
-    CarbonOffsetProject,
-    CarbonOffsetPurchase,
-    CarbonReport,
-    CarbonSource,
-    IoTDataPoint,
-    IoTDevice,
-    SustainabilityBadge,
-)
+from carbon.models import IoTDevice
 from company.models import Company, Establishment
-from history.models import (
-    ChemicalEvent,
-    EquipmentEvent,
-    GeneralEvent,
-    History,
-    PestManagementEvent,
-    ProductionEvent,
-    SoilManagementEvent,
-    WeatherEvent,
-)
+from history.models import ChemicalEvent, EquipmentEvent, GeneralEvent, History, ProductionEvent, SoilManagementEvent
 from product.models import Parcel, Product
 from subscriptions.models import Plan, Subscription
-from users.constants import PRODUCER
-from users.models import WorksIn
 
 User = get_user_model()
 

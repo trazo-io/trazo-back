@@ -15,32 +15,18 @@ Test Coverage:
 - Edge cases and error handling
 """
 
-import json
-from datetime import datetime, timedelta
 from decimal import Decimal
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.core.exceptions import ValidationError
-from django.test import TestCase, TransactionTestCase
+from django.test import TestCase
 from django.utils import timezone
 
-from carbon.models import (
-    CarbonAuditLog,
-    CarbonEntry,
-    CarbonReport,
-    CarbonSource,
-    IoTDataPoint,
-    IoTDevice,
-    ProductionTemplate,
-    SustainabilityBadge,
-    USDAComplianceRecord,
-)
+from carbon.models import CarbonEntry, CarbonReport, IoTDataPoint, IoTDevice, SustainabilityBadge, USDAComplianceRecord
 from carbon.services.blockchain import BlockchainCarbonService
 from carbon.services.calculator import CarbonFootprintCalculator
 from carbon.services.circuit_breaker_enhanced import CircuitBreakerManager
-from carbon.services.coolfarm_service import CoolFarmService
 
 # Skip emission factor function imports - functions not implemented
 # from carbon.services.emission_factors import (
@@ -73,9 +59,8 @@ def get_irrigation_factor(irrigation_type):
 
 
 from company.models import Company, Establishment
-from history.models import History
 from product.models import Parcel
-from users.models import User, WorksIn
+from users.models import User
 
 User = get_user_model()
 

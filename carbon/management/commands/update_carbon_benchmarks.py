@@ -9,8 +9,7 @@ Usage: poetry run python manage.py update_carbon_benchmarks --dry-run
 """
 
 import logging
-from decimal import Decimal
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from django.core.management.base import BaseCommand
 from django.db import transaction

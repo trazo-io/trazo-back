@@ -6,21 +6,14 @@ Comprehensive stress testing for circuit breaker patterns under extreme conditio
 Tests the resilience and recovery mechanisms of the production-ready circuit breakers.
 """
 
-import asyncio
 import logging
 import os
 import random
 import sys
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timedelta
-from unittest.mock import MagicMock, patch
 
 import django
-
-import requests
-from requests.exceptions import ConnectionError, ConnectTimeout, ReadTimeout
 
 # Add project root to path
 sys.path.insert(0, "/Users/oscarmunoz/dev/trazo/trazo-back")
@@ -29,7 +22,6 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.settings.dev")
 django.setup()
 
 from carbon.services.api_circuit_breaker import APICircuitBreaker
-from carbon.services.circuit_breaker_enhanced import EnhancedCircuitBreaker
 from common.services.external_api_manager import ExternalAPIManager
 
 

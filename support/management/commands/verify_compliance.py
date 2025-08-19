@@ -1,13 +1,9 @@
-from datetime import timedelta
-
 from django.core.management.base import BaseCommand
-from django.utils import timezone
 
 from carbon.models import IoTDataPoint, IoTDevice
 from carbon.services.automation_service import AutomationLevelService
-from company.models import Company
 from subscriptions.models import Subscription
-from support.models import SupportSLA, SupportTicket
+from support.models import SupportTicket
 from users.models import User
 
 

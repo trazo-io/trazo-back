@@ -8,14 +8,10 @@ Tests all improvements made to the Carbon Dashboard including:
 - API response structure validation
 """
 
-from decimal import Decimal
-
 from django.contrib.auth import get_user_model
 from django.db.models import Count, Sum
 from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
-
-from rest_framework.test import APIClient
 
 from carbon.models import CarbonEntry, CarbonSource
 from company.models import Company, Establishment

@@ -1,8 +1,5 @@
-from django.db.models import Q
-from django.shortcuts import render
-
 from dateutil import parser as date_parser
-from rest_framework import filters, generics, permissions, status, viewsets
+from rest_framework import filters, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response

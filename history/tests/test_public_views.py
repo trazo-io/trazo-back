@@ -3,7 +3,6 @@ Test cases for enhanced public views tracking with bot filtering and unique visi
 """
 
 from django.contrib.sessions.backends.db import SessionStore
-from django.contrib.sessions.models import Session
 from django.test import RequestFactory, TestCase
 
 from company.models import Company, Establishment
@@ -158,7 +157,6 @@ class PublicViewsTrackingTestCase(TestCase):
     def test_concurrent_view_increments(self):
         """Test atomic increments prevent race conditions"""
         import threading
-        from time import sleep
 
         initial_views = self.production.public_views
         results = []

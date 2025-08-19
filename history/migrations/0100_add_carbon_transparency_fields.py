@@ -2,7 +2,6 @@
 # Phase 1: Foundation & Data Architecture - History Model Enhancement
 
 from django.db import migrations, models
-import django.core.validators
 
 
 class Migration(migrations.Migration):

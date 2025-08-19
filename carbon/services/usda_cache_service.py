@@ -8,12 +8,11 @@ import json
 import logging
 import pickle
 import zlib
-from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta
+from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
-from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
 

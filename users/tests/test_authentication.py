@@ -5,7 +5,7 @@ Ensures secure and reliable user management
 
 import json
 import unittest
-from datetime import datetime, timedelta
+from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import authenticate, get_user_model
@@ -14,7 +14,6 @@ from django.urls import reverse
 from django.utils import timezone
 
 from company.models import Company, Establishment
-from subscriptions.models import Subscription
 from users.models import VerificationCode, WorksIn
 
 User = get_user_model()
@@ -491,7 +490,6 @@ class TestSecurityFeatures(TestCase):
     @patch("users.utils.send_verification_email")
     def test_resend_verification_email(self, mock_send_email):
         """Test resend verification email endpoint"""
-        from django.urls import reverse
 
         # Create an unverified user
         user = User.objects.create_user(

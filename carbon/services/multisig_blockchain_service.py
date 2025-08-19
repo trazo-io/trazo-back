@@ -4,11 +4,9 @@ Implements multi-signature requirements for critical blockchain operations.
 Addresses CRITICAL security vulnerability found in single-key blockchain operations.
 """
 
-import json
 import logging
 import time
-from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from django.conf import settings
 from django.utils import timezone
@@ -24,15 +22,7 @@ except ImportError:
     ContractLogicError = Exception
     WEB3_AVAILABLE = False
 
-from .blockchain import BlockchainCarbonService, BlockchainOperationError, BlockchainUnavailableError
-from .enhanced_error_handling import (
-    BlockchainErrorHandler,
-    FallbackConfig,
-    FallbackStrategy,
-    RetryConfig,
-    error_handler,
-    with_error_handling,
-)
+from .blockchain import BlockchainCarbonService, BlockchainOperationError
 from .secure_key_management import secure_key_manager
 
 logger = logging.getLogger(__name__)
@@ -41,13 +31,9 @@ logger = logging.getLogger(__name__)
 class MultiSigOperationError(Exception):
     """Raised when multi-signature operation fails"""
 
-    pass
-
 
 class InsufficientSignaturesError(Exception):
     """Raised when insufficient signatures for operation"""
-
-    pass
 
 
 class MultiSigBlockchainService(BlockchainCarbonService):

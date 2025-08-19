@@ -1,7 +1,6 @@
 import hashlib
 import json
 import time
-from decimal import Decimal
 from typing import Any, Dict, Optional
 
 from django.conf import settings
@@ -24,21 +23,16 @@ except ImportError:
     logger = logging.getLogger(__name__)
     logger.critical("web3 library not installed. Blockchain functionality unavailable.")
 
-from ..models import CarbonEntry, CarbonReport
-from .secure_key_management import get_secure_blockchain_key, secure_key_manager
+from .secure_key_management import get_secure_blockchain_key
 
 
 # Custom exceptions for blockchain operations
 class BlockchainUnavailableError(Exception):
     """Raised when blockchain is required but unavailable"""
 
-    pass
-
 
 class BlockchainOperationError(Exception):
     """Raised when blockchain operation fails"""
-
-    pass
 
 
 class BlockchainCarbonService:
@@ -164,7 +158,6 @@ class BlockchainCarbonService:
         Load the ABI from the deployed contract file.
         """
         try:
-            import os
             from pathlib import Path
 
             # Look for the contract file in the carbon/contracts directory

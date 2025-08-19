@@ -3,15 +3,11 @@ Tests for Enhanced Circuit Breaker Implementation
 Comprehensive testing of circuit breaker functionality for external API resilience
 """
 
-import json
 import time
-import unittest
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock, Mock, patch
 
 from django.core.cache import cache
-from django.test import TestCase, override_settings
-from django.utils import timezone
+from django.test import TestCase
 
 from carbon.services.circuit_breaker_enhanced import (
     CircuitBreakerConfig,
@@ -20,7 +16,6 @@ from carbon.services.circuit_breaker_enhanced import (
     CircuitMetrics,
     CircuitState,
     EnhancedCircuitBreaker,
-    FallbackNotAvailableError,
     blockchain_circuit_breaker,
     blockchain_fallback_response,
     circuit_breaker,

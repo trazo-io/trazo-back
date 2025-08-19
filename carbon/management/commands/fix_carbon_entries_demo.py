@@ -3,7 +3,6 @@ Command to fix carbon entries creation for the demo data
 This addresses the database schema constraints that prevent carbon entries from being created
 """
 
-import datetime
 import random
 
 from django.contrib.auth import get_user_model

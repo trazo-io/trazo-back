@@ -1,11 +1,8 @@
 import logging
-import random
-from datetime import datetime, timedelta
-from decimal import Decimal
-from typing import Any, Dict, Optional
+from datetime import timedelta
+from typing import Any, Dict
 
-from django.conf import settings
-from django.db.models import Count, Q, Sum
+from django.db.models import Q, Sum
 from django.utils import timezone
 
 from ..models import CarbonEntry

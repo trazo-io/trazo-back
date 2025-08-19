@@ -6,11 +6,9 @@ across all calculation services and that database field usage is consistent.
 """
 
 import unittest
-from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
-from django.utils import timezone
 
 from carbon.models import CarbonEntry, CarbonSource
 from carbon.services.coolfarm_service import CoolFarmService

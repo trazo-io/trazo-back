@@ -12,7 +12,6 @@ import json
 
 from django.contrib.auth import get_user_model
 from django.test import RequestFactory, TestCase
-from django.urls import reverse
 
 from carbon.views import calculate_event_carbon_impact
 

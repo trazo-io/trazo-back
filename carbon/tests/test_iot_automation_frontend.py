@@ -10,8 +10,6 @@ Tests IoT automation functionality including:
 
 import random
 from datetime import timedelta
-from decimal import Decimal
-from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, TransactionTestCase

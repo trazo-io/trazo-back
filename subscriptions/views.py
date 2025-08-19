@@ -1,24 +1,21 @@
-import json
 import logging
 
 from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
-from django.http import HttpResponse, JsonResponse
-from django.shortcuts import get_object_or_404
+from django.http import HttpResponse
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 
 import stripe
 from rest_framework import permissions, status, viewsets
-from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ViewSet
 
-from carbon.services.circuit_breaker_enhanced import stripe_circuit_breaker, stripe_fallback_response
 from company.models import Company
 from company.serializers import RetrieveCompanySerializer
 
@@ -28,7 +25,6 @@ from .serializers import (
     InvoiceSerializer,
     PaymentMethodSerializer,
     PlanSerializer,
-    SubscriptionAddOnSerializer,
     SubscriptionSerializer,
 )
 

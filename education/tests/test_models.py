@@ -12,22 +12,15 @@ Test Coverage:
 - Performance optimizations for large datasets
 """
 
-import json
-from datetime import datetime, timedelta
-from decimal import Decimal
-from unittest.mock import MagicMock, patch
-
 from django.contrib.auth import get_user_model
-from django.core.exceptions import ValidationError
 from django.db.models import Avg, Count, Q
-from django.test import TestCase, TransactionTestCase
+from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
-from company.models import Company, Establishment
 from education.models import (
     EducationBookmark,
     EducationCategory,
@@ -37,8 +30,7 @@ from education.models import (
     FarmerQuestionAnswer,
     UserEducationProgress,
 )
-from subscriptions.models import Subscription
-from users.models import User, WorksIn
+from users.models import User
 
 User = get_user_model()
 

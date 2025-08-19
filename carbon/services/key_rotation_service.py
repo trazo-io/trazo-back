@@ -6,14 +6,13 @@ Implements automated key rotation and compliance tracking for sensitive credenti
 import hashlib
 import json
 import logging
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from datetime import datetime
+from typing import Any, Dict
 
-from django.conf import settings
 from django.core.cache import cache
 from django.db import models
 
-from carbon.services.secure_key_management import AWSSecurityError, SecureKeyManager
+from carbon.services.secure_key_management import SecureKeyManager
 
 logger = logging.getLogger(__name__)
 

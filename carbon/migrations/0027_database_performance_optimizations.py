@@ -58,7 +58,6 @@ class Migration(migrations.Migration):
         """Skip materialized views for now - can be added later"""
         # Materialized views are complex and can be added separately
         print("⚠️  Skipping materialized views - will be added in future optimization")
-        pass
 
     def remove_indexes_reverse(apps, schema_editor):
         """Remove performance indexes safely"""
@@ -80,7 +79,6 @@ class Migration(migrations.Migration):
     def remove_materialized_views_reverse(apps, schema_editor):
         """Remove materialized views - none created in this migration"""
         print("⚠️  No materialized views to remove")
-        pass
 
     operations = [
         migrations.RunPython(

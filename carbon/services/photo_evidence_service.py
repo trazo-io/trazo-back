@@ -7,15 +7,13 @@ agricultural carbon tracking mission.
 """
 
 import hashlib
-import json
 import logging
 import mimetypes
 import os
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
-from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 

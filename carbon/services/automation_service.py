@@ -4,8 +4,7 @@ from datetime import timedelta
 
 from django.utils import timezone
 
-from carbon.models import AutomationRule, CarbonEntry, IoTDataPoint
-from company.models import Company, Establishment
+from carbon.models import IoTDataPoint
 from subscriptions.models import Subscription
 
 logger = logging.getLogger(__name__)

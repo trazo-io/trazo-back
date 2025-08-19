@@ -5,31 +5,18 @@ Ensures all carbon calculation logic is production-ready and accurate
 
 import unittest
 from datetime import datetime, timedelta
-from decimal import Decimal
-from unittest.mock import MagicMock, call, patch
 
 from django.contrib.auth import get_user_model
 from django.db import models
 from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 
-from carbon.models import (
-    CarbonBenchmark,
-    CarbonCertification,
-    CarbonEntry,
-    CarbonReport,
-    CarbonSource,
-    CropType,
-    EventTemplate,
-    ProductionTemplate,
-)
+from carbon.models import CarbonEntry, CarbonReport, CarbonSource, CropType
 from carbon.services.calculator import CarbonFootprintCalculator
-from carbon.services.emission_factors import EmissionFactorsRegistry, emission_factors
-from carbon.services.enhanced_usda_factors import EnhancedUSDAFactors
+from carbon.services.emission_factors import emission_factors
 from carbon.services.event_carbon_calculator import EventCarbonCalculator
-from carbon.services.verification import CarbonVerificationService
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, EquipmentEvent, History, ProductionEvent, SoilManagementEvent
+from history.models import ChemicalEvent, EquipmentEvent, History
 from product.models import Parcel
 
 User = get_user_model()

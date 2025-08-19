@@ -1,9 +1,7 @@
 import os
 import uuid
-from datetime import datetime
 
 from django.conf import settings
-from django.core.files.storage import default_storage
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
@@ -11,7 +9,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from ..models import CarbonOffsetProject, CarbonOffsetPurchase
+from ..models import CarbonOffsetPurchase
 from .verification import verification_service
 
 

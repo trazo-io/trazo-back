@@ -8,14 +8,12 @@ from rest_framework import serializers
 
 from backend.constants import get_carbon_score_from_co2e
 from carbon.models import CarbonEntry
-from company.models import Establishment
 
 from .models import History, HistoryScan
 from .models_consumer import (
     UserFavorite,
     UserImpactSummary,
     UserLocalRecommendation,
-    UserProductComparison,
     UserShoppingGoal,
     UserShoppingInsight,
 )

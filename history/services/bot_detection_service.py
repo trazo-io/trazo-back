@@ -6,7 +6,7 @@ Modern bot detection with machine learning patterns and behavioral analysis
 import re
 import time
 from datetime import timedelta
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 from django.core.cache import cache
 from django.utils import timezone

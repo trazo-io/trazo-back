@@ -12,10 +12,8 @@ Test Coverage:
 - Performance optimizations for large datasets
 """
 
-import json
-from datetime import datetime, timedelta
+from datetime import timedelta
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError

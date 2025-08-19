@@ -4,17 +4,16 @@ Enhanced carbon transparency calculations with A-F grading, industry comparisons
 """
 
 import logging
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import timedelta
+from typing import Any, Dict, List, Optional
 
 from django.core.cache import cache
-from django.db.models import Avg, Count, Q, Sum
+from django.db.models import Sum
 from django.utils import timezone
 
-from company.models import Establishment
 from history.models import History
 
-from ..models import CarbonBenchmark, CarbonEntry, CarbonIntelligence, CarbonReport, ConsumerTrustMetric
+from ..models import CarbonBenchmark, CarbonEntry, ConsumerTrustMetric
 
 logger = logging.getLogger(__name__)
 

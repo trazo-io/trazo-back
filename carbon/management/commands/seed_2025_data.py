@@ -8,7 +8,6 @@ from django.utils import timezone
 from carbon.models import CarbonBenchmark, CarbonEntry, CarbonReport, CarbonSource, SustainabilityBadge
 from company.models import Establishment
 from history.models import ChemicalEvent, History, ProductionEvent, WeatherEvent
-from product.models import Product
 
 User = get_user_model()
 

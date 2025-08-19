@@ -8,18 +8,14 @@ import json
 import logging
 import time
 from dataclasses import dataclass
-from decimal import Decimal
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
-from django.conf import settings
 from django.core.cache import cache
-from django.utils import timezone
 
 try:
     from web3 import Web3
     from web3.exceptions import ContractLogicError, TransactionNotFound
-    from web3.gas_strategies.time_based import fast_gas_price_strategy, medium_gas_price_strategy
 
     WEB3_AVAILABLE = True
 except ImportError:
@@ -29,7 +25,6 @@ except ImportError:
     WEB3_AVAILABLE = False
 
 from .multisig_blockchain_service import MultiSigBlockchainService
-from .secure_key_management import secure_key_manager
 
 logger = logging.getLogger(__name__)
 

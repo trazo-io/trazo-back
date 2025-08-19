@@ -9,15 +9,13 @@ import json
 import logging
 import os
 import time
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Union
 
 from django.conf import settings
 from django.core.cache import cache
-from django.utils.decorators import method_decorator
-from django.views.decorators.cache import cache_page
 
 import boto3
-from botocore.exceptions import BotoCoreError, ClientError
+from botocore.exceptions import ClientError
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
@@ -30,13 +28,9 @@ logger = logging.getLogger(__name__)
 class AWSSecurityError(Exception):
     """Raised when AWS security operations fail"""
 
-    pass
-
 
 class KeyRotationRequiredError(Exception):
     """Raised when key rotation is required"""
-
-    pass
 
 
 class SecureKeyManager:

@@ -5,17 +5,16 @@ Ensures reliable Stripe integration and billing functionality
 
 import json
 import unittest
-from datetime import datetime, timedelta
+from datetime import timedelta
 from decimal import Decimal
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.db import models
 from django.test import Client, TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from company.models import Company, Establishment
+from company.models import Company
 from subscriptions.middleware import SubscriptionMiddleware
 from subscriptions.models import Plan, Subscription
 
@@ -52,7 +51,7 @@ class BillingService:
         return 10.0  # Mock overage charge
 
     def calculate_proration(self, old_price, new_price, days_remaining, total_days):
-        from decimal import Decimal
+        pass
 
         return (new_price - old_price) * (days_remaining / total_days)
 
@@ -73,8 +72,6 @@ class BillingService:
 
 class SubscriptionService:
     """Mock subscription service for testing"""
-
-    pass
 
 
 class TestSubscriptionModel(TransactionTestCase):
@@ -507,7 +504,6 @@ class TestSubscriptionMiddleware(TestCase):
 
     def test_subscription_access_control(self):
         """Test subscription-based access control"""
-        from django.contrib.auth.models import AnonymousUser
         from django.http import HttpRequest
 
         # Create request

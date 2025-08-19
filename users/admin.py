@@ -2,10 +2,9 @@ from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin
 from django.utils import timezone
 from django.utils.html import format_html
-from django.utils.translation import gettext_lazy as _
 
 from company.models import Company
-from subscriptions.models import Plan, Subscription
+from subscriptions.models import Subscription
 
 from .forms import CustomUserChangeForm, CustomUserCreationForm
 from .models import User, VerificationCode, WorksIn

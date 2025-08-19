@@ -5,20 +5,18 @@ Tests user models, API endpoints, permissions, and authentication flows
 
 import json
 import unittest
-from datetime import datetime, timedelta
-from unittest.mock import MagicMock, patch
+from datetime import timedelta
+from unittest.mock import patch
 
-from django.contrib.auth import authenticate, get_user_model
-from django.core.exceptions import ValidationError
+from django.contrib.auth import get_user_model
 from django.db import IntegrityError
-from django.test import Client, TestCase, TransactionTestCase, override_settings
+from django.test import Client, TestCase, TransactionTestCase
 from django.urls import reverse
 from django.utils import timezone
 
 from company.models import Company, Establishment
 from subscriptions.models import Subscription
-from users.constants import CONSUMER, PRODUCER, USER_TYPE_CHOICES
-from users.managers import UserManager
+from users.constants import CONSUMER, PRODUCER
 from users.models import VerificationCode, WorksIn
 
 User = get_user_model()

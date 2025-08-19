@@ -1,5 +1,3 @@
-import json
-
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
@@ -53,15 +51,6 @@ class Command(BaseCommand):
 
                         # Get members from all event types WITHOUT triggering carbon calculations
                         # Use direct model queries instead of serializers to avoid USDA API calls
-                        from history.models import (
-                            ChemicalEvent,
-                            EquipmentEvent,
-                            GeneralEvent,
-                            PestManagementEvent,
-                            ProductionEvent,
-                            SoilManagementEvent,
-                            WeatherEvent,
-                        )
 
                         # Query each event type directly to get created_by users
                         event_querysets = [

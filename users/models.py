@@ -143,4 +143,3 @@ class PasswordResetToken(models.Model):
 
 
 # Import invitation model
-from .models_invitation import CompanyInvitation

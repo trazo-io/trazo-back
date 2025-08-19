@@ -13,8 +13,6 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from django.conf import settings
-
 logger = logging.getLogger(__name__)
 
 

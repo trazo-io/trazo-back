@@ -8,21 +8,13 @@ be bypassed by client-side manipulation, ensuring data integrity and security.
 import json
 import logging
 from decimal import Decimal, InvalidOperation
-from typing import Any, Dict
 
 from django.utils import timezone
 
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
-from .models import (
-    CarbonEntry,
-    CarbonOffsetCertificate,
-    CarbonOffsetProject,
-    CarbonOffsetPurchase,
-    CarbonSource,
-    RegionalEmissionFactor,
-)
+from .models import CarbonEntry, CarbonOffsetPurchase
 from .services.backend_security_validation import SecurityViolationError, backend_security_validator
 
 logger = logging.getLogger(__name__)

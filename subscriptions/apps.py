@@ -8,7 +8,7 @@ class SubscriptionsConfig(AppConfig):
 
     def ready(self):
         try:
-            from subscriptions import admin, signals
+            pass
         except ImportError:
             import logging
 

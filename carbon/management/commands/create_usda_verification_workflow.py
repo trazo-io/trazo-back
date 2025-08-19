@@ -6,10 +6,9 @@ This demonstrates how events can be marked as USDA verified through proper chann
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from carbon.models import CarbonCertification, CarbonEntry, CarbonSource
+from carbon.models import CarbonCertification, CarbonSource
 from company.models import Establishment
 from history.models import History
-from users.models import User
 
 
 class Command(BaseCommand):

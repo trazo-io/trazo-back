@@ -1,24 +1,10 @@
-import json
 import logging
-import os
 import secrets
 import string
-import uuid
-from datetime import timedelta
 
 from django.conf import settings
-from django.contrib.sites.models import Site
-from django.core.files.base import ContentFile
-from django.core.files.storage import default_storage
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
-from django.urls import reverse
-from django.utils import timezone
-
-import boto3
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +14,7 @@ def send_welcome_email(user):
     Send welcome email to new user after successful registration
     """
     try:
-        from .constants import CONSUMER, PRODUCER
+        from .constants import PRODUCER
 
         user_type = "producer" if user.user_type == PRODUCER else "consumer"
 
@@ -59,7 +45,7 @@ def send_invited_user_welcome_email(user, company, inviter, role):
     Send welcome email to user who joined via company invitation
     """
     try:
-        from .constants import CONSUMER, PRODUCER
+        from .constants import PRODUCER
 
         user_type = "producer" if user.user_type == PRODUCER else "consumer"
 
@@ -97,7 +83,7 @@ def send_verification_email(user, verification_code=None, verification_link=None
     Send email verification to user with code or link
     """
     try:
-        from .constants import CONSUMER, PRODUCER
+        from .constants import PRODUCER
 
         user_type = "producer" if user.user_type == PRODUCER else "consumer"
 
@@ -139,7 +125,7 @@ def send_password_reset_email(user, reset_token, reset_link):
     Following 2025 security and UX best practices
     """
     try:
-        from .constants import CONSUMER, PRODUCER
+        from .constants import PRODUCER
 
         user_type = "producer" if user.user_type == PRODUCER else "consumer"
 
@@ -187,9 +173,9 @@ def send_company_join_welcome_email(user, company, role):
     try:
         # Role display mapping
         role_display_map = {"CA": "Company Admin", "DS": "Domain Supervisor", "DW": "Domain Worker", "DE": "Dealer"}
-        
+
         # Determine dashboard URL based on environment
-        if hasattr(settings, 'BASE_APP_URL'):
+        if hasattr(settings, "BASE_APP_URL"):
             dashboard_url = f"{settings.BASE_APP_URL}admin/dashboard"
         else:
             dashboard_url = f"{settings.BASE_URL}/admin/dashboard"
@@ -228,11 +214,12 @@ def send_invitation_email(
     try:
         # Check if this is a company transfer (existing user)
         from django.contrib.auth import get_user_model
+
         from .models import WorksIn
-        
+
         User = get_user_model()
         is_company_transfer = False
-        
+
         existing_user = User.objects.filter(email=invitee_email).first()
         if existing_user:
             # Check if user has membership in another company

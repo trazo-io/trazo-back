@@ -14,13 +14,11 @@ Options:
 """
 
 import logging
-from datetime import datetime
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection, transaction
 from django.utils import timezone
 
-from carbon.models import CarbonEntry, USDACalculationAudit, USDAComplianceRecord
 from carbon.services.emission_factors import emission_factors
 
 logger = logging.getLogger(__name__)

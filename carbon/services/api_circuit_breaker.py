@@ -3,17 +3,14 @@ API Circuit Breaker Pattern Implementation
 Provides resilient API access with automatic failure handling and recovery
 """
 
-import hashlib
 import logging
 import threading
-import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional
 
-from django.conf import settings
 from django.core.cache import cache
 
 import requests
@@ -296,8 +293,6 @@ class APICircuitBreaker:
 
 class CircuitBreakerOpenError(Exception):
     """Exception raised when circuit breaker is open"""
-
-    pass
 
 
 class USDAAPICircuitBreakers:

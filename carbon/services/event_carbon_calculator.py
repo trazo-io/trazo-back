@@ -1,13 +1,12 @@
 import logging
 import time
-from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from django.utils import timezone
 
-from ..models import CarbonEntry, CarbonSource, RegionalEmissionFactor, USDACalculationAudit, USDAComplianceRecord
+from ..models import CarbonEntry, CarbonSource, USDACalculationAudit, USDAComplianceRecord
 from .emission_factors import emission_factors
-from .enhanced_usda_factors import EnhancedUSDAFactors, USDAValidationResult
+from .enhanced_usda_factors import EnhancedUSDAFactors
 
 logger = logging.getLogger(__name__)
 

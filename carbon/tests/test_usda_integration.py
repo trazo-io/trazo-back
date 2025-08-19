@@ -14,13 +14,10 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.settings")
 django.setup()
 
-import json
 from datetime import date
 
-from django.utils import timezone
-
-from carbon.models import RegionalEmissionFactor, USDACalculationAudit, USDAComplianceRecord
-from carbon.services.enhanced_usda_factors import EnhancedUSDAFactors, USDAValidationResult
+from carbon.models import RegionalEmissionFactor, USDAComplianceRecord
+from carbon.services.enhanced_usda_factors import EnhancedUSDAFactors
 
 
 def test_enhanced_usda_factors():

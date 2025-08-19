@@ -1,7 +1,6 @@
 from django.urls import include, path
 
 from rest_framework.routers import SimpleRouter
-from rest_framework_simplejwt.views import TokenRefreshView
 
 from .social_auth import OAuthConfigView, SocialAuthView
 from .views import APILogoutView, CustomTokenRefreshView, LoginViewSet, RegistrationViewSet, UserViewSet

@@ -1,24 +1,17 @@
-import hashlib
 from datetime import datetime, timedelta
 
 from django.core.cache import cache
-from django.core.exceptions import ObjectDoesNotExist
-from django.db.models import Avg, Count, Prefetch, Q
-from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from django.utils.timezone import make_aware
 
 from dateutil import parser as date_parser
 from rest_framework import filters, status, viewsets
-from rest_framework.decorators import action, permission_classes
+from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from backend.permissions import CompanyNestedViewSet
-from common.models import Gallery
-from company.models import Company
 from notifications.services import notification_service
 from product.models import Parcel, Product
 from reviews.models import Review
@@ -34,22 +27,10 @@ from .constants import (
     SOIL_MANAGEMENT_EVENT_TYPE,
     WEATHER_EVENT_TYPE,
 )
-from .models import (
-    ChemicalEvent,
-    CommonEvent,
-    EquipmentEvent,
-    GeneralEvent,
-    History,
-    HistoryScan,
-    PestManagementEvent,
-    ProductionEvent,
-    SoilManagementEvent,
-    WeatherEvent,
-)
+from .models import ChemicalEvent, GeneralEvent, History, HistoryScan, ProductionEvent
 from .serializers import (
     ChemicalEventSerializer,
     EquipmentEventSerializer,
-    EventSerializer,
     GeneralEventSerializer,
     HistorySerializer,
     ListHistoryClassSerializer,
@@ -540,7 +521,6 @@ class HistoryViewSet(viewsets.ModelViewSet):
             except Exception as e:
                 # If geolocation fails, continue without it
                 print(f"IP geolocation failed: {e}")
-                pass
 
         history_scan = HistoryScan.objects.create(
             history=history,

@@ -4,29 +4,17 @@ Ensures carbon footprint calculations are accurate and production-ready
 """
 
 import unittest
-from datetime import datetime, timedelta
-from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from datetime import timedelta
 
 from django.contrib.auth import get_user_model
-from django.db import models
 from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 
-from carbon.models import (
-    CarbonBenchmark,
-    CarbonCertification,
-    CarbonEntry,
-    CarbonReport,
-    CarbonSource,
-    CropType,
-    EventTemplate,
-    ProductionTemplate,
-)
+from carbon.models import CarbonBenchmark, CarbonEntry, CropType
 from carbon.services.calculator import CarbonFootprintCalculator
 from carbon.services.event_carbon_calculator import EventCarbonCalculator
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, EquipmentEvent, History, ProductionEvent, SoilManagementEvent
+from history.models import History
 from product.models import Parcel
 
 User = get_user_model()

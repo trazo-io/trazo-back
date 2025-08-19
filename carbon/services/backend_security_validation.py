@@ -6,28 +6,17 @@ by client-side manipulation. All critical business logic validation is performed
 on the backend to prevent security vulnerabilities.
 """
 
-import hashlib
-import json
 import logging
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.core.exceptions import ValidationError
 from django.utils import timezone
 
-from ..models import (
-    CarbonAuditLog,
-    CarbonEntry,
-    CarbonOffsetProject,
-    CarbonOffsetPurchase,
-    RegionalEmissionFactor,
-    USDAComplianceRecord,
-    VerificationAudit,
-)
+from ..models import CarbonAuditLog, CarbonEntry, CarbonOffsetProject, VerificationAudit
 
 logger = logging.getLogger(__name__)
 User = get_user_model()

@@ -8,7 +8,7 @@ to ensure they work correctly with the unified IoT workflow.
 
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import django
 
@@ -19,12 +19,10 @@ django.setup()
 
 import json
 
-from django.contrib.auth.middleware import AuthenticationMiddleware
-from django.contrib.sessions.middleware import SessionMiddleware
 from django.test import RequestFactory
 
-from carbon.models import CarbonEntry, IoTDataPoint, IoTDevice
-from carbon.services.john_deere_api import JohnDeereAPI, get_john_deere_api, is_john_deere_configured
+from carbon.models import IoTDataPoint, IoTDevice
+from carbon.services.john_deere_api import get_john_deere_api, is_john_deere_configured
 from company.models import Company, Establishment
 from users.models import User
 
@@ -274,7 +272,7 @@ def test_api_endpoints():
     print("\n🌐 Testing API Endpoints...")
 
     try:
-        from django.http import HttpRequest
+        pass
 
         from carbon.views import john_deere_auth_start, john_deere_sync_devices
 

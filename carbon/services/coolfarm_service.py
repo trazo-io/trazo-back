@@ -1,8 +1,7 @@
 import logging
-from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
-from ..models import CarbonBenchmark, CarbonSource
+from ..models import CarbonBenchmark
 from .emission_factors import emission_factors
 
 logger = logging.getLogger(__name__)

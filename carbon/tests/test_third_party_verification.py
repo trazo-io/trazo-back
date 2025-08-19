@@ -6,15 +6,14 @@ for carbon offset entries including registry credential verification,
 verification status checking, bulk operations, and methodology templates.
 """
 
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, TransactionTestCase
-from django.utils import timezone
 
 from rest_framework.test import APIClient
 
-from carbon.models import CarbonAuditLog, CarbonEntry, CarbonSource
+from carbon.models import CarbonEntry, CarbonSource
 from carbon.services.registry_integration import RegistryIntegrationService
 from carbon.services.verification_service import VerificationService
 from company.models import Company, Establishment

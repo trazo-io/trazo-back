@@ -9,25 +9,19 @@ This module tests the complete IoT workflow with:
 5. Manual approval workflow
 """
 
-from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
-from django.test import TestCase, TransactionTestCase
+from django.test import TransactionTestCase
 from django.utils import timezone
 
 from carbon.models import CarbonEntry, Establishment, IoTDataPoint, IoTDevice
-from carbon.services.john_deere_api import get_john_deere_api
 from carbon.services.weather_api import get_weather_service
 from carbon.tasks import (
     calculate_data_point_confidence,
     create_carbon_entry_from_data_point,
-    monitor_weather_conditions,
-    process_pending_iot_data,
     should_create_carbon_entry,
-    sync_john_deere_devices,
 )
 from company.models import Company
-from users.models import User
 
 
 class IntegratedIoTWorkflowTestCase(TransactionTestCase):

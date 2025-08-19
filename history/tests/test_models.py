@@ -13,12 +13,10 @@ Test Coverage:
 - Privacy and security controls
 """
 
-import json
 import os
 import tempfile
 import uuid
-from datetime import datetime, timedelta
-from decimal import Decimal
+from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
@@ -31,7 +29,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
-from carbon.models import CarbonEntry, CarbonSource
+from carbon.models import CarbonEntry
 from company.models import Company, Establishment
 from history.models import History
 
@@ -526,7 +524,6 @@ class HistoryImageHandlingTestCase(TestCase):
         """Test image size validation."""
         # This would test the max file size validation
         # Implementation depends on how image validation is handled
-        pass
 
     def test_image_format_validation(self):
         """Test image format validation."""

@@ -4,15 +4,14 @@ Ensures blockchain integration is production-ready and secure
 """
 
 import unittest
-from datetime import datetime, timedelta
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 
-from carbon.models import CarbonEntry, CarbonReport, CarbonSource
-from carbon.services.blockchain import BlockchainCarbonService, BlockchainOperationError, BlockchainUnavailableError
+from carbon.models import CarbonEntry, CarbonSource
+from carbon.services.blockchain import BlockchainCarbonService, BlockchainUnavailableError
 from company.models import Company, Establishment
 
 User = get_user_model()

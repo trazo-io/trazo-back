@@ -7,9 +7,6 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
-from company.models import Establishment
-from history.models import History
-
 # Configure logging
 logger = logging.getLogger(__name__)
 

@@ -7,7 +7,6 @@ from datetime import timedelta
 from typing import TYPE_CHECKING, Optional, Tuple
 
 from django.core.cache import cache
-from django.db.models import Q
 from django.utils import timezone
 
 if TYPE_CHECKING:

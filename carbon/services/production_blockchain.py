@@ -3,13 +3,11 @@ import json
 import logging
 import time
 from dataclasses import dataclass
-from decimal import Decimal
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
 from django.conf import settings
 from django.core.cache import cache
-from django.utils import timezone
 
 # Optional web3 import - if not available, use mock mode
 try:
@@ -25,7 +23,6 @@ except ImportError:
     BlockNotFound = Exception
     WEB3_AVAILABLE = False
 
-from ..models import CarbonEntry, CarbonReport
 
 logger = logging.getLogger(__name__)
 

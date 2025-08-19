@@ -3,7 +3,7 @@ Simple command to add missing demo data components without complex model constra
 """
 
 import random
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand

@@ -3,10 +3,8 @@
 Test script for AI suggestions with backend-fetched recent events
 """
 import asyncio
-import json
 import os
 import sys
-from datetime import datetime, timedelta
 
 import django
 

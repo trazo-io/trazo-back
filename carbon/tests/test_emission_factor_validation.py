@@ -6,7 +6,6 @@ and peer-reviewed research to ensure production-ready accuracy.
 """
 
 import unittest
-from decimal import Decimal
 
 from django.test import TestCase
 
@@ -139,7 +138,6 @@ class EmissionFactorConsistencyTest(TestCase):
         """Ensure no hardcoded nitrogen factors exist outside registry"""
         # This test would scan codebase for hardcoded values
         # Implementation would check for patterns like "6.7", "5.86", etc.
-        pass
 
     def test_calculation_consistency(self):
         """Test that all calculation paths use same emission factors"""

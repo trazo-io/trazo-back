@@ -1,7 +1,5 @@
 from django.contrib import admin
 
-from common.models import GalleryImage
-
 # from common.admin import GalleryImageInline
 from .models import Parcel, Product
 

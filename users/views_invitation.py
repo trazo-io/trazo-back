@@ -5,7 +5,6 @@ from django.contrib.auth import get_user_model
 from django.contrib.sites.models import Site
 from django.db import transaction
 from django.shortcuts import get_object_or_404
-from django.urls import reverse
 
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -13,13 +12,12 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from company.models import Company
 from users.constants import PRODUCER
 from users.models import WorksIn
 
 from .models_invitation import CompanyInvitation
 from .serializers import CompanyInvitationSerializer
-from .utils import send_invitation_email, send_invited_user_welcome_email, send_welcome_email
+from .utils import send_invitation_email, send_invited_user_welcome_email
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -71,12 +69,14 @@ def create_invitation(request):
                 return Response(
                     {"error": "User is already a member of this company"}, status=status.HTTP_400_BAD_REQUEST
                 )
-            
+
             # Check if user has membership in another company
             other_membership = WorksIn.objects.filter(user=existing_user).exclude(company=user_company).first()
             if other_membership:
                 # This will be a company transfer invitation
-                logger.info(f"Creating company transfer invitation for {email} from {other_membership.company.name} to {user_company.name}")
+                logger.info(
+                    f"Creating company transfer invitation for {email} from {other_membership.company.name} to {user_company.name}"
+                )
 
         # Check for existing pending invitation
         existing_invitation = CompanyInvitation.objects.filter(
@@ -205,21 +205,20 @@ def accept_invitation(request, invitation_code):
     """
     # Rate limiting for invitation acceptance attempts
     from django.core.cache import cache
-    
-    client_ip = request.META.get('HTTP_X_FORWARDED_FOR', request.META.get('REMOTE_ADDR', ''))
+
+    client_ip = request.META.get("HTTP_X_FORWARDED_FOR", request.META.get("REMOTE_ADDR", ""))
     rate_limit_key = f"invitation_accept_attempts:{client_ip}"
     attempts = cache.get(rate_limit_key, 0)
-    
+
     if attempts >= 5:  # Max 5 attempts per hour per IP
         logger.warning(f"Rate limit exceeded for invitation acceptance from IP: {client_ip}")
         return Response(
-            {"error": "Too many invitation attempts. Please try again later."}, 
-            status=status.HTTP_429_TOO_MANY_REQUESTS
+            {"error": "Too many invitation attempts. Please try again later."}, status=status.HTTP_429_TOO_MANY_REQUESTS
         )
-    
+
     # Increment attempt counter
     cache.set(rate_limit_key, attempts + 1, timeout=3600)  # 1 hour timeout
-    
+
     try:
         invitation = get_object_or_404(CompanyInvitation, invitation_code=invitation_code)
 
@@ -553,10 +552,9 @@ def process_pending_invitation(user):
     """
     try:
         # This would be called from login/signup views
-        from django.contrib.sessions.models import Session
+        pass
 
         # Implementation depends on how sessions are handled
-        pass
     except Exception as e:
         logger.error(f"Error processing pending invitation: {str(e)}")
         return None

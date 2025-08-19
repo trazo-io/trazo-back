@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from django.db.models import Avg, Count, ExpressionWrapper, Q
+from django.db.models import Avg, Count, Q
 from django.db.models.functions import ExtractDay, ExtractMonth, ExtractWeekDay
 from django.shortcuts import get_object_or_404
 from django.utils import timezone

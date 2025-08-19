@@ -8,14 +8,11 @@ agricultural operations and carbon tracking.
 API Documentation: https://www.weather.gov/documentation/services-web-api
 """
 
-import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from django.conf import settings
-from django.core.cache import cache
-from django.utils import timezone
 
 import requests
 
@@ -24,8 +21,6 @@ logger = logging.getLogger(__name__)
 
 class WeatherAPIError(Exception):
     """Custom exception for Weather API errors"""
-
-    pass
 
 
 class WeatherService:

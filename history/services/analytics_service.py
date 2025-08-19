@@ -3,11 +3,11 @@ Privacy-Safe Analytics Service (2025 Standards)
 Provides aggregated insights for the Commercial dashboard without exposing individual data
 """
 
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from datetime import timedelta
+from typing import Dict, List
 
 from django.core.cache import cache
-from django.db.models import Avg, Count, F, Q
+from django.db.models import Avg, Count, Q
 from django.db.models.functions import Length
 from django.utils import timezone
 

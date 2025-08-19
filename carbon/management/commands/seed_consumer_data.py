@@ -6,18 +6,9 @@ from django.core.management.base import BaseCommand
 from django.db.utils import IntegrityError
 from django.utils import timezone
 
-from carbon.models import (
-    CarbonBenchmark,
-    CarbonCertification,
-    CarbonEntry,
-    CarbonOffsetProject,
-    CarbonOffsetPurchase,
-    CarbonReport,
-    CarbonSource,
-    SustainabilityBadge,
-)
+from carbon.models import CarbonBenchmark, CarbonEntry, CarbonReport, CarbonSource, SustainabilityBadge
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, GeneralEvent, History, ProductionEvent, WeatherEvent
+from history.models import ChemicalEvent, History, ProductionEvent, WeatherEvent
 from product.models import Parcel, Product
 
 User = get_user_model()

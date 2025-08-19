@@ -114,7 +114,6 @@ def calculate_general_event_carbon(sender, instance, created, **kwargs):
     """
     if created:  # Only for new general events
         try:
-            from carbon.models import CarbonEntry
             from carbon.services.event_carbon_calculator import EventCarbonCalculator
 
             calculator = EventCarbonCalculator()

@@ -19,15 +19,13 @@ clear ROI and competitive advantages.
 """
 
 import datetime
-import json
 import random
-import time
 import uuid
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
-from django.db import connection, models, transaction
+from django.db import transaction
 from django.utils import timezone
 
 from carbon.models import (
@@ -39,10 +37,8 @@ from carbon.models import (
     CarbonOffsetPurchase,
     CarbonReport,
     CarbonSource,
-    CropType,
     IoTDataPoint,
     IoTDevice,
-    ProductionTemplate,
     SustainabilityBadge,
 )
 from company.models import Company, Establishment
@@ -55,7 +51,6 @@ from history.models import (
     PestManagementEvent,
     ProductionEvent,
     SoilManagementEvent,
-    WeatherEvent,
 )
 from product.models import Parcel, Product
 from reviews.models import Review

@@ -1,4 +1,3 @@
-from django.conf import settings
 from django.db import models
 from django.urls import reverse
 from django.utils import timezone
@@ -70,7 +69,7 @@ class Company(models.Model):
         """Generate a unique company invitation code"""
         import secrets
         import string
-        
+
         while True:
             # Generate a readable code (6 characters, uppercase + digits)
             code = "".join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6))

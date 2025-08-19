@@ -11,24 +11,15 @@ Comprehensive security testing for production readiness features including:
 - Rate limiting and DoS protection
 """
 
-import base64
-import hashlib
 import logging
 import os
 import random
 import sys
 import threading
 import time
-from datetime import datetime, timedelta
-from unittest.mock import MagicMock, patch
 
 import django
-from django.contrib.auth import get_user_model
-from django.core.cache import cache
-from django.test import Client, TestCase
-
-import jwt
-import requests
+from django.test import Client
 
 # Add project root to path
 sys.path.insert(0, "/Users/oscarmunoz/dev/trazo/trazo-back")
@@ -36,11 +27,10 @@ sys.path.insert(0, "/Users/oscarmunoz/dev/trazo/trazo-back")
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.settings.dev")
 django.setup()
 
-from backend.services.secrets_manager import ProductionSecretsManager
 from carbon.models import CarbonEntry
 from carbon.services.secure_key_management import SecureKeyManager
 from common.services.enhanced_logging import EnhancedLogger
-from company.models import Company, Establishment
+from company.models import Company
 from users.models import User
 
 

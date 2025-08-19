@@ -4,19 +4,17 @@ Implements secure automatic rotation of API keys for USDA and other external ser
 Addresses CRITICAL security vulnerability: missing API key rotation mechanisms
 """
 
-import hashlib
 import json
 import logging
 import time
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime
+from typing import Any, Dict, Optional
 
 from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
 
 from backend.services.secrets_manager import secrets_manager
-from carbon.services.secure_key_management import secure_key_manager
 
 logger = logging.getLogger(__name__)
 
@@ -33,13 +31,9 @@ except ImportError:
 class KeyRotationError(Exception):
     """Raised when API key rotation fails"""
 
-    pass
-
 
 class KeyValidationError(Exception):
     """Raised when API key validation fails"""
-
-    pass
 
 
 class APIKeyRotationService:

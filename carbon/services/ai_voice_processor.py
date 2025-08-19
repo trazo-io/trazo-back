@@ -10,7 +10,7 @@ import json
 import logging
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from django.conf import settings
 
@@ -377,10 +377,8 @@ async def _fetch_recent_events_from_db(establishment_id: str, parcel_id: str) ->
     Fetch recent events from the database for AI context.
     Returns a list of recent event descriptions for the last 30 days.
     """
-    import asyncio
-    from datetime import datetime, timedelta
+    from datetime import timedelta
 
-    from django.db.models import Q
     from django.utils import timezone
 
     from asgiref.sync import sync_to_async
@@ -505,9 +503,7 @@ async def generate_ai_event_suggestions(
     Now fetches recent events directly from the database for better context.
     """
     import json
-    from datetime import datetime, timedelta
-
-    from django.utils import timezone
+    from datetime import datetime
 
     try:
         # Extract establishment and parcel info from farm_context

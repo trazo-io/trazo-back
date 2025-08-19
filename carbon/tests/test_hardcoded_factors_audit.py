@@ -5,7 +5,6 @@ This test identifies all hardcoded values in the codebase that should be central
 and validates them against authoritative sources.
 """
 
-import os
 import re
 import unittest
 from pathlib import Path

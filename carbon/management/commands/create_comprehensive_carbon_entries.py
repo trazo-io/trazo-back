@@ -4,14 +4,13 @@ and set up automatic carbon entry creation for IoT devices
 """
 
 import json
-import random
 
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
-from django.db import connection, transaction
+from django.db import connection
 from django.utils import timezone
 
-from carbon.models import CarbonEntry, CarbonSource, IoTDataPoint, IoTDevice
+from carbon.models import CarbonEntry, CarbonSource, IoTDevice
 from carbon.services.event_carbon_calculator import EventCarbonCalculator
 from history.models import (
     ChemicalEvent,

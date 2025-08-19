@@ -1,11 +1,11 @@
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from django.core.management.base import BaseCommand
 from django.db.models import Sum
 
 from carbon.models import CarbonEntry, CarbonSource, EstablishmentCarbonFootprint
-from company.models import Company, Establishment
+from company.models import Establishment
 from users.models import User
 
 

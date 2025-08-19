@@ -8,11 +8,10 @@ API Documentation: https://developer.deere.com/
 """
 
 import base64
-import json
 import logging
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
-from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.core.cache import cache
@@ -25,8 +24,6 @@ logger = logging.getLogger(__name__)
 
 class JohnDeereAPIError(Exception):
     """Custom exception for John Deere API errors"""
-
-    pass
 
 
 class JohnDeereAPI:
