@@ -325,14 +325,22 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.image-tag }}
-          format: 'sarif'
-          output: 'trivy-results.sarif'
+          format: 'table'
+          output: 'trivy-results.txt'
           
-      - name: 📊 Upload Trivy Scan Results
-        uses: github/codeql-action/upload-sarif@v3
-        if: always() && hashFiles('trivy-results.sarif') != ''
-        with:
-          sarif_file: 'trivy-results.sarif'
+      - name: 📊 Display Security Scan Results
+        if: always() && hashFiles('trivy-results.txt') != ''
+        run: |
+          echo "🔒 Container Security Scan Results:"
+          echo "=================================="
+          cat trivy-results.txt || echo "No security scan results to display"
+          
+      # Note: SARIF upload disabled until GitHub Code Scanning is enabled
+      # - name: 📊 Upload Trivy Scan Results  
+      #   uses: github/codeql-action/upload-sarif@v3
+      #   if: always() && hashFiles('trivy-results.sarif') != ''
+      #   with:
+      #     sarif_file: 'trivy-results.sarif'
 
   # =============================================================================
   # Job 4: Deploy to Staging
