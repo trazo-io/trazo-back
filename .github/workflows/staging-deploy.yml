@@ -392,20 +392,32 @@ jobs:
           echo "Registered task definition revision: ${NEW_REVISION}"
           
       - name: 🚀 Deploy to ECS Service 1
-        uses: aws-actions/amazon-ecs-deploy-service@v1
-        with:
-          service: ${{ env.ECS_SERVICE_1 }}
-          cluster: ${{ env.ECS_CLUSTER }}
-          task-definition: ${{ steps.task-def.outputs.task-definition }}
-          wait-for-service-stability: true
+        run: |
+          echo "Updating ECS service: ${{ env.ECS_SERVICE_1 }}"
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_SERVICE_1 }} \
+            --task-definition ${{ env.ECS_TASK_DEFINITION }}:${NEW_TASK_REVISION} \
+            --force-new-deployment
+          
+          echo "Waiting for service stability..."
+          aws ecs wait services-stable \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE_1 }}
           
       - name: 🚀 Deploy to ECS Service 2  
-        uses: aws-actions/amazon-ecs-deploy-service@v1
-        with:
-          service: ${{ env.ECS_SERVICE_2 }}
-          cluster: ${{ env.ECS_CLUSTER }}
-          task-definition: ${{ steps.task-def.outputs.task-definition }}
-          wait-for-service-stability: true
+        run: |
+          echo "Updating ECS service: ${{ env.ECS_SERVICE_2 }}"
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_SERVICE_2 }} \
+            --task-definition ${{ env.ECS_TASK_DEFINITION }}:${NEW_TASK_REVISION} \
+            --force-new-deployment
+          
+          echo "Waiting for service stability..."
+          aws ecs wait services-stable \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE_2 }}
           
       - name: ✅ Verify Deployment
         run: |
