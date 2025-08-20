@@ -31,6 +31,7 @@ from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
 from carbon.models import CarbonEntry
+
 # TODO: EstablishmentCarbonFootprint model needs to be re-added or replaced
 # from carbon.models import EstablishmentCarbonFootprint
 from company.models import Company, Establishment

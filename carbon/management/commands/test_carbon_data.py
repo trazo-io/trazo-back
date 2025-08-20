@@ -5,6 +5,7 @@ from django.core.management.base import BaseCommand
 from django.db.models import Sum
 
 from carbon.models import CarbonEntry, CarbonSource
+
 # TODO: EstablishmentCarbonFootprint model needs to be re-added or replaced
 from company.models import Establishment
 from users.models import User
