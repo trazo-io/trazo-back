@@ -14,14 +14,14 @@ from unittest.mock import MagicMock, patch
 from django.test import TransactionTestCase
 from django.utils import timezone
 
-from carbon.models import CarbonEntry, Establishment, IoTDataPoint, IoTDevice
+from carbon.models import CarbonEntry, IoTDataPoint, IoTDevice
 from carbon.services.weather_api import get_weather_service
 from carbon.tasks import (
     calculate_data_point_confidence,
     create_carbon_entry_from_data_point,
     should_create_carbon_entry,
 )
-from company.models import Company
+from company.models import Company, Establishment
 
 
 class IntegratedIoTWorkflowTestCase(TransactionTestCase):

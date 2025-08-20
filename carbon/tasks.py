@@ -26,7 +26,6 @@ from .models import (
     CarbonBenchmark,
     CarbonEntry,
     CarbonReport,
-    Establishment,
     IoTDataPoint,
     IoTDevice,
     ProductionTemplate,

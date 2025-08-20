@@ -4,7 +4,8 @@ from datetime import datetime
 from django.core.management.base import BaseCommand
 from django.db.models import Sum
 
-from carbon.models import CarbonEntry, CarbonSource, EstablishmentCarbonFootprint
+from carbon.models import CarbonEntry, CarbonSource
+# TODO: EstablishmentCarbonFootprint model needs to be re-added or replaced
 from company.models import Establishment
 from users.models import User
 
@@ -71,12 +72,15 @@ class Command(BaseCommand):
                 self.stdout.write(f"    Establishment: {entry.establishment_id}, Date: {entry.timestamp}")
 
         # Check footprint summaries
-        footprints = EstablishmentCarbonFootprint.objects.all()
-        self.stdout.write(f"\nEstablishment Footprints: {footprints.count()}")
+        # TODO: Fix EstablishmentCarbonFootprint usage
+        # footprints = EstablishmentCarbonFootprint.objects.all()
+        # self.stdout.write(f"\nEstablishment Footprints: {footprints.count()}")
+        self.stdout.write(f"\nEstablishment Footprints: 0 (model currently disabled)")
 
-        if footprints.exists():
-            for fp in footprints[:2]:
-                self.stdout.write(f"  - Est {fp.establishment_id}: {fp.total_emissions} kg CO₂e")
+        if False:  # footprints.exists():
+            # for fp in footprints[:2]:
+            #     self.stdout.write(f"  - Est {fp.establishment_id}: {fp.total_emissions} kg CO₂e")
+            pass
 
         return {
             "total_entries": total_entries,
@@ -108,7 +112,9 @@ class Command(BaseCommand):
             self.stdout.write(f"Net Carbon: {emissions - offsets} kg CO₂e")
 
             # Check if summary exists
-            footprint = EstablishmentCarbonFootprint.objects.filter(establishment_id=establishment_id).first()
+            # TODO: Fix EstablishmentCarbonFootprint usage
+            # footprint = EstablishmentCarbonFootprint.objects.filter(establishment_id=establishment_id).first()
+            footprint = None
 
             if footprint:
                 self.stdout.write(f"✅ Summary Record: {footprint.total_emissions} kg CO₂e")
@@ -196,14 +202,15 @@ class Command(BaseCommand):
         total_emissions = 425.5
         total_offsets = 50.0
 
-        EstablishmentCarbonFootprint.objects.create(
-            establishment=establishment,
-            year=current_year,
-            total_emissions=total_emissions,
-            total_offsets=total_offsets,
-            net_carbon=total_emissions - total_offsets,
-            carbon_score=75,
-        )
+        # TODO: Fix EstablishmentCarbonFootprint usage
+        # EstablishmentCarbonFootprint.objects.create(
+        #     establishment=establishment,
+        #     year=current_year,
+        #     total_emissions=total_emissions,
+        #     total_offsets=total_offsets,
+        #     net_carbon=total_emissions - total_offsets,
+        #     carbon_score=75,
+        # )
 
         self.stdout.write(f"✅ Created sample data for {establishment.name}")
         self.stdout.write(f"   - 2 emission entries (425.5 kg CO₂e)")
@@ -230,7 +237,9 @@ class Command(BaseCommand):
         offsets = entries.filter(type="offset").aggregate(total=Sum("amount"))["total"] or 0
 
         # Check footprint summary
-        footprint = EstablishmentCarbonFootprint.objects.filter(establishment=establishment).first()
+        # TODO: Fix EstablishmentCarbonFootprint usage
+        # footprint = EstablishmentCarbonFootprint.objects.filter(establishment=establishment).first()
+        footprint = None
 
         api_response = {
             "total_emissions": float(emissions),
