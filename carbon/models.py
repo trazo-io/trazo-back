@@ -449,34 +449,22 @@ class CarbonEntry(models.Model):
     registry_name = models.CharField(max_length=100, blank=True, default="")
     registry_submission_id = models.CharField(max_length=100, blank=True, default="")
     verification_report_url = models.URLField(blank=True, default="")
-    
+
     # Transparency fields from migration 0028
-    explanation_text = models.TextField(
-        blank=True,
-        help_text='Consumer-friendly explanation of this carbon entry'
-    )
+    explanation_text = models.TextField(blank=True, help_text="Consumer-friendly explanation of this carbon entry")
     confidence_level = models.CharField(
         max_length=10,
         choices=[
-            ('high', 'High Confidence (>90%)'),
-            ('medium', 'Medium Confidence (70-90%)'),
-            ('low', 'Low Confidence (<70%)'),
+            ("high", "High Confidence (>90%)"),
+            ("medium", "Medium Confidence (70-90%)"),
+            ("low", "Low Confidence (<70%)"),
         ],
-        default='medium',
-        help_text='Confidence level in this carbon calculation'
+        default="medium",
+        help_text="Confidence level in this carbon calculation",
     )
-    calculation_details = models.JSONField(
-        default=dict,
-        help_text='Detailed calculation methodology and factors used'
-    )
-    improvement_potential = models.FloatField(
-        default=0.0,
-        help_text='Potential CO2e reduction through improvements'
-    )
-    benchmark_comparison = models.JSONField(
-        default=dict,
-        help_text='Comparison with industry and regional benchmarks'
-    )
+    calculation_details = models.JSONField(default=dict, help_text="Detailed calculation methodology and factors used")
+    improvement_potential = models.FloatField(default=0.0, help_text="Potential CO2e reduction through improvements")
+    benchmark_comparison = models.JSONField(default=dict, help_text="Comparison with industry and regional benchmarks")
 
     created_at = models.DateTimeField(auto_now=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -665,25 +653,17 @@ class CarbonReport(models.Model):
     generated_at = models.DateTimeField(default=timezone.now)
     usda_verified = models.BooleanField(default=False)
     document = models.FileField(upload_to="carbon_reports/", null=True, blank=True, help_text="Report document file")
-    
+
     # Enhanced transparency fields from migration 0028
-    detailed_breakdown = models.JSONField(
-        default=dict,
-        help_text='Detailed breakdown of carbon sources and sinks'
-    )
-    trend_analysis = models.JSONField(
-        default=dict,
-        help_text='Historical trend analysis and projections'
-    )
+    detailed_breakdown = models.JSONField(default=dict, help_text="Detailed breakdown of carbon sources and sinks")
+    trend_analysis = models.JSONField(default=dict, help_text="Historical trend analysis and projections")
     improvement_tracking = models.JSONField(
-        default=dict,
-        help_text='Tracking of improvement initiatives and their impact'
+        default=dict, help_text="Tracking of improvement initiatives and their impact"
     )
     stakeholder_insights = models.JSONField(
-        default=dict,
-        help_text='Insights for different stakeholders (farmers, consumers, regulators)'
+        default=dict, help_text="Insights for different stakeholders (farmers, consumers, regulators)"
     )
-    
+
     created_at = models.DateTimeField(auto_now=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -3567,24 +3567,24 @@ class Command(BaseCommand):
                     "energy_emissions": 362.4,
                     "cover_crop_sequestration": -1285.5,
                     "no_till_sequestration": -394.2,
-                    "tree_sequestration": -1177.1
+                    "tree_sequestration": -1177.1,
                 },
                 trend_analysis={
                     "yearly_improvement": 15.3,
                     "carbon_reduction_rate": 0.18,
                     "efficiency_trends": ["increasing", "stable", "improving"],
-                    "projection_2026": -2100.0
+                    "projection_2026": -2100.0,
                 },
                 improvement_tracking={
                     "initiatives": ["cover_crops", "precision_fertilizer", "renewable_energy"],
                     "implementation_status": {"cover_crops": "completed", "precision_fertilizer": "in_progress"},
-                    "expected_impact": 450.2
+                    "expected_impact": 450.2,
                 },
                 stakeholder_insights={
                     "farmer_benefits": "25% cost reduction through efficiency gains",
                     "consumer_impact": "Carbon negative produce available year-round",
-                    "regulator_compliance": "Exceeds all carbon offset standards"
-                }
+                    "regulator_compliance": "Exceeds all carbon offset standards",
+                },
             )
             reports_created += 1
 
