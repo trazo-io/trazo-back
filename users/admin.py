@@ -7,7 +7,7 @@ from company.models import Company
 from subscriptions.models import Subscription
 
 from .forms import CustomUserChangeForm, CustomUserCreationForm
-from .models import User, VerificationCode, WorksIn, PasswordResetToken
+from .models import PasswordResetToken, User, VerificationCode, WorksIn
 from .models_invitation import CompanyInvitation
 
 

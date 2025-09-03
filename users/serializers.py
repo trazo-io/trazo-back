@@ -279,9 +279,10 @@ class RegisterSerializer(BasicUserSerializer):
             # 🚀 2025 Best Practice: Single email with welcome + verification
             try:
                 from urllib.parse import quote
-                from .utils import send_company_welcome_verification_email
+
                 from .models import VerificationCode
                 from .signals import generate_verification_code
+                from .utils import send_company_welcome_verification_email
 
                 # Generate verification code and link for company code users
                 verification_code = generate_verification_code()
@@ -292,7 +293,7 @@ class RegisterSerializer(BasicUserSerializer):
 
                 # Generate verification link based on user type
                 verification_link = ""
-                from .constants import PRODUCER, CONSUMER
+                from .constants import CONSUMER, PRODUCER
 
                 user_type = int(user.user_type)
                 if user_type == PRODUCER:
