@@ -209,7 +209,9 @@ class RegisterSerializer(BasicUserSerializer):
                     # 🚀 2025 Best Practice: Mark for company verification, activation still requires email verification
                     user.company_verified = True
                     user.save()
-                    logger.info(f"Existing user {user.email} joined company via code {company_code}, awaiting email verification")
+                    logger.info(
+                        f"Existing user {user.email} joined company via code {company_code}, awaiting email verification"
+                    )
         except ObjectDoesNotExist:
             # Create user and join company in a single transaction
             with transaction.atomic():
@@ -221,7 +223,9 @@ class RegisterSerializer(BasicUserSerializer):
                     # 🚀 2025 Best Practice: Mark for company verification, but still require email verification
                     user.company_verified = True
                     user.save()
-                    logger.info(f"User {user.email} joined company via code {company_code}, awaiting email verification")
+                    logger.info(
+                        f"User {user.email} joined company via code {company_code}, awaiting email verification"
+                    )
 
         return user
 
@@ -259,10 +263,11 @@ class RegisterSerializer(BasicUserSerializer):
             works_in = WorksIn.objects.create(
                 user=user, company=company, role=WorksIn.DOMAIN_WORKER  # Default role for code-based joins
             )
-            
+
             # 🚀 2025 Best Practice: Auto-assign Domain Workers to all company establishments
             # This ensures they can immediately access existing operations
             from company.models import Establishment
+
             company_establishments = Establishment.objects.filter(company=company)
             if company_establishments.exists():
                 works_in.establishments_in_charge.set(company_establishments)
@@ -284,15 +289,20 @@ class RegisterSerializer(BasicUserSerializer):
 
                 # Properly encode the email for URLs
                 encoded_email = quote(user.email)
-                
+
                 # Generate verification link based on user type
                 verification_link = ""
                 from .constants import PRODUCER, CONSUMER
+
                 user_type = int(user.user_type)
                 if user_type == PRODUCER:
-                    verification_link = f"{settings.BASE_APP_URL}auth/verifyemail?email={encoded_email}&code={verification_code}"
+                    verification_link = (
+                        f"{settings.BASE_APP_URL}auth/verifyemail?email={encoded_email}&code={verification_code}"
+                    )
                 elif user_type == CONSUMER:
-                    verification_link = f"{settings.BASE_CONSUMER_URL}auth/verifyemail?email={encoded_email}&code={verification_code}"
+                    verification_link = (
+                        f"{settings.BASE_CONSUMER_URL}auth/verifyemail?email={encoded_email}&code={verification_code}"
+                    )
 
                 # Send single combined email
                 send_company_welcome_verification_email(
@@ -300,13 +310,15 @@ class RegisterSerializer(BasicUserSerializer):
                     company=company,
                     role=works_in.role,
                     verification_code=verification_code,
-                    verification_link=verification_link
+                    verification_link=verification_link,
                 )
                 logger.info(f"Combined welcome+verification email sent to {user.email} for {company.name}")
-                
+
             except Exception as email_error:
                 # Log email error but don't fail user creation
-                logger.warning(f"Failed to send combined welcome+verification email to {user.email}: {str(email_error)}")
+                logger.warning(
+                    f"Failed to send combined welcome+verification email to {user.email}: {str(email_error)}"
+                )
 
         except serializers.ValidationError:
             # Re-raise validation errors to prevent user creation with invalid codes

@@ -214,7 +214,7 @@ def send_company_welcome_verification_email(user, company, role, verification_co
         from .constants import PRODUCER
 
         user_type = "producer" if user.user_type == PRODUCER else "consumer"
-        
+
         # Role display mapping
         role_display_map = {"CA": "Company Admin", "DS": "Domain Supervisor", "DW": "Domain Worker", "DE": "Dealer"}
 

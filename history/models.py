@@ -293,7 +293,7 @@ class History(models.Model):
     def save(self, *args, **kwargs):
         # Check if this is a new object
         is_new = not self.id
-        
+
         # Save first to get ID if this is a new object
         if is_new:
             super().save(*args, **kwargs)
@@ -330,7 +330,7 @@ class History(models.Model):
         # Only save again if this was a new object (to update the QR code field)
         # For existing objects, the save will happen normally
         if is_new:
-            super().save(update_fields=['qr_code'])
+            super().save(update_fields=["qr_code"])
         else:
             super().save(*args, **kwargs)
 

@@ -32,7 +32,9 @@ def create_verification_code(sender, instance, created, **kwargs):
         elif instance.company_verified:
             # 🚀 2025 Best Practice: Company code users get combined email from serializer
             # Skip sending separate emails here to avoid duplication
-            logger.info(f"User created via company code: {instance.email} - combined email handled by company join flow")
+            logger.info(
+                f"User created via company code: {instance.email} - combined email handled by company join flow"
+            )
         else:
             # For regular signups: send both welcome and verification emails
             code = generate_verification_code()
