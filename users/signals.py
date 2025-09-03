@@ -29,6 +29,10 @@ def create_verification_code(sender, instance, created, **kwargs):
             # For invited users: skip email sending here since the invitation flow
             # handles sending the specialized welcome email with company context
             logger.info(f"User created via invitation: {instance.email} - email handled by invitation flow")
+        elif instance.company_verified:
+            # 🚀 2025 Best Practice: Company code users get combined email from serializer
+            # Skip sending separate emails here to avoid duplication
+            logger.info(f"User created via company code: {instance.email} - combined email handled by company join flow")
         else:
             # For regular signups: send both welcome and verification emails
             code = generate_verification_code()

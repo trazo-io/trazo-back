@@ -7,7 +7,7 @@ from company.models import Company
 from subscriptions.models import Subscription
 
 from .forms import CustomUserChangeForm, CustomUserCreationForm
-from .models import User, VerificationCode, WorksIn
+from .models import User, VerificationCode, WorksIn, PasswordResetToken
 from .models_invitation import CompanyInvitation
 
 
@@ -373,6 +373,150 @@ class CompanyInvitationAdmin(admin.ModelAdmin):
         elif db_field.name == "inviter":
             kwargs["queryset"] = User.objects.filter(is_active=True).order_by("email")
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+
+@admin.register(PasswordResetToken)
+class PasswordResetTokenAdmin(admin.ModelAdmin):
+    """
+    Admin interface for managing password reset tokens
+    Useful for debugging rate limiting and token management during development
+    """
+    list_display = (
+        "user_email",
+        "token_preview",
+        "created_at",
+        "expires_at", 
+        "status_display",
+        "used_at",
+        "ip_address",
+    )
+    list_filter = (
+        "created_at",
+        "expires_at", 
+        "used_at",
+        "user__user_type",
+    )
+    search_fields = ("user__email", "token", "ip_address")
+    readonly_fields = (
+        "token", 
+        "created_at", 
+        "expires_at",
+        "used_at",
+        "ip_address", 
+        "user_agent",
+        "status_display",
+        "time_remaining",
+    )
+    fieldsets = (
+        (
+            "Token Details",
+            {"fields": ("user", "token", "status_display", "time_remaining")}
+        ),
+        (
+            "Timestamps", 
+            {"fields": ("created_at", "expires_at", "used_at")}
+        ),
+        (
+            "Security Info",
+            {
+                "fields": ("ip_address", "user_agent"),
+                "classes": ("collapse",),
+            }
+        ),
+    )
+    ordering = ("-created_at",)
+    actions = ["mark_as_used", "delete_tokens", "clear_expired_tokens"]
+    
+    def user_email(self, obj):
+        """Display user email with link to user admin"""
+        return format_html(
+            '<a href="/admin/users/user/{}/change/">{}</a>',
+            obj.user.id,
+            obj.user.email
+        )
+    user_email.short_description = "User"
+    user_email.admin_order_field = "user__email"
+    
+    def token_preview(self, obj):
+        """Show first 20 characters of token"""
+        return f"{obj.token[:20]}..."
+    token_preview.short_description = "Token"
+    
+    def status_display(self, obj):
+        """Visual status indicator"""
+        now = timezone.now()
+        
+        if obj.used_at:
+            return format_html(
+                '<span style="color: gray; font-weight: bold;">✓ Used</span><br>'
+                '<small>{}</small>',
+                obj.used_at.strftime("%m/%d %H:%M")
+            )
+        elif obj.expires_at < now:
+            return format_html(
+                '<span style="color: red; font-weight: bold;">✗ Expired</span><br>'
+                '<small>{}</small>',
+                obj.expires_at.strftime("%m/%d %H:%M")
+            )
+        else:
+            return format_html(
+                '<span style="color: green; font-weight: bold;">✓ Valid</span><br>'
+                '<small>Expires {}</small>',
+                obj.expires_at.strftime("%m/%d %H:%M")
+            )
+    status_display.short_description = "Status"
+    
+    def time_remaining(self, obj):
+        """Show time remaining until expiration"""
+        if obj.used_at:
+            return "Used"
+            
+        now = timezone.now()
+        if obj.expires_at < now:
+            delta = now - obj.expires_at
+            return format_html('<span style="color: red;">Expired {} ago</span>', delta)
+        else:
+            delta = obj.expires_at - now
+            minutes = int(delta.total_seconds() / 60)
+            return format_html('<span style="color: green;">{} minutes left</span>', minutes)
+    time_remaining.short_description = "Time Remaining"
+    
+    def mark_as_used(self, request, queryset):
+        """Mark selected tokens as used (prevents rate limiting)"""
+        count = queryset.filter(used_at__isnull=True).update(used_at=timezone.now())
+        if count:
+            messages.success(request, f"Marked {count} token(s) as used.")
+        else:
+            messages.info(request, "No unused tokens selected.")
+    mark_as_used.short_description = "Mark selected tokens as used"
+    
+    def delete_tokens(self, request, queryset):
+        """Delete selected tokens (clears rate limiting)"""
+        count = queryset.count()
+        queryset.delete()
+        messages.success(request, f"Deleted {count} password reset token(s).")
+    delete_tokens.short_description = "Delete selected tokens"
+    
+    def clear_expired_tokens(self, request, queryset):
+        """Delete all expired tokens"""
+        now = timezone.now()
+        expired_tokens = PasswordResetToken.objects.filter(expires_at__lt=now)
+        count = expired_tokens.count()
+        expired_tokens.delete()
+        
+        if count:
+            messages.success(request, f"Deleted {count} expired token(s).")
+        else:
+            messages.info(request, "No expired tokens to delete.")
+    clear_expired_tokens.short_description = "Clear all expired tokens"
+    
+    def has_add_permission(self, request):
+        """Prevent manual token creation"""
+        return False
+    
+    def get_queryset(self, request):
+        """Optimize queries"""
+        return super().get_queryset(request).select_related("user")
 
 
 admin.site.register(User, CustomUserAdmin)

@@ -205,6 +205,54 @@ def send_company_join_welcome_email(user, company, role):
         return False
 
 
+def send_company_welcome_verification_email(user, company, role, verification_code=None, verification_link=None):
+    """
+    Send combined welcome+verification email to user who joined via company code
+    Following 2025 best practice: single email for better UX
+    """
+    try:
+        from .constants import PRODUCER
+
+        user_type = "producer" if user.user_type == PRODUCER else "consumer"
+        
+        # Role display mapping
+        role_display_map = {"CA": "Company Admin", "DS": "Domain Supervisor", "DW": "Domain Worker", "DE": "Dealer"}
+
+        context = {
+            "user": user,
+            "user_type": user_type,
+            "company": company,
+            "role": role,
+            "role_display": role_display_map.get(role, role),
+            "verification_code": verification_code,
+            "verification_link": verification_link,
+            "BASE_URL": settings.BASE_URL,
+        }
+
+        msg_plain = render_to_string("emails/company_welcome_verification.txt", context)
+        msg_html = render_to_string("emails/company_welcome_verification.html", context)
+        subject = f"Welcome to {company.name} - Verify Your Account"
+
+        result = send_mail(
+            subject,
+            msg_plain,
+            settings.DEFAULT_FROM_EMAIL,
+            [user.email],
+            html_message=msg_html,
+        )
+
+        if result:
+            logger.info(f"Combined welcome+verification email sent to {user.email} for {company.name}")
+        else:
+            logger.warning(f"Failed to send combined welcome+verification email to {user.email}")
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Error sending combined welcome+verification email to {user.email}: {str(e)}")
+        return False
+
+
 def send_invitation_email(
     invitee_email, invitee_name, inviter, company, role, invitation_link, invitation_message=None
 ):

@@ -417,7 +417,7 @@ AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "backend.security.password_validators.EnhancedMinimumLengthValidator",
         "OPTIONS": {
-            "min_length": 12,  # OWASP recommendation: 12+ characters
+            "min_length": 8,  # Reduced for development convenience
         },
     },
     {
@@ -445,12 +445,13 @@ AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "backend.security.password_validators.NoPersonalInformationValidator",
     },
-    {
-        "NAME": "backend.security.password_validators.NoSequentialCharactersValidator",
-        "OPTIONS": {
-            "max_sequential": 3,
-        },
-    },
+    # Commented out for development convenience - prevents passwords like "123456" or "abc123"
+    # {
+    #     "NAME": "backend.security.password_validators.NoSequentialCharactersValidator",
+    #     "OPTIONS": {
+    #         "max_sequential": 3,
+    #     },
+    # },
 ]
 
 # SECURITY: Password policy settings

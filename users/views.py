@@ -67,7 +67,8 @@ class UserViewSet(viewsets.ModelViewSet):
         return obj
 
     def get_permissions(self):
-        if self.action in ["verify_email", "resend_verification_email"]:
+        # Allow public access to email verification and password reset endpoints
+        if self.action in ["verify_email", "resend_verification_email", "request_password_reset", "confirm_password_reset"]:
             permission_classes = [AllowAny]
         else:
             permission_classes = [IsAuthenticated]

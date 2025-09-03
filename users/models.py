@@ -17,6 +17,7 @@ class User(AbstractUser):
     date_joined = models.DateTimeField(default=timezone.now)
     phone = models.CharField(max_length=255, blank=True, null=True)
     is_verified = models.BooleanField(default=False)
+    company_verified = models.BooleanField(default=False, help_text="User was invited via company invitation code")
     companies = models.ManyToManyField(
         Company,
         related_name="company_users",

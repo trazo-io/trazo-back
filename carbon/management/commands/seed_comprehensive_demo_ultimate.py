@@ -262,7 +262,7 @@ class Command(BaseCommand):
     def create_demo_user(self):
         """Create the ultimate demo user with full profile"""
         user, created = User.objects.get_or_create(
-            email="demo@trazo.io",
+            email="oscar@trazo.io",
             defaults={
                 "first_name": "Sarah",
                 "last_name": "Martinez",
@@ -270,7 +270,7 @@ class Command(BaseCommand):
             },
         )
         if created:
-            user.set_password("TrazoDemo2025!")
+            user.set_password("om123456")
             user.save()
 
         self.stdout.write(f"   ✅ Demo user: {user.email} (password: TrazoDemo2025!)")
@@ -3559,6 +3559,32 @@ class Command(BaseCommand):
                 carbon_score=92,  # High score for carbon negative operations
                 generated_at=timezone.now(),
                 usda_verified=True,
+                # Enhanced transparency fields from migration 0028
+                detailed_breakdown={
+                    "fertilizer_emissions": 438.2,
+                    "equipment_emissions": 312.1,
+                    "transportation_emissions": 134.8,
+                    "energy_emissions": 362.4,
+                    "cover_crop_sequestration": -1285.5,
+                    "no_till_sequestration": -394.2,
+                    "tree_sequestration": -1177.1
+                },
+                trend_analysis={
+                    "yearly_improvement": 15.3,
+                    "carbon_reduction_rate": 0.18,
+                    "efficiency_trends": ["increasing", "stable", "improving"],
+                    "projection_2026": -2100.0
+                },
+                improvement_tracking={
+                    "initiatives": ["cover_crops", "precision_fertilizer", "renewable_energy"],
+                    "implementation_status": {"cover_crops": "completed", "precision_fertilizer": "in_progress"},
+                    "expected_impact": 450.2
+                },
+                stakeholder_insights={
+                    "farmer_benefits": "25% cost reduction through efficiency gains",
+                    "consumer_impact": "Carbon negative produce available year-round",
+                    "regulator_compliance": "Exceeds all carbon offset standards"
+                }
             )
             reports_created += 1
 

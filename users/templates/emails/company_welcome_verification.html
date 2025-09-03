@@ -1,0 +1,104 @@
+{% extends "emails/base.html" %}
+
+{% block title %}Welcome to {{ company.name }} - Verify Your Account{% endblock %}
+
+{% block header_title %}Welcome to {{ company.name }}!{% endblock %}
+
+{% block header_subtitle %}
+    Your account is ready - just verify your email to get started
+{% endblock %}
+
+{% block greeting %}Hi {{ user.first_name }},{% endblock %}
+
+{% block message %}
+    <p>🎉 <strong>Welcome to {{ company.name }}!</strong> Your account has been successfully created using the company invitation code.</p>
+    
+    <div style="background-color: #f0fdf4; border-left: 4px solid #4CAF50; padding: 16px; margin: 24px 0; border-radius: 4px;">
+        <h3 style="color: #388E3C; margin-bottom: 8px; font-size: 16px;">✅ Account Ready</h3>
+        <p style="margin-bottom: 4px; color: #374151;"><strong>Company:</strong> {{ company.name }}</p>
+        <p style="margin-bottom: 4px; color: #374151;"><strong>Your Role:</strong> {{ role_display }}</p>
+        <p style="margin-bottom: 4px; color: #374151;"><strong>Email:</strong> {{ user.email }}</p>
+        <p style="margin-bottom: 4px; color: #388E3C; font-weight: 600;">✨ Account Status: Active & Ready</p>
+    </div>
+    
+    <p>To complete your setup and ensure the security of your account, please verify your email address below:</p>
+{% endblock %}
+
+{% block content %}
+    {% if verification_code %}
+        <div class="verification-code">
+            <div class="code {% if user_type == 'consumer' %}consumer{% endif %}">{{ verification_code }}</div>
+            <div class="code-instructions">
+                Enter this code to verify your email and complete setup
+            </div>
+        </div>
+    {% endif %}
+    
+    {% if verification_link %}
+        <div class="btn-container">
+            <a href="{{ verification_link }}" class="btn {% if user_type == 'consumer' %}consumer{% endif %}">
+                Verify Email & Start Using Trazo
+            </a>
+        </div>
+        
+        <div class="alt-link {% if user_type == 'consumer' %}consumer{% endif %}">
+            <div class="alt-link-title">Having trouble with the button?</div>
+            <div class="alt-link-url">Copy and paste this link in your browser:<br>{{ verification_link }}</div>
+        </div>
+    {% endif %}
+    
+    <div class="message">
+        <div style="background-color: #f0f9ff; border-left: 4px solid #0ea5e9; padding: 16px; margin: 24px 0; border-radius: 4px;">
+            <h3 style="color: #0369a1; margin-bottom: 8px; font-size: 16px;">🚀 What's Next?</h3>
+            <p style="margin-bottom: 8px; color: #374151;"><strong>1.</strong> Verify your email (above)</p>
+            <p style="margin-bottom: 8px; color: #374151;"><strong>2.</strong> Access your dashboard</p>
+            <p style="margin-bottom: 8px; color: #374151;"><strong>3.</strong> Complete your profile</p>
+            <p style="margin-bottom: 4px; color: #374151;"><strong>4.</strong> Start tracking carbon impact</p>
+        </div>
+        
+        <p><strong>As a {{ role_display }} at {{ company.name }}, you'll have access to:</strong></p>
+        
+        {% if role == 'CA' %}
+            <ul style="margin: 16px 0; padding-left: 20px; color: #4b5563;">
+                <li>Manage all company operations and team members</li>
+                <li>Access complete carbon tracking and reporting</li>
+                <li>Generate and manage carbon certificates</li>
+                <li>Configure company settings and integrations</li>
+                <li>View comprehensive analytics and insights</li>
+            </ul>
+        {% elif role == 'DS' %}
+            <ul style="margin: 16px 0; padding-left: 20px; color: #4b5563;">
+                <li>Supervise specific agricultural domains</li>
+                <li>Track carbon footprint for assigned areas</li>
+                <li>Generate reports for your domains</li>
+                <li>Manage domain workers and activities</li>
+                <li>Monitor sustainability metrics</li>
+            </ul>
+        {% elif role == 'DW' %}
+            <ul style="margin: 16px 0; padding-left: 20px; color: #4b5563;">
+                <li>Record agricultural activities and events</li>
+                <li>Track inputs and outputs for assigned areas</li>
+                <li>Contribute to carbon footprint calculations</li>
+                <li>Generate QR codes for products</li>
+                <li>View domain-specific reports</li>
+            </ul>
+        {% elif role == 'DE' %}
+            <ul style="margin: 16px 0; padding-left: 20px; color: #4b5563;">
+                <li>Access dealer-specific features</li>
+                <li>Track distribution and sales data</li>
+                <li>Generate customer-facing reports</li>
+                <li>Monitor product traceability</li>
+                <li>Support transparency initiatives</li>
+            </ul>
+        {% endif %}
+        
+        <p style="margin-top: 24px; font-size: 14px; color: #6b7280;">
+            Your account is already active and ready to use once you verify your email. This verification link will expire in 24 hours.
+        </p>
+        
+        <p>If you have any questions or need help getting started, don't hesitate to reach out to your team or our support team.</p>
+        
+        <p style="margin-top: 24px; font-weight: 600; color: #111827;">Welcome to the future of agricultural transparency!</p>
+        <p style="margin-top: 16px; color: #4CAF50; font-weight: 600;">The Trazo Team</p>
+    </div>
+{% endblock %}

@@ -19,6 +19,7 @@ BASE_APP_URL = _staging_urls["BASE_APP_URL"]
 BASE_CONSUMER_URL = _staging_urls["BASE_CONSUMER_URL"]
 
 # Override BASE_URL for email templates in staging
+# Use HTTPS now that SSL certificate is configured
 BASE_URL = "https://api-staging.trazo.io/"
 
 # Override production settings for staging
@@ -245,19 +246,16 @@ if REDIS_URL:
         }
     }
 else:
-    # Use dummy cache for staging without Redis
+    # Use locmem cache for staging without Redis (compatible with django_ratelimit)
     CACHES = {
         "default": {
-            "BACKEND": "django.core.cache.backends.dummy.DummyCache",
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "staging-cache",
         }
     }
 
-    # Disable django-ratelimit for staging (no shared cache available)
-    RATELIMIT_ENABLE = False
-
-    # Remove django_ratelimit from INSTALLED_APPS when using DummyCache
-    if "django_ratelimit" in INSTALLED_APPS:
-        INSTALLED_APPS.remove("django_ratelimit")
+    # Keep django-ratelimit enabled with locmem cache
+    RATELIMIT_ENABLE = True
 
 # Staging-specific feature flags
 FEATURES = {

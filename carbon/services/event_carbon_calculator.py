@@ -965,6 +965,7 @@ class EventCarbonCalculator:
                 amount=abs(calculation_result.get("co2e", 0)),
                 year=event.date.year if hasattr(event, "date") else timezone.now().year,
                 description=f"Auto-calculated from {event.__class__.__name__} event: {calculation_result.get('calculation_method', 'unknown')}",
+                explanation_text=f"This carbon {'emission' if calculation_result.get('co2e', 0) > 0 else 'offset'} was automatically calculated from farm event data using USDA emission factors. Amount: {abs(calculation_result.get('co2e', 0)):.2f} kg CO2e from {event.__class__.__name__.lower().replace('event', '')} activity.",
                 usda_factors_based=calculation_result.get("usda_factors_based", False),
                 verification_status=calculation_result.get("verification_status", "estimated"),
                 data_source=calculation_result.get("data_source", "Unknown"),

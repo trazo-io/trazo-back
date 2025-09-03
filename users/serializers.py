@@ -1,5 +1,6 @@
 import logging
 
+from django.conf import settings
 from django.contrib.auth.models import update_last_login
 from django.core.exceptions import ObjectDoesNotExist
 
@@ -205,6 +206,10 @@ class RegisterSerializer(BasicUserSerializer):
             if company_code:
                 with transaction.atomic():
                     self._join_company_with_code(user, company_code)
+                    # 🚀 2025 Best Practice: Mark for company verification, activation still requires email verification
+                    user.company_verified = True
+                    user.save()
+                    logger.info(f"Existing user {user.email} joined company via code {company_code}, awaiting email verification")
         except ObjectDoesNotExist:
             # Create user and join company in a single transaction
             with transaction.atomic():
@@ -213,6 +218,10 @@ class RegisterSerializer(BasicUserSerializer):
                 # Handle company code joining after user creation
                 if company_code:
                     self._join_company_with_code(user, company_code)
+                    # 🚀 2025 Best Practice: Mark for company verification, but still require email verification
+                    user.company_verified = True
+                    user.save()
+                    logger.info(f"User {user.email} joined company via code {company_code}, awaiting email verification")
 
         return user
 
@@ -250,16 +259,54 @@ class RegisterSerializer(BasicUserSerializer):
             works_in = WorksIn.objects.create(
                 user=user, company=company, role=WorksIn.DOMAIN_WORKER  # Default role for code-based joins
             )
+            
+            # 🚀 2025 Best Practice: Auto-assign Domain Workers to all company establishments
+            # This ensures they can immediately access existing operations
+            from company.models import Establishment
+            company_establishments = Establishment.objects.filter(company=company)
+            if company_establishments.exists():
+                works_in.establishments_in_charge.set(company_establishments)
+                logger.info(f"Auto-assigned {company_establishments.count()} establishments to {user.email}")
+            else:
+                logger.info(f"No establishments to assign for {user.email} in {company.name}")
 
-            # Send welcome email for company join
+            # Send combined welcome+verification email for company join
+            # 🚀 2025 Best Practice: Single email with welcome + verification
             try:
-                from .utils import send_company_join_welcome_email
+                from urllib.parse import quote
+                from .utils import send_company_welcome_verification_email
+                from .models import VerificationCode
+                from .signals import generate_verification_code
 
-                send_company_join_welcome_email(user, company, works_in.role)
-                logger.info(f"Company join welcome email sent to {user.email} for {company.name}")
+                # Generate verification code and link for company code users
+                verification_code = generate_verification_code()
+                VerificationCode.objects.create(user=user, code=verification_code)
+
+                # Properly encode the email for URLs
+                encoded_email = quote(user.email)
+                
+                # Generate verification link based on user type
+                verification_link = ""
+                from .constants import PRODUCER, CONSUMER
+                user_type = int(user.user_type)
+                if user_type == PRODUCER:
+                    verification_link = f"{settings.BASE_APP_URL}auth/verifyemail?email={encoded_email}&code={verification_code}"
+                elif user_type == CONSUMER:
+                    verification_link = f"{settings.BASE_CONSUMER_URL}auth/verifyemail?email={encoded_email}&code={verification_code}"
+
+                # Send single combined email
+                send_company_welcome_verification_email(
+                    user=user,
+                    company=company,
+                    role=works_in.role,
+                    verification_code=verification_code,
+                    verification_link=verification_link
+                )
+                logger.info(f"Combined welcome+verification email sent to {user.email} for {company.name}")
+                
             except Exception as email_error:
                 # Log email error but don't fail user creation
-                logger.warning(f"Failed to send welcome email to {user.email}: {str(email_error)}")
+                logger.warning(f"Failed to send combined welcome+verification email to {user.email}: {str(email_error)}")
 
         except serializers.ValidationError:
             # Re-raise validation errors to prevent user creation with invalid codes

@@ -261,21 +261,23 @@ class Command(BaseCommand):
                 "state": "California",
                 "zip_code": "93711",
                 "country": "USA",
-                "phone": "+1-559-555-0987",
-                "email": "citrus@greenharvest.com",
-                "website": "https://citrus.greenharvest.com",
-                "is_organic": False,  # Mixed conventional/organic
-                "total_area": 485.5,
-                "cultivated_area": 425.0,
-                "conservation_area": 60.5,
-                "crops_grown": "Valencia Oranges, Navel Oranges, Nonpareil Almonds",
-                "annual_revenue": "$8.5M",
-                "sustainability_practices": "Solar power, precision irrigation, cover crops, beneficial insects",
-                "water_source": "Drip irrigation with moisture sensors, 40% water reduction vs traditional",
-                "soil_health_practices": "Annual soil testing, compost application, minimal tillage",
+                "contact_phone": "+1-559-555-0987",
+                "contact_email": "citrus@greenharvest.com",
+                "total_acreage": 485.5,
+                "crops_grown": ["Valencia Oranges", "Navel Oranges", "Nonpareil Almonds"],
+                "sustainability_practices": ["Solar power", "precision irrigation", "cover crops", "beneficial insects"],
+                "water_sources": ["Drip irrigation with moisture sensors", "40% water reduction vs traditional"],
+                "soil_types": ["Sandy loam", "Clay loam"],
+                "conservation_practices": ["Annual soil testing", "compost application", "minimal tillage"],
+                "irrigation_methods": ["Drip irrigation", "Micro sprinklers"],
                 "about": "Award-winning citrus ranch combining 75 years of farming tradition with cutting-edge sustainable practices.",
                 "custom_message": "Every orange tells a story of sustainable farming and environmental stewardship.",
-                "farm_certifications": "GlobalGAP, SQF Level 2, California Sustainable Winegrowing",
+                "certifications": "GlobalGAP, SQF Level 2, California Sustainable Winegrowing",
+                "employee_count": 85,
+                "establishment_type": "Mixed Conventional/Organic",
+                "farming_method": "Sustainable Agriculture",
+                "climate_zone": "Mediterranean",
+                "year_established": 1949,
             },
         )
         self.stdout.write(f"✅ Created establishment: {establishment.name}")
@@ -293,21 +295,23 @@ class Command(BaseCommand):
                 "state": "California",
                 "zip_code": "93901",
                 "country": "USA",
-                "phone": "+1-831-555-0654",
-                "email": "organic@greenharvest.com",
-                "website": "https://organic.greenharvest.com",
-                "is_organic": True,
-                "total_area": 156.8,
-                "cultivated_area": 142.0,
-                "conservation_area": 14.8,
-                "crops_grown": "Hass Avocados, Organic Strawberries, Butter Lettuce, Mixed Greens",
-                "annual_revenue": "$4.2M",
-                "sustainability_practices": "Organic certified, renewable energy, water conservation, biodiversity",
-                "water_source": "Rainwater harvesting, recycled water system, micro-sprinklers",
-                "soil_health_practices": "Cover crops, crop rotation, organic amendments only",
+                "contact_phone": "+1-831-555-0654",
+                "contact_email": "organic@greenharvest.com",
+                "total_acreage": 156.8,
+                "crops_grown": ["Hass Avocados", "Organic Strawberries", "Butter Lettuce", "Mixed Greens"],
+                "sustainability_practices": ["Organic certified", "renewable energy", "water conservation", "biodiversity"],
+                "water_sources": ["Rainwater harvesting", "recycled water system", "micro-sprinklers"],
+                "soil_types": ["Loam", "Sandy loam"],
+                "conservation_practices": ["Cover crops", "crop rotation", "organic amendments only"],
+                "irrigation_methods": ["Micro-sprinklers", "Drip irrigation"],
                 "about": "Family-owned organic farm dedicated to producing the healthiest, most sustainable produce while nurturing the land for future generations.",
                 "custom_message": "From our family farm to your table - grown with love and respect for nature.",
-                "farm_certifications": "USDA Organic, CCOF, Demeter Biodynamic, ROC",
+                "certifications": "USDA Organic, CCOF, Demeter Biodynamic, ROC",
+                "employee_count": 35,
+                "establishment_type": "Certified Organic",
+                "farming_method": "Organic Agriculture",
+                "climate_zone": "Coastal Mediterranean",
+                "year_established": 1995,
             },
         )
         self.stdout.write(f"✅ Created establishment: {establishment.name}")
@@ -489,8 +493,9 @@ class Command(BaseCommand):
         ]
 
         for key, name, description, unit in product_data:
-            product, _ = Product.objects.get_or_create(name=name, defaults={"description": description, "unit": unit})
+            product, _ = Product.objects.get_or_create(name=name, defaults={"description": description})
             products[key] = product
+            self.stdout.write(f"   ✅ Created product: {name}")
 
         return products
 

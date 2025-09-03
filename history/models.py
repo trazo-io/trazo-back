@@ -291,8 +291,11 @@ class History(models.Model):
             return {"views_incremented": False, "unique_visitor": False, "reason": "error", "error": str(e)}
 
     def save(self, *args, **kwargs):
+        # Check if this is a new object
+        is_new = not self.id
+        
         # Save first to get ID if this is a new object
-        if not self.id:
+        if is_new:
             super().save(*args, **kwargs)
 
         # Generate secure QR URL with HMAC signature
@@ -324,7 +327,12 @@ class History(models.Model):
             save=False,
         )
 
-        super().save(*args, **kwargs)
+        # Only save again if this was a new object (to update the QR code field)
+        # For existing objects, the save will happen normally
+        if is_new:
+            super().save(update_fields=['qr_code'])
+        else:
+            super().save(*args, **kwargs)
 
     @property
     def certificate_percentage(self):

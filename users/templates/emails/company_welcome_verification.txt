@@ -1,0 +1,69 @@
+Welcome to {{ company.name }} - Verify Your Account
+
+Hi {{ user.first_name }},
+
+🎉 Welcome to {{ company.name }}! Your account has been successfully created using the company invitation code.
+
+Account Details:
+- Company: {{ company.name }}
+- Your Role: {{ role_display }}
+- Email: {{ user.email }}
+- Account Status: Active & Ready ✨
+
+To complete your setup and ensure the security of your account, please verify your email address.
+
+{% if verification_code %}
+Verification Code: {{ verification_code }}
+
+Enter this code to verify your email and complete setup.
+{% endif %}
+
+{% if verification_link %}
+Verification Link:
+{{ verification_link }}
+
+Click the link above or copy and paste it in your browser to verify your account.
+{% endif %}
+
+What's Next?
+1. Verify your email
+2. Access your dashboard  
+3. Complete your profile
+4. Start tracking carbon impact
+
+As a {{ role_display }} at {{ company.name }}, you'll have access to:
+
+{% if role == 'CA' %}
+- Manage all company operations and team members
+- Access complete carbon tracking and reporting
+- Generate and manage carbon certificates
+- Configure company settings and integrations
+- View comprehensive analytics and insights
+{% elif role == 'DS' %}
+- Supervise specific agricultural domains
+- Track carbon footprint for assigned areas
+- Generate reports for your domains
+- Manage domain workers and activities
+- Monitor sustainability metrics
+{% elif role == 'DW' %}
+- Record agricultural activities and events
+- Track inputs and outputs for assigned areas
+- Contribute to carbon footprint calculations
+- Generate QR codes for products
+- View domain-specific reports
+{% elif role == 'DE' %}
+- Access dealer-specific features
+- Track distribution and sales data
+- Generate customer-facing reports
+- Monitor product traceability
+- Support transparency initiatives
+{% endif %}
+
+Your account is already active and ready to use once you verify your email. This verification link will expire in 24 hours.
+
+If you have any questions or need help getting started, don't hesitate to reach out to your team or our support team.
+
+Welcome to the future of agricultural transparency!
+
+The Trazo Team
+info@trazo.io
