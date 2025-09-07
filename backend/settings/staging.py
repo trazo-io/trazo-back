@@ -246,7 +246,7 @@ if REDIS_URL:
         }
     }
 else:
-    # Use dummy cache for staging without Redis (compatible with django_ratelimit)
+    # Use dummy cache for staging without Redis (compatible with django_ratelimit) - v2
     CACHES = {
         "default": {
             "BACKEND": "django.core.cache.backends.dummy.DummyCache",
