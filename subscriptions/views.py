@@ -1,4 +1,5 @@
 import logging
+import requests
 
 from django.conf import settings
 from django.core.cache import cache
@@ -46,22 +47,10 @@ class PlanViewSet(viewsets.ReadOnlyModelViewSet):
         logger.info(f"Getting plans with interval: {interval}")
         logger.info(f"Initial queryset count: {queryset.count()}")
 
-        # Create cache key based on interval
-        cache_key = f"plans_{interval}" if interval else "plans_all"
-        cached_data = cache.get(cache_key)
-
-        if cached_data is not None:
-            logger.info(f"Using cached plan data for {cache_key}")
-            return cached_data
-
         # Filter by interval if provided
         if interval:
             queryset = queryset.filter(interval=interval)
             logger.info(f"Filtered queryset count: {queryset.count()}")
-
-        # Cache the queryset for 1 hour (3600 seconds)
-        cache.set(cache_key, queryset, 3600)
-        logger.info(f"Cached plan data for {cache_key}")
 
         return queryset
 
@@ -74,20 +63,9 @@ class AddOnViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        # Create cache key for add-ons
-        cache_key = "addons_active"
-        cached_data = cache.get(cache_key)
-
-        if cached_data is not None:
-            logger.info("Using cached add-on data")
-            return cached_data
-
+        # Get active add-ons - no caching since QuerySets aren't JSON serializable
         queryset = AddOn.objects.filter(is_active=True)
-
-        # Cache the queryset for 1 hour (3600 seconds)
-        cache.set(cache_key, queryset, 3600)
-        logger.info("Cached add-on data")
-
+        logger.info(f"Retrieved {queryset.count()} active add-ons")
         return queryset
 
 
@@ -298,6 +276,71 @@ class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
         if user.is_staff:
             return Invoice.objects.all().order_by("-invoice_date")
         return Invoice.objects.filter(company__in=user.companies.all()).order_by("-invoice_date")
+
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated])
+    def download(self, request, pk=None):
+        """
+        Download invoice PDF from Stripe.
+        Ensures user can only download invoices from their own companies.
+        """
+        try:
+            # Get the invoice with security check
+            invoice = self.get_object()
+            
+            # Additional security: ensure user has access to this invoice's company
+            user = request.user
+            if not user.is_staff and invoice.company not in user.companies.all():
+                return Response(
+                    {"detail": "You don't have permission to download this invoice."}, 
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Check if invoice has a PDF URL
+            if not invoice.invoice_pdf:
+                return Response(
+                    {"detail": "Invoice PDF is not available."}, 
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Fetch the PDF from Stripe
+            try:
+                pdf_response = requests.get(invoice.invoice_pdf, timeout=30)
+                pdf_response.raise_for_status()
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Failed to download invoice PDF from Stripe: {e}")
+                return Response(
+                    {"detail": "Unable to retrieve invoice PDF from Stripe."}, 
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE
+                )
+            
+            # Create HTTP response with PDF content
+            response = HttpResponse(
+                pdf_response.content,
+                content_type='application/pdf'
+            )
+            
+            # Set headers for file download
+            invoice_filename = f"trazo-invoice-{invoice.stripe_invoice_id or invoice.id}.pdf"
+            response['Content-Disposition'] = f'attachment; filename="{invoice_filename}"'
+            response['Content-Length'] = len(pdf_response.content)
+            
+            # Add cache headers for better performance
+            response['Cache-Control'] = 'private, max-age=3600'  # Cache for 1 hour
+            
+            logger.info(f"Successfully served invoice download for invoice {invoice.id} to user {user.id}")
+            return response
+            
+        except Invoice.DoesNotExist:
+            return Response(
+                {"detail": "Invoice not found."}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            logger.error(f"Unexpected error downloading invoice {pk}: {e}")
+            return Response(
+                {"detail": "An unexpected error occurred while downloading the invoice."}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class PaymentMethodViewSet(viewsets.ModelViewSet):
@@ -725,6 +768,12 @@ def stripe_webhook(request):
                     handle_checkout_session_completed(data)
             elif event_type == "setup_intent.succeeded":
                 handle_setup_intent_succeeded(data)
+            elif event_type == "invoice.created":
+                handle_invoice_created(data)
+            elif event_type == "invoice.finalized":
+                handle_invoice_finalized(data)
+            elif event_type == "invoice.paid":
+                handle_invoice_paid(data)
             elif event_type == "invoice.payment_succeeded":
                 handle_invoice_payment_succeeded(data)
             elif event_type == "invoice.payment_failed":
@@ -855,6 +904,75 @@ def handle_invoice_payment_failed(invoice):
 
     except Exception as e:
         print(f"Error processing invoice payment failure: {str(e)}")
+
+
+def handle_invoice_created(invoice_data):
+    """Process invoice creation"""
+    try:
+        subscription_id = invoice_data.get("subscription")
+        logger.info(f"Processing invoice.created for subscription_id: {subscription_id}")
+        
+        if not subscription_id:
+            logger.warning("No subscription_id in invoice data")
+            return
+
+        # Find subscription with this Stripe subscription ID
+        subscription = Subscription.objects.filter(stripe_subscription_id=subscription_id).first()
+        if not subscription:
+            logger.warning(f"No subscription found with stripe_subscription_id: {subscription_id}")
+            # List all subscription IDs for debugging
+            all_subs = Subscription.objects.values_list('stripe_subscription_id', flat=True)
+            logger.info(f"Available subscription IDs: {list(all_subs)}")
+            return
+
+        # Create or update invoice record
+        Invoice.objects.update_or_create(
+            stripe_invoice_id=invoice_data["id"],
+            defaults={
+                "company": subscription.company,  # Add required company field
+                "subscription": subscription,
+                "amount": invoice_data["total"] / 100,  # Convert from cents
+                "status": "draft",
+                "invoice_date": timezone.make_aware(timezone.datetime.fromtimestamp(invoice_data["created"])),
+                "due_date": timezone.make_aware(timezone.datetime.fromtimestamp(invoice_data["due_date"])) if invoice_data.get("due_date") else None,
+            },
+        )
+        logger.info(f"Invoice created: {invoice_data['id']} for subscription {subscription_id}")
+
+    except Exception as e:
+        logger.error(f"Error processing invoice creation: {str(e)}")
+
+
+def handle_invoice_finalized(invoice_data):
+    """Process invoice finalization"""
+    try:
+        invoice = Invoice.objects.filter(stripe_invoice_id=invoice_data["id"]).first()
+        if invoice:
+            invoice.status = "open"
+            invoice.save()
+            logger.info(f"Invoice finalized: {invoice_data['id']}")
+        else:
+            logger.warning(f"Invoice not found for finalization: {invoice_data['id']}")
+
+    except Exception as e:
+        logger.error(f"Error processing invoice finalization: {str(e)}")
+
+
+def handle_invoice_paid(invoice_data):
+    """Process invoice payment"""
+    try:
+        invoice = Invoice.objects.filter(stripe_invoice_id=invoice_data["id"]).first()
+        if invoice:
+            invoice.status = "paid"
+            if hasattr(invoice, 'paid_at'):
+                invoice.paid_at = timezone.now()
+            invoice.save()
+            logger.info(f"Invoice paid: {invoice_data['id']}")
+        else:
+            logger.warning(f"Invoice not found for payment: {invoice_data['id']}")
+
+    except Exception as e:
+        logger.error(f"Error processing invoice payment: {str(e)}")
 
 
 def handle_subscription_updated(subscription_data):

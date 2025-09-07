@@ -191,6 +191,7 @@ CORS_ALLOW_HEADERS = [
 # Fix for development - allow cross-subdomain cookies and HTTP
 CSRF_COOKIE_DOMAIN = None  # Allow cookies to work across app.localhost and localhost
 CSRF_COOKIE_SECURE = False  # Allow HTTP in development
+CSRF_COOKIE_SAMESITE = "Lax"  # Allow cross-subdomain requests in development (Lax works with HTTP)
 
 # Development-specific rate limiting configuration
 # Disable aggressive rate limiting for development
@@ -205,17 +206,46 @@ REST_FRAMEWORK = {
         "rest_framework.throttling.UserRateThrottle",
     ],
     "DEFAULT_THROTTLE_RATES": {
-        "anon": "1000/hour",  # Very permissive for development
-        "user": "2000/hour",  # Very permissive for development
-        "login": "100/minute",  # Very permissive for development
-        "signup": "50/minute",  # Very permissive for development
-        "password_reset": "50/hour",  # Very permissive for development
-        "carbon_calculation": "500/hour",
-        "api_sensitive": "200/hour",
-        "qr_scan": "1000/hour",
-        "blockchain": "100/hour",
+        "anon": "10000/hour",  # Extremely permissive for development
+        "user": "20000/hour",  # Extremely permissive for development
+        "login": "1000/minute",  # Extremely permissive for development
+        "signup": "500/minute",  # Extremely permissive for development
+        "password_reset": "500/hour",  # Extremely permissive for development
+        "carbon_calculation": "5000/hour",
+        "api_sensitive": "2000/hour",
+        "qr_scan": "10000/hour",
+        "blockchain": "1000/hour",
     },
 }
+
+# SECURITY: Disable aggressive rate limiting in development
+# This removes the custom SecurityMiddleware that blocks IPs after failed attempts
+# WARNING: Only for development! Production must keep these security measures
+MIDDLEWARE = [
+    # Keep Django's security middleware
+    "django.middleware.security.SecurityMiddleware",
+    "backend.security.middleware.SecurityHeadersMiddleware",  # Keep security headers
+    "backend.security.middleware.RequestSecurityMiddleware",  # Keep request validation
+    "corsheaders.middleware.CorsMiddleware",
+    # REMOVED: backend.security.rate_limiting.SecurityMiddleware - This was blocking IPs
+    "backend.security_middleware.SecurityLoggingMiddleware",  # Keep logging
+    "backend.security_middleware.CSRFSecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "carbon.middleware.security_middleware.CarbonSecurityMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "subscriptions.middleware.SubscriptionMiddleware",
+    # REMOVED: backend.security.middleware.RateLimitHeadersMiddleware
+    # REMOVED: backend.security.middleware.SecurityEventMiddleware
+    "subscriptions.middleware.UsageTrackingMiddleware",
+]
+
+# Disable rate limiting for development
+RATELIMIT_ENABLE = False
 
 # JWT Cookie Configuration for Development
 # Enable cross-subdomain cookies for localhost development
@@ -223,7 +253,7 @@ SIMPLE_JWT = {
     **SIMPLE_JWT,  # Inherit base settings
     "AUTH_COOKIE_DOMAIN": ".localhost",  # Allow cookies across *.localhost
     "AUTH_COOKIE_SECURE": False,  # Allow HTTP in development
-    "AUTH_COOKIE_SAMESITE": "None",  # For dev cross-subdomain cookie sharing (requires secure=False)
+    "AUTH_COOKIE_SAMESITE": "Lax",  # Compatible with HTTP and cross-subdomain requests
 }
 
 # Email configuration for development

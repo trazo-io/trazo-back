@@ -4,6 +4,7 @@ from django.db.models import Avg, Count, Q
 from django.db.models.functions import ExtractDay, ExtractMonth, ExtractWeekDay
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.decorators import method_decorator
 
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action

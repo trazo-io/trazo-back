@@ -1,9 +1,12 @@
 # cookieapp/authenticate.py
 from django.conf import settings
+import logging
 
 from rest_framework import exceptions
 from rest_framework.authentication import CSRFCheck
 from rest_framework_simplejwt.authentication import JWTAuthentication
+
+logger = logging.getLogger(__name__)
 
 
 def enforce_csrf(request):
@@ -20,33 +23,42 @@ def enforce_csrf(request):
 
 class CustomAuthentication(JWTAuthentication):
     def authenticate(self, request):
-        header = self.get_header(request)
-        if header is None:
-            raw_token = request.COOKIES.get(settings.SIMPLE_JWT["AUTH_COOKIE"]) or None
-        else:
-            raw_token = self.get_raw_token(header)
+        try:
+            logger.info(f"🔐 CustomAuthentication: STARTING {request.method} {request.path}")
+            
+            header = self.get_header(request)
+            logger.info(f"🔐 CustomAuthentication: Authorization header: {bool(header)}")
+            
+            if header is None:
+                cookie_name = settings.SIMPLE_JWT.get("AUTH_COOKIE", "access_token")
+                raw_token = request.COOKIES.get(cookie_name) or None
+                logger.info(f"🔐 CustomAuthentication: Cookie '{cookie_name}': {'Found' if raw_token else 'Not found'}")
+                if not raw_token:
+                    logger.info(f"🔐 CustomAuthentication: All cookies: {list(request.COOKIES.keys())}")
+            else:
+                raw_token = self.get_raw_token(header)
+                logger.info(f"🔐 CustomAuthentication: Raw token from header: {'Found' if raw_token else 'Not found'}")
 
-        if raw_token is None:
-            return None
+            if raw_token is None:
+                logger.info("🔐 CustomAuthentication: No token found - returning None")
+                return None
 
-        validated_token = self.get_validated_token(raw_token)
-
-        # SECURITY NOTE: For JWT-authenticated requests, CSRF protection is not required
-        # as the JWT token itself provides protection against CSRF attacks.
-        # CSRF is primarily needed for session-based authentication.
-        # DRF's SessionAuthentication handles CSRF appropriately when needed.
-        #
-        # Only enforce CSRF for specific logout endpoint where session state matters
-        if request.method in ["POST", "PUT", "PATCH", "DELETE"] and request.path == "/api/auth/logout/":
+            logger.info(f"🔐 CustomAuthentication: Token length: {len(raw_token)}")
+            
             try:
-                enforce_csrf(request)
-            except exceptions.PermissionDenied as e:
-                # Allow logout to proceed without CSRF in development for now
-                # TODO: Fix frontend CSRF token handling for logout
-                import logging
+                validated_token = self.get_validated_token(raw_token)
+                logger.info("🔐 CustomAuthentication: ✅ Token validated successfully")
+            except Exception as e:
+                logger.error(f"🔐 CustomAuthentication: ❌ Token validation failed: {type(e).__name__}: {e}")
+                raise
 
-                logger = logging.getLogger(__name__)
-                logger.warning(f"CSRF check failed for logout endpoint: {str(e)}")
-                # Don't raise for logout - allow it to proceed
-
-        return self.get_user(validated_token), validated_token
+            user = self.get_user(validated_token)
+            logger.info(f"🔐 CustomAuthentication: ✅ User found: {user.email if user else 'None'}")
+            
+            return user, validated_token
+        
+        except Exception as e:
+            logger.error(f"🔐 CustomAuthentication: 💥 EXCEPTION: {type(e).__name__}: {e}")
+            import traceback
+            logger.error(f"🔐 CustomAuthentication: 💥 TRACEBACK: {traceback.format_exc()}")
+            raise

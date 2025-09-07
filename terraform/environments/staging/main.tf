@@ -299,7 +299,7 @@ resource "aws_ecs_task_definition" "staging_django" {
   container_definitions = jsonencode([
     {
       name      = "django"
-      image     = "${aws_ecr_repository.staging.repository_url}:latest"
+      image     = "${aws_ecr_repository.staging.repository_url}:v1.1.6-20250717-presigned-read-urls"
       essential = true
       
       environment = concat([
@@ -525,8 +525,8 @@ resource "aws_budgets_budget" "staging_budget" {
   }
 }
 
-# Optional: DNS record for staging
-# Commented out - no Route53 zone available for staging
+# DNS record for staging - MANAGED IN GODADDY
+# Uncomment these resources if you switch to Route 53 for DNS management
 # resource "aws_route53_record" "staging_api" {
 #   count = var.enable_ssl ? 1 : 0
 #   
@@ -541,7 +541,7 @@ resource "aws_budgets_budget" "staging_budget" {
 #   }
 # }
 
-# Optional: Route53 zone lookup
+# Route53 zone lookup - NOT USED (DNS managed in GoDaddy)
 # data "aws_route53_zone" "main" {
 #   count = var.enable_ssl ? 1 : 0
 #   name  = "trazo.io"
