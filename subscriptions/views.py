@@ -1,5 +1,4 @@
 import logging
-import requests
 
 from django.conf import settings
 from django.core.cache import cache
@@ -9,6 +8,7 @@ from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 
+import requests
 import stripe
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
@@ -277,7 +277,7 @@ class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
             return Invoice.objects.all().order_by("-invoice_date")
         return Invoice.objects.filter(company__in=user.companies.all()).order_by("-invoice_date")
 
-    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated])
+    @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated])
     def download(self, request, pk=None):
         """
         Download invoice PDF from Stripe.
@@ -286,22 +286,18 @@ class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
         try:
             # Get the invoice with security check
             invoice = self.get_object()
-            
+
             # Additional security: ensure user has access to this invoice's company
             user = request.user
             if not user.is_staff and invoice.company not in user.companies.all():
                 return Response(
-                    {"detail": "You don't have permission to download this invoice."}, 
-                    status=status.HTTP_403_FORBIDDEN
+                    {"detail": "You don't have permission to download this invoice."}, status=status.HTTP_403_FORBIDDEN
                 )
-            
+
             # Check if invoice has a PDF URL
             if not invoice.invoice_pdf:
-                return Response(
-                    {"detail": "Invoice PDF is not available."}, 
-                    status=status.HTTP_404_NOT_FOUND
-                )
-            
+                return Response({"detail": "Invoice PDF is not available."}, status=status.HTTP_404_NOT_FOUND)
+
             # Fetch the PDF from Stripe
             try:
                 pdf_response = requests.get(invoice.invoice_pdf, timeout=30)
@@ -309,37 +305,31 @@ class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
             except requests.exceptions.RequestException as e:
                 logger.error(f"Failed to download invoice PDF from Stripe: {e}")
                 return Response(
-                    {"detail": "Unable to retrieve invoice PDF from Stripe."}, 
-                    status=status.HTTP_503_SERVICE_UNAVAILABLE
+                    {"detail": "Unable to retrieve invoice PDF from Stripe."},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
                 )
-            
+
             # Create HTTP response with PDF content
-            response = HttpResponse(
-                pdf_response.content,
-                content_type='application/pdf'
-            )
-            
+            response = HttpResponse(pdf_response.content, content_type="application/pdf")
+
             # Set headers for file download
             invoice_filename = f"trazo-invoice-{invoice.stripe_invoice_id or invoice.id}.pdf"
-            response['Content-Disposition'] = f'attachment; filename="{invoice_filename}"'
-            response['Content-Length'] = len(pdf_response.content)
-            
+            response["Content-Disposition"] = f'attachment; filename="{invoice_filename}"'
+            response["Content-Length"] = len(pdf_response.content)
+
             # Add cache headers for better performance
-            response['Cache-Control'] = 'private, max-age=3600'  # Cache for 1 hour
-            
+            response["Cache-Control"] = "private, max-age=3600"  # Cache for 1 hour
+
             logger.info(f"Successfully served invoice download for invoice {invoice.id} to user {user.id}")
             return response
-            
+
         except Invoice.DoesNotExist:
-            return Response(
-                {"detail": "Invoice not found."}, 
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "Invoice not found."}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             logger.error(f"Unexpected error downloading invoice {pk}: {e}")
             return Response(
-                {"detail": "An unexpected error occurred while downloading the invoice."}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"detail": "An unexpected error occurred while downloading the invoice."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
 
@@ -911,7 +901,7 @@ def handle_invoice_created(invoice_data):
     try:
         subscription_id = invoice_data.get("subscription")
         logger.info(f"Processing invoice.created for subscription_id: {subscription_id}")
-        
+
         if not subscription_id:
             logger.warning("No subscription_id in invoice data")
             return
@@ -921,7 +911,7 @@ def handle_invoice_created(invoice_data):
         if not subscription:
             logger.warning(f"No subscription found with stripe_subscription_id: {subscription_id}")
             # List all subscription IDs for debugging
-            all_subs = Subscription.objects.values_list('stripe_subscription_id', flat=True)
+            all_subs = Subscription.objects.values_list("stripe_subscription_id", flat=True)
             logger.info(f"Available subscription IDs: {list(all_subs)}")
             return
 
@@ -934,7 +924,11 @@ def handle_invoice_created(invoice_data):
                 "amount": invoice_data["total"] / 100,  # Convert from cents
                 "status": "draft",
                 "invoice_date": timezone.make_aware(timezone.datetime.fromtimestamp(invoice_data["created"])),
-                "due_date": timezone.make_aware(timezone.datetime.fromtimestamp(invoice_data["due_date"])) if invoice_data.get("due_date") else None,
+                "due_date": (
+                    timezone.make_aware(timezone.datetime.fromtimestamp(invoice_data["due_date"]))
+                    if invoice_data.get("due_date")
+                    else None
+                ),
             },
         )
         logger.info(f"Invoice created: {invoice_data['id']} for subscription {subscription_id}")
@@ -964,7 +958,7 @@ def handle_invoice_paid(invoice_data):
         invoice = Invoice.objects.filter(stripe_invoice_id=invoice_data["id"]).first()
         if invoice:
             invoice.status = "paid"
-            if hasattr(invoice, 'paid_at'):
+            if hasattr(invoice, "paid_at"):
                 invoice.paid_at = timezone.now()
             invoice.save()
             logger.info(f"Invoice paid: {invoice_data['id']}")

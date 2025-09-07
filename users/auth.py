@@ -1,6 +1,7 @@
 # cookieapp/authenticate.py
-from django.conf import settings
 import logging
+
+from django.conf import settings
 
 from rest_framework import exceptions
 from rest_framework.authentication import CSRFCheck
@@ -25,10 +26,10 @@ class CustomAuthentication(JWTAuthentication):
     def authenticate(self, request):
         try:
             logger.info(f"🔐 CustomAuthentication: STARTING {request.method} {request.path}")
-            
+
             header = self.get_header(request)
             logger.info(f"🔐 CustomAuthentication: Authorization header: {bool(header)}")
-            
+
             if header is None:
                 cookie_name = settings.SIMPLE_JWT.get("AUTH_COOKIE", "access_token")
                 raw_token = request.COOKIES.get(cookie_name) or None
@@ -44,7 +45,7 @@ class CustomAuthentication(JWTAuthentication):
                 return None
 
             logger.info(f"🔐 CustomAuthentication: Token length: {len(raw_token)}")
-            
+
             try:
                 validated_token = self.get_validated_token(raw_token)
                 logger.info("🔐 CustomAuthentication: ✅ Token validated successfully")
@@ -54,11 +55,12 @@ class CustomAuthentication(JWTAuthentication):
 
             user = self.get_user(validated_token)
             logger.info(f"🔐 CustomAuthentication: ✅ User found: {user.email if user else 'None'}")
-            
+
             return user, validated_token
-        
+
         except Exception as e:
             logger.error(f"🔐 CustomAuthentication: 💥 EXCEPTION: {type(e).__name__}: {e}")
             import traceback
+
             logger.error(f"🔐 CustomAuthentication: 💥 TRACEBACK: {traceback.format_exc()}")
             raise
