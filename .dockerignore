@@ -68,7 +68,11 @@ dev-requirements.txt
 
 # Terraform
 *.tfstate
+*.tfvars
+*.tfplan
 .terraform/
+terraform/
+*.hcl
 
 # Node.js
 node_modules/

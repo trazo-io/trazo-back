@@ -146,7 +146,7 @@ resource "aws_iam_role" "ecs_task_role" {
 
 # ECR Repository for staging
 resource "aws_ecr_repository" "staging" {
-  name = "trazo/backend-staging"
+  name = "trazo-backend-staging"
 
   image_scanning_configuration {
     scan_on_push = false  # Disable to save cost
@@ -299,7 +299,7 @@ resource "aws_ecs_task_definition" "staging_django" {
   container_definitions = jsonencode([
     {
       name      = "django"
-      image     = "${aws_ecr_repository.staging.repository_url}:v1.1.6-20250717-presigned-read-urls"
+      image     = "${aws_ecr_repository.staging.repository_url}:v1.1.6-presigned-urls"
       essential = true
       
       environment = concat([
