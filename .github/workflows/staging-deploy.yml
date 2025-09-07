@@ -27,7 +27,7 @@ on:
 # Environment variables
 env:
   AWS_REGION: us-east-2
-  ECR_REPOSITORY: trazo/backend-staging
+  ECR_REPOSITORY: trazo-backend-staging
   ECS_CLUSTER: staging-cluster
   ECS_SERVICE_1: staging-django-service
   ECS_SERVICE_2: staging-django
