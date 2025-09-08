@@ -1,0 +1,2 @@
+FROM 013640213707.dkr.ecr.us-east-2.amazonaws.com/trazo-backend-staging:v1.4.1-debug-205729
+COPY backend/settings/staging.py /app/backend/backend/settings/staging.py

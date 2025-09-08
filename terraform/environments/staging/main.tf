@@ -299,7 +299,7 @@ resource "aws_ecs_task_definition" "staging_django" {
   container_definitions = jsonencode([
     {
       name      = "django"
-      image     = "${aws_ecr_repository.staging.repository_url}:v1.1.6-presigned-urls"
+      image     = "${aws_ecr_repository.staging.repository_url}:v1.4.5-debug-ratelimit"
       essential = true
       
       environment = concat([
@@ -307,6 +307,7 @@ resource "aws_ecs_task_definition" "staging_django" {
         { name = "DJANGO_SETTINGS_MODULE", value = "backend.settings.staging" },  # Use staging.py for staging-specific settings
         { name = "ENVIRONMENT", value = "staging" },  # Environment identifier for staging
         { name = "ALLOWED_HOSTS", value = "api-staging.trazo.io,staging-alb-1273700937.us-east-2.elb.amazonaws.com,localhost,127.0.0.1,*" },  # Fix ALLOWED_HOSTS for ALB health checks
+        { name = "RATELIMIT_ENABLE", value = "False" },  # Disable django-ratelimit to avoid cache backend errors
         { name = "SECURE_SSL_REDIRECT", value = "False" },  # Disable SSL redirect for staging (no SSL cert)
         { name = "SESSION_COOKIE_SECURE", value = "False" },  # Allow non-SSL cookies for staging
         { name = "CSRF_COOKIE_SECURE", value = "False" },  # Allow non-SSL CSRF for staging

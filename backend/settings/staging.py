@@ -246,15 +246,20 @@ if REDIS_URL:
         }
     }
 else:
-    # Use dummy cache for staging without Redis (compatible with django_ratelimit) - v2
+    # Use dummy cache for staging without Redis to avoid django-ratelimit errors
+    # django-ratelimit requires atomic increment support which FileBasedCache doesn't have
     CACHES = {
         "default": {
             "BACKEND": "django.core.cache.backends.dummy.DummyCache",
         }
     }
 
-    # Keep django-ratelimit enabled with locmem cache
-    RATELIMIT_ENABLE = True
+    # Disable django-ratelimit in staging without proper cache backend
+    RATELIMIT_ENABLE = False
+
+# Remove django_ratelimit from INSTALLED_APPS to prevent system check errors
+if "django_ratelimit" in INSTALLED_APPS:
+    INSTALLED_APPS.remove("django_ratelimit")
 
 # Staging-specific feature flags
 FEATURES = {
