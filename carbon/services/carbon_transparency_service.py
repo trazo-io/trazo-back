@@ -653,8 +653,18 @@ class CarbonTransparencyService:
             score += 40
 
         # Blockchain verification (30 points)
-        # Note: This would check actual blockchain verification status
-        score += 30  # Placeholder - assumes blockchain verification exists
+        # Check for actual blockchain verification records
+        blockchain_verified_entries = carbon_entries.filter(
+            blockchain_verified=True,
+            blockchain_transaction_hash__isnull=False
+        ).exists()
+        if blockchain_verified_entries:
+            score += 30
+        else:
+            logger.info("No blockchain verified entries found for production")
+            # Give partial score for having carbon entries (better than no data)
+            if carbon_entries.exists():
+                score += 10  # Partial score for having some data
 
         # Third-party certifications (20 points)
         if hasattr(production, "carbon_certifications") and production.carbon_certifications.exists():

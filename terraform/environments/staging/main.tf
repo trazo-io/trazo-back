@@ -103,6 +103,7 @@ module "ecs" {
   
   ecs_security_group_id = module.security.ecs_tasks_security_group_id
   private_subnet_ids    = module.networking.private_subnet_ids
+  public_subnet_ids     = module.networking.public_subnet_ids
   s3_bucket_name    = module.s3.media_bucket_id
   cloudfront_domain = module.s3.media_bucket_regional_domain  # Direct S3 access
   domain_name      = var.domain_name
@@ -163,15 +164,18 @@ resource "aws_secretsmanager_secret_version" "staging" {
   secret_id = aws_secretsmanager_secret.staging.id
   
   secret_string = jsonencode({
-    SECRET_KEY        = var.django_secret_key
-    DATABASE_NAME     = "trazo_staging"
-    DATABASE_USER     = "trazo_staging"
-    DATABASE_PASSWORD = var.database_password
-    DATABASE_HOST     = module.rds.endpoint
-    SENDGRID_API_KEY  = var.sendgrid_api_key
-    ALLOWED_HOSTS     = "${var.domain_name},${module.alb.dns_name},localhost"
-    DEBUG             = "False"  # SECURITY: Never use DEBUG=True in publicly accessible environments
-    ENVIRONMENT       = "staging"
+    SECRET_KEY           = var.django_secret_key
+    DATABASE_NAME        = "trazo_staging"
+    DATABASE_USER        = "trazo_staging"
+    DATABASE_PASSWORD    = var.database_password
+    DATABASE_HOST        = module.rds.endpoint
+    SENDGRID_API_KEY     = var.sendgrid_api_key
+    usda_nass_api_key    = var.usda_nass_api_key
+    usda_ers_api_key     = var.usda_ers_api_key
+    usda_fooddata_api_key = var.usda_fooddata_api_key
+    ALLOWED_HOSTS        = "${var.domain_name},${module.alb.dns_name},localhost"
+    DEBUG                = "False"  # SECURITY: Never use DEBUG=True in publicly accessible environments
+    ENVIRONMENT          = "staging"
   })
 }
 
@@ -299,7 +303,7 @@ resource "aws_ecs_task_definition" "staging_django" {
   container_definitions = jsonencode([
     {
       name      = "django"
-      image     = "${aws_ecr_repository.staging.repository_url}:v1.4.5-debug-ratelimit"
+      image     = "${aws_ecr_repository.staging.repository_url}:latest"
       essential = true
       
       environment = concat([

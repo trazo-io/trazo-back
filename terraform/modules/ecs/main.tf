@@ -67,15 +67,14 @@ resource "aws_ecs_service" "django" {
   name                   = "${var.environment}-django"
   cluster               = aws_ecs_cluster.main.id
   task_definition       = aws_ecs_task_definition.django.arn
-  desired_count         = 0  # HIBERNATION: Set to 0 to stop all tasks
-                            # RESTORE VALUE: desired_count = 1
+  desired_count         = var.environment == "staging" ? 1 : 0  # Auto-restore staging, keep prod hibernated
   force_new_deployment = true
   
   health_check_grace_period_seconds = 60
 
   network_configuration {
     security_groups  = [var.ecs_security_group_id]
-    subnets         = var.private_subnet_ids
+    subnets         = var.environment == "staging" ? var.public_subnet_ids : var.private_subnet_ids
     assign_public_ip = true  # Enable public IP for AWS service access
   }
 
@@ -103,11 +102,8 @@ resource "aws_ecs_service" "django" {
 }
 
 resource "aws_appautoscaling_target" "ecs_target" {
-  max_capacity = 0  # HIBERNATION: Set to 0
-  min_capacity = 0  # HIBERNATION: Set to 0
-  # RESTORE VALUES:
-  # max_capacity = 1
-  # min_capacity = 1
+  max_capacity = var.environment == "staging" ? 2 : 0  # Auto-restore staging scaling
+  min_capacity = var.environment == "staging" ? 1 : 0  # Auto-restore staging scaling
   resource_id        = "service/${aws_ecs_cluster.main.name}/${aws_ecs_service.django.name}"
   scalable_dimension = "ecs:service:DesiredCount"
   service_namespace  = "ecs"

@@ -59,6 +59,12 @@ variable "private_subnet_ids" {
   type        = list(string)
 }
 
+variable "public_subnet_ids" {
+  description = "List of public subnet IDs"
+  type        = list(string)
+  default     = []
+}
+
 variable "aws_region" {
   description = "AWS region"
   type        = string

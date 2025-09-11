@@ -6,6 +6,7 @@ resource "aws_s3_bucket" "media" {
 resource "aws_s3_bucket_public_access_block" "media" {
   bucket = aws_s3_bucket.media.id
 
+  # Always block public access - use presigned URLs for secure access
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -31,7 +32,7 @@ resource "aws_s3_bucket_cors_configuration" "media" {
   }
 }
 
-resource "aws_s3_bucket_policy" "media" {
+resource "aws_s3_bucket_policy" "media_cloudfront" {
   count = var.cf_oai_arn != null ? 1 : 0
   
   bucket = aws_s3_bucket.media.id
@@ -49,6 +50,8 @@ resource "aws_s3_bucket_policy" "media" {
     ]
   })
 }
+
+# No public policy - all access through presigned URLs
 
 resource "aws_s3_bucket_lifecycle_configuration" "media" {
   bucket = aws_s3_bucket.media.id

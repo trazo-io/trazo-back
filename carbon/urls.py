@@ -185,4 +185,6 @@ urlpatterns = [
     # Gas Optimization Endpoints
     path("blockchain/gas-estimate/", views.estimate_gas_costs, name="estimate_gas_costs"),
     path("blockchain/optimize-transaction/", views.optimize_transaction_gas, name="optimize_transaction_gas"),
+    # Phase 6: Advanced Carbon Analytics Endpoint
+    path("analytics/<int:production_id>/", views.advanced_carbon_analytics, name="advanced_carbon_analytics"),
 ]

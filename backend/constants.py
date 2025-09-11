@@ -90,3 +90,88 @@ def calculate_trees_equivalent(kg_co2e):
         float: Equivalent trees needed for annual absorption
     """
     return kg_co2e / EPAConversions.KG_CO2_PER_TREE_ANNUAL
+
+
+# Production-ready bounds checking for carbon calculations
+class CarbonValidation:
+    """Validation bounds for agricultural carbon calculations"""
+    
+    # Realistic bounds for agricultural products (kg CO₂e per kg product)
+    MIN_CO2E_PER_KG = 0.01   # Ultra-low carbon products (herbs, lettuce)
+    MAX_CO2E_PER_KG = 50.0   # High-carbon products (imported exotic fruits)
+    
+    # Miles equivalent bounds (unrealistic if outside these ranges)
+    MAX_MILES_EQUIVALENT = 140.0  # ~50kg CO2e limit = ~140 miles maximum
+    MIN_MILES_EQUIVALENT = 0.03   # ~0.01kg CO2e minimum = ~0.03 miles
+    
+    # Trees equivalent bounds
+    MAX_TREES_EQUIVALENT = 2300   # ~50kg CO2e limit = ~2300 trees maximum
+    MIN_TREES_EQUIVALENT = 0.001  # ~0.01kg CO2e minimum = ~0.001 trees
+
+
+def validate_co2e_value(co2e_value, product_weight_kg=1.0):
+    """
+    Validate CO₂e values are within realistic agricultural bounds
+    
+    Args:
+        co2e_value (float): Carbon footprint in kg CO₂e
+        product_weight_kg (float): Product weight in kg
+        
+    Returns:
+        dict: Validation result with is_valid, adjusted_value, and warnings
+    """
+    result = {
+        "is_valid": True,
+        "original_value": co2e_value,
+        "adjusted_value": co2e_value,
+        "warnings": [],
+        "product_intensity": co2e_value / product_weight_kg if product_weight_kg > 0 else 0
+    }
+    
+    # Check if CO₂e per kg is within reasonable bounds
+    intensity = result["product_intensity"]
+    
+    if intensity < CarbonValidation.MIN_CO2E_PER_KG:
+        result["warnings"].append(f"Unusually low carbon intensity: {intensity:.3f} kg CO₂e/kg")
+        result["adjusted_value"] = CarbonValidation.MIN_CO2E_PER_KG * product_weight_kg
+        result["is_valid"] = False
+        
+    elif intensity > CarbonValidation.MAX_CO2E_PER_KG:
+        result["warnings"].append(f"Unrealistically high carbon intensity: {intensity:.1f} kg CO₂e/kg")
+        result["adjusted_value"] = CarbonValidation.MAX_CO2E_PER_KG * product_weight_kg
+        result["is_valid"] = False
+        
+    return result
+
+
+def validate_miles_equivalent(miles_value):
+    """
+    Validate miles equivalent values are within realistic bounds
+    
+    Args:
+        miles_value (float): Driving miles equivalent
+        
+    Returns:
+        dict: Validation result with is_valid and adjusted_value
+    """
+    if miles_value > CarbonValidation.MAX_MILES_EQUIVALENT:
+        return {
+            "is_valid": False,
+            "original_value": miles_value,
+            "adjusted_value": CarbonValidation.MAX_MILES_EQUIVALENT,
+            "warning": f"Miles equivalent capped at {CarbonValidation.MAX_MILES_EQUIVALENT} miles"
+        }
+    elif miles_value < CarbonValidation.MIN_MILES_EQUIVALENT:
+        return {
+            "is_valid": False,
+            "original_value": miles_value,
+            "adjusted_value": CarbonValidation.MIN_MILES_EQUIVALENT,
+            "warning": f"Miles equivalent raised to minimum {CarbonValidation.MIN_MILES_EQUIVALENT} miles"
+        }
+    
+    return {
+        "is_valid": True,
+        "original_value": miles_value,
+        "adjusted_value": miles_value,
+        "warning": None
+    }

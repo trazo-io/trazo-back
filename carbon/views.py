@@ -47,6 +47,7 @@ from django.utils.decorators import method_decorator
 from rest_framework import serializers
 
 from carbon.services.carbon_cost_insights import CarbonCostInsights
+from carbon.production_phases import ProductionPhaseCalculator
 from company.models import Establishment
 from history.models import (
     ChemicalEvent,
@@ -110,6 +111,9 @@ from .services.event_carbon_calculator import EventCarbonCalculator
 
 # from .services.certificate import certificate_generator  # Temporarily disabled due to font issues
 from .services.weather_api import check_weather_alerts, get_agricultural_recommendations, get_weather_service
+
+# EPA-verified carbon calculation utilities
+from backend.constants import calculate_miles_equivalent, calculate_trees_equivalent, validate_co2e_value, validate_miles_equivalent
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -2148,13 +2152,21 @@ class PublicProductionViewSet(viewsets.ViewSet):
             except Exception as e:
                 print(f"Error getting badges: {e}")
 
-            # Generate crop-specific relatable footprint
+            # Generate crop-specific relatable footprint with bounds checking
             relatable_footprint = "Carbon neutral production"
             if net_footprint > 0:
-                miles_equivalent = net_footprint / 0.12  # 0.12 kg CO2 per mile
+                miles_equivalent = calculate_miles_equivalent(net_footprint)  # EPA standard: 0.35548 kg CO2 per mile
+                
+                # Validate miles equivalent to prevent unrealistic values
+                miles_validation = validate_miles_equivalent(miles_equivalent)
+                if not miles_validation["is_valid"]:
+                    miles_equivalent = miles_validation["adjusted_value"]
+                    logger.warning(f"Miles equivalent adjusted: {miles_validation['warning']}")
+                
                 relatable_footprint = f"Like driving {miles_equivalent:.1f} miles"
+                
             elif net_footprint < 0:
-                trees_equivalent = abs(net_footprint) / 22  # 22 kg CO2 per tree per year
+                trees_equivalent = calculate_trees_equivalent(abs(net_footprint))  # EPA standard: 21.8 kg CO2 per tree per year
                 relatable_footprint = f"Like planting {trees_equivalent:.1f} trees"
 
             # Get crop-specific recommendations
@@ -2937,6 +2949,10 @@ class PublicProductionViewSet(viewsets.ViewSet):
                 production, carbon_score, industry_percentile, blockchain_verification, social_proof
             )
 
+            # === PRODUCTION PHASES (Database-Driven, No Hardcoded Values) ===
+            phase_calculator = ProductionPhaseCalculator()
+            production_phases = phase_calculator.calculate_phases(production.id)
+
             # === UNIFIED RESPONSE DATA ===
             response_data = {
                 # Essential product info
@@ -2964,6 +2980,17 @@ class PublicProductionViewSet(viewsets.ViewSet):
                 "timeline": timeline_data,
                 "production_events": timeline_data,  # Alias for compatibility
                 "events": timeline_data,  # Alias for compatibility
+                # Production phases (database-driven, replaces hardcoded values)
+                "production_phases": {
+                    phase_key: {
+                        "name": phase_data["name"],
+                        "carbon_impact": phase_data["carbon_impact"],
+                        "percentage": phase_data["percentage"],
+                        "event_count": len(phase_data["events"]),
+                        "consumer_story": phase_data["consumer_story"]
+                    }
+                    for phase_key, phase_data in production_phases.items()
+                },
                 # Establishment info (from history data)
                 "farmer": establishment_data,  # Primary key for carbon API compatibility
                 "establishment": establishment_data,  # Alias for history API compatibility
@@ -3480,6 +3507,33 @@ class PublicProductionViewSet(viewsets.ViewSet):
                         "area": getattr(event, "area", None),
                         "equipment": getattr(event, "commercial_name", None) or getattr(event, "equipment", None),
                     }
+
+                    # Add blockchain verification data from extra_data if available
+                    if hasattr(event, "extra_data") and event.extra_data:
+                        blockchain_data = event.extra_data
+                        event_data.update({
+                            "blockchain_verified": blockchain_data.get("blockchain_verified", False),
+                            "blockchain_transaction": blockchain_data.get("blockchain_transaction", ""),
+                            "blockchain_block_number": blockchain_data.get("blockchain_block_number", 0),
+                            "verification_confidence": blockchain_data.get("verification_confidence", 0),
+                            "verification_timestamp": blockchain_data.get("verification_timestamp", ""),
+                            "data_integrity_score": blockchain_data.get("data_integrity_score", 0),
+                            "blockchain_network": blockchain_data.get("blockchain_network", "polygon_amoy"),
+                            # Include the full extra_data for frontend access
+                            "extra_data": blockchain_data
+                        })
+                    else:
+                        # Ensure blockchain fields exist even if no data
+                        event_data.update({
+                            "blockchain_verified": False,
+                            "blockchain_transaction": "",
+                            "blockchain_block_number": 0,
+                            "verification_confidence": 0,
+                            "verification_timestamp": "",
+                            "data_integrity_score": 0,
+                            "blockchain_network": "",
+                            "extra_data": {}
+                        })
 
                     # Add carbon calculation data if available
                     carbon_data = self._get_event_carbon_data(event, event_category, production)
@@ -8529,3 +8583,77 @@ def optimize_transaction_gas(request):
             {"error": "Transaction optimization failed", "details": str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def advanced_carbon_analytics(request, production_id):
+    """
+    Advanced Carbon Analytics Endpoint for Phase 6 Enhancement
+    
+    Provides comprehensive carbon intelligence, journey visualization, 
+    and predictive insights that position Trazo as the market leader
+    in agricultural carbon transparency.
+    
+    Features:
+    - Interactive carbon timeline visualization
+    - Carbon ROI and market value analysis  
+    - Predictive insights and optimization roadmap
+    - Consumer-facing impact stories
+    - AI-powered recommendations
+    """
+    from history.models import History
+    from carbon.services.advanced_analytics import AdvancedCarbonAnalyticsService
+    from carbon.serializers import AdvancedCarbonAnalyticsSerializer
+    
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Get production and verify access
+        production = get_object_or_404(History, id=production_id)
+        
+        # Initialize analytics service
+        analytics_service = AdvancedCarbonAnalyticsService(production)
+        
+        # Generate comprehensive analytics
+        analytics_data = analytics_service.generate_comprehensive_analytics()
+        
+        # Serialize the data
+        serializer = AdvancedCarbonAnalyticsSerializer(data=analytics_data)
+        
+        if serializer.is_valid():
+            logger.info(f"Successfully generated advanced analytics for Production {production_id}")
+            
+            return Response({
+                "production_id": production_id,
+                "production_name": production.name,
+                "crop_type": production.crop_type.name if production.crop_type else "Unknown",
+                "analytics": serializer.validated_data,
+                "generated_at": timezone.now().isoformat(),
+                "version": "1.0",
+                "message": "Advanced carbon analytics generated successfully"
+            }, status=status.HTTP_200_OK)
+        
+        else:
+            logger.error(f"Analytics serialization failed for Production {production_id}: {serializer.errors}")
+            return Response({
+                "error": "Analytics data validation failed",
+                "details": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+    except History.DoesNotExist:
+        logger.warning(f"Production {production_id} not found for advanced analytics")
+        return Response({
+            "error": "Production not found",
+            "production_id": production_id
+        }, status=status.HTTP_404_NOT_FOUND)
+        
+    except Exception as e:
+        logger.error(f"Advanced analytics generation failed for Production {production_id}: {e}")
+        logger.error(traceback.format_exc())
+        
+        return Response({
+            "error": "Advanced analytics generation failed",
+            "production_id": production_id,
+            "details": str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
