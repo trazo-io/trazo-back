@@ -108,6 +108,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://api-staging.trazo.io",
     "https://app-staging.trazo.io",
     "http://app-staging.trazo.io",
+    "https://consumer-staging.trazo.io",
+    "http://consumer-staging.trazo.io",
     "http://localhost:3000",
     "https://localhost:3000",
     "http://localhost:3001",

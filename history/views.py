@@ -801,47 +801,43 @@ class HistoryViewSet(viewsets.ModelViewSet):
         Generate secure presigned URL for QR code download.
         Enterprise-grade solution following 2025 best practices.
         """
-        from common.aws_utils import SecureAWSClient
         from django.conf import settings
-        
+
+        from common.aws_utils import SecureAWSClient
+
         try:
             # Get the history object
             history = self.get_object()
-            
+
             # Check if QR code exists
             if not history.qr_code or not history.qr_code.name:
-                return Response(
-                    {"error": "QR code not found for this production"}, 
-                    status=status.HTTP_404_NOT_FOUND
-                )
-            
+                return Response({"error": "QR code not found for this production"}, status=status.HTTP_404_NOT_FOUND)
+
             # Generate presigned URL (expires in 1 hour)
             s3_client = SecureAWSClient.get_s3_client()
             presigned_url = s3_client.generate_presigned_url(
-                'get_object',
-                Params={
-                    'Bucket': settings.AWS_STORAGE_BUCKET_NAME,
-                    'Key': history.qr_code.name
-                },
-                ExpiresIn=3600  # 1 hour expiration
+                "get_object",
+                Params={"Bucket": settings.AWS_STORAGE_BUCKET_NAME, "Key": history.qr_code.name},
+                ExpiresIn=3600,  # 1 hour expiration
             )
-            
+
             # Generate friendly filename
             filename = f"{history.name.replace(' ', '_')}_QR.png"
-            
-            return Response({
-                'download_url': presigned_url,
-                'filename': filename,
-                'expires_in': 3600,
-                'expires_at': (timezone.now() + timedelta(seconds=3600)).isoformat(),
-                'production_name': history.name,
-                'message': 'Secure download URL generated successfully'
-            })
-            
+
+            return Response(
+                {
+                    "download_url": presigned_url,
+                    "filename": filename,
+                    "expires_in": 3600,
+                    "expires_at": (timezone.now() + timedelta(seconds=3600)).isoformat(),
+                    "production_name": history.name,
+                    "message": "Secure download URL generated successfully",
+                }
+            )
+
         except Exception as e:
             return Response(
-                {"error": f"Error generating download URL: {str(e)}"}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": f"Error generating download URL: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
 

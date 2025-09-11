@@ -3,21 +3,24 @@ set -e
 
 echo "🚀 Starting Django development server..."
 
+# Activate poetry environment and use it for all commands
+export PATH="/app/.venv/bin:$PATH"
+
 # Wait for database to be ready
 echo "⏳ Waiting for database to be ready..."
-python manage.py check --database default
+poetry run python manage.py check --database default
 
 # Run database migrations
 echo "🔄 Running database migrations..."
-python manage.py migrate --noinput
+poetry run python manage.py migrate --noinput
 
 # Collect static files
 echo "📁 Collecting static files..."
-python manage.py collectstatic --noinput --clear
+poetry run python manage.py collectstatic --noinput --clear
 
 # Create superuser if it doesn't exist
 echo "👤 Creating superuser if needed..."
-python manage.py shell << END
+poetry run python manage.py shell << END
 from django.contrib.auth import get_user_model
 User = get_user_model()
 if not User.objects.filter(username='admin').exists():
@@ -29,4 +32,4 @@ END
 
 # Start development server
 echo "🌐 Starting Django development server on 0.0.0.0:8000..."
-exec python manage.py runserver 0.0.0.0:8000 
+exec poetry run python manage.py runserver 0.0.0.0:8000 

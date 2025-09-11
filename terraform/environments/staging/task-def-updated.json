@@ -1,0 +1,118 @@
+{
+  "containerDefinitions": [
+    {
+      "name": "django",
+      "image": "013640213707.dkr.ecr.us-east-2.amazonaws.com/trazo-backend-staging:latest-amd64",
+      "cpu": 0,
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "hostPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "environment": [
+        {
+          "name": "SECURE_SSL_REDIRECT",
+          "value": "False"
+        },
+        {
+          "name": "PORT",
+          "value": "8000"
+        },
+        {
+          "name": "ENVIRONMENT",
+          "value": "staging"
+        },
+        {
+          "name": "RATELIMIT_ENABLE",
+          "value": "False"
+        },
+        {
+          "name": "DATABASE_PORT",
+          "value": "5432"
+        },
+        {
+          "name": "SESSION_COOKIE_SECURE",
+          "value": "False"
+        },
+        {
+          "name": "DEBUG",
+          "value": "False"
+        },
+        {
+          "name": "DJANGO_SETTINGS_MODULE",
+          "value": "backend.settings.staging"
+        },
+        {
+          "name": "STATIC_URL",
+          "value": "https://staging-trazo-media-013640213707.s3.us-east-2.amazonaws.com/static/"
+        },
+        {
+          "name": "ALLOWED_HOSTS",
+          "value": "api-staging.trazo.io,staging-alb-1273700937.us-east-2.elb.amazonaws.com,localhost,127.0.0.1,*"
+        },
+        {
+          "name": "AWS_S3_REGION_NAME",
+          "value": "us-east-2"
+        },
+        {
+          "name": "CSRF_COOKIE_SECURE",
+          "value": "False"
+        },
+        {
+          "name": "AWS_STORAGE_BUCKET_NAME",
+          "value": "staging-trazo-media-013640213707"
+        }
+      ],
+      "mountPoints": [],
+      "volumesFrom": [],
+      "secrets": [
+        {
+          "name": "SECRET_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-2:013640213707:secret:staging/trazo/backend-kFpvu9:SECRET_KEY::"
+        },
+        {
+          "name": "DATABASE_NAME",
+          "valueFrom": "arn:aws:secretsmanager:us-east-2:013640213707:secret:staging/trazo/backend-kFpvu9:DATABASE_NAME::"
+        },
+        {
+          "name": "DATABASE_USER",
+          "valueFrom": "arn:aws:secretsmanager:us-east-2:013640213707:secret:staging/trazo/backend-kFpvu9:DATABASE_USER::"
+        },
+        {
+          "name": "DATABASE_PASSWORD",
+          "valueFrom": "arn:aws:secretsmanager:us-east-2:013640213707:secret:staging/trazo/backend-kFpvu9:DATABASE_PASSWORD::"
+        },
+        {
+          "name": "DATABASE_HOST",
+          "valueFrom": "arn:aws:secretsmanager:us-east-2:013640213707:secret:staging/trazo/backend-kFpvu9:DATABASE_HOST::"
+        },
+        {
+          "name": "SENDGRID_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-2:013640213707:secret:staging/trazo/backend-kFpvu9:SENDGRID_API_KEY::"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/staging",
+          "awslogs-region": "us-east-2",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "systemControls": []
+    }
+  ],
+  "family": "staging-django",
+  "taskRoleArn": "arn:aws:iam::013640213707:role/staging-ecs-task-role",
+  "executionRoleArn": "arn:aws:iam::013640213707:role/staging-ecs-execution-role",
+  "networkMode": "awsvpc",
+  "volumes": [],
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "256",
+  "memory": "512"
+}

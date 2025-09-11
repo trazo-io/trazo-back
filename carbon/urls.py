@@ -130,6 +130,8 @@ urlpatterns = [
     # Crop Templates API
     path("crop-templates/", views.get_crop_templates, name="crop-templates"),
     path("crop-templates/<str:template_id>/", views.get_crop_template_detail, name="crop-template-detail"),
+    # Company Creation Crop Options (Production Ready)
+    path("company-crop-options/", views.get_company_crop_options, name="company-crop-options"),
     # Educational content endpoints (Week 2)
     path("education/usda-methodology/", views.get_usda_methodology_content, name="usda-methodology-content"),
     path(

@@ -655,8 +655,7 @@ class CarbonTransparencyService:
         # Blockchain verification (30 points)
         # Check for actual blockchain verification records
         blockchain_verified_entries = carbon_entries.filter(
-            blockchain_verified=True,
-            blockchain_transaction_hash__isnull=False
+            blockchain_verified=True, blockchain_transaction_hash__isnull=False
         ).exists()
         if blockchain_verified_entries:
             score += 30

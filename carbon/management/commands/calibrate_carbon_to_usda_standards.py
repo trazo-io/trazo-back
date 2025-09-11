@@ -63,7 +63,6 @@ class Command(BaseCommand):
                 "target_range": (1000, 1500),
             },
             "Hay/Alfalfa": {"Fertilizer Application": 80.0, "target_range": (400, 800)},  # Nitrogen-fixing legume
-            
             # ALL OTHER CROPS - Using correct event names from actual templates
             "Potatoes": {
                 "Fertilizer Program": 200.0,  # High N requirements for tuber formation (correct name)

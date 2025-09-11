@@ -10,20 +10,20 @@ from .models import (
     CarbonBenchmark,
     CarbonCertification,
     CarbonEntry,
+    CarbonIntelligence,
     CarbonOffsetAction,
     CarbonOffsetCertificate,
     CarbonOffsetProject,
     CarbonOffsetPurchase,
     CarbonReport,
     CarbonSource,
+    ConsumerTrustMetric,
     CropType,
     EventTemplate,
     GreenPoints,
     MicroOffset,
     ProductionTemplate,
     SustainabilityBadge,
-    CarbonIntelligence,
-    ConsumerTrustMetric,
 )
 
 # Database-driven Crop Template System Serializers
@@ -684,106 +684,82 @@ class CarbonOffsetCertificateSerializer(serializers.ModelSerializer):
 class AdvancedCarbonAnalyticsSerializer(serializers.Serializer):
     """
     Advanced carbon analytics serializer for Phase 6 enhancement.
-    Provides comprehensive carbon intelligence, journey visualization, 
+    Provides comprehensive carbon intelligence, journey visualization,
     and predictive insights for Production 125 and similar productions.
     """
+
     # Carbon Journey Visualization
     carbon_timeline = serializers.ListField(
-        child=serializers.DictField(),
-        help_text="Interactive carbon timeline showing emissions/sequestration by event"
+        child=serializers.DictField(), help_text="Interactive carbon timeline showing emissions/sequestration by event"
     )
-    carbon_flow_diagram = serializers.DictField(
-        help_text="Visual carbon flow data (inputs vs outputs)"
-    )
+    carbon_flow_diagram = serializers.DictField(help_text="Visual carbon flow data (inputs vs outputs)")
     carbon_hotspots = serializers.ListField(
-        child=serializers.DictField(),
-        help_text="Highest impact events for optimization"
+        child=serializers.DictField(), help_text="Highest impact events for optimization"
     )
-    
+
     # Advanced Carbon Metrics
-    carbon_efficiency_score = serializers.FloatField(
-        help_text="Carbon efficiency rating (0-100)"
-    )
-    carbon_intensity = serializers.FloatField(
-        help_text="Carbon intensity per kg of product (kg CO2e/kg)"
-    )
-    carbon_roi = serializers.DictField(
-        help_text="Carbon ROI calculations and cost-benefit analysis"
-    )
-    
-    # Market Value & Economic Impact  
-    market_value_impact = serializers.DictField(
-        help_text="Market value implications of carbon performance"
-    )
-    carbon_credit_potential = serializers.DictField(
-        help_text="Carbon credit generation potential and value"
-    )
+    carbon_efficiency_score = serializers.FloatField(help_text="Carbon efficiency rating (0-100)")
+    carbon_intensity = serializers.FloatField(help_text="Carbon intensity per kg of product (kg CO2e/kg)")
+    carbon_roi = serializers.DictField(help_text="Carbon ROI calculations and cost-benefit analysis")
+
+    # Market Value & Economic Impact
+    market_value_impact = serializers.DictField(help_text="Market value implications of carbon performance")
+    carbon_credit_potential = serializers.DictField(help_text="Carbon credit generation potential and value")
     premium_pricing_opportunity = serializers.DictField(
         help_text="Premium pricing opportunities based on carbon performance"
     )
-    
+
     # Benchmarking & Comparison
-    industry_benchmarking = serializers.DictField(
-        help_text="Comparison against industry standards and best practices"
-    )
-    regional_comparison = serializers.DictField(
-        help_text="Comparison with similar operations in the region"
-    )
-    peer_ranking = serializers.DictField(
-        help_text="Ranking among peer productions"
-    )
-    
+    industry_benchmarking = serializers.DictField(help_text="Comparison against industry standards and best practices")
+    regional_comparison = serializers.DictField(help_text="Comparison with similar operations in the region")
+    peer_ranking = serializers.DictField(help_text="Ranking among peer productions")
+
     # Predictive Analytics & Insights
-    future_projections = serializers.DictField(
-        help_text="Future carbon projections based on current practices"
-    )
+    future_projections = serializers.DictField(help_text="Future carbon projections based on current practices")
     optimization_roadmap = serializers.ListField(
-        child=serializers.DictField(),
-        help_text="Prioritized optimization recommendations"
+        child=serializers.DictField(), help_text="Prioritized optimization recommendations"
     )
-    seasonal_patterns = serializers.DictField(
-        help_text="Seasonal carbon patterns and insights"
-    )
-    
+    seasonal_patterns = serializers.DictField(help_text="Seasonal carbon patterns and insights")
+
     # Consumer-Facing Intelligence
-    consumer_impact_story = serializers.DictField(
-        help_text="Consumer-friendly impact narrative and visualizations"
-    )
-    trust_indicators = serializers.DictField(
-        help_text="Trust-building metrics and verification status"
-    )
-    transparency_score = serializers.FloatField(
-        help_text="Overall transparency rating (0-100)"
-    )
-    
+    consumer_impact_story = serializers.DictField(help_text="Consumer-friendly impact narrative and visualizations")
+    trust_indicators = serializers.DictField(help_text="Trust-building metrics and verification status")
+    transparency_score = serializers.FloatField(help_text="Overall transparency rating (0-100)")
+
     # AI-Powered Insights
     ai_recommendations = serializers.ListField(
-        child=serializers.DictField(),
-        help_text="AI-generated optimization recommendations"
+        child=serializers.DictField(), help_text="AI-generated optimization recommendations"
     )
-    pattern_recognition = serializers.DictField(
-        help_text="AI-identified patterns and anomalies"
-    )
-    risk_assessment = serializers.DictField(
-        help_text="Carbon risk assessment and mitigation strategies"
-    )
-    
+    pattern_recognition = serializers.DictField(help_text="AI-identified patterns and anomalies")
+    risk_assessment = serializers.DictField(help_text="Carbon risk assessment and mitigation strategies")
+
     # Performance Tracking
-    improvement_tracking = serializers.DictField(
-        help_text="Tracking of carbon improvement initiatives over time"
-    )
-    success_metrics = serializers.DictField(
-        help_text="Key performance indicators and success measurements"
-    )
-    
+    improvement_tracking = serializers.DictField(help_text="Tracking of carbon improvement initiatives over time")
+    success_metrics = serializers.DictField(help_text="Key performance indicators and success measurements")
+
     class Meta:
         fields = [
-            'carbon_timeline', 'carbon_flow_diagram', 'carbon_hotspots',
-            'carbon_efficiency_score', 'carbon_intensity', 'carbon_roi',
-            'market_value_impact', 'carbon_credit_potential', 'premium_pricing_opportunity',
-            'industry_benchmarking', 'regional_comparison', 'peer_ranking',
-            'future_projections', 'optimization_roadmap', 'seasonal_patterns',
-            'consumer_impact_story', 'trust_indicators', 'transparency_score',
-            'ai_recommendations', 'pattern_recognition', 'risk_assessment',
-            'improvement_tracking', 'success_metrics'
+            "carbon_timeline",
+            "carbon_flow_diagram",
+            "carbon_hotspots",
+            "carbon_efficiency_score",
+            "carbon_intensity",
+            "carbon_roi",
+            "market_value_impact",
+            "carbon_credit_potential",
+            "premium_pricing_opportunity",
+            "industry_benchmarking",
+            "regional_comparison",
+            "peer_ranking",
+            "future_projections",
+            "optimization_roadmap",
+            "seasonal_patterns",
+            "consumer_impact_story",
+            "trust_indicators",
+            "transparency_score",
+            "ai_recommendations",
+            "pattern_recognition",
+            "risk_assessment",
+            "improvement_tracking",
+            "success_metrics",
         ]

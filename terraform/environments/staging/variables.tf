@@ -23,6 +23,27 @@ variable "sendgrid_api_key" {
   default     = ""
 }
 
+variable "usda_nass_api_key" {
+  description = "USDA NASS API key"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "usda_ers_api_key" {
+  description = "USDA ERS API key"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "usda_fooddata_api_key" {
+  description = "USDA FoodData Central API key"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 variable "alert_email" {
   description = "Email address for budget alerts"
   type        = string
