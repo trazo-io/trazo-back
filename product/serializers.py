@@ -78,6 +78,14 @@ class RetrieveParcelSerializer(ModelSerializer):
     image = serializers.SerializerMethodField()
     images = serializers.SerializerMethodField()
     productions_completed = serializers.SerializerMethodField()
+    
+    # 🎯 TRANSPARENCY FIELDS for consumer display
+    transparency_description = serializers.SerializerMethodField()
+    sustainability_practices = serializers.SerializerMethodField()
+    consumer_story = serializers.SerializerMethodField()
+    primary_crop = serializers.SerializerMethodField()
+    transparency_score = serializers.SerializerMethodField()
+    transparency_ready = serializers.SerializerMethodField()
 
     class Meta:
         model = Parcel
@@ -133,6 +141,31 @@ class RetrieveParcelSerializer(ModelSerializer):
 
     def get_productions_completed(self, parcel):
         return parcel.productions_completed
+        
+    # 🎯 TRANSPARENCY FIELD GETTERS
+    def get_transparency_description(self, parcel):
+        """Get consumer-facing parcel description"""
+        return parcel.get_transparency_description()
+        
+    def get_sustainability_practices(self, parcel):
+        """Get sustainability practices narrative for consumers"""
+        return parcel.get_sustainability_practices()
+        
+    def get_consumer_story(self, parcel):
+        """Get consumer story explaining why this parcel matters"""
+        return parcel.get_consumer_story()
+        
+    def get_primary_crop(self, parcel):
+        """Get primary crop focus for this parcel"""
+        return parcel.get_primary_crop()
+        
+    def get_transparency_score(self, parcel):
+        """Get transparency readiness score (0-100)"""
+        return parcel.get_transparency_score()
+        
+    def get_transparency_ready(self, parcel):
+        """Check if parcel is ready for consumer transparency"""
+        return parcel.is_transparency_ready()
 
 
 class CreateParcelSerializer(ModelSerializer):
@@ -156,6 +189,13 @@ class CreateParcelSerializer(ModelSerializer):
     organic_certification_status = serializers.CharField(required=False, write_only=True)
     nrcs_practices = serializers.CharField(required=False, write_only=True)
     carbon_sequestration_practices = serializers.CharField(required=False, write_only=True)
+    
+    # 🎯 TRANSPARENCY-FOCUSED FIELDS for consumer-facing narratives
+    transparency_description = serializers.CharField(required=False, write_only=True, help_text="Consumer-facing parcel description")
+    sustainability_practices = serializers.CharField(required=False, write_only=True, help_text="Sustainability practices for consumers")
+    consumer_story = serializers.CharField(required=False, write_only=True, help_text="Why consumers should care about this parcel")
+    crop_focus = serializers.CharField(required=False, write_only=True, help_text="Primary crop grown for transparency")
+    transparency_ready = serializers.BooleanField(required=False, write_only=True, help_text="Parcel ready for consumer transparency")
 
     class Meta:
         model = Parcel
@@ -178,14 +218,34 @@ class CreateParcelSerializer(ModelSerializer):
             "nrcs_practices",
             "carbon_sequestration_practices",
         ]
+        
+        # 🎯 TRANSPARENCY FIELDS for consumer-facing narratives
+        transparency_fields = [
+            "sustainability_practices",
+            "consumer_story",
+            "transparency_ready"
+        ]
 
         # Get existing agricultural_details or create new dict
         agricultural_details = validated_data.get("agricultural_details", instance.agricultural_details or {})
 
-        # Move individual fields to agricultural_details
+        # Move individual agricultural fields to agricultural_details
         for field in agricultural_fields:
             if field in validated_data:
                 agricultural_details[field] = validated_data.pop(field)
+                
+        # Move transparency fields to agricultural_details for consumer display
+        for field in transparency_fields:
+            if field in validated_data:
+                agricultural_details[field] = validated_data.pop(field)
+
+        # 🎯 Handle transparency_description → description mapping
+        if "transparency_description" in validated_data:
+            validated_data["description"] = validated_data.pop("transparency_description")
+            
+        # 🎯 Handle crop_focus for current production (store in agricultural_details for reference)
+        if "crop_focus" in validated_data:
+            agricultural_details["primary_crop"] = validated_data.pop("crop_focus")
 
         # Store updated agricultural_details
         validated_data["agricultural_details"] = agricultural_details
@@ -195,7 +255,15 @@ class CreateParcelSerializer(ModelSerializer):
             instance.agricultural_details = agricultural_details
             instance.update_usda_compliance_status()
             validated_data["usda_compliance_eligible"] = instance.usda_compliance_eligible
-            validated_data["carbon_calculation_enabled"] = instance.calculate_carbon_readiness_score() > 60
+            
+            # 🎯 Enable carbon calculations for transparency parcels
+            has_transparency_data = bool(
+                agricultural_details.get("sustainability_practices") or 
+                agricultural_details.get("carbon_sequestration_practices")
+            )
+            validated_data["carbon_calculation_enabled"] = (
+                instance.calculate_carbon_readiness_score() > 60 or has_transparency_data
+            )
 
     def update(self, instance, validated_data):
         s3_keys = validated_data.pop("s3_keys", None)

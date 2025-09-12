@@ -1,0 +1,141 @@
+{
+    "taskDefinitionArn": "arn:aws:ecs:us-east-2:013640213707:task-definition/staging-django:85",
+    "containerDefinitions": [
+        {
+            "name": "django",
+            "image": "013640213707.dkr.ecr.us-east-2.amazonaws.com/trazo-backend-staging:latest",
+            "cpu": 0,
+            "portMappings": [
+                {
+                    "containerPort": 8000,
+                    "hostPort": 8000,
+                    "protocol": "tcp"
+                }
+            ],
+            "essential": true,
+            "environment": [
+                {
+                    "name": "DJANGO_SETTINGS_MODULE",
+                    "value": "backend.settings.prod"
+                },
+                {
+                    "name": "STATIC_URL",
+                    "value": "https://static.api-staging.trazo.io/"
+                },
+                {
+                    "name": "ALLOWED_HOSTS",
+                    "value": "api.trazo.io,staging-alb-1273700937.us-east-2.elb.amazonaws.com"
+                },
+                {
+                    "name": "AWS_S3_REGION_NAME",
+                    "value": "us-east-2"
+                },
+                {
+                    "name": "DATABASE_PORT",
+                    "value": "5432"
+                },
+                {
+                    "name": "DEBUG",
+                    "value": "False"
+                },
+                {
+                    "name": "AWS_S3_CUSTOM_DOMAIN",
+                    "value": "staging-trazo-media-013640213707.s3.us-east-2.amazonaws.com"
+                },
+                {
+                    "name": "AWS_STORAGE_BUCKET_NAME",
+                    "value": "staging-trazo-media-013640213707"
+                }
+            ],
+            "mountPoints": [],
+            "volumesFrom": [],
+            "secrets": [
+                {
+                    "name": "SECRET_KEY",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-2:013640213707:secret:staging/trazo/backend-kFpvu9:SECRET_KEY::"
+                },
+                {
+                    "name": "DATABASE_NAME",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-2:013640213707:secret:staging/trazo/backend-kFpvu9:DATABASE_NAME::"
+                },
+                {
+                    "name": "DATABASE_USER",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-2:013640213707:secret:staging/trazo/backend-kFpvu9:DATABASE_USER::"
+                },
+                {
+                    "name": "DATABASE_PASSWORD",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-2:013640213707:secret:staging/trazo/backend-kFpvu9:DATABASE_PASSWORD::"
+                },
+                {
+                    "name": "DATABASE_HOST",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-2:013640213707:secret:staging/trazo/backend-kFpvu9:DATABASE_HOST::"
+                },
+                {
+                    "name": "SENDGRID_API_KEY",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-2:013640213707:secret:staging/trazo/backend-kFpvu9:SENDGRID_API_KEY::"
+                }
+            ],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/staging",
+                    "awslogs-region": "us-east-2",
+                    "awslogs-stream-prefix": "django"
+                }
+            },
+            "systemControls": []
+        }
+    ],
+    "family": "staging-django",
+    "taskRoleArn": "arn:aws:iam::013640213707:role/staging-ecs-task-role",
+    "executionRoleArn": "arn:aws:iam::013640213707:role/staging-ecs-execution-role",
+    "networkMode": "awsvpc",
+    "revision": 85,
+    "volumes": [],
+    "status": "ACTIVE",
+    "requiresAttributes": [
+        {
+            "name": "com.amazonaws.ecs.capability.logging-driver.awslogs"
+        },
+        {
+            "name": "ecs.capability.execution-role-awslogs"
+        },
+        {
+            "name": "com.amazonaws.ecs.capability.ecr-auth"
+        },
+        {
+            "name": "com.amazonaws.ecs.capability.docker-remote-api.1.19"
+        },
+        {
+            "name": "ecs.capability.secrets.asm.environment-variables"
+        },
+        {
+            "name": "com.amazonaws.ecs.capability.task-iam-role"
+        },
+        {
+            "name": "ecs.capability.execution-role-ecr-pull"
+        },
+        {
+            "name": "com.amazonaws.ecs.capability.docker-remote-api.1.18"
+        },
+        {
+            "name": "ecs.capability.task-eni"
+        }
+    ],
+    "placementConstraints": [],
+    "compatibilities": [
+        "EC2",
+        "FARGATE"
+    ],
+    "runtimePlatform": {
+        "cpuArchitecture": "X86_64",
+        "operatingSystemFamily": "LINUX"
+    },
+    "requiresCompatibilities": [
+        "FARGATE"
+    ],
+    "cpu": "256",
+    "memory": "512",
+    "registeredAt": "2025-09-11T17:27:18.890000-03:00",
+    "registeredBy": "arn:aws:iam::013640213707:user/aws-cli"
+}

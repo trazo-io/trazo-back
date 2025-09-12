@@ -11,6 +11,12 @@ resource "aws_ecs_task_definition" "django" {
   execution_role_arn      = var.ecs_exec_role_arn
   task_role_arn           = var.ecs_task_role_arn
   
+  # Force x86_64 architecture to fix exec format error
+  runtime_platform {
+    cpu_architecture        = "X86_64"
+    operating_system_family = "LINUX"
+  }
+  
   # Add task definition retention
   lifecycle {
     create_before_destroy = true
@@ -40,7 +46,8 @@ resource "aws_ecs_task_definition" "django" {
         { name = "DATABASE_USER", valueFrom = "${var.secrets_arn}:DATABASE_USER::" },
         { name = "DATABASE_PASSWORD", valueFrom = "${var.secrets_arn}:DATABASE_PASSWORD::" },
         { name = "DATABASE_HOST", valueFrom = "${var.secrets_arn}:DATABASE_HOST::" },
-        { name = "SENDGRID_API_KEY", valueFrom = "${var.secrets_arn}:SENDGRID_API_KEY::" }
+        { name = "SENDGRID_API_KEY", valueFrom = "${var.secrets_arn}:SENDGRID_API_KEY::" },
+        { name = "BLOCKCHAIN_ENABLED", valueFrom = "${var.secrets_arn}:BLOCKCHAIN_ENABLED::" }
       ]
 
       portMappings = [

@@ -1,4 +1,5 @@
 from .models import (
+    BusinessEvent,
     ChemicalEvent,
     EquipmentEvent,
     GeneralEvent,
@@ -15,6 +16,7 @@ GENERAL_EVENT_TYPE = 3
 EQUIPMENT_EVENT_TYPE = 4
 SOIL_MANAGEMENT_EVENT_TYPE = 5
 PEST_MANAGEMENT_EVENT_TYPE = 6
+BUSINESS_EVENT_TYPE = 7
 
 EVENT_TYPE_TO_MODEL = {
     WEATHER_EVENT_TYPE: WeatherEvent,
@@ -24,6 +26,7 @@ EVENT_TYPE_TO_MODEL = {
     EQUIPMENT_EVENT_TYPE: EquipmentEvent,
     SOIL_MANAGEMENT_EVENT_TYPE: SoilManagementEvent,
     PEST_MANAGEMENT_EVENT_TYPE: PestManagementEvent,
+    BUSINESS_EVENT_TYPE: BusinessEvent,
 }
 
 ALLOWED_PERIODS = ["week", "month", "year"]

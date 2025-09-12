@@ -455,7 +455,7 @@ class EventCarbonCalculator:
         """
         Calculate carbon impact of chemical application events.
         Based on USDA fertilizer emission factors and application efficiency.
-        Enhanced with crop-specific factors.
+        Enhanced with crop-specific factors and new structured fields.
         """
         try:
             # Get crop information from the production
@@ -465,9 +465,8 @@ class EventCarbonCalculator:
                 crop_name = event.history.product.name
                 crop_category = self._get_crop_category(crop_name)
 
-            # Parse nutrient content (NPK analysis) with intelligent defaults
-            concentration = self._get_intelligent_concentration(event.concentration, event, crop_name)
-            npk_content = self._parse_npk_content(concentration)
+            # ENHANCED: Use structured NPK fields if available, otherwise fallback to concentration parsing
+            npk_content = self._get_structured_npk_content(event, crop_name)
 
             # Convert volume to standardized units (liters) with intelligent defaults
             volume_liters = self._convert_volume_to_liters(event.volume, event, crop_name)
@@ -475,8 +474,8 @@ class EventCarbonCalculator:
             # Convert area to standardized units (hectares) with intelligent defaults
             area_hectares = self._convert_area_to_hectares(event.area, event, crop_name)
 
-            # Get application efficiency (crop-specific if available) with intelligent defaults
-            application_method = self._get_intelligent_application_method(event.way_of_application, event, crop_name)
+            # ENHANCED: Use structured application method if available
+            application_method = self._get_structured_application_method(event, crop_name)
             base_efficiency = self.APPLICATION_EFFICIENCY.get(
                 self._normalize_application_method(application_method), 0.7  # Default efficiency
             )
@@ -628,10 +627,29 @@ class EventCarbonCalculator:
                     base_emissions *= 2.0  # Avocados are very water-intensive
 
             elif event.type in ["HA", "PL"]:  # Harvesting, Planting
-                # Estimate equipment fuel consumption
-                area = self._extract_numeric_value(getattr(event.history, "parcel.area", "1"), default=1)
-                fuel_used = area * 2.0  # Estimated 2L diesel per hectare
+                # ENHANCED: Use structured production data
+                production_data = self._get_structured_production_data(event, crop_name)
+                area = production_data['area_hectares']
+                
+                # Use fuel consumption from structured fields if available
+                if production_data['fuel_consumed'] > 0:
+                    fuel_used = production_data['fuel_consumed']
+                    # Convert fuel units to liters if needed
+                    if production_data['fuel_unit'] == 'gal':
+                        fuel_used *= 3.78541
+                else:
+                    fuel_used = area * 2.0  # Estimated 2L diesel per hectare
+                
                 base_emissions = fuel_used * self.FUEL_EMISSION_FACTORS["diesel"]
+                
+                # Apply production efficiency modifier
+                efficiency_modifier = {
+                    'high': 0.85,    # 15% better efficiency
+                    'normal': 1.0,   # Standard emissions
+                    'low': 1.25      # 25% higher emissions
+                }.get(production_data['efficiency'], 1.0)
+                
+                base_emissions *= efficiency_modifier
 
                 # Crop-specific equipment intensity
                 if crop_category == "grains":
@@ -640,6 +658,26 @@ class EventCarbonCalculator:
                     base_emissions *= 0.6  # Herb harvesting is often manual
                 elif crop_category == "nuts":
                     base_emissions *= 1.4  # Nut harvesting requires heavy equipment
+                    
+                # Transportation emissions if distance is specified
+                transport_distance = production_data['transportation_distance']
+                if transport_distance > 0:
+                    # Convert distance to km if needed
+                    distance_km = transport_distance
+                    if production_data['transportation_unit'] == 'miles':
+                        distance_km *= 1.60934
+                    elif production_data['transportation_unit'] == 'm':
+                        distance_km /= 1000
+                    
+                    # Add transportation emissions (0.1 kg CO2e per km per tonne)
+                    yield_tonnes = production_data['yield_quantity']
+                    if production_data['yield_unit'] == 'kg':
+                        yield_tonnes /= 1000
+                    elif production_data['yield_unit'] == 'lbs':
+                        yield_tonnes /= 2204.62
+                    
+                    transport_emissions = distance_km * yield_tonnes * 0.1
+                    base_emissions += transport_emissions
 
             elif event.type == "PR":  # Pruning
                 # Manual operation, minimal emissions, but varies by crop
@@ -725,49 +763,105 @@ class EventCarbonCalculator:
     def calculate_equipment_event_impact(self, event) -> Dict[str, Any]:
         """
         Calculate carbon impact of equipment events (maintenance, fuel consumption, etc.)
+        Enhanced with structured fields for better accuracy.
         """
         try:
+            # Get crop information from the production
+            crop_name = "default"
+            if hasattr(event, "history") and event.history and hasattr(event.history, "product"):
+                crop_name = event.history.product.name
+
+            # ENHANCED: Use structured equipment data
+            equipment_data = self._get_structured_equipment_data(event, crop_name)
+            
             base_emissions = 0.0
             cost_estimate = 0.0
+            efficiency_score = 60.0
 
             if event.type == "FC":  # Fuel Consumption
-                fuel_amount = float(event.fuel_amount or 0)
-                fuel_type = event.fuel_type.lower() if event.fuel_type else "diesel"
+                fuel_amount = equipment_data['fuel_amount']
+                fuel_type = equipment_data['fuel_type'].lower()
 
                 emission_factor = self.FUEL_EMISSION_FACTORS.get(fuel_type, self.FUEL_EMISSION_FACTORS["diesel"])
                 base_emissions = fuel_amount * emission_factor
+                
+                # Apply efficiency modifier based on structured efficiency rating
+                efficiency_modifier = {
+                    'high': 0.85,    # 15% better efficiency
+                    'normal': 1.0,   # Standard emissions
+                    'low': 1.25      # 25% higher emissions
+                }.get(equipment_data['efficiency'], 1.0)
+                
+                base_emissions *= efficiency_modifier
                 cost_estimate = fuel_amount * 1.2  # Approximate fuel cost per liter
+                efficiency_score = 90.0 if equipment_data['efficiency'] == 'high' else 70.0
 
-            elif event.type in ["MA", "RE"]:  # Maintenance, Repair
-                # Estimate based on maintenance activity
-                base_emissions = 5.0  # Moderate impact for maintenance activities
-                cost_estimate = float(event.maintenance_cost or 100)
+                # Equipment type specific adjustments
+                equipment_type = equipment_data['equipment_type']
+                if 'large' in str(equipment_type).lower():
+                    base_emissions *= 1.3  # Large equipment uses more fuel
+                elif 'small' in str(equipment_type).lower():
+                    base_emissions *= 0.8  # Small equipment is more efficient
+
+            elif event.type in ["MN", "RE"]:  # Maintenance, Repair
+                # Use equipment type and hours for better estimation
+                hours = equipment_data['hours_operated']
+                equipment_type = equipment_data['equipment_type']
+                
+                # Base emissions per hour by equipment type
+                base_rate = 2.0  # Default kg CO2e per hour
+                if 'tractor' in str(equipment_type).lower():
+                    if 'large' in str(equipment_type).lower():
+                        base_rate = 5.0
+                    elif 'medium' in str(equipment_type).lower():
+                        base_rate = 3.5
+                    else:
+                        base_rate = 2.5
+                elif 'pump' in str(equipment_type).lower():
+                    base_rate = 1.5
+                elif 'harvester' in str(equipment_type).lower():
+                    base_rate = 8.0
+                
+                base_emissions = hours * base_rate if hours > 0 else base_rate
+                cost_estimate = float(event.maintenance_cost or (hours * 50 if hours > 0 else 100))
 
             elif event.type == "CA":  # Calibration
                 base_emissions = 0.5  # Minimal impact
                 cost_estimate = 50.0
+                efficiency_score = 95.0  # Well-calibrated equipment is efficient
 
-            elif event.type == "BR":  # Breakdown
+            elif event.type == "BD":  # Breakdown
                 # Higher impact due to inefficiency and potential emergency repairs
                 base_emissions = 15.0
                 cost_estimate = float(event.maintenance_cost or 500)
+                efficiency_score = 30.0  # Broken equipment is very inefficient
 
-            recommendations = self._generate_equipment_recommendations(event, base_emissions, cost_estimate)
+            elif event.type == "EI":  # Inspection
+                base_emissions = 0.2  # Very minimal impact
+                cost_estimate = 25.0
+                efficiency_score = 85.0
+
+            recommendations = self._generate_equipment_recommendations(event, base_emissions, cost_estimate, equipment_data)
 
             result = {
                 "co2e": round(base_emissions, 3),
-                "efficiency_score": 70.0 if event.type == "FC" else 60.0,
-                "calculation_method": "usda_fuel_factors" if event.type == "FC" else "equipment_estimation",
+                "efficiency_score": efficiency_score,
+                "calculation_method": "usda_fuel_factors_enhanced" if event.type == "FC" else "equipment_estimation_enhanced",
                 "data_source": "USDA Agricultural Research Service" if event.type == "FC" else "Industry Standards",
                 "verification_status": "factors_verified" if event.type == "FC" else "estimated",
                 "breakdown": {
-                    "fuel_amount": float(event.fuel_amount or 0),
-                    "fuel_type": event.fuel_type or "Unknown",
-                    "equipment_type": event.equipment_name or "General",
+                    "fuel_amount": equipment_data['fuel_amount'],
+                    "fuel_type": equipment_data['fuel_type'],
+                    "equipment_type": equipment_data['equipment_type'],
+                    "area_worked": equipment_data['area_worked'],
+                    "hours_operated": equipment_data['hours_operated'],
+                    "operation_efficiency": equipment_data['efficiency'],
+                    "data_source": equipment_data['data_source'],
                 },
                 "cost_analysis": {
                     "estimated_cost": cost_estimate,
                     "cost_per_co2e": cost_estimate / max(base_emissions, 0.1),
+                    "cost_per_hectare": cost_estimate / max(equipment_data['area_worked'], 0.1) if equipment_data['area_worked'] > 0 else 0,
                 },
                 "recommendations": recommendations,
             }
@@ -846,35 +940,120 @@ class EventCarbonCalculator:
     def calculate_business_event_impact(self, event) -> Dict[str, Any]:
         """
         Calculate carbon impact of business events (often indirect)
+        Enhanced with structured carbon-focused fields.
         """
         try:
+            # Get crop information from the production
+            crop_name = "default"
+            if hasattr(event, "history") and event.history and hasattr(event.history, "product"):
+                crop_name = event.history.product.name
+
+            # ENHANCED: Use structured business data
+            business_data = self._get_structured_business_data(event, crop_name)
+            
             base_emissions = 0.0
-            carbon_credits = 0.0
-
-            if event.type == "HS":  # Harvest Sale
-                # Calculate transportation emissions based on distance (estimated)
-                quantity = self._extract_numeric_value(event.quantity_sold or "0", default=0)
-                base_emissions = quantity * 0.1  # Approximate transport emissions
-
+            carbon_credits = business_data['carbon_credits_earned']
+            efficiency_score = 70.0
+            
+            # Calculate based on business activity type
+            business_type = business_data['business_type']
+            
+            if business_type == "carbon_credits":
+                # Carbon credits offset emissions
+                if business_data['carbon_credits_unit'] == 'kgCO2e':
+                    base_emissions = -carbon_credits  # Direct offset in kg
+                elif business_data['carbon_credits_unit'] == 'tCO2e':
+                    base_emissions = -carbon_credits * 1000  # Convert tonnes to kg
+                else:  # credits
+                    base_emissions = -carbon_credits * 10  # Assume 10 kg per credit unit
+                efficiency_score = 95.0  # Very efficient for carbon goals
+                
+            elif business_type == "certification":
+                # Certification events have minimal direct emissions but positive impact
+                cert_type = business_data['certification_type']
+                if cert_type == "carbon_neutral":
+                    base_emissions = -50.0  # Significant carbon benefit
+                    efficiency_score = 90.0
+                elif cert_type == "organic_usda":
+                    base_emissions = -20.0  # Moderate carbon benefit
+                    efficiency_score = 80.0
+                elif cert_type in ["regenerative", "sustainable_agriculture"]:
+                    base_emissions = -30.0  # Good carbon benefit
+                    efficiency_score = 85.0
+                else:
+                    base_emissions = -10.0  # Basic certification benefit
+                    efficiency_score = 75.0
+                    
+            elif business_type == "sustainability_audit":
+                # Audits improve practices leading to long-term reductions
+                base_emissions = 0.5  # Small travel/documentation impact
+                efficiency_score = 85.0  # Good for identifying improvements
+                
+            elif business_type == "verification":
+                # Verification builds consumer trust but has minimal impact
+                base_emissions = 1.0  # Small verification process impact
+                efficiency_score = 80.0
+                
+            elif business_type == "compliance":
+                base_emissions = 0.5  # Minimal impact from documentation
+                efficiency_score = 70.0
+                
+            elif business_type == "transparency":
+                # Transparency initiatives have very positive consumer impact
+                base_emissions = -5.0  # Small benefit from consumer awareness
+                efficiency_score = 88.0
+                
+            # Legacy event type handling for backward compatibility
             elif event.type == "CE":  # Certification
-                # Carbon credit certifications can offset emissions
-                carbon_credits = float(event.carbon_credits_earned or 0)
-                base_emissions = -carbon_credits  # Negative emissions from credits
-
+                if carbon_credits > 0:
+                    base_emissions = -carbon_credits
+                    efficiency_score = 90.0
+                else:
+                    base_emissions = -10.0  # Default certification benefit
+                    efficiency_score = 80.0
+                    
             elif event.type in ["IN", "CM"]:  # Inspection, Compliance
-                base_emissions = 0.5  # Minimal impact from travel/documentation
+                base_emissions = 0.5
+                efficiency_score = 70.0
 
-            recommendations = self._generate_business_recommendations(event, base_emissions)
+            # Apply sustainability practice bonus if applicable
+            practice = business_data['sustainability_practice']
+            if practice:
+                practice_benefits = {
+                    'cover_cropping': -15.0,
+                    'no_till': -25.0,
+                    'integrated_pest': -10.0,
+                    'water_conservation': -8.0,
+                    'renewable_energy': -50.0,
+                    'composting': -20.0,
+                    'biodiversity': -12.0,
+                    'soil_health': -18.0,
+                }
+                practice_benefit = practice_benefits.get(practice, -5.0)
+                base_emissions += practice_benefit
+                efficiency_score = min(efficiency_score + 10, 100.0)
+
+            recommendations = self._generate_business_recommendations(event, base_emissions, business_data)
 
             result = {
                 "co2e": round(base_emissions, 3),
-                "efficiency_score": 70.0,
-                "calculation_method": "business_activity_estimation",
-                "data_source": "Industry Standards",
-                "verification_status": "estimated",
+                "efficiency_score": round(efficiency_score, 1),
+                "calculation_method": "carbon_focused_business_analysis",
+                "data_source": "Carbon Transparency Standards",
+                "verification_status": business_data['verification_status'],
                 "breakdown": {
-                    "business_activity": event.type,
-                    "estimated_impact": base_emissions,
+                    "business_type": business_data['business_type'],
+                    "certification_type": business_data['certification_type'],
+                    "carbon_credits_earned": business_data['carbon_credits_earned'],
+                    "carbon_credits_unit": business_data['carbon_credits_unit'],
+                    "sustainability_practice": business_data['sustainability_practice'],
+                    "verification_status": business_data['verification_status'],
+                    "data_source": business_data['data_source'],
+                },
+                "transparency_metrics": {
+                    "consumer_value": "high" if base_emissions < -20 else "medium" if base_emissions < 0 else "low",
+                    "verification_level": business_data['verification_status'],
+                    "carbon_impact": "positive" if base_emissions < 0 else "neutral" if base_emissions == 0 else "minimal",
                 },
                 "recommendations": recommendations,
             }
@@ -1004,6 +1183,194 @@ class EventCarbonCalculator:
         except Exception as e:
             logger.error(f"Error creating carbon entry from event: {e}")
             return None
+
+    # ENHANCED Helper methods for structured fields
+    def _get_structured_npk_content(self, event, crop_name: str = "default") -> Dict[str, float]:
+        """
+        Get NPK content from structured fields (nitrogen_percentage, phosphorus_percentage, potassium_percentage)
+        or fallback to parsing concentration string
+        """
+        try:
+            # Check if structured NPK fields are available and populated
+            if (hasattr(event, 'nitrogen_percentage') and event.nitrogen_percentage is not None and
+                hasattr(event, 'phosphorus_percentage') and event.phosphorus_percentage is not None and
+                hasattr(event, 'potassium_percentage') and event.potassium_percentage is not None):
+                
+                return {
+                    "N": float(event.nitrogen_percentage),
+                    "P": float(event.phosphorus_percentage), 
+                    "K": float(event.potassium_percentage)
+                }
+            
+            # Fallback to parsing concentration string
+            concentration = self._get_intelligent_concentration(event.concentration, event, crop_name)
+            return self._parse_npk_content(concentration)
+            
+        except Exception as e:
+            logger.warning(f"Error getting structured NPK content, using fallback: {e}")
+            concentration = self._get_intelligent_concentration(event.concentration, event, crop_name)
+            return self._parse_npk_content(concentration)
+    
+    def _get_structured_application_method(self, event, crop_name: str = "default") -> str:
+        """
+        Get application method from structured field (application_method_structured) 
+        or fallback to way_of_application
+        """
+        try:
+            # Check if structured application method field is available
+            if hasattr(event, 'application_method_structured') and event.application_method_structured:
+                return event.application_method_structured
+            
+            # Fallback to legacy field
+            return self._get_intelligent_application_method(event.way_of_application, event, crop_name)
+            
+        except Exception as e:
+            logger.warning(f"Error getting structured application method, using fallback: {e}")
+            return self._get_intelligent_application_method(event.way_of_application, event, crop_name)
+    
+    def _get_structured_equipment_data(self, event, crop_name: str = "default") -> Dict[str, Any]:
+        """
+        Get equipment data from structured fields or fallback to legacy fields
+        """
+        try:
+            # Check for structured fields first
+            if (hasattr(event, 'fuel_consumed') and event.fuel_consumed is not None):
+                fuel_amount = float(event.fuel_consumed)
+                fuel_unit = getattr(event, 'fuel_unit', 'L')
+                
+                # Convert to liters if needed
+                if fuel_unit == 'gal':
+                    fuel_amount *= 3.78541  # gallons to liters
+                elif fuel_unit == 'kg':
+                    fuel_amount *= 1.2  # approximate kg to L for diesel
+                    
+                return {
+                    'fuel_amount': fuel_amount,
+                    'fuel_type': event.fuel_type or 'diesel',
+                    'equipment_type': getattr(event, 'equipment_type_structured', None) or event.equipment_name,
+                    'area_worked': float(getattr(event, 'area_worked', 0) or 0),
+                    'area_unit': getattr(event, 'area_unit', 'ha'),
+                    'hours_operated': float(getattr(event, 'hours_operated', 0) or 0),
+                    'efficiency': getattr(event, 'operation_efficiency', 'normal'),
+                    'data_source': 'structured_fields'
+                }
+            
+            # Fallback to legacy fields
+            return {
+                'fuel_amount': float(getattr(event, 'fuel_amount', 0) or 0),
+                'fuel_type': event.fuel_type or 'diesel', 
+                'equipment_type': event.equipment_name or 'general',
+                'area_worked': self._extract_numeric_value(event.area_covered or '', default=1.0),
+                'area_unit': 'ha',
+                'hours_operated': float(getattr(event, 'hours_used', 0) or 0),
+                'efficiency': 'normal',
+                'data_source': 'legacy_fields'
+            }
+            
+        except Exception as e:
+            logger.warning(f"Error getting structured equipment data, using defaults: {e}")
+            return {
+                'fuel_amount': 10.0,  # Default fuel consumption
+                'fuel_type': 'diesel',
+                'equipment_type': 'general',
+                'area_worked': 1.0,
+                'area_unit': 'ha',
+                'hours_operated': 2.0,
+                'efficiency': 'normal',
+                'data_source': 'defaults'
+            }
+    
+    def _get_structured_production_data(self, event, crop_name: str = "default") -> Dict[str, Any]:
+        """
+        Get production data from structured fields or fallback to legacy fields
+        """
+        try:
+            # Check for structured fields first
+            if (hasattr(event, 'area_covered') and event.area_covered is not None):
+                area = float(event.area_covered)
+                area_unit = getattr(event, 'area_unit', 'ha')
+                
+                # Convert to hectares if needed
+                if area_unit == 'acres':
+                    area *= 0.404686  # acres to hectares
+                elif area_unit == 'm2':
+                    area /= 10000  # m2 to hectares
+                elif area_unit == 'km2':
+                    area *= 100  # km2 to hectares
+                    
+                return {
+                    'area_hectares': area,
+                    'yield_quantity': float(getattr(event, 'yield_quantity', 0) or 0),
+                    'yield_unit': getattr(event, 'yield_unit', 'kg'),
+                    'fuel_consumed': float(getattr(event, 'fuel_consumed', 0) or 0),
+                    'fuel_unit': getattr(event, 'fuel_unit', 'L'),
+                    'equipment_hours': float(getattr(event, 'equipment_hours', 0) or 0),
+                    'transportation_distance': float(getattr(event, 'transportation_distance', 0) or 0),
+                    'transportation_unit': getattr(event, 'transportation_unit', 'km'),
+                    'efficiency': getattr(event, 'production_efficiency', 'normal'),
+                    'data_source': 'structured_fields'
+                }
+            
+            # Fallback to legacy fields and history data
+            area = 1.0  # Default area
+            if hasattr(event, 'history') and event.history and hasattr(event.history, 'parcel'):
+                parcel_area = getattr(event.history.parcel, 'area', '1')
+                area = self._extract_numeric_value(str(parcel_area), default=1.0)
+                
+            return {
+                'area_hectares': area,
+                'yield_quantity': 0.0,
+                'yield_unit': 'kg',
+                'fuel_consumed': 0.0,
+                'fuel_unit': 'L',
+                'equipment_hours': 0.0,
+                'transportation_distance': 0.0,
+                'transportation_unit': 'km',
+                'efficiency': 'normal',
+                'data_source': 'legacy_fields'
+            }
+            
+        except Exception as e:
+            logger.warning(f"Error getting structured production data, using defaults: {e}")
+            defaults = self._get_intelligent_defaults(event, crop_name)
+            return {
+                'area_hectares': defaults.get('area', 1.0),
+                'yield_quantity': 0.0,
+                'yield_unit': 'kg',
+                'fuel_consumed': 0.0,
+                'fuel_unit': 'L',
+                'equipment_hours': 0.0,
+                'transportation_distance': 0.0,
+                'transportation_unit': 'km',
+                'efficiency': 'normal',
+                'data_source': 'defaults'
+            }
+    
+    def _get_structured_business_data(self, event, crop_name: str = "default") -> Dict[str, Any]:
+        """
+        Get business event data from structured fields
+        """
+        try:
+            return {
+                'business_type': getattr(event, 'business_type', 'certification'),
+                'certification_type': getattr(event, 'certification_type', None),
+                'carbon_credits_earned': float(getattr(event, 'carbon_credits_earned', 0) or 0),
+                'carbon_credits_unit': getattr(event, 'carbon_credits_unit', 'tCO2e'),
+                'verification_status': getattr(event, 'verification_status', 'pending'),
+                'sustainability_practice': getattr(event, 'sustainability_practice', None),
+                'data_source': 'structured_fields' if hasattr(event, 'business_type') else 'legacy_fields'
+            }
+        except Exception as e:
+            logger.warning(f"Error getting structured business data, using defaults: {e}")
+            return {
+                'business_type': 'certification',
+                'certification_type': None,
+                'carbon_credits_earned': 0.0,
+                'carbon_credits_unit': 'tCO2e',
+                'verification_status': 'pending',
+                'sustainability_practice': None,
+                'data_source': 'defaults'
+            }
 
     # Helper methods
     def _parse_npk_content(self, concentration_str: str) -> Dict[str, float]:
@@ -1431,7 +1798,7 @@ class EventCarbonCalculator:
 
         return recommendations
 
-    def _generate_equipment_recommendations(self, event, emissions: float, cost: float) -> List[Dict[str, Any]]:
+    def _generate_equipment_recommendations(self, event, emissions: float, cost: float, equipment_data: Dict[str, Any] = None) -> List[Dict[str, Any]]:
         """Generate recommendations for equipment events"""
         recommendations = []
 
@@ -1487,7 +1854,7 @@ class EventCarbonCalculator:
 
         return recommendations
 
-    def _generate_business_recommendations(self, event, emissions: float) -> List[Dict[str, Any]]:
+    def _generate_business_recommendations(self, event, emissions: float, business_data: Dict[str, Any] = None) -> List[Dict[str, Any]]:
         """Generate recommendations for business events"""
         recommendations = []
 

@@ -18,6 +18,7 @@ from reviews.models import Review
 
 from .constants import (
     ALLOWED_PERIODS,
+    BUSINESS_EVENT_TYPE,
     CHEMICAL_EVENT_TYPE,
     EQUIPMENT_EVENT_TYPE,
     EVENT_TYPE_TO_MODEL,
@@ -27,8 +28,9 @@ from .constants import (
     SOIL_MANAGEMENT_EVENT_TYPE,
     WEATHER_EVENT_TYPE,
 )
-from .models import ChemicalEvent, GeneralEvent, History, HistoryScan, ProductionEvent
+from .models import BusinessEvent, ChemicalEvent, GeneralEvent, History, HistoryScan, ProductionEvent
 from .serializers import (
+    BusinessEventSerializer,
     ChemicalEventSerializer,
     EquipmentEventSerializer,
     GeneralEventSerializer,
@@ -1380,6 +1382,8 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             return UpdateSoilManagementEventSerializer if is_mutation else SoilManagementEventSerializer
         elif event_type == PEST_MANAGEMENT_EVENT_TYPE:
             return UpdatePestManagementEventSerializer if is_mutation else PestManagementEventSerializer
+        elif event_type == BUSINESS_EVENT_TYPE:
+            return BusinessEventSerializer  # Same serializer for read/write operations
         else:  # GENERAL_EVENT_TYPE
             return UpdateGeneralEventSerializer if is_mutation else GeneralEventSerializer
 
@@ -1508,6 +1512,8 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 serializer_class = SoilManagementEventSerializer
             elif event_type == PEST_MANAGEMENT_EVENT_TYPE:
                 serializer_class = PestManagementEventSerializer
+            elif event_type == BUSINESS_EVENT_TYPE:
+                serializer_class = BusinessEventSerializer
             else:  # GENERAL_EVENT_TYPE
                 serializer_class = GeneralEventSerializer
 
@@ -1525,6 +1531,10 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             raise Exception("Event type is required")
         if parcels is None or parcels is []:
             raise Exception("Parcel is required")
+        
+        # Enhanced validation for structured fields
+        self._validate_structured_fields(int(event_type), serializer.validated_data)
+        
         parcels = Parcel.objects.filter(id__in=[int(parcel) for parcel in parcels]).select_related("current_history")
 
         for parcel in parcels:
@@ -1538,6 +1548,7 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     + history.history_equipmentevent_events.count()
                     + history.history_soilmanagementevent_events.count()
                     + history.history_pestmanagementevent_events.count()
+                    + history.history_businessevent_events.count()
                 ) + 1
 
                 event_model = EVENT_TYPE_TO_MODEL.get(int(event_type), GeneralEvent)
@@ -1587,3 +1598,144 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         # If event types match, proceed with normal update
         return super().update(request, *args, **kwargs)
+
+    def _validate_structured_fields(self, event_type, validated_data):
+        """
+        Enhanced validation for structured fields based on event type
+        """
+        from rest_framework.serializers import ValidationError
+        
+        if event_type == CHEMICAL_EVENT_TYPE:
+            # Validate NPK percentages don't exceed 100%
+            nitrogen = validated_data.get('nitrogen_percentage', 0) or 0
+            phosphorus = validated_data.get('phosphorus_percentage', 0) or 0
+            potassium = validated_data.get('potassium_percentage', 0) or 0
+            
+            total_npk = nitrogen + phosphorus + potassium
+            if total_npk > 100:
+                raise ValidationError(
+                    f"Total NPK percentages cannot exceed 100%. Current total: {total_npk}%"
+                )
+            
+            # Validate application method is valid if provided
+            app_method = validated_data.get('application_method_structured')
+            if app_method and app_method not in ['broadcast', 'injection', 'foliar', 'drip', 'banding']:
+                raise ValidationError(
+                    f"Invalid application method: {app_method}. Must be one of: broadcast, injection, foliar, drip, banding"
+                )
+                
+        elif event_type == EQUIPMENT_EVENT_TYPE:
+            # Validate fuel consumed is positive
+            fuel_consumed = validated_data.get('fuel_consumed')
+            if fuel_consumed is not None and fuel_consumed < 0:
+                raise ValidationError("Fuel consumed cannot be negative")
+            
+            # Validate hours operated is positive
+            hours_operated = validated_data.get('hours_operated')
+            if hours_operated is not None and hours_operated < 0:
+                raise ValidationError("Hours operated cannot be negative")
+            
+            # Validate efficiency rating
+            efficiency = validated_data.get('operation_efficiency')
+            if efficiency and efficiency not in ['high', 'normal', 'low']:
+                raise ValidationError(
+                    f"Invalid efficiency rating: {efficiency}. Must be one of: high, normal, low"
+                )
+                
+        elif event_type == PRODUCTION_EVENT_TYPE:
+            # Validate area covered is positive
+            area_covered = validated_data.get('area_covered')
+            if area_covered is not None and area_covered <= 0:
+                raise ValidationError("Area covered must be greater than 0")
+            
+            # Validate yield amount is positive
+            yield_amount = validated_data.get('yield_amount')
+            if yield_amount is not None and yield_amount < 0:
+                raise ValidationError("Yield amount cannot be negative")
+            
+            # Validate transportation distance is not negative
+            transport_distance = validated_data.get('transportation_distance')
+            if transport_distance is not None and transport_distance < 0:
+                raise ValidationError("Transportation distance cannot be negative")
+                
+        elif event_type == BUSINESS_EVENT_TYPE:
+            # Validate carbon credits earned is not negative
+            carbon_credits = validated_data.get('carbon_credits_earned')
+            if carbon_credits is not None and carbon_credits < 0:
+                raise ValidationError("Carbon credits earned cannot be negative")
+            
+            # Validate investment amount is not negative
+            investment = validated_data.get('investment_amount')
+            if investment is not None and investment < 0:
+                raise ValidationError("Investment amount cannot be negative")
+            
+            # Validate business type
+            business_type = validated_data.get('business_type')
+            valid_business_types = [
+                'certification', 'carbon_credits', 'sustainability_audit', 'green_investment',
+                'supply_chain', 'consumer_engagement', 'regulatory_compliance', 'carbon_offset',
+                'sustainability_training', 'eco_certification'
+            ]
+            if business_type and business_type not in valid_business_types:
+                raise ValidationError(
+                    f"Invalid business type: {business_type}. Must be one of: {', '.join(valid_business_types)}"
+                )
+
+    @action(detail=False, methods=['get'], url_path='structured-field-options')
+    def structured_field_options(self, request):
+        """
+        API endpoint to get available options for structured fields
+        """
+        options = {
+            'chemical_event': {
+                'application_methods': [
+                    {'value': 'broadcast', 'label': 'Broadcast/Spread'},
+                    {'value': 'injection', 'label': 'Injection/Banding'},
+                    {'value': 'foliar', 'label': 'Foliar Spray'},
+                    {'value': 'drip', 'label': 'Drip/Fertigation'},
+                    {'value': 'banding', 'label': 'Banding/Placement'},
+                ]
+            },
+            'equipment_event': {
+                'efficiency_ratings': [
+                    {'value': 'high', 'label': 'High Efficiency'},
+                    {'value': 'normal', 'label': 'Normal Efficiency'},
+                    {'value': 'low', 'label': 'Low Efficiency'},
+                ],
+                'fuel_units': [
+                    {'value': 'L', 'label': 'Liters'},
+                    {'value': 'gal', 'label': 'Gallons'},
+                ]
+            },
+            'production_event': {
+                'area_units': [
+                    {'value': 'ha', 'label': 'Hectares'},
+                    {'value': 'acre', 'label': 'Acres'},
+                ],
+                'yield_units': [
+                    {'value': 'kg', 'label': 'Kilograms'},
+                    {'value': 'lb', 'label': 'Pounds'},
+                    {'value': 'ton', 'label': 'Tons'},
+                ],
+                'efficiency_ratings': [
+                    {'value': 'high', 'label': 'High Efficiency'},
+                    {'value': 'normal', 'label': 'Normal Efficiency'},
+                    {'value': 'low', 'label': 'Low Efficiency'},
+                ]
+            },
+            'business_event': {
+                'business_types': [
+                    {'value': 'certification', 'label': 'Certification Event (Organic, Carbon, etc.)'},
+                    {'value': 'carbon_credits', 'label': 'Carbon Credits Transaction'},
+                    {'value': 'sustainability_audit', 'label': 'Sustainability Audit/Assessment'},
+                    {'value': 'green_investment', 'label': 'Green Technology Investment'},
+                    {'value': 'supply_chain', 'label': 'Supply Chain Optimization'},
+                    {'value': 'consumer_engagement', 'label': 'Consumer Engagement Initiative'},
+                    {'value': 'regulatory_compliance', 'label': 'Regulatory Compliance'},
+                    {'value': 'carbon_offset', 'label': 'Carbon Offset Purchase'},
+                    {'value': 'sustainability_training', 'label': 'Sustainability Training'},
+                    {'value': 'eco_certification', 'label': 'Eco-Certification Process'},
+                ]
+            }
+        }
+        return Response(options)

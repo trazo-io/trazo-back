@@ -7,6 +7,7 @@ from users.models import User
 from users.serializers import BasicUserSerializer
 
 from .constants import (
+    BUSINESS_EVENT_TYPE,
     CHEMICAL_EVENT_TYPE,
     EQUIPMENT_EVENT_TYPE,
     GENERAL_EVENT_TYPE,
@@ -16,6 +17,7 @@ from .constants import (
     WEATHER_EVENT_TYPE,
 )
 from .models import (
+    BusinessEvent,
     ChemicalEvent,
     CommonEvent,
     EquipmentEvent,
@@ -91,6 +93,8 @@ class EventSerializer(serializers.ModelSerializer):
                 result = calculator.calculate_soil_management_event_impact(event)
             elif isinstance(event, PestManagementEvent):
                 result = calculator.calculate_pest_management_event_impact(event)
+            elif isinstance(event, BusinessEvent):
+                result = calculator.calculate_business_event_impact(event)
             elif isinstance(event, GeneralEvent):
                 # For general events, use standard minimal calculation
                 result = {
@@ -140,6 +144,39 @@ class UpdateChemicalEventSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChemicalEvent
         fields = "__all__"
+
+    def validate(self, data):
+        """
+        Custom validation for chemical event structured fields
+        """
+        # Validate NPK percentages sum to reasonable total
+        nitrogen = data.get('nitrogen_percentage') or 0
+        phosphorus = data.get('phosphorus_percentage') or 0
+        potassium = data.get('potassium_percentage') or 0
+        
+        total_npk = nitrogen + phosphorus + potassium
+        if total_npk > 100:
+            raise serializers.ValidationError({
+                'non_field_errors': 'Total NPK percentages cannot exceed 100%.'
+            })
+        
+        # Validate that structured fields have reasonable values
+        if nitrogen < 0 or nitrogen > 100:
+            raise serializers.ValidationError({
+                'nitrogen_percentage': 'Nitrogen percentage must be between 0 and 100.'
+            })
+        
+        if phosphorus < 0 or phosphorus > 100:
+            raise serializers.ValidationError({
+                'phosphorus_percentage': 'Phosphorus percentage must be between 0 and 100.'
+            })
+        
+        if potassium < 0 or potassium > 100:
+            raise serializers.ValidationError({
+                'potassium_percentage': 'Potassium percentage must be between 0 and 100.'
+            })
+        
+        return data
 
 
 class ChemicalEventSerializer(EventSerializer):
@@ -374,6 +411,50 @@ class UpdateProductionEventSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductionEvent
         fields = "__all__"
+
+    def validate(self, data):
+        """
+        Custom validation for production event structured fields
+        """
+        area_covered = data.get('area_covered')
+        yield_quantity = data.get('yield_quantity')
+        fuel_consumed = data.get('fuel_consumed')
+        equipment_hours = data.get('equipment_hours')
+        transportation_distance = data.get('transportation_distance')
+        
+        # Validate positive values where applicable
+        if area_covered is not None and area_covered < 0:
+            raise serializers.ValidationError({
+                'area_covered': 'Area covered cannot be negative.'
+            })
+        
+        if yield_quantity is not None and yield_quantity < 0:
+            raise serializers.ValidationError({
+                'yield_quantity': 'Yield quantity cannot be negative.'
+            })
+        
+        if fuel_consumed is not None and fuel_consumed < 0:
+            raise serializers.ValidationError({
+                'fuel_consumed': 'Fuel consumed cannot be negative.'
+            })
+        
+        if equipment_hours is not None and equipment_hours < 0:
+            raise serializers.ValidationError({
+                'equipment_hours': 'Equipment hours cannot be negative.'
+            })
+        
+        if transportation_distance is not None and transportation_distance < 0:
+            raise serializers.ValidationError({
+                'transportation_distance': 'Transportation distance cannot be negative.'
+            })
+        
+        # Reasonable maximum hours per day validation
+        if equipment_hours is not None and equipment_hours > 24:
+            raise serializers.ValidationError({
+                'equipment_hours': 'Equipment hours cannot exceed 24 hours per day for a single event.'
+            })
+        
+        return data
 
 
 class ProductionEventSerializer(EventSerializer):
@@ -870,6 +951,9 @@ class PublicHistorySerializer(serializers.ModelSerializer):
             general_events = history.history_generalevent_events.only(
                 "id", "date", "description", "name", "observation"
             )
+            business_events = history.history_businessevent_events.only(
+                "id", "date", "description", "name", "observation", "business_type", "certification_type"
+            )
 
             # Create lightweight event data without carbon calculations
             for event in chemical_events:
@@ -984,6 +1068,25 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                     }
                 )
 
+            for event in business_events:
+                business_display = event.get_business_type_display() if hasattr(event, 'get_business_type_display') else event.business_type
+                certification_display = event.get_certification_type_display() if hasattr(event, 'get_certification_type_display') and event.certification_type else None
+                
+                events_data.append(
+                    {
+                        "id": event.id,
+                        "date": event.date.isoformat() if event.date else None,
+                        "description": event.name or event.description or f"Business Event - {business_display}",
+                        "observation": event.observation or "",
+                        "type": "business",
+                        "certified": getattr(event, "certified", True),
+                        "index": getattr(event, "index", 0),
+                        "volume": None,
+                        "concentration": None,
+                        "equipment": certification_display or business_display,
+                    }
+                )
+
             # Sort by index first, then by date
             events_data.sort(key=lambda x: (x.get("index", 0), x.get("date", "")))
 
@@ -1049,6 +1152,38 @@ class UpdateEquipmentEventSerializer(serializers.ModelSerializer):
     class Meta:
         model = EquipmentEvent
         fields = "__all__"
+
+    def validate(self, data):
+        """
+        Custom validation for equipment event structured fields
+        """
+        fuel_consumed = data.get('fuel_consumed')
+        hours_operated = data.get('hours_operated')
+        area_worked = data.get('area_worked')
+        
+        # Validate positive values where applicable
+        if fuel_consumed is not None and fuel_consumed < 0:
+            raise serializers.ValidationError({
+                'fuel_consumed': 'Fuel consumed cannot be negative.'
+            })
+        
+        if hours_operated is not None and hours_operated < 0:
+            raise serializers.ValidationError({
+                'hours_operated': 'Hours operated cannot be negative.'
+            })
+        
+        if area_worked is not None and area_worked < 0:
+            raise serializers.ValidationError({
+                'area_worked': 'Area worked cannot be negative.'
+            })
+        
+        # Reasonable maximum hours per day validation
+        if hours_operated is not None and hours_operated > 24:
+            raise serializers.ValidationError({
+                'hours_operated': 'Hours operated cannot exceed 24 hours per day for a single event.'
+            })
+        
+        return data
 
 
 class EquipmentEventSerializer(EventSerializer):
@@ -1117,3 +1252,68 @@ class PestManagementEventSerializer(EventSerializer):
 
     def get_event_type(self, pest_event):
         return PEST_MANAGEMENT_EVENT_TYPE
+
+
+# Business Event Serializers
+class UpdateBusinessEventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BusinessEvent
+        fields = "__all__"
+
+    def validate(self, data):
+        """
+        Custom validation for business event fields
+        """
+        business_type = data.get('business_type')
+        certification_type = data.get('certification_type')
+        carbon_credits_earned = data.get('carbon_credits_earned')
+        
+        # Certification type is required when business_type is 'certification'
+        if business_type == 'certification' and not certification_type:
+            raise serializers.ValidationError({
+                'certification_type': 'Certification type is required when business type is certification.'
+            })
+        
+        # Carbon credits must be positive if provided
+        if carbon_credits_earned is not None and carbon_credits_earned < 0:
+            raise serializers.ValidationError({
+                'carbon_credits_earned': 'Carbon credits earned cannot be negative.'
+            })
+        
+        return data
+
+
+class BusinessEventSerializer(EventSerializer):
+    type = serializers.SerializerMethodField()
+    event_type = serializers.SerializerMethodField()
+    
+    # Add display fields for better readability
+    business_type_display = serializers.SerializerMethodField()
+    certification_type_display = serializers.SerializerMethodField()
+    verification_status_display = serializers.SerializerMethodField()
+    sustainability_practice_display = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BusinessEvent
+        fields = "__all__"
+
+    def get_type(self, business_event):
+        type_display = business_event.get_type_display()
+        if type_display is None:
+            return "event.business.unknown"
+        return f"event.business.{type_display.lower().replace(' ', '_')}"
+
+    def get_event_type(self, business_event):
+        return BUSINESS_EVENT_TYPE
+    
+    def get_business_type_display(self, business_event):
+        return business_event.get_business_type_display()
+    
+    def get_certification_type_display(self, business_event):
+        return business_event.get_certification_type_display() if business_event.certification_type else None
+    
+    def get_verification_status_display(self, business_event):
+        return business_event.get_verification_status_display()
+    
+    def get_sustainability_practice_display(self, business_event):
+        return business_event.get_sustainability_practice_display() if business_event.sustainability_practice else None

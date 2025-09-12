@@ -1,5 +1,6 @@
 # Staging-specific settings
 # This file provides a secure staging environment configuration
+# Updated with CORS fix for x-analytics-consent header
 
 import os
 

@@ -104,6 +104,10 @@ class History(models.Model):
             .union(self.history_chemicalevent_events.all().values_list("created_by", flat=True))
             .union(self.history_productionevent_events.all().values_list("created_by", flat=True))
             .union(self.history_generalevent_events.all().values_list("created_by", flat=True))
+            .union(self.history_equipmentevent_events.all().values_list("created_by", flat=True))
+            .union(self.history_soilmanagementevent_events.all().values_list("created_by", flat=True))
+            .union(self.history_pestmanagementevent_events.all().values_list("created_by", flat=True))
+            .union(self.history_businessevent_events.all().values_list("created_by", flat=True))
         )
         return users
 
@@ -134,6 +138,10 @@ class History(models.Model):
             + self.history_chemicalevent_events.count()
             + self.history_weatherevent_events.count()
             + self.history_generalevent_events.count()
+            + self.history_equipmentevent_events.count()
+            + self.history_soilmanagementevent_events.count()
+            + self.history_pestmanagementevent_events.count()
+            + self.history_businessevent_events.count()
         )
         if total_events > 0:
             score += min(total_events * 3, 30)  # 3 points per event, max 30
@@ -169,6 +177,10 @@ class History(models.Model):
             self.history_productionevent_events.count()
             + self.history_chemicalevent_events.count()
             + self.history_generalevent_events.count()
+            + self.history_equipmentevent_events.count()
+            + self.history_soilmanagementevent_events.count()
+            + self.history_pestmanagementevent_events.count()
+            + self.history_businessevent_events.count()
         )
 
         for event in self.history_productionevent_events.all():
@@ -373,6 +385,7 @@ class History(models.Model):
 
     def get_events(self):
         from .serializers import (
+            BusinessEventSerializer,
             ChemicalEventSerializer,
             EquipmentEventSerializer,
             GeneralEventSerializer,
@@ -390,6 +403,7 @@ class History(models.Model):
             + EquipmentEventSerializer(self.history_equipmentevent_events.all(), many=True).data
             + SoilManagementEventSerializer(self.history_soilmanagementevent_events.all(), many=True).data
             + PestManagementEventSerializer(self.history_pestmanagementevent_events.all(), many=True).data
+            + BusinessEventSerializer(self.history_businessevent_events.all(), many=True).data
         )
         return sorted(events, key=lambda event: event["index"])
 
@@ -471,6 +485,33 @@ class ChemicalEvent(CommonEvent):
     time_period = models.CharField(max_length=60, blank=True, null=True)
     observation = models.TextField(blank=True, null=True)
     extra_data = models.JSONField(blank=True, null=True)
+    
+    # New structured fields for better carbon calculations
+    name = models.CharField(max_length=150, blank=True, null=True, help_text="Event name")
+    nitrogen_percentage = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True,
+        help_text="Nitrogen content percentage"
+    )
+    phosphorus_percentage = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True,
+        help_text="Phosphorus content percentage"
+    )
+    potassium_percentage = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True,
+        help_text="Potassium content percentage"
+    )
+    application_method_structured = models.CharField(
+        max_length=20,
+        choices=[
+            ('broadcast', 'Broadcast'),
+            ('injection', 'Soil Injection'),
+            ('foliar', 'Foliar Application'),
+            ('drip', 'Drip/Fertigation'),
+            ('banding', 'Band Application'),
+        ],
+        null=True, blank=True,
+        help_text="Structured application method"
+    )
 
 
 class ProductionEvent(CommonEvent):
@@ -489,6 +530,83 @@ class ProductionEvent(CommonEvent):
     type = models.CharField(max_length=2, choices=PRODUCTION_EVENTS)
     observation = models.TextField(blank=True, null=True)
     extra_data = models.JSONField(blank=True, null=True)
+    
+    # New structured fields for better carbon calculations
+    name = models.CharField(max_length=150, blank=True, null=True, help_text="Event name")
+    area_covered = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Area covered in numeric format"
+    )
+    area_unit = models.CharField(
+        max_length=10,
+        choices=[
+            ('ha', 'Hectares'),
+            ('acres', 'Acres'),
+            ('m2', 'Square Meters'),
+            ('km2', 'Square Kilometers'),
+        ],
+        default='ha', blank=True,
+        help_text="Area unit"
+    )
+    yield_quantity = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Quantity harvested or planted"
+    )
+    yield_unit = models.CharField(
+        max_length=10,
+        choices=[
+            ('kg', 'Kilograms'),
+            ('tons', 'Tonnes'),
+            ('lbs', 'Pounds'),
+            ('boxes', 'Boxes'),
+            ('plants', 'Plants'),
+            ('seeds', 'Seeds'),
+        ],
+        default='kg', blank=True,
+        help_text="Yield unit"
+    )
+    fuel_consumed = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Fuel consumed during production activity"
+    )
+    fuel_unit = models.CharField(
+        max_length=10,
+        choices=[
+            ('L', 'Liters'),
+            ('gal', 'Gallons'),
+            ('kg', 'Kilograms'),
+        ],
+        default='L', blank=True,
+        help_text="Fuel unit"
+    )
+    equipment_hours = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Equipment operating hours"
+    )
+    transportation_distance = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Transportation distance for logistics emissions"
+    )
+    transportation_unit = models.CharField(
+        max_length=10,
+        choices=[
+            ('km', 'Kilometers'),
+            ('miles', 'Miles'),
+            ('m', 'Meters'),
+        ],
+        default='km', blank=True,
+        help_text="Transportation unit"
+    )
+    production_efficiency = models.CharField(
+        max_length=10,
+        choices=[
+            ('high', 'High Efficiency'),
+            ('normal', 'Normal Efficiency'),
+            ('low', 'Low Efficiency'),
+        ],
+        default='normal', blank=True,
+        help_text="Production efficiency rating for carbon scoring"
+    )
 
 
 class GeneralEvent(CommonEvent):
@@ -659,6 +777,67 @@ class EquipmentEvent(CommonEvent):
     hours_used = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     area_covered = models.CharField(max_length=100, blank=True)
     extra_data = models.JSONField(blank=True, null=True)
+    
+    # New structured fields for better carbon calculations
+    name = models.CharField(max_length=150, blank=True, null=True, help_text="Event name")
+    equipment_type_structured = models.CharField(
+        max_length=30,
+        choices=[
+            ('tractor_small', 'Small Tractor (<75 HP)'),
+            ('tractor_medium', 'Medium Tractor (75-150 HP)'),
+            ('tractor_large', 'Large Tractor (>150 HP)'),
+            ('irrigation_pump', 'Irrigation Pump'),
+            ('harvester', 'Combine Harvester'),
+            ('sprayer', 'Field Sprayer'),
+            ('cultivator', 'Cultivator/Plow'),
+            ('transport', 'Transport Vehicle'),
+        ],
+        null=True, blank=True,
+        help_text="Structured equipment type for carbon calculations"
+    )
+    fuel_consumed = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Fuel consumed (renamed from fuel_amount for clarity)"
+    )
+    fuel_unit = models.CharField(
+        max_length=10,
+        choices=[
+            ('L', 'Liters'),
+            ('gal', 'Gallons'),
+            ('kg', 'Kilograms'),
+        ],
+        default='L', blank=True,
+        help_text="Fuel unit"
+    )
+    hours_operated = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Hours operated (renamed from hours_used for clarity)"
+    )
+    area_worked = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Area worked in numeric format"
+    )
+    area_unit = models.CharField(
+        max_length=10,
+        choices=[
+            ('ha', 'Hectares'),
+            ('acres', 'Acres'),
+            ('m2', 'Square Meters'),
+        ],
+        default='ha', blank=True,
+        help_text="Area unit"
+    )
+    operation_efficiency = models.CharField(
+        max_length=10,
+        choices=[
+            ('high', 'High Efficiency'),
+            ('normal', 'Normal Efficiency'),
+            ('low', 'Low Efficiency'),
+        ],
+        default='normal', blank=True,
+        help_text="Operation efficiency rating for carbon scoring"
+    )
+    observation = models.TextField(blank=True, null=True, help_text="Equipment event observations")
 
     class Meta:
         verbose_name = "Equipment Event"
@@ -733,3 +912,114 @@ class PestManagementEvent(CommonEvent):
     class Meta:
         verbose_name = "Pest Management Event"
         verbose_name_plural = "Pest Management Events"
+
+
+class BusinessEvent(CommonEvent):
+    """Carbon-focused business events for transparency and consumer value"""
+
+    # Business event types (legacy compatibility)
+    CERTIFICATION = "CE"
+    COMPLIANCE = "CM"
+    INSPECTION = "IN"
+
+    BUSINESS_TYPE_CHOICES = [
+        (CERTIFICATION, "Certification"),
+        (COMPLIANCE, "Compliance"),
+        (INSPECTION, "Inspection"),
+    ]
+
+    # Carbon-focused business activity types
+    BUSINESS_ACTIVITY_CHOICES = [
+        ("certification", "Certification Event (Organic, Carbon, etc.)"),
+        ("carbon_credits", "Carbon Credits Transaction"),
+        ("sustainability_audit", "Sustainability Audit/Assessment"),
+        ("verification", "Third-Party Verification"),
+        ("compliance", "Regulatory Compliance Activity"),
+        ("transparency", "Consumer Transparency Initiative"),
+    ]
+
+    CERTIFICATION_TYPE_CHOICES = [
+        ("organic_usda", "USDA Organic"),
+        ("carbon_neutral", "Carbon Neutral Certification"),
+        ("rainforest_alliance", "Rainforest Alliance"),
+        ("fair_trade", "Fair Trade Certified"),
+        ("regenerative", "Regenerative Organic Certified"),
+        ("sustainable_agriculture", "Sustainable Agriculture Standard"),
+        ("water_stewardship", "Water Stewardship Certification"),
+    ]
+
+    CARBON_CREDIT_UNITS = [
+        ("tCO2e", "tCO2e (tonnes CO2 equivalent)"),
+        ("kgCO2e", "kgCO2e (kilograms CO2 equivalent)"),
+        ("credits", "Carbon Credits (units)"),
+    ]
+
+    VERIFICATION_STATUS_CHOICES = [
+        ("pending", "Pending Verification"),
+        ("verified", "Verified"),
+        ("in_progress", "Verification In Progress"),
+        ("failed", "Verification Failed"),
+        ("not_applicable", "Not Applicable"),
+    ]
+
+    SUSTAINABILITY_PRACTICE_CHOICES = [
+        ("cover_cropping", "Cover Cropping Implementation"),
+        ("no_till", "No-Till Farming Adoption"),
+        ("integrated_pest", "Integrated Pest Management"),
+        ("water_conservation", "Water Conservation Measures"),
+        ("renewable_energy", "Renewable Energy Installation"),
+        ("composting", "On-Farm Composting Program"),
+        ("biodiversity", "Biodiversity Conservation"),
+        ("soil_health", "Soil Health Improvement"),
+    ]
+
+    type = models.CharField(max_length=2, choices=BUSINESS_TYPE_CHOICES, default=CERTIFICATION)
+    name = models.CharField(max_length=150, blank=True, null=True, help_text="Event name")
+    
+    # New carbon-focused fields
+    business_type = models.CharField(
+        max_length=30,
+        choices=BUSINESS_ACTIVITY_CHOICES,
+        default="certification",
+        help_text="Type of carbon-relevant business activity"
+    )
+    certification_type = models.CharField(
+        max_length=50,
+        choices=CERTIFICATION_TYPE_CHOICES,
+        blank=True,
+        null=True,
+        help_text="Type of certification obtained or renewed"
+    )
+    carbon_credits_earned = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        help_text="Amount of carbon credits generated or traded"
+    )
+    carbon_credits_unit = models.CharField(
+        max_length=10,
+        choices=CARBON_CREDIT_UNITS,
+        default="tCO2e",
+        blank=True,
+        help_text="Unit for carbon credits"
+    )
+    verification_status = models.CharField(
+        max_length=20,
+        choices=VERIFICATION_STATUS_CHOICES,
+        default="pending",
+        help_text="Status of verification for consumer transparency"
+    )
+    sustainability_practice = models.CharField(
+        max_length=30,
+        choices=SUSTAINABILITY_PRACTICE_CHOICES,
+        blank=True,
+        null=True,
+        help_text="Sustainability practice implemented"
+    )
+    observation = models.TextField(blank=True, null=True)
+    extra_data = models.JSONField(blank=True, null=True)
+
+    class Meta:
+        verbose_name = "Business Event"
+        verbose_name_plural = "Business Events"
