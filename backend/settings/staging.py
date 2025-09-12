@@ -78,6 +78,7 @@ SESSION_COOKIE_SECURE = config("SESSION_COOKIE_SECURE", default=False, cast=bool
 CSRF_COOKIE_SECURE = config("CSRF_COOKIE_SECURE", default=False, cast=bool)
 
 # CORS configuration for staging - very permissive for development
+# Override base.py CORS settings completely
 CORS_ORIGIN_ALLOW_ALL = True
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_ALL_ORIGINS = True  # More explicit setting
@@ -91,6 +92,7 @@ CORS_ALLOWED_HEADERS = [
     "user-agent",
     "x-csrftoken",
     "x-requested-with",
+    "x-analytics-consent",
 ]
 CORS_ALLOW_METHODS = [
     "DELETE",
