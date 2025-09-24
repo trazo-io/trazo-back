@@ -848,24 +848,78 @@ class OptimizedCarbonCalculator:
         return fallback_factors.get(crop_type.lower(), fallback_factors["fertilizer"])
 
     def calculate_chemical_impact_optimized(self, processed_event: Dict[str, Any]) -> Dict[str, Any]:
-        """Optimized chemical event calculation"""
-        # Get emission factors with caching
-        factors = self.get_emission_factors("fertilizer")
-
-        # Fast calculation using processed data
-        volume = processed_event.get("volume", 10)
-        area = processed_event.get("area", 1.0)
-
-        # Simplified but accurate calculation
-        co2e = volume * area * factors.get("nitrogen", 5.87) * 0.1
-        efficiency_score = max(0, min(100, 85 - (co2e * 2)))
-
-        return {
-            "co2e": round(co2e, 3),
-            "efficiency_score": round(efficiency_score, 1),
-            "calculation_method": "optimized_chemical",
-            "usda_verified": True,
-        }
+        """FIXED: Now uses proper EPA/USDA emission factors instead of simple multiplication"""
+        from carbon.services.verified_emission_factors import VerifiedEmissionFactors
+        
+        # Extract processed data (now with proper unit conversions)
+        chemical_type = processed_event.get("chemical_type", "FE")
+        volume_liters = processed_event.get("volume", 10)
+        area_hectares = processed_event.get("area", 1.0)  # Now properly converted to hectares
+        application_method = processed_event.get("application_method", "broadcast")
+        
+        # Parse NPK content - only fertilizers have NPK
+        concentration = processed_event.get("concentration", "0-0-0")
+        if chemical_type == "FE":  # Only fertilizers have NPK
+            # Parse concentration like "10-10-10" or "1.5%"
+            if "-" in concentration:
+                parts = concentration.split("-")
+                npk_content = {
+                    "N": float(parts[0]) if len(parts) > 0 else 0,
+                    "P": float(parts[1]) if len(parts) > 1 else 0,
+                    "K": float(parts[2]) if len(parts) > 2 else 0,
+                }
+            else:
+                # Default for non-NPK concentrations
+                npk_content = {"N": 0, "P": 0, "K": 0}
+        else:
+            # Pesticides, fungicides, herbicides have NO NPK content
+            npk_content = {"N": 0, "P": 0, "K": 0}
+        
+        # Use EPA/USDA verified emission factors (same as standard endpoint)
+        try:
+            calculation_result = VerifiedEmissionFactors.calculate_chemical_application_emissions(
+                chemical_type=chemical_type,
+                volume_liters=volume_liters,
+                area_hectares=area_hectares,
+                npk_content=npk_content,
+                application_method=application_method
+            )
+            
+            # Extract results
+            co2e = calculation_result['co2e_kg']
+            breakdown = calculation_result['breakdown']
+            calculation_method = calculation_result['calculation_method']
+            
+            # Calculate efficiency score based on EPA confidence
+            confidence_level = breakdown.get('confidence_level', 0.90)
+            efficiency_score = confidence_level * 100
+            
+            return {
+                "co2e": round(co2e, 3),
+                "efficiency_score": round(efficiency_score, 1),
+                "calculation_method": f"optimized_{calculation_method}",
+                "verification_status": "epa_usda_verified",
+                "breakdown": breakdown,
+                "npk_content": npk_content,
+                "manufacturing_emissions_kg_co2e": breakdown.get('manufacturing_emissions_kg_co2e', 0),
+                "application_fuel_liters": breakdown.get('application_fuel_liters', 0),
+                "application_fuel_gallons": breakdown.get('application_fuel_gallons', 0),
+                "application_emissions_kg_co2e": breakdown.get('application_emissions_kg_co2e', 0),
+            }
+            
+        except Exception as e:
+            # Fallback to prevent breaking existing functionality
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"EPA calculation failed in optimized endpoint: {e}")
+            
+            return {
+                "co2e": 0.0,
+                "efficiency_score": 50.0,
+                "calculation_method": "optimized_fallback",
+                "verification_status": "calculation_error",
+                "error": str(e)
+            }
 
     def calculate_production_impact_optimized(self, processed_event: Dict[str, Any]) -> Dict[str, Any]:
         """Optimized production event calculation"""
@@ -1023,12 +1077,29 @@ class OptimizedEventProcessor:
 
     @classmethod
     def _process_chemical_event(cls, event_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Process chemical event data efficiently"""
+        """Process chemical event data efficiently WITH PROPER UNIT CONVERSION"""
+        # CRITICAL FIX: Convert area from acres to hectares
+        area_value = float(event_data.get("area", 1.0))
+        area_unit = event_data.get("area_unit", "acres")
+        
+        # Convert area to hectares for EPA calculations
+        if area_unit.lower() in ["acre", "acres"]:
+            area_hectares = area_value * 0.404686  # acres to hectares
+        elif area_unit.lower() in ["ha", "hectare", "hectares"]:
+            area_hectares = area_value
+        elif area_unit.lower() in ["m²", "m2", "square_meter", "square_meters"]:
+            area_hectares = area_value / 10000
+        else:
+            # Default to hectares if unit not specified
+            area_hectares = area_value
+            
         return {
             "chemical_type": event_data.get("type", "FE"),
             "volume": float(event_data.get("volume", 10)),
-            "area": float(event_data.get("area", 1.0)),
+            "area": area_hectares,  # NOW IN HECTARES
+            "area_unit": "hectares",  # Track converted unit
             "concentration": event_data.get("concentration", "10-10-10"),
+            "application_method": event_data.get("way_of_application", "broadcast"),
         }
 
     @classmethod
@@ -1219,23 +1290,70 @@ def calculate_event_carbon_impact(request):
                 # Map production event data (use actual form data, not defaults)
                 elif event_type == "production":
                     self.type = event_data.get("type", "IR")  # Use actual type from form
-                    # Map frontend field names to backend field names
+                    
+                    # Map frontend form fields correctly for EPA calculations
+                    self.area_covered = float(event_data.get("area_covered", "1.0")) if event_data.get("area_covered") else 1.0
+                    self.area_unit = event_data.get("area_unit", "ha")
+                    
+                    # Handle fuel consumption with unit conversion
+                    fuel_consumed = event_data.get("fuel_consumed")
+                    self.fuel_consumed = float(fuel_consumed) if fuel_consumed and fuel_consumed.strip() else None
+                    self.fuel_unit = event_data.get("fuel_unit", "L")
+                    
+                    # Equipment hours (frontend sends 'equipment_hours' not 'equipment_operating_hours')  
+                    equipment_hours = event_data.get("equipment_hours")
+                    self.equipment_hours = float(equipment_hours) if equipment_hours else None
+                    
+                    # Additional production fields from frontend
+                    self.yield_quantity = float(event_data.get("yield_quantity", 0)) if event_data.get("yield_quantity") else None
+                    self.yield_unit = event_data.get("yield_unit", "kg")
+                    self.transportation_distance = float(event_data.get("transportation_distance", 0)) if event_data.get("transportation_distance") else None
+                    self.transportation_unit = event_data.get("transportation_unit", "km")
+                    self.production_efficiency = event_data.get("production_efficiency", "normal")
+                    
+                    # Legacy support for existing fields
                     duration = event_data.get("duration", "2 hours")
-                    area_covered = event_data.get("area_covered", "1.0 hectares")
                     equipment_used = event_data.get("equipment_used", "irrigation_system")
 
-                    # Convert duration to volume estimate for irrigation
-                    if "hour" in duration:
+                    # Convert duration to volume estimate for irrigation (backwards compatibility)
+                    if "hour" in str(duration):
                         import re
-
-                        hours = re.findall(r"\d+", duration)
+                        hours = re.findall(r"\d+", str(duration))
                         estimated_volume = int(hours[0]) * 50 if hours else 100  # 50L per hour estimate
                         self.volume = f"{estimated_volume} liters"
                     else:
-                        self.volume = duration  # Use as-is if not hours
+                        self.volume = str(duration)  # Use as-is if not hours
 
-                    self.area = area_covered  # Map area_covered to area
-                    self.equipment = equipment_used  # Map equipment_used to equipment
+                    # Legacy field mapping 
+                    self.area = f"{self.area_covered} {self.area_unit}"
+                    self.equipment = equipment_used
+                    
+                    # Create structured data for EPA calculations with correct field names
+                    self.extra_data = {
+                        "area_covered": self.area_covered,
+                        "area_unit": self.area_unit,
+                        "fuel_consumed": self.fuel_consumed,
+                        "fuel_unit": self.fuel_unit,
+                        "equipment_hours": self.equipment_hours,
+                        "yield_quantity": self.yield_quantity,
+                        "yield_unit": self.yield_unit,
+                        "transportation_distance": self.transportation_distance,
+                        "transportation_unit": self.transportation_unit,
+                        "production_efficiency": self.production_efficiency,
+                        "equipment_used": equipment_used,
+                        "duration": duration
+                    }
+                    
+                    # Mock history for crop information (needed for EPA calculations)
+                    class MockHistory:
+                        def __init__(self):
+                            self.product = MockProduct()
+                            
+                    class MockProduct:
+                        def __init__(self):
+                            self.name = event_data.get("crop_name", "unknown")
+                    
+                    self.history = MockHistory()
 
                 # Map equipment event data (use actual form data, not defaults)
                 elif event_type == "equipment":
@@ -1255,6 +1373,23 @@ def calculate_event_carbon_impact(request):
                     self.water_deficit = event_data.get("water_deficit")
                     self.duration = event_data.get("duration")
                     self.way_of_protection = event_data.get("way_of_protection", "")
+                    
+                    # Add extra_data for EPA calculation compatibility
+                    self.extra_data = {
+                        "lower_temperature": event_data.get("lower_temperature"),
+                        "highest_temperature": event_data.get("highest_temperature"),
+                        "water_deficit": event_data.get("water_deficit"),
+                        "duration": event_data.get("duration"),
+                        "way_of_protection": event_data.get("way_of_protection", ""),
+                        "weight": event_data.get("weight"),
+                        "diameter": event_data.get("diameter"),
+                        "wind_speed": event_data.get("wind_speed"),
+                        "precipitation_amount": event_data.get("precipitation_amount"),
+                        "humidity_level": event_data.get("humidity_level"),
+                        "crop_impact": event_data.get("crop_impact"),
+                        "protection_measures": event_data.get("protection_measures"),
+                        "damage_assessment": event_data.get("damage_assessment")
+                    }
 
                 # Map soil management event data (use actual form data, not defaults)
                 elif event_type == "soil_management":
@@ -1358,9 +1493,32 @@ def calculate_event_carbon_impact(request):
                     "timestamp": timezone.now().isoformat(),
                 }
 
-        # Ensure required fields are present
+        # Ensure required fields are present and enhance with verification info
         calculation_result["event_type"] = event_type
         calculation_result["timestamp"] = timezone.now().isoformat()
+        
+        # Add EPA/USDA verification indicators for transparency
+        if calculation_result.get("calculation_method") in ["verified_epa_factors", "verified_epa_usda_factors"]:
+            calculation_result["verification_badge"] = "EPA Verified"
+            calculation_result["verification_level"] = "factors_verified"
+            # Handle confidence_level (could be string or number)
+            confidence = calculation_result.get("confidence_score", 0.85)
+            if isinstance(confidence, str):
+                confidence_map = {"high": 0.95, "medium": 0.85, "low": 0.70}
+                confidence = confidence_map.get(confidence, 0.85)
+            calculation_result["confidence_percentage"] = int(confidence * 100) if confidence < 1 else int(confidence)
+            if "data_sources" in calculation_result:
+                calculation_result["verification_sources"] = "EPA/USDA"
+        elif calculation_result.get("usda_factors_based"):
+            calculation_result["verification_badge"] = "USDA Verified"
+            calculation_result["verification_level"] = "factors_verified"
+            calculation_result["verification_sources"] = "USDA"
+            calculation_result["confidence_percentage"] = 85
+        else:
+            calculation_result["verification_badge"] = "Estimated"
+            calculation_result["verification_level"] = "estimated"
+            calculation_result["verification_sources"] = "Industry Standards"
+            calculation_result["confidence_percentage"] = 50
 
         return Response(calculation_result, status=status.HTTP_200_OK)
 
@@ -1987,52 +2145,43 @@ class PublicProductionViewSet(viewsets.ViewSet):
                 print(f"Error calculating crop-specific benchmarks: {e}")
                 industry_percentile = 50
 
-            # Calculate carbon score with crop-specific considerations
-            carbon_score = 0
-            if benchmark:
-                # Use benchmark-based scoring
-                production_amount = getattr(production, "production_amount", None) or 1000
-                net_footprint_per_kg = net_footprint / production_amount if production_amount > 0 else net_footprint
-
-                if net_footprint_per_kg <= 0:
-                    carbon_score = 95  # Excellent for carbon neutral/negative
-                elif net_footprint_per_kg <= benchmark.min_emissions:
-                    carbon_score = 90  # Excellent performance
-                elif net_footprint_per_kg <= benchmark.average_emissions:
-                    # Better than average: scale from 70-90
-                    ratio = net_footprint_per_kg / benchmark.average_emissions
-                    carbon_score = int(90 - (ratio * 20))
-                elif net_footprint_per_kg <= benchmark.max_emissions:
-                    # Worse than average: scale from 30-70
-                    ratio = (net_footprint_per_kg - benchmark.average_emissions) / (
-                        benchmark.max_emissions - benchmark.average_emissions
-                    )
-                    carbon_score = int(70 - (ratio * 40))
-                else:
-                    # Worse than max: scale from 10-30
-                    ratio = min(net_footprint_per_kg / benchmark.max_emissions, 2.0)
-                    carbon_score = max(10, int(30 - ((ratio - 1) * 20)))
+            # Calculate transparency score using TransparencyCalculator
+            from history.services.transparency_calculator import TransparencyCalculator
+            from .services.carbon_transparency_service import transparency_service
+            
+            transparency_calc = TransparencyCalculator()
+            transparency_data = transparency_calc.calculate_transparency_score(production)
+            transparency_score = transparency_data.get('transparency_percentage', 0)
+            
+            # Get verification level and standards
+            verification_level = transparency_service.calculate_verification_level(production)
+            verification_standards = transparency_service.calculate_verification_standards(production)
+            
+            # Calculate carbon score (supporting role for transparency)
+            # This provides scientific validation, not competitive ranking
+            carbon_footprint_per_kg = 0
+            if hasattr(production, 'production_amount') and production.production_amount:
+                carbon_footprint_per_kg = net_footprint / production.production_amount
             else:
-                # Fallback to offset-based scoring
-                if total_emissions > 0:
-                    offset_percentage = min(100, (total_offsets / total_emissions) * 100)
-                    if offset_percentage >= 100:
-                        carbon_score = 85 + min(15, ((offset_percentage - 100) / 50) * 15)
-                    else:
-                        carbon_score = offset_percentage * 0.85
-                elif total_offsets > 0:
-                    carbon_score = 95  # High score for carbon negative
-                else:
-                    carbon_score = 50  # Default score when no data
+                carbon_footprint_per_kg = net_footprint / 1000  # Default per kg
 
-            carbon_score = max(1, min(100, round(carbon_score)))
+            # Carbon data for consumer context (non-competitive)
+            carbon_context = {
+                'per_kg_footprint': round(carbon_footprint_per_kg, 2),
+                'is_carbon_negative': net_footprint < 0,
+                'is_carbon_neutral': abs(net_footprint) < 0.1,
+                'verified_by_usda': verification_standards.get('usda_verified', False),
+                'blockchain_verified': verification_standards.get('blockchain_verified', False)
+            }
 
-            # Quick mode: return minimal data for fast loading
+            # Quick mode: return minimal data for fast loading (transparency-first)
             if quick_mode:
                 quick_response = {
-                    "carbonScore": carbon_score,
-                    "totalEmissions": float(total_emissions),
-                    "totalOffsets": float(total_offsets),
+                    "transparencyScore": round(transparency_score, 1),
+                    "verificationLevel": verification_level,
+                    "carbonFootprint": round(carbon_footprint_per_kg, 2),
+                    "carbonNegative": carbon_context['is_carbon_negative'],
+                    "usda_verified": carbon_context['verified_by_usda'],
                     "cache_hit": False,
                     "timestamp": timezone.now().isoformat(),
                 }
@@ -2043,28 +2192,31 @@ class PublicProductionViewSet(viewsets.ViewSet):
             # Create blockchain verification if not already exists
             blockchain_verification = None
             try:
-                # Prepare carbon data for blockchain
-                carbon_data = {
+                # Prepare transparency data for blockchain
+                transparency_blockchain_data = {
                     "production_id": int(pk),
+                    "transparency_score": transparency_score,
+                    "verification_level": verification_level,
                     "total_emissions": float(total_emissions),
                     "total_offsets": float(total_offsets),
+                    "carbon_footprint_per_kg": carbon_footprint_per_kg,
                     "crop_type": crop_name,
-                    "calculation_method": "crop_specific_usda_benchmarking",
-                    "usda_verified": bool(benchmark and benchmark.usda_verified),
+                    "calculation_method": "transparency_first_usda_verification",
+                    "usda_verified": carbon_context['verified_by_usda'],
+                    "documentation_completeness": transparency_data.get('completeness_score', 0),
+                    "category_breakdown": transparency_data.get('category_breakdown', {}),
                     "timestamp": (
                         int(production.start_date.timestamp())
                         if production.start_date
                         else int(timezone.now().timestamp())
                     ),
-                    "carbon_score": carbon_score,
-                    "industry_percentile": industry_percentile,
                 }
 
                 # Check if blockchain record exists, create if not
                 verification_result = blockchain_service.verify_carbon_record(int(pk))
                 if not verification_result.get("verified", False):
-                    # Create new blockchain record
-                    blockchain_result = blockchain_service.create_carbon_record(int(pk), carbon_data)
+                    # Create new blockchain record with transparency data
+                    blockchain_result = blockchain_service.create_carbon_record(int(pk), transparency_blockchain_data)
                     blockchain_verification = {
                         "verified": True,
                         "transaction_hash": blockchain_result.get("transaction_hash"),
@@ -2122,27 +2274,36 @@ class PublicProductionViewSet(viewsets.ViewSet):
                         }
                     )
 
-                # Add crop-specific badges
-                if carbon_score >= 90:
+                # Add transparency-focused badges
+                if transparency_score >= 95:
                     badges.append(
                         {
-                            "id": "excellence",
-                            "name": f"Excellence in {crop_name.title()} Production",
-                            "description": f"Top 10% performer for {crop_name} carbon efficiency",
-                            "icon": "star",
+                            "id": "complete_transparency",
+                            "name": f"Complete Transparency - {crop_name.title()}",
+                            "description": f"Comprehensive documentation of {crop_name} production",
+                            "icon": "shield-check",
                         }
                     )
-                elif carbon_score >= 70:
+                elif transparency_score >= 85:
                     badges.append(
                         {
-                            "id": "sustainable",
-                            "name": f"Sustainable {crop_name.title()} Producer",
-                            "description": f"Above average sustainability for {crop_name} production",
-                            "icon": "leaf",
+                            "id": "high_transparency",
+                            "name": f"High Transparency - {crop_name.title()}",
+                            "description": f"Strong documentation practices for {crop_name}",
+                            "icon": "shield",
+                        }
+                    )
+                elif transparency_score >= 75:
+                    badges.append(
+                        {
+                            "id": "good_transparency",
+                            "name": f"Good Transparency - {crop_name.title()}",
+                            "description": f"Solid documentation foundation for {crop_name}",
+                            "icon": "check-circle",
                         }
                     )
 
-                # Add blockchain verification badge
+                # Add verification badges
                 if blockchain_verification and blockchain_verification.get("verified"):
                     badges.append(
                         {
@@ -2150,6 +2311,28 @@ class PublicProductionViewSet(viewsets.ViewSet):
                             "name": "Blockchain Verified",
                             "description": "Carbon data verified on blockchain for immutable transparency",
                             "icon": "shield",
+                        }
+                    )
+                
+                if carbon_context['verified_by_usda']:
+                    badges.append(
+                        {
+                            "id": "usda_verified",
+                            "name": "USDA Verified",
+                            "description": "Carbon calculations verified by USDA standards",
+                            "icon": "check-circle",
+                        }
+                    )
+                
+                # Add documentation completeness badge
+                completeness_score = transparency_data.get('completeness_score', 0)
+                if completeness_score >= 90:
+                    badges.append(
+                        {
+                            "id": "complete_documentation",
+                            "name": "Complete Documentation",
+                            "description": "Comprehensive farm activity documentation",
+                            "icon": "file-check",
                         }
                     )
 
@@ -2175,35 +2358,35 @@ class PublicProductionViewSet(viewsets.ViewSet):
                 )  # EPA standard: 21.8 kg CO2 per tree per year
                 relatable_footprint = f"Like planting {trees_equivalent:.1f} trees"
 
-            # Get crop-specific recommendations
+            # Get transparency-focused recommendations
             recommendations = []
-            crop_category = self._get_crop_category_for_recommendations(crop_name)
+            transparency_recommendations = transparency_service._generate_transparency_recommendations(
+                production, verification_standards
+            )
 
-            if carbon_score < 70:
-                base_recommendations = [
-                    "Consider implementing drip irrigation to reduce water usage",
-                    "Switch to organic fertilizers to lower chemical emissions",
-                    "Use renewable energy sources for farm operations",
-                    "Implement cover crops for carbon sequestration",
-                ]
-
-                # Add crop-specific recommendations
-                if crop_category == "legumes":
-                    base_recommendations.append("Reduce nitrogen fertilizer use - legumes naturally fix nitrogen")
-                elif crop_category == "nuts":
-                    base_recommendations.append("Implement deficit irrigation strategies to reduce water consumption")
-                elif crop_category == "herbs":
-                    base_recommendations.append("Consider companion planting to reduce pest control needs")
-                elif crop_category == "grains":
-                    base_recommendations.append("Implement no-till farming to reduce soil carbon loss")
-
-                recommendations = base_recommendations[:4]  # Limit to 4 recommendations
+            if transparency_score < 85:
+                # Use transparency recommendations directly
+                for rec in transparency_recommendations[:4]:  # Limit to 4 recommendations
+                    recommendations.append(rec['description'])
+                
+                # Add generic transparency improvements if needed
+                if len(recommendations) < 4:
+                    base_transparency_recommendations = [
+                        "Document all farming activities to improve transparency",
+                        "Add photos and details to your farming events",
+                        "Record equipment maintenance and fuel usage",
+                        "Keep detailed records of soil management practices",
+                    ]
+                    
+                    for rec in base_transparency_recommendations:
+                        if len(recommendations) < 4:
+                            recommendations.append(rec)
             else:
                 recommendations = [
-                    f"Excellent {crop_name} production practices!",
-                    "Continue current sustainable farming methods",
-                    "Consider sharing best practices with other farmers",
-                    "Look into carbon credit opportunities",
+                    f"Excellent transparency for {crop_name} production!",
+                    "Your documentation practices set a great example",
+                    "Consider sharing transparency best practices with other farmers",
+                    "Maintain your comprehensive documentation standards",
                 ]
 
             # Add timeline data from production events (if not quick mode)
@@ -2254,31 +2437,44 @@ class PublicProductionViewSet(viewsets.ViewSet):
                         }
                     )
 
-            # Build the response matching the frontend interface with blockchain data
+            # Build transparency-first response for consumer QR experience
             response_data = {
-                "carbonScore": carbon_score,
-                "totalEmissions": float(total_emissions),
-                "totalOffsets": float(total_offsets),
-                "netFootprint": float(net_footprint),
+                # PRIMARY: Transparency information comes first
+                "transparencyScore": round(transparency_score, 1),
+                "verificationLevel": verification_level,
+                "documentationCompleteness": transparency_data.get('completeness_score', 0),
+                "categoryBreakdown": transparency_data.get('category_breakdown', {}),
+                
+                # SECONDARY: Carbon data for scientific context (non-competitive)
+                "carbonFootprint": {
+                    "per_kg": round(carbon_footprint_per_kg, 2),
+                    "total_emissions": float(total_emissions),
+                    "total_offsets": float(total_offsets),
+                    "net_footprint": float(net_footprint),
+                    "is_carbon_negative": carbon_context['is_carbon_negative'],
+                    "is_carbon_neutral": carbon_context['is_carbon_neutral'],
+                    "unit": "kg CO₂"
+                },
+                
+                # VERIFICATION: Trust and verification information
+                "verificationData": {
+                    "usda_verified": carbon_context['verified_by_usda'],
+                    "blockchain_verified": carbon_context['blockchain_verified'],
+                    "verification_date": verification_standards.get('last_updated'),
+                    "blockchain_verification": blockchain_verification,
+                },
+                
+                # CONSUMER CONTEXT: Relatable information
                 "relatableFootprint": relatable_footprint,
-                "industryPercentile": industry_percentile,
-                "industryAverage": float(industry_average),
-                "isUsdaVerified": (
-                    getattr(establishment, "usda_verified", False)
-                    if hasattr(establishment, "usda_verified")
-                    else bool(benchmark and benchmark.usda_verified)
-                ),
                 "cropType": crop_name,
-                "benchmarkSource": benchmark_source,
                 "badges": badges,
                 "recommendations": recommendations,
+                "achievements": verification_standards.get('achievements', []),
+                
+                # BREAKDOWN DATA: For detailed view
                 "emissionsByCategory": emissions_by_category,
                 "emissionsBySource": emissions_by_source,
                 "offsetsByAction": offsets_by_action,
-                "socialProof": self._calculate_social_proof(production),
-                "verificationDate": benchmark.last_updated.isoformat() if benchmark else None,
-                # Enhanced blockchain verification data
-                "blockchainVerification": blockchain_verification,
                 # Add essential location and establishment data for consumer experience
                 "farmer": {
                     "name": establishment.name if establishment else "Unknown Farm",
@@ -2340,25 +2536,30 @@ class PublicProductionViewSet(viewsets.ViewSet):
             traceback.print_exc()
             return Response(
                 {
-                    "error": "Internal server error",
-                    "carbonScore": 50,
-                    "totalEmissions": 0.0,
-                    "totalOffsets": 0.0,
-                    "netFootprint": 0.0,
-                    "relatableFootprint": "Data being calculated",
-                    "industryPercentile": 50,
-                    "industryAverage": 0.0,
-                    "isUsdaVerified": False,
+                    "error": "Internal server error", 
+                    "transparencyScore": 0,
+                    "verificationLevel": "Limited",
+                    "documentationCompleteness": 0,
+                    "carbonFootprint": {
+                        "per_kg": 0.0,
+                        "total_emissions": 0.0,
+                        "total_offsets": 0.0,
+                        "net_footprint": 0.0,
+                        "is_carbon_negative": False,
+                        "is_carbon_neutral": False,
+                        "unit": "kg CO₂"
+                    },
+                    "verificationData": {
+                        "usda_verified": False,
+                        "blockchain_verified": False,
+                        "verification_date": None,
+                        "blockchain_verification": {"verified": False, "error": str(e)},
+                    },
                     "cropType": "unknown",
-                    "benchmarkSource": "fallback",
                     "badges": [],
-                    "recommendations": ["Data will be available soon"],
-                    "emissionsByCategory": {},
-                    "emissionsBySource": {},
-                    "offsetsByAction": {},
-                    "socialProof": {"totalScans": 0, "totalOffsets": 0.0, "totalUsers": 0, "averageRating": 0.0},
-                    "verificationDate": None,
-                    "blockchainVerification": {"verified": False, "error": str(e)},
+                    "recommendations": ["Production data will be available soon"],
+                    "achievements": [],
+                    "message": "Transparency data being calculated",
                 },
                 status=status.HTTP_200_OK,
             )
@@ -2394,11 +2595,17 @@ class PublicProductionViewSet(viewsets.ViewSet):
 
             # Quick mode: return minimal data for fast loading
             if quick_mode:
+                # Quick transparency-first response (NO competitive scoring)
                 quick_response = {
-                    "carbonScore": self._legacy_carbon_score(production),  # Fallback score calculation
-                    "carbonGrade": production.carbon_grade or "C",
-                    "totalEmissions": 0.0,  # Will be populated by full request
-                    "totalOffsets": 0.0,
+                    "transparency": {
+                        "completeness_percentage": getattr(production, 'transparency_percentage', 75),
+                        "data_quality": production.carbon_grade or "C", 
+                        "verification_status": "verified" if getattr(production, 'blockchain_verified', False) else "pending"
+                    },
+                    "carbon_impact": {
+                        "kg_per_kg": 0.0,  # Will be populated by full request
+                        "unit": "kg CO₂ per kg product"
+                    },
                     "cache_hit": False,
                     "timestamp": timezone.now().isoformat(),
                 }
@@ -2431,26 +2638,36 @@ class PublicProductionViewSet(viewsets.ViewSet):
             # Get social proof
             social_proof = self._calculate_social_proof(production)
 
-            # Build consumer-safe response (no internal scoring details)
+            # Build transparency-first response (NO competitive scoring)
             response_data = {
-                # Consumer-friendly carbon metrics only
-                "carbonScore": min(100, max(0, carbon_data.get("carbon_score", 50))),  # Bounded 0-100
-                "carbonGrade": transparency_data["carbonGrade"],
-                # Public transparency features
-                "industryComparison": {
-                    "percentile": transparency_data["industryComparison"].get("percentile", 50),
-                    "better_than_average": transparency_data["industryComparison"].get("better_than_average", False),
-                    "region": transparency_data["industryComparison"].get("region", "Estimated"),
+                # PRIMARY: Transparency metrics (non-competitive)
+                "transparency": {
+                    "completeness_percentage": getattr(production, 'transparency_percentage', 75),
+                    "data_quality": transparency_data["carbonGrade"],
+                    "verification_status": "verified" if blockchain_verification.get("verified", False) else "pending"
+                },
+                # SECONDARY: Raw carbon data (factual, not comparative)
+                "carbon_impact": {
+                    "kg_per_kg": round(carbon_data.get("total_co2_kg_per_kg", 0), 3),
+                    "total_emissions": carbon_data.get("total_emissions", 0),
+                    "total_offsets": carbon_data.get("total_offsets", 0),
+                    "net_impact": carbon_data.get("net_footprint", 0),
+                    "unit": "kg CO₂ per kg product"
+                },
+                # Transparency features (NO competitive comparison)
+                "farm_practices": {
+                    "sustainable_methods": transparency_data.get("sustainable_practices", []),
+                    "data_completeness": transparency_data.get("completeness_score", 75),
+                    "verification_methods": transparency_data.get("verification_methods", [])
                 },
                 "equivalencyMetrics": transparency_data["equivalencyMetrics"],
                 "trustIndicators": transparency_data["trustIndicators"],
                 "consumerInsights": transparency_data["consumerInsights"],
-                # Consumer-friendly fields
-                "industryPercentile": transparency_data["industryComparison"].get("percentile", 50),
-                "relatableFootprint": self._get_primary_equivalency(transparency_data["equivalencyMetrics"]),
-                "isUsdaVerified": carbon_data.get("usda_verified", False),
-                "cropType": getattr(production.crop_type, "name", "Unknown") if production.crop_type else "Unknown",
-                "badges": self._generate_consumer_badges(transparency_data, carbon_data),
+                # Consumer-friendly fields (transparency-focused)
+                "environmental_impact": self._get_primary_equivalency(transparency_data["equivalencyMetrics"]),
+                "data_verified": carbon_data.get("usda_verified", False),
+                "crop_type": getattr(production.crop_type, "name", "Unknown") if production.crop_type else "Unknown",
+                "achievements": self._generate_transparency_achievements(production, transparency_data),
                 # Public data only
                 "blockchainVerification": blockchain_verification,
                 "socialProof": self._get_consumer_safe_social_proof(production),
@@ -2537,6 +2754,70 @@ class PublicProductionViewSet(viewsets.ViewSet):
             )
 
         return badges
+
+    def _generate_transparency_achievements(self, production, transparency_data):
+        """Generate transparency-focused achievements (NO competitive scoring)"""
+        achievements = []
+        
+        # Data completeness achievements
+        completeness = getattr(production, 'transparency_percentage', 75)
+        if completeness >= 90:
+            achievements.append({
+                "type": "data_complete",
+                "label": "Complete Transparency",
+                "color": "green",
+                "icon": "check-circle",
+                "description": "Full farm data documented and verified"
+            })
+        elif completeness >= 75:
+            achievements.append({
+                "type": "data_comprehensive", 
+                "label": "Comprehensive Records",
+                "color": "blue",
+                "icon": "document",
+                "description": "Thorough documentation of farming practices"
+            })
+        
+        # Verification achievements (non-competitive)
+        if transparency_data.get("trustIndicators", {}).get("usda_verified"):
+            achievements.append({
+                "type": "government_verified",
+                "label": "USDA Verified",
+                "color": "blue",
+                "icon": "shield",
+                "description": "Verified by official government standards"
+            })
+            
+        if transparency_data.get("trustIndicators", {}).get("blockchain_verified"):
+            achievements.append({
+                "type": "blockchain_secured",
+                "label": "Blockchain Secured", 
+                "color": "purple",
+                "icon": "lock",
+                "description": "Permanently recorded and tamper-proof"
+            })
+            
+        # Sustainable practice achievements (fact-based, not comparative)
+        practices = transparency_data.get("sustainable_practices", [])
+        if "organic" in str(practices).lower():
+            achievements.append({
+                "type": "organic_certified",
+                "label": "Organic Practices",
+                "color": "green", 
+                "icon": "leaf",
+                "description": "Uses certified organic farming methods"
+            })
+            
+        if "renewable_energy" in str(practices).lower():
+            achievements.append({
+                "type": "renewable_energy",
+                "label": "Clean Energy",
+                "color": "yellow",
+                "icon": "sun",
+                "description": "Powered by renewable energy sources"
+            })
+            
+        return achievements
 
     def _get_consumer_safe_social_proof(self, production):
         """Get social proof data safe for consumers"""
@@ -3534,6 +3815,40 @@ class PublicProductionViewSet(viewsets.ViewSet):
             for events, event_category in event_types:
                 for event in events:
                     # Build basic event data
+                    # Get album data for photo verification
+                    album_data = None
+                    if hasattr(event, 'album') and event.album:
+                        try:
+                            images = []
+                            for image in event.album.images.all():
+                                # Try to get the real image URL first from image_url field
+                                try:
+                                    if hasattr(image, 'image_url') and image.image_url:
+                                        image_url = image.image_url
+                                    elif hasattr(image, 'image') and image.image and hasattr(image.image, 'url'):
+                                        image_url = request.build_absolute_uri(image.image.url)
+                                    else:
+                                        # Use placeholder image for testing
+                                        image_url = "https://via.placeholder.com/400x300/4CAF50/FFFFFF?text=Farming+Practice+Photo"
+                                except Exception:
+                                    # Fallback to placeholder if there's any issue accessing the image
+                                    image_url = "https://via.placeholder.com/400x300/4CAF50/FFFFFF?text=Farming+Practice+Photo"
+                                
+                                images.append({
+                                    "id": image.id,
+                                    "image": image_url,
+                                    "caption": f"Farming practice photo {image.id}",
+                                    "created_at": image.created_at.isoformat() if image.created_at else None
+                                })
+                            
+                            if images:
+                                album_data = {
+                                    "id": event.album.id,
+                                    "images": images
+                                }
+                        except Exception as e:
+                            album_data = None
+
                     event_data = {
                         "id": event.id,
                         "type": event_category,
@@ -3546,6 +3861,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                         "concentration": getattr(event, "concentration", None),
                         "area": getattr(event, "area", None),
                         "equipment": getattr(event, "commercial_name", None) or getattr(event, "equipment", None),
+                        "album": album_data,
                     }
 
                     # Add blockchain verification data from extra_data if available
@@ -8828,4 +9144,349 @@ def advanced_carbon_analytics(request, production_id):
         return Response(
             {"error": "Advanced analytics generation failed", "production_id": production_id, "details": str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+# ============================================================================
+# SMART PRODUCT API ENDPOINTS - Smart Bag UX Implementation
+# ============================================================================
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@ratelimit(key='user', rate='100/m', method='GET')
+def smart_product_search(request):
+    """
+    Smart product search API endpoint implementing the Smart Bag UX approach.
+    
+    Provides intelligent product recognition with educational context.
+    
+    Query Parameters:
+    - q: Search query (product name, NPK ratio, etc.)
+    - max_results: Maximum number of results (default: 8)
+    - type_filter: Filter by chemical type (FE/PE/FU/HE)
+    
+    Returns:
+    - List of matched products with confidence scores
+    - Educational tips and application recommendations
+    - NPK auto-fill data for fertilizers
+    """
+    from carbon.services.smart_product_validator import smart_product_validator
+    
+    try:
+        # Get query parameters
+        query = request.GET.get('q', '').strip()
+        max_results = int(request.GET.get('max_results', 8))
+        type_filter = request.GET.get('type_filter', '').upper()
+        
+        # Validate type filter
+        valid_types = ['FE', 'PE', 'FU', 'HE']
+        if type_filter and type_filter not in valid_types:
+            return Response(
+                {
+                    "error": "Invalid type filter",
+                    "valid_types": valid_types,
+                    "provided": type_filter
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Perform smart search
+        suggestions = smart_product_validator.smart_product_search(
+            query=query,
+            max_suggestions=min(max_results, 20)  # Cap at 20 for performance
+        )
+        
+        # Filter by type if requested
+        if type_filter:
+            suggestions = [s for s in suggestions if s.get('type_code') == type_filter]
+        
+        # Log search for analytics
+        logger.info(f"Smart product search: query='{query}', results={len(suggestions)}, user={request.user.id}")
+        
+        return Response({
+            "query": query,
+            "results_count": len(suggestions),
+            "suggestions": suggestions,
+            "search_type": "smart_product_search",
+            "version": "1.0"
+        }, status=status.HTTP_200_OK)
+        
+    except ValueError as e:
+        logger.warning(f"Smart product search parameter error: {e}")
+        return Response(
+            {"error": "Invalid parameters", "details": str(e)},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    except Exception as e:
+        logger.error(f"Smart product search failed: {e}")
+        logger.error(traceback.format_exc())
+        
+        return Response(
+            {"error": "Product search failed", "details": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@ratelimit(key='user', rate='50/m', method='POST')
+def smart_product_validation(request):
+    """
+    Smart product validation API endpoint implementing Smart Bag UX validation.
+    
+    Validates commercial product names against user-selected chemical types,
+    providing educational warnings and NPK auto-fill recommendations.
+    
+    Request Body:
+    {
+        "commercial_name": "Miracle-Gro All Purpose",
+        "user_selected_type": "FE",
+        "confidence_threshold": 0.7
+    }
+    
+    Returns:
+    - Product validation result with confidence score
+    - Educational tips and best practices
+    - NPK auto-fill data and application rates
+    - Warnings for common farmer mistakes
+    """
+    from carbon.services.smart_product_validator import smart_product_validator
+    
+    try:
+        # Validate request data
+        commercial_name = request.data.get('commercial_name', '').strip()
+        user_selected_type = request.data.get('user_selected_type', '').strip().upper()
+        confidence_threshold = float(request.data.get('confidence_threshold', 0.7))
+        
+        # Validate required fields
+        if not commercial_name:
+            return Response(
+                {"error": "Commercial name is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not user_selected_type:
+            return Response(
+                {"error": "User selected type is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate chemical type
+        valid_types = ['FE', 'PE', 'FU', 'HE']
+        if user_selected_type not in valid_types:
+            return Response(
+                {
+                    "error": "Invalid chemical type",
+                    "valid_types": valid_types,
+                    "provided": user_selected_type
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate confidence threshold
+        if not (0.0 <= confidence_threshold <= 1.0):
+            return Response(
+                {"error": "Confidence threshold must be between 0.0 and 1.0"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Perform smart validation
+        validation_result = smart_product_validator.validate_smart_product(
+            commercial_name=commercial_name,
+            user_selected_type=user_selected_type,
+            confidence_threshold=confidence_threshold
+        )
+        
+        # Helper to convert type codes to user-friendly names
+        def get_type_name(type_code):
+            type_names = {
+                "FE": "Fertilizer",
+                "PE": "Pesticide",
+                "HE": "Herbicide",
+                "FU": "Fungicide"
+            }
+            return type_names.get(type_code, type_code)
+        
+        # Convert result to dict for JSON response
+        result_data = {
+            "commercial_name": validation_result.commercial_name,
+            "correct_type": get_type_name(validation_result.correct_type),
+            "correct_type_code": validation_result.correct_type,  # Keep the code for backend logic
+            "npk_ratio": validation_result.npk_ratio,
+            "confidence": validation_result.confidence,
+            "warnings": validation_result.warnings,
+            "educational_tips": validation_result.educational_tips,
+            "manufacturer": validation_result.manufacturer,
+            "active_ingredient": validation_result.active_ingredient,
+            "application_rate": validation_result.application_rate,
+            "best_practices": validation_result.best_practices,
+            "validation_passed": validation_result.correct_type == user_selected_type,
+            "requires_correction": validation_result.correct_type != user_selected_type,
+            "smart_suggestions": {
+                "auto_fill_npk": validation_result.npk_ratio if validation_result.correct_type == "FE" else None,
+                "recommended_type": get_type_name(validation_result.correct_type),
+                "recommended_type_code": validation_result.correct_type,  # Keep the code for backend logic
+                "confidence_level": "high" if validation_result.confidence >= 0.8 else "medium" if validation_result.confidence >= 0.5 else "low"
+            }
+        }
+        
+        # Log validation for analytics
+        logger.info(f"Smart product validation: name='{commercial_name}', type={user_selected_type}→{validation_result.correct_type}, confidence={validation_result.confidence:.2f}, user={request.user.id}")
+        
+        return Response({
+            "validation_result": result_data,
+            "timestamp": timezone.now().isoformat(),
+            "version": "1.0"
+        }, status=status.HTTP_200_OK)
+        
+    except ValueError as e:
+        logger.warning(f"Smart product validation parameter error: {e}")
+        return Response(
+            {"error": "Invalid parameters", "details": str(e)},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    except Exception as e:
+        logger.error(f"Smart product validation failed: {e}")
+        logger.error(traceback.format_exc())
+        
+        return Response(
+            {"error": "Product validation failed", "details": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@ratelimit(key='user', rate='100/m', method='GET')
+def smart_product_suggestions_by_type(request):
+    """
+    Get smart product suggestions filtered by chemical type.
+    
+    Useful for populating dropdown lists and providing type-specific recommendations.
+    
+    Query Parameters:
+    - type: Chemical type (FE/PE/FU/HE) - required
+    - max_results: Maximum number of results (default: 5)
+    
+    Returns:
+    - List of products filtered by type
+    - Educational tips for each product
+    - NPK data for fertilizers
+    """
+    from carbon.services.smart_product_validator import smart_product_validator
+    
+    try:
+        # Get query parameters
+        chemical_type = request.GET.get('type', '').strip().upper()
+        max_results = int(request.GET.get('max_results', 5))
+        
+        # Validate required parameters
+        if not chemical_type:
+            return Response(
+                {"error": "Chemical type is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate chemical type
+        valid_types = ['FE', 'PE', 'FU', 'HE']
+        if chemical_type not in valid_types:
+            return Response(
+                {
+                    "error": "Invalid chemical type",
+                    "valid_types": valid_types,
+                    "provided": chemical_type
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get suggestions by type
+        suggestions = smart_product_validator.get_smart_suggestions_by_type(
+            chemical_type=chemical_type,
+            max_suggestions=min(max_results, 10)  # Cap at 10 for performance
+        )
+        
+        # Add type-specific educational context
+        type_names = {
+            "FE": "Fertilizer",
+            "PE": "Pesticide", 
+            "FU": "Fungicide",
+            "HE": "Herbicide"
+        }
+        
+        response_data = {
+            "chemical_type": chemical_type,
+            "type_name": type_names.get(chemical_type),
+            "results_count": len(suggestions),
+            "suggestions": suggestions,
+            "educational_context": {
+                "FE": "Fertilizers provide nutrients (N-P-K) to promote plant growth and development.",
+                "PE": "Pesticides control harmful insects and pests that damage crops.",
+                "FU": "Fungicides prevent and treat plant diseases caused by fungi.",
+                "HE": "Herbicides control weeds that compete with crops for nutrients and water."
+            }.get(chemical_type, ""),
+            "version": "1.0"
+        }
+        
+        # Log request for analytics
+        logger.info(f"Smart product suggestions by type: type={chemical_type}, results={len(suggestions)}, user={request.user.id}")
+        
+        return Response(response_data, status=status.HTTP_200_OK)
+        
+    except ValueError as e:
+        logger.warning(f"Smart product suggestions parameter error: {e}")
+        return Response(
+            {"error": "Invalid parameters", "details": str(e)},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    except Exception as e:
+        logger.error(f"Smart product suggestions failed: {e}")
+        logger.error(traceback.format_exc())
+        
+        return Response(
+            {"error": "Product suggestions failed", "details": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@ratelimit(key='user', rate='20/m', method='GET')
+def smart_product_stats(request):
+    """
+    Get smart product validator statistics and database information.
+    
+    Useful for admin monitoring and system health checks.
+    
+    Returns:
+    - Total products in database
+    - Product counts by type
+    - Feature list and capabilities
+    - Database coverage information
+    """
+    from carbon.services.smart_product_validator import smart_product_validator
+    
+    try:
+        # Get validation statistics
+        stats = smart_product_validator.get_validation_stats()
+        
+        # Add additional system information
+        stats.update({
+            "database_version": "smart_bag_ux_v1.0",
+            "last_updated": "2025-01-15",
+            "api_version": "1.0",
+            "user_id": request.user.id,
+            "timestamp": timezone.now().isoformat()
+        })
+        
+        logger.info(f"Smart product stats requested by user {request.user.id}")
+        
+        return Response(stats, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        logger.error(f"Smart product stats failed: {e}")
+        logger.error(traceback.format_exc())
+        
+        return Response(
+            {"error": "Stats retrieval failed", "details": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )

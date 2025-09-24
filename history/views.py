@@ -28,7 +28,10 @@ from .constants import (
     SOIL_MANAGEMENT_EVENT_TYPE,
     WEATHER_EVENT_TYPE,
 )
-from .models import BusinessEvent, ChemicalEvent, GeneralEvent, History, HistoryScan, ProductionEvent
+from .models import (
+    BusinessEvent, ChemicalEvent, EquipmentEvent, GeneralEvent, History, 
+    HistoryScan, PestManagementEvent, ProductionEvent, SoilManagementEvent, WeatherEvent
+)
 from .serializers import (
     BusinessEventSerializer,
     ChemicalEventSerializer,
@@ -1739,3 +1742,36 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             }
         }
         return Response(options)
+    
+    @action(detail=False, methods=['post'], url_path='validate-structured-fields')
+    def validate_structured_fields(self, request):
+        """
+        Validate structured field data without creating an event.
+        Useful for real-time form validation in the frontend.
+        """
+        try:
+            event_type = request.data.get('event_type')
+            if event_type is None:
+                return Response(
+                    {'error': 'event_type is required'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Validate the structured fields
+            try:
+                self._validate_structured_fields(int(event_type), request.data)
+                return Response({
+                    'valid': True,
+                    'message': 'All structured fields are valid'
+                })
+            except Exception as e:
+                return Response({
+                    'valid': False,
+                    'error': str(e),
+                    'field_errors': getattr(e, 'detail', {}) if hasattr(e, 'detail') else {}
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Exception as e:
+            return Response({
+                'error': f'Validation error: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

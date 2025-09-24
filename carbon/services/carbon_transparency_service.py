@@ -1,6 +1,7 @@
 """
-Carbon Transparency Service - Trazo 2025 Enhancement
-Enhanced carbon transparency calculations with A-F grading, industry comparisons, and consumer-friendly metrics.
+Carbon Transparency Service - Trazo Transparency-First Platform
+Enhanced carbon transparency calculations supporting documentation completeness and verification standards.
+Eliminates competitive rankings to focus on transparency achievements and scientific validation.
 """
 
 import logging
@@ -19,140 +20,106 @@ logger = logging.getLogger(__name__)
 
 
 class CarbonTransparencyService:
-    """Enhanced carbon transparency calculations and grading service."""
+    """Enhanced carbon transparency calculations supporting verification and documentation standards."""
 
-    # Carbon grade thresholds (based on percentile performance)
-    GRADE_THRESHOLDS = {
-        "A+": 95,  # Top 5%
-        "A": 90,  # Top 10%
-        "A-": 85,  # Top 15%
-        "B+": 75,  # Top 25%
-        "B": 65,  # Top 35%
-        "B-": 50,  # Average (50th percentile)
-        "C+": 35,  # Below average
-        "C": 25,  # Bottom 25%
-        "C-": 15,  # Bottom 15%
-        "D+": 10,  # Bottom 10%
-        "D": 5,  # Bottom 5%
-        "F": 0,  # Bottom performers
+    # Transparency verification thresholds (absolute standards, not competitive)
+    VERIFICATION_THRESHOLDS = {
+        "Complete": 95,      # Complete documentation and verification
+        "Comprehensive": 85, # Strong documentation with verification
+        "Good": 75,          # Good documentation practices
+        "Standard": 60,      # Meets basic standards
+        "Basic": 40,         # Basic documentation only
+        "Limited": 0,        # Limited documentation
     }
 
     def __init__(self):
         self.cache_timeout = 1800  # 30 minutes cache
 
-    def calculate_carbon_grade(self, production: History) -> str:
+    def calculate_verification_level(self, production: History) -> str:
         """
-        Calculate A-F carbon grade based on industry comparison and performance.
+        Calculate transparency verification level based on documentation completeness and validation.
 
         Args:
             production: History object representing the production
 
         Returns:
-            str: Carbon grade (A+ to F)
+            str: Verification level (Complete, Comprehensive, Good, Standard, Basic, Limited)
         """
         try:
-            cache_key = f"carbon_grade_{production.id}"
-            cached_grade = cache.get(cache_key)
-            if cached_grade:
-                return cached_grade
+            cache_key = f"verification_level_{production.id}"
+            cached_level = cache.get(cache_key)
+            if cached_level:
+                return cached_level
 
             # Get carbon data for this production
             carbon_data = self._get_production_carbon_data(production)
             if not carbon_data:
-                return "C"  # Default grade for no data
+                return "Limited"  # Default level for no data
 
-            # Calculate performance percentile
-            percentile = self._calculate_industry_percentile(production, carbon_data)
+            # Calculate transparency score using TransparencyCalculator
+            from history.services.transparency_calculator import TransparencyCalculator
+            transparency_calc = TransparencyCalculator()
+            transparency_data = transparency_calc.calculate_transparency_score(production)
+            transparency_score = transparency_data.get('transparency_percentage', 0)
 
-            # Convert percentile to grade
-            grade = self._percentile_to_grade(percentile)
+            # Convert transparency score to verification level
+            level = self._score_to_verification_level(transparency_score)
 
             # Cache the result
-            cache.set(cache_key, grade, self.cache_timeout)
+            cache.set(cache_key, level, self.cache_timeout)
 
-            return grade
+            return level
 
         except Exception as e:
-            logger.error(f"Error calculating carbon grade for production {production.id}: {str(e)}")
-            return "C"  # Default grade on error
+            logger.error(f"Error calculating verification level for production {production.id}: {str(e)}")
+            return "Limited"  # Default level on error
 
-    def calculate_industry_comparison(self, production: History) -> Dict[str, Any]:
+    def calculate_verification_standards(self, production: History) -> Dict[str, Any]:
         """
-        Calculate detailed industry comparison metrics.
+        Calculate verification against absolute transparency standards (non-competitive).
 
         Args:
             production: History object
 
         Returns:
-            Dict containing industry comparison data
+            Dict containing verification standards assessment
         """
         try:
-            cache_key = f"industry_comparison_{production.id}"
-            cached_comparison = cache.get(cache_key)
-            if cached_comparison:
-                return cached_comparison
+            cache_key = f"verification_standards_{production.id}"
+            cached_standards = cache.get(cache_key)
+            if cached_standards:
+                return cached_standards
 
             carbon_data = self._get_production_carbon_data(production)
             if not carbon_data:
                 return {}
 
-            # Get crop type for benchmarking
-            crop_type = getattr(production.crop_type, "name", "Unknown") if production.crop_type else "Unknown"
+            # Get transparency data
+            from history.services.transparency_calculator import TransparencyCalculator
+            transparency_calc = TransparencyCalculator()
+            transparency_data = transparency_calc.calculate_transparency_score(production)
 
-            # Find relevant benchmarks
-            benchmark = self._get_industry_benchmark(crop_type, carbon_data.get("region", "US"))
-
-            if not benchmark:
-                return self._create_fallback_comparison(carbon_data)
-
-            # Calculate comparison metrics
-            comparison = {
-                "industry_average": float(benchmark.average_emissions),
-                "industry_best": float(benchmark.min_emissions),
-                "industry_worst": float(benchmark.max_emissions),
-                "your_emissions": carbon_data["net_emissions"],
-                "percentile": self._calculate_industry_percentile(production, carbon_data),
-                "better_than_percent": 0,  # Calculated below
-                "crop_type": crop_type,
-                "region": carbon_data.get("region", "US"),
-                "sample_size": benchmark.company_count,
-                "last_updated": benchmark.last_updated.isoformat() if benchmark.last_updated else None,
-                "context_message": "",  # Calculated below
-                "improvement_potential": 0,  # Calculated below
+            # Calculate verification against standards
+            verification = {
+                "transparency_percentage": transparency_data.get('transparency_percentage', 0),
+                "verification_level": self._score_to_verification_level(transparency_data.get('transparency_percentage', 0)),
+                "carbon_data_verified": carbon_data["entry_count"] > 0,
+                "usda_verified": self._check_usda_verification(production),
+                "blockchain_verified": self._check_blockchain_verification(production),
+                "documentation_completeness": transparency_data.get('completeness_score', 0),
+                "category_breakdown": transparency_data.get('category_breakdown', {}),
+                "context_message": self._generate_verification_message(transparency_data),
+                "next_standards": self._get_next_verification_standards(transparency_data.get('transparency_percentage', 0)),
+                "achievements": self._generate_transparency_achievements(transparency_data),
             }
 
-            # Calculate better than percentage
-            if comparison["your_emissions"] <= comparison["industry_best"]:
-                comparison["better_than_percent"] = 95
-            elif comparison["your_emissions"] <= comparison["industry_average"]:
-                ratio = (comparison["industry_average"] - comparison["your_emissions"]) / (
-                    comparison["industry_average"] - comparison["industry_best"]
-                )
-                comparison["better_than_percent"] = 50 + (ratio * 45)
-            else:
-                if comparison["your_emissions"] <= comparison["industry_worst"]:
-                    ratio = (comparison["your_emissions"] - comparison["industry_average"]) / (
-                        comparison["industry_worst"] - comparison["industry_average"]
-                    )
-                    comparison["better_than_percent"] = 50 - (ratio * 45)
-                else:
-                    comparison["better_than_percent"] = 5
-
-            comparison["better_than_percent"] = max(5, min(95, round(comparison["better_than_percent"], 1)))
-
-            # Generate context message
-            comparison["context_message"] = self._generate_context_message(comparison)
-
-            # Calculate improvement potential
-            comparison["improvement_potential"] = max(0, comparison["your_emissions"] - comparison["industry_best"])
-
             # Cache the result
-            cache.set(cache_key, comparison, self.cache_timeout)
+            cache.set(cache_key, verification, self.cache_timeout)
 
-            return comparison
+            return verification
 
         except Exception as e:
-            logger.error(f"Error calculating industry comparison for production {production.id}: {str(e)}")
+            logger.error(f"Error calculating verification standards for production {production.id}: {str(e)}")
             return {}
 
     def calculate_equivalency_metrics(self, production: History) -> Dict[str, Any]:
@@ -340,30 +307,30 @@ class CarbonTransparencyService:
         """
         try:
             # Calculate all transparency metrics
-            carbon_grade = self.calculate_carbon_grade(production)
-            industry_comparison = self.calculate_industry_comparison(production)
+            verification_level = self.calculate_verification_level(production)
+            verification_standards = self.calculate_verification_standards(production)
             equivalency_metrics = self.calculate_equivalency_metrics(production)
             trust_indicators = self.calculate_trust_indicators(production)
 
-            # Update production fields
-            production.carbon_grade = carbon_grade
-            production.industry_comparison = industry_comparison
+            # Update production fields with transparency-focused data
+            production.verification_level = verification_level
+            production.verification_standards = verification_standards
             production.equivalency_metrics = equivalency_metrics
             production.trust_indicators = trust_indicators
 
-            # Generate improvement recommendations
-            recommendations = self._generate_improvement_recommendations(production, industry_comparison)
+            # Generate transparency improvement recommendations
+            recommendations = self._generate_transparency_recommendations(production, verification_standards)
             production.improvement_recommendations = recommendations
 
-            # Generate consumer insights
-            consumer_insights = self._generate_consumer_insights(production, equivalency_metrics, trust_indicators)
+            # Generate consumer insights focused on transparency
+            consumer_insights = self._generate_transparency_consumer_insights(production, equivalency_metrics, trust_indicators)
             production.consumer_insights = consumer_insights
 
             # Save the production
             production.save(
                 update_fields=[
-                    "carbon_grade",
-                    "industry_comparison",
+                    "verification_level",
+                    "verification_standards", 
                     "equivalency_metrics",
                     "trust_indicators",
                     "improvement_recommendations",
@@ -451,16 +418,217 @@ class CarbonTransparencyService:
             logger.error(f"Error calculating industry percentile: {str(e)}")
             return 50.0
 
-    def _percentile_to_grade(self, percentile: float) -> str:
-        """Convert percentile to letter grade."""
-        for grade, threshold in self.GRADE_THRESHOLDS.items():
-            if percentile >= threshold:
-                return grade
-        return "F"
+    def _score_to_verification_level(self, score: float) -> str:
+        """Convert transparency score to verification level."""
+        for level, threshold in self.VERIFICATION_THRESHOLDS.items():
+            if score >= threshold:
+                return level
+        return "Limited"
 
-    def _score_to_grade(self, score: float) -> str:
-        """Convert numeric score to letter grade."""
-        return self._percentile_to_grade(score)
+    def _check_usda_verification(self, production: History) -> bool:
+        """Check if production has USDA verified carbon data."""
+        from ..models import CarbonEntry
+        return CarbonEntry.objects.filter(production=production, usda_verified=True).exists()
+
+    def _check_blockchain_verification(self, production: History) -> bool:
+        """Check if production has blockchain verified carbon data."""
+        from ..models import CarbonEntry
+        return CarbonEntry.objects.filter(
+            production=production, 
+            blockchain_verified=True,
+            blockchain_transaction_hash__isnull=False
+        ).exists()
+
+    def _generate_verification_message(self, transparency_data: Dict) -> str:
+        """Generate verification message based on transparency data."""
+        transparency_percentage = transparency_data.get('transparency_percentage', 0)
+        
+        if transparency_percentage >= 95:
+            return "Complete transparency with comprehensive documentation"
+        elif transparency_percentage >= 85:
+            return f"{transparency_percentage:.0f}% transparency - comprehensive farm record"
+        elif transparency_percentage >= 75:
+            return f"{transparency_percentage:.0f}% transparency - good documentation practices"
+        elif transparency_percentage >= 60:
+            return f"{transparency_percentage:.0f}% transparency - meets transparency standards"
+        elif transparency_percentage >= 40:
+            return f"{transparency_percentage:.0f}% transparency - basic documentation available"
+        else:
+            return f"{transparency_percentage:.0f}% transparency - limited documentation"
+
+    def _get_next_verification_standards(self, current_score: float) -> Dict:
+        """Get next transparency verification standard to achieve."""
+        for level, threshold in self.VERIFICATION_THRESHOLDS.items():
+            if current_score < threshold:
+                return {
+                    'target_score': threshold,
+                    'target_level': level,
+                    'points_needed': threshold - current_score,
+                    'description': f"Achieve {level} verification level"
+                }
+        
+        return {
+            'target_score': 100,
+            'target_level': 'Perfect',
+            'points_needed': 100 - current_score,
+            'description': 'Perfect transparency documentation'
+        }
+
+    def _generate_transparency_achievements(self, transparency_data: Dict) -> List[Dict]:
+        """Generate transparency achievements based on documentation."""
+        achievements = []
+        transparency_percentage = transparency_data.get('transparency_percentage', 0)
+        category_breakdown = transparency_data.get('category_breakdown', {})
+        
+        # Overall transparency achievements
+        if transparency_percentage >= 95:
+            achievements.append({
+                'title': 'Complete Transparency',
+                'description': 'Comprehensive farm documentation',
+                'icon': 'shield-check',
+                'level': 'gold'
+            })
+        elif transparency_percentage >= 85:
+            achievements.append({
+                'title': 'High Transparency',
+                'description': 'Strong documentation practices',
+                'icon': 'shield',
+                'level': 'silver'
+            })
+        elif transparency_percentage >= 75:
+            achievements.append({
+                'title': 'Good Transparency',
+                'description': 'Solid documentation foundation',
+                'icon': 'check-circle',
+                'level': 'bronze'
+            })
+
+        # Category-specific achievements
+        for category, data in category_breakdown.items():
+            if data.get('completeness_percentage', 0) >= 90:
+                achievements.append({
+                    'title': f'Excellent {category.replace("_", " ").title()} Documentation',
+                    'description': f'Complete {category} event recording',
+                    'icon': 'file-check',
+                    'level': 'category'
+                })
+
+        return achievements
+
+    def _generate_transparency_recommendations(self, production: History, verification_standards: Dict) -> List[Dict]:
+        """Generate transparency improvement recommendations (non-competitive)."""
+        recommendations = []
+        
+        transparency_percentage = verification_standards.get('transparency_percentage', 0)
+        category_breakdown = verification_standards.get('category_breakdown', {})
+        
+        # Documentation improvement recommendations
+        if transparency_percentage < 85:
+            recommendations.append({
+                'category': 'Documentation',
+                'priority': 'High',
+                'title': 'Improve Farm Documentation',
+                'description': 'Add more detailed event documentation to increase transparency',
+                'action_items': [
+                    'Document routine farming activities',
+                    'Record equipment maintenance events',
+                    'Add soil management practices'
+                ],
+                'potential_improvement': f"+{85 - transparency_percentage:.0f} transparency points"
+            })
+
+        # Category-specific recommendations
+        for category, data in category_breakdown.items():
+            if data.get('completeness_percentage', 0) < 70:
+                recommendations.append({
+                    'category': 'Category Improvement',
+                    'priority': 'Medium',
+                    'title': f'Improve {category.replace("_", " ").title()} Documentation',
+                    'description': f'Add more {category} events to strengthen transparency',
+                    'action_items': [f'Document {category} activities regularly'],
+                    'potential_improvement': f"Strengthen {category} transparency"
+                })
+
+        # Verification recommendations
+        if not verification_standards.get('usda_verified', False):
+            recommendations.append({
+                'category': 'Verification',
+                'priority': 'Medium',
+                'title': 'Add USDA Verification',
+                'description': 'Verify carbon calculations with USDA standards',
+                'action_items': ['Submit carbon data for USDA verification'],
+                'potential_improvement': 'Enhanced credibility'
+            })
+
+        if not verification_standards.get('blockchain_verified', False):
+            recommendations.append({
+                'category': 'Verification',
+                'priority': 'Low',
+                'title': 'Add Blockchain Verification',
+                'description': 'Secure carbon data with blockchain verification',
+                'action_items': ['Enable blockchain verification for carbon records'],
+                'potential_improvement': 'Immutable verification'
+            })
+
+        return recommendations
+
+    def _generate_transparency_consumer_insights(
+        self, production: History, equivalency_metrics: Dict, trust_indicators: Dict
+    ) -> Dict:
+        """Generate consumer-focused transparency insights."""
+        insights = {
+            'transparency_story': '',
+            'verification_summary': '',
+            'trust_summary': '',
+            'carbon_context': '',
+            'achievements': []
+        }
+
+        # Get verification level
+        verification_level = getattr(production, 'verification_level', 'Limited')
+        
+        # Generate transparency story
+        if verification_level == 'Complete':
+            insights['transparency_story'] = 'This farm maintains complete transparency with comprehensive documentation of all farming activities'
+        elif verification_level == 'Comprehensive':
+            insights['transparency_story'] = 'This farm demonstrates strong transparency practices with detailed documentation'
+        elif verification_level == 'Good':
+            insights['transparency_story'] = 'This farm follows good transparency practices with solid documentation'
+        else:
+            insights['transparency_story'] = 'This farm is working to improve transparency through better documentation'
+
+        # Generate verification summary
+        verification_points = []
+        if self._check_usda_verification(production):
+            verification_points.append('USDA verified carbon data')
+        if self._check_blockchain_verification(production):
+            verification_points.append('Blockchain secured records')
+        
+        if verification_points:
+            insights['verification_summary'] = f"Verified through: {', '.join(verification_points)}"
+        else:
+            insights['verification_summary'] = 'Working toward third-party verification'
+
+        # Generate trust summary from trust indicators
+        trust_score = trust_indicators.get('overall_score', 0)
+        if trust_score >= 80:
+            insights['trust_summary'] = 'High trust through verified transparency and documentation'
+        elif trust_score >= 60:
+            insights['trust_summary'] = 'Good transparency with reliable documentation'
+        else:
+            insights['trust_summary'] = 'Building trust through improved transparency'
+
+        # Generate carbon context (supporting role)
+        if equivalency_metrics and equivalency_metrics.get('context'):
+            context = equivalency_metrics['context']
+            if context.get('is_carbon_negative', False):
+                insights['carbon_context'] = 'Carbon negative production - removes CO₂ from atmosphere'
+            elif context.get('is_carbon_neutral', False):
+                insights['carbon_context'] = 'Carbon neutral production - balanced emissions'
+            else:
+                insights['carbon_context'] = 'Working to reduce environmental impact'
+
+        return insights
 
     def _get_industry_benchmark(self, crop_type: str, region: str) -> Optional[CarbonBenchmark]:
         """Get industry benchmark for crop type and region."""
@@ -520,20 +688,6 @@ class CarbonTransparencyService:
             "estimated": True,
         }
 
-    def _generate_context_message(self, comparison: Dict) -> str:
-        """Generate context message for industry comparison."""
-        better_than = comparison["better_than_percent"]
-
-        if better_than >= 90:
-            return f"Exceptional performance - better than {better_than:.0f}% of {comparison['crop_type'].lower()} producers"
-        elif better_than >= 75:
-            return f"Excellent performance - better than {better_than:.0f}% of similar operations"
-        elif better_than >= 50:
-            return f"Above average performance - better than {better_than:.0f}% of producers"
-        elif better_than >= 25:
-            return f"Below average performance - {100-better_than:.0f}% of producers perform better"
-        else:
-            return f"Significant room for improvement - only better than {better_than:.0f}% of producers"
 
     def _get_emissions_interpretation(self, net_emissions: float) -> str:
         """Get interpretation of emissions level."""
@@ -776,99 +930,12 @@ class CarbonTransparencyService:
 
         return badges
 
-    def _generate_improvement_recommendations(self, production: History, industry_comparison: Dict) -> List[Dict]:
-        """Generate AI-powered improvement recommendations."""
-        recommendations = []
-
-        if not industry_comparison:
-            return recommendations
-
-        # Performance-based recommendations
-        if industry_comparison.get("better_than_percent", 50) < 50:
-            recommendations.append(
-                {
-                    "category": "Performance",
-                    "priority": "High",
-                    "title": "Reduce Carbon Footprint",
-                    "description": "Your emissions are above industry average. Focus on high-impact reduction strategies.",
-                    "potential_impact": "High",
-                    "difficulty": "Medium",
-                    "estimated_savings": industry_comparison.get("improvement_potential", 0),
-                }
-            )
-
-        # Add more specific recommendations based on carbon data
-        carbon_data = self._get_production_carbon_data(production)
-        if carbon_data:
-            if carbon_data["total_emissions"] > carbon_data["total_offsets"] * 2:
-                recommendations.append(
-                    {
-                        "category": "Offsetting",
-                        "priority": "Medium",
-                        "title": "Increase Carbon Offsets",
-                        "description": "Consider additional carbon offset projects to balance emissions.",
-                        "potential_impact": "Medium",
-                        "difficulty": "Low",
-                        "estimated_savings": carbon_data["total_emissions"] - carbon_data["total_offsets"],
-                    }
-                )
-
-        return recommendations
-
-    def _generate_consumer_insights(
-        self, production: History, equivalency_metrics: Dict, trust_indicators: Dict
-    ) -> Dict:
-        """Generate consumer-focused insights and explanations."""
-        insights = {
-            "key_message": "",
-            "sustainability_story": "",
-            "trust_summary": "",
-            "action_items": [],
-            "comparisons": {},
-            "explanations": {},
-        }
-
-        # Generate key message
-        grade = production.carbon_grade
-        if grade in ["A+", "A", "A-"]:
-            insights["key_message"] = f"Exceptional sustainability with {grade} grade carbon performance"
-        elif grade in ["B+", "B", "B-"]:
-            insights["key_message"] = f"Good sustainability practices with {grade} grade performance"
-        else:
-            insights["key_message"] = f"Working toward better sustainability - current grade: {grade}"
-
-        # Generate sustainability story
-        if equivalency_metrics and equivalency_metrics.get("context"):
-            context = equivalency_metrics["context"]
-            if context["is_carbon_negative"]:
-                insights["sustainability_story"] = (
-                    "This production actually removes more CO₂ from the atmosphere than it produces, helping fight climate change."
-                )
-            elif context["is_carbon_neutral"]:
-                insights["sustainability_story"] = (
-                    "This production achieves carbon neutrality, balancing emissions with effective offsets."
-                )
-            else:
-                insights["sustainability_story"] = (
-                    "This production is working to reduce its environmental impact through sustainable farming practices."
-                )
-
-        # Generate trust summary
-        trust_score = trust_indicators.get("overall_score", 0)
-        if trust_score >= 80:
-            insights["trust_summary"] = "High trust with verified data and transparent reporting"
-        elif trust_score >= 60:
-            insights["trust_summary"] = "Good transparency with reliable data sources"
-        else:
-            insights["trust_summary"] = "Basic transparency - room for improvement in verification"
-
-        return insights
 
     def _clear_production_caches(self, production_id: int):
         """Clear all caches related to a production."""
         cache_keys = [
-            f"carbon_grade_{production_id}",
-            f"industry_comparison_{production_id}",
+            f"verification_level_{production_id}",
+            f"verification_standards_{production_id}",
             f"equivalency_metrics_{production_id}",
             f"trust_indicators_{production_id}",
             f"qr_summary_{production_id}_v2",

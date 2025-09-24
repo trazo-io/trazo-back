@@ -34,6 +34,7 @@ from .models import (
 class EventSerializer(serializers.ModelSerializer):
     image = serializers.SerializerMethodField()
     carbon_data = serializers.SerializerMethodField()
+    album = serializers.SerializerMethodField()
 
     class Meta:
         model = CommonEvent
@@ -43,6 +44,40 @@ class EventSerializer(serializers.ModelSerializer):
         if event.album is not None:
             return event.album.images.first().image.url
         return None
+
+    def get_album(self, event):
+        """
+        Get album data with images for photo verification in Production Journey
+        """
+        if not event.album:
+            return None
+        
+        try:
+            request = self.context.get("request")
+            images = []
+            
+            for image in event.album.images.all():
+                # For testing: create placeholder image data even if no actual file
+                if image.image:
+                    image_url = request.build_absolute_uri(image.image.url) if request else image.image.url
+                else:
+                    # Use placeholder image for testing
+                    image_url = "https://via.placeholder.com/400x300/4CAF50/FFFFFF?text=Farming+Practice+Photo"
+                
+                images.append({
+                    "id": image.id,
+                    "image": image_url,
+                    "caption": f"Farming practice photo {image.id}",  # Basic caption
+                    "created_at": image.created_at.isoformat() if image.created_at else None
+                })
+            
+            return {
+                "id": event.album.id,
+                "images": images
+            } if images else None
+        except Exception as e:
+            # Return None if there's any issue with album serialization
+            return None
 
     def get_carbon_data(self, event):
         """
@@ -147,34 +182,60 @@ class UpdateChemicalEventSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         """
-        Custom validation for chemical event structured fields
+        Enhanced validation for chemical event structured fields with helpful error messages
         """
-        # Validate NPK percentages sum to reasonable total
-        nitrogen = data.get('nitrogen_percentage') or 0
-        phosphorus = data.get('phosphorus_percentage') or 0
-        potassium = data.get('potassium_percentage') or 0
+        # Get NPK percentages, handling None values
+        nitrogen = data.get('nitrogen_percentage')
+        phosphorus = data.get('phosphorus_percentage')
+        potassium = data.get('potassium_percentage')
         
-        total_npk = nitrogen + phosphorus + potassium
-        if total_npk > 100:
-            raise serializers.ValidationError({
-                'non_field_errors': 'Total NPK percentages cannot exceed 100%.'
-            })
+        # Individual field validation with detailed error messages
+        if nitrogen is not None:
+            if nitrogen < 0:
+                raise serializers.ValidationError({
+                    'nitrogen_percentage': 'Nitrogen percentage cannot be negative. Please enter a value between 0-100.'
+                })
+            if nitrogen > 100:
+                raise serializers.ValidationError({
+                    'nitrogen_percentage': 'Nitrogen percentage cannot exceed 100%. Most fertilizers have nitrogen content between 0-46%.'
+                })
+                
+        if phosphorus is not None:
+            if phosphorus < 0:
+                raise serializers.ValidationError({
+                    'phosphorus_percentage': 'Phosphorus percentage cannot be negative. Please enter a value between 0-100.'
+                })
+            if phosphorus > 100:
+                raise serializers.ValidationError({
+                    'phosphorus_percentage': 'Phosphorus percentage cannot exceed 100%. Most fertilizers have phosphorus content between 0-20%.'
+                })
+                
+        if potassium is not None:
+            if potassium < 0:
+                raise serializers.ValidationError({
+                    'potassium_percentage': 'Potassium percentage cannot be negative. Please enter a value between 0-100.'
+                })
+            if potassium > 100:
+                raise serializers.ValidationError({
+                    'potassium_percentage': 'Potassium percentage cannot exceed 100%. Most fertilizers have potassium content between 0-60%.'
+                })
         
-        # Validate that structured fields have reasonable values
-        if nitrogen < 0 or nitrogen > 100:
-            raise serializers.ValidationError({
-                'nitrogen_percentage': 'Nitrogen percentage must be between 0 and 100.'
-            })
-        
-        if phosphorus < 0 or phosphorus > 100:
-            raise serializers.ValidationError({
-                'phosphorus_percentage': 'Phosphorus percentage must be between 0 and 100.'
-            })
-        
-        if potassium < 0 or potassium > 100:
-            raise serializers.ValidationError({
-                'potassium_percentage': 'Potassium percentage must be between 0 and 100.'
-            })
+        # Validate total NPK only if all three values are provided
+        if nitrogen is not None and phosphorus is not None and potassium is not None:
+            total_npk = nitrogen + phosphorus + potassium
+            if total_npk > 100:
+                raise serializers.ValidationError({
+                    'non_field_errors': [
+                        f'Total NPK percentages cannot exceed 100%. Current total: {total_npk:.1f}%',
+                        f'Breakdown: N={nitrogen}%, P={phosphorus}%, K={potassium}%',
+                        'Tip: Common fertilizers like 20-10-10 have totals of 40%. Check your fertilizer label.'
+                    ]
+                })
+            
+            # Warning for suspiciously low totals (might indicate input error)
+            if total_npk < 5 and total_npk > 0:
+                # Note: This is a warning, not an error. We'll just add it to the response
+                data['_validation_warning'] = f'Very low NPK total ({total_npk:.1f}%). Please verify the values are correct.'
         
         return data
 
@@ -414,45 +475,97 @@ class UpdateProductionEventSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         """
-        Custom validation for production event structured fields
+        Enhanced validation for production event structured fields with helpful error messages
         """
         area_covered = data.get('area_covered')
         yield_quantity = data.get('yield_quantity')
         fuel_consumed = data.get('fuel_consumed')
         equipment_hours = data.get('equipment_hours')
         transportation_distance = data.get('transportation_distance')
+        area_unit = data.get('area_unit', 'ha')
+        yield_unit = data.get('yield_unit', 'kg')
         
-        # Validate positive values where applicable
-        if area_covered is not None and area_covered < 0:
+        # Enhanced area_covered validation
+        if area_covered is not None and area_covered <= 0:
             raise serializers.ValidationError({
-                'area_covered': 'Area covered cannot be negative.'
+                'area_covered': [
+                    'Area covered must be greater than 0.',
+                    'Please enter the actual area where the production activity took place.',
+                    f'Tip: Small plots are typically 0.1-1 {area_unit}, medium farms 1-10 {area_unit}, large farms 10+ {area_unit}.'
+                ]
             })
         
+        # Enhanced yield_quantity validation
         if yield_quantity is not None and yield_quantity < 0:
             raise serializers.ValidationError({
-                'yield_quantity': 'Yield quantity cannot be negative.'
+                'yield_quantity': [
+                    'Yield quantity cannot be negative.',
+                    'Please enter the actual amount produced or harvested.',
+                    f'Tip: If no yield yet (e.g., planting), you can leave this field empty.'
+                ]
             })
         
+        # Enhanced fuel_consumed validation
         if fuel_consumed is not None and fuel_consumed < 0:
             raise serializers.ValidationError({
-                'fuel_consumed': 'Fuel consumed cannot be negative.'
+                'fuel_consumed': [
+                    'Fuel consumed cannot be negative.',
+                    'Please enter the actual fuel used during the production activity.',
+                    'Tip: Small tractors typically use 5-15L/hr, large tractors 20-40L/hr.'
+                ]
             })
         
+        # Enhanced equipment_hours validation
         if equipment_hours is not None and equipment_hours < 0:
             raise serializers.ValidationError({
-                'equipment_hours': 'Equipment hours cannot be negative.'
+                'equipment_hours': [
+                    'Equipment hours cannot be negative.',
+                    'Please enter the actual time equipment was operating.',
+                    'Tip: Enter decimal hours (e.g., 1.5 for 1 hour 30 minutes).'
+                ]
             })
         
+        # Enhanced transportation_distance validation
         if transportation_distance is not None and transportation_distance < 0:
             raise serializers.ValidationError({
-                'transportation_distance': 'Transportation distance cannot be negative.'
+                'transportation_distance': [
+                    'Transportation distance cannot be negative.',
+                    'Please enter the distance from farm to processing/market.',
+                    'Tip: Local markets 0-50km, regional 50-200km, long distance 200+ km.'
+                ]
             })
         
-        # Reasonable maximum hours per day validation
+        # Enhanced maximum hours validation
         if equipment_hours is not None and equipment_hours > 24:
             raise serializers.ValidationError({
-                'equipment_hours': 'Equipment hours cannot exceed 24 hours per day for a single event.'
+                'equipment_hours': [
+                    'Equipment hours cannot exceed 24 hours per day for a single event.',
+                    'Please enter hours for this specific operation only.',
+                    'Tip: For multi-day operations, create separate events for each day.'
+                ]
             })
+        
+        # Business logic validation with farmer-friendly messages
+        if area_covered and area_covered > 500:  # Very large area
+            raise serializers.ValidationError({
+                'area_covered': [
+                    f'Area coverage ({area_covered} {area_unit}) is very large.',
+                    'Please verify this is correct for a single production event.',
+                    'Tip: Consider breaking large areas into smaller, manageable sections.'
+                ]
+            })
+        
+        # Yield efficiency check
+        if (yield_quantity and area_covered and yield_quantity > 0 and area_covered > 0):
+            yield_per_hectare = float(yield_quantity) / float(area_covered)
+            if yield_unit in ['kg', 'tons'] and yield_per_hectare > 50000:  # 50 tons per hectare
+                raise serializers.ValidationError({
+                    'yield_quantity': [
+                        f'Yield rate ({yield_per_hectare:.1f} {yield_unit}/ha) seems very high.',
+                        'Please verify the yield quantity and area are correct.',
+                        'Tip: Average yields vary by crop - check local agricultural statistics.'
+                    ]
+                })
         
         return data
 
@@ -1155,33 +1268,109 @@ class UpdateEquipmentEventSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         """
-        Custom validation for equipment event structured fields
+        Enhanced validation for equipment event structured fields with helpful error messages
         """
         fuel_consumed = data.get('fuel_consumed')
         hours_operated = data.get('hours_operated')
         area_worked = data.get('area_worked')
+        maintenance_cost = data.get('maintenance_cost')
+        equipment_type = data.get('equipment_type_structured')
         
-        # Validate positive values where applicable
+        # Validate positive values with detailed error messages
         if fuel_consumed is not None and fuel_consumed < 0:
             raise serializers.ValidationError({
-                'fuel_consumed': 'Fuel consumed cannot be negative.'
+                'fuel_consumed': [
+                    'Fuel consumed cannot be negative.',
+                    'Please enter the actual fuel consumed during the operation.',
+                    'Tip: Small tractors typically consume 5-15L/hr, large tractors 20-40L/hr.'
+                ]
             })
         
         if hours_operated is not None and hours_operated < 0:
             raise serializers.ValidationError({
-                'hours_operated': 'Hours operated cannot be negative.'
+                'hours_operated': [
+                    'Hours operated cannot be negative.',
+                    'Please enter the actual operating time for this equipment.'
+                ]
             })
         
         if area_worked is not None and area_worked < 0:
             raise serializers.ValidationError({
-                'area_worked': 'Area worked cannot be negative.'
+                'area_worked': [
+                    'Area worked cannot be negative.',
+                    'Please enter the actual area covered during the operation.'
+                ]
+            })
+            
+        if maintenance_cost is not None and maintenance_cost < 0:
+            raise serializers.ValidationError({
+                'maintenance_cost': [
+                    'Maintenance cost cannot be negative.',
+                    'Please enter the actual cost incurred for maintenance or repairs.'
+                ]
+            })
+        
+        # Business logic validation with farmer-friendly messages
+        
+        # If fuel consumption is provided, encourage hours operated for accurate carbon calculations
+        if fuel_consumed and fuel_consumed > 0 and not hours_operated:
+            raise serializers.ValidationError({
+                'hours_operated': [
+                    'Hours operated should be provided when fuel consumption is recorded.',
+                    'This helps calculate accurate carbon emissions and fuel efficiency.',
+                    'Even an approximate value is better than none.'
+                ]
             })
         
         # Reasonable maximum hours per day validation
         if hours_operated is not None and hours_operated > 24:
             raise serializers.ValidationError({
-                'hours_operated': 'Hours operated cannot exceed 24 hours per day for a single event.'
+                'hours_operated': [
+                    f'Hours operated cannot exceed 24 hours per day for a single event. Current: {hours_operated}h',
+                    'If this operation took multiple days, please create separate events for each day.',
+                    'For multi-day operations: Day 1 = 8h, Day 2 = 6h, etc.'
+                ]
             })
+            
+        # Fuel efficiency sanity check (if both fuel and hours are provided)
+        if (fuel_consumed and fuel_consumed > 0 and 
+            hours_operated and hours_operated > 0):
+            fuel_per_hour = float(fuel_consumed) / float(hours_operated)
+            
+            # Reasonable fuel consumption: 0.5L/hr to 50L/hr
+            if fuel_per_hour > 50:
+                raise serializers.ValidationError({
+                    'fuel_consumed': [
+                        f'Fuel consumption ({fuel_per_hour:.1f}L/hr) seems unusually high.',
+                        'Please double-check your fuel consumption and hours operated values.',
+                        'Typical ranges: Small equipment 2-10L/hr, Large tractors 15-40L/hr.'
+                    ]
+                })
+            elif fuel_per_hour < 0.5:
+                raise serializers.ValidationError({
+                    'fuel_consumed': [
+                        f'Fuel consumption ({fuel_per_hour:.1f}L/hr) seems unusually low.',
+                        'Please verify your fuel consumption and hours operated values.',
+                        'Even small equipment typically consumes at least 1L/hr.'
+                    ]
+                })
+        
+        # Equipment type specific validations
+        if equipment_type and fuel_consumed:
+            if equipment_type in ['tractor_large'] and fuel_consumed and fuel_consumed < 10:
+                raise serializers.ValidationError({
+                    'fuel_consumed': [
+                        'Large tractors typically consume more than 10L for significant operations.',
+                        'Please verify the fuel consumption or consider changing equipment type.'
+                    ]
+                })
+            elif equipment_type in ['irrigation_pump'] and fuel_consumed and fuel_consumed > 20:
+                raise serializers.ValidationError({
+                    'fuel_consumed': [
+                        'Irrigation pumps typically consume less than 20L per operation.',
+                        'Please verify the fuel consumption or operating duration.'
+                    ]
+                })
         
         return data
 
@@ -1262,22 +1451,69 @@ class UpdateBusinessEventSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         """
-        Custom validation for business event fields
+        Enhanced validation for business event structured fields with helpful error messages
         """
         business_type = data.get('business_type')
         certification_type = data.get('certification_type')
         carbon_credits_earned = data.get('carbon_credits_earned')
+        verification_status = data.get('verification_status')
         
-        # Certification type is required when business_type is 'certification'
-        if business_type == 'certification' and not certification_type:
-            raise serializers.ValidationError({
-                'certification_type': 'Certification type is required when business type is certification.'
-            })
-        
-        # Carbon credits must be positive if provided
+        # Validate carbon_credits_earned - must be non-negative
         if carbon_credits_earned is not None and carbon_credits_earned < 0:
             raise serializers.ValidationError({
-                'carbon_credits_earned': 'Carbon credits earned cannot be negative.'
+                'carbon_credits_earned': [
+                    'Carbon credits earned cannot be negative.',
+                    'Carbon credits represent positive environmental impact.',
+                    'If no credits were earned, leave this field empty or enter 0.'
+                ]
+            })
+        
+        # Business logic validation: reasonable carbon credit amounts
+        if carbon_credits_earned is not None and carbon_credits_earned > 10000:
+            raise serializers.ValidationError({
+                'carbon_credits_earned': [
+                    f'Carbon credits amount ({carbon_credits_earned}) seems unusually large.',
+                    'Typical farm operations generate 0.1-100 credits per event.',
+                    'Please verify this amount is correct.'
+                ]
+            })
+        
+        # Validate business_type is not empty
+        if not business_type or len(business_type.strip()) == 0:
+            raise serializers.ValidationError({
+                'business_type': [
+                    'Business type is required.',
+                    'Please select the type of business activity (certification, carbon credits, etc.)'
+                ]
+            })
+        
+        # Business logic: certification events should have certification_type
+        if business_type == 'certification' and not certification_type:
+            raise serializers.ValidationError({
+                'certification_type': [
+                    'Certification type is required for certification events.',
+                    'Please specify what type of certification was obtained.',
+                    'Examples: USDA Organic, Carbon Neutral, Rainforest Alliance'
+                ]
+            })
+        
+        # Business logic: carbon_credits events should have carbon_credits_earned
+        if business_type == 'carbon_credits' and not carbon_credits_earned:
+            raise serializers.ValidationError({
+                'carbon_credits_earned': [
+                    'Carbon credits amount is required for carbon credit transactions.',
+                    'Please enter the number of credits generated or traded.',
+                    'If no credits were generated, consider using a different business type.'
+                ]
+            })
+        
+        # Business logic: verification events should have verified status
+        if business_type == 'verification' and verification_status in ['pending', 'not_applicable']:
+            raise serializers.ValidationError({
+                'verification_status': [
+                    'Verification events should have a definitive verification status.',
+                    'Please update the status to "verified", "in_progress", or "failed".'
+                ]
             })
         
         return data

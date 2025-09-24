@@ -1,6 +1,7 @@
 from io import BytesIO
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
@@ -160,51 +161,56 @@ class History(models.Model):
 
     def calculate_transparency_score(self):
         """
-        Calculate overall transparency rating (0-100%)
-        Based on documentation completeness, public accessibility, third-party verifications
+        Calculate overall transparency rating (0-100%) using enhanced anti-gaming system
+        NOW INTEGRATED with advanced photo verification and anti-gaming measures
         """
-        score = 0
-
-        # Basic information completeness (25 points)
-        if self.name and self.description:
-            score += 15
-        if self.album and self.album.images.exists():
-            score += 10
-
-        # Event documentation with images (25 points)
-        events_with_images = 0
-        total_events = (
-            self.history_productionevent_events.count()
-            + self.history_chemicalevent_events.count()
-            + self.history_generalevent_events.count()
-            + self.history_equipmentevent_events.count()
-            + self.history_soilmanagementevent_events.count()
-            + self.history_pestmanagementevent_events.count()
-            + self.history_businessevent_events.count()
-        )
-
-        for event in self.history_productionevent_events.all():
-            if hasattr(event, "images") and event.images.exists():
-                events_with_images += 1
-
-        if total_events > 0:
-            score += (events_with_images / total_events) * 25
-
-        # Public accessibility (25 points)
-        if self.published:
-            score += 15
-        if self.qr_code:
-            score += 10
-
-        # Third-party verification (25 points)
-        if hasattr(self, "carbon_entries") and self.carbon_entries.exists():
-            score += 10
-        if hasattr(self, "reviews") and self.reviews.count() > 0:
-            score += 10
-        if hasattr(self, "blockchain_verification") and self.blockchain_verification:
-            score += 5
-
-        return min(round(score, 1), 100.0)
+        try:
+            # Use the enhanced TransparencyCalculator service with anti-gaming photo verification
+            from .services.transparency_calculator import TransparencyCalculator
+            
+            calculator = TransparencyCalculator()
+            transparency_data = calculator.calculate_transparency_score(self)
+            
+            return transparency_data.get('transparency_percentage', 0.0)
+            
+        except Exception as e:
+            # Fallback to basic calculation if service fails
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Enhanced transparency calculation failed for history {self.id}: {str(e)}")
+            
+            # Simple fallback without photo verification
+            score = 0
+            
+            # Basic completeness
+            if self.name and self.description:
+                score += 30
+            
+            # Event count (without photo requirements)
+            total_events = (
+                self.history_productionevent_events.count()
+                + self.history_chemicalevent_events.count()
+                + self.history_generalevent_events.count()
+                + self.history_equipmentevent_events.count()
+                + self.history_soilmanagementevent_events.count()
+                + self.history_pestmanagementevent_events.count()
+                + self.history_businessevent_events.count()
+            )
+            
+            if total_events >= 10:
+                score += 40
+            elif total_events >= 5:
+                score += 20
+            
+            # Public accessibility
+            if self.published:
+                score += 20
+            
+            # Verification
+            if hasattr(self, "carbon_entries") and self.carbon_entries.exists():
+                score += 10
+                
+            return min(score, 100.0)
 
     def get_farm_history_years(self):
         """
@@ -512,6 +518,45 @@ class ChemicalEvent(CommonEvent):
         null=True, blank=True,
         help_text="Structured application method"
     )
+    
+    def clean(self):
+        """
+        Model-level validation for NPK percentages and business logic
+        """
+        from django.core.exceptions import ValidationError
+        
+        # Validate individual NPK percentages are within range
+        for field_name, percentage in [
+            ('nitrogen_percentage', self.nitrogen_percentage),
+            ('phosphorus_percentage', self.phosphorus_percentage), 
+            ('potassium_percentage', self.potassium_percentage)
+        ]:
+            if percentage is not None:
+                if percentage < 0:
+                    raise ValidationError({
+                        field_name: f'{field_name.replace("_", " ").title()} cannot be negative'
+                    })
+                if percentage > 100:
+                    raise ValidationError({
+                        field_name: f'{field_name.replace("_", " ").title()} cannot exceed 100%'
+                    })
+        
+        # Validate total NPK doesn't exceed 100%
+        if (self.nitrogen_percentage is not None and 
+            self.phosphorus_percentage is not None and 
+            self.potassium_percentage is not None):
+            
+            total_npk = self.nitrogen_percentage + self.phosphorus_percentage + self.potassium_percentage
+            if total_npk > 100:
+                raise ValidationError({
+                    '__all__': f'Total NPK percentages cannot exceed 100%. '
+                             f'Current total: {total_npk}% '
+                             f'(N: {self.nitrogen_percentage}%, '
+                             f'P: {self.phosphorus_percentage}%, '
+                             f'K: {self.potassium_percentage}%)'
+                })
+        
+        super().clean()
 
 
 class ProductionEvent(CommonEvent):
@@ -607,6 +652,45 @@ class ProductionEvent(CommonEvent):
         default='normal', blank=True,
         help_text="Production efficiency rating for carbon scoring"
     )
+    
+    def clean(self):
+        """Model-level validation for production event values and business logic"""
+        errors = {}
+        
+        # Validate area_covered - must be positive for most operations
+        if self.area_covered is not None and self.area_covered <= 0:
+            errors['area_covered'] = 'Area covered must be greater than 0'
+            
+        # Validate transportation_distance - cannot be negative
+        if self.transportation_distance is not None and self.transportation_distance < 0:
+            errors['transportation_distance'] = 'Transportation distance cannot be negative'
+            
+        # Validate yield_quantity - cannot be negative
+        if self.yield_quantity is not None and self.yield_quantity < 0:
+            errors['yield_quantity'] = 'Yield quantity cannot be negative'
+            
+        # Validate equipment_hours - cannot be negative
+        if self.equipment_hours is not None and self.equipment_hours < 0:
+            errors['equipment_hours'] = 'Equipment hours cannot be negative'
+        
+        # Business logic validation: reasonable area coverage
+        if self.area_covered and self.area_covered > 1000:  # More than 1000 hectares
+            errors['area_covered'] = f'Area coverage ({self.area_covered} {self.area_unit}) seems unusually large. Please verify.'
+            
+        # Business logic: yield efficiency checks
+        if (self.yield_quantity and self.area_covered and 
+            self.yield_quantity > 0 and self.area_covered > 0):
+            yield_per_hectare = float(self.yield_quantity) / float(self.area_covered)
+            # Example check for unreasonably high yields (varies by crop)
+            if self.yield_unit in ['kg', 'tons'] and yield_per_hectare > 100000:  # 100 tons per hectare
+                errors['yield_quantity'] = f'Yield rate ({yield_per_hectare:.1f} {self.yield_unit}/ha) seems unreasonably high. Please verify.'
+        
+        # Transportation efficiency check
+        if (self.transportation_distance and self.transportation_distance > 500):
+            errors['transportation_distance'] = f'Transportation distance ({self.transportation_distance} {self.transportation_unit}) is very long. Consider local processing to reduce carbon footprint.'
+        
+        if errors:
+            raise ValidationError(errors)
 
 
 class GeneralEvent(CommonEvent):
@@ -838,6 +922,55 @@ class EquipmentEvent(CommonEvent):
         help_text="Operation efficiency rating for carbon scoring"
     )
     observation = models.TextField(blank=True, null=True, help_text="Equipment event observations")
+    
+    def clean(self):
+        """Model-level validation for equipment event values and business logic"""
+        from django.core.exceptions import ValidationError
+        
+        errors = {}
+        
+        # Validate fuel_consumed is non-negative
+        if self.fuel_consumed is not None and self.fuel_consumed < 0:
+            errors['fuel_consumed'] = 'Fuel consumed cannot be negative'
+            
+        # Validate hours_operated is non-negative
+        if self.hours_operated is not None and self.hours_operated < 0:
+            errors['hours_operated'] = 'Hours operated cannot be negative'
+            
+        # Validate maintenance_cost is non-negative
+        if self.maintenance_cost is not None and self.maintenance_cost < 0:
+            errors['maintenance_cost'] = 'Maintenance cost cannot be negative'
+            
+        # Validate area_worked is non-negative
+        if self.area_worked is not None and self.area_worked < 0:
+            errors['area_worked'] = 'Area worked cannot be negative'
+            
+        # Business logic validations
+        
+        # If fuel consumption is provided, hours operated should also be provided for accuracy
+        if self.fuel_consumed and self.fuel_consumed > 0 and not self.hours_operated:
+            if 'hours_operated' not in errors:
+                errors['hours_operated'] = 'Hours operated should be provided when fuel consumption is recorded'
+                
+        # Validate reasonable fuel efficiency (basic sanity check)
+        if (self.fuel_consumed and self.fuel_consumed > 0 and 
+            self.hours_operated and self.hours_operated > 0):
+            fuel_per_hour = float(self.fuel_consumed) / float(self.hours_operated)
+            
+            # Reasonable fuel consumption: 0.5L/hr to 50L/hr (covers small pumps to large tractors)
+            if fuel_per_hour > 50:
+                errors['fuel_consumed'] = f'Fuel consumption ({fuel_per_hour:.1f}L/hr) seems unreasonably high. Check values.'
+            elif fuel_per_hour < 0.5:
+                errors['fuel_consumed'] = f'Fuel consumption ({fuel_per_hour:.1f}L/hr) seems unreasonably low. Check values.'
+                
+        # Validate reasonable operating hours (max 24 hours per day)
+        if self.hours_operated and self.hours_operated > 24:
+            errors['hours_operated'] = 'Hours operated cannot exceed 24 hours per day'
+            
+        if errors:
+            raise ValidationError(errors)
+            
+        super().clean()
 
     class Meta:
         verbose_name = "Equipment Event"
@@ -1019,6 +1152,34 @@ class BusinessEvent(CommonEvent):
     )
     observation = models.TextField(blank=True, null=True)
     extra_data = models.JSONField(blank=True, null=True)
+
+    def clean(self):
+        """Model-level validation for business event values and business logic"""
+        from django.core.exceptions import ValidationError
+        errors = {}
+        
+        # Validate carbon_credits_earned - must be non-negative
+        if self.carbon_credits_earned is not None and self.carbon_credits_earned < 0:
+            errors['carbon_credits_earned'] = 'Carbon credits earned cannot be negative'
+        
+        # Business logic validation: reasonable carbon credit amounts
+        if self.carbon_credits_earned and self.carbon_credits_earned > 10000:
+            errors['carbon_credits_earned'] = f'Carbon credits amount ({self.carbon_credits_earned} {self.carbon_credits_unit}) seems unusually large. Please verify.'
+        
+        # Validate business_type is not empty
+        if not self.business_type or len(self.business_type.strip()) == 0:
+            errors['business_type'] = 'Business type is required'
+        
+        # Business logic: certification events should have certification_type
+        if self.business_type == 'certification' and not self.certification_type:
+            errors['certification_type'] = 'Certification type is required for certification events'
+        
+        # Business logic: carbon_credits events should have carbon_credits_earned
+        if self.business_type == 'carbon_credits' and not self.carbon_credits_earned:
+            errors['carbon_credits_earned'] = 'Carbon credits amount is required for carbon credit transactions'
+        
+        if errors:
+            raise ValidationError(errors)
 
     class Meta:
         verbose_name = "Business Event"

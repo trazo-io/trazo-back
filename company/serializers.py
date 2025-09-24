@@ -565,7 +565,7 @@ class CreateCompanySerializer(ModelSerializer):
 
 class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
     """
-    Accurate dashboard metrics for SmartUsageCard based on real backend data
+    Transparency-first dashboard metrics for SmartUsageCard based on documentation completeness
     """
 
     # Consumer engagement metrics
@@ -573,17 +573,23 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
     monthly_scans = serializers.IntegerField(help_text="Total QR scans this month")
     scan_growth_percentage = serializers.FloatField(help_text="Month-over-month scan growth")
 
-    # Trust and verification metrics
-    trust_score = serializers.IntegerField(help_text="Average confidence score (0-100%)")
+    # Transparency metrics (PRIMARY)
+    transparency_score = serializers.FloatField(help_text="Average transparency percentage (0-100%)")
+    documentation_completeness = serializers.FloatField(help_text="Documentation completeness percentage")
+    verification_level = serializers.CharField(help_text="Current verification level")
+
+    # Verification metrics
     verified_productions = serializers.IntegerField(help_text="Productions with carbon verification")
     total_productions = serializers.IntegerField(help_text="Total productions in establishment")
+    usda_verified_count = serializers.IntegerField(help_text="USDA verified productions")
+    blockchain_verified_count = serializers.IntegerField(help_text="Blockchain verified productions")
 
-    # Performance metrics
-    industry_percentile = serializers.FloatField(help_text="Industry ranking percentile")
-    carbon_score = serializers.FloatField(help_text="Average carbon score (1-5 stars)")
+    # Carbon context (SUPPORTING)
+    carbon_footprint_avg = serializers.FloatField(help_text="Average carbon footprint per kg")
+    carbon_negative_count = serializers.IntegerField(help_text="Carbon negative productions")
 
     # Business impact metrics
-    revenue_potential = serializers.FloatField(help_text="Transparency engagement score (not actual revenue)")
+    transparency_engagement = serializers.FloatField(help_text="Transparency engagement score")
 
     # Subscription context
     subscription_usage_percentage = serializers.FloatField(help_text="Subscription limits usage %")
@@ -624,16 +630,70 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
         elif monthly_scans > 0:
             scan_growth_percentage = 100  # First month with scans
 
-        # 3. TRUST SCORE - Average confidence from productions
+        # 3. TRANSPARENCY METRICS - Primary focus on documentation completeness
         establishment_histories = History.objects.filter(parcel__establishment=establishment)
-        avg_confidence = (
-            establishment_histories.aggregate(avg_conf=Avg("confidence_score"))["avg_conf"] or 70
-        )  # Default to 70% if no data
+        total_productions = establishment_histories.count()
+        
+        # Calculate transparency scores using TransparencyCalculator
+        from history.services.transparency_calculator import TransparencyCalculator
+        from django.db.models import Sum
+        transparency_calc = TransparencyCalculator()
+        
+        transparency_scores = []
+        completeness_scores = []
+        verification_levels = []
+        usda_verified_count = 0
+        blockchain_verified_count = 0
+        carbon_negative_count = 0
+        carbon_footprints = []
+        
+        for history in establishment_histories:
+            # Get transparency data for each production
+            transparency_data = transparency_calc.calculate_transparency_score(history)
+            transparency_scores.append(transparency_data.get('transparency_percentage', 0))
+            completeness_scores.append(transparency_data.get('completeness_score', 0))
+            
+            # Get verification level
+            from carbon.services.carbon_transparency_service import transparency_service
+            verification_level = transparency_service.calculate_verification_level(history)
+            verification_levels.append(verification_level)
+            
+            # Count USDA and blockchain verifications
+            from carbon.models import CarbonEntry
+            if CarbonEntry.objects.filter(production=history, usda_verified=True).exists():
+                usda_verified_count += 1
+            # Check for blockchain verification using available fields
+            if CarbonEntry.objects.filter(production=history, 
+                                         verification_status="blockchain_verified").exists():
+                blockchain_verified_count += 1
+                
+            # Check for carbon negative productions
+            carbon_entries = CarbonEntry.objects.filter(production=history)
+            if carbon_entries.exists():
+                total_emissions = carbon_entries.filter(type="emission").aggregate(Sum("co2e_amount"))["co2e_amount__sum"] or 0
+                total_offsets = carbon_entries.filter(type="offset").aggregate(Sum("effective_amount"))["effective_amount__sum"] or 0
+                net_footprint = total_emissions - total_offsets
+                
+                if net_footprint < 0:
+                    carbon_negative_count += 1
+                    
+                # Calculate per-kg footprint
+                production_amount = getattr(history, 'production_amount', None)
+                if production_amount and production_amount > 0:
+                    carbon_footprints.append(net_footprint / production_amount)
 
-        trust_score = round(avg_confidence)
+        # Calculate averages
+        transparency_score = sum(transparency_scores) / len(transparency_scores) if transparency_scores else 0
+        documentation_completeness = sum(completeness_scores) / len(completeness_scores) if completeness_scores else 0
+        carbon_footprint_avg = sum(carbon_footprints) / len(carbon_footprints) if carbon_footprints else 0
+        
+        # Determine overall verification level
+        verification_level_counts = {}
+        for level in verification_levels:
+            verification_level_counts[level] = verification_level_counts.get(level, 0) + 1
+        verification_level = max(verification_level_counts.items(), key=lambda x: x[1])[0] if verification_level_counts else "Limited"
 
         # 4. VERIFIED PRODUCTIONS - Count with carbon data
-        total_productions = establishment_histories.count()
         verified_productions = (
             establishment_histories.filter(
                 Q(carbonentry__isnull=False) | Q(carbonreport__isnull=False) | Q(carbon_intelligence__isnull=False)
@@ -642,48 +702,24 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
             .count()
         )
 
-        # 5. INDUSTRY PERCENTILE - Based on carbon performance and confidence scores
-        # Get average confidence score for this establishment
-        avg_confidence = establishment_histories.aggregate(avg_conf=Avg("confidence_score"))["avg_conf"] or 70
-
-        # Calculate percentile based on confidence score (simplified)
-        if avg_confidence >= 85:
-            industry_percentile = 90
-        elif avg_confidence >= 75:
-            industry_percentile = 80
-        elif avg_confidence >= 65:
-            industry_percentile = 70
-        else:
-            industry_percentile = 60
-
-        # 6. CARBON SCORE - Average from transparency and confidence scores
-        transparency_avg = establishment_histories.aggregate(avg_trans=Avg("transparency_score"))["avg_trans"] or 70
-
-        # Combine confidence and transparency for carbon score (1-5 scale)
-        combined_score = (avg_confidence + transparency_avg) / 2
-        carbon_score = min(5.0, max(1.0, (combined_score / 100) * 5))
-
-        # 7. TRANSPARENCY ENGAGEMENT - What Trazo Actually Provides
-        # NOTE: We don't have actual sales/premium data, so we show engagement metrics instead
-        revenue_potential = 0
+        # 5. TRANSPARENCY ENGAGEMENT - Trazo's Value Proposition
+        transparency_engagement = 0
         if consumer_reach > 0 and monthly_scans > 0:
-            # TRANSPARENCY ENGAGEMENT SCORE: Combination of reach and verification
+            # TRANSPARENCY ENGAGEMENT SCORE: Combination of reach, documentation, and verification
             # This represents the value Trazo provides: consumer engagement with farm transparency
-
-            # Engagement score based on actual tracked metrics
             engagement_base = consumer_reach * 10  # Each unique consumer = 10 points
             scan_multiplier = min(monthly_scans / 10, 5)  # Up to 5x multiplier for scan frequency
-            verification_bonus = verified_productions * 20  # Verification adds credibility
+            transparency_bonus = transparency_score * 2  # Transparency documentation adds value
+            verification_bonus = (usda_verified_count + blockchain_verified_count) * 15  # Verification adds credibility
 
-            # Calculate transparency engagement score (not actual revenue)
-            transparency_engagement = engagement_base * scan_multiplier + verification_bonus
+            # Calculate transparency engagement score
+            transparency_engagement = engagement_base * scan_multiplier + transparency_bonus + verification_bonus
 
-            # Convert to a meaningful metric for farmers
-            # This represents "transparency reach potential" rather than guaranteed revenue
-            revenue_potential = min(transparency_engagement, 1000)  # Cap at 1000 for display
+            # Cap at reasonable display value
+            transparency_engagement = min(transparency_engagement, 1000)
         else:
-            # Fallback for new farms
-            revenue_potential = verified_productions * 50  # Basic potential based on verified products
+            # Fallback for new farms - based on documentation quality
+            transparency_engagement = transparency_score * 5 + verified_productions * 25
 
         # 8. SUBSCRIPTION CONTEXT - From company subscription
         subscription = establishment.company.subscription if hasattr(establishment.company, "subscription") else None
@@ -698,15 +734,30 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
             is_premium = subscription.plan.name.lower() in ["premium", "enterprise"]
 
         return {
+            # Consumer engagement metrics
             "consumer_reach": consumer_reach,
             "monthly_scans": monthly_scans,
             "scan_growth_percentage": round(scan_growth_percentage, 1),
-            "trust_score": trust_score,
+            
+            # Transparency metrics (PRIMARY)
+            "transparency_score": round(transparency_score, 1),
+            "documentation_completeness": round(documentation_completeness, 1),
+            "verification_level": verification_level,
+            
+            # Verification metrics
             "verified_productions": verified_productions,
             "total_productions": total_productions,
-            "industry_percentile": industry_percentile,
-            "carbon_score": round(carbon_score, 1),
-            "revenue_potential": round(revenue_potential, 2),
+            "usda_verified_count": usda_verified_count,
+            "blockchain_verified_count": blockchain_verified_count,
+            
+            # Carbon context (SUPPORTING)
+            "carbon_footprint_avg": round(carbon_footprint_avg, 3),
+            "carbon_negative_count": carbon_negative_count,
+            
+            # Business impact metrics
+            "transparency_engagement": round(transparency_engagement, 2),
+            
+            # Subscription context
             "subscription_usage_percentage": round(subscription_usage_percentage, 1),
             "is_premium": is_premium,
         }

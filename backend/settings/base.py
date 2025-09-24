@@ -92,8 +92,10 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "backend.security.middleware.SecurityHeadersMiddleware",  # Add security headers early
     "backend.security.middleware.RequestSecurityMiddleware",  # Validate requests
+    "backend.security.enhanced_ddos_protection.CircuitBreakerMiddleware",  # Circuit breaker protection
+    "backend.security.enhanced_ddos_protection.EnhancedRateLimitMiddleware",  # Enhanced DDoS protection
     "corsheaders.middleware.CorsMiddleware",
-    "backend.security.rate_limiting.SecurityMiddleware",
+    "backend.security.rate_limiting.SecurityMiddleware",  # Fallback rate limiting
     "backend.security_middleware.SecurityLoggingMiddleware",
     "backend.security_middleware.CSRFSecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
@@ -803,3 +805,20 @@ PHOTO_EVIDENCE_ALLOWED_TYPES = config("PHOTO_EVIDENCE_ALLOWED_TYPES", default="i
     ","
 )
 PHOTO_EVIDENCE_COMPRESSION_QUALITY = config("PHOTO_EVIDENCE_COMPRESSION_QUALITY", default=85, cast=int)
+
+# Enhanced DDoS Protection Configuration
+DDOS_PROTECTION_ENABLED = config("DDOS_PROTECTION_ENABLED", default=True, cast=bool)
+DDOS_THREAT_SCORE_THRESHOLD = config("DDOS_THREAT_SCORE_THRESHOLD", default=50, cast=int)
+DDOS_IP_WHITELIST = config("DDOS_IP_WHITELIST", default="").split(",") if config("DDOS_IP_WHITELIST", default="") else []
+DDOS_CIRCUIT_BREAKER_THRESHOLD = config("DDOS_CIRCUIT_BREAKER_THRESHOLD", default=50, cast=int)
+DDOS_CIRCUIT_BREAKER_TIMEOUT = config("DDOS_CIRCUIT_BREAKER_TIMEOUT", default=60, cast=int)
+
+# Rate Limiting Configuration (Enhanced)
+RATE_LIMIT_ENABLE_BURST = config("RATE_LIMIT_ENABLE_BURST", default=True, cast=bool)
+RATE_LIMIT_ADAPTIVE_ENABLED = config("RATE_LIMIT_ADAPTIVE_ENABLED", default=True, cast=bool)
+RATE_LIMIT_GEOLOCATION_ENABLED = config("RATE_LIMIT_GEOLOCATION_ENABLED", default=False, cast=bool)  # Requires geolocation service
+
+# Security Monitoring Configuration
+SECURITY_MONITORING_ENABLED = config("SECURITY_MONITORING_ENABLED", default=True, cast=bool)
+SECURITY_ALERT_WEBHOOK_URL = config("SECURITY_ALERT_WEBHOOK_URL", default="")  # Slack/Teams webhook for alerts
+SECURITY_LOG_RETENTION_DAYS = config("SECURITY_LOG_RETENTION_DAYS", default=30, cast=int)
