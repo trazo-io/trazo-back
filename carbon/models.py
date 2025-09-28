@@ -496,6 +496,12 @@ class CarbonEntry(models.Model):
         ]
 
     def save(self, *args, **kwargs):
+        # Validate event type for establishment compatibility
+        is_valid, error_message = self.validate_event_for_establishment()
+        if not is_valid:
+            from django.core.exceptions import ValidationError
+            raise ValidationError(f"Invalid event for establishment: {error_message}")
+        
         # Only set basic trust score if not already set by verification service
         if self.type == "offset" and not hasattr(self, "_verification_processed"):
             trust_scores = {"self_reported": 0.5, "certified_project": 1.0}
@@ -582,6 +588,82 @@ class CarbonEntry(models.Model):
                 # Ensure minimum score of 1 for positive emissions
                 score = int(offset_ratio * 50)
                 return max(1, score) if total_emissions > 0 else 50
+
+    @classmethod
+    def get_allowed_event_types_for_establishment(cls, establishment_type):
+        """
+        Define which event types are allowed for different establishment types.
+        Prevents inappropriate events like packaging at research facilities.
+        
+        Args:
+            establishment_type: String representing the type of establishment
+            
+        Returns:
+            dict: Configuration with allowed/restricted event patterns
+        """
+        # Default configuration for unknown establishment types
+        default_config = {
+            'allowed_patterns': [
+                'fertilizer', 'irrigation', 'soil', 'cover crop', 'equipment', 
+                'solar', 'organic', 'harvest', 'processing', 'pest'
+            ],
+            'restricted_patterns': ['packaging'],
+            'reasoning': 'General farm operations without packaging'
+        }
+        
+        # Establishment-specific configurations
+        configs = {
+            'Organic Research Center': {
+                'allowed_patterns': [
+                    'fertilizer', 'irrigation', 'soil', 'cover crop', 'equipment',
+                    'solar', 'organic', 'research', 'experimental', 'pest'
+                ],
+                'restricted_patterns': ['packaging', 'processing', 'harvest'],
+                'reasoning': 'Research facilities should focus on agricultural research, not product packaging or processing'
+            },
+            'Regenerative Grain Ranch': {
+                'allowed_patterns': [
+                    'fertilizer', 'irrigation', 'soil', 'cover crop', 'equipment',
+                    'solar', 'grain', 'harvest', 'pest', 'organic'
+                ],
+                'restricted_patterns': ['packaging'],
+                'reasoning': 'Grain ranches grow crops but typically do not package consumer products'
+            },
+            'Premium Citrus Ranch': {
+                'allowed_patterns': [
+                    'fertilizer', 'irrigation', 'soil', 'cover crop', 'equipment',
+                    'solar', 'citrus', 'harvest', 'processing', 'pest', 'organic'
+                ],
+                'restricted_patterns': [],  # Citrus operations might legitimately package
+                'reasoning': 'Citrus ranches may have some packaging operations for direct sales'
+            }
+        }
+        
+        return configs.get(establishment_type, default_config)
+    
+    def validate_event_for_establishment(self):
+        """
+        Validate that this carbon entry is appropriate for the establishment type.
+        
+        Returns:
+            tuple: (is_valid: bool, error_message: str)
+        """
+        if not self.establishment or not self.description:
+            return True, ""
+        
+        establishment_type = getattr(self.establishment, 'establishment_type', None)
+        if not establishment_type:
+            return True, ""  # Skip validation if establishment type is unknown
+        
+        config = self.get_allowed_event_types_for_establishment(establishment_type)
+        description_lower = self.description.lower()
+        
+        # Check if event contains any restricted patterns
+        for restricted_pattern in config['restricted_patterns']:
+            if restricted_pattern in description_lower:
+                return False, f"Event type '{restricted_pattern}' is not appropriate for {establishment_type}. {config['reasoning']}"
+        
+        return True, ""
 
 
 class CarbonCertification(models.Model):

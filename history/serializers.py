@@ -41,8 +41,13 @@ class EventSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
     def get_image(self, event):
-        if event.album is not None:
-            return event.album.images.first().image.url
+        if event.album is not None and event.album.images.exists():
+            first_image = event.album.images.first()
+            # Prefer image_url (S3 URL) over file field
+            if first_image.image_url:
+                return first_image.image_url
+            elif first_image.image:
+                return first_image.image.url
         return None
 
     def get_album(self, event):
@@ -57,8 +62,10 @@ class EventSerializer(serializers.ModelSerializer):
             images = []
             
             for image in event.album.images.all():
-                # For testing: create placeholder image data even if no actual file
-                if image.image:
+                # Prefer image_url (S3 URL) over file field
+                if image.image_url:
+                    image_url = image.image_url
+                elif image.image:
                     image_url = request.build_absolute_uri(image.image.url) if request else image.image.url
                 else:
                     # Use placeholder image for testing
@@ -264,28 +271,67 @@ class UpdateWeatherEventSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
     def to_internal_value(self, data):
-        type = data.get("type", None)
-        if type is None:
+        # DEBUG: Log incoming data
+        print(f"[UpdateWeatherEventSerializer.to_internal_value] Incoming data keys: {data.keys()}")
+        print(f"[UpdateWeatherEventSerializer.to_internal_value] weather type: {data.get('type')}")
+        if 'water_deficit' in data:
+            print(f"[UpdateWeatherEventSerializer.to_internal_value] water_deficit in data: {data.get('water_deficit')} (python type: {type(data.get('water_deficit')).__name__})")
+        
+        event_type = data.get("type", None)
+        if event_type is None:
             raise serializers.ValidationError({"type": ["This field is required."]}, code="required")
         data = data.copy()
         extra_data = {}
-        if type == WeatherEvent.FROST:
+        if event_type == WeatherEvent.FROST:
             extra_data["lower_temperature"] = data.pop("lower_temperature", None)
             extra_data["way_of_protection"] = data.pop("way_of_protection", None)
-        elif type == WeatherEvent.DROUGHT:
-            extra_data["water_deficit"] = data.pop("water_deficit", None)
-        elif type == WeatherEvent.HAILSTORM:
+        elif event_type == WeatherEvent.DROUGHT:
+            water_deficit_value = data.pop("water_deficit", None)
+            print(f"[UpdateWeatherEventSerializer.to_internal_value] DROUGHT - water_deficit popped: {water_deficit_value} (python type: {type(water_deficit_value).__name__})")
+            extra_data["water_deficit"] = water_deficit_value
+        elif event_type == WeatherEvent.HAILSTORM:
             extra_data["weight"] = data.pop("weight", None)
             extra_data["diameter"] = data.pop("diameter", None)
             extra_data["duration"] = data.pop("duration", None)
             extra_data["way_of_protection"] = data.pop("way_of_protection", None)
-        elif type == WeatherEvent.HIGH_TEMPERATURE:
+        elif event_type == WeatherEvent.HIGH_TEMPERATURE:
             extra_data["highest_temperature"] = data.pop("highest_temperature", None)
             extra_data["start_date"] = data.pop("start_date", None)
             extra_data["end_date"] = data.pop("end_date", None)
+        elif event_type == WeatherEvent.TROPICAL_STORM:
+            extra_data["wind_speed"] = data.pop("wind_speed", None)
+            extra_data["precipitation_amount"] = data.pop("precipitation_amount", None)
+            extra_data["duration"] = data.pop("duration", None)
+            extra_data["damage_assessment"] = data.pop("damage_assessment", None)
+        elif event_type == WeatherEvent.HIGH_WINDS:
+            extra_data["wind_speed"] = data.pop("wind_speed", None)
+            extra_data["duration"] = data.pop("duration", None)
+            extra_data["protection_measures"] = data.pop("protection_measures", None)
+        elif event_type == WeatherEvent.HIGH_HUMIDITY:
+            extra_data["humidity_level"] = data.pop("humidity_level", None)
+            extra_data["duration"] = data.pop("duration", None)
+            extra_data["crop_impact"] = data.pop("crop_impact", None)
+        elif event_type == WeatherEvent.LOW_HUMIDITY:
+            extra_data["humidity_level"] = data.pop("humidity_level", None)
+            extra_data["duration"] = data.pop("duration", None)
+            extra_data["crop_impact"] = data.pop("crop_impact", None)
+        print(f"[UpdateWeatherEventSerializer.to_internal_value] extra_data before merge: {extra_data}")
+        
         internal_value = super().to_internal_value(data)
-        internal_value.extra_data = extra_data
+        
+        # Merge with existing extra_data to preserve carbon_calculation and other fields
+        if hasattr(self, 'instance') and self.instance and self.instance.extra_data:
+            # Updating existing event - merge with current extra_data
+            print(f"[UpdateWeatherEventSerializer.to_internal_value] Existing instance.extra_data: {self.instance.extra_data}")
+            merged_extra_data = {**self.instance.extra_data, **extra_data}
+            print(f"[UpdateWeatherEventSerializer.to_internal_value] Merged extra_data: {merged_extra_data}")
+            internal_value['extra_data'] = merged_extra_data
+        else:
+            # Creating new event - use new extra_data
+            print(f"[UpdateWeatherEventSerializer.to_internal_value] No existing instance - using new extra_data")
+            internal_value['extra_data'] = extra_data
 
+        print(f"[UpdateWeatherEventSerializer.to_internal_value] Final internal_value['extra_data']: {internal_value['extra_data']}")
         return internal_value
 
     def to_representation(self, instance):
@@ -308,106 +354,145 @@ class UpdateWeatherEventSerializer(serializers.ModelSerializer):
             data["way_of_protection"] = instance.extra_data.get("way_of_protection", "")
         elif type == WeatherEvent.HIGH_TEMPERATURE:
             data["highest_temperature"] = instance.extra_data.get("highest_temperature", 0)
-            data["start_date"] = instance.extra_data.get("start_date", "")
-            data["end_date"] = instance.extra_data.get("end_date", "")
+            # Convert date strings to datetime-local format for frontend datetime-local inputs
+            start_date = instance.extra_data.get("start_date", "")
+            end_date = instance.extra_data.get("end_date", "")
+            # If dates are in YYYY-MM-DD format, add time component for datetime-local
+            if start_date and len(start_date) == 10:  # YYYY-MM-DD format
+                data["start_date"] = f"{start_date}T00:00"
+            else:
+                data["start_date"] = start_date
+            if end_date and len(end_date) == 10:  # YYYY-MM-DD format
+                data["end_date"] = f"{end_date}T00:00"
+            else:
+                data["end_date"] = end_date
+        elif type == WeatherEvent.TROPICAL_STORM:
+            data["wind_speed"] = instance.extra_data.get("wind_speed", 0)
+            data["precipitation_amount"] = instance.extra_data.get("precipitation_amount", 0)
+            data["duration"] = instance.extra_data.get("duration", 0)
+            data["damage_assessment"] = instance.extra_data.get("damage_assessment", "")
+        elif type == WeatherEvent.HIGH_WINDS:
+            data["wind_speed"] = instance.extra_data.get("wind_speed", 0)
+            data["duration"] = instance.extra_data.get("duration", 0)
+            data["protection_measures"] = instance.extra_data.get("protection_measures", "")
+        elif type == WeatherEvent.HIGH_HUMIDITY:
+            data["humidity_level"] = instance.extra_data.get("humidity_level", 0)
+            data["duration"] = instance.extra_data.get("duration", 0)
+            data["crop_impact"] = instance.extra_data.get("crop_impact", "")
+        elif type == WeatherEvent.LOW_HUMIDITY:
+            data["humidity_level"] = instance.extra_data.get("humidity_level", 0)
+            data["duration"] = instance.extra_data.get("duration", 0)
+            data["crop_impact"] = instance.extra_data.get("crop_impact", "")
 
         data.pop("extra_data", None)  # Use pop with default to avoid KeyError if key doesn't exist
 
         # Calculate production-level USDA verification status
-        try:
-            from carbon.models import CarbonEntry
+        # Only calculate carbon data if instance is a model instance with an ID
+        if hasattr(instance, 'id') and instance.id:
+            try:
+                from carbon.models import CarbonEntry
+                carbon_entries = CarbonEntry.objects.filter(production=instance)
+                total_entries = carbon_entries.count()
 
-            carbon_entries = CarbonEntry.objects.filter(production=instance)
-            total_entries = carbon_entries.count()
+                if total_entries > 0:
+                    usda_verified_entries = carbon_entries.filter(usda_verified=True).count()
+                    usda_factors_based_entries = carbon_entries.filter(usda_factors_based=True).count()
 
-            if total_entries > 0:
-                usda_verified_entries = carbon_entries.filter(usda_verified=True).count()
-                usda_factors_based_entries = carbon_entries.filter(usda_factors_based=True).count()
-
-                # Production is USDA verified if majority of entries are USDA verified or factors-based
-                production_usda_verified = usda_verified_entries > 0 or usda_factors_based_entries >= (
-                    total_entries * 0.5
-                )
-
-                # Add to extra_data for frontend
-                if data.get("extra_data") is None:
-                    data["extra_data"] = {}
-
-                data["extra_data"]["usda_verified"] = production_usda_verified
-                data["extra_data"]["usda_verification_details"] = {
-                    "total_entries": total_entries,
-                    "usda_verified_entries": usda_verified_entries,
-                    "usda_factors_based_entries": usda_factors_based_entries,
-                    "verification_percentage": (
-                        round((usda_verified_entries / total_entries * 100), 1) if total_entries > 0 else 0
-                    ),
-                }
-
-                # Calculate and add carbon totals for dashboard display
-                from django.db.models import Sum
-
-                total_emissions = (
-                    carbon_entries.filter(type="emission").aggregate(Sum("co2e_amount"))["co2e_amount__sum"] or 0
-                )
-                total_offsets = (
-                    carbon_entries.filter(type="offset").aggregate(Sum("co2e_amount"))["co2e_amount__sum"] or 0
-                )
-                carbon_score = 50  # Default score
-
-                # Calculate carbon score using the model method with industry benchmark
-                if total_emissions > 0 or total_offsets > 0:
-                    from carbon.models import CarbonBenchmark, CarbonEntry
-
-                    # Get industry benchmark for the production
-                    industry_benchmark = None
-                    try:
-                        # Get crop type from product name
-                        product_name = instance.product.name.lower() if instance.product else None
-                        crop_type = None
-
-                        if product_name:
-                            # Map product names to benchmark crop types
-                            crop_mapping = {
-                                "citrus (oranges)": "orange",
-                                "citrus (lemons)": "lemon",
-                                "strawberries": "strawberry",
-                                "almonds": "almond",
-                                "grapes": "grape",
-                                "apples": "apple",
-                                "avocados": "avocado",
-                                "tomatoes": "tomato",
-                                "corn": "corn",
-                                "soybeans": "soybean",
-                            }
-
-                            crop_type = crop_mapping.get(product_name, product_name.split()[0])
-
-                        # Look for crop-specific benchmark
-                        if crop_type:
-                            benchmark = CarbonBenchmark.objects.filter(
-                                crop_type=crop_type,
-                                year=instance.start_date.year if instance.start_date else 2025,
-                                usda_verified=True,
-                            ).first()
-
-                            if benchmark:
-                                # Convert per-kg benchmark to total production benchmark
-                                # Estimate production weight (default 1000kg if unknown)
-                                estimated_production_kg = 1000  # Default estimate
-                                industry_benchmark = benchmark.average_emissions * estimated_production_kg
-
-                    except Exception as e:
-                        print(f"Error getting benchmark for production {instance.id}: {e}")
-
-                    carbon_score = CarbonEntry.calculate_carbon_score(
-                        total_emissions, total_offsets, industry_benchmark
+                    # Production is USDA verified if majority of entries are USDA verified or factors-based
+                    production_usda_verified = usda_verified_entries > 0 or usda_factors_based_entries >= (
+                        total_entries * 0.5
                     )
 
-                data["extra_data"]["total_emissions"] = float(total_emissions)
-                data["extra_data"]["total_offsets"] = float(total_offsets)
-                data["extra_data"]["carbon_score"] = carbon_score
-            else:
-                # No carbon entries, so not USDA verified
+                    # Add to extra_data for frontend
+                    if data.get("extra_data") is None:
+                        data["extra_data"] = {}
+
+                    data["extra_data"]["usda_verified"] = production_usda_verified
+                    data["extra_data"]["usda_verification_details"] = {
+                        "total_entries": total_entries,
+                        "usda_verified_entries": usda_verified_entries,
+                        "usda_factors_based_entries": usda_factors_based_entries,
+                        "verification_percentage": (
+                            round((usda_verified_entries / total_entries * 100), 1) if total_entries > 0 else 0
+                        ),
+                    }
+
+                    # Calculate and add carbon totals for dashboard display
+                    from django.db.models import Sum
+
+                    total_emissions = (
+                        carbon_entries.filter(type="emission").aggregate(Sum("co2e_amount"))["co2e_amount__sum"] or 0
+                    )
+                    total_offsets = (
+                        carbon_entries.filter(type="offset").aggregate(Sum("co2e_amount"))["co2e_amount__sum"] or 0
+                    )
+                    carbon_score = 50  # Default score
+
+                    # Calculate carbon score using the model method with industry benchmark
+                    if total_emissions > 0 or total_offsets > 0:
+                        from carbon.models import CarbonBenchmark, CarbonEntry
+
+                        # Get industry benchmark for the production
+                        industry_benchmark = None
+                        try:
+                            # Get crop type from product name
+                            product_name = instance.product.name.lower() if instance.product else None
+                            crop_type = None
+
+                            if product_name:
+                                # Map product names to benchmark crop types
+                                crop_mapping = {
+                                    "citrus (oranges)": "orange",
+                                    "citrus (lemons)": "lemon",
+                                    "strawberries": "strawberry",
+                                    "almonds": "almond",
+                                    "grapes": "grape",
+                                    "apples": "apple",
+                                    "avocados": "avocado",
+                                    "tomatoes": "tomato",
+                                    "corn": "corn",
+                                    "soybeans": "soybean",
+                                }
+
+                                crop_type = crop_mapping.get(product_name, product_name.split()[0])
+
+                            # Look for crop-specific benchmark
+                            if crop_type:
+                                benchmark = CarbonBenchmark.objects.filter(
+                                    crop_type=crop_type,
+                                    year=instance.start_date.year if instance.start_date else 2025,
+                                    usda_verified=True,
+                                ).first()
+
+                                if benchmark:
+                                    # Convert per-kg benchmark to total production benchmark
+                                    # Estimate production weight (default 1000kg if unknown)
+                                    estimated_production_kg = 1000  # Default estimate
+                                    industry_benchmark = benchmark.average_emissions * estimated_production_kg
+
+                        except Exception as e:
+                            print(f"Error getting benchmark for production {instance.id}: {e}")
+
+                        carbon_score = CarbonEntry.calculate_carbon_score(
+                            total_emissions, total_offsets, industry_benchmark
+                        )
+
+                    data["extra_data"]["total_emissions"] = float(total_emissions)
+                    data["extra_data"]["total_offsets"] = float(total_offsets)
+                    data["extra_data"]["carbon_score"] = carbon_score
+                else:
+                    # No carbon entries, so not USDA verified
+                    if data.get("extra_data") is None:
+                        data["extra_data"] = {}
+                    data["extra_data"]["usda_verified"] = False
+                    data["extra_data"]["total_emissions"] = 0.0
+                    data["extra_data"]["total_offsets"] = 0.0
+                    data["extra_data"]["carbon_score"] = 50
+
+            except Exception as e:
+                instance_id = getattr(instance, 'id', 'unknown')
+                print(f"Error calculating USDA verification for production {instance_id}: {e}")
+                # Fallback to existing logic
                 if data.get("extra_data") is None:
                     data["extra_data"] = {}
                 data["extra_data"]["usda_verified"] = False
@@ -415,21 +500,42 @@ class UpdateWeatherEventSerializer(serializers.ModelSerializer):
                 data["extra_data"]["total_offsets"] = 0.0
                 data["extra_data"]["carbon_score"] = 50
 
-        except Exception as e:
-            print(f"Error calculating USDA verification for production {instance.id}: {e}")
-            # Fallback to existing logic
-            if data.get("extra_data") is None:
-                data["extra_data"] = {}
-            data["extra_data"]["usda_verified"] = False
-            data["extra_data"]["total_emissions"] = 0.0
-            data["extra_data"]["total_offsets"] = 0.0
-            data["extra_data"]["carbon_score"] = 50
-
         return data
 
     def update(self, instance, validated_data):
-        album_data = self.context.get("request").FILES
-        if album_data:
+        # DEBUG: Log what we're about to save
+        print(f"[UpdateWeatherEventSerializer.update] Instance ID: {instance.id}")
+        print(f"[UpdateWeatherEventSerializer.update] validated_data type: {type(validated_data)}")
+        print(f"[UpdateWeatherEventSerializer.update] validated_data keys: {validated_data.keys()}")
+        if 'extra_data' in validated_data:
+            print(f"[UpdateWeatherEventSerializer.update] validated_data['extra_data']: {validated_data['extra_data']}")
+        
+        # Handle album images from S3 URLs (modern approach)
+        request = self.context.get("request")
+        album_images = request.data.get("album_images", []) if request else []
+        
+        if album_images:
+            print(f"[UpdateWeatherEventSerializer.update] Processing {len(album_images)} album images from S3 URLs")
+            gallery = instance.album
+            if gallery is None:
+                gallery = Gallery.objects.create()
+                print(f"[UpdateWeatherEventSerializer.update] Created new gallery: {gallery.id}")
+            
+            # Create GalleryImage records from S3 URLs
+            for image_url in album_images:
+                # Extract S3 key from URL if possible
+                s3_key = image_url.split("/")[-1] if "/" in image_url else None
+                gallery_image = gallery.images.create(
+                    image_url=image_url,
+                    s3_key=s3_key
+                )
+                print(f"[UpdateWeatherEventSerializer.update] Created gallery image {gallery_image.id} with URL: {image_url}")
+            
+            validated_data["album"] = gallery
+        
+        # Legacy support: Handle file uploads (will be deprecated)
+        elif request and request.FILES:
+            album_data = request.FILES
             gallery = instance.album
             if gallery is None:
                 gallery = Gallery.objects.create()
@@ -437,16 +543,45 @@ class UpdateWeatherEventSerializer(serializers.ModelSerializer):
                 gallery_image = gallery.images.create(image=image_data)
                 gallery_image.save()
             validated_data["album"] = gallery
-        return super().update(instance, validated_data)
+        
+        # Call parent update
+        updated_instance = super().update(instance, validated_data)
+        
+        # DEBUG: Log what was saved
+        print(f"[UpdateWeatherEventSerializer.update] After save, extra_data: {updated_instance.extra_data}")
+        
+        return updated_instance
 
     def create(self, validated_data):
-        album_data = self.context.get("request").FILES
-        if album_data:
+        # Handle album images from S3 URLs (modern approach)
+        request = self.context.get("request")
+        album_images = request.data.get("album_images", []) if request else []
+        
+        if album_images:
+            print(f"[UpdateWeatherEventSerializer.create] Processing {len(album_images)} album images from S3 URLs")
+            gallery = Gallery.objects.create()
+            
+            # Create GalleryImage records from S3 URLs
+            for image_url in album_images:
+                # Extract S3 key from URL if possible
+                s3_key = image_url.split("/")[-1] if "/" in image_url else None
+                gallery_image = gallery.images.create(
+                    image_url=image_url,
+                    s3_key=s3_key
+                )
+                print(f"[UpdateWeatherEventSerializer.create] Created gallery image {gallery_image.id} with URL: {image_url}")
+            
+            validated_data["album"] = gallery
+        
+        # Legacy support: Handle file uploads (will be deprecated)
+        elif request and request.FILES:
+            album_data = request.FILES
             gallery = Gallery.objects.create()
             for image_data in album_data.getlist("album[images]"):
                 gallery_image = gallery.images.create(image=image_data)
                 gallery_image.save()
             validated_data["album"] = gallery
+        
         return super().create(validated_data)
 
 
@@ -894,11 +1029,15 @@ class HistorySerializer(serializers.ModelSerializer):
                 return []
 
             request = self.context.get("request")
-            return [
-                request.build_absolute_uri(image.image.url) if request else image.image.url
-                for image in history.album.images.all()
-                if image.image is not None
-            ]
+            images = []
+            for image in history.album.images.all():
+                # Prefer image_url (S3 URL) over file field
+                if image.image_url:
+                    images.append(image.image_url)
+                elif image.image:
+                    image_url = request.build_absolute_uri(image.image.url) if request else image.image.url
+                    images.append(image_url)
+            return images
         except Exception as e:
             print(f"Error getting images: {str(e)}")
             return []
@@ -1239,11 +1378,15 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                 return []
 
             request = self.context.get("request")
-            return [
-                request.build_absolute_uri(image.image.url) if request else image.image.url
-                for image in history.album.images.all()
-                if image.image is not None
-            ]
+            images = []
+            for image in history.album.images.all():
+                # Prefer image_url (S3 URL) over file field
+                if image.image_url:
+                    images.append(image.image_url)
+                elif image.image:
+                    image_url = request.build_absolute_uri(image.image.url) if request else image.image.url
+                    images.append(image_url)
+            return images
         except Exception as e:
             print(f"Error getting images: {str(e)}")
             return []

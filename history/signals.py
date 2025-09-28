@@ -79,32 +79,37 @@ def calculate_production_event_carbon(sender, instance, created, **kwargs):
 @receiver(post_save, sender=WeatherEvent)
 def calculate_weather_event_carbon(sender, instance, created, **kwargs):
     """
-    Automatically calculate carbon impact when a weather event is created or updated
+    Weather events are TRANSPARENCY DOCUMENTATION ONLY - they don't generate emissions.
+    
+    Weather events document environmental conditions (frost, drought, hailstorm) for 
+    agricultural transparency. They are NOT farmer responses that generate emissions.
+    
+    Per Trazo's transparency-first transformation: weather events provide transparency 
+    value without carbon emissions.
     """
     if created or kwargs.get("update_fields"):
         try:
-            calculator = EventCarbonCalculator()
-            calculation_result = calculator.calculate_weather_event_impact(instance)
+            # Store transparency metadata in event's extra_data
+            if not hasattr(instance, "extra_data") or instance.extra_data is None:
+                instance.extra_data = {}
 
-            # Create carbon entry if calculation was successful
-            if calculation_result.get("co2e", 0) > 0:
-                carbon_entry = calculator.create_carbon_entry_from_event(instance, calculation_result)
+            instance.extra_data["carbon_calculation"] = {
+                "co2e": 0.0,
+                "efficiency_score": 100.0,
+                "calculation_method": "weather_transparency",
+                "usda_verified": False,
+                "transparency_note": "Weather events document environmental conditions for agricultural transparency - no emissions generated"
+            }
 
-                # Store calculation result in event's extra_data
-                if not hasattr(instance, "extra_data") or instance.extra_data is None:
-                    instance.extra_data = {}
+            # Update without triggering signal again
+            WeatherEvent.objects.filter(id=instance.id).update(extra_data=instance.extra_data)
 
-                instance.extra_data["carbon_calculation"] = calculation_result
-
-                # Update without triggering signal again
-                WeatherEvent.objects.filter(id=instance.id).update(extra_data=instance.extra_data)
-
-                print(
-                    f"✅ Carbon calculation completed for Weather Event {instance.id}: {calculation_result['co2e']} kg CO2e"
-                )
+            print(
+                f"✅ Transparency documentation recorded for Weather Event {instance.id}: 0.0 kg CO2e (transparency value only)"
+            )
 
         except Exception as e:
-            print(f"❌ Error calculating carbon for Weather Event {instance.id}: {e}")
+            print(f"❌ Error recording transparency for Weather Event {instance.id}: {e}")
 
 
 @receiver(post_save, sender=GeneralEvent)

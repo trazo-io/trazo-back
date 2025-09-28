@@ -519,6 +519,26 @@ class ChemicalEvent(CommonEvent):
         help_text="Structured application method"
     )
     
+    # Environmental context fields for transparency
+    weather_conditions = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Weather conditions during application for transparency"
+    )
+    application_timing = models.CharField(
+        max_length=100,
+        blank=True, 
+        null=True,
+        help_text="When the application was made for consumer understanding"
+    )
+    target_pest_disease = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="What problem this application addresses for transparency"
+    )
+    
     def clean(self):
         """
         Model-level validation for NPK percentages and business logic

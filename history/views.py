@@ -436,55 +436,95 @@ class HistoryViewSet(viewsets.ModelViewSet):
                 # Increment index for each event
                 current_event_count += 1
 
-                # Determine event type based on name
+                # Determine event type based on name using comprehensive mapping
                 event_name = event_data.get("name", "").lower()
-
-                # Create appropriate event type
-                if "pruning" in event_name:
-                    ProductionEvent.objects.create(
-                        history=history,
-                        description=f"{event_data.get('name', 'Production Event')}: {event_data.get('efficiency_tips', '')}",
-                        date=scheduled_date,
-                        type=ProductionEvent.PRUNING,
-                        index=current_event_count,
-                        created_by=history.operator,
-                    )
-                elif "harvest" in event_name:
-                    ProductionEvent.objects.create(
-                        history=history,
-                        description=f"{event_data.get('name', 'Production Event')}: {event_data.get('efficiency_tips', '')}",
-                        date=scheduled_date,
-                        type=ProductionEvent.HARVESTING,
-                        index=current_event_count,
-                        created_by=history.operator,
-                    )
-                elif "irrigation" in event_name:
-                    ProductionEvent.objects.create(
-                        history=history,
-                        description=f"{event_data.get('name', 'Production Event')}: {event_data.get('efficiency_tips', '')}",
-                        date=scheduled_date,
-                        type=ProductionEvent.IRRIGATION,
-                        index=current_event_count,
-                        created_by=history.operator,
-                    )
-                elif "fertiliz" in event_name:
-                    # Create as Chemical Event for fertilization
+                
+                # Comprehensive event type detection (matches frontend logic)
+                event_type_info = self._determine_template_event_type(event_name)
+                
+                # Create appropriate event based on detected type
+                if event_type_info["category"] == "chemical":
                     ChemicalEvent.objects.create(
                         history=history,
                         description=f"{event_data.get('name', 'Chemical Event')}: {event_data.get('efficiency_tips', '')}",
                         date=scheduled_date,
-                        type=ChemicalEvent.FERTILIZER,
+                        type=event_type_info["sub_type"],
                         commercial_name=(
                             event_data.get("carbon_sources", ["Unknown"])[0]
                             if event_data.get("carbon_sources")
                             else "Unknown"
                         ),
-                        volume=event_data.get("typical_amounts", {}).get("fertilizer", "Unknown"),
+                        volume=event_data.get("typical_amounts", {}).get("fertilizer", "100"),
+                        index=current_event_count,
+                        created_by=history.operator,
+                    )
+                elif event_type_info["category"] == "equipment":
+                    EquipmentEvent.objects.create(
+                        history=history,
+                        description=f"{event_data.get('name', 'Equipment Event')}: {event_data.get('efficiency_tips', '')}",
+                        date=scheduled_date,
+                        type=event_type_info["sub_type"],
+                        equipment_name=event_data.get("name", "General Equipment"),
+                        fuel_type="diesel",
+                        fuel_amount=10.0,  # Default fuel consumption
+                        index=current_event_count,
+                        created_by=history.operator,
+                    )
+                elif event_type_info["category"] == "weather":
+                    WeatherEvent.objects.create(
+                        history=history,
+                        description=f"{event_data.get('name', 'Weather Event')}: {event_data.get('efficiency_tips', '')}",
+                        date=scheduled_date,
+                        type=event_type_info["sub_type"],
+                        temperature=20.0,  # Default temperature
+                        humidity=60.0,     # Default humidity
+                        index=current_event_count,
+                        created_by=history.operator,
+                    )
+                elif event_type_info["category"] == "soil":
+                    SoilManagementEvent.objects.create(
+                        history=history,
+                        description=f"{event_data.get('name', 'Soil Event')}: {event_data.get('efficiency_tips', '')}",
+                        date=scheduled_date,
+                        type=event_type_info["sub_type"],
+                        soil_ph=7.0,       # Default neutral pH
+                        organic_matter=3.5, # Default organic matter
+                        index=current_event_count,
+                        created_by=history.operator,
+                    )
+                elif event_type_info["category"] == "pest":
+                    PestManagementEvent.objects.create(
+                        history=history,
+                        description=f"{event_data.get('name', 'Pest Event')}: {event_data.get('efficiency_tips', '')}",
+                        date=scheduled_date,
+                        type=event_type_info["sub_type"],
+                        pest_type="general",
+                        severity_level="low",
+                        index=current_event_count,
+                        created_by=history.operator,
+                    )
+                elif event_type_info["category"] == "business":
+                    BusinessEvent.objects.create(
+                        history=history,
+                        description=f"{event_data.get('name', 'Business Event')}: {event_data.get('efficiency_tips', '')}",
+                        date=scheduled_date,
+                        type=event_type_info["sub_type"],
+                        certification_type="organic",
+                        compliance_status="compliant",
+                        index=current_event_count,
+                        created_by=history.operator,
+                    )
+                elif event_type_info["category"] == "production":
+                    ProductionEvent.objects.create(
+                        history=history,
+                        description=f"{event_data.get('name', 'Production Event')}: {event_data.get('efficiency_tips', '')}",
+                        date=scheduled_date,
+                        type=event_type_info["sub_type"],
                         index=current_event_count,
                         created_by=history.operator,
                     )
                 else:
-                    # Create as General Event for other types
+                    # Only create GeneralEvent as absolute fallback
                     GeneralEvent.objects.create(
                         history=history,
                         name=event_data.get("name", "General Event"),
@@ -498,6 +538,90 @@ class HistoryViewSet(viewsets.ModelViewSet):
                 print(f"Error creating template event {event_data.get('name', 'Unknown')}: {e}")
                 # Continue with other events even if one fails
                 continue
+
+    def _determine_template_event_type(self, event_name):
+        """
+        Comprehensive event type detection matching frontend logic
+        Returns: {"category": str, "sub_type": str}
+        """
+        name = event_name.lower() if event_name else ''
+        
+        # Chemical events (fertilizers, pesticides, herbicides, fungicides)
+        if any(term in name for term in ['fertiliz', 'nutrient', 'nitrogen', 'phosphor', 'potassium']):
+            return {"category": "chemical", "sub_type": ChemicalEvent.FERTILIZER}
+        if any(term in name for term in ['spray', 'pesticide', 'insecticide', 'pest control']):
+            return {"category": "chemical", "sub_type": ChemicalEvent.PESTICIDE}
+        if any(term in name for term in ['herbicide', 'weed', 'glyphosate']):
+            return {"category": "chemical", "sub_type": ChemicalEvent.HERBICIDE}
+        if any(term in name for term in ['fungicide', 'fungus', 'disease control']):
+            return {"category": "chemical", "sub_type": ChemicalEvent.FUNGICIDE}
+        
+        # Equipment events (machinery, fuel consumption, maintenance) - maintenance first
+        if any(term in name for term in ['maintenance', 'repair', 'service', 'calibration']):
+            return {"category": "equipment", "sub_type": EquipmentEvent.MAINTENANCE}
+        if any(term in name for term in ['equipment', 'machinery', 'tractor', 'harvester']):
+            return {"category": "equipment", "sub_type": EquipmentEvent.FUEL_CONSUMPTION}
+        if any(term in name for term in ['fuel', 'diesel', 'gasoline']):
+            return {"category": "equipment", "sub_type": EquipmentEvent.FUEL_CONSUMPTION}
+        if 'field preparation' in name or 'planting/seeding' in name:
+            return {"category": "equipment", "sub_type": EquipmentEvent.FUEL_CONSUMPTION}
+        if any(term in name for term in ['preparation', 'tillage', 'cultivation', 'plowing']) and 'soil' not in name:
+            return {"category": "equipment", "sub_type": EquipmentEvent.FUEL_CONSUMPTION}
+        
+        # Weather events (frost, drought, storms, temperature monitoring)
+        if any(term in name for term in ['weather', 'climate', 'temperature', 'monitoring weather']):
+            return {"category": "weather", "sub_type": WeatherEvent.HIGH_TEMPERATURE}
+        if any(term in name for term in ['frost', 'freeze', 'cold protection']):
+            return {"category": "weather", "sub_type": WeatherEvent.FROST}
+        if any(term in name for term in ['drought', 'water stress', 'irrigation need']):
+            return {"category": "weather", "sub_type": WeatherEvent.DROUGHT}
+        if any(term in name for term in ['storm', 'wind', 'hail', 'rain']):
+            return {"category": "weather", "sub_type": WeatherEvent.TROPICAL_STORM}
+        
+        # Soil events (testing, amendments, management) - check soil + tillage specifically
+        if 'soil' in name and any(term in name for term in ['test', 'analysis', 'ph']):
+            return {"category": "soil", "sub_type": SoilManagementEvent.SOIL_TEST}
+        if any(term in name for term in ['soil amendment', 'lime', 'compost', 'organic matter']):
+            return {"category": "soil", "sub_type": SoilManagementEvent.ORGANIC_MATTER}
+        if any(term in name for term in ['soil preparation', 'soil management']):
+            return {"category": "soil", "sub_type": SoilManagementEvent.TILLAGE}
+        if 'soil' in name and 'tillage' in name:
+            return {"category": "soil", "sub_type": SoilManagementEvent.TILLAGE}
+        if any(term in name for term in ['ph management', 'ph adjustment', 'ph control']):
+            return {"category": "soil", "sub_type": SoilManagementEvent.PH_ADJUSTMENT}
+        
+        # Pest management events (scouting, monitoring, biological control)
+        if any(term in name for term in ['scout', 'monitoring', 'inspection', 'pest monitoring']):
+            return {"category": "pest", "sub_type": PestManagementEvent.SCOUTING}
+        if any(term in name for term in ['biological control', 'beneficial', 'predator']):
+            return {"category": "pest", "sub_type": PestManagementEvent.BENEFICIAL_RELEASE}
+        if any(term in name for term in ['trap', 'pheromone', 'ipm']):
+            return {"category": "pest", "sub_type": PestManagementEvent.TRAP_MONITORING}
+        
+        # Business events (certification, audit, training)
+        if any(term in name for term in ['certif', 'organic', 'audit', 'compliance']):
+            return {"category": "business", "sub_type": BusinessEvent.CERTIFICATION}
+        if any(term in name for term in ['training', 'education', 'workshop']):
+            return {"category": "business", "sub_type": BusinessEvent.CERTIFICATION}
+        if any(term in name for term in ['record', 'documentation', 'reporting']):
+            return {"category": "business", "sub_type": BusinessEvent.COMPLIANCE}
+        
+        # Production events (biological/manual operations) - must be after more specific checks
+        if any(term in name for term in ['irrigation', 'watering', 'water application']):
+            return {"category": "production", "sub_type": ProductionEvent.IRRIGATION}
+        if any(term in name for term in ['harvest', 'picking', 'collection']):
+            return {"category": "production", "sub_type": ProductionEvent.HARVESTING}
+        if 'planting' in name and not any(term in name for term in ['equipment', 'seeding']):
+            return {"category": "production", "sub_type": ProductionEvent.PLANTING}
+        if any(term in name for term in ['pruning', 'trimming', 'cutting back']):
+            return {"category": "production", "sub_type": ProductionEvent.PRUNING}
+        if any(term in name for term in ['bloom', 'flower', 'pollination']):
+            return {"category": "production", "sub_type": ProductionEvent.PLANTING}  # Use planting as fallback
+        if any(term in name for term in ['thinning', 'selective removal', 'crop management']):
+            return {"category": "production", "sub_type": ProductionEvent.PLANTING}  # Use planting as fallback
+        
+        # Default fallback to production with irrigation
+        return {"category": "production", "sub_type": ProductionEvent.IRRIGATION}
 
     @action(detail=True, methods=["get"], permission_classes=[AllowAny])
     def public_history(self, request, pk=None):
@@ -1371,7 +1495,8 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             raise Exception("Event type is required")
         event_type = int(event_type)
 
-        is_mutation = self.action in ["create", "update", "partial_update"]
+        # Use Update serializers for retrieve action to ensure proper field flattening for editing
+        is_mutation = self.action in ["create", "update", "partial_update", "retrieve"]
 
         if event_type == WEATHER_EVENT_TYPE:
             return UpdateWeatherEventSerializer if is_mutation else WeatherEventSerializer
@@ -1493,7 +1618,7 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
     def retrieve(self, request, *args, **kwargs):
         """
-        Override retrieve to handle event_type determination
+        Override retrieve to handle event_type determination and use Update serializers for editing
         """
         instance = self.get_object()
 
@@ -1502,23 +1627,23 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             # Force re-evaluation of serializer class with correct event type
             event_type = self._determined_event_type
 
-            # Get the correct serializer class
+            # Get the correct Update serializer class for editing (to flatten fields)
             if event_type == WEATHER_EVENT_TYPE:
-                serializer_class = WeatherEventSerializer
+                serializer_class = UpdateWeatherEventSerializer
             elif event_type == PRODUCTION_EVENT_TYPE:
-                serializer_class = ProductionEventSerializer
+                serializer_class = UpdateProductionEventSerializer
             elif event_type == CHEMICAL_EVENT_TYPE:
-                serializer_class = ChemicalEventSerializer
+                serializer_class = UpdateChemicalEventSerializer
             elif event_type == EQUIPMENT_EVENT_TYPE:
-                serializer_class = EquipmentEventSerializer
+                serializer_class = UpdateEquipmentEventSerializer
             elif event_type == SOIL_MANAGEMENT_EVENT_TYPE:
-                serializer_class = SoilManagementEventSerializer
+                serializer_class = UpdateSoilManagementEventSerializer
             elif event_type == PEST_MANAGEMENT_EVENT_TYPE:
-                serializer_class = PestManagementEventSerializer
+                serializer_class = UpdatePestManagementEventSerializer
             elif event_type == BUSINESS_EVENT_TYPE:
                 serializer_class = BusinessEventSerializer
             else:  # GENERAL_EVENT_TYPE
-                serializer_class = GeneralEventSerializer
+                serializer_class = UpdateGeneralEventSerializer
 
             serializer = serializer_class(instance)
             return Response(serializer.data)

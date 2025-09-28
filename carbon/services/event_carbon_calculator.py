@@ -651,7 +651,7 @@ class EventCarbonCalculator:
                 breakdown = calculation_result['breakdown']
                 limitations = calculation_result.get('limitations', '')
                 
-            elif event.type in ["HA", "PL", "GE"]:  # Harvesting, Planting, General
+            elif event.type in ["HA", "PL", "GE", "PR", "IR"]:  # Harvesting, Planting, General, Pruning, Irrigation
                 # Use EPA/USDA production emission factors
                 calculation_result = VerifiedEmissionFactors.calculate_production_event_emissions(
                     production_type=production_type,
@@ -1102,55 +1102,96 @@ class EventCarbonCalculator:
 
     def calculate_soil_management_event_impact(self, event) -> Dict[str, Any]:
         """
-        Calculate carbon impact of soil management events (often negative - sequestration)
+        Calculate carbon impact of soil management events using USDA area-scaled emission factors
         """
         try:
-            base_emissions = 0.0  # Often negative for soil management
-            sequestration = 0.0
-            area_hectares = 0.0  # Initialize area_hectares variable
+            from .emission_factors import EmissionFactorsRegistry
+            
+            base_emissions = 0.0
+            area_hectares = 0.0
+            confidence_score = 65.0
+            data_completeness_factors = []
 
-            if event.type == "OM":  # Organic Matter Addition
-                # Organic matter typically sequesters carbon
-                amount = self._extract_numeric_value(event.amendment_amount or "1", default=1)
-                sequestration = amount * 0.5  # Approximate 0.5 kg CO2e sequestered per kg organic matter
-                base_emissions = -sequestration  # Negative emissions (sequestration)
+            # Get area managed - critical for proper scaling
+            area_hectares = self._convert_area_to_hectares(
+                getattr(event, "area_covered", None) or 
+                getattr(event, "area", "1")
+            )
+            
+            # Map event types to emission factor keys
+            event_type_mapping = {
+                "OM": "organic_matter",      # Organic Matter Addition
+                "CC": "cover_crops",         # Cover Crop
+                "CO": "composting",          # Composting
+                "TI": "tillage",            # Tillage
+                "ST": "soil_test",          # Soil Test
+                "PA": "ph_adjustment",       # pH Adjustment
+            }
 
-            elif event.type == "CC":  # Cover Crop
-                # Cover crops sequester carbon
-                area_hectares = self._convert_area_to_hectares(event.area_covered or "1")
-                sequestration = area_hectares * 2.0  # Approximate 2 kg CO2e per hectare per season
-                base_emissions = -sequestration
+            # Get the appropriate emission factor
+            factor_key = event_type_mapping.get(event.type, "general")
+            factor_data = EmissionFactorsRegistry.get_soil_management_factor(factor_key)
+            emission_factor = factor_data["value"]  # kg CO2e per hectare
+            
+            # CRITICAL FIX: Area-scaled calculation instead of hardcoded 0.1
+            if area_hectares > 0:
+                base_emissions = area_hectares * emission_factor
+                confidence_score = 85.0  # High confidence with area data
+                data_completeness_factors.append("area_documented")
+            else:
+                # Default to 1 hectare if no area specified
+                area_hectares = 1.0
+                base_emissions = emission_factor
+                confidence_score = 60.0  # Lower confidence without area data
+                data_completeness_factors.append("area_assumed")
 
-            elif event.type == "CO":  # Composting
-                # Composting can both emit and sequester
-                sequestration = 3.0  # Net positive impact
-                base_emissions = -sequestration
+            # Additional confidence factors based on available data
+            if hasattr(event, 'soil_ph') and event.soil_ph:
+                confidence_score += 5.0
+                data_completeness_factors.append("soil_ph_available")
+                
+            if hasattr(event, 'organic_matter_percentage') and event.organic_matter_percentage:
+                confidence_score += 5.0
+                data_completeness_factors.append("organic_matter_data")
+                
+            if hasattr(event, 'amendment_amount') and event.amendment_amount:
+                confidence_score += 10.0
+                data_completeness_factors.append("amendment_quantity")
+                
+            if hasattr(event, 'test_results') and event.test_results:
+                confidence_score += 10.0
+                data_completeness_factors.append("detailed_test_results")
 
-            elif event.type == "TI":  # Tillage
-                # Tillage releases stored carbon
-                area_hectares = self._convert_area_to_hectares(event.area_covered or "1")
-                base_emissions = area_hectares * 1.5  # Release stored carbon
-
-            elif event.type in ["ST", "PA"]:  # Soil Test, pH Adjustment
-                base_emissions = 0.1  # Minimal impact
-                area_hectares = self._convert_area_to_hectares(getattr(event, "area", "1"))
-
-            # If area_hectares is still 0, try to get it from event or default to 1
-            if area_hectares == 0.0:
-                area_hectares = self._convert_area_to_hectares(getattr(event, "area", "1"))
+            # Cap confidence at 95%
+            confidence_score = min(confidence_score, 95.0)
 
             recommendations = self._generate_soil_recommendations(event, base_emissions)
 
             result = {
                 "co2e": round(base_emissions, 3),
-                "efficiency_score": 65.0,
-                "calculation_method": "usda_soil_management_factors",
-                "data_source": "USDA Agricultural Research Service",
-                "verification_status": "factors_verified",
+                "efficiency_score": confidence_score,
+                "calculation_method": "usda_area_scaled_soil_factors",
+                "data_source": factor_data["source"],
+                "verification_status": "usda_factors_verified",
+                "emission_factor_used": {
+                    "factor_type": factor_key,
+                    "factor_value": emission_factor,
+                    "unit": factor_data["unit"],
+                    "impact_type": factor_data.get("impact_type", "unknown"),
+                    "reference": factor_data["reference"],
+                },
+                "calculation_details": {
+                    "area_hectares": area_hectares,
+                    "emission_factor": emission_factor,
+                    "calculation": f"{area_hectares} ha × {emission_factor} kg CO₂e/ha = {round(base_emissions, 3)} kg CO₂e",
+                    "confidence_score": confidence_score,
+                    "data_completeness": data_completeness_factors,
+                },
                 "breakdown": {
                     "soil_activity": event.type,
-                    "area_impact": area_hectares,
-                    "organic_matter_change": sequestration,
+                    "area_managed": area_hectares,
+                    "emission_factor": emission_factor,
+                    "total_impact": base_emissions,
                 },
                 "recommendations": recommendations,
             }
@@ -1159,11 +1200,12 @@ class EventCarbonCalculator:
 
         except Exception as e:
             return {
-                "co2e": 0.0,
-                "efficiency_score": 65.0,
+                "co2e": 1.0,  # Default to 1.0 kg CO2e for general soil management
+                "efficiency_score": 45.0,
                 "usda_factors_based": False,
                 "verification_status": "calculation_error",
                 "error": str(e),
+                "fallback_used": "general_soil_management_estimate"
             }
 
     def calculate_business_event_impact(self, event) -> Dict[str, Any]:

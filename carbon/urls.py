@@ -12,7 +12,7 @@ from .views import (
     CarbonProductionViewSet,
     PublicProductionViewSet,
     calculate_event_carbon_impact,
-    calculate_event_carbon_impact_optimized,
+    calculate_event_carbon_impact_enhanced,
 )
 
 router = DefaultRouter()
@@ -44,12 +44,13 @@ router.register(r"blockchain", BlockchainVerificationViewSet, basename="blockcha
 
 urlpatterns = [
     path("", include(router.urls)),
+    # Legacy endpoint (maintained for backward compatibility)
     path("calculate-event-impact/", calculate_event_carbon_impact, name="calculate-event-carbon-impact"),
-    # OPTIMIZED Carbon Calculation Endpoint - 95% Performance Improvement
+    # High-performance Carbon Calculation Endpoint - 95% Performance Improvement
     path(
-        "calculate-event-impact-optimized/",
-        calculate_event_carbon_impact_optimized,
-        name="calculate-event-carbon-impact-optimized",
+        "calculate-event-carbon/",
+        calculate_event_carbon_impact_enhanced,
+        name="calculate-event-carbon",
     ),
     # Enhanced USDA Integration Endpoints
     path("enhanced-event-impact/", views.calculate_event_impact, name="enhanced-event-impact"),

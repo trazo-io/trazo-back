@@ -974,6 +974,22 @@ class OptimizedCarbonCalculator:
             "usda_verified": False,
         }
 
+    def calculate_weather_event_impact(self, processed_event: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Optimized weather event calculation.
+        
+        Weather events are environmental context - they don't directly generate emissions
+        but document transparency and agricultural conditions.
+        """
+        # Weather events provide transparency value but don't generate direct emissions
+        return {
+            "co2e": 0.0,  # Weather events don't generate emissions
+            "efficiency_score": 100.0,  # Perfect score - transparency value
+            "calculation_method": "weather_transparency",
+            "usda_verified": False,
+            "transparency_note": "Weather events document environmental conditions for agricultural transparency"
+        }
+
 
 # Initialize calculator singleton
 calculator_instance = OptimizedCarbonCalculator()
@@ -1078,8 +1094,15 @@ class OptimizedEventProcessor:
     @classmethod
     def _process_chemical_event(cls, event_data: Dict[str, Any]) -> Dict[str, Any]:
         """Process chemical event data efficiently WITH PROPER UNIT CONVERSION"""
+        # FIELD NAME COMPATIBILITY: Support both naming conventions
+        # Frontend form uses: volume_applied, area_treated, application_method
+        # Backend/stored events use: volume, area, way_of_application
+        volume_value = event_data.get("volume_applied") or event_data.get("volume", 10)
+        area_value = event_data.get("area_treated") or event_data.get("area", 1.0)
+        application_method = event_data.get("application_method") or event_data.get("way_of_application", "broadcast")
+        
         # CRITICAL FIX: Convert area from acres to hectares
-        area_value = float(event_data.get("area", 1.0))
+        area_value = float(area_value)
         area_unit = event_data.get("area_unit", "acres")
         
         # Convert area to hectares for EPA calculations
@@ -1095,11 +1118,11 @@ class OptimizedEventProcessor:
             
         return {
             "chemical_type": event_data.get("type", "FE"),
-            "volume": float(event_data.get("volume", 10)),
+            "volume": float(volume_value),
             "area": area_hectares,  # NOW IN HECTARES
             "area_unit": "hectares",  # Track converted unit
             "concentration": event_data.get("concentration", "10-10-10"),
-            "application_method": event_data.get("way_of_application", "broadcast"),
+            "application_method": application_method,
         }
 
     @classmethod
@@ -1125,8 +1148,8 @@ class OptimizedEventProcessor:
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 @ratelimit(key="user", rate="20/m", method="POST", block=True)  # Increased rate limit
-@method_decorator(cache_page(300), name="dispatch")  # 5-minute cache for identical requests
-def calculate_event_carbon_impact_optimized(request):
+@cache_page(300)  # 5-minute cache for identical requests
+def calculate_event_carbon_impact_enhanced(request):
     """
     OPTIMIZED carbon calculation endpoint.
 
@@ -1160,13 +1183,29 @@ def calculate_event_carbon_impact_optimized(request):
         # Optimized event processing (avoid regex parsing)
         processed_event = OptimizedEventProcessor.process_event_data(event_type, event_data)
 
-        # Calculate carbon impact with optimized calculator
+        # Calculate carbon impact with optimized calculator - SUPPORTS ALL 8 EVENT TYPES
         if event_type == "chemical":
             result = calculator_instance.calculate_chemical_impact_optimized(processed_event)
         elif event_type == "production":
             result = calculator_instance.calculate_production_impact_optimized(processed_event)
         elif event_type == "equipment":
             result = calculator_instance.calculate_equipment_impact_optimized(processed_event)
+        elif event_type == "weather":
+            # Use standard calculator for weather events (optimized version not needed - low complexity)
+            result = calculator_instance.calculate_weather_event_impact(processed_event)
+            result["calculation_method"] = f"optimized_weather_{result.get('calculation_method', 'standard')}"
+        elif event_type == "soil_management":
+            # Use standard calculator for soil events (optimized version not needed - low complexity)
+            result = calculator_instance.calculate_soil_management_event_impact(processed_event)
+            result["calculation_method"] = f"optimized_soil_{result.get('calculation_method', 'standard')}"
+        elif event_type == "pest_management":
+            # Use standard calculator for pest events (optimized version not needed - low complexity)
+            result = calculator_instance.calculate_pest_management_event_impact(processed_event)
+            result["calculation_method"] = f"optimized_pest_{result.get('calculation_method', 'standard')}"
+        elif event_type == "business":
+            # Use standard calculator for business events (optimized version not needed - low complexity)
+            result = calculator_instance.calculate_business_event_impact(processed_event)
+            result["calculation_method"] = f"optimized_business_{result.get('calculation_method', 'standard')}"
         else:
             result = calculator_instance.calculate_general_impact_optimized(processed_event)
 
@@ -7262,6 +7301,7 @@ def get_crop_template_detail(request, template_id):
 
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def calculate_event_impact(request):
     """
     Calculate carbon impact for a specific event.
