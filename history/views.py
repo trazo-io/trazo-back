@@ -997,14 +997,6 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
         Enhanced scan creation with 2025 privacy, security & performance standards
         Supports: QR scans, feedback collection, bot detection, deduplication
         """
-        print(f"🚀 SCAN CREATE METHOD CALLED - VERY START")
-        print(f"  - Method: {request.method}")
-        print(f"  - Path: {request.path}")
-        print(f"  - User-Agent: {request.META.get('HTTP_USER_AGENT', 'None')}")
-        print(f"  - Request data: {request.data}")
-        print(f"  - Cookies: {request.COOKIES}")
-        print(f"  - Headers: {request.META.keys()}")
-
         try:
             # Input validation
             validation_result = self._validate_scan_request(request)
@@ -1034,26 +1026,14 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
                     {"error": "Request rejected", "reason": block_reason}, status=status.HTTP_429_TOO_MANY_REQUESTS
                 )
 
-            # Process privacy and consent data with comprehensive debugging
-            print(f"🔍 Backend consent validation for request:")
-            print(f"  - Request cookies: {request.COOKIES}")
-            print(f"  - All headers: {dict(request.META)}")
-            print(f"  - Request data: {request.data}")
-
+            # Process privacy and consent data
             privacy_data = self.privacy_service.process_scan_consent(request)
-            print(f"🔍 Privacy service returned: {privacy_data}")
 
             # Check for consent requirement
             consent_required = self.privacy_service.is_consent_required(request)
             consent_given = privacy_data["consent_given"]
 
-            print(f"🔍 Consent validation:")
-            print(f"  - Consent required: {consent_required}")
-            print(f"  - Consent given: {consent_given}")
-            print(f"  - Will block: {consent_required and not consent_given}")
-
             if consent_required and not consent_given:
-                print(f"🚫 Blocking request - consent required but not given")
                 return Response(
                     {
                         "error": "Analytics consent required",
@@ -1063,7 +1043,6 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_428_PRECONDITION_REQUIRED,
                 )
 
-            print(f"✅ Consent validation passed - proceeding with scan creation")
 
             # Session deduplication check
             is_duplicate, original_scan, dedup_method = self.deduplication_service.check_comprehensive_duplicate(
@@ -1473,6 +1452,13 @@ class HistoryScanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     permission_classes = (IsAuthenticated,)
     filter_backends = [filters.OrderingFilter]
+    
+
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)
 
     def get_serializer_class(self):
         event_type = (
@@ -1653,8 +1639,13 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def perform_create(self, serializer):
-        parcels = self.request.POST.getlist("parcels", None)
+        parcels_post = self.request.POST.getlist("parcels", None)
+        parcels_data = self.request.data.get("parcels", [])
         event_type = self.request.data.get("event_type", None)
+        
+        # Use data.get instead of POST.getlist for JSON requests
+        parcels = parcels_data if parcels_data else parcels_post
+        
         if event_type is None:
             raise Exception("Event type is required")
         if parcels is None or parcels is []:
@@ -1668,6 +1659,7 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         for parcel in parcels:
             if parcel.current_history is not None:
                 history = parcel.current_history
+                
                 index = (
                     history.history_weatherevent_events.count()
                     + history.history_chemicalevent_events.count()
@@ -1680,12 +1672,38 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 ) + 1
 
                 event_model = EVENT_TYPE_TO_MODEL.get(int(event_type), GeneralEvent)
+                
+                # Remove history and created_by from validated_data to prevent override
+                validated_data = serializer.validated_data.copy()
+                validated_data.pop('history', None)
+                validated_data.pop('created_by', None)
+                
                 event = event_model.objects.create(
                     history=history,
                     index=index,
                     created_by=self.request.user,
-                    **serializer.validated_data,
+                    **validated_data,
                 )
+                
+                # Handle album images from S3 URLs
+                album_images = self.request.data.get("album_images", [])
+                
+                if album_images:
+                    from .models import Gallery
+                    gallery = Gallery.objects.create()
+                    
+                    # Create GalleryImage records from S3 URLs
+                    for image_url in album_images:
+                        # Extract S3 key from URL if possible
+                        s3_key = image_url.split("/")[-1] if "/" in image_url else None
+                        gallery_image = gallery.images.create(
+                            image_url=image_url,
+                            s3_key=s3_key
+                        )
+                    
+                    # Associate album with event
+                    event.album = gallery
+                
                 event.save()
 
     def update(self, request, *args, **kwargs):

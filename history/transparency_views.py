@@ -17,6 +17,7 @@ from django.db.models import Count, Q
 from .models import History, HistoryScan
 from .services.transparency_calculator import TransparencyCalculator
 from .services.transparency_response_formatter import TransparencyResponseFormatter
+from .serializers import PublicHistorySerializer
 from carbon.services.calculator_service import CarbonCalculatorService
 
 logger = logging.getLogger(__name__)
@@ -57,6 +58,7 @@ def production_transparency_detail(request, production_id):
             carbon_breakdown = carbon_data.get('breakdown', {})
         except Exception as e:
             logger.warning(f"Carbon calculation failed for history {history.id}: {str(e)}")
+            # Don't let carbon calculation errors block transparency data
             carbon_score = 0
             carbon_breakdown = {}
         
@@ -68,7 +70,7 @@ def production_transparency_detail(request, production_id):
         farm_info = {
             'name': establishment.name if establishment else 'Farm',
             'location': f"{establishment.city}, {establishment.state}" if establishment and establishment.city else None,
-            'total_area': establishment.total_area_hectares if establishment else None,
+            'total_area': establishment.total_acreage if establishment else None,  # FIX: Use correct field name
             'country': establishment.country if establishment else None
         }
         
@@ -88,8 +90,7 @@ def production_transparency_detail(request, production_id):
                 user=request.user if request.user.is_authenticated else None,
                 date=timezone.now(),
                 scan_type='transparency_api',
-                ip_address=request.META.get('REMOTE_ADDR', ''),
-                user_agent=request.META.get('HTTP_USER_AGENT', '')[:500]
+                ip_address=request.META.get('REMOTE_ADDR', '')
             )
         except Exception as e:
             # Don't fail the whole request if scan tracking fails
@@ -110,7 +111,8 @@ def production_transparency_detail(request, production_id):
         
         transparency_data_formatted = {
             'carbonGrade': transparency_benchmarks.get('benchmark_level', 'C'),
-            'completeness_score': transparency_data.get('completeness_score', 0)
+            'completeness_score': transparency_data.get('completeness_score', 0),
+            'transparency_percentage': transparency_data.get('transparency_percentage', 0)  # FIX: Pass calculated score
         }
         
         # Generate transparency-based achievements
@@ -130,6 +132,15 @@ def production_transparency_detail(request, production_id):
             blockchain_verification={'verified': True},  # You can implement proper blockchain checking
             achievements=achievements
         )
+        
+        # Add timeline events with album data (same as producer page gets)
+        # This ensures photos are available on consumer page
+        public_history_serializer = PublicHistorySerializer(history, context={'request': request})
+        public_history_data = public_history_serializer.data
+        
+        # Include timeline events in the response for photo display
+        if 'events' in public_history_data:
+            response_data['timeline_events'] = public_history_data['events']
         
         # Add progressive loading structure for backward compatibility
         response_data.update({
@@ -361,7 +372,7 @@ def _get_verification_status(history):
         verifications['blockchain_verified'] = history.extra_data.get('blockchain_verified', False)
     
     # Check business events for certifications
-    from ..models import BusinessEvent
+    from history.models import BusinessEvent
     business_events = BusinessEvent.objects.filter(history=history)
     
     if business_events.filter(Q(description__icontains='organic') | Q(description__icontains='certified')).exists():

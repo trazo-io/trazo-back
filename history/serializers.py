@@ -266,6 +266,9 @@ class ChemicalEventSerializer(EventSerializer):
 
 
 class UpdateWeatherEventSerializer(serializers.ModelSerializer):
+    def __init__(self, *args, **kwargs):
+        print(f"🔥🔥 [UpdateWeatherEventSerializer.__init__] Serializer initialized! 🔥🔥")
+        super().__init__(*args, **kwargs)
     class Meta:
         model = WeatherEvent
         fields = "__all__"
@@ -338,25 +341,29 @@ class UpdateWeatherEventSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         type = data.get("type", None)
 
-        # Ensure extra_data is not None before accessing it
-        if instance.extra_data is None:
-            instance.extra_data = {}
+        # Handle both model instances and dictionaries (during serialization)
+        if hasattr(instance, 'extra_data'):
+            # Model instance case
+            extra_data = instance.extra_data or {}
+        else:
+            # Dictionary/OrderedDict case (during serialization)
+            extra_data = data.get('extra_data', {}) or {}
 
         if type == WeatherEvent.FROST:
-            data["lower_temperature"] = instance.extra_data.get("lower_temperature", 0)
-            data["way_of_protection"] = instance.extra_data.get("way_of_protection", "")
+            data["lower_temperature"] = extra_data.get("lower_temperature", 0)
+            data["way_of_protection"] = extra_data.get("way_of_protection", "")
         elif type == WeatherEvent.DROUGHT:
-            data["water_deficit"] = instance.extra_data.get("water_deficit", 0)
+            data["water_deficit"] = extra_data.get("water_deficit", 0)
         elif type == WeatherEvent.HAILSTORM:
-            data["weight"] = instance.extra_data.get("weight", 0)
-            data["diameter"] = instance.extra_data.get("diameter", 0)
-            data["duration"] = instance.extra_data.get("duration", 0)
-            data["way_of_protection"] = instance.extra_data.get("way_of_protection", "")
+            data["weight"] = extra_data.get("weight", 0)
+            data["diameter"] = extra_data.get("diameter", 0)
+            data["duration"] = extra_data.get("duration", 0)
+            data["way_of_protection"] = extra_data.get("way_of_protection", "")
         elif type == WeatherEvent.HIGH_TEMPERATURE:
-            data["highest_temperature"] = instance.extra_data.get("highest_temperature", 0)
+            data["highest_temperature"] = extra_data.get("highest_temperature", 0)
             # Convert date strings to datetime-local format for frontend datetime-local inputs
-            start_date = instance.extra_data.get("start_date", "")
-            end_date = instance.extra_data.get("end_date", "")
+            start_date = extra_data.get("start_date", "")
+            end_date = extra_data.get("end_date", "")
             # If dates are in YYYY-MM-DD format, add time component for datetime-local
             if start_date and len(start_date) == 10:  # YYYY-MM-DD format
                 data["start_date"] = f"{start_date}T00:00"
@@ -367,22 +374,22 @@ class UpdateWeatherEventSerializer(serializers.ModelSerializer):
             else:
                 data["end_date"] = end_date
         elif type == WeatherEvent.TROPICAL_STORM:
-            data["wind_speed"] = instance.extra_data.get("wind_speed", 0)
-            data["precipitation_amount"] = instance.extra_data.get("precipitation_amount", 0)
-            data["duration"] = instance.extra_data.get("duration", 0)
-            data["damage_assessment"] = instance.extra_data.get("damage_assessment", "")
+            data["wind_speed"] = extra_data.get("wind_speed", 0)
+            data["precipitation_amount"] = extra_data.get("precipitation_amount", 0)
+            data["duration"] = extra_data.get("duration", 0)
+            data["damage_assessment"] = extra_data.get("damage_assessment", "")
         elif type == WeatherEvent.HIGH_WINDS:
-            data["wind_speed"] = instance.extra_data.get("wind_speed", 0)
-            data["duration"] = instance.extra_data.get("duration", 0)
-            data["protection_measures"] = instance.extra_data.get("protection_measures", "")
+            data["wind_speed"] = extra_data.get("wind_speed", 0)
+            data["duration"] = extra_data.get("duration", 0)
+            data["protection_measures"] = extra_data.get("protection_measures", "")
         elif type == WeatherEvent.HIGH_HUMIDITY:
-            data["humidity_level"] = instance.extra_data.get("humidity_level", 0)
-            data["duration"] = instance.extra_data.get("duration", 0)
-            data["crop_impact"] = instance.extra_data.get("crop_impact", "")
+            data["humidity_level"] = extra_data.get("humidity_level", 0)
+            data["duration"] = extra_data.get("duration", 0)
+            data["crop_impact"] = extra_data.get("crop_impact", "")
         elif type == WeatherEvent.LOW_HUMIDITY:
-            data["humidity_level"] = instance.extra_data.get("humidity_level", 0)
-            data["duration"] = instance.extra_data.get("duration", 0)
-            data["crop_impact"] = instance.extra_data.get("crop_impact", "")
+            data["humidity_level"] = extra_data.get("humidity_level", 0)
+            data["duration"] = extra_data.get("duration", 0)
+            data["crop_impact"] = extra_data.get("crop_impact", "")
 
         data.pop("extra_data", None)  # Use pop with default to avoid KeyError if key doesn't exist
 
@@ -510,8 +517,42 @@ class UpdateWeatherEventSerializer(serializers.ModelSerializer):
         if 'extra_data' in validated_data:
             print(f"[UpdateWeatherEventSerializer.update] validated_data['extra_data']: {validated_data['extra_data']}")
         
-        # Handle album images from S3 URLs (modern approach)
+        # CRITICAL FIX: Set history and created_by from request (same as ViewSet logic)
         request = self.context.get("request")
+        if request and not instance.history:
+            from product.models import Parcel
+            parcels = request.POST.getlist("parcels", None) or request.data.get("parcels", [])
+            print(f"[UpdateWeatherEventSerializer.update] parcels from request: {parcels}")
+            
+            if parcels:
+                parcel_id = parcels[0] if isinstance(parcels, list) else parcels
+                try:
+                    parcel = Parcel.objects.select_related("current_history").get(id=int(parcel_id))
+                    if parcel.current_history:
+                        validated_data["history"] = parcel.current_history
+                        validated_data["created_by"] = request.user
+                        print(f"[UpdateWeatherEventSerializer.update] Set history to: {parcel.current_history.id}")
+                        print(f"[UpdateWeatherEventSerializer.update] Set created_by to: {request.user}")
+                        
+                        # Calculate index matching ViewSet logic (only if not already set)
+                        if not instance.index:
+                            history = parcel.current_history
+                            index = (
+                                history.history_weatherevent_events.count()
+                                + history.history_chemicalevent_events.count()
+                                + history.history_generalevent_events.count()
+                                + history.history_productionevent_events.count()
+                                + history.history_equipmentevent_events.count()
+                                + history.history_soilmanagementevent_events.count()
+                                + history.history_pestmanagementevent_events.count()
+                                + history.history_businessevent_events.count()
+                            ) + 1
+                            validated_data["index"] = index
+                            print(f"[UpdateWeatherEventSerializer.update] Set index to: {index}")
+                except Exception as e:
+                    print(f"[UpdateWeatherEventSerializer.update] Error setting history: {e}")
+        
+        # Handle album images from S3 URLs (modern approach)
         album_images = request.data.get("album_images", []) if request else []
         
         if album_images:
@@ -553,6 +594,8 @@ class UpdateWeatherEventSerializer(serializers.ModelSerializer):
         return updated_instance
 
     def create(self, validated_data):
+        print(f"🚨🚨 [UpdateWeatherEventSerializer.create] SERIALIZER CREATE METHOD CALLED 🚨🚨")
+        print(f"[UpdateWeatherEventSerializer.create] Starting custom create method")
         # Handle album images from S3 URLs (modern approach)
         request = self.context.get("request")
         album_images = request.data.get("album_images", []) if request else []
@@ -581,6 +624,43 @@ class UpdateWeatherEventSerializer(serializers.ModelSerializer):
                 gallery_image = gallery.images.create(image=image_data)
                 gallery_image.save()
             validated_data["album"] = gallery
+        
+        # CRITICAL FIX: Set history and created_by from ViewSet logic
+        # This was previously done in ViewSet.perform_create but custom serializer.create bypasses that
+        if request:
+            from product.models import Parcel
+            
+            parcels = request.POST.getlist("parcels", None) or request.data.get("parcels", [])
+            print(f"[UpdateWeatherEventSerializer.create] parcels from request: {parcels}")
+            
+            if parcels:
+                # Get the first parcel's current_history (matching ViewSet logic)
+                parcel_id = parcels[0] if isinstance(parcels, list) else parcels
+                try:
+                    parcel = Parcel.objects.select_related("current_history").get(id=int(parcel_id))
+                    if parcel.current_history:
+                        print(f"[UpdateWeatherEventSerializer.create] Setting history to {parcel.current_history.id} and created_by to {request.user.id}")
+                        validated_data["history"] = parcel.current_history
+                        validated_data["created_by"] = request.user
+                        
+                        # Calculate index (matching ViewSet logic)
+                        history = parcel.current_history
+                        index = (
+                            history.history_weatherevent_events.count()
+                            + history.history_chemicalevent_events.count()
+                            + history.history_generalevent_events.count()
+                            + history.history_productionevent_events.count()
+                            + history.history_equipmentevent_events.count()
+                            + history.history_soilmanagementevent_events.count()
+                            + history.history_pestmanagementevent_events.count()
+                            + history.history_businessevent_events.count()
+                        ) + 1
+                        validated_data["index"] = index
+                        print(f"[UpdateWeatherEventSerializer.create] Set index to {index}")
+                    else:
+                        print(f"[UpdateWeatherEventSerializer.create] WARNING: Parcel {parcel_id} has no current_history")
+                except (Parcel.DoesNotExist, ValueError) as e:
+                    print(f"[UpdateWeatherEventSerializer.create] ERROR: Could not find parcel {parcel_id}: {e}")
         
         return super().create(validated_data)
 
@@ -774,6 +854,7 @@ class OptimizedHistoryListSerializer(serializers.ModelSerializer):
             "number_of_plants",
             "soil_ph",
             "crop_type",
+            "transparency_score",  # Include for transparency calculations
             "extra_data",  # Include for carbon data
         ]
         read_only_fields = ["id"]
@@ -796,8 +877,8 @@ class OptimizedHistoryListSerializer(serializers.ModelSerializer):
 
     def get_members(self, history):
         """
-        Ultra-lightweight members list that completely avoids database queries.
-        Returns cached members from extra_data if available, otherwise empty list.
+        Lightweight members list that checks cached members first, then falls back to involved users.
+        Returns cached members from extra_data if available, otherwise gets involved users.
         """
         # Check if we have cached member data in extra_data
         if history.extra_data and isinstance(history.extra_data, dict):
@@ -813,8 +894,18 @@ class OptimizedHistoryListSerializer(serializers.ModelSerializer):
                     for member in cached_members[:3]  # Limit to 3 members
                 ]
 
-        # Return empty list to avoid expensive queries
-        # Members will be loaded on demand when needed
+        # Fallback to involved users when no cached members
+        try:
+            from users.serializers import BasicUserSerializer
+            user_ids = history.get_involved_users()
+            if user_ids:
+                from users.models import User
+                members = User.objects.filter(id__in=user_ids).order_by("first_name")[:3]
+                return BasicUserSerializer(members, many=True).data
+        except Exception as e:
+            # Log error but don't fail the serialization
+            print(f"Error getting members for history {history.id}: {str(e)}")
+        
         return []
 
     def to_representation(self, instance):
@@ -1025,19 +1116,108 @@ class HistorySerializer(serializers.ModelSerializer):
 
     def get_images(self, history):
         try:
-            if not history.album:
-                return []
-
             request = self.context.get("request")
             images = []
-            for image in history.album.images.all():
-                # Prefer image_url (S3 URL) over file field
-                if image.image_url:
-                    images.append(image.image_url)
-                elif image.image:
-                    image_url = request.build_absolute_uri(image.image.url) if request else image.image.url
-                    images.append(image_url)
-            return images
+            
+            # Get images from production's own album
+            if history.album:
+                for image in history.album.images.all():
+                    # Prefer image_url (S3 URL) over file field
+                    if image.image_url:
+                        images.append(image.image_url)
+                    elif image.image:
+                        image_url = request.build_absolute_uri(image.image.url) if request else image.image.url
+                        images.append(image_url)
+            
+            # Get images from all associated events
+            # Chemical Events
+            for event in history.history_chemicalevent_events.all():
+                if event.album:
+                    for image in event.album.images.all():
+                        if image.image_url:
+                            images.append(image.image_url)
+                        elif image.image:
+                            image_url = request.build_absolute_uri(image.image.url) if request else image.image.url
+                            images.append(image_url)
+            
+            # Production Events
+            for event in history.history_productionevent_events.all():
+                if event.album:
+                    for image in event.album.images.all():
+                        if image.image_url:
+                            images.append(image.image_url)
+                        elif image.image:
+                            image_url = request.build_absolute_uri(image.image.url) if request else image.image.url
+                            images.append(image_url)
+            
+            # Weather Events
+            for event in history.history_weatherevent_events.all():
+                if event.album:
+                    for image in event.album.images.all():
+                        if image.image_url:
+                            images.append(image.image_url)
+                        elif image.image:
+                            image_url = request.build_absolute_uri(image.image.url) if request else image.image.url
+                            images.append(image_url)
+            
+            # General Events
+            for event in history.history_generalevent_events.all():
+                if event.album:
+                    for image in event.album.images.all():
+                        if image.image_url:
+                            images.append(image.image_url)
+                        elif image.image:
+                            image_url = request.build_absolute_uri(image.image.url) if request else image.image.url
+                            images.append(image_url)
+            
+            # Equipment Events
+            for event in history.history_equipmentevent_events.all():
+                if event.album:
+                    for image in event.album.images.all():
+                        if image.image_url:
+                            images.append(image.image_url)
+                        elif image.image:
+                            image_url = request.build_absolute_uri(image.image.url) if request else image.image.url
+                            images.append(image_url)
+            
+            # Soil Management Events
+            for event in history.history_soilmanagementevent_events.all():
+                if event.album:
+                    for image in event.album.images.all():
+                        if image.image_url:
+                            images.append(image.image_url)
+                        elif image.image:
+                            image_url = request.build_absolute_uri(image.image.url) if request else image.image.url
+                            images.append(image_url)
+            
+            # Pest Management Events
+            for event in history.history_pestmanagementevent_events.all():
+                if event.album:
+                    for image in event.album.images.all():
+                        if image.image_url:
+                            images.append(image.image_url)
+                        elif image.image:
+                            image_url = request.build_absolute_uri(image.image.url) if request else image.image.url
+                            images.append(image_url)
+            
+            # Business Events
+            for event in history.history_businessevent_events.all():
+                if event.album:
+                    for image in event.album.images.all():
+                        if image.image_url:
+                            images.append(image.image_url)
+                        elif image.image:
+                            image_url = request.build_absolute_uri(image.image.url) if request else image.image.url
+                            images.append(image_url)
+            
+            # Remove duplicates while preserving order
+            unique_images = []
+            for img in images:
+                if img not in unique_images:
+                    unique_images.append(img)
+            
+            return unique_images
+            
         except Exception as e:
             print(f"Error getting images: {str(e)}")
             return []
@@ -1183,7 +1363,8 @@ class PublicHistorySerializer(serializers.ModelSerializer):
 
             # Get events using minimal queries with correct related names
             chemical_events = history.history_chemicalevent_events.only(
-                "id", "date", "description", "commercial_name", "volume", "concentration", "type"
+                "id", "date", "description", "commercial_name", "volume", "concentration", "type",
+                "area", "way_of_application", "weather_conditions", "application_timing", "target_pest_disease", "extra_data"
             )
             production_events = history.history_productionevent_events.only(
                 "id", "date", "description", "type", "observation"
@@ -1209,6 +1390,25 @@ class PublicHistorySerializer(serializers.ModelSerializer):
 
             # Create lightweight event data without carbon calculations
             for event in chemical_events:
+                # Count photos from event album
+                photo_count = 0
+                album_data = None
+                if hasattr(event, 'album') and event.album:
+                    photo_count = event.album.images.count()
+                    # Serialize album data for frontend
+                    album_data = {
+                        "id": event.album.id,
+                        "images": [
+                            {
+                                "id": img.id,
+                                "image": img.image_url if img.image_url else (img.image.url if img.image else ""),
+                                "caption": getattr(img, "caption", "") or "",
+                                "created_at": img.created_at.isoformat() if hasattr(img, "created_at") and img.created_at else "",
+                            }
+                            for img in event.album.images.all()
+                        ]
+                    }
+                
                 events_data.append(
                     {
                         "id": event.id,
@@ -1220,11 +1420,40 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "index": getattr(event, "index", 0),
                         "volume": event.volume,
                         "concentration": event.concentration,
+                        "area": getattr(event, "area", None),
                         "equipment": event.commercial_name,
+                        "photo_count": photo_count,
+                        "commercial_name": event.commercial_name,
+                        "album": album_data,
+                        # Additional transparency fields
+                        "way_of_application": getattr(event, "way_of_application", None),
+                        "weather_conditions": getattr(event, "weather_conditions", None),
+                        "application_timing": getattr(event, "application_timing", None),
+                        "target_pest_disease": getattr(event, "target_pest_disease", None),
+                        "extra_data": getattr(event, "extra_data", None),
                     }
                 )
 
             for event in production_events:
+                # Count photos from event album
+                photo_count = 0
+                album_data = None
+                if hasattr(event, 'album') and event.album:
+                    photo_count = event.album.images.count()
+                    # Serialize album data for frontend
+                    album_data = {
+                        "id": event.album.id,
+                        "images": [
+                            {
+                                "id": img.id,
+                                "image": img.image_url if img.image_url else (img.image.url if img.image else ""),
+                                "caption": getattr(img, "caption", "") or "",
+                                "created_at": img.created_at.isoformat() if hasattr(img, "created_at") and img.created_at else "",
+                            }
+                            for img in event.album.images.all()
+                        ]
+                    }
+                
                 events_data.append(
                     {
                         "id": event.id,
@@ -1236,11 +1465,34 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "index": getattr(event, "index", 0),
                         "volume": None,
                         "concentration": None,
+                        "area": getattr(event, "area", None),
                         "equipment": None,
+                        "photo_count": photo_count,
+                        "commercial_name": None,
+                        "album": album_data,
                     }
                 )
 
             for event in weather_events:
+                # Count photos from event album
+                photo_count = 0
+                album_data = None
+                if hasattr(event, 'album') and event.album:
+                    photo_count = event.album.images.count()
+                    # Serialize album data for frontend
+                    album_data = {
+                        "id": event.album.id,
+                        "images": [
+                            {
+                                "id": img.id,
+                                "image": img.image_url if img.image_url else (img.image.url if img.image else ""),
+                                "caption": getattr(img, "caption", "") or "",
+                                "created_at": img.created_at.isoformat() if hasattr(img, "created_at") and img.created_at else "",
+                            }
+                            for img in event.album.images.all()
+                        ]
+                    }
+                
                 events_data.append(
                     {
                         "id": event.id,
@@ -1252,11 +1504,34 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "index": getattr(event, "index", 0),
                         "volume": None,
                         "concentration": None,
+                        "area": getattr(event, "area", None),
                         "equipment": None,
+                        "photo_count": photo_count,
+                        "commercial_name": None,
+                        "album": album_data,
                     }
                 )
 
             for event in equipment_events:
+                # Count photos from event album
+                photo_count = 0
+                album_data = None
+                if hasattr(event, 'album') and event.album:
+                    photo_count = event.album.images.count()
+                    # Serialize album data for frontend
+                    album_data = {
+                        "id": event.album.id,
+                        "images": [
+                            {
+                                "id": img.id,
+                                "image": img.image_url if img.image_url else (img.image.url if img.image else ""),
+                                "caption": getattr(img, "caption", "") or "",
+                                "created_at": img.created_at.isoformat() if hasattr(img, "created_at") and img.created_at else "",
+                            }
+                            for img in event.album.images.all()
+                        ]
+                    }
+                
                 events_data.append(
                     {
                         "id": event.id,
@@ -1268,11 +1543,34 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "index": getattr(event, "index", 0),
                         "volume": None,
                         "concentration": None,
+                        "area": getattr(event, "area", None),
                         "equipment": event.equipment_name,
+                        "photo_count": photo_count,
+                        "commercial_name": None,
+                        "album": album_data,
                     }
                 )
 
             for event in soil_events:
+                # Count photos from event album
+                photo_count = 0
+                album_data = None
+                if hasattr(event, 'album') and event.album:
+                    photo_count = event.album.images.count()
+                    # Serialize album data for frontend
+                    album_data = {
+                        "id": event.album.id,
+                        "images": [
+                            {
+                                "id": img.id,
+                                "image": img.image_url if img.image_url else (img.image.url if img.image else ""),
+                                "caption": getattr(img, "caption", "") or "",
+                                "created_at": img.created_at.isoformat() if hasattr(img, "created_at") and img.created_at else "",
+                            }
+                            for img in event.album.images.all()
+                        ]
+                    }
+                
                 events_data.append(
                     {
                         "id": event.id,
@@ -1284,11 +1582,34 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "index": getattr(event, "index", 0),
                         "volume": None,
                         "concentration": None,
+                        "area": getattr(event, "area", None),
                         "equipment": event.amendment_type,
+                        "photo_count": photo_count,
+                        "commercial_name": None,
+                        "album": album_data,
                     }
                 )
 
             for event in pest_events:
+                # Count photos from event album
+                photo_count = 0
+                album_data = None
+                if hasattr(event, 'album') and event.album:
+                    photo_count = event.album.images.count()
+                    # Serialize album data for frontend
+                    album_data = {
+                        "id": event.album.id,
+                        "images": [
+                            {
+                                "id": img.id,
+                                "image": img.image_url if img.image_url else (img.image.url if img.image else ""),
+                                "caption": getattr(img, "caption", "") or "",
+                                "created_at": img.created_at.isoformat() if hasattr(img, "created_at") and img.created_at else "",
+                            }
+                            for img in event.album.images.all()
+                        ]
+                    }
+                
                 events_data.append(
                     {
                         "id": event.id,
@@ -1300,11 +1621,34 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "index": getattr(event, "index", 0),
                         "volume": None,
                         "concentration": None,
+                        "area": getattr(event, "area", None),
                         "equipment": event.pest_species,
+                        "photo_count": photo_count,
+                        "commercial_name": None,
+                        "album": album_data,
                     }
                 )
 
             for event in general_events:
+                # Count photos from event album
+                photo_count = 0
+                album_data = None
+                if hasattr(event, 'album') and event.album:
+                    photo_count = event.album.images.count()
+                    # Serialize album data for frontend
+                    album_data = {
+                        "id": event.album.id,
+                        "images": [
+                            {
+                                "id": img.id,
+                                "image": img.image_url if img.image_url else (img.image.url if img.image else ""),
+                                "caption": getattr(img, "caption", "") or "",
+                                "created_at": img.created_at.isoformat() if hasattr(img, "created_at") and img.created_at else "",
+                            }
+                            for img in event.album.images.all()
+                        ]
+                    }
+                
                 events_data.append(
                     {
                         "id": event.id,
@@ -1316,13 +1660,36 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "index": getattr(event, "index", 0),
                         "volume": None,
                         "concentration": None,
+                        "area": getattr(event, "area", None),
                         "equipment": None,
+                        "photo_count": photo_count,
+                        "commercial_name": None,
+                        "album": album_data,
                     }
                 )
 
             for event in business_events:
                 business_display = event.get_business_type_display() if hasattr(event, 'get_business_type_display') else event.business_type
                 certification_display = event.get_certification_type_display() if hasattr(event, 'get_certification_type_display') and event.certification_type else None
+                
+                # Count photos from event album
+                photo_count = 0
+                album_data = None
+                if hasattr(event, 'album') and event.album:
+                    photo_count = event.album.images.count()
+                    # Serialize album data for frontend
+                    album_data = {
+                        "id": event.album.id,
+                        "images": [
+                            {
+                                "id": img.id,
+                                "image": img.image_url if img.image_url else (img.image.url if img.image else ""),
+                                "caption": getattr(img, "caption", "") or "",
+                                "created_at": img.created_at.isoformat() if hasattr(img, "created_at") and img.created_at else "",
+                            }
+                            for img in event.album.images.all()
+                        ]
+                    }
                 
                 events_data.append(
                     {
@@ -1335,7 +1702,11 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "index": getattr(event, "index", 0),
                         "volume": None,
                         "concentration": None,
+                        "area": getattr(event, "area", None),
                         "equipment": certification_display or business_display,
+                        "photo_count": photo_count,
+                        "commercial_name": None,
+                        "album": album_data,
                     }
                 )
 
@@ -1373,20 +1744,111 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         return None
 
     def get_images(self, history):
+        print(f"DEBUG: PublicHistorySerializer.get_images called for history {history.id}")
         try:
-            if not history.album:
-                return []
-
             request = self.context.get("request")
             images = []
-            for image in history.album.images.all():
-                # Prefer image_url (S3 URL) over file field
-                if image.image_url:
-                    images.append(image.image_url)
-                elif image.image:
-                    image_url = request.build_absolute_uri(image.image.url) if request else image.image.url
-                    images.append(image_url)
-            return images
+            
+            # Get images from production's own album
+            if history.album:
+                for image in history.album.images.all():
+                    # Prefer image_url (S3 URL) over file field
+                    if image.image_url:
+                        images.append(image.image_url)
+                    elif image.image:
+                        image_url = request.build_absolute_uri(image.image.url) if request else image.image.url
+                        images.append(image_url)
+            
+            # Get images from all associated events
+            # Chemical Events
+            for event in history.history_chemicalevent_events.all():
+                if event.album:
+                    for image in event.album.images.all():
+                        if image.image_url:
+                            images.append(image.image_url)
+                        elif image.image:
+                            image_url = request.build_absolute_uri(image.image.url) if request else image.image.url
+                            images.append(image_url)
+            
+            # Production Events
+            for event in history.history_productionevent_events.all():
+                if event.album:
+                    for image in event.album.images.all():
+                        if image.image_url:
+                            images.append(image.image_url)
+                        elif image.image:
+                            image_url = request.build_absolute_uri(image.image.url) if request else image.image.url
+                            images.append(image_url)
+            
+            # Weather Events
+            for event in history.history_weatherevent_events.all():
+                if event.album:
+                    for image in event.album.images.all():
+                        if image.image_url:
+                            images.append(image.image_url)
+                        elif image.image:
+                            image_url = request.build_absolute_uri(image.image.url) if request else image.image.url
+                            images.append(image_url)
+            
+            # General Events
+            for event in history.history_generalevent_events.all():
+                if event.album:
+                    for image in event.album.images.all():
+                        if image.image_url:
+                            images.append(image.image_url)
+                        elif image.image:
+                            image_url = request.build_absolute_uri(image.image.url) if request else image.image.url
+                            images.append(image_url)
+            
+            # Equipment Events
+            for event in history.history_equipmentevent_events.all():
+                if event.album:
+                    for image in event.album.images.all():
+                        if image.image_url:
+                            images.append(image.image_url)
+                        elif image.image:
+                            image_url = request.build_absolute_uri(image.image.url) if request else image.image.url
+                            images.append(image_url)
+            
+            # Soil Management Events
+            for event in history.history_soilmanagementevent_events.all():
+                if event.album:
+                    for image in event.album.images.all():
+                        if image.image_url:
+                            images.append(image.image_url)
+                        elif image.image:
+                            image_url = request.build_absolute_uri(image.image.url) if request else image.image.url
+                            images.append(image_url)
+            
+            # Pest Management Events
+            for event in history.history_pestmanagementevent_events.all():
+                if event.album:
+                    for image in event.album.images.all():
+                        if image.image_url:
+                            images.append(image.image_url)
+                        elif image.image:
+                            image_url = request.build_absolute_uri(image.image.url) if request else image.image.url
+                            images.append(image_url)
+            
+            # Business Events
+            for event in history.history_businessevent_events.all():
+                if event.album:
+                    for image in event.album.images.all():
+                        if image.image_url:
+                            images.append(image.image_url)
+                        elif image.image:
+                            image_url = request.build_absolute_uri(image.image.url) if request else image.image.url
+                            images.append(image_url)
+            
+            # Remove duplicates while preserving order
+            unique_images = []
+            for img in images:
+                if img not in unique_images:
+                    unique_images.append(img)
+            
+            print(f"PublicHistorySerializer.get_images for history {history.id}: Found {len(unique_images)} images")
+            return unique_images
+            
         except Exception as e:
             print(f"Error getting images: {str(e)}")
             return []

@@ -52,7 +52,8 @@ class CarbonCalculatorService:
             # Create breakdown by category
             breakdown = {}
             for entry in carbon_entries:
-                category = entry.category or 'other'
+                # Fix: Access category through the source relationship
+                category = (entry.source.category if entry.source and entry.source.category else 'other')
                 if category not in breakdown:
                     breakdown[category] = 0
                     

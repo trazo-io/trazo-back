@@ -694,7 +694,7 @@ class EventCarbonCalculator:
                 "co2e": round(base_emissions, 3),
                 "efficiency_score": self._calculate_production_efficiency_score(breakdown, calculation_method),
                 "calculation_method": calculation_method,
-                "verification_status": "epa_usda_verified" if calculation_method == "verified_epa_usda_factors" else "standard",
+                "verification_status": "usda_verified" if calculation_method == "verified_usda_factors" else "standard",
                 "data_sources": data_sources,
                 "breakdown": breakdown,
                 "limitations": limitations,
@@ -828,7 +828,7 @@ class EventCarbonCalculator:
                     ]
                     limitations = ["Water deficit data required for accurate calculation"]
 
-            elif event.type == "HL":  # Hailstorm - Using verified EPA diesel factors
+            elif event.type == "HL":  # Hailstorm - Using verified USDA diesel factors
                 # Extract hailstorm-specific fields
                 weight = self._extract_numeric_value(getattr(event, 'weight', '1'), default=1.0)
                 diameter = self._extract_numeric_value(getattr(event, 'diameter', '1'), default=1.0) 
@@ -837,7 +837,7 @@ class EventCarbonCalculator:
                 # Calculate damage severity index (0-10 scale)
                 severity = min((weight * diameter) / 10, 10.0)
                 
-                # Use EPA verified diesel emission factor for cleanup equipment
+                # Use USDA verified diesel emission factor for cleanup equipment
                 diesel_factor = VerifiedEmissionFactors.get_emission_factor('diesel', 'diesel_fuel_mobile')
                 equipment_factor = VerifiedEmissionFactors.get_emission_factor('damage', 'debris_cleanup')
                 
@@ -880,12 +880,12 @@ class EventCarbonCalculator:
                         "note": "Hailstorm cleanup emissions require equipment fuel consumption data"
                     }
 
-            elif event.type == "HT":  # High temperatures - Using verified EPA electricity factors
+            elif event.type == "HT":  # High temperatures - Using verified USDA electricity factors
                 # Extract temperature and duration
                 if hasattr(event, 'highest_temperature') and event.highest_temperature:
                     highest_temp = self._extract_numeric_value(event.highest_temperature, default=90)
                     
-                    # Use EPA verified electricity emission factor for cooling systems
+                    # Use USDA verified electricity emission factor for cooling systems
                     electricity_factor = VerifiedEmissionFactors.get_emission_factor('electricity', 'electricity_us_avg')
                     misting_factor = VerifiedEmissionFactors.get_emission_factor('equipment', 'misting_system')
                     
@@ -1780,7 +1780,7 @@ class EventCarbonCalculator:
                 })
             
             # Always include verification recommendation
-            if calculation_method == "verified_epa_usda_factors":
+            if calculation_method == "verified_usda_factors":
                 recommendations.append({
                     "type": "data_quality",
                     "message": "Carbon calculation uses verified EPA/USDA emission factors",
@@ -1799,8 +1799,8 @@ class EventCarbonCalculator:
         try:
             base_score = 75.0
             
-            # Higher score for EPA-verified calculations
-            if calculation_method == "verified_epa_usda_factors":
+            # Higher score for USDA-verified calculations
+            if calculation_method == "verified_usda_factors":
                 base_score = 85.0
             
             # Adjust based on calculation basis

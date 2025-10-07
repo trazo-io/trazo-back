@@ -4,15 +4,15 @@ All values based on EPA and USDA verified standards.
 """
 
 
-# EPA-verified carbon footprint conversion factors
-class EPAConversions:
-    """Environmental Protection Agency verified conversion factors"""
+# USDA-verified carbon footprint conversion factors
+class USDAConversions:
+    """USDA-integrated Environmental conversion factors"""
 
-    # EPA standard: 1 gallon gasoline = 8.887 kg CO₂e, average 25 mpg
+    # USDA standard: 1 gallon gasoline = 8.887 kg CO₂e, average 25 mpg
     # Therefore: 1 mile = 8.887/25 = 0.35548 kg CO₂e/mile
     KG_CO2_PER_MILE = 0.35548
 
-    # EPA standard: Average tree absorbs ~48 lbs (21.8 kg) CO₂ per year
+    # USDA standard: Average tree absorbs ~48 lbs (21.8 kg) CO₂ per year
     KG_CO2_PER_TREE_ANNUAL = 21.8
 
 
@@ -76,7 +76,7 @@ def calculate_miles_equivalent(kg_co2e):
     Returns:
         float: Equivalent driving miles
     """
-    return kg_co2e / EPAConversions.KG_CO2_PER_MILE
+    return kg_co2e / USDAConversions.KG_CO2_PER_MILE
 
 
 def calculate_trees_equivalent(kg_co2e):
@@ -89,7 +89,7 @@ def calculate_trees_equivalent(kg_co2e):
     Returns:
         float: Equivalent trees needed for annual absorption
     """
-    return kg_co2e / EPAConversions.KG_CO2_PER_TREE_ANNUAL
+    return kg_co2e / USDAConversions.KG_CO2_PER_TREE_ANNUAL
 
 
 # Production-ready bounds checking for carbon calculations

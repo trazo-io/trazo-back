@@ -37,10 +37,10 @@ class TransparencyResponseFormatter:
         
         # PRIMARY: Transparency metrics (non-competitive)
         transparency_section = {
-            "completeness_percentage": getattr(production, 'transparency_percentage', 75),
+            "completeness_percentage": transparency_data.get("transparency_percentage", 0),  # FIX: Use calculated score
             "data_quality_grade": transparency_data.get("carbonGrade", "C"),
             "verification_status": self._get_verification_status(blockchain_verification),
-            "documentation_score": transparency_data.get("completeness_score", 75),
+            "documentation_score": transparency_data.get("completeness_score", 0),  # FIX: Remove hardcoded 75
             "last_updated": timezone.now().isoformat()
         }
         
