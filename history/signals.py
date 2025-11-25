@@ -24,22 +24,23 @@ def calculate_chemical_event_carbon(sender, instance, created, **kwargs):
             calculator = EventCarbonCalculator()
             calculation_result = calculator.calculate_chemical_event_impact(instance)
 
-            # Create carbon entry if calculation was successful
-            if calculation_result.get("co2e", 0) > 0:
+            # Store calculation result in event's extra_data for future reference
+            if not hasattr(instance, "extra_data") or instance.extra_data is None:
+                instance.extra_data = {}
+
+            instance.extra_data["carbon_calculation"] = calculation_result
+
+            # Update without triggering signal again
+            ChemicalEvent.objects.filter(id=instance.id).update(extra_data=instance.extra_data)
+
+            # Create carbon entry if calculation has meaningful emissions (positive or negative)
+            co2e_value = calculation_result.get("co2e", 0)
+            if abs(co2e_value) > 0:
                 carbon_entry = calculator.create_carbon_entry_from_event(instance, calculation_result)
 
-                # Store calculation result in event's extra_data for future reference
-                if not hasattr(instance, "extra_data") or instance.extra_data is None:
-                    instance.extra_data = {}
-
-                instance.extra_data["carbon_calculation"] = calculation_result
-
-                # Update without triggering signal again
-                ChemicalEvent.objects.filter(id=instance.id).update(extra_data=instance.extra_data)
-
-                print(
-                    f"✅ Carbon calculation completed for Chemical Event {instance.id}: {calculation_result['co2e']} kg CO2e"
-                )
+            print(
+                f"✅ Carbon calculation completed for Chemical Event {instance.id}: {calculation_result['co2e']} kg CO2e"
+            )
 
         except Exception as e:
             print(f"❌ Error calculating carbon for Chemical Event {instance.id}: {e}")

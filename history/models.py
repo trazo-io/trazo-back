@@ -528,7 +528,7 @@ class ChemicalEvent(CommonEvent):
     )
     application_timing = models.CharField(
         max_length=100,
-        blank=True, 
+        blank=True,
         null=True,
         help_text="When the application was made for consumer understanding"
     )
@@ -538,44 +538,114 @@ class ChemicalEvent(CommonEvent):
         null=True,
         help_text="What problem this application addresses for transparency"
     )
-    
+
+    # EPA Worker Protection Standard (WPS) Compliance Fields - 40 CFR 170.309
+    applicator_name = models.CharField(
+        max_length=150,
+        blank=True,
+        null=True,
+        help_text="Name of the certified applicator who applied the chemical"
+    )
+    epa_registration_number = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="EPA registration number from the product label (e.g., 12345-67)"
+    )
+    restricted_use_pesticide = models.BooleanField(
+        default=False,
+        help_text="Whether this is a Restricted Use Pesticide (RUP) requiring certified applicator"
+    )
+    applicator_certification = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Applicator certification/license number (required for RUPs)"
+    )
+    rei_hours = models.DecimalField(
+        max_digits=6,
+        decimal_places=1,
+        blank=True,
+        null=True,
+        help_text="Restricted Entry Interval in hours (worker safety)"
+    )
+    phi_days = models.DecimalField(
+        max_digits=6,
+        decimal_places=1,
+        blank=True,
+        null=True,
+        help_text="Pre-Harvest Interval in days (consumer safety)"
+    )
+
     def clean(self):
         """
-        Model-level validation for NPK percentages and business logic
+        Model-level validation for NPK percentages, EPA compliance, and business logic
         """
         from django.core.exceptions import ValidationError
-        
+
+        errors = {}
+
         # Validate individual NPK percentages are within range
         for field_name, percentage in [
-            ('nitrogen_percentage', self.nitrogen_percentage),
-            ('phosphorus_percentage', self.phosphorus_percentage), 
-            ('potassium_percentage', self.potassium_percentage)
+            ("nitrogen_percentage", self.nitrogen_percentage),
+            ("phosphorus_percentage", self.phosphorus_percentage),
+            ("potassium_percentage", self.potassium_percentage),
         ]:
             if percentage is not None:
                 if percentage < 0:
-                    raise ValidationError({
-                        field_name: f'{field_name.replace("_", " ").title()} cannot be negative'
-                    })
+                    errors[field_name] = f'{field_name.replace("_", " ").title()} cannot be negative'
                 if percentage > 100:
-                    raise ValidationError({
-                        field_name: f'{field_name.replace("_", " ").title()} cannot exceed 100%'
-                    })
-        
+                    errors[field_name] = f'{field_name.replace("_", " ").title()} cannot exceed 100%'
+
         # Validate total NPK doesn't exceed 100%
-        if (self.nitrogen_percentage is not None and 
-            self.phosphorus_percentage is not None and 
-            self.potassium_percentage is not None):
-            
+        if (
+            self.nitrogen_percentage is not None
+            and self.phosphorus_percentage is not None
+            and self.potassium_percentage is not None
+        ):
             total_npk = self.nitrogen_percentage + self.phosphorus_percentage + self.potassium_percentage
             if total_npk > 100:
-                raise ValidationError({
-                    '__all__': f'Total NPK percentages cannot exceed 100%. '
-                             f'Current total: {total_npk}% '
-                             f'(N: {self.nitrogen_percentage}%, '
-                             f'P: {self.phosphorus_percentage}%, '
-                             f'K: {self.potassium_percentage}%)'
-                })
-        
+                errors["__all__"] = (
+                    f"Total NPK percentages cannot exceed 100%. "
+                    f"Current total: {total_npk}% "
+                    f"(N: {self.nitrogen_percentage}%, "
+                    f"P: {self.phosphorus_percentage}%, "
+                    f"K: {self.potassium_percentage}%)"
+                )
+
+        # EPA WPS Compliance Validation - 40 CFR 170.309
+        # Restricted Use Pesticides (RUPs) require certified applicator
+        if self.restricted_use_pesticide and not self.applicator_certification:
+            errors["applicator_certification"] = (
+                "Applicator certification is required for Restricted Use Pesticides (RUPs) "
+                "per EPA Worker Protection Standard 40 CFR 170.309"
+            )
+
+        # REI validation - must be non-negative
+        if self.rei_hours is not None and self.rei_hours < 0:
+            errors["rei_hours"] = "Restricted Entry Interval (REI) cannot be negative"
+
+        # PHI validation - must be non-negative
+        if self.phi_days is not None and self.phi_days < 0:
+            errors["phi_days"] = "Pre-Harvest Interval (PHI) cannot be negative"
+
+        # REI reasonableness check (typical range 4-48 hours)
+        if self.rei_hours is not None and self.rei_hours > 168:  # More than 7 days
+            errors["rei_hours"] = (
+                f"REI of {self.rei_hours} hours seems unusually high. "
+                "Please verify against product label."
+            )
+
+        # PHI reasonableness check (typical range 0-120 days)
+        if self.phi_days is not None and self.phi_days > 365:  # More than 1 year
+            errors["phi_days"] = (
+                f"PHI of {self.phi_days} days seems unusually high. "
+                "Please verify against product label."
+            )
+
+        if errors:
+            raise ValidationError(errors)
+
         super().clean()
 
 
@@ -584,12 +654,14 @@ class ProductionEvent(CommonEvent):
     HARVESTING = "HA"
     IRRIGATION = "IR"
     PRUNING = "PR"
+    TRANSPLANTING = "TR"  # NEW - matches UI screenshot option "🌿 Transplanting - Plant relocation"
 
     PRODUCTION_EVENTS = (
         (PLANTING, "Planting"),
         (HARVESTING, "Harvesting"),
         (IRRIGATION, "Irrigation"),
         (PRUNING, "Pruning"),
+        (TRANSPLANTING, "Transplanting"),  # NEW - enables complete transparency tracking
     )
 
     type = models.CharField(max_length=2, choices=PRODUCTION_EVENTS)
@@ -716,6 +788,32 @@ class ProductionEvent(CommonEvent):
 class GeneralEvent(CommonEvent):
     name = models.CharField(max_length=150, help_text="Event name")
     observation = models.TextField(blank=True, null=True)
+    
+    # Activity details for comprehensive farm transparency
+    activity_type = models.CharField(
+        max_length=100, 
+        blank=True, 
+        null=True,
+        help_text="Type of activity performed (e.g., Farm Maintenance, Equipment Setup)"
+    )
+    activity_name = models.CharField(
+        max_length=200, 
+        blank=True, 
+        null=True,
+        help_text="Specific name or description of the activity"
+    )
+    duration = models.CharField(
+        max_length=50, 
+        blank=True, 
+        null=True,
+        help_text="Duration of the activity (e.g., '2 hours', '1 day')"
+    )
+    people_involved = models.PositiveIntegerField(
+        blank=True, 
+        null=True,
+        help_text="Number of people involved in the activity"
+    )
+    
     extra_data = models.JSONField(blank=True, null=True)
 
 
@@ -1025,6 +1123,166 @@ class SoilManagementEvent(CommonEvent):
     test_results = models.JSONField(null=True, blank=True)  # Store complex test data
     carbon_sequestration_potential = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
     extra_data = models.JSONField(blank=True, null=True)
+    
+    # Standardized fields for carbon calculations (matching ProductionEvent pattern)
+    name = models.CharField(max_length=150, blank=True, null=True, help_text="Event name")
+    area_covered = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Area covered in numeric format"
+    )
+    area_unit = models.CharField(
+        max_length=10,
+        choices=[
+            ("ha", "Hectares"),
+            ("acres", "Acres"),
+            ("m2", "Square Meters"),
+            ("km2", "Square Kilometers"),
+        ],
+        default="ha", blank=True,
+        help_text="Area unit"
+    )
+    fuel_consumed = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Fuel consumed during soil management activity"
+    )
+    fuel_unit = models.CharField(
+        max_length=10,
+        choices=[
+            ("L", "Liters"),
+            ("gal", "Gallons"),
+            ("kg", "Kilograms"),
+        ],
+        default="L", blank=True,
+        help_text="Fuel unit"
+    )
+    equipment_hours = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Equipment operating hours"
+    )
+    transportation_distance = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Transportation distance for logistics emissions"
+    )
+    transportation_unit = models.CharField(
+        max_length=10,
+        choices=[
+            ("km", "Kilometers"),
+            ("miles", "Miles"),
+            ("m", "Meters"),
+        ],
+        default="km", blank=True,
+        help_text="Transportation unit"
+    )
+    production_efficiency = models.CharField(
+        max_length=10,
+        choices=[
+            ("high", "High Efficiency"),
+            ("normal", "Normal Efficiency"),
+            ("low", "Low Efficiency"),
+        ],
+        default="normal", blank=True,
+        help_text="Production efficiency rating for carbon scoring"
+    )
+    
+    # Additional soil management fields for comprehensive data capture
+    working_depth = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Working depth for tillage or soil operations"
+    )
+    depth_unit = models.CharField(
+        max_length=10,
+        choices=[
+            ("cm", "Centimeters"),
+            ("inches", "Inches"),
+            ("m", "Meters"),
+        ],
+        default="cm", blank=True,
+        help_text="Depth measurement unit"
+    )
+    soil_texture = models.CharField(
+        max_length=50,
+        choices=[
+            ("clay", "Clay"),
+            ("clay_loam", "Clay Loam"),
+            ("loam", "Loam"),
+            ("sandy_loam", "Sandy Loam"),
+            ("sand", "Sand"),
+            ("silt", "Silt"),
+            ("silt_loam", "Silt Loam"),
+        ],
+        blank=True, null=True,
+        help_text="Soil texture classification"
+    )
+    soil_moisture = models.CharField(
+        max_length=20,
+        choices=[
+            ("dry", "Dry"),
+            ("moderate", "Moderate"),
+            ("moist", "Moist"),
+            ("wet", "Wet"),
+        ],
+        blank=True, null=True,
+        help_text="Soil moisture condition during operation"
+    )
+    weather_conditions = models.CharField(
+        max_length=200, blank=True, null=True,
+        help_text="Weather conditions during soil management"
+    )
+    temperature_range = models.CharField(
+        max_length=50, blank=True, null=True,
+        help_text="Temperature range during operation"
+    )
+    equipment_used = models.CharField(
+        max_length=200, blank=True, null=True,
+        help_text="Equipment used for soil management operation"
+    )
+    
+    def clean(self):
+        """Model-level validation for soil management event values and business logic"""
+        errors = {}
+        
+        # Validate area_covered - must be positive for most operations
+        if self.area_covered is not None and self.area_covered <= 0:
+            errors["area_covered"] = "Area covered must be greater than 0"
+            
+        # Validate transportation_distance - cannot be negative
+        if self.transportation_distance is not None and self.transportation_distance < 0:
+            errors["transportation_distance"] = "Transportation distance cannot be negative"
+            
+        # Validate equipment_hours - cannot be negative
+        if self.equipment_hours is not None and self.equipment_hours < 0:
+            errors["equipment_hours"] = "Equipment hours cannot be negative"
+        
+        # Validate fuel_consumed is non-negative
+        if self.fuel_consumed is not None and self.fuel_consumed < 0:
+            errors["fuel_consumed"] = "Fuel consumed cannot be negative"
+            
+        # Business logic validation: reasonable area coverage
+        if self.area_covered and self.area_covered > 1000:  # More than 1000 hectares
+            errors["area_covered"] = f"Area coverage ({self.area_covered} {self.area_unit}) seems unusually large. Please verify."
+            
+        # If fuel consumption is provided, hours operated should also be provided for accuracy
+        if self.fuel_consumed and self.fuel_consumed > 0 and not self.equipment_hours:
+            if "equipment_hours" not in errors:
+                errors["equipment_hours"] = "Equipment hours should be provided when fuel consumption is specified for accurate carbon calculations."
+                
+        # Validate reasonable fuel efficiency (basic sanity check)
+        if (self.fuel_consumed and self.fuel_consumed > 0 and 
+            self.equipment_hours and self.equipment_hours > 0):
+            fuel_per_hour = float(self.fuel_consumed) / float(self.equipment_hours)
+            
+            # Reasonable fuel consumption: 0.5L/hr to 50L/hr (covers small pumps to large tractors)
+            if fuel_per_hour > 50:
+                errors["fuel_consumed"] = f"Fuel consumption ({fuel_per_hour:.1f}L/hr) seems unreasonably high. Check values."
+            elif fuel_per_hour < 0.5:
+                errors["fuel_consumed"] = f"Fuel consumption ({fuel_per_hour:.1f}L/hr) seems unreasonably low. Check values."
+        
+        # Transportation efficiency check
+        if (self.transportation_distance and self.transportation_distance > 500):
+            errors["transportation_distance"] = f"Transportation distance ({self.transportation_distance} {self.transportation_unit}) is very long. Consider local processing to reduce carbon footprint."
+        
+        if errors:
+            raise ValidationError(errors)
 
     class Meta:
         verbose_name = "Soil Management Event"

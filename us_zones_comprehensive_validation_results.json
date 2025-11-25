@@ -1,0 +1,480 @@
+[
+  {
+    "test": "California Almond - NPK Granular Fertilizer",
+    "type": "FERTILIZER",
+    "location": "California",
+    "calculated": 730.509,
+    "expected_range": [
+      850,
+      950
+    ],
+    "research_source": "UC Davis Almond Research Program",
+    "status": "acceptable",
+    "scenario": {
+      "chemical_type": "FE",
+      "volume_liters": 480,
+      "area_hectares": 3.5,
+      "npk_content": {
+        "N": 16,
+        "P": 8,
+        "K": 12
+      },
+      "application_method": "broadcast_granular",
+      "location": "Central Valley, California",
+      "crop": "Almonds",
+      "timing": "Spring application",
+      "real_scenario": "Almond orchard pre-bloom nutrition program"
+    }
+  },
+  {
+    "test": "Iowa Corn - Insecticide Application",
+    "type": "PESTICIDE",
+    "location": "Iowa",
+    "calculated": 32.345278731836196,
+    "expected_range": [
+      35,
+      55
+    ],
+    "research_source": "Iowa State University Extension",
+    "status": "review",
+    "scenario": {
+      "chemical_type": "PE",
+      "volume_liters": 12.8,
+      "area_hectares": 8.5,
+      "active_ingredient": "Chlorantraniliprole",
+      "application_method": "foliar_spray",
+      "location": "Central Iowa",
+      "crop": "Corn",
+      "timing": "V6 stage corn borer control",
+      "real_scenario": "European corn borer targeted application"
+    }
+  },
+  {
+    "test": "California Grapes - Fungicide Application",
+    "type": "FUNGICIDE",
+    "location": "California",
+    "calculated": 520.6878467635403,
+    "expected_range": [
+      95,
+      125
+    ],
+    "research_source": "UC Davis Viticulture & Enology",
+    "status": "review",
+    "scenario": {
+      "chemical_type": "FU",
+      "volume_liters": 285,
+      "area_hectares": 4.8,
+      "active_ingredient": "Mancozeb",
+      "application_method": "sprayer_tractor",
+      "location": "Napa Valley, California",
+      "crop": "Wine Grapes",
+      "timing": "Pre-bloom powdery mildew prevention",
+      "real_scenario": "Premium wine grape disease management"
+    }
+  },
+  {
+    "test": "Iowa Soybean - Pre-emergence Herbicide",
+    "type": "HERBICIDE",
+    "location": "Iowa",
+    "calculated": 41.199035667107005,
+    "expected_range": [
+      48,
+      68
+    ],
+    "research_source": "Iowa State University Weed Science",
+    "status": "review",
+    "scenario": {
+      "chemical_type": "HE",
+      "volume_liters": 18.5,
+      "area_hectares": 12.3,
+      "active_ingredient": "S-metolachlor + Glyphosate",
+      "application_method": "ground_spray",
+      "location": "Western Iowa",
+      "crop": "Soybeans",
+      "timing": "Pre-emergence weed control",
+      "real_scenario": "No-till soybean weed management program"
+    }
+  },
+  {
+    "test": "Iowa Corn - Precision Planting",
+    "type": "PLANTING",
+    "location": "Iowa",
+    "calculated": 876.6842800528402,
+    "expected_range": [
+      875,
+      915
+    ],
+    "research_source": "Iowa State University Precision Agriculture",
+    "status": "excellent",
+    "scenario": {
+      "crop": "Corn",
+      "area_hectares": 65.0,
+      "seeds_planted": 520000,
+      "fuel_liters": 325,
+      "equipment": "12-row Precision Planter + 250 HP Tractor",
+      "location": "Central Iowa",
+      "efficiency": "high",
+      "real_scenario": "GPS-guided precision corn planting with variable rate"
+    }
+  },
+  {
+    "test": "California Tomatoes - Mechanical Harvesting",
+    "type": "HARVESTING",
+    "location": "California",
+    "calculated": 1308.2826948480847,
+    "expected_range": [
+      1305,
+      1365
+    ],
+    "research_source": "UC Davis Processing Tomato Research",
+    "status": "excellent",
+    "scenario": {
+      "crop": "Processing Tomatoes",
+      "area_hectares": 28.5,
+      "yield_kg": 2850000,
+      "fuel_liters": 485,
+      "equipment": "Self-propelled Tomato Harvester",
+      "location": "San Joaquin Valley, California",
+      "efficiency": "high",
+      "real_scenario": "Large-scale processing tomato mechanical harvest"
+    }
+  },
+  {
+    "test": "California Strawberries - Drip Irrigation",
+    "type": "IRRIGATION",
+    "location": "California",
+    "calculated": 75.52972258916776,
+    "expected_range": [
+      75,
+      95
+    ],
+    "research_source": "UC Davis Strawberry Research Program",
+    "status": "excellent",
+    "scenario": {
+      "crop": "Strawberries",
+      "area_hectares": 6.5,
+      "water_applied_liters": 65000,
+      "fuel_liters": 28,
+      "equipment": "Electric Pump + Precision Drip System",
+      "location": "Salinas Valley, California",
+      "efficiency": "high",
+      "real_scenario": "High-value berry crop precision irrigation"
+    }
+  },
+  {
+    "test": "California Citrus - Mechanical Pruning",
+    "type": "PRUNING",
+    "location": "California",
+    "calculated": 121.38705416116248,
+    "expected_range": [
+      120,
+      140
+    ],
+    "research_source": "UC Riverside Citrus Research Center",
+    "status": "excellent",
+    "scenario": {
+      "crop": "Oranges",
+      "area_hectares": 8.2,
+      "fuel_liters": 45,
+      "equipment": "Hydraulic Pruning Equipment + Tractor",
+      "location": "Ventura County, California",
+      "efficiency": "normal",
+      "real_scenario": "Citrus orchard annual pruning for optimal production"
+    }
+  },
+  {
+    "test": "Iowa Tractor - Scheduled Maintenance",
+    "type": "MAINTENANCE",
+    "location": "Iowa",
+    "calculated": 22.92866578599736,
+    "expected_range": [
+      22,
+      28
+    ],
+    "research_source": "Iowa State University Farm Machinery Management",
+    "status": "excellent",
+    "scenario": {
+      "equipment": "John Deere 7230R (230 HP)",
+      "maintenance_type": "Annual service",
+      "fuel_liters": 8.5,
+      "hours_operated": 2.5,
+      "location": "Northern Iowa",
+      "efficiency": "normal",
+      "real_scenario": "Annual tractor maintenance and tune-up"
+    }
+  },
+  {
+    "test": "California Vineyard - Tractor Operations",
+    "type": "FUEL_CONSUMPTION",
+    "location": "California",
+    "calculated": 337.18626155878474,
+    "expected_range": [
+      335,
+      355
+    ],
+    "research_source": "UC Davis Viticulture Mechanization",
+    "status": "excellent",
+    "scenario": {
+      "equipment": "Narrow Vineyard Tractor (85 HP)",
+      "fuel_liters": 125,
+      "hours_operated": 12.5,
+      "area_worked": 18.5,
+      "operation": "Vineyard cultivation and canopy management",
+      "location": "Sonoma County, California",
+      "efficiency": "normal",
+      "real_scenario": "Specialized vineyard tractor for wine grape operations"
+    }
+  },
+  {
+    "test": "Iowa Combine - Field Repair",
+    "type": "REPAIR",
+    "location": "Iowa",
+    "calculated": 41.8110964332893,
+    "expected_range": [
+      40,
+      50
+    ],
+    "research_source": "Iowa State University Agricultural Engineering",
+    "status": "excellent",
+    "scenario": {
+      "equipment": "Case IH 8240 Combine",
+      "repair_type": "Header bearing replacement",
+      "fuel_liters": 15.5,
+      "hours_operated": 4.0,
+      "location": "Southeast Iowa",
+      "efficiency": "normal",
+      "real_scenario": "Emergency field repair during harvest season"
+    }
+  },
+  {
+    "test": "California Sprayer - Precision Calibration",
+    "type": "CALIBRATION",
+    "location": "California",
+    "calculated": 32.36988110964333,
+    "expected_range": [
+      32,
+      38
+    ],
+    "research_source": "UC Davis Agricultural Engineering",
+    "status": "excellent",
+    "scenario": {
+      "equipment": "Self-propelled Sprayer (120 ft boom)",
+      "calibration_type": "Nozzle flow and pressure calibration",
+      "fuel_liters": 12.0,
+      "hours_operated": 3.5,
+      "location": "Imperial Valley, California",
+      "efficiency": "high",
+      "real_scenario": "Precision sprayer calibration for vegetable crops"
+    }
+  },
+  {
+    "test": "Iowa Planter - Breakdown Recovery",
+    "type": "BREAKDOWN",
+    "location": "Iowa",
+    "calculated": 68.78599735799207,
+    "expected_range": [
+      68,
+      78
+    ],
+    "research_source": "Iowa State University Farm Machinery Reliability",
+    "status": "excellent",
+    "scenario": {
+      "equipment": "16-row Corn Planter",
+      "breakdown_type": "Hydraulic system failure",
+      "fuel_liters": 25.5,
+      "hours_operated": 6.0,
+      "location": "Central Iowa",
+      "efficiency": "low",
+      "real_scenario": "Critical planting season equipment breakdown"
+    }
+  },
+  {
+    "test": "California Harvester - Safety Inspection",
+    "type": "INSPECTION",
+    "location": "California",
+    "calculated": 17.533685601056803,
+    "expected_range": [
+      17,
+      23
+    ],
+    "research_source": "UC Davis Agricultural Safety Program",
+    "status": "excellent",
+    "scenario": {
+      "equipment": "Almond Harvester (Self-propelled)",
+      "inspection_type": "Annual safety and emissions inspection",
+      "fuel_liters": 6.5,
+      "hours_operated": 2.0,
+      "location": "Central Valley, California",
+      "efficiency": "normal",
+      "real_scenario": "Mandatory equipment safety inspection"
+    }
+  },
+  {
+    "test": "California Citrus - Frost Protection",
+    "type": "FROST",
+    "location": "California",
+    "calculated": 229.2866578599736,
+    "expected_range": [
+      228,
+      248
+    ],
+    "research_source": "UC Riverside Citrus Research & Extension",
+    "status": "excellent",
+    "scenario": {
+      "weather_type": "Late spring frost",
+      "area_affected": 12.5,
+      "protection_fuel": 85,
+      "duration_hours": 8,
+      "location": "Ventura County, California",
+      "crop": "Citrus",
+      "real_scenario": "Frost protection during critical flowering period"
+    }
+  },
+  {
+    "test": "California Almonds - Drought Response",
+    "type": "DROUGHT",
+    "location": "California",
+    "calculated": 418.11096433289305,
+    "expected_range": [
+      417,
+      457
+    ],
+    "research_source": "UC Davis Drought Management Program",
+    "status": "excellent",
+    "scenario": {
+      "weather_type": "Severe drought conditions",
+      "area_affected": 25.0,
+      "irrigation_fuel": 155,
+      "duration_days": 45,
+      "location": "Central Valley, California",
+      "crop": "Almonds",
+      "real_scenario": "Extended drought requiring additional irrigation"
+    }
+  },
+  {
+    "test": "Iowa Corn - Hail Damage Assessment",
+    "type": "HAILSTORM",
+    "location": "Iowa",
+    "calculated": 75.52972258916776,
+    "expected_range": [
+      75,
+      85
+    ],
+    "research_source": "Iowa State University Crop Insurance Research",
+    "status": "excellent",
+    "scenario": {
+      "weather_type": "Severe hailstorm",
+      "area_affected": 35.0,
+      "assessment_fuel": 28,
+      "duration_hours": 2,
+      "location": "Central Iowa",
+      "crop": "Corn",
+      "real_scenario": "Post-hail damage assessment and recovery planning"
+    }
+  },
+  {
+    "test": "California Grapes - Heat Stress Mitigation",
+    "type": "HIGH_TEMPERATURE",
+    "location": "California",
+    "calculated": 337.18626155878474,
+    "expected_range": [
+      336,
+      366
+    ],
+    "research_source": "UC Davis Viticulture Heat Stress Research",
+    "status": "excellent",
+    "scenario": {
+      "weather_type": "Extreme heat wave (>105\u00b0F)",
+      "area_affected": 18.5,
+      "cooling_fuel": 125,
+      "duration_days": 7,
+      "location": "Napa Valley, California",
+      "crop": "Wine Grapes",
+      "real_scenario": "Heat stress protection for premium wine grapes"
+    }
+  },
+  {
+    "test": "California Strawberries - Storm Preparation",
+    "type": "TROPICAL_STORM",
+    "location": "California",
+    "calculated": 121.38705416116248,
+    "expected_range": [
+      121,
+      131
+    ],
+    "research_source": "UC Davis Strawberry Storm Response",
+    "status": "excellent",
+    "scenario": {
+      "weather_type": "Atmospheric river event",
+      "area_affected": 8.5,
+      "preparation_fuel": 45,
+      "duration_hours": 18,
+      "location": "Coastal California",
+      "crop": "Strawberries",
+      "real_scenario": "Storm preparation for high-value berry crops"
+    }
+  },
+  {
+    "test": "Iowa Soybeans - Derecho Recovery",
+    "type": "HIGH_WINDS",
+    "location": "Iowa",
+    "calculated": 499.03566710700136,
+    "expected_range": [
+      498,
+      528
+    ],
+    "research_source": "Iowa State University Storm Damage Research",
+    "status": "excellent",
+    "scenario": {
+      "weather_type": "Derecho wind damage",
+      "area_affected": 42.0,
+      "recovery_fuel": 185,
+      "duration_hours": 12,
+      "location": "Eastern Iowa",
+      "crop": "Soybeans",
+      "real_scenario": "Post-derecho field cleanup and crop recovery"
+    }
+  },
+  {
+    "test": "Iowa Corn - Disease Pressure Management",
+    "type": "HIGH_HUMIDITY",
+    "location": "Iowa",
+    "calculated": 86.31968295904888,
+    "expected_range": [
+      86,
+      96
+    ],
+    "research_source": "Iowa State University Plant Pathology",
+    "status": "excellent",
+    "scenario": {
+      "weather_type": "Extended high humidity (>85%)",
+      "area_affected": 28.5,
+      "fungicide_fuel": 32,
+      "duration_days": 14,
+      "location": "Southeast Iowa",
+      "crop": "Corn",
+      "real_scenario": "High humidity disease pressure management"
+    }
+  },
+  {
+    "test": "California Avocados - Humidity Stress Response",
+    "type": "LOW_HUMIDITY",
+    "location": "California",
+    "calculated": 175.33685601056806,
+    "expected_range": [
+      175,
+      195
+    ],
+    "research_source": "UC Riverside Avocado Research Program",
+    "status": "excellent",
+    "scenario": {
+      "weather_type": "Extreme low humidity (<20%)",
+      "area_affected": 15.5,
+      "mitigation_fuel": 65,
+      "duration_days": 10,
+      "location": "Ventura County, California",
+      "crop": "Avocados",
+      "real_scenario": "Low humidity stress mitigation for avocado trees"
+    }
+  }
+]

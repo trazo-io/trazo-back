@@ -238,17 +238,45 @@ class UpdateChemicalEventSerializer(serializers.ModelSerializer):
                         'Tip: Common fertilizers like 20-10-10 have totals of 40%. Check your fertilizer label.'
                     ]
                 })
-            
+
             # Warning for suspiciously low totals (might indicate input error)
             if total_npk < 5 and total_npk > 0:
                 # Note: This is a warning, not an error. We'll just add it to the response
                 data['_validation_warning'] = f'Very low NPK total ({total_npk:.1f}%). Please verify the values are correct.'
-        
+
+        # EPA WPS Compliance Validation - 40 CFR 170.309
+        restricted_use = data.get('restricted_use_pesticide', False)
+        applicator_cert = data.get('applicator_certification')
+        rei_hours = data.get('rei_hours')
+        phi_days = data.get('phi_days')
+
+        # Restricted Use Pesticides (RUPs) require certified applicator
+        if restricted_use and not applicator_cert:
+            raise serializers.ValidationError({
+                'applicator_certification': (
+                    'Applicator certification is required for Restricted Use Pesticides (RUPs) '
+                    'per EPA Worker Protection Standard 40 CFR 170.309'
+                )
+            })
+
+        # REI validation - must be non-negative
+        if rei_hours is not None and rei_hours < 0:
+            raise serializers.ValidationError({
+                'rei_hours': 'Restricted Entry Interval (REI) cannot be negative'
+            })
+
+        # PHI validation - must be non-negative
+        if phi_days is not None and phi_days < 0:
+            raise serializers.ValidationError({
+                'phi_days': 'Pre-Harvest Interval (PHI) cannot be negative'
+            })
+
         return data
 
 
 class ChemicalEventSerializer(EventSerializer):
     type = serializers.SerializerMethodField()
+    chemical_type = serializers.SerializerMethodField()  # Add raw chemical type for frontend
     event_type = serializers.SerializerMethodField()
 
     class Meta:
@@ -260,6 +288,10 @@ class ChemicalEventSerializer(EventSerializer):
         if type_display is None:
             return "event.chemical.unknown"
         return f"event.chemical.{type_display.lower().replace(' ', '_')}"
+    
+    def get_chemical_type(self, chemical_event):
+        """Return raw chemical type code (FE, PE, FU, HE) for frontend processing"""
+        return chemical_event.type  # Return raw database value: 'FU', 'PE', etc.
 
     def get_event_type(self, chemical_event):
         return CHEMICAL_EVENT_TYPE
@@ -1352,6 +1384,45 @@ class PublicHistorySerializer(serializers.ModelSerializer):
             "similar_histories",
         ]
 
+    def _get_chemical_type_with_fallback(self, event):
+        """
+        Get chemical type with multiple fallback strategies.
+        1. Use event.type if set (FE, PE, FU, HE)
+        2. Infer from commercial_name (most reliable for incorrectly typed events)
+        3. Extract from carbon calculation data if available
+        """
+        # Primary: Use database type field if set
+        if event.type and event.type in ['FE', 'PE', 'FU', 'HE']:
+            return event.type
+        
+        # Fallback 1: Infer from commercial name (prioritized over carbon calc due to data quality)
+        commercial_name = (event.commercial_name or '').lower()
+        
+        # Check most specific terms first to avoid mismatches
+        if any(word in commercial_name for word in ['fungicide', 'copper']):
+            return 'FU' 
+        elif any(word in commercial_name for word in ['pesticide', 'insecticide', 'neem']):
+            return 'PE'
+        elif any(word in commercial_name for word in ['herbicide', 'weed', 'glyphosate']):
+            return 'HE'
+        elif 'roundup' in commercial_name and 'pesticide' in commercial_name:
+            return 'PE'  # Pesticide Roundup should be pesticide, not herbicide
+        elif any(word in commercial_name for word in ['fertilizer', 'nutrient', 'npk', 'nitrogen', 'phosphorus', 'potassium']):
+            return 'FE'
+        elif 'roundup' in commercial_name:
+            return 'HE'  # Pure roundup is typically herbicide
+            
+        # Fallback 2: Extract from carbon calculation data (if name inference fails)
+        if hasattr(event, 'extra_data') and event.extra_data:
+            carbon_data = event.extra_data.get('carbon_calculation', {})
+            breakdown = carbon_data.get('breakdown', {})
+            carbon_chemical_type = breakdown.get('chemical_type')
+            if carbon_chemical_type and carbon_chemical_type in ['FE', 'PE', 'FU', 'HE']:
+                return carbon_chemical_type
+            
+        # Final fallback: return None (will show as generic "chemical application")
+        return None
+
     def get_events(self, history):
         """
         OPTIMIZED: Get events without triggering carbon calculations.
@@ -1370,19 +1441,28 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                 "id", "date", "description", "type", "observation"
             )
             weather_events = history.history_weatherevent_events.only(
-                "id", "date", "description", "type", "observation"
+                "id", "date", "description", "type", "observation", "extra_data"
             )
             equipment_events = history.history_equipmentevent_events.only(
                 "id", "date", "description", "type", "equipment_name"
             )
             soil_events = history.history_soilmanagementevent_events.only(
-                "id", "date", "description", "type", "amendment_type"
+                "id", "date", "description", "type", "amendment_type", "name", 
+                "soil_ph", "organic_matter_percentage", "amendment_amount", 
+                "test_results", "area_covered", "area_unit", "fuel_consumed", 
+                "fuel_unit", "equipment_hours", "extra_data", "working_depth",
+                "depth_unit",
+                # 🚨 CRITICAL FIX: Add missing fields that preview shows but ProductDetail was missing
+                "transportation_distance", "transportation_unit", "production_efficiency",
+                "soil_texture", "soil_moisture", "weather_conditions", 
+                "temperature_range", "equipment_used"
             )
             pest_events = history.history_pestmanagementevent_events.only(
                 "id", "date", "description", "type", "pest_species"
             )
             general_events = history.history_generalevent_events.only(
-                "id", "date", "description", "name", "observation"
+                "id", "date", "description", "name", "observation", 
+                "activity_type", "activity_name", "duration", "people_involved"
             )
             business_events = history.history_businessevent_events.only(
                 "id", "date", "description", "name", "observation", "business_type", "certification_type"
@@ -1416,6 +1496,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "description": event.description or "Chemical Application",
                         "observation": getattr(event, "observation", ""),
                         "type": "chemical",
+                        "chemical_type": self._get_chemical_type_with_fallback(event),  # Expose raw chemical type (FE, PE, FU, HE) for frontend processing
                         "certified": getattr(event, "certified", True),
                         "index": getattr(event, "index", 0),
                         "volume": event.volume,
@@ -1499,7 +1580,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "date": event.date.isoformat() if event.date else None,
                         "description": event.description or "Weather Event",
                         "observation": event.observation or "",
-                        "type": "weather",
+                        "type": getattr(event, "type", "weather"),  # 🌦️ PRESERVE WEATHER TYPE: Use actual weather type (FR, DR, etc.) instead of generic "weather"
                         "certified": getattr(event, "certified", True),
                         "index": getattr(event, "index", 0),
                         "volume": None,
@@ -1509,6 +1590,8 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "photo_count": photo_count,
                         "commercial_name": None,
                         "album": album_data,
+                        # 🌦️ WEATHER FIELDS: Add missing extra_data for weather-specific fields unification
+                        "extra_data": getattr(event, "extra_data", None),
                     }
                 )
 
@@ -1538,13 +1621,33 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "date": event.date.isoformat() if event.date else None,
                         "description": event.description or "Equipment Use",
                         "observation": getattr(event, "observation", ""),
-                        "type": "equipment",
+                        "type": "equipment",  # FIXED: Always return "equipment" as main type for Equipment events
                         "certified": getattr(event, "certified", True),
                         "index": getattr(event, "index", 0),
                         "volume": None,
                         "concentration": None,
                         "area": getattr(event, "area", None),
                         "equipment": event.equipment_name,
+                        # CRITICAL: Add Equipment subtype and operation name for frontend display
+                        "operation_type": getattr(event, "type", None),  # Equipment subtype (MN, RE, CA, FC, BD, EI)
+                        "name": getattr(event, "name", None),  # Operation name for title display
+                        "operation_name": getattr(event, "name", None),  # Frontend compatibility alias
+                        
+                        # COMPLETE EQUIPMENT FIELDS - Handle both legacy and new field names
+                        "equipment_type": getattr(event, "equipment_type_structured", None) or getattr(event, "equipment_name", None),  # tractor, harvester, etc.
+                        "fuel_consumed": getattr(event, "fuel_consumed", None) or getattr(event, "fuel_amount", None),  # Check both new and legacy
+                        "fuel_type": getattr(event, "fuel_type", None),  # diesel, gasoline, etc.
+                        "fuel_unit": getattr(event, "fuel_unit", "L"),  # L, gal, kg, kWh
+                        "hours_operated": getattr(event, "hours_operated", None) or getattr(event, "hours_used", None),  # Check both new and legacy
+                        "area_worked": getattr(event, "area_worked", None) or getattr(event, "area_covered", None),  # Check both new and legacy (string to numeric)
+                        "area_unit": getattr(event, "area_unit", "ha"),  # ha, ac, m2
+                        "operation_efficiency": getattr(event, "operation_efficiency", None),  # high, normal, low
+                        
+                        # 🚨 CRITICAL FIX: Add name field for equipment operation name
+                        "name": getattr(event, "name", None) or getattr(event, "equipment_name", None),
+                        # Add operation_type to map Equipment subtype for description generation
+                        "operation_type": getattr(event, "type", None),  # FC, MN, RE, etc.
+                        
                         "photo_count": photo_count,
                         "commercial_name": None,
                         "album": album_data,
@@ -1576,17 +1679,45 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "id": event.id,
                         "date": event.date.isoformat() if event.date else None,
                         "description": event.description or "Soil Management",
-                        "observation": getattr(event, "observation", ""),
+                        "observation": "",  # Soil management events don't have observation field
                         "type": "soil_management",
                         "certified": getattr(event, "certified", True),
                         "index": getattr(event, "index", 0),
                         "volume": None,
                         "concentration": None,
-                        "area": getattr(event, "area", None),
+                        "area": getattr(event, "area_covered", None),
                         "equipment": event.amendment_type,
                         "photo_count": photo_count,
                         "commercial_name": None,
                         "album": album_data,
+                        # 🌱 SOIL MANAGEMENT SPECIFIC FIELDS - Raw data for frontend processing
+                        "name": getattr(event, "name", None),  # Event name for display titles
+                        "soil_management_name": getattr(event, "name", None),  # Compatibility with TimelineService
+                        "soil_management_type": getattr(event, "type", None),  # Raw type (ST, PA, OM, etc.) - frontend handles mapping
+                        "amendment_type": getattr(event, "amendment_type", None),  # Type of amendment used
+                        "amendment_amount": getattr(event, "amendment_amount", None),  # Amount of amendment
+                        "soil_ph": getattr(event, "soil_ph", None),  # Soil pH measurement
+                        "organic_matter_percentage": getattr(event, "organic_matter_percentage", None),  # Organic matter %
+                        "test_results": getattr(event, "test_results", None),  # JSONField test data
+                        # Raw values only - no fallbacks
+                        "area_covered": getattr(event, "area_covered", None),  # Numeric area covered
+                        "area_unit": getattr(event, "area_unit", None),  # ha, acres, m2, km2 (raw)
+                        "fuel_consumed": getattr(event, "fuel_consumed", None),  # Fuel amount
+                        "fuel_unit": getattr(event, "fuel_unit", None),  # L, gal, kg (raw)
+                        "equipment_hours": getattr(event, "equipment_hours", None),  # Operating hours
+                        "working_depth": getattr(event, "working_depth", None),  # Working depth for operations
+                        "depth_unit": getattr(event, "depth_unit", None),  # cm, m, inches (raw)
+                        # 🚨 CRITICAL FIX: Add missing Additional Information & Technical Details fields
+                        "transportation_distance": getattr(event, "transportation_distance", None),  # Transportation distance
+                        "transportation_unit": getattr(event, "transportation_unit", None),  # km, miles
+                        "operation_efficiency": getattr(event, "production_efficiency", None),  # high, normal, low (mapped from production_efficiency field)
+                        # Technical Details fields
+                        "soil_texture": getattr(event, "soil_texture", None),  # Clay, Sandy Loam, etc.
+                        "soil_moisture": getattr(event, "soil_moisture", None),  # wet, moderate, dry
+                        "weather_conditions": getattr(event, "weather_conditions", None),  # Weather during operation
+                        "temperature_range": getattr(event, "temperature_range", None),  # Temperature range
+                        "equipment_used": getattr(event, "equipment_used", None),  # Equipment type used
+                        "extra_data": getattr(event, "extra_data", None),  # Additional soil management data
                     }
                 )
 
@@ -1665,6 +1796,11 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "photo_count": photo_count,
                         "commercial_name": None,
                         "album": album_data,
+                        # NEW ACTIVITY FIELDS for complete transparency
+                        "activity_type": getattr(event, "activity_type", None),
+                        "activity_name": getattr(event, "activity_name", None),
+                        "duration": getattr(event, "duration", None),
+                        "people_involved": getattr(event, "people_involved", None),
                     }
                 )
 
@@ -1871,6 +2007,47 @@ class UpdateEquipmentEventSerializer(serializers.ModelSerializer):
         model = EquipmentEvent
         fields = "__all__"
 
+    def to_internal_value(self, data):
+        """
+        Map frontend field names to backend database field names.
+        Handles field name mapping and value mapping for equipment events.
+        """
+        print(f"[UpdateEquipmentEventSerializer.to_internal_value] Input data: {data}")
+        
+        # Create a copy to avoid modifying the original
+        data = data.copy()
+        
+        # Map equipment_type (frontend) to equipment_type_structured (backend/database)
+        if 'equipment_type' in data:
+            equipment_type = data.pop('equipment_type')
+            
+            # EQUIPMENT VALUE MAPPING: Handle generic frontend values to specific backend values
+            # Frontend sends generic "tractor", backend expects specific tractor size
+            equipment_type_mapping = {
+                'tractor': 'tractor_medium',  # Default to medium tractor for generic "tractor"
+                'harvester': 'harvester',
+                'sprayer': 'sprayer',
+                'cultivator': 'cultivator',
+                'transport': 'transport',
+                'irrigation_pump': 'irrigation_pump',
+                # Backend values that should pass through unchanged
+                'tractor_small': 'tractor_small',
+                'tractor_medium': 'tractor_medium', 
+                'tractor_large': 'tractor_large',
+            }
+            
+            # Map the equipment type, fallback to original value if not in mapping
+            mapped_equipment_type = equipment_type_mapping.get(equipment_type, equipment_type)
+            data['equipment_type_structured'] = mapped_equipment_type
+            
+            if mapped_equipment_type != equipment_type:
+                print(f"[UpdateEquipmentEventSerializer] Mapped equipment_type '{equipment_type}' → '{mapped_equipment_type}' → equipment_type_structured")
+            else:
+                print(f"[UpdateEquipmentEventSerializer] Mapped equipment_type '{equipment_type}' → equipment_type_structured (no value mapping needed)")
+        
+        # Call the parent method to handle the rest
+        return super().to_internal_value(data)
+
     def validate(self, data):
         """
         Enhanced validation for equipment event structured fields with helpful error messages
@@ -2003,6 +2180,52 @@ class UpdateSoilManagementEventSerializer(serializers.ModelSerializer):
     class Meta:
         model = SoilManagementEvent
         fields = "__all__"
+        
+    def to_internal_value(self, data):
+        """
+        Custom processing to handle Decimal field serialization for JSON storage.
+        Ensures all numeric values are properly serialized for extra_data JSONField.
+        """
+        import decimal
+        from decimal import Decimal
+        
+        print(f"[UpdateSoilManagementEventSerializer.to_internal_value] Input data: {data}")
+        
+        # Create a copy to avoid modifying the original
+        data = data.copy()
+        
+        # Process the data through parent first
+        internal_value = super().to_internal_value(data)
+        
+        # Convert any Decimal fields to strings for JSON serialization
+        decimal_fields = ['soil_ph', 'organic_matter_percentage', 'area_covered', 
+                         'fuel_consumed', 'carbon_sequestration_potential']
+        
+        for field_name in decimal_fields:
+            if field_name in internal_value and internal_value[field_name] is not None:
+                if isinstance(internal_value[field_name], Decimal):
+                    # Convert Decimal to string to ensure JSON serialization works
+                    internal_value[field_name] = str(internal_value[field_name])
+                    print(f"[UpdateSoilManagementEventSerializer] Converted {field_name} from Decimal to string: {internal_value[field_name]}")
+        
+        # Handle extra_data field specifically - ensure all nested Decimal objects are converted
+        if 'extra_data' in internal_value and internal_value['extra_data']:
+            def convert_decimals_in_dict(obj):
+                """Recursively convert Decimal objects to strings in nested dictionaries"""
+                if isinstance(obj, dict):
+                    return {key: convert_decimals_in_dict(value) for key, value in obj.items()}
+                elif isinstance(obj, list):
+                    return [convert_decimals_in_dict(item) for item in obj]
+                elif isinstance(obj, Decimal):
+                    return str(obj)
+                else:
+                    return obj
+            
+            internal_value['extra_data'] = convert_decimals_in_dict(internal_value['extra_data'])
+            print(f"[UpdateSoilManagementEventSerializer] Processed extra_data: {internal_value['extra_data']}")
+        
+        print(f"[UpdateSoilManagementEventSerializer.to_internal_value] Final internal_value: {internal_value}")
+        return internal_value
 
 
 class SoilManagementEventSerializer(EventSerializer):
@@ -2037,6 +2260,7 @@ class PestManagementEventSerializer(EventSerializer):
     class Meta:
         model = PestManagementEvent
         fields = "__all__"
+
 
     def get_type(self, pest_event):
         type_display = pest_event.get_type_display()

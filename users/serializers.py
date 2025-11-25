@@ -185,6 +185,17 @@ class RegisterSerializer(BasicUserSerializer):
             "company_code",
         ]
 
+    def validate_email(self, value):
+        """
+        Validate email uniqueness - critical security validation
+        Following 2025 security best practices
+        """
+        if User.objects.filter(email=value.lower()).exists():
+            raise serializers.ValidationError(
+                "A user with this email address already exists. Please sign in instead."
+            )
+        return value.lower()
+
     def create(self, validated_data):
         from django.db import transaction
 
@@ -200,21 +211,10 @@ class RegisterSerializer(BasicUserSerializer):
                 user_type.upper(), 3
             )  # Default to CONSUMER if not found
 
-        try:
-            user = User.objects.get(email=validated_data["email"])
-            # If user exists and we have a company code, try to join them
-            if company_code:
-                with transaction.atomic():
-                    self._join_company_with_code(user, company_code)
-                    # 🚀 2025 Best Practice: Mark for company verification, activation still requires email verification
-                    user.company_verified = True
-                    user.save()
-                    logger.info(
-                        f"Existing user {user.email} joined company via code {company_code}, awaiting email verification"
-                    )
-        except ObjectDoesNotExist:
-            # Create user and join company in a single transaction
-            with transaction.atomic():
+        # 🚀 2025 Security Fix: Always create new user - email uniqueness validated above
+        # No more dangerous account access for existing users
+        with transaction.atomic():
+            try:
                 user = User.objects.create_user(**validated_data)
 
                 # Handle company code joining after user creation
@@ -226,6 +226,14 @@ class RegisterSerializer(BasicUserSerializer):
                     logger.info(
                         f"User {user.email} joined company via code {company_code}, awaiting email verification"
                     )
+                else:
+                    logger.info(f"New user {user.email} created, awaiting email verification")
+
+            except Exception as e:
+                logger.error(f"Error creating user {validated_data.get('email', 'unknown')}: {str(e)}")
+                raise serializers.ValidationError(
+                    "Unable to create account. Please try again or contact support if the problem persists."
+                )
 
         return user
 

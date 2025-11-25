@@ -1,0 +1,371 @@
+[
+  {
+    "test": "California Avocado - Organic Fertilizer",
+    "type": "FERTILIZER",
+    "calculated": 159.764,
+    "expected_range": [
+      180,
+      220
+    ],
+    "status": "acceptable",
+    "scenario": {
+      "chemical_type": "FE",
+      "volume_liters": 380,
+      "area_hectares": 1.8,
+      "npk_content": {
+        "N": 4,
+        "P": 4,
+        "K": 4
+      },
+      "application_method": "broadcast_organic",
+      "location": "California, USA",
+      "crop": "Avocado",
+      "timing": "Pre-flowering"
+    }
+  },
+  {
+    "test": "Brazil Coffee - NPK Granular",
+    "type": "FERTILIZER",
+    "calculated": 1207.802,
+    "expected_range": [
+      1100,
+      1300
+    ],
+    "status": "excellent",
+    "scenario": {
+      "chemical_type": "FE",
+      "volume_liters": 650,
+      "area_hectares": 3.2,
+      "npk_content": {
+        "N": 20,
+        "P": 5,
+        "K": 20
+      },
+      "application_method": "granular_incorporation",
+      "location": "Minas Gerais, Brazil",
+      "crop": "Coffee Arabica",
+      "timing": "Rainy season start"
+    }
+  },
+  {
+    "test": "Netherlands Greenhouse - Liquid Fertigation",
+    "type": "FERTILIZER",
+    "calculated": 489.822,
+    "expected_range": [
+      350,
+      420
+    ],
+    "status": "review",
+    "scenario": {
+      "chemical_type": "FE",
+      "volume_liters": 200,
+      "area_hectares": 0.5,
+      "npk_content": {
+        "N": 15,
+        "P": 15,
+        "K": 30
+      },
+      "application_method": "fertigation_drip",
+      "location": "Netherlands",
+      "crop": "Greenhouse Tomatoes",
+      "timing": "Growing season"
+    }
+  },
+  {
+    "test": "Kenya Tea - Foliar Micronutrients",
+    "type": "FERTILIZER",
+    "calculated": 17.415,
+    "expected_range": [
+      25,
+      45
+    ],
+    "status": "review",
+    "scenario": {
+      "chemical_type": "FE",
+      "volume_liters": 45,
+      "area_hectares": 2.1,
+      "npk_content": {
+        "N": 0,
+        "P": 0,
+        "K": 12
+      },
+      "application_method": "foliar_spray",
+      "location": "Kenya",
+      "crop": "Tea",
+      "timing": "Dry season supplement"
+    }
+  },
+  {
+    "test": "Australian Wheat - Anhydrous Ammonia",
+    "type": "FERTILIZER",
+    "calculated": 17347.972,
+    "expected_range": [
+      17800,
+      18200
+    ],
+    "status": "acceptable",
+    "scenario": {
+      "chemical_type": "FE",
+      "volume_liters": 2940,
+      "area_hectares": 25.0,
+      "npk_content": {
+        "N": 82,
+        "P": 0,
+        "K": 0
+      },
+      "application_method": "injection_deep",
+      "location": "Western Australia",
+      "crop": "Wheat",
+      "timing": "Pre-planting"
+    }
+  },
+  {
+    "test": "Mexico Maize - Integrated Pest Management",
+    "type": "PESTICIDE",
+    "calculated": 26.055,
+    "expected_range": [
+      15,
+      35
+    ],
+    "status": "excellent",
+    "scenario": {
+      "chemical_type": "PE",
+      "volume_liters": 8.5,
+      "area_hectares": 4.2,
+      "active_ingredient": "Bacillus thuringiensis",
+      "application_method": "foliar_spray",
+      "location": "Jalisco, Mexico",
+      "crop": "Maize",
+      "timing": "Bollworm control"
+    }
+  },
+  {
+    "test": "France Vineyard - Copper Fungicide",
+    "type": "FUNGICIDE",
+    "calculated": 36.682,
+    "expected_range": [
+      125,
+      165
+    ],
+    "status": "review",
+    "scenario": {
+      "chemical_type": "FU",
+      "volume_liters": 450,
+      "area_hectares": 6.8,
+      "active_ingredient": "Copper sulfate",
+      "application_method": "sprayer_tractor",
+      "location": "Bordeaux, France",
+      "crop": "Wine Grapes",
+      "timing": "Downy mildew prevention"
+    }
+  },
+  {
+    "test": "India Rice - Post-emergence Herbicide",
+    "type": "HERBICIDE",
+    "calculated": 29.669,
+    "expected_range": [
+      22,
+      38
+    ],
+    "status": "excellent",
+    "scenario": {
+      "chemical_type": "HE",
+      "volume_liters": 12.5,
+      "area_hectares": 5.5,
+      "active_ingredient": "Bispyribac-sodium",
+      "application_method": "knapsack_spray",
+      "location": "Punjab, India",
+      "crop": "Basmati Rice",
+      "timing": "Post-emergence weed control"
+    }
+  },
+  {
+    "test": "California Almonds - Mechanized Harvesting",
+    "type": "HARVESTING",
+    "calculated": 420.80845442536327,
+    "expected_range": [
+      420,
+      460
+    ],
+    "status": "excellent",
+    "scenario": {
+      "crop": "Almonds",
+      "area_hectares": 12.5,
+      "yield_kg": 3750,
+      "fuel_liters": 156,
+      "equipment": "Tree Shaker + Pickup Machine",
+      "location": "Central Valley, California",
+      "efficiency": "high"
+    }
+  },
+  {
+    "test": "Ethiopian Coffee - Hand Picking",
+    "type": "HARVESTING",
+    "calculated": 22.92866578599736,
+    "expected_range": [
+      20,
+      30
+    ],
+    "status": "excellent",
+    "scenario": {
+      "crop": "Coffee Arabica",
+      "area_hectares": 2.8,
+      "yield_kg": 1400,
+      "fuel_liters": 8.5,
+      "equipment": "Manual + Small Transport",
+      "location": "Sidamo, Ethiopia",
+      "efficiency": "normal"
+    }
+  },
+  {
+    "test": "Iowa Corn - Large Scale Planting",
+    "type": "PLANTING",
+    "calculated": 1146.433289299868,
+    "expected_range": [
+      1145,
+      1185
+    ],
+    "status": "excellent",
+    "scenario": {
+      "crop": "Corn/Maize",
+      "area_hectares": 85.0,
+      "seeds_planted": 680000,
+      "fuel_liters": 425,
+      "equipment": "16-row Planter + Large Tractor",
+      "location": "Iowa, USA",
+      "efficiency": "high"
+    }
+  },
+  {
+    "test": "Bangladesh Rice - Wet Season Planting",
+    "type": "PLANTING",
+    "calculated": 49.90356671070013,
+    "expected_range": [
+      45,
+      55
+    ],
+    "status": "excellent",
+    "scenario": {
+      "crop": "Rice",
+      "area_hectares": 3.2,
+      "seedlings_planted": 384000,
+      "fuel_liters": 18.5,
+      "equipment": "Small Tractor + Transplanter",
+      "location": "Sylhet, Bangladesh",
+      "efficiency": "normal"
+    }
+  },
+  {
+    "test": "Spain Olive - Drip Irrigation",
+    "type": "IRRIGATION",
+    "calculated": 86.31968295904888,
+    "expected_range": [
+      75,
+      95
+    ],
+    "status": "excellent",
+    "scenario": {
+      "crop": "Olives",
+      "area_hectares": 8.5,
+      "water_applied_liters": 85000,
+      "fuel_liters": 32,
+      "equipment": "Electric Pump + Drip System",
+      "location": "Andalusia, Spain",
+      "efficiency": "high"
+    }
+  },
+  {
+    "test": "New Zealand Kiwi - Precision Pruning",
+    "type": "PRUNING",
+    "calculated": 41.8110964332893,
+    "expected_range": [
+      35,
+      45
+    ],
+    "status": "excellent",
+    "scenario": {
+      "crop": "Kiwifruit",
+      "area_hectares": 4.2,
+      "fuel_liters": 15.5,
+      "equipment": "Pneumatic Tools + Small Tractor",
+      "location": "Bay of Plenty, New Zealand",
+      "efficiency": "high"
+    }
+  },
+  {
+    "test": "Large Tractor - Field Operations",
+    "type": "FUEL_CONSUMPTION",
+    "calculated": 1038.533685601057,
+    "expected_range": [
+      1035,
+      1075
+    ],
+    "status": "excellent",
+    "scenario": {
+      "equipment": "John Deere 8320R (320 HP)",
+      "fuel_liters": 385,
+      "hours_operated": 8.5,
+      "area_worked": 42.5,
+      "operation": "Deep tillage",
+      "location": "Saskatchewan, Canada",
+      "efficiency": "normal"
+    }
+  },
+  {
+    "test": "Irrigation Pump - Water Distribution",
+    "type": "FUEL_CONSUMPTION",
+    "calculated": 391.13606340819024,
+    "expected_range": [
+      390,
+      410
+    ],
+    "status": "excellent",
+    "scenario": {
+      "equipment": "Diesel Irrigation Pump (75 HP)",
+      "fuel_liters": 145,
+      "hours_operated": 18.0,
+      "area_irrigated": 15.5,
+      "operation": "Flood irrigation",
+      "location": "San Joaquin Valley, California",
+      "efficiency": "normal"
+    }
+  },
+  {
+    "test": "Combine Harvester - Grain Harvest",
+    "type": "FUEL_CONSUMPTION",
+    "calculated": 1672.4438573315722,
+    "expected_range": [
+      1665,
+      1705
+    ],
+    "status": "excellent",
+    "scenario": {
+      "equipment": "Case IH 8250 Combine",
+      "fuel_liters": 620,
+      "hours_operated": 12.0,
+      "area_harvested": 85.0,
+      "operation": "Wheat harvest",
+      "location": "Kansas, USA",
+      "efficiency": "high"
+    }
+  },
+  {
+    "test": "Small Tractor - Vegetable Farming",
+    "type": "FUEL_CONSUMPTION",
+    "calculated": 175.33685601056806,
+    "expected_range": [
+      170,
+      190
+    ],
+    "status": "excellent",
+    "scenario": {
+      "equipment": "Kubota M5-111 (105 HP)",
+      "fuel_liters": 65,
+      "hours_operated": 6.5,
+      "area_worked": 8.2,
+      "operation": "Cultivation",
+      "location": "Salinas Valley, California",
+      "efficiency": "normal"
+    }
+  }
+]

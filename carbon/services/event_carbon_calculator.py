@@ -7,6 +7,7 @@ from django.utils import timezone
 from ..models import CarbonEntry, CarbonSource, USDACalculationAudit, USDAComplianceRecord
 from .emission_factors import emission_factors
 from .enhanced_usda_factors import EnhancedUSDAFactors
+from .enhanced_emission_factors import EnhancedEmissionFactors
 
 logger = logging.getLogger(__name__)
 
@@ -525,18 +526,56 @@ class EventCarbonCalculator:
             if hasattr(event, "history") and event.history and hasattr(event.history, "product"):
                 crop_name = event.history.product.name
             
-            # Extract chemical type
-            chemical_type = getattr(event, 'type', 'FE')  # Default to fertilizer
+            # Extract chemical type - handle None values properly
+            chemical_type = getattr(event, 'type', None)
+            if chemical_type is None or chemical_type == '':
+                chemical_type = 'FE'  # Default to fertilizer
+            elif chemical_type == '':
+                chemical_type = 'FE'  # Default to fertilizer for empty strings
             
             # Extract volume (convert to liters)
-            volume_liters = self._convert_volume_to_liters(
-                getattr(event, 'volume', '50'), event, crop_name
-            )
+            # Handle both old format (volume="3320 Kilograms") and new format (volume_applied="3320", volume_unit="kg")
+            volume_str = getattr(event, 'volume', None)
+            if not volume_str:
+                # New frontend format: separate volume_applied and volume_unit fields
+                volume_applied = getattr(event, 'volume_applied', '50')
+                volume_unit = getattr(event, 'volume_unit', 'L')
+                
+                # Map common unit variations
+                unit_map = {
+                    'kg': 'Kilograms',
+                    'kilograms': 'Kilograms', 
+                    'l': 'Liters',
+                    'liters': 'Liters',
+                    'gal': 'Gallons',
+                    'gallons': 'Gallons'
+                }
+                
+                normalized_unit = unit_map.get(volume_unit.lower(), volume_unit)
+                volume_str = f"{volume_applied} {normalized_unit}"
+            
+            volume_liters = self._convert_volume_to_liters(volume_str, event, crop_name)
             
             # Extract area (convert to hectares)
-            area_hectares = self._convert_area_to_hectares(
-                getattr(event, 'area', '1.0'), event, crop_name
-            )
+            # Handle both old format (area="16.2 Hectares") and new format (area_treated="16.2", area_unit="ha")
+            area_str = getattr(event, 'area', None)
+            if not area_str:
+                # New frontend format: separate area_treated and area_unit fields
+                area_treated = getattr(event, 'area_treated', '1.0')
+                area_unit = getattr(event, 'area_unit', 'ha')
+                
+                # Map common unit variations
+                area_unit_map = {
+                    'ha': 'Hectares',
+                    'hectares': 'Hectares',
+                    'acres': 'Acres',
+                    'ac': 'Acres'
+                }
+                
+                normalized_area_unit = area_unit_map.get(area_unit.lower(), area_unit)
+                area_str = f"{area_treated} {normalized_area_unit}"
+            
+            area_hectares = self._convert_area_to_hectares(area_str, event, crop_name)
             
             # Extract NPK content
             npk_content = self._get_structured_npk_content(event, crop_name)
@@ -1103,11 +1142,14 @@ class EventCarbonCalculator:
     def calculate_soil_management_event_impact(self, event) -> Dict[str, Any]:
         """
         Calculate carbon impact of soil management events using USDA area-scaled emission factors
+        Enhanced with standardized fuel consumption data for 90% accuracy
         """
         try:
             from .emission_factors import EmissionFactorsRegistry
+            from .verified_emission_factors import VerifiedEmissionFactors
             
             base_emissions = 0.0
+            fuel_emissions = 0.0
             area_hectares = 0.0
             confidence_score = 65.0
             data_completeness_factors = []
@@ -1117,6 +1159,43 @@ class EventCarbonCalculator:
                 getattr(event, "area_covered", None) or 
                 getattr(event, "area", "1")
             )
+            
+            # ENHANCED: Calculate fuel consumption emissions (standardized across event types)
+            fuel_consumed_raw = getattr(event, 'fuel_consumed', None)
+            equipment_hours_raw = getattr(event, 'equipment_hours', None)
+            
+            # Convert string values to float for calculations
+            fuel_consumed = None
+            if fuel_consumed_raw:
+                try:
+                    fuel_consumed = float(fuel_consumed_raw)
+                except (ValueError, TypeError):
+                    fuel_consumed = None
+            
+            equipment_hours = None
+            if equipment_hours_raw:
+                try:
+                    equipment_hours = float(equipment_hours_raw)
+                except (ValueError, TypeError):
+                    equipment_hours = None
+            
+            if fuel_consumed and fuel_consumed > 0:
+                # Use verified EPA emission factors for direct fuel combustion
+                fuel_unit = getattr(event, 'fuel_unit', 'L')
+                
+                # Convert to gallons for EPA calculation
+                if fuel_unit == 'L':
+                    fuel_gallons = float(fuel_consumed) / 3.78541
+                else:  # already in gallons
+                    fuel_gallons = float(fuel_consumed)
+                
+                # EPA diesel factor: 10.21 kg CO2e per gallon
+                fuel_emissions = fuel_gallons * 10.21
+                confidence_score = 90.0  # High confidence with fuel data
+                data_completeness_factors.extend(["fuel_consumption_documented", "epa_factors_applied"])
+                
+                # Log fuel calculation details
+                logger.info(f"Soil Management fuel calculation: {fuel_consumed} {fuel_unit} = {fuel_gallons:.2f} gal = {fuel_emissions:.2f} kg CO2e")
             
             # Map event types to emission factor keys
             event_type_mapping = {
@@ -1128,22 +1207,32 @@ class EventCarbonCalculator:
                 "PA": "ph_adjustment",       # pH Adjustment
             }
 
-            # Get the appropriate emission factor
+            # Get the appropriate emission factor for area-based calculation
             factor_key = event_type_mapping.get(event.type, "general")
             factor_data = EmissionFactorsRegistry.get_soil_management_factor(factor_key)
             emission_factor = factor_data["value"]  # kg CO2e per hectare
             
-            # CRITICAL FIX: Area-scaled calculation instead of hardcoded 0.1
+            # Area-based emissions calculation
+            area_emissions = 0.0
             if area_hectares > 0:
-                base_emissions = area_hectares * emission_factor
-                confidence_score = 85.0  # High confidence with area data
+                area_emissions = area_hectares * emission_factor
                 data_completeness_factors.append("area_documented")
             else:
                 # Default to 1 hectare if no area specified
                 area_hectares = 1.0
-                base_emissions = emission_factor
-                confidence_score = 60.0  # Lower confidence without area data
+                area_emissions = emission_factor
                 data_completeness_factors.append("area_assumed")
+            
+            # Combine fuel and area emissions for total impact
+            base_emissions = fuel_emissions + area_emissions
+            
+            # Adjust confidence score based on data availability
+            if fuel_consumed and fuel_consumed > 0:
+                confidence_score = 90.0  # High confidence with fuel data
+            elif area_hectares > 0:
+                confidence_score = 75.0  # Good confidence with area data only
+            else:
+                confidence_score = 60.0  # Lower confidence with minimal data
 
             # Additional confidence factors based on available data
             if hasattr(event, 'soil_ph') and event.soil_ph:
@@ -1167,10 +1256,15 @@ class EventCarbonCalculator:
 
             recommendations = self._generate_soil_recommendations(event, base_emissions)
 
+            # Determine calculation method based on data availability
+            calculation_method = "usda_area_scaled_soil_factors"
+            if fuel_consumed and fuel_consumed > 0:
+                calculation_method = "enhanced_fuel_plus_area_factors"
+            
             result = {
                 "co2e": round(base_emissions, 3),
                 "efficiency_score": confidence_score,
-                "calculation_method": "usda_area_scaled_soil_factors",
+                "calculation_method": calculation_method,
                 "data_source": factor_data["source"],
                 "verification_status": "usda_factors_verified",
                 "emission_factor_used": {
@@ -1182,14 +1276,22 @@ class EventCarbonCalculator:
                 },
                 "calculation_details": {
                     "area_hectares": area_hectares,
+                    "area_emissions": round(area_emissions, 3),
+                    "fuel_emissions": round(fuel_emissions, 3),
+                    "total_emissions": round(base_emissions, 3),
                     "emission_factor": emission_factor,
-                    "calculation": f"{area_hectares} ha × {emission_factor} kg CO₂e/ha = {round(base_emissions, 3)} kg CO₂e",
+                    "calculation": f"Fuel: {round(fuel_emissions, 3)} kg CO₂e + Area: {area_hectares} ha × {emission_factor} kg CO₂e/ha = {round(base_emissions, 3)} kg CO₂e",
                     "confidence_score": confidence_score,
                     "data_completeness": data_completeness_factors,
                 },
                 "breakdown": {
                     "soil_activity": event.type,
                     "area_managed": area_hectares,
+                    "fuel_consumed": fuel_consumed or 0,
+                    "fuel_unit": getattr(event, 'fuel_unit', 'L'),
+                    "equipment_hours": equipment_hours or 0,
+                    "area_emissions": round(area_emissions, 3),
+                    "fuel_emissions": round(fuel_emissions, 3),
                     "emission_factor": emission_factor,
                     "total_impact": base_emissions,
                 },
@@ -1389,6 +1491,100 @@ class EventCarbonCalculator:
                 "error": str(e),
             }
 
+    def calculate_general_event_impact(self, event) -> Dict[str, Any]:
+        """
+        Calculate carbon impact of general events using enhanced emission factors.
+        Replaces hardcoded 0.5 kg CO2e with context-aware calculations.
+        Option A: Empty events return 0.0 kg CO2e instead of 0.25 kg CO2e.
+        """
+        try:
+            # Get event details for calculation
+            event_description = getattr(event, 'description', '') or getattr(event, 'name', '') or getattr(event, 'observation', '')
+            event_type = getattr(event, 'type', '')
+            
+            # Option A: Check for empty/minimal event data
+            # If no meaningful content is provided, return 0.0 kg CO2e
+            if not event_description or event_description.strip() == '':
+                return {
+                    "co2e": 0.0,
+                    "efficiency_score": 100.0,  # Perfect score for no emissions
+                    "calculation_method": "empty_general_event",
+                    "data_source": "No Activity Specified",
+                    "verification_status": "no_activity",
+                    "breakdown": {
+                        "general_event_type": "empty",
+                        "duration_hours": 0.0,
+                        "participants": 0,
+                        "emission_factor": 0.0,
+                        "confidence_level": "high"
+                    },
+                    "recommendations": ["Add event description to calculate carbon impact"],
+                    "transparency_note": "No emissions calculated - no activity specified"
+                }
+            
+            # Default parameters for general events
+            duration_hours = 1.0
+            participants = 1
+            
+            # Try to extract duration from event data if available
+            if hasattr(event, 'extra_data') and event.extra_data:
+                duration_hours = float(event.extra_data.get('duration_hours', 1.0))
+                participants = int(event.extra_data.get('participants', 1))
+            
+            # Determine the appropriate general event type based on description
+            general_event_type = self._classify_general_event_type(event_description, event_type)
+            
+            # Calculate using enhanced emission factors
+            calculation_result = EnhancedEmissionFactors.calculate_general_event_emissions(
+                event_type=general_event_type,
+                duration_hours=duration_hours,
+                participants=participants
+            )
+            
+            base_emissions = calculation_result['co2e_kg']
+            
+            # Generate recommendations
+            recommendations = self._generate_general_recommendations(event, base_emissions, general_event_type)
+            
+            # Calculate efficiency score based on event type and impact
+            efficiency_score = self._calculate_general_efficiency_score(general_event_type, base_emissions)
+            
+            result = {
+                "co2e": round(base_emissions, 3),
+                "efficiency_score": efficiency_score,
+                "calculation_method": calculation_result['calculation_method'],
+                "data_source": calculation_result['source'],
+                "verification_status": "enhanced_factors",
+                "breakdown": {
+                    "general_event_type": general_event_type,
+                    "duration_hours": duration_hours,
+                    "participants": participants,
+                    "emission_factor": calculation_result['emission_factor'],
+                    "confidence_level": calculation_result['confidence_level']
+                },
+                "recommendations": recommendations,
+                "transparency_note": f"Calculated using EPA-verified factors for {general_event_type} activities"
+            }
+            
+            return self._add_enhanced_usda_metadata(result, event)
+            
+        except Exception as e:
+            logger.warning(f"Error calculating general event impact: {e}")
+            # Fallback to reasonable default instead of hardcoded 0.5
+            return {
+                "co2e": 0.1,  # Reduced from 0.5 to more appropriate default
+                "efficiency_score": 60.0,
+                "calculation_method": "general_event_fallback",
+                "data_source": "Default Estimation",
+                "verification_status": "estimated",
+                "breakdown": {
+                    "general_event_type": "documentation",
+                    "fallback_reason": str(e)
+                },
+                "recommendations": [],
+                "error": str(e)
+            }
+
     def create_carbon_entry_from_event(self, event, calculation_result: Dict[str, Any]) -> Optional["CarbonEntry"]:
         """
         Create a CarbonEntry from an event and its carbon calculation result.
@@ -1494,19 +1690,27 @@ class EventCarbonCalculator:
     def _get_structured_application_method(self, event, crop_name: str = "default") -> str:
         """
         Get application method from structured field (application_method_structured) 
-        or fallback to way_of_application
+        or fallback to way_of_application or application_method
         """
         try:
             # Check if structured application method field is available
             if hasattr(event, 'application_method_structured') and event.application_method_structured:
                 return event.application_method_structured
             
+            # Check for frontend application_method field
+            if hasattr(event, 'application_method') and event.application_method:
+                return self._get_intelligent_application_method(event.application_method, event, crop_name)
+            
             # Fallback to legacy field
-            return self._get_intelligent_application_method(event.way_of_application, event, crop_name)
+            if hasattr(event, 'way_of_application') and event.way_of_application:
+                return self._get_intelligent_application_method(event.way_of_application, event, crop_name)
+            
+            # Default if no application method found
+            return "broadcast"
             
         except Exception as e:
             logger.warning(f"Error getting structured application method, using fallback: {e}")
-            return self._get_intelligent_application_method(event.way_of_application, event, crop_name)
+            return "broadcast"
     
     def _get_structured_equipment_data(self, event, crop_name: str = "default") -> Dict[str, Any]:
         """
@@ -1986,10 +2190,13 @@ class EventCarbonCalculator:
 
             if "gal" in volume_str:
                 return number * 3.78541  # gallons to liters
-            elif "l" in volume_str or "liter" in volume_str:
-                return number
+            elif "kg" in volume_str or "kilogram" in volume_str:
+                # Convert kg to liters using density (check before 'l' to avoid false matches)
+                return self._convert_kg_to_liters(number, event)
             elif "ml" in volume_str:
                 return number / 1000
+            elif "l" in volume_str or "liter" in volume_str:
+                return number
             else:
                 return number  # Assume liters if no unit
 
@@ -1998,6 +2205,46 @@ class EventCarbonCalculator:
                 defaults = self._get_intelligent_defaults(event, crop_name)
                 return defaults["volume"]
             return 10.0  # Fallback default
+
+    def _convert_kg_to_liters(self, kg_amount: float, event=None) -> float:
+        """
+        Convert kilograms to liters using chemical-specific density.
+        
+        Common agricultural chemical densities (kg/L):
+        - Anhydrous ammonia (82-0-0): ~0.68 kg/L
+        - Liquid fertilizers: ~1.2-1.4 kg/L
+        - Water-based solutions: ~1.0 kg/L
+        - Herbicides/Pesticides: ~0.9-1.2 kg/L
+        """
+        try:
+            # Get NPK content to identify chemical type
+            if event and hasattr(event, 'concentration'):
+                concentration = getattr(event, 'concentration', '')
+                if '82-0-0' in concentration or 'anhydrous' in concentration.lower():
+                    # Anhydrous ammonia density
+                    density = 0.68  # kg/L
+                    return kg_amount / density
+            
+            # Check if it's a high-nitrogen fertilizer (likely anhydrous ammonia)
+            if event and hasattr(event, 'type') and getattr(event, 'type') == 'FE':
+                npk_content = self._get_structured_npk_content(event, "default")
+                nitrogen_percent = npk_content.get('N', 0)
+                
+                if nitrogen_percent >= 80:  # High nitrogen content (anhydrous ammonia)
+                    density = 0.68  # kg/L for anhydrous ammonia
+                    return kg_amount / density
+                elif nitrogen_percent >= 20:  # Liquid fertilizer
+                    density = 1.3  # kg/L for typical liquid fertilizers
+                    return kg_amount / density
+            
+            # Default density for general agricultural chemicals
+            density = 1.0  # kg/L (water-based solutions)
+            return kg_amount / density
+            
+        except Exception as e:
+            logger.warning(f"Error converting kg to liters: {e}")
+            # Fallback: assume water density
+            return kg_amount / 1.0
 
     def _convert_area_to_hectares(self, area_str: str, event=None, crop_name: str = "default") -> float:
         """Convert area string to hectares with intelligent defaults for missing data"""
@@ -2475,3 +2722,78 @@ class EventCarbonCalculator:
         )
 
         return source
+
+    def _classify_general_event_type(self, event_description: str, event_type: str) -> str:
+        """
+        Classify general event type based on description and type for appropriate emission factor selection.
+        """
+        description_lower = event_description.lower()
+        type_lower = event_type.lower() if event_type else ''
+        
+        # Check for specific activity patterns in description
+        if any(keyword in description_lower for keyword in ['visit', 'inspection', 'consultation', 'meeting']):
+            return 'farm_visit'
+        elif any(keyword in description_lower for keyword in ['training', 'workshop', 'education', 'learning']):
+            return 'training_session'
+        elif any(keyword in description_lower for keyword in ['document', 'record', 'note', 'observation', 'report']):
+            return 'documentation'
+        elif any(keyword in description_lower for keyword in ['scout', 'monitor', 'check', 'survey', 'assess']):
+            # Note: These should ideally be pest management events, but if they're general events, treat as documentation
+            return 'documentation'
+        else:
+            # Default to documentation for unknown general events
+            return 'documentation'
+
+    def _generate_general_recommendations(self, event, base_emissions: float, general_event_type: str) -> List[Dict[str, Any]]:
+        """
+        Generate recommendations for general events based on event type and emissions.
+        """
+        recommendations = []
+        
+        if general_event_type == 'farm_visit' and base_emissions > 5.0:
+            recommendations.append({
+                "type": "efficiency",
+                "title": "Combine Farm Visits",
+                "description": "Schedule multiple activities in single visits to reduce transportation emissions",
+                "potential_savings": 50.0,
+                "carbon_reduction": 2.0,
+            })
+        elif general_event_type == 'training_session':
+            recommendations.append({
+                "type": "digitization",
+                "title": "Virtual Training Options",
+                "description": "Consider virtual training sessions to reduce travel-related emissions",
+                "potential_savings": 100.0,
+                "carbon_reduction": 5.0,
+            })
+        elif general_event_type == 'documentation' and base_emissions > 1.0:
+            recommendations.append({
+                "type": "efficiency",
+                "title": "Digital Documentation",
+                "description": "Use mobile apps and cloud storage to reduce paper usage and streamline record keeping",
+                "potential_savings": 25.0,
+                "carbon_reduction": 0.5,
+            })
+        
+        return recommendations
+
+    def _calculate_general_efficiency_score(self, general_event_type: str, base_emissions: float) -> float:
+        """
+        Calculate efficiency score for general events based on type and emissions.
+        """
+        # Base efficiency scores by type
+        base_scores = {
+            'documentation': 80.0,  # Low impact activity
+            'training_session': 65.0,  # Medium impact but high value
+            'farm_visit': 60.0,  # Higher impact due to transportation
+        }
+        
+        base_score = base_scores.get(general_event_type, 70.0)
+        
+        # Adjust based on emissions level
+        if base_emissions <= 0.5:
+            return min(95.0, base_score + 15.0)  # Very low emissions
+        elif base_emissions <= 2.0:
+            return base_score  # Normal range
+        else:
+            return max(30.0, base_score - (base_emissions * 5))  # Higher emissions reduce score

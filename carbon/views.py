@@ -855,14 +855,18 @@ class OptimizedCarbonCalculator:
         return fallback_factors.get(crop_type.lower(), fallback_factors["fertilizer"])
 
     def calculate_chemical_impact_optimized(self, processed_event: Dict[str, Any]) -> Dict[str, Any]:
-        """FIXED: Now uses proper EPA/USDA emission factors instead of simple multiplication"""
+        """FIXED: Now uses proper EPA/USDA emission factors with comprehensive debug logging"""
         from carbon.services.verified_emission_factors import VerifiedEmissionFactors
+        import logging
+        
+        logger = logging.getLogger(__name__)
         
         # Extract processed data (now with proper unit conversions)
         chemical_type = processed_event.get("chemical_type", "FE")
         volume_liters = processed_event.get("volume", 10)
         area_hectares = processed_event.get("area", 1.0)  # Now properly converted to hectares
         application_method = processed_event.get("application_method", "broadcast")
+        
         
         # Parse NPK content - only fertilizers have NPK
         concentration = processed_event.get("concentration", "0-0-0")
@@ -884,6 +888,7 @@ class OptimizedCarbonCalculator:
         
         # Use EPA/USDA verified emission factors (same as standard endpoint)
         try:
+            
             calculation_result = VerifiedEmissionFactors.calculate_chemical_application_emissions(
                 chemical_type=chemical_type,
                 volume_liters=volume_liters,
@@ -897,11 +902,20 @@ class OptimizedCarbonCalculator:
             breakdown = calculation_result['breakdown']
             calculation_method = calculation_result['calculation_method']
             
+            # Add the volume_applied_liters to the response for calculations
+            volume_applied_liters = breakdown.get('volume_applied_liters', volume_liters)
+            
             # Calculate efficiency score based on EPA confidence
             confidence_level = breakdown.get('confidence_level', 0.90)
             efficiency_score = confidence_level * 100
             
-            return {
+            # INCLUDE ORIGINAL USER INPUT FOR PROPER DISPLAY
+            original_volume = processed_event.get('original_volume', volume_applied_liters)
+            original_volume_unit = processed_event.get('original_volume_unit', 'L')
+            original_area = processed_event.get('original_area', processed_event.get('area', 1.0))
+            original_area_unit = processed_event.get('original_area_unit', 'hectares')
+            
+            result = {
                 "co2e": round(co2e, 3),
                 "efficiency_score": round(efficiency_score, 1),
                 "calculation_method": f"optimized_{calculation_method}",
@@ -912,13 +926,24 @@ class OptimizedCarbonCalculator:
                 "application_fuel_liters": breakdown.get('application_fuel_liters', 0),
                 "application_fuel_gallons": breakdown.get('application_fuel_gallons', 0),
                 "application_emissions_kg_co2e": breakdown.get('application_emissions_kg_co2e', 0),
+                "volume_applied_liters": volume_applied_liters,  # Converted volume for calculations
+                "nitrogen_kg": breakdown.get('nitrogen_kg', 0),
+                # ORIGINAL USER INPUT FOR DISPLAY PURPOSES
+                "original_volume_applied": original_volume,  # What user actually entered
+                "original_volume_unit": original_volume_unit,  # Unit user selected
+                "original_area_treated": original_area,  # Original area input
+                "original_area_unit": original_area_unit,  # Original area unit
             }
+            
+            # Log essential calculation results for troubleshooting
+            logger.info(f"✅ Carbon calculation completed: {result['co2e']} kg CO2e for {original_volume} {original_volume_unit}")
+            
+            return result
             
         except Exception as e:
             # Fallback to prevent breaking existing functionality
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"EPA calculation failed in optimized endpoint: {e}")
+            logger.error(f"❌ EPA calculation failed in optimized endpoint: {e}")
+            logger.error(f"   Traceback: {str(e)}")
             
             return {
                 "co2e": 0.0,
@@ -1014,22 +1039,52 @@ class OptimizedCarbonCalculator:
         }
 
     def calculate_general_impact_optimized(self, processed_event: Dict[str, Any]) -> Dict[str, Any]:
-        """Optimized general event calculation"""
-        # Simple but fast calculation for general events
-        description = processed_event.get("description", "").lower()
-
-        co2e = 0.5  # Base value
-        if "fuel" in description or "diesel" in description:
-            co2e = 2.0
-        elif "organic" in description or "compost" in description:
-            co2e = -0.3  # Carbon sequestration
-
-        return {
-            "co2e": round(co2e, 3),
-            "efficiency_score": 60.0,
-            "calculation_method": "optimized_general",
-            "usda_verified": False,
-        }
+        """
+        Optimized general event calculation using enhanced EventCarbonCalculator.
+        Replaces hardcoded 0.5 kg CO2e with context-aware EPA-verified calculations.
+        """
+        try:
+            # Use the new EventCarbonCalculator with proper emission factors
+            from .services.event_carbon_calculator import EventCarbonCalculator
+            
+            # Create a mock event object from processed_event data
+            class MockGeneralEvent:
+                def __init__(self, processed_data):
+                    self.description = processed_data.get("description", "")
+                    self.name = processed_data.get("name", "")
+                    self.observation = processed_data.get("observation", "")
+                    self.type = processed_data.get("type", "general")
+                    self.extra_data = processed_data.get("extra_data", {})
+            
+            mock_event = MockGeneralEvent(processed_event)
+            
+            # Use the enhanced calculator
+            calculator = EventCarbonCalculator()
+            result = calculator.calculate_general_event_impact(mock_event)
+            
+            # Convert to optimized response format
+            return {
+                "co2e": round(result.get("co2e", 0), 3),
+                "efficiency_score": result.get("efficiency_score", 60.0),
+                "calculation_method": f"optimized_{result.get('calculation_method', 'general_enhanced')}",
+                "usda_verified": True,  # Now using EPA/USDA verified factors
+                "data_source": result.get("data_source", "EPA/USDA Enhanced Factors"),
+                "verification_status": result.get("verification_status", "enhanced_factors")
+            }
+            
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Enhanced general calculation failed, using fallback: {e}")
+            
+            # Improved fallback (reduced from 0.5 to 0.25)
+            return {
+                "co2e": 0.25,  # Reduced fallback value
+                "efficiency_score": 60.0,
+                "calculation_method": "optimized_general_fallback",
+                "usda_verified": False,
+                "fallback_reason": str(e)
+            }
 
     def calculate_weather_event_impact(self, processed_event: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -1046,6 +1101,81 @@ class OptimizedCarbonCalculator:
             "usda_verified": False,
             "transparency_note": "Weather events document environmental conditions for agricultural transparency"
         }
+
+    def calculate_pest_management_event_impact(self, processed_event: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Calculate carbon impact for pest management events.
+        
+        Pest management events focused on transparency and sustainable practices.
+        Uses fixed emission factors based on pest management type.
+        """
+        from carbon.services.event_carbon_calculator import EventCarbonCalculator
+        
+        # Create a mock event object with the required attributes for EventCarbonCalculator
+        class MockPestEvent:
+            def __init__(self, event_data):
+                self.type = event_data.get('pest_type', 'SC')  # Map pest_type back to type
+                self.pest_species = event_data.get('pest_species', '')
+                self.pest_pressure_level = event_data.get('pest_pressure_level', '')
+                self.beneficial_species = event_data.get('beneficial_species', '')
+                self.release_quantity = event_data.get('release_quantity', '')
+                self.trap_count = event_data.get('trap_count', 0)
+                self.damage_percentage = event_data.get('damage_percentage', 0)
+                self.action_threshold_met = event_data.get('action_threshold_met', False)
+                self.imp_strategy = event_data.get('imp_strategy', '')
+                # Add a minimal id for USDA metadata (prevents attribute error)
+                self.id = event_data.get('id', 1)
+        
+        mock_event = MockPestEvent(processed_event)
+        
+        # Use the standard calculator for pest management logic
+        calculator = EventCarbonCalculator()
+        return calculator.calculate_pest_management_event_impact(mock_event)
+
+    def calculate_soil_management_event_impact(self, processed_event: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Calculate carbon impact for soil management events.
+        
+        Soil management events focused on sustainable agriculture practices.
+        Uses USDA emission factors based on soil management type and area.
+        """
+        from carbon.services.event_carbon_calculator import EventCarbonCalculator
+        
+        # Create a mock event object with the required attributes for EventCarbonCalculator
+        class MockSoilEvent:
+            def __init__(self, event_data):
+                # Map processed event data back to the format expected by EventCarbonCalculator
+                self.type = event_data.get('soil_type', 'ST')  # Map soil_type back to type
+                self.area = event_data.get('area', '1.0')
+                self.area_covered = event_data.get('area_covered', '1.0')
+                self.area_unit = event_data.get('area_unit', 'hectares')
+                self.soil_ph = event_data.get('soil_ph')
+                self.organic_matter_percentage = event_data.get('organic_matter_percentage')
+                self.soil_texture = event_data.get('soil_texture')
+                self.soil_moisture = event_data.get('soil_moisture')
+                self.depth = event_data.get('depth', '30')
+                self.depth_unit = event_data.get('depth_unit', 'cm')
+                self.equipment_used = event_data.get('equipment_used', '')
+                self.method = event_data.get('method', '')
+                # Fuel consumption fields (converted to proper types)
+                self.fuel_consumed = event_data.get('fuel_consumed')
+                self.fuel_unit = event_data.get('fuel_unit', 'L')
+                self.equipment_hours = event_data.get('equipment_hours')
+                # Tillage-specific fields
+                self.tillage_type = event_data.get('tillage_type')
+                self.tillage_intensity = event_data.get('tillage_intensity')
+                self.tillage_direction = event_data.get('tillage_direction')
+                self.residue_management = event_data.get('residue_management')
+                self.weather_conditions = event_data.get('weather_conditions')
+                self.temperature_range = event_data.get('temperature_range')
+                # Add a minimal id for USDA metadata (prevents attribute error)
+                self.id = event_data.get('id', 1)
+        
+        mock_event = MockSoilEvent(processed_event)
+        
+        # Use the standard calculator for soil management logic
+        calculator = EventCarbonCalculator()
+        return calculator.calculate_soil_management_event_impact(mock_event)
 
 
 # Initialize calculator singleton
@@ -1089,6 +1219,10 @@ class OptimizedEventProcessor:
             processed.update(cls._process_production_event(event_data))
         elif event_type == "equipment":
             processed.update(cls._process_equipment_event(event_data))
+        elif event_type == "soil_management":
+            processed.update(cls._process_soil_management_event(event_data))
+        elif event_type == "pest_management":
+            processed.update(cls._process_pest_management_event(event_data))
 
         return processed
 
@@ -1150,17 +1284,56 @@ class OptimizedEventProcessor:
 
     @classmethod
     def _process_chemical_event(cls, event_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Process chemical event data efficiently WITH PROPER UNIT CONVERSION"""
+        """Process chemical event data efficiently WITH PROPER UNIT CONVERSION AND DEBUG LOGGING"""
+        import logging
+        from carbon.services.verified_emission_factors import VerifiedEmissionFactors
+        
+        logger = logging.getLogger(__name__)
+        
         # FIELD NAME COMPATIBILITY: Support both naming conventions
         # Frontend form uses: volume_applied, area_treated, application_method
         # Backend/stored events use: volume, area, way_of_application
         volume_value = event_data.get("volume_applied") or event_data.get("volume", 10)
+        volume_unit = event_data.get("volume_unit", "L")  # CRITICAL: Get the volume unit
         area_value = event_data.get("area_treated") or event_data.get("area", 1.0)
+        area_unit = event_data.get("area_unit", "acres")
         application_method = event_data.get("application_method") or event_data.get("way_of_application", "broadcast")
+        concentration = event_data.get("concentration", "10-10-10")
+        
+        # DEBUG LOGGING: Log all incoming values
+        
+        # CRITICAL FIX: Convert volume from kg to liters if needed
+        volume_value = float(volume_value)
+        volume_liters = volume_value  # Default assumption: already in liters
+        
+        if volume_unit.lower() in ["kg", "kilogram", "kilograms"]:
+            # Need to convert kg to liters using fertilizer density
+            logger.info(f"   🚨 VOLUME CONVERSION NEEDED: {volume_value} kg → ? L")
+            
+            # Parse NPK content to determine density
+            if "-" in concentration:
+                parts = concentration.split("-")
+                npk_content = {
+                    "N": float(parts[0]) if len(parts) > 0 else 0,
+                    "P": float(parts[1]) if len(parts) > 1 else 0,
+                    "K": float(parts[2]) if len(parts) > 2 else 0,
+                }
+            else:
+                npk_content = {"N": 0, "P": 0, "K": 0}
+            
+            # Get accurate fertilizer density
+            density_kg_per_l = VerifiedEmissionFactors._get_fertilizer_density(npk_content, application_method)
+            volume_liters = volume_value / density_kg_per_l  # Convert kg to L
+            
+            # Calculate density for kg to L conversion
+            # Convert kg to liters using density
+            pass
+        else:
+            # Volume already in correct unit
+            pass
         
         # CRITICAL FIX: Convert area from acres to hectares
         area_value = float(area_value)
-        area_unit = event_data.get("area_unit", "acres")
         
         # Convert area to hectares for EPA calculations
         if area_unit.lower() in ["acre", "acres"]:
@@ -1172,15 +1345,25 @@ class OptimizedEventProcessor:
         else:
             # Default to hectares if unit not specified
             area_hectares = area_value
-            
-        return {
+            logger.info(f"   ⚠️ Unknown area unit '{area_unit}', assuming hectares: {area_hectares} ha")
+        
+        processed_data = {
             "chemical_type": event_data.get("type", "FE"),
-            "volume": float(volume_value),
+            "volume": volume_liters,  # NOW PROPERLY CONVERTED TO LITERS
             "area": area_hectares,  # NOW IN HECTARES
             "area_unit": "hectares",  # Track converted unit
-            "concentration": event_data.get("concentration", "10-10-10"),
+            "concentration": concentration,
             "application_method": application_method,
+            # PRESERVE ORIGINAL USER INPUT FOR DISPLAY
+            "original_volume": volume_value,  # Original user input
+            "original_volume_unit": volume_unit,  # Original unit selected by user
+            "original_area": area_value,  # Original area input
+            "original_area_unit": area_unit,  # Original area unit
         }
+        
+        # Event processing complete
+        
+        return processed_data
 
     @classmethod
     def _process_production_event(cls, event_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -1416,11 +1599,73 @@ class OptimizedEventProcessor:
     @classmethod
     def _process_equipment_event(cls, event_data: Dict[str, Any]) -> Dict[str, Any]:
         """Process equipment event data efficiently"""
+        # FIXED: Use fuel_consumed from the actual payload instead of fuel_amount
+        fuel_consumed = event_data.get("fuel_consumed") or event_data.get("fuel_amount", 5)
+        fuel_unit = event_data.get("fuel_unit", "L")
+        
+        # Convert fuel to liters if needed
+        fuel_liters = float(fuel_consumed)
+        if fuel_unit == "gal":
+            fuel_liters *= 3.78541  # gallons to liters
+        elif fuel_unit == "kg":
+            fuel_liters *= 1.2  # approximate kg to L for diesel
+            
         return {
             "equipment_type": event_data.get("type", "FC"),
             "fuel_type": event_data.get("fuel_type", "diesel"),
-            "fuel_amount_liters": float(event_data.get("fuel_amount", 5)),
-            "hours_used": float(event_data.get("hours_used", 2)),
+            "fuel_amount_liters": fuel_liters,
+            "hours_used": float(event_data.get("hours_operated") or event_data.get("hours_used", 2)),
+        }
+
+    @classmethod
+    def _process_soil_management_event(cls, event_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Process soil management event data efficiently"""
+        # Convert area from string to float, handle both area_worked and area fields
+        area_str = event_data.get("area_worked") or event_data.get("area", "1.0")
+        try:
+            area_value = float(area_str)
+        except (ValueError, TypeError):
+            area_value = 1.0
+        
+        return {
+            "soil_type": event_data.get("type", "ST"),  # Default to Soil Testing
+            "area": str(area_value),
+            "area_covered": str(area_value),  # For calculator compatibility
+            "area_unit": event_data.get("area_unit", "hectares"),
+            "soil_ph": event_data.get("soil_ph"),
+            "organic_matter_percentage": event_data.get("organic_matter_percentage"),
+            "soil_texture": event_data.get("soil_texture"),
+            "soil_moisture": event_data.get("soil_moisture"), 
+            "depth": event_data.get("depth", "30"),
+            "depth_unit": event_data.get("depth_unit", "cm"),
+            "equipment_used": event_data.get("equipment_used", ""),
+            "method": event_data.get("method", ""),
+            # Fuel consumption fields for standardized calculation (convert to float)
+            "fuel_consumed": float(event_data.get("fuel_consumed", 0)) if event_data.get("fuel_consumed") else None,
+            "fuel_unit": event_data.get("fuel_unit", "L"),
+            "equipment_hours": float(event_data.get("equipment_hours", 0)) if event_data.get("equipment_hours") else None,
+            # Tillage-specific fields
+            "tillage_type": event_data.get("tillage_type"),
+            "tillage_intensity": event_data.get("tillage_intensity"),
+            "tillage_direction": event_data.get("tillage_direction"),
+            "residue_management": event_data.get("residue_management"),
+            "weather_conditions": event_data.get("weather_conditions"),
+            "temperature_range": event_data.get("temperature_range"),
+        }
+
+    @classmethod
+    def _process_pest_management_event(cls, event_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Process pest management event data efficiently"""
+        return {
+            "pest_type": event_data.get("type", "SC"),  # Default to Scouting
+            "pest_species": event_data.get("pest_species", ""),
+            "pest_pressure_level": event_data.get("pest_pressure_level", ""),
+            "beneficial_species": event_data.get("beneficial_species", ""),
+            "release_quantity": event_data.get("release_quantity", ""),
+            "trap_count": int(event_data.get("trap_count", 0)) if event_data.get("trap_count") else 0,
+            "damage_percentage": float(event_data.get("damage_percentage", 0)) if event_data.get("damage_percentage") else 0,
+            "action_threshold_met": bool(event_data.get("action_threshold_met", False)),
+            "ipm_strategy": event_data.get("ipm_strategy", ""),
         }
 
 
@@ -4209,13 +4454,34 @@ class PublicProductionViewSet(viewsets.ViewSet):
 
                     # Add event-type specific fields for better transparency
                     if event_category == "chemical":
+                        # 🔧 DEBUG: Log chemical event field extraction for event 178
+                        if event.id == 178:
+                            print(f"🔧 BACKEND DEBUG - Event 178 field extraction:")
+                            area_val = getattr(event, 'area', 'NO_FIELD')
+                            timing_val = getattr(event, 'application_timing', 'NO_FIELD')
+                            method_val = getattr(event, 'way_of_application', 'NO_FIELD')
+                            print(f"   event.area = '{area_val}' (type: {type(area_val)})")
+                            print(f"   event.application_timing = '{timing_val}' (type: {type(timing_val)})")
+                            print(f"   event.way_of_application = '{method_val}' (type: {type(method_val)})")
+                            print(f"   Current event_data.area = '{event_data.get('area', 'NOT_SET')}'")
+                            print(f"   Full event object type: {type(event)}")
+                        
                         # Add chemical-specific agricultural context fields
+                        # 🔧 CRITICAL FIX: Ensure None values from getattr don't become empty strings
+                        area_value = getattr(event, "area", None)
+                        timing_value = getattr(event, "application_timing", None) 
+                        method_value = getattr(event, "way_of_application", None)
+                        
+                        # If area was already set in event_data and is None, but database has value, preserve the database value
+                        if event_data.get("area") is None and area_value is not None:
+                            event_data["area"] = area_value
+                            
                         event_data.update({
                             "weather_conditions": getattr(event, "weather_conditions", None),
-                            "application_timing": getattr(event, "application_timing", None),
+                            "application_timing": timing_value,
                             "target_pest_disease": getattr(event, "target_pest_disease", None),
-                            "way_of_application": getattr(event, "way_of_application", None),
-                            "application_method": getattr(event, "way_of_application", None),  # Alias for frontend compatibility
+                            "way_of_application": method_value,
+                            "application_method": method_value,  # Alias for frontend compatibility
                             "target_purpose": getattr(event, "target_pest_disease", None),    # Alias for frontend compatibility
                             "npk_ratio": self._get_npk_ratio(event),
                             "active_ingredient": getattr(event, "commercial_name", None),
@@ -4225,6 +4491,15 @@ class PublicProductionViewSet(viewsets.ViewSet):
                             "phosphorus_percentage": getattr(event, "phosphorus_percentage", None),
                             "potassium_percentage": getattr(event, "potassium_percentage", None),
                         })
+                        
+                        # 🔧 DEBUG: Log final event_data for event 178
+                        if event.id == 178:
+                            print(f"🔧 BACKEND DEBUG - Event 178 FINAL event_data:")
+                            print(f"   event_data['area'] = '{event_data.get('area', 'NOT_SET')}'")
+                            print(f"   event_data['application_timing'] = '{event_data.get('application_timing', 'NOT_SET')}'")
+                            print(f"   event_data['way_of_application'] = '{event_data.get('way_of_application', 'NOT_SET')}'")
+                            print(f"   event_data['application_method'] = '{event_data.get('application_method', 'NOT_SET')}'")
+                            print("🔧 Full event_data keys:", list(event_data.keys()))
                     elif event_category == "production":
                         # Add production-specific fields
                         event_data.update({
@@ -4233,12 +4508,37 @@ class PublicProductionViewSet(viewsets.ViewSet):
                             "quality_grade": getattr(event, "quality_grade", None),
                         })
                     elif event_category == "equipment":
-                        # Add equipment-specific fields
+                        # Add equipment-specific fields - FIXED TO MATCH EquipmentEvent MODEL
+                        # CRITICAL: Include name field for operation name display
+                        operation_name = getattr(event, "name", None) or getattr(event, "operation_name", None)
+                        operation_type = getattr(event, "type", None)
+                        
+                        # DEBUG: Add debug info to the API response for Equipment events
+                        print(f"🔧 BACKEND DEBUG Equipment Event {event.id}: type='{operation_type}', name='{operation_name}'")
+                        
                         event_data.update({
-                            "fuel_consumption": getattr(event, "fuel_consumption", None),
-                            "operation_duration": getattr(event, "operation_duration", None),
-                            "maintenance_status": getattr(event, "maintenance_status", None),
+                            "name": operation_name,  # CRITICAL: Operation name for title display
+                            "operation_name": operation_name,  # Frontend compatibility alias
+                            "fuel_consumed": getattr(event, "fuel_consumed", None),
+                            "fuel_unit": getattr(event, "fuel_unit", None),
+                            "hours_operated": getattr(event, "hours_operated", None),
+                            "area_worked": getattr(event, "area_worked", None),
+                            "area_unit": getattr(event, "area_unit", None),
+                            "equipment_type": getattr(event, "equipment_type_structured", None) or getattr(event, "equipment_name", None),
+                            "operation_type": operation_type,
+                            # DEBUG: Add debug info to API response
+                            "debug_backend_type": operation_type,
+                            "debug_backend_name": operation_name,
+                            "operation_efficiency": getattr(event, "operation_efficiency", None),
+                            # Legacy fields for backward compatibility
+                            "fuel_consumption": getattr(event, "fuel_consumed", None),  # Legacy alias
+                            "operation_duration": getattr(event, "hours_operated", None),  # Legacy alias
+                            "maintenance_status": getattr(event, "type", None),  # Legacy alias
                         })
+                        
+                        # Also update the generic equipment field for backward compatibility
+                        if operation_name:
+                            event_data["equipment"] = operation_name
                     elif event_category == "weather":
                         # Add weather-specific fields
                         event_data.update({
@@ -4994,6 +5294,66 @@ class PublicProductionViewSet(viewsets.ViewSet):
             return timeline
         except:
             return []
+
+    @action(detail=True, methods=["get"], url_path="complete")
+    def complete_summary(self, request, pk=None):
+        """
+        Public access to the complete summary endpoint.
+        Uses the same TimelineService logic that works in the transparency endpoint.
+        """
+        try:
+            from django.core.cache import cache
+            from history.models import History
+
+            # Get the production object
+            production = History.objects.select_related(
+                "product", "parcel__establishment__company", "album"
+            ).prefetch_related(
+                "carbonentry_set__source",
+                "album__images",
+                "history_weatherevent_events",
+                "history_chemicalevent_events",
+                "history_productionevent_events",
+                "history_generalevent_events",
+                "history_equipmentevent_events",
+                "history_soilmanagementevent_events",
+                "history_pestmanagementevent_events",
+            ).get(id=pk, published=True)
+
+            # 🔧 DEBUG: Check production data
+            print(f"DEBUG: Getting complete summary for production {production.id}")
+            
+            # Use PublicHistorySerializer (same as working transparency endpoint)
+            from history.serializers import PublicHistorySerializer
+            public_history_serializer = PublicHistorySerializer(production, context={'request': request})
+            public_history_data = public_history_serializer.data
+            
+            # 🔧 DEBUG: Check if event 178 has correct data now
+            if 'events' in public_history_data:
+                print(f"DEBUG: PublicHistorySerializer returned {len(public_history_data['events'])} events")
+                event_178 = next((e for e in public_history_data['events'] if str(e.get('id')) == '178'), None)
+                if event_178:
+                    print(f"DEBUG: Event 178 from PublicHistorySerializer - area: {event_178.get('area')}, application_timing: {event_178.get('application_timing')}, way_of_application: {event_178.get('way_of_application')}")
+                else:
+                    print("DEBUG: Event 178 not found in PublicHistorySerializer events")
+
+            # Build response matching the expected frontend format
+            response_data = {
+                "production_id": production.id,
+                "timeline": public_history_data.get('events', []),
+                "timestamp": timezone.now().isoformat(),
+            }
+
+            return Response(response_data, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error in PublicProductionViewSet.complete_summary: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {"error": "Failed to get complete summary", "detail": str(e)}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class CarbonOffsetViewSet(viewsets.ViewSet):

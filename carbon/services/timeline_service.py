@@ -31,7 +31,7 @@ class TimelineService:
         """
         try:
             # Import models locally to avoid circular imports
-            from history.models import ChemicalEvent, EquipmentEvent, ProductionEvent
+            from history.models import ChemicalEvent, EquipmentEvent, ProductionEvent, SoilManagementEvent, WeatherEvent, GeneralEvent, PestManagementEvent, BusinessEvent
             from common.models import Gallery, GalleryImage
             
             # Optimized query with proper prefetch_related and select_related
@@ -41,7 +41,7 @@ class TimelineService:
                 'history', 'history__product', 'album'
             ).prefetch_related(
                 Prefetch('album__images', queryset=GalleryImage.objects.all())
-            ).order_by('-date')[:limit]
+            ).order_by('date')[:limit]
             
             chemical_count = chemical_events.count()
             logger.info(f"DEBUG: Found {chemical_count} chemical events for production {production.id}")
@@ -52,7 +52,7 @@ class TimelineService:
                 'history', 'history__product', 'album'
             ).prefetch_related(
                 Prefetch('album__images', queryset=GalleryImage.objects.all())
-            ).order_by('-date')[:limit]
+            ).order_by('date')[:limit]
             
             production_count = production_events.count()
             logger.info(f"DEBUG: Found {production_count} production events for production {production.id}")
@@ -63,12 +63,69 @@ class TimelineService:
                 'history', 'history__product', 'album'
             ).prefetch_related(
                 Prefetch('album__images', queryset=GalleryImage.objects.all())
-            ).order_by('-date')[:limit]
+            ).order_by('date')[:limit]
             
             equipment_count = equipment_events.count()
             logger.info(f"DEBUG: Found {equipment_count} equipment events for production {production.id}")
             
-            total_events = chemical_count + production_count + equipment_count
+            # 🚨 CRITICAL FIX: Add missing soil management events
+            soil_events = SoilManagementEvent.objects.filter(
+                history=production
+            ).select_related(
+                'history', 'history__product', 'album'
+            ).prefetch_related(
+                Prefetch('album__images', queryset=GalleryImage.objects.all())
+            ).order_by('date')[:limit]
+            
+            soil_count = soil_events.count()
+            logger.info(f"DEBUG: Found {soil_count} soil management events for production {production.id}")
+            
+            # Add other missing event types for completeness
+            weather_events = WeatherEvent.objects.filter(
+                history=production
+            ).select_related(
+                'history', 'history__product', 'album'
+            ).prefetch_related(
+                Prefetch('album__images', queryset=GalleryImage.objects.all())
+            ).order_by('date')[:limit]
+            
+            weather_count = weather_events.count()
+            logger.info(f"DEBUG: Found {weather_count} weather events for production {production.id}")
+            
+            general_events = GeneralEvent.objects.filter(
+                history=production
+            ).select_related(
+                'history', 'history__product', 'album'
+            ).prefetch_related(
+                Prefetch('album__images', queryset=GalleryImage.objects.all())
+            ).order_by('date')[:limit]
+            
+            general_count = general_events.count()
+            logger.info(f"DEBUG: Found {general_count} general events for production {production.id}")
+            
+            pest_events = PestManagementEvent.objects.filter(
+                history=production
+            ).select_related(
+                'history', 'history__product', 'album'
+            ).prefetch_related(
+                Prefetch('album__images', queryset=GalleryImage.objects.all())
+            ).order_by('date')[:limit]
+            
+            pest_count = pest_events.count()
+            logger.info(f"DEBUG: Found {pest_count} pest management events for production {production.id}")
+            
+            business_events = BusinessEvent.objects.filter(
+                history=production
+            ).select_related(
+                'history', 'history__product', 'album'
+            ).prefetch_related(
+                Prefetch('album__images', queryset=GalleryImage.objects.all())
+            ).order_by('date')[:limit]
+            
+            business_count = business_events.count()
+            logger.info(f"DEBUG: Found {business_count} business events for production {production.id}")
+            
+            total_events = chemical_count + production_count + equipment_count + soil_count + weather_count + general_count + pest_count + business_count
             logger.info(f"DEBUG: Total events before processing: {total_events}")
             
             # Combine and sort events efficiently
@@ -87,8 +144,30 @@ class TimelineService:
                 event_data = TimelineService._format_equipment_event(event)
                 all_events.append((TimelineService._get_event_date(event), event_data))
             
-            # Sort by date (newest first) and return only the data
-            all_events.sort(key=lambda x: x[0], reverse=True)
+            # 🚨 CRITICAL FIX: Process soil management events
+            for event in soil_events:
+                event_data = TimelineService._format_soil_management_event(event)
+                all_events.append((TimelineService._get_event_date(event), event_data))
+            
+            # Process other missing event types
+            for event in weather_events:
+                event_data = TimelineService._format_weather_event(event)
+                all_events.append((TimelineService._get_event_date(event), event_data))
+            
+            for event in general_events:
+                event_data = TimelineService._format_general_event(event)
+                all_events.append((TimelineService._get_event_date(event), event_data))
+            
+            for event in pest_events:
+                event_data = TimelineService._format_pest_management_event(event)
+                all_events.append((TimelineService._get_event_date(event), event_data))
+            
+            for event in business_events:
+                event_data = TimelineService._format_business_event(event)
+                all_events.append((TimelineService._get_event_date(event), event_data))
+            
+            # Sort by date (oldest first) and return only the data
+            all_events.sort(key=lambda x: x[0], reverse=False)
             return [event_data for _, event_data in all_events[:limit]]
             
         except Exception as e:
@@ -387,6 +466,219 @@ class TimelineService:
             return f"{num_value} hectares"
         except ValueError:
             return area_str
+    
+    @staticmethod
+    def _format_soil_management_event(event) -> Dict[str, Any]:
+        """Format SoilManagementEvent with all soil-specific fields."""
+        try:
+            # Map type codes to consumer-friendly descriptions
+            event_type = "soil.management"
+            type_code = getattr(event, "type", "")
+            
+            # Get soil management type display name
+            soil_management_type = event.get_type_display() if hasattr(event, 'get_type_display') else ""
+            
+            # Format fields with units
+            working_depth = TimelineService._safe_get_numeric(event, "working_depth")
+            depth_unit = getattr(event, "depth_unit", "") or "cm"
+            working_depth_formatted = f"{working_depth} {depth_unit}" if working_depth else ""
+            
+            area_covered = TimelineService._safe_get_numeric(event, "area_covered")
+            area_unit = getattr(event, "area_unit", "") or "ha"
+            area_covered_formatted = f"{area_covered} {area_unit}" if area_covered else ""
+            
+            fuel_consumed = TimelineService._safe_get_numeric(event, "fuel_consumed")
+            fuel_unit = getattr(event, "fuel_unit", "") or "L"
+            fuel_consumed_formatted = f"{fuel_consumed} {fuel_unit}" if fuel_consumed else ""
+            
+            equipment_hours = TimelineService._safe_get_numeric(event, "equipment_hours")
+            equipment_hours_formatted = f"{equipment_hours} hours" if equipment_hours else ""
+            
+            event_data = {
+                "id": f"soil_{event.id}",
+                "type": event_type,
+                "date": TimelineService._get_event_date(event).isoformat(),
+                "description": escape(getattr(event, "description", "") or ""),
+                "observation": escape(getattr(event, "observation", "") or ""),
+                "certified": bool(getattr(event, "certified", False)),
+                
+                # Soil management specific fields
+                "soil_management_name": escape(getattr(event, "name", "") or ""),
+                "soil_management_type": escape(soil_management_type),
+                "working_depth": working_depth_formatted,
+                "depth_unit": escape(depth_unit),
+                "area_covered": area_covered_formatted,
+                "area_unit": escape(area_unit),
+                "fuel_consumed": fuel_consumed_formatted,
+                "fuel_unit": escape(fuel_unit),
+                "equipment_hours": equipment_hours_formatted,
+                "amendment_type": escape(getattr(event, "amendment_type", "") or ""),
+                "amendment_amount": escape(getattr(event, "amendment_amount", "") or ""),
+                
+                # Raw numeric values for calculations
+                "working_depth_numeric": working_depth,
+                "area_covered_numeric": area_covered,
+                "fuel_consumed_numeric": fuel_consumed,
+                "equipment_hours_numeric": equipment_hours,
+                
+                # Soil science fields
+                "soil_ph": TimelineService._safe_get_numeric(event, "soil_ph"),
+                "organic_matter_percentage": TimelineService._safe_get_numeric(event, "organic_matter_percentage"),
+                "carbon_sequestration_potential": TimelineService._safe_get_numeric(event, "carbon_sequestration_potential"),
+                "soil_texture": escape(getattr(event, "soil_texture", "") or ""),
+                
+                # Additional transparency fields
+                "production_efficiency": escape(getattr(event, "production_efficiency", "") or ""),
+                "transportation_distance": TimelineService._safe_get_numeric(event, "transportation_distance"),
+                "transportation_unit": escape(getattr(event, "transportation_unit", "") or ""),
+            }
+            
+            # Add album data if available
+            album = getattr(event, 'album', None)
+            if album:
+                images = album.images.all()
+                if images:
+                    event_data["albums"] = [
+                        TimelineService._format_album_image(image) for image in images
+                    ]
+            
+            return event_data
+            
+        except Exception as e:
+            logger.warning(f"Error formatting soil management event {event.id}: {e}")
+            return TimelineService._create_error_event(event, "soil.management")
+    
+    @staticmethod
+    def _format_weather_event(event) -> Dict[str, Any]:
+        """Format WeatherEvent with weather-specific fields."""
+        try:
+            event_type = "weather.event"
+            weather_type = event.get_type_display() if hasattr(event, 'get_type_display') else ""
+            
+            event_data = {
+                "id": f"weather_{event.id}",
+                "type": event_type,
+                "date": TimelineService._get_event_date(event).isoformat(),
+                "description": escape(getattr(event, "description", "") or ""),
+                "observation": escape(getattr(event, "observation", "") or ""),
+                "certified": bool(getattr(event, "certified", False)),
+                "weather_type": escape(weather_type),
+                "weather_code": escape(getattr(event, "type", "") or ""),
+            }
+            
+            # Add album data if available
+            album = getattr(event, 'album', None)
+            if album:
+                images = album.images.all()
+                if images:
+                    event_data["albums"] = [
+                        TimelineService._format_album_image(image) for image in images
+                    ]
+            
+            return event_data
+            
+        except Exception as e:
+            logger.warning(f"Error formatting weather event {event.id}: {e}")
+            return TimelineService._create_error_event(event, "weather.event")
+    
+    @staticmethod
+    def _format_general_event(event) -> Dict[str, Any]:
+        """Format GeneralEvent with general activity fields."""
+        try:
+            event_data = {
+                "id": f"general_{event.id}",
+                "type": "general.activity",
+                "date": TimelineService._get_event_date(event).isoformat(),
+                "description": escape(getattr(event, "description", "") or ""),
+                "observation": escape(getattr(event, "observation", "") or ""),
+                "certified": bool(getattr(event, "certified", False)),
+                "activity_name": escape(getattr(event, "name", "") or getattr(event, "activity_name", "") or ""),
+                "activity_type": escape(getattr(event, "activity_type", "") or ""),
+                "duration": TimelineService._safe_get_numeric(event, "duration"),
+                "people_involved": TimelineService._safe_get_numeric(event, "people_involved"),
+            }
+            
+            # Add album data if available
+            album = getattr(event, 'album', None)
+            if album:
+                images = album.images.all()
+                if images:
+                    event_data["albums"] = [
+                        TimelineService._format_album_image(image) for image in images
+                    ]
+            
+            return event_data
+            
+        except Exception as e:
+            logger.warning(f"Error formatting general event {event.id}: {e}")
+            return TimelineService._create_error_event(event, "general.activity")
+    
+    @staticmethod
+    def _format_pest_management_event(event) -> Dict[str, Any]:
+        """Format PestManagementEvent with pest control fields."""
+        try:
+            pest_type = event.get_type_display() if hasattr(event, 'get_type_display') else ""
+            
+            event_data = {
+                "id": f"pest_{event.id}",
+                "type": "pest.management",
+                "date": TimelineService._get_event_date(event).isoformat(),
+                "description": escape(getattr(event, "description", "") or ""),
+                "observation": escape(getattr(event, "observation", "") or ""),
+                "certified": bool(getattr(event, "certified", False)),
+                "pest_management_type": escape(pest_type),
+                "pest_species": escape(getattr(event, "pest_species", "") or ""),
+                "treatment_method": escape(getattr(event, "treatment_method", "") or ""),
+                "severity_level": escape(getattr(event, "severity_level", "") or ""),
+            }
+            
+            # Add album data if available
+            album = getattr(event, 'album', None)
+            if album:
+                images = album.images.all()
+                if images:
+                    event_data["albums"] = [
+                        TimelineService._format_album_image(image) for image in images
+                    ]
+            
+            return event_data
+            
+        except Exception as e:
+            logger.warning(f"Error formatting pest management event {event.id}: {e}")
+            return TimelineService._create_error_event(event, "pest.management")
+    
+    @staticmethod
+    def _format_business_event(event) -> Dict[str, Any]:
+        """Format BusinessEvent with business activity fields."""
+        try:
+            event_data = {
+                "id": f"business_{event.id}",
+                "type": "business.activity",
+                "date": TimelineService._get_event_date(event).isoformat(),
+                "description": escape(getattr(event, "description", "") or ""),
+                "observation": escape(getattr(event, "observation", "") or ""),
+                "certified": bool(getattr(event, "certified", False)),
+                "business_name": escape(getattr(event, "name", "") or ""),
+                "business_type": escape(getattr(event, "business_type", "") or ""),
+                "certification_type": escape(getattr(event, "certification_type", "") or ""),
+                "carbon_credits_earned": TimelineService._safe_get_numeric(event, "carbon_credits_earned"),
+                "verification_status": escape(getattr(event, "verification_status", "") or ""),
+            }
+            
+            # Add album data if available
+            album = getattr(event, 'album', None)
+            if album:
+                images = album.images.all()
+                if images:
+                    event_data["albums"] = [
+                        TimelineService._format_album_image(image) for image in images
+                    ]
+            
+            return event_data
+            
+        except Exception as e:
+            logger.warning(f"Error formatting business event {event.id}: {e}")
+            return TimelineService._create_error_event(event, "business.activity")
     
     @staticmethod
     def _create_error_event(event, event_type: str) -> Dict[str, Any]:

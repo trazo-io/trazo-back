@@ -1,0 +1,297 @@
+{
+  "test_timestamp": "2025-10-11T22:08:32.523584",
+  "summary": {
+    "total_events_tested": 6,
+    "high_priority_issues": 1,
+    "medium_priority_issues": 0,
+    "success_rate_percent": 75.0
+  },
+  "high_priority_issues": [
+    {
+      "event_type": "chemical_fertilizer",
+      "calculated": 894.604,
+      "expected_range": "2800-3200",
+      "deviation_percent": 70.17986666666665,
+      "description": "Anhydrous ammonia 40 gal/ha"
+    }
+  ],
+  "medium_priority_issues": [],
+  "calculation_results": {
+    "chemical_fertilizer": {
+      "co2e_kg": 894.604,
+      "calculation_method": "verified_epa_usda_factors",
+      "breakdown": {
+        "chemical_type": "fertilizer",
+        "volume_applied_liters": 151.4164,
+        "area_treated_hectares": 1.0,
+        "chemical_mass_kg": 102.96315200000001,
+        "manufacturing_emissions_kg_co2e": 886.513,
+        "application_fuel_liters": 3.0,
+        "application_fuel_gallons": 0.793,
+        "application_emissions_kg_co2e": 8.092,
+        "application_method": "injection",
+        "epa_diesel_factor_kg_co2_per_gallon": 10.21,
+        "confidence_level": 0.9,
+        "npk_content": {
+          "N": 82,
+          "P": 0,
+          "K": 0
+        },
+        "nitrogen_kg": 84.42978464000001,
+        "phosphorus_kg": 0.0,
+        "potassium_kg": 0.0,
+        "epa_nitrogen_factor_kg_co2_per_kg_n": 10.5,
+        "epa_phosphorus_factor_kg_co2_per_kg_p": 1.19,
+        "epa_potassium_factor_kg_co2_per_kg_k": 0.65
+      },
+      "data_sources": [
+        "EPA Greenhouse Gas Emission Factors Hub (40 CFR Part 98) + IPCC Direct N2O",
+        "EPA Greenhouse Gas Emission Factors Hub (40 CFR Part 98)",
+        "EPA Greenhouse Gas Emission Factors Hub (40 CFR Part 98)",
+        "EPA Greenhouse Gas Emission Factors Hub (40 CFR Part 98)",
+        "USDA Agricultural Research Service - Chemical Application Methods"
+      ],
+      "limitations": "Manufacturing emissions based on EPA factors, application estimates vary with equipment and conditions"
+    },
+    "chemical_pesticide": {
+      "co2e_kg": 202.027,
+      "calculation_method": "verified_epa_usda_factors",
+      "breakdown": {
+        "chemical_type": "pesticide",
+        "volume_applied_liters": 37.8541,
+        "area_treated_hectares": 1.0,
+        "chemical_mass_kg": 47.31762500000001,
+        "manufacturing_emissions_kg_co2e": 199.87,
+        "application_fuel_liters": 0.8,
+        "application_fuel_gallons": 0.211,
+        "application_emissions_kg_co2e": 2.158,
+        "application_method": "spray",
+        "epa_diesel_factor_kg_co2_per_gallon": 10.21,
+        "confidence_level": 0.85,
+        "active_ingredient_percentage": 48,
+        "active_ingredient_kg": 22.712460000000004,
+        "epa_pesticide_factor_kg_co2_per_kg": 8.8
+      },
+      "data_sources": [
+        "EPA Greenhouse Gas Emission Factors Hub (40 CFR Part 98) + IPCC Direct N2O",
+        "EPA Greenhouse Gas Emission Factors Hub (40 CFR Part 98)",
+        "EPA Greenhouse Gas Emission Factors Hub (40 CFR Part 98)",
+        "EPA Greenhouse Gas Emission Factors Hub (40 CFR Part 98)",
+        "USDA Agricultural Research Service - Chemical Application Methods"
+      ],
+      "limitations": "Manufacturing emissions based on EPA factors, application estimates vary with equipment and conditions"
+    },
+    "chemical_herbicide": {
+      "co2e_kg": 162.21,
+      "calculation_method": "verified_epa_usda_factors",
+      "breakdown": {
+        "chemical_type": "herbicide",
+        "volume_applied_liters": 56.781150000000004,
+        "area_treated_hectares": 1.0,
+        "chemical_mass_kg": 70.9764375,
+        "manufacturing_emissions_kg_co2e": 160.052,
+        "application_fuel_liters": 0.8,
+        "application_fuel_gallons": 0.211,
+        "application_emissions_kg_co2e": 2.158,
+        "application_method": "spray",
+        "epa_diesel_factor_kg_co2_per_gallon": 10.21,
+        "confidence_level": 0.85,
+        "active_ingredient_percentage": 41,
+        "active_ingredient_kg": 29.100339375,
+        "epa_herbicide_factor_kg_co2_per_kg": 5.5
+      },
+      "data_sources": [
+        "EPA Greenhouse Gas Emission Factors Hub (40 CFR Part 98) + IPCC Direct N2O",
+        "EPA Greenhouse Gas Emission Factors Hub (40 CFR Part 98)",
+        "EPA Greenhouse Gas Emission Factors Hub (40 CFR Part 98)",
+        "EPA Greenhouse Gas Emission Factors Hub (40 CFR Part 98)",
+        "USDA Agricultural Research Service - Chemical Application Methods"
+      ],
+      "limitations": "Manufacturing emissions based on EPA factors, application estimates vary with equipment and conditions"
+    },
+    "chemical_fungicide": {
+      "co2e_kg": 107.558,
+      "calculation_method": "verified_epa_usda_factors",
+      "breakdown": {
+        "chemical_type": "fungicide",
+        "volume_applied_liters": 18.92705,
+        "area_treated_hectares": 1.0,
+        "chemical_mass_kg": 23.658812500000003,
+        "manufacturing_emissions_kg_co2e": 105.4,
+        "application_fuel_liters": 0.8,
+        "application_fuel_gallons": 0.211,
+        "application_emissions_kg_co2e": 2.158,
+        "application_method": "spray",
+        "epa_diesel_factor_kg_co2_per_gallon": 10.21,
+        "confidence_level": 0.8,
+        "active_ingredient_percentage": 99,
+        "active_ingredient_kg": 23.422224375000003,
+        "epa_fungicide_factor_kg_co2_per_kg": 4.5
+      },
+      "data_sources": [
+        "EPA Greenhouse Gas Emission Factors Hub (40 CFR Part 98) + IPCC Direct N2O",
+        "EPA Greenhouse Gas Emission Factors Hub (40 CFR Part 98)",
+        "EPA Greenhouse Gas Emission Factors Hub (40 CFR Part 98)",
+        "EPA Greenhouse Gas Emission Factors Hub (40 CFR Part 98)",
+        "USDA Agricultural Research Service - Chemical Application Methods"
+      ],
+      "limitations": "Manufacturing emissions based on EPA factors, application estimates vary with equipment and conditions"
+    }
+  },
+  "benchmarks_used": {
+    "weather_frost": {
+      "range": [
+        200,
+        250
+      ],
+      "description": "Frost protection with heaters & wind machines"
+    },
+    "weather_drought": {
+      "range": [
+        400,
+        500
+      ],
+      "description": "Drought irrigation response"
+    },
+    "weather_wind": {
+      "range": [
+        150,
+        300
+      ],
+      "description": "Wind damage cleanup"
+    },
+    "weather_heat": {
+      "range": [
+        100,
+        200
+      ],
+      "description": "Heat stress mitigation"
+    },
+    "chemical_fertilizer": {
+      "range": [
+        2800,
+        3200
+      ],
+      "description": "Anhydrous ammonia 40 gal/ha"
+    },
+    "chemical_pesticide": {
+      "range": [
+        180,
+        220
+      ],
+      "description": "Chlorpyrifos 10 gal/ha"
+    },
+    "chemical_herbicide": {
+      "range": [
+        155,
+        195
+      ],
+      "description": "Glyphosate 15 gal/ha"
+    },
+    "chemical_fungicide": {
+      "range": [
+        95,
+        125
+      ],
+      "description": "Copper sulfate 5 gal/ha"
+    },
+    "production_planting": {
+      "range": [
+        50,
+        150
+      ],
+      "description": "Mechanized planting operations"
+    },
+    "production_harvesting": {
+      "range": [
+        100,
+        300
+      ],
+      "description": "Mechanical harvesting"
+    },
+    "production_irrigation": {
+      "range": [
+        30,
+        80
+      ],
+      "description": "Irrigation system operation"
+    },
+    "production_pruning": {
+      "range": [
+        40,
+        100
+      ],
+      "description": "Mechanical pruning"
+    },
+    "equipment_fuel": {
+      "range": [
+        250,
+        260
+      ],
+      "description": "25 gallons diesel consumption"
+    },
+    "equipment_maintenance": {
+      "range": [
+        20,
+        40
+      ],
+      "description": "Scheduled maintenance"
+    },
+    "soil_compost": {
+      "range": [
+        -100,
+        50
+      ],
+      "description": "Compost application (can sequester carbon)"
+    },
+    "soil_lime": {
+      "range": [
+        80,
+        120
+      ],
+      "description": "Lime application for pH adjustment"
+    },
+    "pest_beneficial": {
+      "range": [
+        1,
+        3
+      ],
+      "description": "Beneficial insect release"
+    },
+    "pest_scouting": {
+      "range": [
+        5,
+        15
+      ],
+      "description": "Field scouting operations"
+    },
+    "business_certification": {
+      "range": [
+        10,
+        30
+      ],
+      "description": "Certification audit process"
+    },
+    "business_verification": {
+      "range": [
+        0.5,
+        2
+      ],
+      "description": "Blockchain verification"
+    },
+    "general_training": {
+      "range": [
+        20,
+        50
+      ],
+      "description": "Training session"
+    },
+    "general_documentation": {
+      "range": [
+        1,
+        3
+      ],
+      "description": "Documentation work"
+    }
+  }
+}

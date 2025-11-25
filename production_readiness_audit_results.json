@@ -1,0 +1,730 @@
+{
+  "california_farms": [
+    {
+      "farm_type": "Almond Orchard (Premium)",
+      "location": "Central Valley, California",
+      "size": "85 hectares",
+      "operations_tested": 4,
+      "operations_ready": 3,
+      "production_ready": false,
+      "annual_emissions_estimate": 8513.953104359314,
+      "critical_for": "Premium almond export market",
+      "operation_results": [
+        {
+          "operation": "FERTILIZER",
+          "calculated": 0.0,
+          "expected_range": [
+            1145,
+            1285
+          ],
+          "within_range": false,
+          "accuracy": "NEEDS_REVIEW"
+        },
+        {
+          "operation": "IRRIGATION",
+          "calculated": 337.18626155878474,
+          "expected_range": [
+            337,
+            357
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        },
+        {
+          "operation": "PRUNING",
+          "calculated": 256.26155878467637,
+          "expected_range": [
+            256,
+            276
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        },
+        {
+          "operation": "DROUGHT",
+          "calculated": 768.7846763540291,
+          "expected_range": [
+            768,
+            808
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        }
+      ]
+    },
+    {
+      "farm_type": "Wine Grape Vineyard (Premium)",
+      "location": "Napa Valley, California",
+      "size": "22 hectares",
+      "operations_tested": 4,
+      "operations_ready": 1,
+      "production_ready": false,
+      "annual_emissions_estimate": 3702.305151915456,
+      "critical_for": "Premium wine production",
+      "operation_results": [
+        {
+          "operation": "FUNGICIDE",
+          "calculated": 0.0,
+          "expected_range": [
+            78,
+            98
+          ],
+          "within_range": false,
+          "accuracy": "NEEDS_REVIEW"
+        },
+        {
+          "operation": "PEST_SCOUTING",
+          "calculated": 29.67239101717305,
+          "expected_range": [
+            47,
+            67
+          ],
+          "within_range": false,
+          "accuracy": "NEEDS_REVIEW"
+        },
+        {
+          "operation": "HIGH_TEMPERATURE",
+          "calculated": 256.26155878467637,
+          "expected_range": [
+            256,
+            276
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        },
+        {
+          "operation": "PH_ADJUSTMENT",
+          "calculated": 207.70673712021136,
+          "expected_range": [
+            660,
+            680
+          ],
+          "within_range": false,
+          "accuracy": "NEEDS_REVIEW"
+        }
+      ]
+    },
+    {
+      "farm_type": "Strawberry Farm (High-Intensity)",
+      "location": "Salinas Valley, California",
+      "size": "12 hectares",
+      "operations_tested": 4,
+      "operations_ready": 3,
+      "production_ready": false,
+      "annual_emissions_estimate": 3372.6314398943196,
+      "critical_for": "High-value berry market",
+      "operation_results": [
+        {
+          "operation": "IRRIGATION",
+          "calculated": 148.36195508586528,
+          "expected_range": [
+            148,
+            168
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        },
+        {
+          "operation": "BENEFICIAL_RELEASE",
+          "calculated": 2.4,
+          "expected_range": [
+            2.3,
+            2.9
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        },
+        {
+          "operation": "ORGANIC_MATTER",
+          "calculated": 113.29458388375166,
+          "expected_range": [
+            360,
+            380
+          ],
+          "within_range": false,
+          "accuracy": "NEEDS_REVIEW"
+        },
+        {
+          "operation": "TROPICAL_STORM",
+          "calculated": 121.38705416116248,
+          "expected_range": [
+            121,
+            141
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        }
+      ]
+    },
+    {
+      "farm_type": "Citrus Grove (Mixed Varieties)",
+      "location": "Ventura County, California",
+      "size": "35 hectares",
+      "operations_tested": 4,
+      "operations_ready": 4,
+      "production_ready": true,
+      "annual_emissions_estimate": 5900.759577278732,
+      "critical_for": "Fresh citrus export market",
+      "operation_results": [
+        {
+          "operation": "FROST",
+          "calculated": 391.13606340819024,
+          "expected_range": [
+            391,
+            411
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        },
+        {
+          "operation": "PRUNING",
+          "calculated": 337.18626155878474,
+          "expected_range": [
+            337,
+            357
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        },
+        {
+          "operation": "PEST_IDENTIFICATION",
+          "calculated": 47.20607661822986,
+          "expected_range": [
+            47,
+            67
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        },
+        {
+          "operation": "MAINTENANCE",
+          "calculated": 67.43725231175694,
+          "expected_range": [
+            67,
+            77
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        }
+      ]
+    }
+  ],
+  "iowa_farms": [
+    {
+      "farm_type": "Corn-Soybean Rotation (Large)",
+      "location": "Central Iowa",
+      "size": "485 hectares",
+      "operations_tested": 4,
+      "operations_ready": 2,
+      "production_ready": false,
+      "annual_emissions_estimate": 37629.98678996037,
+      "critical_for": "Commodity grain market",
+      "operation_results": [
+        {
+          "operation": "PLANTING",
+          "calculated": 3371.862615587847,
+          "expected_range": [
+            3370,
+            3470
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        },
+        {
+          "operation": "PESTICIDE",
+          "calculated": 0.0,
+          "expected_range": [
+            468,
+            508
+          ],
+          "within_range": false,
+          "accuracy": "NEEDS_REVIEW"
+        },
+        {
+          "operation": "HERBICIDE",
+          "calculated": 0.0,
+          "expected_range": [
+            625,
+            685
+          ],
+          "within_range": false,
+          "accuracy": "NEEDS_REVIEW"
+        },
+        {
+          "operation": "HARVESTING",
+          "calculated": 4990.356671070013,
+          "expected_range": [
+            4990,
+            5090
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        }
+      ]
+    },
+    {
+      "farm_type": "Precision Agriculture Farm (Medium)",
+      "location": "Western Iowa",
+      "size": "225 hectares",
+      "operations_tested": 4,
+      "operations_ready": 2,
+      "production_ready": false,
+      "annual_emissions_estimate": 36645.40290620873,
+      "critical_for": "Precision agriculture market",
+      "operation_results": [
+        {
+          "operation": "SOIL_TEST",
+          "calculated": 2124.273447820344,
+          "expected_range": [
+            135,
+            155
+          ],
+          "within_range": false,
+          "accuracy": "NEEDS_REVIEW"
+        },
+        {
+          "operation": "COVER_CROP",
+          "calculated": 2124.273447820344,
+          "expected_range": [
+            2125,
+            2165
+          ],
+          "within_range": false,
+          "accuracy": "NEEDS_REVIEW"
+        },
+        {
+          "operation": "CALIBRATION",
+          "calculated": 121.38705416116248,
+          "expected_range": [
+            121,
+            141
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        },
+        {
+          "operation": "FUEL_CONSUMPTION",
+          "calculated": 2292.866578599736,
+          "expected_range": [
+            2292,
+            2332
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        }
+      ]
+    },
+    {
+      "farm_type": "Sustainable Corn Farm (IPM Focus)",
+      "location": "Southeast Iowa",
+      "size": "165 hectares",
+      "operations_tested": 4,
+      "operations_ready": 3,
+      "production_ready": false,
+      "annual_emissions_estimate": 3306.8322324966975,
+      "critical_for": "Sustainable agriculture market",
+      "operation_results": [
+        {
+          "operation": "TRAP_MONITORING",
+          "calculated": 34.199999999999996,
+          "expected_range": [
+            34,
+            38
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        },
+        {
+          "operation": "THRESHOLD_ASSESSMENT",
+          "calculated": 222.5429326287979,
+          "expected_range": [
+            223,
+            243
+          ],
+          "within_range": false,
+          "accuracy": "NEEDS_REVIEW"
+        },
+        {
+          "operation": "HIGH_HUMIDITY",
+          "calculated": 229.2866578599736,
+          "expected_range": [
+            229,
+            249
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        },
+        {
+          "operation": "REPAIR",
+          "calculated": 175.33685601056806,
+          "expected_range": [
+            175,
+            195
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        }
+      ]
+    },
+    {
+      "farm_type": "Carbon Credit Farm (Regenerative)",
+      "location": "Northern Iowa",
+      "size": "325 hectares",
+      "operations_tested": 4,
+      "operations_ready": 3,
+      "production_ready": false,
+      "annual_emissions_estimate": 23950.462351387057,
+      "critical_for": "Carbon credit market",
+      "operation_results": [
+        {
+          "operation": "CARBON_CREDITS",
+          "calculated": 125.0,
+          "expected_range": [
+            125,
+            145
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        },
+        {
+          "operation": "COMPOSTING",
+          "calculated": 3068.394980184941,
+          "expected_range": [
+            1275,
+            1295
+          ],
+          "within_range": false,
+          "accuracy": "NEEDS_REVIEW"
+        },
+        {
+          "operation": "TILLAGE",
+          "calculated": 3068.394980184941,
+          "expected_range": [
+            3065,
+            3105
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        },
+        {
+          "operation": "CERTIFICATION",
+          "calculated": 125.0,
+          "expected_range": [
+            125,
+            145
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        }
+      ]
+    }
+  ],
+  "critical_operations": [
+    {
+      "operation": "Chemical Application (High-Volume)",
+      "description": "Large-scale fertilizer/pesticide applications",
+      "tests_ready": 0,
+      "total_tests": 3,
+      "production_ready": false,
+      "critical_because": "Most common farm operations",
+      "test_results": [
+        {
+          "test": "FERTILIZER",
+          "calculated": 0.0,
+          "expected_range": [
+            2055,
+            2155
+          ],
+          "within_range": false,
+          "accuracy": "CRITICAL_ISSUE"
+        },
+        {
+          "test": "PESTICIDE",
+          "calculated": 0.0,
+          "expected_range": [
+            219,
+            259
+          ],
+          "within_range": false,
+          "accuracy": "CRITICAL_ISSUE"
+        },
+        {
+          "test": "HERBICIDE",
+          "calculated": 0.0,
+          "expected_range": [
+            370,
+            410
+          ],
+          "within_range": false,
+          "accuracy": "CRITICAL_ISSUE"
+        }
+      ]
+    },
+    {
+      "operation": "Weather Response (Emergency)",
+      "description": "Emergency weather response operations",
+      "tests_ready": 3,
+      "total_tests": 3,
+      "production_ready": true,
+      "critical_because": "Emergency operations must be accurate",
+      "test_results": [
+        {
+          "test": "FROST",
+          "calculated": 499.03566710700136,
+          "expected_range": [
+            499,
+            519
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        },
+        {
+          "test": "DROUGHT",
+          "calculated": 1038.533685601057,
+          "expected_range": [
+            1038,
+            1058
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        },
+        {
+          "test": "HIGH_WINDS",
+          "calculated": 1308.2826948480847,
+          "expected_range": [
+            1308,
+            1328
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        }
+      ]
+    },
+    {
+      "operation": "Equipment Operations (Heavy Use)",
+      "description": "High-intensity equipment operations",
+      "tests_ready": 3,
+      "total_tests": 3,
+      "production_ready": true,
+      "critical_because": "High-cost operations need precision",
+      "test_results": [
+        {
+          "test": "FUEL_CONSUMPTION",
+          "calculated": 4990.356671070013,
+          "expected_range": [
+            4989,
+            5029
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        },
+        {
+          "test": "MAINTENANCE",
+          "calculated": 229.2866578599736,
+          "expected_range": [
+            229,
+            249
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        },
+        {
+          "test": "BREAKDOWN",
+          "calculated": 337.18626155878474,
+          "expected_range": [
+            337,
+            357
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        }
+      ]
+    },
+    {
+      "operation": "Certification & Compliance",
+      "description": "Business critical certification operations",
+      "tests_ready": 3,
+      "total_tests": 3,
+      "production_ready": true,
+      "critical_because": "Business revenue depends on accuracy",
+      "test_results": [
+        {
+          "test": "CERTIFICATION",
+          "calculated": 125.0,
+          "expected_range": [
+            125,
+            145
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        },
+        {
+          "test": "CARBON_CREDITS",
+          "calculated": 125.0,
+          "expected_range": [
+            125,
+            145
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        },
+        {
+          "test": "BLOCKCHAIN",
+          "calculated": 2.0,
+          "expected_range": [
+            1.9,
+            2.1
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        }
+      ]
+    }
+  ],
+  "edge_cases": [
+    {
+      "case": "Very Large Farm Operations",
+      "description": "Testing maximum scale operations",
+      "tests_ready": 1,
+      "total_tests": 2,
+      "production_ready": false,
+      "risk": "Large-scale farms are major customers",
+      "test_results": [
+        {
+          "test": "PLANTING",
+          "calculated": 14836.195508586525,
+          "expected_range": [
+            14829,
+            14869
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        },
+        {
+          "test": "HARVESTING",
+          "calculated": 22928.665785997357,
+          "expected_range": [
+            22937,
+            22977
+          ],
+          "within_range": false,
+          "accuracy": "EDGE_CASE_ISSUE"
+        }
+      ]
+    },
+    {
+      "case": "Very Small Farm Operations",
+      "description": "Testing minimum scale operations",
+      "tests_ready": 2,
+      "total_tests": 2,
+      "production_ready": true,
+      "risk": "Small farms need accurate calculations too",
+      "test_results": [
+        {
+          "test": "IRRIGATION",
+          "calculated": 6.743725231175694,
+          "expected_range": [
+            6.7,
+            7.3
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        },
+        {
+          "test": "PRUNING",
+          "calculated": 4.8554821664464995,
+          "expected_range": [
+            4.8,
+            5.4
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        }
+      ]
+    },
+    {
+      "case": "Extreme Weather Events",
+      "description": "Testing severe weather responses",
+      "tests_ready": 2,
+      "total_tests": 2,
+      "production_ready": true,
+      "risk": "Climate change increases extreme events",
+      "test_results": [
+        {
+          "test": "HIGH_WINDS",
+          "calculated": 6743.725231175694,
+          "expected_range": [
+            6742,
+            6782
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        },
+        {
+          "test": "DROUGHT",
+          "calculated": 4046.2351387054164,
+          "expected_range": [
+            4045,
+            4085
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        }
+      ]
+    },
+    {
+      "case": "High-Frequency Operations",
+      "description": "Testing operations done many times per year",
+      "tests_ready": 1,
+      "total_tests": 2,
+      "production_ready": false,
+      "risk": "Small errors compound with frequency",
+      "test_results": [
+        {
+          "test": "PEST_SCOUTING",
+          "calculated": 114.6433289299868,
+          "expected_range": [
+            183,
+            203
+          ],
+          "within_range": false,
+          "accuracy": "EDGE_CASE_ISSUE"
+        },
+        {
+          "test": "IRRIGATION",
+          "calculated": 67.43725231175694,
+          "expected_range": [
+            67,
+            77
+          ],
+          "within_range": true,
+          "accuracy": "READY"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "overall_readiness_percentage": 37.5,
+    "california_farms": {
+      "ready": 1,
+      "total": 4,
+      "percentage": 25.0
+    },
+    "iowa_farms": {
+      "ready": 0,
+      "total": 4,
+      "percentage": 0.0
+    },
+    "critical_operations": {
+      "ready": 3,
+      "total": 4,
+      "percentage": 75.0
+    },
+    "edge_cases": {
+      "ready": 2,
+      "total": 4,
+      "percentage": 50.0
+    },
+    "production_recommendation": "NEEDS REVIEW"
+  }
+}
