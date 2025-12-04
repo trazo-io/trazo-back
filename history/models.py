@@ -33,6 +33,52 @@ class History(models.Model):
     lot_id = models.CharField(max_length=50, blank=True, null=True, help_text="Lot identifier")
     description = models.TextField(blank=True, null=True)
     production_amount = models.FloatField(default=0)
+
+    # Harvest details for transparency
+    UNIT_CHOICES = [
+        ("kg", "Kilograms"),
+        ("lb", "Pounds"),
+        ("boxes", "Boxes"),
+        ("crates", "Crates"),
+        ("tons", "Tons"),
+        ("bushels", "Bushels"),
+        ("units", "Units"),
+    ]
+    production_unit = models.CharField(
+        max_length=20,
+        choices=UNIT_CHOICES,
+        blank=True,
+        null=True,
+        help_text="Unit of measurement for production amount",
+    )
+
+    QUALITY_CHOICES = [
+        ("premium", "Premium Grade"),
+        ("grade_a", "Grade A"),
+        ("grade_b", "Grade B"),
+        ("standard", "Standard"),
+        ("processing", "Processing Grade"),
+    ]
+    quality_grade = models.CharField(
+        max_length=20,
+        choices=QUALITY_CHOICES,
+        blank=True,
+        null=True,
+        help_text="Quality grade of the harvest",
+    )
+
+    HARVEST_METHOD_CHOICES = [
+        ("manual", "Manual Harvest"),
+        ("mechanical", "Mechanical Harvest"),
+        ("mixed", "Mixed (Manual + Mechanical)"),
+    ]
+    harvest_method = models.CharField(
+        max_length=20,
+        choices=HARVEST_METHOD_CHOICES,
+        blank=True,
+        null=True,
+        help_text="Method used for harvesting",
+    )
     qr_code = models.ImageField(upload_to="qr_codes", blank=True)
     album = models.ForeignKey("common.Gallery", on_delete=models.CASCADE, blank=True, null=True)
     reputation = models.FloatField(default=0, validators=[MinValueValidator(0), MaxValueValidator(5)])
@@ -167,25 +213,26 @@ class History(models.Model):
         try:
             # Use the enhanced TransparencyCalculator service with anti-gaming photo verification
             from .services.transparency_calculator import TransparencyCalculator
-            
+
             calculator = TransparencyCalculator()
             transparency_data = calculator.calculate_transparency_score(self)
-            
-            return transparency_data.get('transparency_percentage', 0.0)
-            
+
+            return transparency_data.get("transparency_percentage", 0.0)
+
         except Exception as e:
             # Fallback to basic calculation if service fails
             import logging
+
             logger = logging.getLogger(__name__)
             logger.warning(f"Enhanced transparency calculation failed for history {self.id}: {str(e)}")
-            
+
             # Simple fallback without photo verification
             score = 0
-            
+
             # Basic completeness
             if self.name and self.description:
                 score += 30
-            
+
             # Event count (without photo requirements)
             total_events = (
                 self.history_productionevent_events.count()
@@ -196,20 +243,20 @@ class History(models.Model):
                 + self.history_pestmanagementevent_events.count()
                 + self.history_businessevent_events.count()
             )
-            
+
             if total_events >= 10:
                 score += 40
             elif total_events >= 5:
                 score += 20
-            
+
             # Public accessibility
             if self.published:
                 score += 20
-            
+
             # Verification
             if hasattr(self, "carbon_entries") and self.carbon_entries.exists():
                 score += 10
-                
+
             return min(score, 100.0)
 
     def get_farm_history_years(self):
@@ -387,6 +434,12 @@ class History(models.Model):
         self.published = True
         self.production_amount = history_data["production_amount"]
         self.lot_id = history_data["lot_id"]
+
+        # Harvest details for consumer transparency (Sprint 3)
+        self.production_unit = history_data.get("production_unit")
+        self.quality_grade = history_data.get("quality_grade")
+        self.harvest_method = history_data.get("harvest_method")
+
         self.save()
 
     def get_events(self):
@@ -427,6 +480,13 @@ class CommonEvent(models.Model):
     )
     index = models.IntegerField(default=0)
     created_by = models.ForeignKey("users.User", on_delete=models.CASCADE, blank=True, null=True)
+    # Sprint 1 Epic 1.4: USDA GAP Traceability - Who performed this agricultural activity
+    performed_by = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Name of person who performed this agricultural activity (USDA GAP traceability)",
+    )
 
     class Meta:
         abstract = True
@@ -482,7 +542,64 @@ class ChemicalEvent(CommonEvent):
         (HERBICIDE, "Herbicide"),
     )
 
+    # Chemical subtype choices - used for accurate carbon emission factor selection
+    # These subtypes have different manufacturing emission factors
+    HERBICIDE_SUBTYPE_CHOICES = [
+        ("synthetic", "Synthetic (Glyphosate, 2,4-D, Atrazine, etc.)"),
+        ("organic", "Organic/Natural (Vinegar, Acetic Acid, Clove Oil, etc.)"),
+    ]
+
+    FUNGICIDE_SUBTYPE_CHOICES = [
+        ("synthetic", "Synthetic (Chlorothalonil, Mancozeb, etc.)"),
+        ("copper", "Copper-Based (Bordeaux Mix, Copper Sulfate, Kocide, etc.)"),
+        ("sulfur", "Sulfur-Based"),
+        ("biological", "Biological (Bacillus, Trichoderma, etc.)"),
+    ]
+
+    PESTICIDE_SUBTYPE_CHOICES = [
+        ("synthetic", "Synthetic (Conventional)"),
+        ("organic", "Organic/Natural (Neem, Pyrethrin, etc.)"),
+        ("biological", "Biological (Bt, Spinosad, etc.)"),
+    ]
+
+    FERTILIZER_SUBTYPE_CHOICES = [
+        ("synthetic", "Synthetic/Chemical (Urea, Ammonium Nitrate, etc.)"),
+        ("organic", "Organic (Compost, Manure, etc.)"),
+        ("slow_release", "Slow-Release/Controlled"),
+    ]
+
+    # Combined choices for database storage
+    CHEMICAL_SUBTYPE_CHOICES = [
+        # Herbicide subtypes
+        ("synthetic_herbicide", "Synthetic Herbicide"),
+        ("organic_herbicide", "Organic/Natural Herbicide"),
+        # Fungicide subtypes
+        ("synthetic_fungicide", "Synthetic Fungicide"),
+        ("copper_fungicide", "Copper-Based Fungicide"),
+        ("sulfur_fungicide", "Sulfur-Based Fungicide"),
+        ("biological_fungicide", "Biological Fungicide"),
+        # Pesticide subtypes
+        ("synthetic_pesticide", "Synthetic Pesticide"),
+        ("organic_pesticide", "Organic/Natural Pesticide"),
+        ("biological_pesticide", "Biological Pesticide"),
+        # Fertilizer subtypes
+        ("synthetic_fertilizer", "Synthetic/Chemical Fertilizer"),
+        ("organic_fertilizer", "Organic Fertilizer"),
+        ("slow_release_fertilizer", "Slow-Release Fertilizer"),
+    ]
+
     type = models.CharField(max_length=2, choices=CHEMICAL_EVENTS, blank=True, null=True)
+
+    # Chemical subtype for accurate carbon emission factor selection
+    # This field determines which emission factor to use in carbon calculations
+    chemical_subtype = models.CharField(
+        max_length=30,
+        choices=CHEMICAL_SUBTYPE_CHOICES,
+        blank=True,
+        null=True,
+        help_text="Specific subtype of chemical for accurate carbon emission calculations. "
+        "Different subtypes have different manufacturing emission factors.",
+    )
     commercial_name = models.CharField(max_length=60, blank=True, null=True)
     volume = models.CharField(max_length=60, blank=True, null=True)
     concentration = models.CharField(max_length=60, blank=True, null=True)
@@ -491,90 +608,92 @@ class ChemicalEvent(CommonEvent):
     time_period = models.CharField(max_length=60, blank=True, null=True)
     observation = models.TextField(blank=True, null=True)
     extra_data = models.JSONField(blank=True, null=True)
-    
+
     # New structured fields for better carbon calculations
     name = models.CharField(max_length=150, blank=True, null=True, help_text="Event name")
     nitrogen_percentage = models.DecimalField(
-        max_digits=5, decimal_places=2, null=True, blank=True,
-        help_text="Nitrogen content percentage"
+        max_digits=5, decimal_places=2, null=True, blank=True, help_text="Nitrogen content percentage"
     )
     phosphorus_percentage = models.DecimalField(
-        max_digits=5, decimal_places=2, null=True, blank=True,
-        help_text="Phosphorus content percentage"
+        max_digits=5, decimal_places=2, null=True, blank=True, help_text="Phosphorus content percentage"
     )
     potassium_percentage = models.DecimalField(
-        max_digits=5, decimal_places=2, null=True, blank=True,
-        help_text="Potassium content percentage"
+        max_digits=5, decimal_places=2, null=True, blank=True, help_text="Potassium content percentage"
     )
     application_method_structured = models.CharField(
         max_length=20,
         choices=[
-            ('broadcast', 'Broadcast'),
-            ('injection', 'Soil Injection'),
-            ('foliar', 'Foliar Application'),
-            ('drip', 'Drip/Fertigation'),
-            ('banding', 'Band Application'),
+            ("broadcast", "Broadcast"),
+            ("injection", "Soil Injection"),
+            ("foliar", "Foliar Application"),
+            ("drip", "Drip/Fertigation"),
+            ("banding", "Band Application"),
         ],
-        null=True, blank=True,
-        help_text="Structured application method"
+        null=True,
+        blank=True,
+        help_text="Structured application method",
     )
-    
+
     # Environmental context fields for transparency
     weather_conditions = models.CharField(
-        max_length=100,
-        blank=True,
-        null=True,
-        help_text="Weather conditions during application for transparency"
+        max_length=100, blank=True, null=True, help_text="Weather conditions during application for transparency"
     )
     application_timing = models.CharField(
-        max_length=100,
-        blank=True,
-        null=True,
-        help_text="When the application was made for consumer understanding"
+        max_length=100, blank=True, null=True, help_text="When the application was made for consumer understanding"
     )
     target_pest_disease = models.CharField(
-        max_length=200,
+        max_length=200, blank=True, null=True, help_text="What problem this application addresses for transparency"
+    )
+
+    # Sprint 3 Epic 3.2: Consumer Trust Fields
+    organic_approved = models.CharField(
+        max_length=20,
+        choices=[
+            ("yes", "Yes - Organic Approved"),
+            ("no", "No - Not Organic"),
+            ("not_applicable", "Not Applicable"),
+        ],
         blank=True,
         null=True,
-        help_text="What problem this application addresses for transparency"
+        help_text="Whether this chemical is approved for organic farming",
+    )
+    buffer_zone_meters = models.DecimalField(
+        max_digits=6,
+        decimal_places=1,
+        blank=True,
+        null=True,
+        help_text="Buffer zone maintained near water sources or sensitive habitats (meters)",
     )
 
     # EPA Worker Protection Standard (WPS) Compliance Fields - 40 CFR 170.309
     applicator_name = models.CharField(
-        max_length=150,
-        blank=True,
-        null=True,
-        help_text="Name of the certified applicator who applied the chemical"
+        max_length=150, blank=True, null=True, help_text="Name of the certified applicator who applied the chemical"
     )
     epa_registration_number = models.CharField(
         max_length=50,
         blank=True,
         null=True,
-        help_text="EPA registration number from the product label (e.g., 12345-67)"
+        help_text="EPA registration number from the product label (e.g., 12345-67)",
     )
     restricted_use_pesticide = models.BooleanField(
-        default=False,
-        help_text="Whether this is a Restricted Use Pesticide (RUP) requiring certified applicator"
+        default=False, help_text="Whether this is a Restricted Use Pesticide (RUP) requiring certified applicator"
     )
     applicator_certification = models.CharField(
-        max_length=100,
-        blank=True,
-        null=True,
-        help_text="Applicator certification/license number (required for RUPs)"
+        max_length=100, blank=True, null=True, help_text="Applicator certification/license number (required for RUPs)"
     )
     rei_hours = models.DecimalField(
         max_digits=6,
         decimal_places=1,
         blank=True,
         null=True,
-        help_text="Restricted Entry Interval in hours (worker safety)"
+        help_text="Restricted Entry Interval in hours (worker safety)",
     )
     phi_days = models.DecimalField(
         max_digits=6,
         decimal_places=1,
         blank=True,
         null=True,
-        help_text="Pre-Harvest Interval in days (consumer safety)"
+        help_text="Pre-Harvest Interval in days (consumer safety)",
     )
 
     def clean(self):
@@ -632,15 +751,13 @@ class ChemicalEvent(CommonEvent):
         # REI reasonableness check (typical range 4-48 hours)
         if self.rei_hours is not None and self.rei_hours > 168:  # More than 7 days
             errors["rei_hours"] = (
-                f"REI of {self.rei_hours} hours seems unusually high. "
-                "Please verify against product label."
+                f"REI of {self.rei_hours} hours seems unusually high. " "Please verify against product label."
             )
 
         # PHI reasonableness check (typical range 0-120 days)
         if self.phi_days is not None and self.phi_days > 365:  # More than 1 year
             errors["phi_days"] = (
-                f"PHI of {self.phi_days} days seems unusually high. "
-                "Please verify against product label."
+                f"PHI of {self.phi_days} days seems unusually high. " "Please verify against product label."
             )
 
         if errors:
@@ -655,6 +772,11 @@ class ProductionEvent(CommonEvent):
     IRRIGATION = "IR"
     PRUNING = "PR"
     TRANSPLANTING = "TR"  # NEW - matches UI screenshot option "🌿 Transplanting - Plant relocation"
+    # Sprint 2 Epic 2.1: Event Consolidation - Equipment merged into Production
+    EQUIPMENT_MAINTENANCE = "EM"  # Merged from EquipmentEvent
+    # Sprint 2 Epic 2.2: Missing USDA production types
+    CULTIVATION = "CU"  # Mechanical weed removal, row cultivation
+    THINNING = "TH"  # Plant density reduction
 
     PRODUCTION_EVENTS = (
         (PLANTING, "Planting"),
@@ -662,125 +784,210 @@ class ProductionEvent(CommonEvent):
         (IRRIGATION, "Irrigation"),
         (PRUNING, "Pruning"),
         (TRANSPLANTING, "Transplanting"),  # NEW - enables complete transparency tracking
+        # Sprint 2 additions
+        (EQUIPMENT_MAINTENANCE, "Equipment Maintenance"),  # Merged from Equipment events
+        (CULTIVATION, "Cultivation/Weed Control"),  # USDA aligned
+        (THINNING, "Thinning"),  # USDA aligned
     )
 
     type = models.CharField(max_length=2, choices=PRODUCTION_EVENTS)
     observation = models.TextField(blank=True, null=True)
     extra_data = models.JSONField(blank=True, null=True)
-    
+
     # New structured fields for better carbon calculations
     name = models.CharField(max_length=150, blank=True, null=True, help_text="Event name")
     area_covered = models.DecimalField(
-        max_digits=10, decimal_places=2, null=True, blank=True,
-        help_text="Area covered in numeric format"
+        max_digits=10, decimal_places=2, null=True, blank=True, help_text="Area covered in numeric format"
     )
     area_unit = models.CharField(
         max_length=10,
         choices=[
-            ('ha', 'Hectares'),
-            ('acres', 'Acres'),
-            ('m2', 'Square Meters'),
-            ('km2', 'Square Kilometers'),
+            ("ha", "Hectares"),
+            ("acres", "Acres"),
+            ("m2", "Square Meters"),
+            ("km2", "Square Kilometers"),
         ],
-        default='ha', blank=True,
-        help_text="Area unit"
+        default="ha",
+        blank=True,
+        help_text="Area unit",
     )
     yield_quantity = models.DecimalField(
-        max_digits=10, decimal_places=2, null=True, blank=True,
-        help_text="Quantity harvested or planted"
+        max_digits=10, decimal_places=2, null=True, blank=True, help_text="Quantity harvested or planted"
     )
     yield_unit = models.CharField(
         max_length=10,
         choices=[
-            ('kg', 'Kilograms'),
-            ('tons', 'Tonnes'),
-            ('lbs', 'Pounds'),
-            ('boxes', 'Boxes'),
-            ('plants', 'Plants'),
-            ('seeds', 'Seeds'),
+            ("kg", "Kilograms"),
+            ("tons", "Tonnes"),
+            ("lbs", "Pounds"),
+            ("boxes", "Boxes"),
+            ("plants", "Plants"),
+            ("seeds", "Seeds"),
         ],
-        default='kg', blank=True,
-        help_text="Yield unit"
+        default="kg",
+        blank=True,
+        help_text="Yield unit",
     )
     fuel_consumed = models.DecimalField(
-        max_digits=10, decimal_places=2, null=True, blank=True,
-        help_text="Fuel consumed during production activity"
+        max_digits=10, decimal_places=2, null=True, blank=True, help_text="Fuel consumed during production activity"
     )
     fuel_unit = models.CharField(
         max_length=10,
         choices=[
-            ('L', 'Liters'),
-            ('gal', 'Gallons'),
-            ('kg', 'Kilograms'),
+            ("L", "Liters"),
+            ("gal", "Gallons"),
+            ("kg", "Kilograms"),
         ],
-        default='L', blank=True,
-        help_text="Fuel unit"
+        default="L",
+        blank=True,
+        help_text="Fuel unit",
     )
     equipment_hours = models.DecimalField(
-        max_digits=10, decimal_places=2, null=True, blank=True,
-        help_text="Equipment operating hours"
+        max_digits=10, decimal_places=2, null=True, blank=True, help_text="Equipment operating hours"
     )
     transportation_distance = models.DecimalField(
-        max_digits=10, decimal_places=2, null=True, blank=True,
-        help_text="Transportation distance for logistics emissions"
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Transportation distance for logistics emissions",
     )
     transportation_unit = models.CharField(
         max_length=10,
         choices=[
-            ('km', 'Kilometers'),
-            ('miles', 'Miles'),
-            ('m', 'Meters'),
+            ("km", "Kilometers"),
+            ("miles", "Miles"),
+            ("m", "Meters"),
         ],
-        default='km', blank=True,
-        help_text="Transportation unit"
+        default="km",
+        blank=True,
+        help_text="Transportation unit",
     )
     production_efficiency = models.CharField(
         max_length=10,
         choices=[
-            ('high', 'High Efficiency'),
-            ('normal', 'Normal Efficiency'),
-            ('low', 'Low Efficiency'),
+            ("high", "High Efficiency"),
+            ("normal", "Normal Efficiency"),
+            ("low", "Low Efficiency"),
         ],
-        default='normal', blank=True,
-        help_text="Production efficiency rating for carbon scoring"
+        default="normal",
+        blank=True,
+        help_text="Production efficiency rating for carbon scoring",
     )
-    
+
+    # Sprint 3 Epic 3.2: Consumer Trust Fields
+    seeds_source = models.CharField(
+        max_length=50,
+        choices=[
+            ("local", "Local Supplier"),
+            ("imported", "Imported"),
+            ("farm_saved", "Farm Saved"),
+            ("certified", "Certified Organic"),
+        ],
+        blank=True,
+        null=True,
+        help_text="Source of seeds/seedlings for consumer transparency",
+    )
+    water_source = models.CharField(
+        max_length=50,
+        choices=[
+            ("well", "Well Water"),
+            ("rainwater", "Rainwater Harvesting"),
+            ("municipal", "Municipal Supply"),
+            ("river", "River/Stream"),
+            ("recycled", "Recycled Water"),
+        ],
+        blank=True,
+        null=True,
+        help_text="Water source for irrigation transparency",
+    )
+
+    # Sprint 2 Epic 2.1: Equipment Maintenance fields (merged from EquipmentEvent)
+    # These fields are used when production_type = 'EM' (Equipment Maintenance)
+    fuel_type = models.CharField(
+        max_length=20,
+        choices=[
+            ("diesel", "Diesel"),
+            ("gasoline", "Gasoline"),
+            ("natural_gas", "Natural Gas"),
+            ("lpg", "LPG"),
+            ("electric", "Electric"),
+        ],
+        blank=True,
+        null=True,
+        help_text="Fuel type for equipment (EPA emission factor selection)",
+    )
+    equipment_type = models.CharField(
+        max_length=30,
+        choices=[
+            ("tractor", "Tractor"),
+            ("harvester", "Harvester/Combine"),
+            ("sprayer", "Sprayer"),
+            ("truck", "Truck/Transport"),
+            ("generator", "Generator"),
+            ("pump", "Irrigation Pump"),
+            ("other", "Other Equipment"),
+        ],
+        blank=True,
+        null=True,
+        help_text="Type of equipment used (for carbon calculation accuracy)",
+    )
+    equipment_operation_type = models.CharField(
+        max_length=2,
+        choices=[
+            ("FC", "Fuel Consumption"),
+            ("MN", "Maintenance"),
+            ("RE", "Repair"),
+            ("CA", "Calibration"),
+            ("BD", "Breakdown"),
+            ("EI", "Inspection"),
+        ],
+        blank=True,
+        null=True,
+        help_text="Type of equipment operation (for Equipment Maintenance events)",
+    )
+
     def clean(self):
         """Model-level validation for production event values and business logic"""
         errors = {}
-        
+
         # Validate area_covered - must be positive for most operations
         if self.area_covered is not None and self.area_covered <= 0:
-            errors['area_covered'] = 'Area covered must be greater than 0'
-            
+            errors["area_covered"] = "Area covered must be greater than 0"
+
         # Validate transportation_distance - cannot be negative
         if self.transportation_distance is not None and self.transportation_distance < 0:
-            errors['transportation_distance'] = 'Transportation distance cannot be negative'
-            
+            errors["transportation_distance"] = "Transportation distance cannot be negative"
+
         # Validate yield_quantity - cannot be negative
         if self.yield_quantity is not None and self.yield_quantity < 0:
-            errors['yield_quantity'] = 'Yield quantity cannot be negative'
-            
+            errors["yield_quantity"] = "Yield quantity cannot be negative"
+
         # Validate equipment_hours - cannot be negative
         if self.equipment_hours is not None and self.equipment_hours < 0:
-            errors['equipment_hours'] = 'Equipment hours cannot be negative'
-        
+            errors["equipment_hours"] = "Equipment hours cannot be negative"
+
         # Business logic validation: reasonable area coverage
         if self.area_covered and self.area_covered > 1000:  # More than 1000 hectares
-            errors['area_covered'] = f'Area coverage ({self.area_covered} {self.area_unit}) seems unusually large. Please verify.'
-            
+            errors["area_covered"] = (
+                f"Area coverage ({self.area_covered} {self.area_unit}) seems unusually large. Please verify."
+            )
+
         # Business logic: yield efficiency checks
-        if (self.yield_quantity and self.area_covered and 
-            self.yield_quantity > 0 and self.area_covered > 0):
+        if self.yield_quantity and self.area_covered and self.yield_quantity > 0 and self.area_covered > 0:
             yield_per_hectare = float(self.yield_quantity) / float(self.area_covered)
             # Example check for unreasonably high yields (varies by crop)
-            if self.yield_unit in ['kg', 'tons'] and yield_per_hectare > 100000:  # 100 tons per hectare
-                errors['yield_quantity'] = f'Yield rate ({yield_per_hectare:.1f} {self.yield_unit}/ha) seems unreasonably high. Please verify.'
-        
+            if self.yield_unit in ["kg", "tons"] and yield_per_hectare > 100000:  # 100 tons per hectare
+                errors["yield_quantity"] = (
+                    f"Yield rate ({yield_per_hectare:.1f} {self.yield_unit}/ha) seems unreasonably high. Please verify."
+                )
+
         # Transportation efficiency check
-        if (self.transportation_distance and self.transportation_distance > 500):
-            errors['transportation_distance'] = f'Transportation distance ({self.transportation_distance} {self.transportation_unit}) is very long. Consider local processing to reduce carbon footprint.'
-        
+        if self.transportation_distance and self.transportation_distance > 500:
+            errors["transportation_distance"] = (
+                f"Transportation distance ({self.transportation_distance} {self.transportation_unit}) is very long. Consider local processing to reduce carbon footprint."
+            )
+
         if errors:
             raise ValidationError(errors)
 
@@ -788,32 +995,24 @@ class ProductionEvent(CommonEvent):
 class GeneralEvent(CommonEvent):
     name = models.CharField(max_length=150, help_text="Event name")
     observation = models.TextField(blank=True, null=True)
-    
+
     # Activity details for comprehensive farm transparency
     activity_type = models.CharField(
-        max_length=100, 
-        blank=True, 
+        max_length=100,
+        blank=True,
         null=True,
-        help_text="Type of activity performed (e.g., Farm Maintenance, Equipment Setup)"
+        help_text="Type of activity performed (e.g., Farm Maintenance, Equipment Setup)",
     )
     activity_name = models.CharField(
-        max_length=200, 
-        blank=True, 
-        null=True,
-        help_text="Specific name or description of the activity"
+        max_length=200, blank=True, null=True, help_text="Specific name or description of the activity"
     )
     duration = models.CharField(
-        max_length=50, 
-        blank=True, 
-        null=True,
-        help_text="Duration of the activity (e.g., '2 hours', '1 day')"
+        max_length=50, blank=True, null=True, help_text="Duration of the activity (e.g., '2 hours', '1 day')"
     )
     people_involved = models.PositiveIntegerField(
-        blank=True, 
-        null=True,
-        help_text="Number of people involved in the activity"
+        blank=True, null=True, help_text="Number of people involved in the activity"
     )
-    
+
     extra_data = models.JSONField(blank=True, null=True)
 
 
@@ -979,115 +1178,127 @@ class EquipmentEvent(CommonEvent):
     hours_used = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     area_covered = models.CharField(max_length=100, blank=True)
     extra_data = models.JSONField(blank=True, null=True)
-    
+
     # New structured fields for better carbon calculations
     name = models.CharField(max_length=150, blank=True, null=True, help_text="Event name")
     equipment_type_structured = models.CharField(
         max_length=30,
         choices=[
-            ('tractor_small', 'Small Tractor (<75 HP)'),
-            ('tractor_medium', 'Medium Tractor (75-150 HP)'),
-            ('tractor_large', 'Large Tractor (>150 HP)'),
-            ('irrigation_pump', 'Irrigation Pump'),
-            ('harvester', 'Combine Harvester'),
-            ('sprayer', 'Field Sprayer'),
-            ('cultivator', 'Cultivator/Plow'),
-            ('transport', 'Transport Vehicle'),
+            ("tractor_small", "Small Tractor (<75 HP)"),
+            ("tractor_medium", "Medium Tractor (75-150 HP)"),
+            ("tractor_large", "Large Tractor (>150 HP)"),
+            ("irrigation_pump", "Irrigation Pump"),
+            ("harvester", "Combine Harvester"),
+            ("sprayer", "Field Sprayer"),
+            ("cultivator", "Cultivator/Plow"),
+            ("transport", "Transport Vehicle"),
         ],
-        null=True, blank=True,
-        help_text="Structured equipment type for carbon calculations"
+        null=True,
+        blank=True,
+        help_text="Structured equipment type for carbon calculations",
     )
     fuel_consumed = models.DecimalField(
-        max_digits=10, decimal_places=2, null=True, blank=True,
-        help_text="Fuel consumed (renamed from fuel_amount for clarity)"
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Fuel consumed (renamed from fuel_amount for clarity)",
     )
     fuel_unit = models.CharField(
         max_length=10,
         choices=[
-            ('L', 'Liters'),
-            ('gal', 'Gallons'),
-            ('kg', 'Kilograms'),
+            ("L", "Liters"),
+            ("gal", "Gallons"),
+            ("kg", "Kilograms"),
         ],
-        default='L', blank=True,
-        help_text="Fuel unit"
+        default="L",
+        blank=True,
+        help_text="Fuel unit",
     )
     hours_operated = models.DecimalField(
-        max_digits=10, decimal_places=2, null=True, blank=True,
-        help_text="Hours operated (renamed from hours_used for clarity)"
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Hours operated (renamed from hours_used for clarity)",
     )
     area_worked = models.DecimalField(
-        max_digits=10, decimal_places=2, null=True, blank=True,
-        help_text="Area worked in numeric format"
+        max_digits=10, decimal_places=2, null=True, blank=True, help_text="Area worked in numeric format"
     )
     area_unit = models.CharField(
         max_length=10,
         choices=[
-            ('ha', 'Hectares'),
-            ('acres', 'Acres'),
-            ('m2', 'Square Meters'),
+            ("ha", "Hectares"),
+            ("acres", "Acres"),
+            ("m2", "Square Meters"),
         ],
-        default='ha', blank=True,
-        help_text="Area unit"
+        default="ha",
+        blank=True,
+        help_text="Area unit",
     )
     operation_efficiency = models.CharField(
         max_length=10,
         choices=[
-            ('high', 'High Efficiency'),
-            ('normal', 'Normal Efficiency'),
-            ('low', 'Low Efficiency'),
+            ("high", "High Efficiency"),
+            ("normal", "Normal Efficiency"),
+            ("low", "Low Efficiency"),
         ],
-        default='normal', blank=True,
-        help_text="Operation efficiency rating for carbon scoring"
+        default="normal",
+        blank=True,
+        help_text="Operation efficiency rating for carbon scoring",
     )
     observation = models.TextField(blank=True, null=True, help_text="Equipment event observations")
-    
+
     def clean(self):
         """Model-level validation for equipment event values and business logic"""
         from django.core.exceptions import ValidationError
-        
+
         errors = {}
-        
+
         # Validate fuel_consumed is non-negative
         if self.fuel_consumed is not None and self.fuel_consumed < 0:
-            errors['fuel_consumed'] = 'Fuel consumed cannot be negative'
-            
+            errors["fuel_consumed"] = "Fuel consumed cannot be negative"
+
         # Validate hours_operated is non-negative
         if self.hours_operated is not None and self.hours_operated < 0:
-            errors['hours_operated'] = 'Hours operated cannot be negative'
-            
+            errors["hours_operated"] = "Hours operated cannot be negative"
+
         # Validate maintenance_cost is non-negative
         if self.maintenance_cost is not None and self.maintenance_cost < 0:
-            errors['maintenance_cost'] = 'Maintenance cost cannot be negative'
-            
+            errors["maintenance_cost"] = "Maintenance cost cannot be negative"
+
         # Validate area_worked is non-negative
         if self.area_worked is not None and self.area_worked < 0:
-            errors['area_worked'] = 'Area worked cannot be negative'
-            
+            errors["area_worked"] = "Area worked cannot be negative"
+
         # Business logic validations
-        
+
         # If fuel consumption is provided, hours operated should also be provided for accuracy
         if self.fuel_consumed and self.fuel_consumed > 0 and not self.hours_operated:
-            if 'hours_operated' not in errors:
-                errors['hours_operated'] = 'Hours operated should be provided when fuel consumption is recorded'
-                
+            if "hours_operated" not in errors:
+                errors["hours_operated"] = "Hours operated should be provided when fuel consumption is recorded"
+
         # Validate reasonable fuel efficiency (basic sanity check)
-        if (self.fuel_consumed and self.fuel_consumed > 0 and 
-            self.hours_operated and self.hours_operated > 0):
+        if self.fuel_consumed and self.fuel_consumed > 0 and self.hours_operated and self.hours_operated > 0:
             fuel_per_hour = float(self.fuel_consumed) / float(self.hours_operated)
-            
+
             # Reasonable fuel consumption: 0.5L/hr to 50L/hr (covers small pumps to large tractors)
             if fuel_per_hour > 50:
-                errors['fuel_consumed'] = f'Fuel consumption ({fuel_per_hour:.1f}L/hr) seems unreasonably high. Check values.'
+                errors["fuel_consumed"] = (
+                    f"Fuel consumption ({fuel_per_hour:.1f}L/hr) seems unreasonably high. Check values."
+                )
             elif fuel_per_hour < 0.5:
-                errors['fuel_consumed'] = f'Fuel consumption ({fuel_per_hour:.1f}L/hr) seems unreasonably low. Check values.'
-                
+                errors["fuel_consumed"] = (
+                    f"Fuel consumption ({fuel_per_hour:.1f}L/hr) seems unreasonably low. Check values."
+                )
+
         # Validate reasonable operating hours (max 24 hours per day)
         if self.hours_operated and self.hours_operated > 24:
-            errors['hours_operated'] = 'Hours operated cannot exceed 24 hours per day'
-            
+            errors["hours_operated"] = "Hours operated cannot exceed 24 hours per day"
+
         if errors:
             raise ValidationError(errors)
-            
+
         super().clean()
 
     class Meta:
@@ -1123,12 +1334,11 @@ class SoilManagementEvent(CommonEvent):
     test_results = models.JSONField(null=True, blank=True)  # Store complex test data
     carbon_sequestration_potential = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
     extra_data = models.JSONField(blank=True, null=True)
-    
+
     # Standardized fields for carbon calculations (matching ProductionEvent pattern)
     name = models.CharField(max_length=150, blank=True, null=True, help_text="Event name")
     area_covered = models.DecimalField(
-        max_digits=10, decimal_places=2, null=True, blank=True,
-        help_text="Area covered in numeric format"
+        max_digits=10, decimal_places=2, null=True, blank=True, help_text="Area covered in numeric format"
     )
     area_unit = models.CharField(
         max_length=10,
@@ -1138,12 +1348,16 @@ class SoilManagementEvent(CommonEvent):
             ("m2", "Square Meters"),
             ("km2", "Square Kilometers"),
         ],
-        default="ha", blank=True,
-        help_text="Area unit"
+        default="ha",
+        blank=True,
+        help_text="Area unit",
     )
     fuel_consumed = models.DecimalField(
-        max_digits=10, decimal_places=2, null=True, blank=True,
-        help_text="Fuel consumed during soil management activity"
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Fuel consumed during soil management activity",
     )
     fuel_unit = models.CharField(
         max_length=10,
@@ -1152,16 +1366,19 @@ class SoilManagementEvent(CommonEvent):
             ("gal", "Gallons"),
             ("kg", "Kilograms"),
         ],
-        default="L", blank=True,
-        help_text="Fuel unit"
+        default="L",
+        blank=True,
+        help_text="Fuel unit",
     )
     equipment_hours = models.DecimalField(
-        max_digits=10, decimal_places=2, null=True, blank=True,
-        help_text="Equipment operating hours"
+        max_digits=10, decimal_places=2, null=True, blank=True, help_text="Equipment operating hours"
     )
     transportation_distance = models.DecimalField(
-        max_digits=10, decimal_places=2, null=True, blank=True,
-        help_text="Transportation distance for logistics emissions"
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Transportation distance for logistics emissions",
     )
     transportation_unit = models.CharField(
         max_length=10,
@@ -1170,8 +1387,9 @@ class SoilManagementEvent(CommonEvent):
             ("miles", "Miles"),
             ("m", "Meters"),
         ],
-        default="km", blank=True,
-        help_text="Transportation unit"
+        default="km",
+        blank=True,
+        help_text="Transportation unit",
     )
     production_efficiency = models.CharField(
         max_length=10,
@@ -1180,14 +1398,14 @@ class SoilManagementEvent(CommonEvent):
             ("normal", "Normal Efficiency"),
             ("low", "Low Efficiency"),
         ],
-        default="normal", blank=True,
-        help_text="Production efficiency rating for carbon scoring"
+        default="normal",
+        blank=True,
+        help_text="Production efficiency rating for carbon scoring",
     )
-    
+
     # Additional soil management fields for comprehensive data capture
     working_depth = models.DecimalField(
-        max_digits=10, decimal_places=2, null=True, blank=True,
-        help_text="Working depth for tillage or soil operations"
+        max_digits=10, decimal_places=2, null=True, blank=True, help_text="Working depth for tillage or soil operations"
     )
     depth_unit = models.CharField(
         max_length=10,
@@ -1196,8 +1414,9 @@ class SoilManagementEvent(CommonEvent):
             ("inches", "Inches"),
             ("m", "Meters"),
         ],
-        default="cm", blank=True,
-        help_text="Depth measurement unit"
+        default="cm",
+        blank=True,
+        help_text="Depth measurement unit",
     )
     soil_texture = models.CharField(
         max_length=50,
@@ -1210,8 +1429,9 @@ class SoilManagementEvent(CommonEvent):
             ("silt", "Silt"),
             ("silt_loam", "Silt Loam"),
         ],
-        blank=True, null=True,
-        help_text="Soil texture classification"
+        blank=True,
+        null=True,
+        help_text="Soil texture classification",
     )
     soil_moisture = models.CharField(
         max_length=20,
@@ -1221,66 +1441,73 @@ class SoilManagementEvent(CommonEvent):
             ("moist", "Moist"),
             ("wet", "Wet"),
         ],
-        blank=True, null=True,
-        help_text="Soil moisture condition during operation"
+        blank=True,
+        null=True,
+        help_text="Soil moisture condition during operation",
     )
     weather_conditions = models.CharField(
-        max_length=200, blank=True, null=True,
-        help_text="Weather conditions during soil management"
+        max_length=200, blank=True, null=True, help_text="Weather conditions during soil management"
     )
     temperature_range = models.CharField(
-        max_length=50, blank=True, null=True,
-        help_text="Temperature range during operation"
+        max_length=50, blank=True, null=True, help_text="Temperature range during operation"
     )
     equipment_used = models.CharField(
-        max_length=200, blank=True, null=True,
-        help_text="Equipment used for soil management operation"
+        max_length=200, blank=True, null=True, help_text="Equipment used for soil management operation"
     )
-    
+
     def clean(self):
         """Model-level validation for soil management event values and business logic"""
         errors = {}
-        
+
         # Validate area_covered - must be positive for most operations
         if self.area_covered is not None and self.area_covered <= 0:
             errors["area_covered"] = "Area covered must be greater than 0"
-            
+
         # Validate transportation_distance - cannot be negative
         if self.transportation_distance is not None and self.transportation_distance < 0:
             errors["transportation_distance"] = "Transportation distance cannot be negative"
-            
+
         # Validate equipment_hours - cannot be negative
         if self.equipment_hours is not None and self.equipment_hours < 0:
             errors["equipment_hours"] = "Equipment hours cannot be negative"
-        
+
         # Validate fuel_consumed is non-negative
         if self.fuel_consumed is not None and self.fuel_consumed < 0:
             errors["fuel_consumed"] = "Fuel consumed cannot be negative"
-            
+
         # Business logic validation: reasonable area coverage
         if self.area_covered and self.area_covered > 1000:  # More than 1000 hectares
-            errors["area_covered"] = f"Area coverage ({self.area_covered} {self.area_unit}) seems unusually large. Please verify."
-            
+            errors["area_covered"] = (
+                f"Area coverage ({self.area_covered} {self.area_unit}) seems unusually large. Please verify."
+            )
+
         # If fuel consumption is provided, hours operated should also be provided for accuracy
         if self.fuel_consumed and self.fuel_consumed > 0 and not self.equipment_hours:
             if "equipment_hours" not in errors:
-                errors["equipment_hours"] = "Equipment hours should be provided when fuel consumption is specified for accurate carbon calculations."
-                
+                errors["equipment_hours"] = (
+                    "Equipment hours should be provided when fuel consumption is specified for accurate carbon calculations."
+                )
+
         # Validate reasonable fuel efficiency (basic sanity check)
-        if (self.fuel_consumed and self.fuel_consumed > 0 and 
-            self.equipment_hours and self.equipment_hours > 0):
+        if self.fuel_consumed and self.fuel_consumed > 0 and self.equipment_hours and self.equipment_hours > 0:
             fuel_per_hour = float(self.fuel_consumed) / float(self.equipment_hours)
-            
+
             # Reasonable fuel consumption: 0.5L/hr to 50L/hr (covers small pumps to large tractors)
             if fuel_per_hour > 50:
-                errors["fuel_consumed"] = f"Fuel consumption ({fuel_per_hour:.1f}L/hr) seems unreasonably high. Check values."
+                errors["fuel_consumed"] = (
+                    f"Fuel consumption ({fuel_per_hour:.1f}L/hr) seems unreasonably high. Check values."
+                )
             elif fuel_per_hour < 0.5:
-                errors["fuel_consumed"] = f"Fuel consumption ({fuel_per_hour:.1f}L/hr) seems unreasonably low. Check values."
-        
+                errors["fuel_consumed"] = (
+                    f"Fuel consumption ({fuel_per_hour:.1f}L/hr) seems unreasonably low. Check values."
+                )
+
         # Transportation efficiency check
-        if (self.transportation_distance and self.transportation_distance > 500):
-            errors["transportation_distance"] = f"Transportation distance ({self.transportation_distance} {self.transportation_unit}) is very long. Consider local processing to reduce carbon footprint."
-        
+        if self.transportation_distance and self.transportation_distance > 500:
+            errors["transportation_distance"] = (
+                f"Transportation distance ({self.transportation_distance} {self.transportation_unit}) is very long. Consider local processing to reduce carbon footprint."
+            )
+
         if errors:
             raise ValidationError(errors)
 
@@ -1320,6 +1547,22 @@ class PestManagementEvent(CommonEvent):
     ipm_strategy = models.TextField(blank=True)
     extra_data = models.JSONField(blank=True, null=True)
 
+    # Sprint 3 Epic 3.2: Consumer Trust Fields
+    beneficial_insects_used = models.CharField(
+        max_length=20,
+        choices=[
+            ("yes", "Yes - Using Beneficial Insects"),
+            ("no", "No"),
+            ("planning", "Planning to Implement"),
+        ],
+        blank=True,
+        null=True,
+        help_text="Whether beneficial insects are used for pest control",
+    )
+    chemical_free_period_days = models.PositiveIntegerField(
+        blank=True, null=True, help_text="Days since last synthetic chemical application"
+    )
+
     class Meta:
         verbose_name = "Pest Management Event"
         verbose_name_plural = "Pest Management Events"
@@ -1349,14 +1592,21 @@ class BusinessEvent(CommonEvent):
         ("transparency", "Consumer Transparency Initiative"),
     ]
 
+    # Sprint 2 Epic 2.2: Expanded certification types with GlobalG.A.P., Non-GMO, CNG
     CERTIFICATION_TYPE_CHOICES = [
+        # Organic & Food Safety Certifications
         ("organic_usda", "USDA Organic"),
+        ("regenerative", "Regenerative Organic Certified (ROC)"),
+        ("cng", "Certified Naturally Grown (CNG)"),
+        ("non_gmo", "Non-GMO Project Verified"),
+        # Environmental & Sustainability Certifications
         ("carbon_neutral", "Carbon Neutral Certification"),
         ("rainforest_alliance", "Rainforest Alliance"),
-        ("fair_trade", "Fair Trade Certified"),
-        ("regenerative", "Regenerative Organic Certified"),
-        ("sustainable_agriculture", "Sustainable Agriculture Standard"),
         ("water_stewardship", "Water Stewardship Certification"),
+        ("sustainable_agriculture", "Sustainable Agriculture Standard"),
+        # Global Food Safety & Trade Certifications
+        ("global_gap", "GlobalG.A.P. Certified"),
+        ("fair_trade", "Fair Trade Certified"),
     ]
 
     CARBON_CREDIT_UNITS = [
@@ -1386,76 +1636,77 @@ class BusinessEvent(CommonEvent):
 
     type = models.CharField(max_length=2, choices=BUSINESS_TYPE_CHOICES, default=CERTIFICATION)
     name = models.CharField(max_length=150, blank=True, null=True, help_text="Event name")
-    
+
     # New carbon-focused fields
     business_type = models.CharField(
         max_length=30,
         choices=BUSINESS_ACTIVITY_CHOICES,
         default="certification",
-        help_text="Type of carbon-relevant business activity"
+        help_text="Type of carbon-relevant business activity",
     )
     certification_type = models.CharField(
         max_length=50,
         choices=CERTIFICATION_TYPE_CHOICES,
         blank=True,
         null=True,
-        help_text="Type of certification obtained or renewed"
+        help_text="Type of certification obtained or renewed",
     )
     carbon_credits_earned = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        blank=True,
-        null=True,
-        help_text="Amount of carbon credits generated or traded"
+        max_digits=10, decimal_places=2, blank=True, null=True, help_text="Amount of carbon credits generated or traded"
     )
     carbon_credits_unit = models.CharField(
-        max_length=10,
-        choices=CARBON_CREDIT_UNITS,
-        default="tCO2e",
-        blank=True,
-        help_text="Unit for carbon credits"
+        max_length=10, choices=CARBON_CREDIT_UNITS, default="tCO2e", blank=True, help_text="Unit for carbon credits"
     )
     verification_status = models.CharField(
         max_length=20,
         choices=VERIFICATION_STATUS_CHOICES,
         default="pending",
-        help_text="Status of verification for consumer transparency"
+        help_text="Status of verification for consumer transparency",
     )
     sustainability_practice = models.CharField(
         max_length=30,
         choices=SUSTAINABILITY_PRACTICE_CHOICES,
         blank=True,
         null=True,
-        help_text="Sustainability practice implemented"
+        help_text="Sustainability practice implemented",
     )
+
+    # Sprint 3 Epic 3.2: Consumer Trust Fields
+    verified_certifier_name = models.CharField(
+        max_length=150, blank=True, null=True, help_text="Name of the certifying organization for consumer trust"
+    )
+
     observation = models.TextField(blank=True, null=True)
     extra_data = models.JSONField(blank=True, null=True)
 
     def clean(self):
         """Model-level validation for business event values and business logic"""
         from django.core.exceptions import ValidationError
+
         errors = {}
-        
+
         # Validate carbon_credits_earned - must be non-negative
         if self.carbon_credits_earned is not None and self.carbon_credits_earned < 0:
-            errors['carbon_credits_earned'] = 'Carbon credits earned cannot be negative'
-        
+            errors["carbon_credits_earned"] = "Carbon credits earned cannot be negative"
+
         # Business logic validation: reasonable carbon credit amounts
         if self.carbon_credits_earned and self.carbon_credits_earned > 10000:
-            errors['carbon_credits_earned'] = f'Carbon credits amount ({self.carbon_credits_earned} {self.carbon_credits_unit}) seems unusually large. Please verify.'
-        
+            errors["carbon_credits_earned"] = (
+                f"Carbon credits amount ({self.carbon_credits_earned} {self.carbon_credits_unit}) seems unusually large. Please verify."
+            )
+
         # Validate business_type is not empty
         if not self.business_type or len(self.business_type.strip()) == 0:
-            errors['business_type'] = 'Business type is required'
-        
+            errors["business_type"] = "Business type is required"
+
         # Business logic: certification events should have certification_type
-        if self.business_type == 'certification' and not self.certification_type:
-            errors['certification_type'] = 'Certification type is required for certification events'
-        
+        if self.business_type == "certification" and not self.certification_type:
+            errors["certification_type"] = "Certification type is required for certification events"
+
         # Business logic: carbon_credits events should have carbon_credits_earned
-        if self.business_type == 'carbon_credits' and not self.carbon_credits_earned:
-            errors['carbon_credits_earned'] = 'Carbon credits amount is required for carbon credit transactions'
-        
+        if self.business_type == "carbon_credits" and not self.carbon_credits_earned:
+            errors["carbon_credits_earned"] = "Carbon credits amount is required for carbon credit transactions"
+
         if errors:
             raise ValidationError(errors)
 

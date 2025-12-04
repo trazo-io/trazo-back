@@ -193,6 +193,8 @@ urlpatterns = [
     # Smart Product API Endpoints - Smart Bag UX Implementation
     path("smart-product/search/", views.smart_product_search, name="smart_product_search"),
     path("smart-product/validate/", views.smart_product_validation, name="smart_product_validation"),
-    path("smart-product/suggestions/", views.smart_product_suggestions_by_type, name="smart_product_suggestions_by_type"),
+    path(
+        "smart-product/suggestions/", views.smart_product_suggestions_by_type, name="smart_product_suggestions_by_type"
+    ),
     path("smart-product/stats/", views.smart_product_stats, name="smart_product_stats"),
 ]

@@ -27,15 +27,13 @@ class Command(BaseCommand):
         try:
             # Find the user by email
             user = User.objects.get(email=email)
-            
+
             # Change the password using Django's built-in method (this handles hashing)
             user.set_password(password)
             user.save()
-            
-            self.stdout.write(
-                self.style.SUCCESS(f"✅ Password changed successfully for user: {email}")
-            )
-            
+
+            self.stdout.write(self.style.SUCCESS(f"✅ Password changed successfully for user: {email}"))
+
         except User.DoesNotExist:
             raise CommandError(f"❌ User with email '{email}' does not exist")
         except Exception as e:

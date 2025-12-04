@@ -2,11 +2,12 @@
 """Debug Equipment Type display issue for Event 114"""
 
 import os
+
 import django
 from django.conf import settings
 
 # Setup Django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings.dev')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.settings.dev")
 django.setup()
 
 from history.models import EquipmentEvent
@@ -24,14 +25,22 @@ try:
     print(f"🔍 equipment_type_structured is not empty: {event.equipment_type_structured != ''}")
     print(f"🔍 equipment_type_structured type: {type(event.equipment_type_structured)}")
     print(f"🔍 equipment_type_structured repr: {repr(event.equipment_type_structured)}")
-    
+
     # Check full data
     print("\n=== FULL EVENT DATA ===")
-    for field_name in ['id', 'description', 'equipment_type_structured', 'equipment_name', 
-                       'fuel_consumed', 'fuel_type', 'area_worked', 'hours_operated']:
-        value = getattr(event, field_name, 'FIELD_NOT_FOUND')
+    for field_name in [
+        "id",
+        "description",
+        "equipment_type_structured",
+        "equipment_name",
+        "fuel_consumed",
+        "fuel_type",
+        "area_worked",
+        "hours_operated",
+    ]:
+        value = getattr(event, field_name, "FIELD_NOT_FOUND")
         print(f"{field_name}: {repr(value)}")
-        
+
     print("\n=== FIELD DISPLAY CONDITIONS CHECK ===")
     # Replicate the condition from fieldDisplayUtils.ts line 1467
     if event.equipment_type_structured:
@@ -40,7 +49,7 @@ try:
     else:
         print("❌ Condition 'if (event.equipment_type_structured)' would be FALSE")
         print("🚨 This is why Equipment Type field is not showing!")
-    
+
 except EquipmentEvent.DoesNotExist:
     print("❌ Event 114 not found")
 except Exception as e:

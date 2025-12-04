@@ -114,31 +114,31 @@ class Parcel(models.Model):
     def get_transparency_description(self):
         """Get consumer-facing parcel description"""
         return self.description or ""
-        
+
     def get_sustainability_practices(self):
         """Get sustainability practices narrative for consumers"""
         return self.agricultural_details.get("sustainability_practices", "")
-        
+
     def get_consumer_story(self):
         """Get consumer story explaining why this parcel matters"""
         return self.agricultural_details.get("consumer_story", "")
-        
+
     def get_primary_crop(self):
         """Get primary crop focus for this parcel"""
         return self.agricultural_details.get("primary_crop", "")
-        
+
     def is_transparency_ready(self):
         """Check if parcel has sufficient transparency data for consumer display"""
         has_description = bool(self.description and len(self.description.strip()) >= 10)
         has_practices = bool(self.agricultural_details.get("sustainability_practices"))
         has_images = bool(self.album and self.album.images.exists())
-        
+
         return has_description and (has_practices or has_images)
-        
+
     def get_transparency_score(self):
         """Calculate transparency readiness score (0-100) for consumer confidence"""
         score = 0
-        
+
         # Description quality (40 points)
         if self.description and len(self.description.strip()) >= 10:
             description_length = len(self.description.strip())
@@ -148,11 +148,11 @@ class Parcel(models.Model):
                 score += 30
             else:
                 score += 20
-                
+
         # Sustainability practices (30 points)
         if self.agricultural_details.get("sustainability_practices"):
             score += 30
-            
+
         # Visual documentation (20 points)
         if self.album and self.album.images.exists():
             image_count = self.album.images.count()
@@ -160,11 +160,11 @@ class Parcel(models.Model):
                 score += 20
             elif image_count >= 1:
                 score += 15
-                
+
         # Certification (10 points)
         if self.certified and self.certification_type:
             score += 10
-            
+
         return min(100, score)
 
     def finish_current_history(self, history_data, images):

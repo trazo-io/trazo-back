@@ -615,16 +615,16 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
         )
 
         monthly_scans = current_month_scans.count()
-        
+
         # Calculate consumer reach with fallback methods
         # Method 1: Try session_hash if available
-        session_based_reach = current_month_scans.exclude(session_hash='').values("session_hash").distinct().count()
-        
+        session_based_reach = current_month_scans.exclude(session_hash="").values("session_hash").distinct().count()
+
         if session_based_reach > 0:
             consumer_reach = session_based_reach
         else:
             # Method 2: Fallback to IP hash when session_hash is empty
-            ip_based_reach = current_month_scans.exclude(ip_hash='').values("ip_hash").distinct().count()
+            ip_based_reach = current_month_scans.exclude(ip_hash="").values("ip_hash").distinct().count()
             if ip_based_reach > 0:
                 consumer_reach = ip_based_reach
             else:
@@ -649,12 +649,14 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
         # 3. TRANSPARENCY METRICS - Primary focus on documentation completeness
         establishment_histories = History.objects.filter(parcel__establishment=establishment)
         total_productions = establishment_histories.count()
-        
+
         # Calculate transparency scores using TransparencyCalculator
-        from history.services.transparency_calculator import TransparencyCalculator
         from django.db.models import Sum
+
+        from history.services.transparency_calculator import TransparencyCalculator
+
         transparency_calc = TransparencyCalculator()
-        
+
         transparency_scores = []
         completeness_scores = []
         verification_levels = []
@@ -662,39 +664,45 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
         blockchain_verified_count = 0
         carbon_negative_count = 0
         carbon_footprints = []
-        
+
         for history in establishment_histories:
             # Get transparency data for each production
             transparency_data = transparency_calc.calculate_transparency_score(history)
-            transparency_scores.append(transparency_data.get('transparency_percentage', 0))
-            completeness_scores.append(transparency_data.get('completeness_score', 0))
-            
+            transparency_scores.append(transparency_data.get("transparency_percentage", 0))
+            completeness_scores.append(transparency_data.get("completeness_score", 0))
+
             # Get verification level
             from carbon.services.carbon_transparency_service import transparency_service
+
             verification_level = transparency_service.calculate_verification_level(history)
             verification_levels.append(verification_level)
-            
+
             # Count USDA and blockchain verifications
             from carbon.models import CarbonEntry
+
             if CarbonEntry.objects.filter(production=history, usda_verified=True).exists():
                 usda_verified_count += 1
             # Check for blockchain verification using available fields
-            if CarbonEntry.objects.filter(production=history, 
-                                         verification_status="blockchain_verified").exists():
+            if CarbonEntry.objects.filter(production=history, verification_status="blockchain_verified").exists():
                 blockchain_verified_count += 1
-                
+
             # Check for carbon negative productions
             carbon_entries = CarbonEntry.objects.filter(production=history)
             if carbon_entries.exists():
-                total_emissions = carbon_entries.filter(type="emission").aggregate(Sum("co2e_amount"))["co2e_amount__sum"] or 0
-                total_offsets = carbon_entries.filter(type="offset").aggregate(Sum("effective_amount"))["effective_amount__sum"] or 0
+                total_emissions = (
+                    carbon_entries.filter(type="emission").aggregate(Sum("co2e_amount"))["co2e_amount__sum"] or 0
+                )
+                total_offsets = (
+                    carbon_entries.filter(type="offset").aggregate(Sum("effective_amount"))["effective_amount__sum"]
+                    or 0
+                )
                 net_footprint = total_emissions - total_offsets
-                
+
                 if net_footprint < 0:
                     carbon_negative_count += 1
-                    
+
                 # Calculate per-kg footprint
-                production_amount = getattr(history, 'production_amount', None)
+                production_amount = getattr(history, "production_amount", None)
                 if production_amount and production_amount > 0:
                     carbon_footprints.append(net_footprint / production_amount)
 
@@ -702,12 +710,14 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
         transparency_score = sum(transparency_scores) / len(transparency_scores) if transparency_scores else 0
         documentation_completeness = sum(completeness_scores) / len(completeness_scores) if completeness_scores else 0
         carbon_footprint_avg = sum(carbon_footprints) / len(carbon_footprints) if carbon_footprints else 0
-        
+
         # Determine overall verification level
         verification_level_counts = {}
         for level in verification_levels:
             verification_level_counts[level] = verification_level_counts.get(level, 0) + 1
-        verification_level = max(verification_level_counts.items(), key=lambda x: x[1])[0] if verification_level_counts else "Limited"
+        verification_level = (
+            max(verification_level_counts.items(), key=lambda x: x[1])[0] if verification_level_counts else "Limited"
+        )
 
         # 4. VERIFIED PRODUCTIONS - Count with carbon data
         verified_productions = (
@@ -754,25 +764,20 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
             "consumer_reach": consumer_reach,
             "monthly_scans": monthly_scans,
             "scan_growth_percentage": round(scan_growth_percentage, 1),
-            
             # Transparency metrics (PRIMARY)
             "transparency_score": round(transparency_score, 1),
             "documentation_completeness": round(documentation_completeness, 1),
             "verification_level": verification_level,
-            
             # Verification metrics
             "verified_productions": verified_productions,
             "total_productions": total_productions,
             "usda_verified_count": usda_verified_count,
             "blockchain_verified_count": blockchain_verified_count,
-            
             # Carbon context (SUPPORTING)
             "carbon_footprint_avg": round(carbon_footprint_avg, 3),
             "carbon_negative_count": carbon_negative_count,
-            
             # Business impact metrics
             "transparency_engagement": round(transparency_engagement, 2),
-            
             # Subscription context
             "subscription_usage_percentage": round(subscription_usage_percentage, 1),
             "is_premium": is_premium,

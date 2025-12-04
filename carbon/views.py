@@ -48,11 +48,6 @@ from django.utils.html import escape
 
 from rest_framework import serializers
 
-# Security and optimization imports
-from carbon.permissions import PublicQRPermission, SecurePublicDataPermission
-from carbon.services.timeline_service import TimelineService
-from carbon.validation import QRParameterValidator, APIResponseValidator
-
 # USDA-verified carbon calculation utilities
 from backend.constants import (
     calculate_miles_equivalent,
@@ -60,8 +55,13 @@ from backend.constants import (
     validate_co2e_value,
     validate_miles_equivalent,
 )
+
+# Security and optimization imports
+from carbon.permissions import PublicQRPermission, SecurePublicDataPermission
 from carbon.production_phases import ProductionPhaseCalculator
 from carbon.services.carbon_cost_insights import CarbonCostInsights
+from carbon.services.timeline_service import TimelineService
+from carbon.validation import APIResponseValidator, QRParameterValidator
 from company.models import Establishment
 from history.models import (
     ChemicalEvent,
@@ -856,18 +856,18 @@ class OptimizedCarbonCalculator:
 
     def calculate_chemical_impact_optimized(self, processed_event: Dict[str, Any]) -> Dict[str, Any]:
         """FIXED: Now uses proper EPA/USDA emission factors with comprehensive debug logging"""
-        from carbon.services.verified_emission_factors import VerifiedEmissionFactors
         import logging
-        
+
+        from carbon.services.verified_emission_factors import VerifiedEmissionFactors
+
         logger = logging.getLogger(__name__)
-        
+
         # Extract processed data (now with proper unit conversions)
         chemical_type = processed_event.get("chemical_type", "FE")
         volume_liters = processed_event.get("volume", 10)
         area_hectares = processed_event.get("area", 1.0)  # Now properly converted to hectares
         application_method = processed_event.get("application_method", "broadcast")
-        
-        
+
         # Parse NPK content - only fertilizers have NPK
         concentration = processed_event.get("concentration", "0-0-0")
         if chemical_type == "FE":  # Only fertilizers have NPK
@@ -885,36 +885,36 @@ class OptimizedCarbonCalculator:
         else:
             # Pesticides, fungicides, herbicides have NO NPK content
             npk_content = {"N": 0, "P": 0, "K": 0}
-        
+
         # Use EPA/USDA verified emission factors (same as standard endpoint)
         try:
-            
+
             calculation_result = VerifiedEmissionFactors.calculate_chemical_application_emissions(
                 chemical_type=chemical_type,
                 volume_liters=volume_liters,
                 area_hectares=area_hectares,
                 npk_content=npk_content,
-                application_method=application_method
+                application_method=application_method,
             )
-            
+
             # Extract results
-            co2e = calculation_result['co2e_kg']
-            breakdown = calculation_result['breakdown']
-            calculation_method = calculation_result['calculation_method']
-            
+            co2e = calculation_result["co2e_kg"]
+            breakdown = calculation_result["breakdown"]
+            calculation_method = calculation_result["calculation_method"]
+
             # Add the volume_applied_liters to the response for calculations
-            volume_applied_liters = breakdown.get('volume_applied_liters', volume_liters)
-            
+            volume_applied_liters = breakdown.get("volume_applied_liters", volume_liters)
+
             # Calculate efficiency score based on EPA confidence
-            confidence_level = breakdown.get('confidence_level', 0.90)
+            confidence_level = breakdown.get("confidence_level", 0.90)
             efficiency_score = confidence_level * 100
-            
+
             # INCLUDE ORIGINAL USER INPUT FOR PROPER DISPLAY
-            original_volume = processed_event.get('original_volume', volume_applied_liters)
-            original_volume_unit = processed_event.get('original_volume_unit', 'L')
-            original_area = processed_event.get('original_area', processed_event.get('area', 1.0))
-            original_area_unit = processed_event.get('original_area_unit', 'hectares')
-            
+            original_volume = processed_event.get("original_volume", volume_applied_liters)
+            original_volume_unit = processed_event.get("original_volume_unit", "L")
+            original_area = processed_event.get("original_area", processed_event.get("area", 1.0))
+            original_area_unit = processed_event.get("original_area_unit", "hectares")
+
             result = {
                 "co2e": round(co2e, 3),
                 "efficiency_score": round(efficiency_score, 1),
@@ -922,71 +922,73 @@ class OptimizedCarbonCalculator:
                 "verification_status": "epa_usda_verified",
                 "breakdown": breakdown,
                 "npk_content": npk_content,
-                "manufacturing_emissions_kg_co2e": breakdown.get('manufacturing_emissions_kg_co2e', 0),
-                "application_fuel_liters": breakdown.get('application_fuel_liters', 0),
-                "application_fuel_gallons": breakdown.get('application_fuel_gallons', 0),
-                "application_emissions_kg_co2e": breakdown.get('application_emissions_kg_co2e', 0),
+                "manufacturing_emissions_kg_co2e": breakdown.get("manufacturing_emissions_kg_co2e", 0),
+                "application_fuel_liters": breakdown.get("application_fuel_liters", 0),
+                "application_fuel_gallons": breakdown.get("application_fuel_gallons", 0),
+                "application_emissions_kg_co2e": breakdown.get("application_emissions_kg_co2e", 0),
                 "volume_applied_liters": volume_applied_liters,  # Converted volume for calculations
-                "nitrogen_kg": breakdown.get('nitrogen_kg', 0),
+                "nitrogen_kg": breakdown.get("nitrogen_kg", 0),
                 # ORIGINAL USER INPUT FOR DISPLAY PURPOSES
                 "original_volume_applied": original_volume,  # What user actually entered
                 "original_volume_unit": original_volume_unit,  # Unit user selected
                 "original_area_treated": original_area,  # Original area input
                 "original_area_unit": original_area_unit,  # Original area unit
             }
-            
+
             # Log essential calculation results for troubleshooting
-            logger.info(f"✅ Carbon calculation completed: {result['co2e']} kg CO2e for {original_volume} {original_volume_unit}")
-            
+            logger.info(
+                f"✅ Carbon calculation completed: {result['co2e']} kg CO2e for {original_volume} {original_volume_unit}"
+            )
+
             return result
-            
+
         except Exception as e:
             # Fallback to prevent breaking existing functionality
             logger.error(f"❌ EPA calculation failed in optimized endpoint: {e}")
             logger.error(f"   Traceback: {str(e)}")
-            
+
             return {
                 "co2e": 0.0,
                 "efficiency_score": 50.0,
                 "calculation_method": "optimized_fallback",
                 "verification_status": "calculation_error",
-                "error": str(e)
+                "error": str(e),
             }
 
     def calculate_production_impact_optimized(self, processed_event: Dict[str, Any]) -> Dict[str, Any]:
         """
         FIXED: Production event calculation using USDA verified emission factors
-        
+
         CRITICAL BUG FIX: Previous implementation used incorrect calculation (hours * area * 0.5)
         which bypassed all USDA emission factors and validation systems.
-        
+
         Now uses proper VerifiedEmissionFactors.calculate_production_event_emissions
         with validation to prevent 26x overestimation issues.
         """
         from carbon.services.verified_emission_factors import VerifiedEmissionFactors
-        
+
         # Extract proper parameters for USDA calculation
         production_type = processed_event.get("production_type", "general production")
         area_covered = processed_event.get("area_covered", 1.0)  # Should be in acres
         fuel_consumed = processed_event.get("fuel_consumed")
         equipment_hours = processed_event.get("equipment_hours") or processed_event.get("duration_hours")
-        
+
         try:
             # Use proper USDA verified emission factors with validation
             calculation_result = VerifiedEmissionFactors.calculate_production_event_emissions(
                 production_type=production_type,
                 area_covered=area_covered,
                 fuel_consumed=fuel_consumed,
-                equipment_hours=equipment_hours
+                equipment_hours=equipment_hours,
             )
-            
+
             # Extract results from USDA calculation
-            co2e_kg = calculation_result['co2e_kg']
-            
+            co2e_kg = calculation_result["co2e_kg"]
+
             # Calculate efficiency score based on realistic ranges
             area_hectares = area_covered * 0.404686  # Convert acres to hectares
             emissions_per_hectare = co2e_kg / area_hectares if area_hectares > 0 else co2e_kg
-            
+
             # Base efficiency score on realistic emission ranges (lower emissions = higher efficiency)
             if emissions_per_hectare < 10:
                 efficiency_score = 90
@@ -996,18 +998,18 @@ class OptimizedCarbonCalculator:
                 efficiency_score = 70
             else:
                 efficiency_score = 60
-            
+
             return {
                 "co2e": co2e_kg,
                 "efficiency_score": efficiency_score,
                 "calculation_method": f"usda_verified_{calculation_result['calculation_method']}",
                 "usda_verified": True,
-                "breakdown": calculation_result.get('breakdown', {}),
-                "data_sources": calculation_result.get('data_sources', []),
-                "validation_warnings": calculation_result.get('validation_warnings', []),
-                "limitations": calculation_result.get('limitations', '')
+                "breakdown": calculation_result.get("breakdown", {}),
+                "data_sources": calculation_result.get("data_sources", []),
+                "validation_warnings": calculation_result.get("validation_warnings", []),
+                "limitations": calculation_result.get("limitations", ""),
             }
-            
+
         except Exception as e:
             # Fallback to prevent API failures, but log the error
             print(f"ERROR in production calculation: {e}")
@@ -1016,7 +1018,7 @@ class OptimizedCarbonCalculator:
                 "efficiency_score": 50.0,
                 "calculation_method": "fallback_error",
                 "usda_verified": False,
-                "error": str(e)
+                "error": str(e),
             }
 
     def calculate_equipment_impact_optimized(self, processed_event: Dict[str, Any]) -> Dict[str, Any]:
@@ -1046,7 +1048,7 @@ class OptimizedCarbonCalculator:
         try:
             # Use the new EventCarbonCalculator with proper emission factors
             from .services.event_carbon_calculator import EventCarbonCalculator
-            
+
             # Create a mock event object from processed_event data
             class MockGeneralEvent:
                 def __init__(self, processed_data):
@@ -1055,13 +1057,13 @@ class OptimizedCarbonCalculator:
                     self.observation = processed_data.get("observation", "")
                     self.type = processed_data.get("type", "general")
                     self.extra_data = processed_data.get("extra_data", {})
-            
+
             mock_event = MockGeneralEvent(processed_event)
-            
+
             # Use the enhanced calculator
             calculator = EventCarbonCalculator()
             result = calculator.calculate_general_event_impact(mock_event)
-            
+
             # Convert to optimized response format
             return {
                 "co2e": round(result.get("co2e", 0), 3),
@@ -1069,27 +1071,28 @@ class OptimizedCarbonCalculator:
                 "calculation_method": f"optimized_{result.get('calculation_method', 'general_enhanced')}",
                 "usda_verified": True,  # Now using EPA/USDA verified factors
                 "data_source": result.get("data_source", "EPA/USDA Enhanced Factors"),
-                "verification_status": result.get("verification_status", "enhanced_factors")
+                "verification_status": result.get("verification_status", "enhanced_factors"),
             }
-            
+
         except Exception as e:
             import logging
+
             logger = logging.getLogger(__name__)
             logger.warning(f"Enhanced general calculation failed, using fallback: {e}")
-            
+
             # Improved fallback (reduced from 0.5 to 0.25)
             return {
                 "co2e": 0.25,  # Reduced fallback value
                 "efficiency_score": 60.0,
                 "calculation_method": "optimized_general_fallback",
                 "usda_verified": False,
-                "fallback_reason": str(e)
+                "fallback_reason": str(e),
             }
 
     def calculate_weather_event_impact(self, processed_event: Dict[str, Any]) -> Dict[str, Any]:
         """
         Optimized weather event calculation.
-        
+
         Weather events are environmental context - they don't directly generate emissions
         but document transparency and agricultural conditions.
         """
@@ -1099,35 +1102,35 @@ class OptimizedCarbonCalculator:
             "efficiency_score": 100.0,  # Perfect score - transparency value
             "calculation_method": "weather_transparency",
             "usda_verified": False,
-            "transparency_note": "Weather events document environmental conditions for agricultural transparency"
+            "transparency_note": "Weather events document environmental conditions for agricultural transparency",
         }
 
     def calculate_pest_management_event_impact(self, processed_event: Dict[str, Any]) -> Dict[str, Any]:
         """
         Calculate carbon impact for pest management events.
-        
+
         Pest management events focused on transparency and sustainable practices.
         Uses fixed emission factors based on pest management type.
         """
         from carbon.services.event_carbon_calculator import EventCarbonCalculator
-        
+
         # Create a mock event object with the required attributes for EventCarbonCalculator
         class MockPestEvent:
             def __init__(self, event_data):
-                self.type = event_data.get('pest_type', 'SC')  # Map pest_type back to type
-                self.pest_species = event_data.get('pest_species', '')
-                self.pest_pressure_level = event_data.get('pest_pressure_level', '')
-                self.beneficial_species = event_data.get('beneficial_species', '')
-                self.release_quantity = event_data.get('release_quantity', '')
-                self.trap_count = event_data.get('trap_count', 0)
-                self.damage_percentage = event_data.get('damage_percentage', 0)
-                self.action_threshold_met = event_data.get('action_threshold_met', False)
-                self.imp_strategy = event_data.get('imp_strategy', '')
+                self.type = event_data.get("pest_type", "SC")  # Map pest_type back to type
+                self.pest_species = event_data.get("pest_species", "")
+                self.pest_pressure_level = event_data.get("pest_pressure_level", "")
+                self.beneficial_species = event_data.get("beneficial_species", "")
+                self.release_quantity = event_data.get("release_quantity", "")
+                self.trap_count = event_data.get("trap_count", 0)
+                self.damage_percentage = event_data.get("damage_percentage", 0)
+                self.action_threshold_met = event_data.get("action_threshold_met", False)
+                self.imp_strategy = event_data.get("imp_strategy", "")
                 # Add a minimal id for USDA metadata (prevents attribute error)
-                self.id = event_data.get('id', 1)
-        
+                self.id = event_data.get("id", 1)
+
         mock_event = MockPestEvent(processed_event)
-        
+
         # Use the standard calculator for pest management logic
         calculator = EventCarbonCalculator()
         return calculator.calculate_pest_management_event_impact(mock_event)
@@ -1135,44 +1138,44 @@ class OptimizedCarbonCalculator:
     def calculate_soil_management_event_impact(self, processed_event: Dict[str, Any]) -> Dict[str, Any]:
         """
         Calculate carbon impact for soil management events.
-        
+
         Soil management events focused on sustainable agriculture practices.
         Uses USDA emission factors based on soil management type and area.
         """
         from carbon.services.event_carbon_calculator import EventCarbonCalculator
-        
+
         # Create a mock event object with the required attributes for EventCarbonCalculator
         class MockSoilEvent:
             def __init__(self, event_data):
                 # Map processed event data back to the format expected by EventCarbonCalculator
-                self.type = event_data.get('soil_type', 'ST')  # Map soil_type back to type
-                self.area = event_data.get('area', '1.0')
-                self.area_covered = event_data.get('area_covered', '1.0')
-                self.area_unit = event_data.get('area_unit', 'hectares')
-                self.soil_ph = event_data.get('soil_ph')
-                self.organic_matter_percentage = event_data.get('organic_matter_percentage')
-                self.soil_texture = event_data.get('soil_texture')
-                self.soil_moisture = event_data.get('soil_moisture')
-                self.depth = event_data.get('depth', '30')
-                self.depth_unit = event_data.get('depth_unit', 'cm')
-                self.equipment_used = event_data.get('equipment_used', '')
-                self.method = event_data.get('method', '')
+                self.type = event_data.get("soil_type", "ST")  # Map soil_type back to type
+                self.area = event_data.get("area", "1.0")
+                self.area_covered = event_data.get("area_covered", "1.0")
+                self.area_unit = event_data.get("area_unit", "hectares")
+                self.soil_ph = event_data.get("soil_ph")
+                self.organic_matter_percentage = event_data.get("organic_matter_percentage")
+                self.soil_texture = event_data.get("soil_texture")
+                self.soil_moisture = event_data.get("soil_moisture")
+                self.depth = event_data.get("depth", "30")
+                self.depth_unit = event_data.get("depth_unit", "cm")
+                self.equipment_used = event_data.get("equipment_used", "")
+                self.method = event_data.get("method", "")
                 # Fuel consumption fields (converted to proper types)
-                self.fuel_consumed = event_data.get('fuel_consumed')
-                self.fuel_unit = event_data.get('fuel_unit', 'L')
-                self.equipment_hours = event_data.get('equipment_hours')
+                self.fuel_consumed = event_data.get("fuel_consumed")
+                self.fuel_unit = event_data.get("fuel_unit", "L")
+                self.equipment_hours = event_data.get("equipment_hours")
                 # Tillage-specific fields
-                self.tillage_type = event_data.get('tillage_type')
-                self.tillage_intensity = event_data.get('tillage_intensity')
-                self.tillage_direction = event_data.get('tillage_direction')
-                self.residue_management = event_data.get('residue_management')
-                self.weather_conditions = event_data.get('weather_conditions')
-                self.temperature_range = event_data.get('temperature_range')
+                self.tillage_type = event_data.get("tillage_type")
+                self.tillage_intensity = event_data.get("tillage_intensity")
+                self.tillage_direction = event_data.get("tillage_direction")
+                self.residue_management = event_data.get("residue_management")
+                self.weather_conditions = event_data.get("weather_conditions")
+                self.temperature_range = event_data.get("temperature_range")
                 # Add a minimal id for USDA metadata (prevents attribute error)
-                self.id = event_data.get('id', 1)
-        
+                self.id = event_data.get("id", 1)
+
         mock_event = MockSoilEvent(processed_event)
-        
+
         # Use the standard calculator for soil management logic
         calculator = EventCarbonCalculator()
         return calculator.calculate_soil_management_event_impact(mock_event)
@@ -1286,10 +1289,11 @@ class OptimizedEventProcessor:
     def _process_chemical_event(cls, event_data: Dict[str, Any]) -> Dict[str, Any]:
         """Process chemical event data efficiently WITH PROPER UNIT CONVERSION AND DEBUG LOGGING"""
         import logging
+
         from carbon.services.verified_emission_factors import VerifiedEmissionFactors
-        
+
         logger = logging.getLogger(__name__)
-        
+
         # FIELD NAME COMPATIBILITY: Support both naming conventions
         # Frontend form uses: volume_applied, area_treated, application_method
         # Backend/stored events use: volume, area, way_of_application
@@ -1299,17 +1303,17 @@ class OptimizedEventProcessor:
         area_unit = event_data.get("area_unit", "acres")
         application_method = event_data.get("application_method") or event_data.get("way_of_application", "broadcast")
         concentration = event_data.get("concentration", "10-10-10")
-        
+
         # DEBUG LOGGING: Log all incoming values
-        
+
         # CRITICAL FIX: Convert volume from kg to liters if needed
         volume_value = float(volume_value)
         volume_liters = volume_value  # Default assumption: already in liters
-        
+
         if volume_unit.lower() in ["kg", "kilogram", "kilograms"]:
             # Need to convert kg to liters using fertilizer density
             logger.info(f"   🚨 VOLUME CONVERSION NEEDED: {volume_value} kg → ? L")
-            
+
             # Parse NPK content to determine density
             if "-" in concentration:
                 parts = concentration.split("-")
@@ -1320,21 +1324,21 @@ class OptimizedEventProcessor:
                 }
             else:
                 npk_content = {"N": 0, "P": 0, "K": 0}
-            
+
             # Get accurate fertilizer density
             density_kg_per_l = VerifiedEmissionFactors._get_fertilizer_density(npk_content, application_method)
             volume_liters = volume_value / density_kg_per_l  # Convert kg to L
-            
+
             # Calculate density for kg to L conversion
             # Convert kg to liters using density
             pass
         else:
             # Volume already in correct unit
             pass
-        
+
         # CRITICAL FIX: Convert area from acres to hectares
         area_value = float(area_value)
-        
+
         # Convert area to hectares for EPA calculations
         if area_unit.lower() in ["acre", "acres"]:
             area_hectares = area_value * 0.404686  # acres to hectares
@@ -1346,7 +1350,7 @@ class OptimizedEventProcessor:
             # Default to hectares if unit not specified
             area_hectares = area_value
             logger.info(f"   ⚠️ Unknown area unit '{area_unit}', assuming hectares: {area_hectares} ha")
-        
+
         processed_data = {
             "chemical_type": event_data.get("type", "FE"),
             "volume": volume_liters,  # NOW PROPERLY CONVERTED TO LITERS
@@ -1360,33 +1364,34 @@ class OptimizedEventProcessor:
             "original_area": area_value,  # Original area input
             "original_area_unit": area_unit,  # Original area unit
         }
-        
+
         # Event processing complete
-        
+
         return processed_data
 
     @classmethod
     def _process_production_event(cls, event_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         ENHANCED: Process production event data with comprehensive unit conversions
-        
+
         CRITICAL IMPROVEMENTS:
         - Handles ALL unit conversions (area, fuel, yield, water)
         - Uses UnitConverter for accurate, auditable conversions
         - Supports all form units: kg, tonnes, pounds, liters, gallons, etc.
         - Maintains audit trail for transparency
         """
-        from carbon.utils.unit_converter import UnitConverter, UnitConversionError
         import logging
-        
+
+        from carbon.utils.unit_converter import UnitConversionError, UnitConverter
+
         logger = logging.getLogger(__name__)
         conversion_audit = []  # Track all conversions for transparency
-        
+
         try:
             # AREA CONVERSION - Convert to acres for USDA calculations
             area_raw = event_data.get("area_covered", 1.0)
             area_unit = event_data.get("area_unit", "hectares")
-            
+
             # Extract numeric value if string
             if isinstance(area_raw, str):
                 if " " in area_raw:
@@ -1395,21 +1400,17 @@ class OptimizedEventProcessor:
                     area_value = float(area_raw)
             else:
                 area_value = float(area_raw)
-            
+
             # Convert area to acres (required by USDA emission factors)
-            area_covered_acres, area_audit = UnitConverter.convert_area(
-                area_value, 
-                area_unit, 
-                to_unit='acres'
-            )
+            area_covered_acres, area_audit = UnitConverter.convert_area(area_value, area_unit, to_unit="acres")
             conversion_audit.append(area_audit)
-            
+
             # FUEL CONVERSION - Convert to gallons for EPA emission factors
             fuel_consumed_gallons = None
             fuel_consumed_raw = event_data.get("fuel_consumed")
             fuel_unit = event_data.get("fuel_unit", "gallons")
             fuel_type = event_data.get("fuel_type", "diesel")
-            
+
             if fuel_consumed_raw:
                 # Extract numeric value from fuel input
                 if isinstance(fuel_consumed_raw, str):
@@ -1422,75 +1423,69 @@ class OptimizedEventProcessor:
                         fuel_value = None
                 else:
                     fuel_value = float(fuel_consumed_raw)
-                
+
                 if fuel_value and fuel_value > 0:
                     # Convert fuel to gallons for EPA calculations
                     fuel_consumed_gallons, fuel_audit = UnitConverter.convert_fuel_to_gallons(
-                        fuel_value,
-                        fuel_unit,
-                        fuel_type
+                        fuel_value, fuel_unit, fuel_type
                     )
                     conversion_audit.append(fuel_audit)
-            
+
             # EQUIPMENT HOURS - Ensure proper float conversion
             equipment_hours_raw = event_data.get("equipment_hours") or event_data.get("duration", 8.0)
             try:
                 equipment_hours = float(equipment_hours_raw)
             except (ValueError, TypeError):
                 equipment_hours = 8.0  # Default fallback
-            
+
             # YIELD QUANTITY CONVERSION - Convert to kilograms
             yield_quantity_kg = None
             yield_raw = event_data.get("yield_quantity") or event_data.get("quantity_planted")
             yield_unit = event_data.get("yield_unit") or event_data.get("quantity_unit", "kilograms")
-            
+
             if yield_raw:
                 try:
                     if isinstance(yield_raw, str):
                         yield_value = float(yield_raw) if yield_raw.strip() else 0
                     else:
                         yield_value = float(yield_raw)
-                    
+
                     if yield_value > 0:
                         yield_quantity_kg, yield_audit = UnitConverter.convert_mass(
-                            yield_value,
-                            yield_unit,
-                            to_unit='kilograms'
+                            yield_value, yield_unit, to_unit="kilograms"
                         )
                         conversion_audit.append(yield_audit)
-                        
+
                 except (ValueError, TypeError, UnitConversionError):
                     logger.warning(f"Could not convert yield quantity: {yield_raw} {yield_unit}")
                     yield_quantity_kg = None
-            
+
             # WATER VOLUME CONVERSION - Convert to gallons for irrigation calculations
             water_volume_gallons = None
             water_raw = event_data.get("water_volume")
             water_unit = event_data.get("water_unit", "gallons")
-            
+
             if water_raw:
                 try:
                     if isinstance(water_raw, str):
                         water_value = float(water_raw) if water_raw.strip() else 0
                     else:
                         water_value = float(water_raw)
-                    
+
                     if water_value > 0:
                         water_volume_gallons, water_audit = UnitConverter.convert_volume(
-                            water_value,
-                            water_unit,
-                            to_unit='gallons'
+                            water_value, water_unit, to_unit="gallons"
                         )
                         conversion_audit.append(water_audit)
-                        
+
                 except (ValueError, TypeError, UnitConversionError):
                     logger.warning(f"Could not convert water volume: {water_raw} {water_unit}")
                     water_volume_gallons = None
-            
+
             # Log all conversions for audit trail
             if conversion_audit:
                 logger.info(f"Production event unit conversions: {'; '.join(conversion_audit)}")
-            
+
             # Return processed data with all conversions applied
             processed_data = {
                 "production_type": cls._map_production_type(event_data.get("type", "IR")),
@@ -1499,19 +1494,19 @@ class OptimizedEventProcessor:
                 "equipment_hours": equipment_hours,
                 "conversion_audit": conversion_audit,  # Track conversions for transparency
             }
-            
+
             # Add optional converted values if present
             if yield_quantity_kg is not None:
                 processed_data["yield_quantity_kg"] = yield_quantity_kg
             if water_volume_gallons is not None:
                 processed_data["water_volume_gallons"] = water_volume_gallons
-            
+
             # Mark that unit conversions were successfully applied
             processed_data["unit_conversions_applied"] = True
             processed_data["processing_method"] = "enhanced_with_unit_conversions"
-                
+
             return processed_data
-            
+
         except UnitConversionError as e:
             logger.error(f"Unit conversion error in production event: {e}")
             # Fall back to basic processing without conversions
@@ -1519,13 +1514,13 @@ class OptimizedEventProcessor:
         except Exception as e:
             logger.error(f"Error processing production event: {e}")
             return cls._process_production_event_fallback(event_data)
-    
+
     @classmethod
     def _process_production_event_fallback(cls, event_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Fallback production event processing without unit conversions.
         Used when UnitConverter fails to prevent calculation failures.
-        
+
         Returns basic processed data with minimal validation.
         """
         try:
@@ -1543,7 +1538,7 @@ class OptimizedEventProcessor:
                     except ValueError:
                         return default
                 return default
-            
+
             # Process with basic validation but no unit conversions
             processed_data = {
                 "production_type": cls._map_production_type(event_data.get("type", "GE")),
@@ -1552,21 +1547,19 @@ class OptimizedEventProcessor:
                 "fuel_consumed": safe_float(event_data.get("fuel_consumed")),
                 "yield_quantity": safe_float(event_data.get("yield_quantity", 0)),
                 "water_volume": safe_float(event_data.get("water_volume", 0)),
-                
                 # Pass through other data as-is
                 "product_name": event_data.get("product_name", "Unknown Product"),
                 "equipment_type": event_data.get("equipment_type", ""),
                 "fuel_type": event_data.get("fuel_type", "diesel"),
-                
                 # Add fallback indicators for debugging
                 "processing_method": "fallback_basic",
                 "unit_conversions_applied": False,
-                "fallback_reason": "Unit converter unavailable or failed"
+                "fallback_reason": "Unit converter unavailable or failed",
             }
-            
+
             logger.warning(f"Using fallback processing for production event: {processed_data}")
             return processed_data
-            
+
         except Exception as e:
             logger.error(f"Fallback processing failed: {e}")
             # Absolute minimal fallback
@@ -1580,19 +1573,19 @@ class OptimizedEventProcessor:
                 "product_name": "Unknown Product",
                 "processing_method": "emergency_fallback",
                 "unit_conversions_applied": False,
-                "fallback_reason": f"Emergency fallback due to: {e}"
+                "fallback_reason": f"Emergency fallback due to: {e}",
             }
-    
+
     @classmethod
     def _map_production_type(cls, type_code: str) -> str:
         """Map frontend production type codes to descriptive names for USDA calculation"""
         type_mapping = {
             "HA": "harvesting",
-            "PL": "planting", 
+            "PL": "planting",
             "IR": "irrigation",
             "PR": "pruning",
             "TR": "transplanting",
-            "GE": "general production"
+            "GE": "general production",
         }
         return type_mapping.get(type_code, "general production")
 
@@ -1602,14 +1595,14 @@ class OptimizedEventProcessor:
         # FIXED: Use fuel_consumed from the actual payload instead of fuel_amount
         fuel_consumed = event_data.get("fuel_consumed") or event_data.get("fuel_amount", 5)
         fuel_unit = event_data.get("fuel_unit", "L")
-        
+
         # Convert fuel to liters if needed
         fuel_liters = float(fuel_consumed)
         if fuel_unit == "gal":
             fuel_liters *= 3.78541  # gallons to liters
         elif fuel_unit == "kg":
             fuel_liters *= 1.2  # approximate kg to L for diesel
-            
+
         return {
             "equipment_type": event_data.get("type", "FC"),
             "fuel_type": event_data.get("fuel_type", "diesel"),
@@ -1626,7 +1619,7 @@ class OptimizedEventProcessor:
             area_value = float(area_str)
         except (ValueError, TypeError):
             area_value = 1.0
-        
+
         return {
             "soil_type": event_data.get("type", "ST"),  # Default to Soil Testing
             "area": str(area_value),
@@ -1635,7 +1628,7 @@ class OptimizedEventProcessor:
             "soil_ph": event_data.get("soil_ph"),
             "organic_matter_percentage": event_data.get("organic_matter_percentage"),
             "soil_texture": event_data.get("soil_texture"),
-            "soil_moisture": event_data.get("soil_moisture"), 
+            "soil_moisture": event_data.get("soil_moisture"),
             "depth": event_data.get("depth", "30"),
             "depth_unit": event_data.get("depth_unit", "cm"),
             "equipment_used": event_data.get("equipment_used", ""),
@@ -1643,7 +1636,9 @@ class OptimizedEventProcessor:
             # Fuel consumption fields for standardized calculation (convert to float)
             "fuel_consumed": float(event_data.get("fuel_consumed", 0)) if event_data.get("fuel_consumed") else None,
             "fuel_unit": event_data.get("fuel_unit", "L"),
-            "equipment_hours": float(event_data.get("equipment_hours", 0)) if event_data.get("equipment_hours") else None,
+            "equipment_hours": (
+                float(event_data.get("equipment_hours", 0)) if event_data.get("equipment_hours") else None
+            ),
             # Tillage-specific fields
             "tillage_type": event_data.get("tillage_type"),
             "tillage_intensity": event_data.get("tillage_intensity"),
@@ -1663,7 +1658,9 @@ class OptimizedEventProcessor:
             "beneficial_species": event_data.get("beneficial_species", ""),
             "release_quantity": event_data.get("release_quantity", ""),
             "trap_count": int(event_data.get("trap_count", 0)) if event_data.get("trap_count") else 0,
-            "damage_percentage": float(event_data.get("damage_percentage", 0)) if event_data.get("damage_percentage") else 0,
+            "damage_percentage": (
+                float(event_data.get("damage_percentage", 0)) if event_data.get("damage_percentage") else 0
+            ),
             "action_threshold_met": bool(event_data.get("action_threshold_met", False)),
             "ipm_strategy": event_data.get("ipm_strategy", ""),
         }
@@ -1853,27 +1850,35 @@ def calculate_event_carbon_impact(request):
                 # Map production event data (use actual form data, not defaults)
                 elif event_type == "production":
                     self.type = event_data.get("type", "IR")  # Use actual type from form
-                    
+
                     # Map frontend form fields correctly for EPA calculations
-                    self.area_covered = float(event_data.get("area_covered", "1.0")) if event_data.get("area_covered") else 1.0
+                    self.area_covered = (
+                        float(event_data.get("area_covered", "1.0")) if event_data.get("area_covered") else 1.0
+                    )
                     self.area_unit = event_data.get("area_unit", "ha")
-                    
+
                     # Handle fuel consumption with unit conversion
                     fuel_consumed = event_data.get("fuel_consumed")
                     self.fuel_consumed = float(fuel_consumed) if fuel_consumed and fuel_consumed.strip() else None
                     self.fuel_unit = event_data.get("fuel_unit", "L")
-                    
-                    # Equipment hours (frontend sends 'equipment_hours' not 'equipment_operating_hours')  
+
+                    # Equipment hours (frontend sends 'equipment_hours' not 'equipment_operating_hours')
                     equipment_hours = event_data.get("equipment_hours")
                     self.equipment_hours = float(equipment_hours) if equipment_hours else None
-                    
+
                     # Additional production fields from frontend
-                    self.yield_quantity = float(event_data.get("yield_quantity", 0)) if event_data.get("yield_quantity") else None
+                    self.yield_quantity = (
+                        float(event_data.get("yield_quantity", 0)) if event_data.get("yield_quantity") else None
+                    )
                     self.yield_unit = event_data.get("yield_unit", "kg")
-                    self.transportation_distance = float(event_data.get("transportation_distance", 0)) if event_data.get("transportation_distance") else None
+                    self.transportation_distance = (
+                        float(event_data.get("transportation_distance", 0))
+                        if event_data.get("transportation_distance")
+                        else None
+                    )
                     self.transportation_unit = event_data.get("transportation_unit", "km")
                     self.production_efficiency = event_data.get("production_efficiency", "normal")
-                    
+
                     # Legacy support for existing fields
                     duration = event_data.get("duration", "2 hours")
                     equipment_used = event_data.get("equipment_used", "irrigation_system")
@@ -1881,16 +1886,17 @@ def calculate_event_carbon_impact(request):
                     # Convert duration to volume estimate for irrigation (backwards compatibility)
                     if "hour" in str(duration):
                         import re
+
                         hours = re.findall(r"\d+", str(duration))
                         estimated_volume = int(hours[0]) * 50 if hours else 100  # 50L per hour estimate
                         self.volume = f"{estimated_volume} liters"
                     else:
                         self.volume = str(duration)  # Use as-is if not hours
 
-                    # Legacy field mapping 
+                    # Legacy field mapping
                     self.area = f"{self.area_covered} {self.area_unit}"
                     self.equipment = equipment_used
-                    
+
                     # Create structured data for EPA calculations with correct field names
                     self.extra_data = {
                         "area_covered": self.area_covered,
@@ -1904,18 +1910,18 @@ def calculate_event_carbon_impact(request):
                         "transportation_unit": self.transportation_unit,
                         "production_efficiency": self.production_efficiency,
                         "equipment_used": equipment_used,
-                        "duration": duration
+                        "duration": duration,
                     }
-                    
+
                     # Mock history for crop information (needed for EPA calculations)
                     class MockHistory:
                         def __init__(self):
                             self.product = MockProduct()
-                            
+
                     class MockProduct:
                         def __init__(self):
                             self.name = event_data.get("crop_name", "unknown")
-                    
+
                     self.history = MockHistory()
 
                 # Map equipment event data (use actual form data, not defaults)
@@ -1936,7 +1942,7 @@ def calculate_event_carbon_impact(request):
                     self.water_deficit = event_data.get("water_deficit")
                     self.duration = event_data.get("duration")
                     self.way_of_protection = event_data.get("way_of_protection", "")
-                    
+
                     # Add extra_data for EPA calculation compatibility
                     self.extra_data = {
                         "lower_temperature": event_data.get("lower_temperature"),
@@ -1951,7 +1957,7 @@ def calculate_event_carbon_impact(request):
                         "humidity_level": event_data.get("humidity_level"),
                         "crop_impact": event_data.get("crop_impact"),
                         "protection_measures": event_data.get("protection_measures"),
-                        "damage_assessment": event_data.get("damage_assessment")
+                        "damage_assessment": event_data.get("damage_assessment"),
                     }
 
                 # Map soil management event data (use actual form data, not defaults)
@@ -2059,7 +2065,7 @@ def calculate_event_carbon_impact(request):
         # Ensure required fields are present and enhance with verification info
         calculation_result["event_type"] = event_type
         calculation_result["timestamp"] = timezone.now().isoformat()
-        
+
         # Add EPA/USDA verification indicators for transparency
         if calculation_result.get("calculation_method") in ["verified_epa_factors", "verified_epa_usda_factors"]:
             calculation_result["verification_badge"] = "EPA Verified"
@@ -2341,21 +2347,20 @@ class CarbonEstablishmentSummaryViewSet(viewsets.ViewSet):
 
             # Calculate transparency metrics: photos and active productions
             from history.models import History
-            
+
             # Get active productions for this establishment
             active_productions = History.objects.filter(
-                parcel__establishment_id=establishment_id,
-                finish_date__isnull=True  # Only active productions
+                parcel__establishment_id=establishment_id, finish_date__isnull=True  # Only active productions
             )
             active_productions_count = active_productions.count()
-            
+
             # Count photos from all event albums across active productions
             photo_count = 0
             for history in active_productions:
                 # Count photos from production album
-                if history.album and hasattr(history.album, 'images'):
+                if history.album and hasattr(history.album, "images"):
                     photo_count += history.album.images.count()
-                
+
                 # Count photos from all event albums (this is where event photos are stored)
                 all_events = []
                 all_events.extend(history.history_weatherevent_events.all())
@@ -2379,7 +2384,7 @@ class CarbonEstablishmentSummaryViewSet(viewsets.ViewSet):
                 all_events.extend(history.history_qualityevent_events.all())
 
                 for event in all_events:
-                    if event.album and hasattr(event.album, 'images'):
+                    if event.album and hasattr(event.album, "images"):
                         photo_count += event.album.images.count()
 
             # Check blockchain verification status for establishment
@@ -2387,6 +2392,7 @@ class CarbonEstablishmentSummaryViewSet(viewsets.ViewSet):
             try:
                 # Check if any production in this establishment has blockchain verification
                 from carbon.models import BlockchainVerification
+
                 blockchain_records = BlockchainVerification.objects.filter(
                     production__parcel__establishment_id=establishment_id
                 ).exists()
@@ -2619,7 +2625,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
             except ValidationError as e:
                 logger.warning(f"🚨 QR validation failed: {e}")
                 return Response({"error": "Invalid request parameters"}, status=status.HTTP_400_BAD_REQUEST)
-            
+
             print(f"DEBUG: qr_summary called for production {production_id}")
             # Phase 1 Optimization: Add caching for QR endpoint
             from django.core.cache import cache
@@ -2778,31 +2784,32 @@ class PublicProductionViewSet(viewsets.ViewSet):
 
             # Calculate transparency score using TransparencyCalculator
             from history.services.transparency_calculator import TransparencyCalculator
+
             from .services.carbon_transparency_service import transparency_service
-            
+
             transparency_calc = TransparencyCalculator()
             transparency_data = transparency_calc.calculate_transparency_score(production)
-            transparency_score = transparency_data.get('transparency_percentage', 0)
-            
+            transparency_score = transparency_data.get("transparency_percentage", 0)
+
             # Get verification level and standards
             verification_level = transparency_service.calculate_verification_level(production)
             verification_standards = transparency_service.calculate_verification_standards(production)
-            
+
             # Calculate carbon score (supporting role for transparency)
             # This provides scientific validation, not competitive ranking
             carbon_footprint_per_kg = 0
-            if hasattr(production, 'production_amount') and production.production_amount:
+            if hasattr(production, "production_amount") and production.production_amount:
                 carbon_footprint_per_kg = net_footprint / production.production_amount
             else:
                 carbon_footprint_per_kg = net_footprint / 1000  # Default per kg
 
             # Carbon data for consumer context (non-competitive)
             carbon_context = {
-                'per_kg_footprint': round(carbon_footprint_per_kg, 2),
-                'is_carbon_negative': net_footprint < 0,
-                'is_carbon_neutral': abs(net_footprint) < 0.1,
-                'verified_by_usda': verification_standards.get('usda_verified', False),
-                'blockchain_verified': verification_standards.get('blockchain_verified', False)
+                "per_kg_footprint": round(carbon_footprint_per_kg, 2),
+                "is_carbon_negative": net_footprint < 0,
+                "is_carbon_neutral": abs(net_footprint) < 0.1,
+                "verified_by_usda": verification_standards.get("usda_verified", False),
+                "blockchain_verified": verification_standards.get("blockchain_verified", False),
             }
 
             # Quick mode: return minimal data for fast loading (transparency-first)
@@ -2811,8 +2818,8 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     "transparencyScore": round(transparency_score, 1),
                     "verificationLevel": verification_level,
                     "carbonFootprint": round(carbon_footprint_per_kg, 2),
-                    "carbonNegative": carbon_context['is_carbon_negative'],
-                    "usda_verified": carbon_context['verified_by_usda'],
+                    "carbonNegative": carbon_context["is_carbon_negative"],
+                    "usda_verified": carbon_context["verified_by_usda"],
                     "cache_hit": False,
                     "timestamp": timezone.now().isoformat(),
                 }
@@ -2833,9 +2840,9 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     "carbon_footprint_per_kg": carbon_footprint_per_kg,
                     "crop_type": crop_name,
                     "calculation_method": "transparency_first_usda_verification",
-                    "usda_verified": carbon_context['verified_by_usda'],
-                    "documentation_completeness": transparency_data.get('completeness_score', 0),
-                    "category_breakdown": transparency_data.get('category_breakdown', {}),
+                    "usda_verified": carbon_context["verified_by_usda"],
+                    "documentation_completeness": transparency_data.get("completeness_score", 0),
+                    "category_breakdown": transparency_data.get("category_breakdown", {}),
                     "timestamp": (
                         int(production.start_date.timestamp())
                         if production.start_date
@@ -2944,8 +2951,8 @@ class PublicProductionViewSet(viewsets.ViewSet):
                             "icon": "shield",
                         }
                     )
-                
-                if carbon_context['verified_by_usda']:
+
+                if carbon_context["verified_by_usda"]:
                     badges.append(
                         {
                             "id": "usda_verified",
@@ -2954,9 +2961,9 @@ class PublicProductionViewSet(viewsets.ViewSet):
                             "icon": "check-circle",
                         }
                     )
-                
+
                 # Add documentation completeness badge
-                completeness_score = transparency_data.get('completeness_score', 0)
+                completeness_score = transparency_data.get("completeness_score", 0)
                 if completeness_score >= 90:
                     badges.append(
                         {
@@ -2998,8 +3005,8 @@ class PublicProductionViewSet(viewsets.ViewSet):
             if transparency_score < 85:
                 # Use transparency recommendations directly
                 for rec in transparency_recommendations[:4]:  # Limit to 4 recommendations
-                    recommendations.append(rec['description'])
-                
+                    recommendations.append(rec["description"])
+
                 # Add generic transparency improvements if needed
                 if len(recommendations) < 4:
                     base_transparency_recommendations = [
@@ -3008,7 +3015,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                         "Record equipment maintenance and fuel usage",
                         "Keep detailed records of soil management practices",
                     ]
-                    
+
                     for rec in base_transparency_recommendations:
                         if len(recommendations) < 4:
                             recommendations.append(rec)
@@ -3026,47 +3033,43 @@ class PublicProductionViewSet(viewsets.ViewSet):
                 try:
                     # Use optimized timeline service to fix N+1 query problems
                     timeline_data = TimelineService.get_production_timeline(production, limit=10)
-                    logger.info(f"✅ Timeline service loaded {len(timeline_data)} events for production {production.id}")
+                    logger.info(
+                        f"✅ Timeline service loaded {len(timeline_data)} events for production {production.id}"
+                    )
                 except Exception as e:
                     logger.error(f"❌ Timeline service error for production {production.id}: {e}")
                     timeline_data = []
-
-
 
             # Build transparency-first response for consumer QR experience
             response_data = {
                 # PRIMARY: Transparency information comes first
                 "transparencyScore": round(transparency_score, 1),
                 "verificationLevel": verification_level,
-                "documentationCompleteness": transparency_data.get('completeness_score', 0),
-                "categoryBreakdown": transparency_data.get('category_breakdown', {}),
-                
+                "documentationCompleteness": transparency_data.get("completeness_score", 0),
+                "categoryBreakdown": transparency_data.get("category_breakdown", {}),
                 # SECONDARY: Carbon data for scientific context (non-competitive)
                 "carbonFootprint": {
                     "per_kg": round(carbon_footprint_per_kg, 2),
                     "total_emissions": float(total_emissions),
                     "total_offsets": float(total_offsets),
                     "net_footprint": float(net_footprint),
-                    "is_carbon_negative": carbon_context['is_carbon_negative'],
-                    "is_carbon_neutral": carbon_context['is_carbon_neutral'],
-                    "unit": "kg CO₂"
+                    "is_carbon_negative": carbon_context["is_carbon_negative"],
+                    "is_carbon_neutral": carbon_context["is_carbon_neutral"],
+                    "unit": "kg CO₂",
                 },
-                
                 # VERIFICATION: Trust and verification information
                 "verificationData": {
-                    "usda_verified": carbon_context['verified_by_usda'],
-                    "blockchain_verified": carbon_context['blockchain_verified'],
-                    "verification_date": verification_standards.get('last_updated'),
+                    "usda_verified": carbon_context["verified_by_usda"],
+                    "blockchain_verified": carbon_context["blockchain_verified"],
+                    "verification_date": verification_standards.get("last_updated"),
                     "blockchain_verification": blockchain_verification,
                 },
-                
                 # CONSUMER CONTEXT: Relatable information
                 "relatableFootprint": relatable_footprint,
                 "cropType": crop_name,
                 "badges": badges,
                 "recommendations": recommendations,
-                "achievements": verification_standards.get('achievements', []),
-                
+                "achievements": verification_standards.get("achievements", []),
                 # BREAKDOWN DATA: For detailed view
                 "emissionsByCategory": emissions_by_category,
                 "emissionsBySource": emissions_by_source,
@@ -3120,7 +3123,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
             # Cache the response for 15 minutes (900 seconds)
             # SECURITY: Validate and sanitize response data before sending
             validated_response = APIResponseValidator.validate_response_data(response_data)
-            
+
             # Production data doesn't change frequently, so caching is safe
             cache.set(cache_key, validated_response, 900)
 
@@ -3138,10 +3141,10 @@ class PublicProductionViewSet(viewsets.ViewSet):
         except Exception as e:
             logger.error(f"🚨 QR summary error for production {production_id}: {type(e).__name__}: {e}")
             logger.error(f"🚨 QR summary traceback: {traceback.format_exc()}")
-            
+
             # Return graceful fallback response for QR consumers
             fallback_response = {
-                "error": "Service temporarily unavailable", 
+                "error": "Service temporarily unavailable",
                 "transparencyScore": 0,
                 "verificationLevel": "Limited",
                 "documentationCompleteness": 0,
@@ -3152,7 +3155,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     "net_footprint": 0.0,
                     "is_carbon_negative": False,
                     "is_carbon_neutral": False,
-                    "unit": "kg CO₂"
+                    "unit": "kg CO₂",
                 },
                 "verificationData": {
                     "usda_verified": False,
@@ -3202,13 +3205,15 @@ class PublicProductionViewSet(viewsets.ViewSet):
                 # Quick transparency-first response (NO competitive scoring)
                 quick_response = {
                     "transparency": {
-                        "completeness_percentage": getattr(production, 'transparency_percentage', 75),
-                        "data_quality": production.carbon_grade or "C", 
-                        "verification_status": "verified" if getattr(production, 'blockchain_verified', False) else "pending"
+                        "completeness_percentage": getattr(production, "transparency_percentage", 75),
+                        "data_quality": production.carbon_grade or "C",
+                        "verification_status": (
+                            "verified" if getattr(production, "blockchain_verified", False) else "pending"
+                        ),
                     },
                     "carbon_impact": {
                         "kg_per_kg": 0.0,  # Will be populated by full request
-                        "unit": "kg CO₂ per kg product"
+                        "unit": "kg CO₂ per kg product",
                     },
                     "cache_hit": False,
                     "timestamp": timezone.now().isoformat(),
@@ -3246,9 +3251,9 @@ class PublicProductionViewSet(viewsets.ViewSet):
             response_data = {
                 # PRIMARY: Transparency metrics (non-competitive)
                 "transparency": {
-                    "completeness_percentage": getattr(production, 'transparency_percentage', 75),
+                    "completeness_percentage": getattr(production, "transparency_percentage", 75),
                     "data_quality": transparency_data["carbonGrade"],
-                    "verification_status": "verified" if blockchain_verification.get("verified", False) else "pending"
+                    "verification_status": "verified" if blockchain_verification.get("verified", False) else "pending",
                 },
                 # SECONDARY: Raw carbon data (factual, not comparative)
                 "carbon_impact": {
@@ -3256,13 +3261,13 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     "total_emissions": carbon_data.get("total_emissions", 0),
                     "total_offsets": carbon_data.get("total_offsets", 0),
                     "net_impact": carbon_data.get("net_footprint", 0),
-                    "unit": "kg CO₂ per kg product"
+                    "unit": "kg CO₂ per kg product",
                 },
                 # Transparency features (NO competitive comparison)
                 "farm_practices": {
                     "sustainable_methods": transparency_data.get("sustainable_practices", []),
                     "data_completeness": transparency_data.get("completeness_score", 75),
-                    "verification_methods": transparency_data.get("verification_methods", [])
+                    "verification_methods": transparency_data.get("verification_methods", []),
                 },
                 "equivalencyMetrics": transparency_data["equivalencyMetrics"],
                 "trustIndicators": transparency_data["trustIndicators"],
@@ -3362,65 +3367,77 @@ class PublicProductionViewSet(viewsets.ViewSet):
     def _generate_transparency_achievements(self, production, transparency_data):
         """Generate transparency-focused achievements (NO competitive scoring)"""
         achievements = []
-        
+
         # Data completeness achievements
-        completeness = getattr(production, 'transparency_percentage', 75)
+        completeness = getattr(production, "transparency_percentage", 75)
         if completeness >= 90:
-            achievements.append({
-                "type": "data_complete",
-                "label": "Complete Transparency",
-                "color": "green",
-                "icon": "check-circle",
-                "description": "Full farm data documented and verified"
-            })
+            achievements.append(
+                {
+                    "type": "data_complete",
+                    "label": "Complete Transparency",
+                    "color": "green",
+                    "icon": "check-circle",
+                    "description": "Full farm data documented and verified",
+                }
+            )
         elif completeness >= 75:
-            achievements.append({
-                "type": "data_comprehensive", 
-                "label": "Comprehensive Records",
-                "color": "blue",
-                "icon": "document",
-                "description": "Thorough documentation of farming practices"
-            })
-        
+            achievements.append(
+                {
+                    "type": "data_comprehensive",
+                    "label": "Comprehensive Records",
+                    "color": "blue",
+                    "icon": "document",
+                    "description": "Thorough documentation of farming practices",
+                }
+            )
+
         # Verification achievements (non-competitive)
         if transparency_data.get("trustIndicators", {}).get("usda_verified"):
-            achievements.append({
-                "type": "government_verified",
-                "label": "USDA Verified",
-                "color": "blue",
-                "icon": "shield",
-                "description": "Verified by official government standards"
-            })
-            
+            achievements.append(
+                {
+                    "type": "government_verified",
+                    "label": "USDA Verified",
+                    "color": "blue",
+                    "icon": "shield",
+                    "description": "Verified by official government standards",
+                }
+            )
+
         if transparency_data.get("trustIndicators", {}).get("blockchain_verified"):
-            achievements.append({
-                "type": "blockchain_secured",
-                "label": "Blockchain Secured", 
-                "color": "purple",
-                "icon": "lock",
-                "description": "Permanently recorded and tamper-proof"
-            })
-            
+            achievements.append(
+                {
+                    "type": "blockchain_secured",
+                    "label": "Blockchain Secured",
+                    "color": "purple",
+                    "icon": "lock",
+                    "description": "Permanently recorded and tamper-proof",
+                }
+            )
+
         # Sustainable practice achievements (fact-based, not comparative)
         practices = transparency_data.get("sustainable_practices", [])
         if "organic" in str(practices).lower():
-            achievements.append({
-                "type": "organic_certified",
-                "label": "Organic Practices",
-                "color": "green", 
-                "icon": "leaf",
-                "description": "Uses certified organic farming methods"
-            })
-            
+            achievements.append(
+                {
+                    "type": "organic_certified",
+                    "label": "Organic Practices",
+                    "color": "green",
+                    "icon": "leaf",
+                    "description": "Uses certified organic farming methods",
+                }
+            )
+
         if "renewable_energy" in str(practices).lower():
-            achievements.append({
-                "type": "renewable_energy",
-                "label": "Clean Energy",
-                "color": "yellow",
-                "icon": "sun",
-                "description": "Powered by renewable energy sources"
-            })
-            
+            achievements.append(
+                {
+                    "type": "renewable_energy",
+                    "label": "Clean Energy",
+                    "color": "yellow",
+                    "icon": "sun",
+                    "description": "Powered by renewable energy sources",
+                }
+            )
+
         return achievements
 
     def _get_consumer_safe_social_proof(self, production):
@@ -3491,15 +3508,15 @@ class PublicProductionViewSet(viewsets.ViewSet):
         try:
             # Use the same TimelineService that producer dashboard uses for consistency
             timeline_data = TimelineService.get_production_timeline(production, limit=20)
-            
+
             if not timeline_data:
                 return []
-            
+
             # TimelineService already provides properly formatted consumer-safe data
             # with commercial_name, proper descriptions, and all transparency fields
             # No need for manual filtering - TimelineService handles security and formatting
             return timeline_data
-            
+
         except Exception as e:
             logger.warning(f"Error getting consumer timeline: {str(e)}")
             return []
@@ -3523,7 +3540,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
 
             # Check for cache busting
             bust_cache = request.GET.get("bust_cache") == "true"
-            
+
             # Enhanced cache key for complete endpoint (v4 includes fixed TimelineService with Gallery imports)
             cache_key = f"complete_summary_{pk}_v4"
             cached_data = cache.get(cache_key) if not bust_cache else None
@@ -3859,6 +3876,32 @@ class PublicProductionViewSet(viewsets.ViewSet):
             # Ensure score is within valid range (0-100)
             transparency_score = min(100, max(0, transparency_score))
 
+            # === HARVEST DETAILS (for consumer transparency) ===
+            harvest_details = {}
+            if production.production_amount:
+                harvest_details["amount"] = production.production_amount
+                harvest_details["unit"] = production.production_unit or "kg"
+            if production.lot_id:
+                harvest_details["lot_number"] = production.lot_id
+            if getattr(production, "quality_grade", None):
+                grade_labels = {
+                    "premium": "Premium Grade",
+                    "grade_a": "Grade A",
+                    "grade_b": "Grade B",
+                    "standard": "Standard",
+                    "processing": "Processing Grade",
+                }
+                harvest_details["quality_grade"] = grade_labels.get(production.quality_grade, production.quality_grade)
+            if getattr(production, "harvest_method", None):
+                method_labels = {
+                    "manual": "Hand Harvested",
+                    "mechanical": "Machine Harvested",
+                    "mixed": "Mixed Harvest",
+                }
+                harvest_details["harvest_method"] = method_labels.get(
+                    production.harvest_method, production.harvest_method
+                )
+
             # === UNIFIED RESPONSE DATA ===
             response_data = {
                 # Essential product info
@@ -3867,6 +3910,11 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     "name": production.product.name if production.product else "Product",
                     "reputation": float(production.reputation) if production.reputation else 4.5,
                 },
+                # Production dates
+                "start_date": production.start_date.isoformat() if production.start_date else None,
+                "finish_date": production.finish_date.isoformat() if production.finish_date else None,
+                # Harvest details for consumer display
+                "harvestDetails": harvest_details if harvest_details else None,
                 # Carbon metrics (complete from qr-summary)
                 "carbonScore": carbon_score,
                 "totalEmissions": float(total_emissions),
@@ -4405,35 +4453,36 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     # Build basic event data
                     # Get album data for photo verification
                     album_data = None
-                    if hasattr(event, 'album') and event.album:
+                    if hasattr(event, "album") and event.album:
                         try:
                             images = []
                             for image in event.album.images.all():
                                 # Try to get the real image URL first from image_url field
                                 try:
-                                    if hasattr(image, 'image_url') and image.image_url:
+                                    if hasattr(image, "image_url") and image.image_url:
                                         image_url = image.image_url
-                                    elif hasattr(image, 'image') and image.image and hasattr(image.image, 'url'):
+                                    elif hasattr(image, "image") and image.image and hasattr(image.image, "url"):
                                         image_url = request.build_absolute_uri(image.image.url)
                                     else:
                                         # Use placeholder image for testing
                                         image_url = "https://via.placeholder.com/400x300/4CAF50/FFFFFF?text=Farming+Practice+Photo"
                                 except Exception:
                                     # Fallback to placeholder if there's any issue accessing the image
-                                    image_url = "https://via.placeholder.com/400x300/4CAF50/FFFFFF?text=Farming+Practice+Photo"
-                                
-                                images.append({
-                                    "id": image.id,
-                                    "image": image_url,
-                                    "caption": f"Farming practice photo {image.id}",
-                                    "created_at": image.created_at.isoformat() if image.created_at else None
-                                })
-                            
+                                    image_url = (
+                                        "https://via.placeholder.com/400x300/4CAF50/FFFFFF?text=Farming+Practice+Photo"
+                                    )
+
+                                images.append(
+                                    {
+                                        "id": image.id,
+                                        "image": image_url,
+                                        "caption": f"Farming practice photo {image.id}",
+                                        "created_at": image.created_at.isoformat() if image.created_at else None,
+                                    }
+                                )
+
                             if images:
-                                album_data = {
-                                    "id": event.album.id,
-                                    "images": images
-                                }
+                                album_data = {"id": event.album.id, "images": images}
                         except Exception as e:
                             album_data = None
 
@@ -4457,103 +4506,124 @@ class PublicProductionViewSet(viewsets.ViewSet):
                         # 🔧 DEBUG: Log chemical event field extraction for event 178
                         if event.id == 178:
                             print(f"🔧 BACKEND DEBUG - Event 178 field extraction:")
-                            area_val = getattr(event, 'area', 'NO_FIELD')
-                            timing_val = getattr(event, 'application_timing', 'NO_FIELD')
-                            method_val = getattr(event, 'way_of_application', 'NO_FIELD')
+                            area_val = getattr(event, "area", "NO_FIELD")
+                            timing_val = getattr(event, "application_timing", "NO_FIELD")
+                            method_val = getattr(event, "way_of_application", "NO_FIELD")
                             print(f"   event.area = '{area_val}' (type: {type(area_val)})")
                             print(f"   event.application_timing = '{timing_val}' (type: {type(timing_val)})")
                             print(f"   event.way_of_application = '{method_val}' (type: {type(method_val)})")
                             print(f"   Current event_data.area = '{event_data.get('area', 'NOT_SET')}'")
                             print(f"   Full event object type: {type(event)}")
-                        
+
                         # Add chemical-specific agricultural context fields
                         # 🔧 CRITICAL FIX: Ensure None values from getattr don't become empty strings
                         area_value = getattr(event, "area", None)
-                        timing_value = getattr(event, "application_timing", None) 
+                        timing_value = getattr(event, "application_timing", None)
                         method_value = getattr(event, "way_of_application", None)
-                        
+
                         # If area was already set in event_data and is None, but database has value, preserve the database value
                         if event_data.get("area") is None and area_value is not None:
                             event_data["area"] = area_value
-                            
-                        event_data.update({
-                            "weather_conditions": getattr(event, "weather_conditions", None),
-                            "application_timing": timing_value,
-                            "target_pest_disease": getattr(event, "target_pest_disease", None),
-                            "way_of_application": method_value,
-                            "application_method": method_value,  # Alias for frontend compatibility
-                            "target_purpose": getattr(event, "target_pest_disease", None),    # Alias for frontend compatibility
-                            "npk_ratio": self._get_npk_ratio(event),
-                            "active_ingredient": getattr(event, "commercial_name", None),
-                            "dose": getattr(event, "volume", None),
-                            "unit": "L",  # Default unit for volume
-                            "nitrogen_percentage": getattr(event, "nitrogen_percentage", None),
-                            "phosphorus_percentage": getattr(event, "phosphorus_percentage", None),
-                            "potassium_percentage": getattr(event, "potassium_percentage", None),
-                        })
-                        
+
+                        event_data.update(
+                            {
+                                "weather_conditions": getattr(event, "weather_conditions", None),
+                                "application_timing": timing_value,
+                                "target_pest_disease": getattr(event, "target_pest_disease", None),
+                                "way_of_application": method_value,
+                                "application_method": method_value,  # Alias for frontend compatibility
+                                "target_purpose": getattr(
+                                    event, "target_pest_disease", None
+                                ),  # Alias for frontend compatibility
+                                "npk_ratio": self._get_npk_ratio(event),
+                                "active_ingredient": getattr(event, "commercial_name", None),
+                                "dose": getattr(event, "volume", None),
+                                "unit": "L",  # Default unit for volume
+                                "nitrogen_percentage": getattr(event, "nitrogen_percentage", None),
+                                "phosphorus_percentage": getattr(event, "phosphorus_percentage", None),
+                                "potassium_percentage": getattr(event, "potassium_percentage", None),
+                            }
+                        )
+
                         # 🔧 DEBUG: Log final event_data for event 178
                         if event.id == 178:
                             print(f"🔧 BACKEND DEBUG - Event 178 FINAL event_data:")
                             print(f"   event_data['area'] = '{event_data.get('area', 'NOT_SET')}'")
-                            print(f"   event_data['application_timing'] = '{event_data.get('application_timing', 'NOT_SET')}'")
-                            print(f"   event_data['way_of_application'] = '{event_data.get('way_of_application', 'NOT_SET')}'")
-                            print(f"   event_data['application_method'] = '{event_data.get('application_method', 'NOT_SET')}'")
+                            print(
+                                f"   event_data['application_timing'] = '{event_data.get('application_timing', 'NOT_SET')}'"
+                            )
+                            print(
+                                f"   event_data['way_of_application'] = '{event_data.get('way_of_application', 'NOT_SET')}'"
+                            )
+                            print(
+                                f"   event_data['application_method'] = '{event_data.get('application_method', 'NOT_SET')}'"
+                            )
                             print("🔧 Full event_data keys:", list(event_data.keys()))
                     elif event_category == "production":
                         # Add production-specific fields
-                        event_data.update({
-                            "harvest_date": getattr(event, "harvest_date", None),
-                            "yield_amount": getattr(event, "yield_amount", None),
-                            "quality_grade": getattr(event, "quality_grade", None),
-                        })
+                        event_data.update(
+                            {
+                                "harvest_date": getattr(event, "harvest_date", None),
+                                "yield_amount": getattr(event, "yield_amount", None),
+                                "quality_grade": getattr(event, "quality_grade", None),
+                            }
+                        )
                     elif event_category == "equipment":
                         # Add equipment-specific fields - FIXED TO MATCH EquipmentEvent MODEL
                         # CRITICAL: Include name field for operation name display
                         operation_name = getattr(event, "name", None) or getattr(event, "operation_name", None)
                         operation_type = getattr(event, "type", None)
-                        
+
                         # DEBUG: Add debug info to the API response for Equipment events
-                        print(f"🔧 BACKEND DEBUG Equipment Event {event.id}: type='{operation_type}', name='{operation_name}'")
-                        
-                        event_data.update({
-                            "name": operation_name,  # CRITICAL: Operation name for title display
-                            "operation_name": operation_name,  # Frontend compatibility alias
-                            "fuel_consumed": getattr(event, "fuel_consumed", None),
-                            "fuel_unit": getattr(event, "fuel_unit", None),
-                            "hours_operated": getattr(event, "hours_operated", None),
-                            "area_worked": getattr(event, "area_worked", None),
-                            "area_unit": getattr(event, "area_unit", None),
-                            "equipment_type": getattr(event, "equipment_type_structured", None) or getattr(event, "equipment_name", None),
-                            "operation_type": operation_type,
-                            # DEBUG: Add debug info to API response
-                            "debug_backend_type": operation_type,
-                            "debug_backend_name": operation_name,
-                            "operation_efficiency": getattr(event, "operation_efficiency", None),
-                            # Legacy fields for backward compatibility
-                            "fuel_consumption": getattr(event, "fuel_consumed", None),  # Legacy alias
-                            "operation_duration": getattr(event, "hours_operated", None),  # Legacy alias
-                            "maintenance_status": getattr(event, "type", None),  # Legacy alias
-                        })
-                        
+                        print(
+                            f"🔧 BACKEND DEBUG Equipment Event {event.id}: type='{operation_type}', name='{operation_name}'"
+                        )
+
+                        event_data.update(
+                            {
+                                "name": operation_name,  # CRITICAL: Operation name for title display
+                                "operation_name": operation_name,  # Frontend compatibility alias
+                                "fuel_consumed": getattr(event, "fuel_consumed", None),
+                                "fuel_unit": getattr(event, "fuel_unit", None),
+                                "hours_operated": getattr(event, "hours_operated", None),
+                                "area_worked": getattr(event, "area_worked", None),
+                                "area_unit": getattr(event, "area_unit", None),
+                                "equipment_type": getattr(event, "equipment_type_structured", None)
+                                or getattr(event, "equipment_name", None),
+                                "operation_type": operation_type,
+                                # DEBUG: Add debug info to API response
+                                "debug_backend_type": operation_type,
+                                "debug_backend_name": operation_name,
+                                "operation_efficiency": getattr(event, "operation_efficiency", None),
+                                # Legacy fields for backward compatibility
+                                "fuel_consumption": getattr(event, "fuel_consumed", None),  # Legacy alias
+                                "operation_duration": getattr(event, "hours_operated", None),  # Legacy alias
+                                "maintenance_status": getattr(event, "type", None),  # Legacy alias
+                            }
+                        )
+
                         # Also update the generic equipment field for backward compatibility
                         if operation_name:
                             event_data["equipment"] = operation_name
                     elif event_category == "weather":
                         # Add weather-specific fields
-                        event_data.update({
-                            "temperature": getattr(event, "temperature", None),
-                            "humidity": getattr(event, "humidity", None),
-                            "precipitation": getattr(event, "precipitation", None),
-                            "wind_speed": getattr(event, "wind_speed", None),
-                        })
+                        event_data.update(
+                            {
+                                "temperature": getattr(event, "temperature", None),
+                                "humidity": getattr(event, "humidity", None),
+                                "precipitation": getattr(event, "precipitation", None),
+                                "wind_speed": getattr(event, "wind_speed", None),
+                            }
+                        )
                     elif event_category == "soil_management":
                         # Add soil management-specific fields
-                        event_data.update({
-                            "soil_ph": getattr(event, "soil_ph", None),
-                            "organic_matter": getattr(event, "organic_matter", None),
-                            "tillage_depth": getattr(event, "tillage_depth", None),
-                        })
+                        event_data.update(
+                            {
+                                "soil_ph": getattr(event, "soil_ph", None),
+                                "organic_matter": getattr(event, "organic_matter", None),
+                                "tillage_depth": getattr(event, "tillage_depth", None),
+                            }
+                        )
 
                     # Add blockchain verification data from extra_data if available
                     if hasattr(event, "extra_data") and event.extra_data:
@@ -4606,17 +4676,17 @@ class PublicProductionViewSet(viewsets.ViewSet):
         try:
             # Try to build from individual percentage fields first
             n = getattr(event, "nitrogen_percentage", None)
-            p = getattr(event, "phosphorus_percentage", None) 
+            p = getattr(event, "phosphorus_percentage", None)
             k = getattr(event, "potassium_percentage", None)
-            
+
             if n is not None and p is not None and k is not None:
                 return f"{int(n)}-{int(p)}-{int(k)}"
-            
+
             # Fallback to concentration field (legacy format)
             concentration = getattr(event, "concentration", None)
             if concentration and "-" in concentration:
                 return concentration
-                
+
             return None
         except Exception:
             return None
@@ -4638,7 +4708,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                         # Handle string confidence levels
                         confidence_map = {"high": 90, "medium": 75, "low": 50}
                         confidence_percentage = confidence_map.get(confidence, 75)
-                    
+
                     return {
                         "co2e": float(carbon_calc.get("co2e", 0)),
                         "efficiency_score": float(carbon_calc.get("efficiency_score", 0)),
@@ -4654,13 +4724,12 @@ class PublicProductionViewSet(viewsets.ViewSet):
             # Second, try to find related CarbonEntry records
             # Since CarbonEntry doesn't have extra_data field, we match by production and description containing event info
             carbon_entries = CarbonEntry.objects.filter(
-                production=production,
-                description__icontains=f"{event.__class__.__name__}"
+                production=production, description__icontains=f"{event.__class__.__name__}"
             ).order_by("-created_at")
 
             if carbon_entries.exists():
                 carbon_entry = carbon_entries.first()
-                
+
                 # Calculate efficiency score based on USDA verification status
                 efficiency_score = 90.0 if carbon_entry.usda_factors_based else 75.0
 
@@ -5303,56 +5372,209 @@ class PublicProductionViewSet(viewsets.ViewSet):
         """
         try:
             from django.core.cache import cache
+
             from history.models import History
 
             # Get the production object
-            production = History.objects.select_related(
-                "product", "parcel__establishment__company", "album"
-            ).prefetch_related(
-                "carbonentry_set__source",
-                "album__images",
-                "history_weatherevent_events",
-                "history_chemicalevent_events",
-                "history_productionevent_events",
-                "history_generalevent_events",
-                "history_equipmentevent_events",
-                "history_soilmanagementevent_events",
-                "history_pestmanagementevent_events",
-            ).get(id=pk, published=True)
+            production = (
+                History.objects.select_related("product", "parcel__establishment__company", "album")
+                .prefetch_related(
+                    "carbonentry_set__source",
+                    "album__images",
+                    "history_weatherevent_events",
+                    "history_chemicalevent_events",
+                    "history_productionevent_events",
+                    "history_generalevent_events",
+                    "history_equipmentevent_events",
+                    "history_soilmanagementevent_events",
+                    "history_pestmanagementevent_events",
+                )
+                .get(id=pk, published=True)
+            )
 
             # 🔧 DEBUG: Check production data
             print(f"DEBUG: Getting complete summary for production {production.id}")
-            
+
             # Use PublicHistorySerializer (same as working transparency endpoint)
             from history.serializers import PublicHistorySerializer
-            public_history_serializer = PublicHistorySerializer(production, context={'request': request})
+
+            public_history_serializer = PublicHistorySerializer(production, context={"request": request})
             public_history_data = public_history_serializer.data
-            
+
             # 🔧 DEBUG: Check if event 178 has correct data now
-            if 'events' in public_history_data:
+            if "events" in public_history_data:
                 print(f"DEBUG: PublicHistorySerializer returned {len(public_history_data['events'])} events")
-                event_178 = next((e for e in public_history_data['events'] if str(e.get('id')) == '178'), None)
+                event_178 = next((e for e in public_history_data["events"] if str(e.get("id")) == "178"), None)
                 if event_178:
-                    print(f"DEBUG: Event 178 from PublicHistorySerializer - area: {event_178.get('area')}, application_timing: {event_178.get('application_timing')}, way_of_application: {event_178.get('way_of_application')}")
+                    print(
+                        f"DEBUG: Event 178 from PublicHistorySerializer - area: {event_178.get('area')}, application_timing: {event_178.get('application_timing')}, way_of_application: {event_178.get('way_of_application')}"
+                    )
                 else:
                     print("DEBUG: Event 178 not found in PublicHistorySerializer events")
+
+            # Build harvestDetails for consumer transparency
+            harvest_details = {}
+            if production.production_amount:
+                harvest_details["amount"] = production.production_amount
+                harvest_details["unit"] = production.production_unit or "kg"
+            if production.lot_id:
+                harvest_details["lot_number"] = production.lot_id
+            if getattr(production, "quality_grade", None):
+                grade_labels = {
+                    "premium": "Premium Grade",
+                    "grade_a": "Grade A",
+                    "grade_b": "Grade B",
+                    "standard": "Standard",
+                    "processing": "Processing Grade",
+                }
+                harvest_details["quality_grade"] = grade_labels.get(
+                    production.quality_grade, production.quality_grade
+                )
+            if getattr(production, "harvest_method", None):
+                method_labels = {
+                    "manual": "Hand Harvested",
+                    "mechanical": "Machine Harvested",
+                    "mixed": "Mixed Harvest",
+                }
+                harvest_details["harvest_method"] = method_labels.get(
+                    production.harvest_method, production.harvest_method
+                )
+
+            # === ESTABLISHMENT AND COMPANY DATA (for consumer transparency) ===
+            establishment = production.parcel.establishment if production.parcel else None
+            establishment_data = None
+            company_data = None
+
+            if establishment:
+                # Get establishment photo from album
+                establishment_photo = None
+                if hasattr(establishment, "album") and establishment.album and establishment.album.images.exists():
+                    first_image = establishment.album.images.first()
+                    try:
+                        if first_image and first_image.image and hasattr(first_image.image, "url") and first_image.image.url:
+                            establishment_photo = first_image.image.url
+                    except (ValueError, AttributeError):
+                        establishment_photo = None
+
+                # Build establishment data (privacy-filtered for public access)
+                establishment_data = {
+                    "id": establishment.id,
+                    "name": establishment.name,
+                    "description": establishment.description or "",
+                    "location": (
+                        f"{establishment.city}, {establishment.state}"
+                        if establishment.city and establishment.state
+                        else establishment.address or ""
+                    ),
+                    "photo": establishment_photo,
+                    "certifications": getattr(establishment, "certifications", []),
+                    # Basic location fields
+                    "address": establishment.address or "",
+                    "city": establishment.city or "",
+                    "state": establishment.state or "",
+                    "country": establishment.country or "",
+                    "zone": getattr(establishment, "zone", ""),
+                    "latitude": establishment.latitude,
+                    "longitude": establishment.longitude,
+                    "zip_code": getattr(establishment, "zip_code", ""),
+                    # Consumer-facing transparency fields
+                    "about": getattr(establishment, "about", ""),
+                    "main_activities": getattr(establishment, "main_activities", ""),
+                    "location_highlights": getattr(establishment, "location_highlights", ""),
+                    "custom_message": getattr(establishment, "custom_message", ""),
+                    "is_active": getattr(establishment, "is_active", True),
+                    # Agricultural transparency fields
+                    "crops_grown": getattr(establishment, "crops_grown", []),
+                    "sustainability_practices": getattr(establishment, "sustainability_practices", []),
+                    "year_established": getattr(establishment, "year_established", None),
+                    "establishment_type": getattr(establishment, "establishment_type", ""),
+                    "farming_method": getattr(establishment, "farming_method", ""),
+                    # Operational agricultural fields (Operations & Practices from step 3)
+                    "water_sources": getattr(establishment, "water_sources", []),
+                    "climate_zone": getattr(establishment, "climate_zone", ""),
+                    "soil_types": getattr(establishment, "soil_types", []),
+                    "conservation_practices": getattr(establishment, "conservation_practices", []),
+                    "irrigation_methods": getattr(establishment, "irrigation_methods", []),
+                    # NOTE: employee_count and total_acreage intentionally excluded (business sensitive)
+                }
+
+                # Build company data if available
+                if establishment.company:
+                    company = establishment.company
+                    company_logo = None
+                    if company.logo:
+                        try:
+                            if hasattr(company.logo, "url") and company.logo.url:
+                                company_logo = company.logo.url
+                        except (ValueError, AttributeError):
+                            company_logo = None
+
+                    company_data = {
+                        "id": company.id,
+                        "name": company.name,
+                        "description": getattr(company, "description", ""),
+                        "address": getattr(company, "address", ""),
+                        "city": getattr(company, "city", ""),
+                        "state": getattr(company, "state", ""),
+                        "country": getattr(company, "country", ""),
+                        "website": getattr(company, "website", ""),
+                        "facebook": getattr(company, "facebook", ""),
+                        "instagram": getattr(company, "instagram", ""),
+                        "legal_structure": getattr(company, "legal_structure", ""),
+                        "primary_commodities": getattr(company, "primary_commodities", ""),
+                        "sustainability_commitment": getattr(company, "sustainability_commitment", ""),
+                        "logo": company_logo,
+                        # NOTE: phone, email, fiscal_id intentionally excluded (private info)
+                    }
+
+                    # Add company to establishment data
+                    establishment_data["company"] = company_data
+
+            # === PARCEL DATA ===
+            parcel_data = None
+            if production.parcel:
+                parcel = production.parcel
+                parcel_data = {
+                    "id": parcel.id,
+                    "name": parcel.name,
+                    "area": float(parcel.area) if parcel.area else None,
+                    "polygon": parcel.polygon,
+                    "map_metadata": parcel.map_metadata,
+                    "description": getattr(parcel, "description", ""),
+                    "soil_type": getattr(parcel, "soil_type", ""),
+                    "crop_type": getattr(parcel, "crop_type", ""),
+                    "certification_type": getattr(parcel, "certification_type", ""),
+                    "certified": getattr(parcel, "certified", False),
+                    "unique_code": getattr(parcel, "unique_code", ""),
+                    "agricultural_details": getattr(parcel, "agricultural_details", {}),
+                    # NOTE: contact_person, contact_phone, contact_email intentionally excluded (private info)
+                }
 
             # Build response matching the expected frontend format
             response_data = {
                 "production_id": production.id,
-                "timeline": public_history_data.get('events', []),
+                "timeline": public_history_data.get("events", []),
                 "timestamp": timezone.now().isoformat(),
+                # Harvest details for consumer display
+                "harvestDetails": harvest_details if harvest_details else None,
+                # Establishment/farmer data for consumer transparency
+                "farmer": establishment_data,
+                # Company data (also nested in farmer for backwards compatibility)
+                "company": company_data,
+                # Parcel/field data
+                "parcel": parcel_data,
             }
 
             return Response(response_data, status=status.HTTP_200_OK)
-            
+
         except Exception as e:
             logger.error(f"Error in PublicProductionViewSet.complete_summary: {str(e)}")
             import traceback
+
             traceback.print_exc()
             return Response(
-                {"error": "Failed to get complete summary", "detail": str(e)}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": "Failed to get complete summary", "detail": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
 
@@ -5711,39 +5933,39 @@ class CarbonOffsetViewSet(viewsets.ViewSet):
 class ProductionSerializer(serializers.ModelSerializer):
     transparency_score = serializers.SerializerMethodField()
     carbon_footprint = serializers.SerializerMethodField()
-    
+
     class Meta:
         model = History
         fields = ["id", "name", "start_date", "finish_date", "published", "transparency_score", "carbon_footprint"]
-    
+
     def get_transparency_score(self, obj):
         """Calculate transparency score using the same system as consumer pages"""
         try:
             from history.services.transparency_calculator import TransparencyCalculator
-            
+
             calculator = TransparencyCalculator()
             result = calculator.calculate_transparency_score(obj)
-            
-            return result.get('transparency_percentage', 0)
+
+            return result.get("transparency_percentage", 0)
         except Exception:
             return 0
-    
+
     def get_carbon_footprint(self, obj):
         """Calculate carbon footprint from carbon entries"""
         try:
             from carbon.models import CarbonEntry
-            
+
             # Get carbon entries for this production
             production_entries = CarbonEntry.objects.filter(production=obj)
-            
+
             if production_entries.exists():
                 # Calculate from production-specific entries
-                total_emissions = production_entries.filter(type="emission").aggregate(
-                    total=Sum("co2e_amount")
-                )["total"] or 0
-                total_offsets = production_entries.filter(type="offset").aggregate(
-                    total=Sum("effective_amount")
-                )["total"] or 0
+                total_emissions = (
+                    production_entries.filter(type="emission").aggregate(total=Sum("co2e_amount"))["total"] or 0
+                )
+                total_offsets = (
+                    production_entries.filter(type="offset").aggregate(total=Sum("effective_amount"))["total"] or 0
+                )
                 net_carbon = total_emissions - total_offsets
                 return round(max(0, net_carbon), 2)
             else:
@@ -5753,13 +5975,12 @@ class ProductionSerializer(serializers.ModelSerializer):
                     establishment_entries = CarbonEntry.objects.filter(establishment=establishment)
                     if establishment_entries.exists():
                         # Average per production
-                        total_emissions = establishment_entries.filter(type="emission").aggregate(
-                            total=Sum("co2e_amount")
-                        )["total"] or 0
+                        total_emissions = (
+                            establishment_entries.filter(type="emission").aggregate(total=Sum("co2e_amount"))["total"]
+                            or 0
+                        )
                         # Simple estimation: divide by number of productions
-                        production_count = establishment.parcels.aggregate(
-                            count=Count('histories')
-                        )['count'] or 1
+                        production_count = establishment.parcels.aggregate(count=Count("histories"))["count"] or 1
                         avg_per_production = total_emissions / production_count
                         return round(max(0, avg_per_production), 2)
                 return 0.0
@@ -5771,35 +5992,39 @@ class CarbonProductionViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = History.objects.all()
     permission_classes = [SecurePublicDataPermission]
     serializer_class = ProductionSerializer
-    
+
     def get_queryset(self):
         """Filter productions by establishment"""
-        queryset = History.objects.select_related('parcel__establishment').prefetch_related(
-            'history_chemicalevent_events',
-            'history_productionevent_events', 
-            'history_generalevent_events',
-            'history_weatherevent_events',
-            'history_equipmentevent_events',
-            'history_soilmanagementevent_events',
-            'history_pestmanagementevent_events'
+        queryset = History.objects.select_related("parcel__establishment").prefetch_related(
+            "history_chemicalevent_events",
+            "history_productionevent_events",
+            "history_generalevent_events",
+            "history_weatherevent_events",
+            "history_equipmentevent_events",
+            "history_soilmanagementevent_events",
+            "history_pestmanagementevent_events",
         )
-        
-        establishment_id = self.request.query_params.get('establishment')
+
+        establishment_id = self.request.query_params.get("establishment")
         print(f"🚀 DEBUG - CarbonProductionViewSet.get_queryset() called with establishment={establishment_id}")
-        
+
         if establishment_id:
             try:
                 establishment_id = int(establishment_id)
                 queryset = queryset.filter(parcel__establishment_id=establishment_id)
-                print(f"🔍 DEBUG - CarbonProductionViewSet: Filtered queryset for establishment {establishment_id}, found {queryset.count()} productions")
+                print(
+                    f"🔍 DEBUG - CarbonProductionViewSet: Filtered queryset for establishment {establishment_id}, found {queryset.count()} productions"
+                )
                 for prod in queryset:
                     print(f"  Production {prod.id}: {prod.name}, finish_date: {prod.finish_date}")
             except (ValueError, TypeError):
                 print(f"❌ DEBUG - CarbonProductionViewSet: Invalid establishment_id: {establishment_id}")
                 pass
         else:
-            print(f"🔍 DEBUG - CarbonProductionViewSet: No establishment filter, returning all {queryset.count()} productions")
-                
+            print(
+                f"🔍 DEBUG - CarbonProductionViewSet: No establishment filter, returning all {queryset.count()} productions"
+            )
+
         return queryset
 
 
@@ -10029,99 +10254,94 @@ def advanced_carbon_analytics(request, production_id):
 # SMART PRODUCT API ENDPOINTS - Smart Bag UX Implementation
 # ============================================================================
 
-@api_view(['GET'])
+
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
-@ratelimit(key='user', rate='100/m', method='GET')
+@ratelimit(key="user", rate="100/m", method="GET")
 def smart_product_search(request):
     """
     Smart product search API endpoint implementing the Smart Bag UX approach.
-    
+
     Provides intelligent product recognition with educational context.
-    
+
     Query Parameters:
     - q: Search query (product name, NPK ratio, etc.)
     - max_results: Maximum number of results (default: 8)
     - type_filter: Filter by chemical type (FE/PE/FU/HE)
-    
+
     Returns:
     - List of matched products with confidence scores
     - Educational tips and application recommendations
     - NPK auto-fill data for fertilizers
     """
     from carbon.services.smart_product_validator import smart_product_validator
-    
+
     try:
         # Get query parameters
-        query = request.GET.get('q', '').strip()
-        max_results = int(request.GET.get('max_results', 8))
-        type_filter = request.GET.get('type_filter', '').upper()
-        
+        query = request.GET.get("q", "").strip()
+        max_results = int(request.GET.get("max_results", 8))
+        type_filter = request.GET.get("type_filter", "").upper()
+
         # Validate type filter
-        valid_types = ['FE', 'PE', 'FU', 'HE']
+        valid_types = ["FE", "PE", "FU", "HE"]
         if type_filter and type_filter not in valid_types:
             return Response(
-                {
-                    "error": "Invalid type filter",
-                    "valid_types": valid_types,
-                    "provided": type_filter
-                },
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "Invalid type filter", "valid_types": valid_types, "provided": type_filter},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        
+
         # Perform smart search
         suggestions = smart_product_validator.smart_product_search(
-            query=query,
-            max_suggestions=min(max_results, 20)  # Cap at 20 for performance
+            query=query, max_suggestions=min(max_results, 20)  # Cap at 20 for performance
         )
-        
+
         # Filter by type if requested
         if type_filter:
-            suggestions = [s for s in suggestions if s.get('type_code') == type_filter]
-        
+            suggestions = [s for s in suggestions if s.get("type_code") == type_filter]
+
         # Log search for analytics
         logger.info(f"Smart product search: query='{query}', results={len(suggestions)}, user={request.user.id}")
-        
-        return Response({
-            "query": query,
-            "results_count": len(suggestions),
-            "suggestions": suggestions,
-            "search_type": "smart_product_search",
-            "version": "1.0"
-        }, status=status.HTTP_200_OK)
-        
+
+        return Response(
+            {
+                "query": query,
+                "results_count": len(suggestions),
+                "suggestions": suggestions,
+                "search_type": "smart_product_search",
+                "version": "1.0",
+            },
+            status=status.HTTP_200_OK,
+        )
+
     except ValueError as e:
         logger.warning(f"Smart product search parameter error: {e}")
-        return Response(
-            {"error": "Invalid parameters", "details": str(e)},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+        return Response({"error": "Invalid parameters", "details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         logger.error(f"Smart product search failed: {e}")
         logger.error(traceback.format_exc())
-        
+
         return Response(
-            {"error": "Product search failed", "details": str(e)},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {"error": "Product search failed", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
 
-@api_view(['POST'])
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
-@ratelimit(key='user', rate='50/m', method='POST')
+@ratelimit(key="user", rate="50/m", method="POST")
 def smart_product_validation(request):
     """
     Smart product validation API endpoint implementing Smart Bag UX validation.
-    
+
     Validates commercial product names against user-selected chemical types,
     providing educational warnings and NPK auto-fill recommendations.
-    
+
     Request Body:
     {
         "commercial_name": "Miracle-Gro All Purpose",
         "user_selected_type": "FE",
         "confidence_threshold": 0.7
     }
-    
+
     Returns:
     - Product validation result with confidence score
     - Educational tips and best practices
@@ -10129,62 +10349,46 @@ def smart_product_validation(request):
     - Warnings for common farmer mistakes
     """
     from carbon.services.smart_product_validator import smart_product_validator
-    
+
     try:
         # Validate request data
-        commercial_name = request.data.get('commercial_name', '').strip()
-        user_selected_type = request.data.get('user_selected_type', '').strip().upper()
-        confidence_threshold = float(request.data.get('confidence_threshold', 0.7))
-        
+        commercial_name = request.data.get("commercial_name", "").strip()
+        user_selected_type = request.data.get("user_selected_type", "").strip().upper()
+        confidence_threshold = float(request.data.get("confidence_threshold", 0.7))
+
         # Validate required fields
         if not commercial_name:
-            return Response(
-                {"error": "Commercial name is required"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
+            return Response({"error": "Commercial name is required"}, status=status.HTTP_400_BAD_REQUEST)
+
         if not user_selected_type:
-            return Response(
-                {"error": "User selected type is required"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
+            return Response({"error": "User selected type is required"}, status=status.HTTP_400_BAD_REQUEST)
+
         # Validate chemical type
-        valid_types = ['FE', 'PE', 'FU', 'HE']
+        valid_types = ["FE", "PE", "FU", "HE"]
         if user_selected_type not in valid_types:
             return Response(
-                {
-                    "error": "Invalid chemical type",
-                    "valid_types": valid_types,
-                    "provided": user_selected_type
-                },
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "Invalid chemical type", "valid_types": valid_types, "provided": user_selected_type},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        
+
         # Validate confidence threshold
         if not (0.0 <= confidence_threshold <= 1.0):
             return Response(
-                {"error": "Confidence threshold must be between 0.0 and 1.0"},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "Confidence threshold must be between 0.0 and 1.0"}, status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         # Perform smart validation
         validation_result = smart_product_validator.validate_smart_product(
             commercial_name=commercial_name,
             user_selected_type=user_selected_type,
-            confidence_threshold=confidence_threshold
+            confidence_threshold=confidence_threshold,
         )
-        
+
         # Helper to convert type codes to user-friendly names
         def get_type_name(type_code):
-            type_names = {
-                "FE": "Fertilizer",
-                "PE": "Pesticide",
-                "HE": "Herbicide",
-                "FU": "Fungicide"
-            }
+            type_names = {"FE": "Fertilizer", "PE": "Pesticide", "HE": "Herbicide", "FU": "Fungicide"}
             return type_names.get(type_code, type_code)
-        
+
         # Convert result to dict for JSON response
         result_data = {
             "commercial_name": validation_result.commercial_name,
@@ -10204,93 +10408,81 @@ def smart_product_validation(request):
                 "auto_fill_npk": validation_result.npk_ratio if validation_result.correct_type == "FE" else None,
                 "recommended_type": get_type_name(validation_result.correct_type),
                 "recommended_type_code": validation_result.correct_type,  # Keep the code for backend logic
-                "confidence_level": "high" if validation_result.confidence >= 0.8 else "medium" if validation_result.confidence >= 0.5 else "low"
-            }
+                "confidence_level": (
+                    "high"
+                    if validation_result.confidence >= 0.8
+                    else "medium" if validation_result.confidence >= 0.5 else "low"
+                ),
+            },
         }
-        
+
         # Log validation for analytics
-        logger.info(f"Smart product validation: name='{commercial_name}', type={user_selected_type}→{validation_result.correct_type}, confidence={validation_result.confidence:.2f}, user={request.user.id}")
-        
-        return Response({
-            "validation_result": result_data,
-            "timestamp": timezone.now().isoformat(),
-            "version": "1.0"
-        }, status=status.HTTP_200_OK)
-        
+        logger.info(
+            f"Smart product validation: name='{commercial_name}', type={user_selected_type}→{validation_result.correct_type}, confidence={validation_result.confidence:.2f}, user={request.user.id}"
+        )
+
+        return Response(
+            {"validation_result": result_data, "timestamp": timezone.now().isoformat(), "version": "1.0"},
+            status=status.HTTP_200_OK,
+        )
+
     except ValueError as e:
         logger.warning(f"Smart product validation parameter error: {e}")
-        return Response(
-            {"error": "Invalid parameters", "details": str(e)},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+        return Response({"error": "Invalid parameters", "details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         logger.error(f"Smart product validation failed: {e}")
         logger.error(traceback.format_exc())
-        
+
         return Response(
-            {"error": "Product validation failed", "details": str(e)},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {"error": "Product validation failed", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
-@ratelimit(key='user', rate='100/m', method='GET')
+@ratelimit(key="user", rate="100/m", method="GET")
 def smart_product_suggestions_by_type(request):
     """
     Get smart product suggestions filtered by chemical type.
-    
+
     Useful for populating dropdown lists and providing type-specific recommendations.
-    
+
     Query Parameters:
     - type: Chemical type (FE/PE/FU/HE) - required
     - max_results: Maximum number of results (default: 5)
-    
+
     Returns:
     - List of products filtered by type
     - Educational tips for each product
     - NPK data for fertilizers
     """
     from carbon.services.smart_product_validator import smart_product_validator
-    
+
     try:
         # Get query parameters
-        chemical_type = request.GET.get('type', '').strip().upper()
-        max_results = int(request.GET.get('max_results', 5))
-        
+        chemical_type = request.GET.get("type", "").strip().upper()
+        max_results = int(request.GET.get("max_results", 5))
+
         # Validate required parameters
         if not chemical_type:
-            return Response(
-                {"error": "Chemical type is required"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
+            return Response({"error": "Chemical type is required"}, status=status.HTTP_400_BAD_REQUEST)
+
         # Validate chemical type
-        valid_types = ['FE', 'PE', 'FU', 'HE']
+        valid_types = ["FE", "PE", "FU", "HE"]
         if chemical_type not in valid_types:
             return Response(
-                {
-                    "error": "Invalid chemical type",
-                    "valid_types": valid_types,
-                    "provided": chemical_type
-                },
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "Invalid chemical type", "valid_types": valid_types, "provided": chemical_type},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        
+
         # Get suggestions by type
         suggestions = smart_product_validator.get_smart_suggestions_by_type(
-            chemical_type=chemical_type,
-            max_suggestions=min(max_results, 10)  # Cap at 10 for performance
+            chemical_type=chemical_type, max_suggestions=min(max_results, 10)  # Cap at 10 for performance
         )
-        
+
         # Add type-specific educational context
-        type_names = {
-            "FE": "Fertilizer",
-            "PE": "Pesticide", 
-            "FU": "Fungicide",
-            "HE": "Herbicide"
-        }
-        
+        type_names = {"FE": "Fertilizer", "PE": "Pesticide", "FU": "Fungicide", "HE": "Herbicide"}
+
         response_data = {
             "chemical_type": chemical_type,
             "type_name": type_names.get(chemical_type),
@@ -10300,41 +10492,39 @@ def smart_product_suggestions_by_type(request):
                 "FE": "Fertilizers provide nutrients (N-P-K) to promote plant growth and development.",
                 "PE": "Pesticides control harmful insects and pests that damage crops.",
                 "FU": "Fungicides prevent and treat plant diseases caused by fungi.",
-                "HE": "Herbicides control weeds that compete with crops for nutrients and water."
+                "HE": "Herbicides control weeds that compete with crops for nutrients and water.",
             }.get(chemical_type, ""),
-            "version": "1.0"
+            "version": "1.0",
         }
-        
+
         # Log request for analytics
-        logger.info(f"Smart product suggestions by type: type={chemical_type}, results={len(suggestions)}, user={request.user.id}")
-        
+        logger.info(
+            f"Smart product suggestions by type: type={chemical_type}, results={len(suggestions)}, user={request.user.id}"
+        )
+
         return Response(response_data, status=status.HTTP_200_OK)
-        
+
     except ValueError as e:
         logger.warning(f"Smart product suggestions parameter error: {e}")
-        return Response(
-            {"error": "Invalid parameters", "details": str(e)},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+        return Response({"error": "Invalid parameters", "details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         logger.error(f"Smart product suggestions failed: {e}")
         logger.error(traceback.format_exc())
-        
+
         return Response(
-            {"error": "Product suggestions failed", "details": str(e)},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {"error": "Product suggestions failed", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
-@ratelimit(key='user', rate='20/m', method='GET')
+@ratelimit(key="user", rate="20/m", method="GET")
 def smart_product_stats(request):
     """
     Get smart product validator statistics and database information.
-    
+
     Useful for admin monitoring and system health checks.
-    
+
     Returns:
     - Total products in database
     - Product counts by type
@@ -10342,29 +10532,30 @@ def smart_product_stats(request):
     - Database coverage information
     """
     from carbon.services.smart_product_validator import smart_product_validator
-    
+
     try:
         # Get validation statistics
         stats = smart_product_validator.get_validation_stats()
-        
+
         # Add additional system information
-        stats.update({
-            "database_version": "smart_bag_ux_v1.0",
-            "last_updated": "2025-01-15",
-            "api_version": "1.0",
-            "user_id": request.user.id,
-            "timestamp": timezone.now().isoformat()
-        })
-        
+        stats.update(
+            {
+                "database_version": "smart_bag_ux_v1.0",
+                "last_updated": "2025-01-15",
+                "api_version": "1.0",
+                "user_id": request.user.id,
+                "timestamp": timezone.now().isoformat(),
+            }
+        )
+
         logger.info(f"Smart product stats requested by user {request.user.id}")
-        
+
         return Response(stats, status=status.HTTP_200_OK)
-        
+
     except Exception as e:
         logger.error(f"Smart product stats failed: {e}")
         logger.error(traceback.format_exc())
-        
+
         return Response(
-            {"error": "Stats retrieval failed", "details": str(e)},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {"error": "Stats retrieval failed", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )

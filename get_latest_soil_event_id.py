@@ -4,23 +4,23 @@ Get the ID of the latest created Soil Management event
 """
 
 import os
+
 import django
 
 # Setup Django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings.dev')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.settings.dev")
 django.setup()
 
 from history.models import SoilManagementEvent
 
+
 def get_latest_soil_event_id():
     print("🔍 FINDING LATEST SOIL MANAGEMENT EVENT")
     print("=" * 60)
-    
+
     # Get the latest soil management event
-    latest_event = SoilManagementEvent.objects.filter(
-        name__icontains="MCP Browser Test"
-    ).order_by('-id').first()
-    
+    latest_event = SoilManagementEvent.objects.filter(name__icontains="MCP Browser Test").order_by("-id").first()
+
     if latest_event:
         print(f"✅ FOUND LATEST EVENT:")
         print(f"📝 Event ID: {latest_event.id}")
@@ -37,6 +37,7 @@ def get_latest_soil_event_id():
     else:
         print("❌ No MCP Browser Test events found")
         return None
+
 
 if __name__ == "__main__":
     get_latest_soil_event_id()

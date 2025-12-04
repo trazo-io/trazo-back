@@ -24,12 +24,12 @@ class CarbonTransparencyService:
 
     # Transparency verification thresholds (absolute standards, not competitive)
     VERIFICATION_THRESHOLDS = {
-        "Complete": 95,      # Complete documentation and verification
-        "Comprehensive": 85, # Strong documentation with verification
-        "Good": 75,          # Good documentation practices
-        "Standard": 60,      # Meets basic standards
-        "Basic": 40,         # Basic documentation only
-        "Limited": 0,        # Limited documentation
+        "Complete": 95,  # Complete documentation and verification
+        "Comprehensive": 85,  # Strong documentation with verification
+        "Good": 75,  # Good documentation practices
+        "Standard": 60,  # Meets basic standards
+        "Basic": 40,  # Basic documentation only
+        "Limited": 0,  # Limited documentation
     }
 
     def __init__(self):
@@ -58,9 +58,10 @@ class CarbonTransparencyService:
 
             # Calculate transparency score using TransparencyCalculator
             from history.services.transparency_calculator import TransparencyCalculator
+
             transparency_calc = TransparencyCalculator()
             transparency_data = transparency_calc.calculate_transparency_score(production)
-            transparency_score = transparency_data.get('transparency_percentage', 0)
+            transparency_score = transparency_data.get("transparency_percentage", 0)
 
             # Convert transparency score to verification level
             level = self._score_to_verification_level(transparency_score)
@@ -96,20 +97,25 @@ class CarbonTransparencyService:
 
             # Get transparency data
             from history.services.transparency_calculator import TransparencyCalculator
+
             transparency_calc = TransparencyCalculator()
             transparency_data = transparency_calc.calculate_transparency_score(production)
 
             # Calculate verification against standards
             verification = {
-                "transparency_percentage": transparency_data.get('transparency_percentage', 0),
-                "verification_level": self._score_to_verification_level(transparency_data.get('transparency_percentage', 0)),
+                "transparency_percentage": transparency_data.get("transparency_percentage", 0),
+                "verification_level": self._score_to_verification_level(
+                    transparency_data.get("transparency_percentage", 0)
+                ),
                 "carbon_data_verified": carbon_data["entry_count"] > 0,
                 "usda_verified": self._check_usda_verification(production),
                 "blockchain_verified": self._check_blockchain_verification(production),
-                "documentation_completeness": transparency_data.get('completeness_score', 0),
-                "category_breakdown": transparency_data.get('category_breakdown', {}),
+                "documentation_completeness": transparency_data.get("completeness_score", 0),
+                "category_breakdown": transparency_data.get("category_breakdown", {}),
                 "context_message": self._generate_verification_message(transparency_data),
-                "next_standards": self._get_next_verification_standards(transparency_data.get('transparency_percentage', 0)),
+                "next_standards": self._get_next_verification_standards(
+                    transparency_data.get("transparency_percentage", 0)
+                ),
                 "achievements": self._generate_transparency_achievements(transparency_data),
             }
 
@@ -323,14 +329,16 @@ class CarbonTransparencyService:
             production.improvement_recommendations = recommendations
 
             # Generate consumer insights focused on transparency
-            consumer_insights = self._generate_transparency_consumer_insights(production, equivalency_metrics, trust_indicators)
+            consumer_insights = self._generate_transparency_consumer_insights(
+                production, equivalency_metrics, trust_indicators
+            )
             production.consumer_insights = consumer_insights
 
             # Save the production
             production.save(
                 update_fields=[
                     "verification_level",
-                    "verification_standards", 
+                    "verification_standards",
                     "equivalency_metrics",
                     "trust_indicators",
                     "improvement_recommendations",
@@ -428,21 +436,21 @@ class CarbonTransparencyService:
     def _check_usda_verification(self, production: History) -> bool:
         """Check if production has USDA verified carbon data."""
         from ..models import CarbonEntry
+
         return CarbonEntry.objects.filter(production=production, usda_verified=True).exists()
 
     def _check_blockchain_verification(self, production: History) -> bool:
         """Check if production has blockchain verified carbon data."""
         from ..models import CarbonEntry
+
         return CarbonEntry.objects.filter(
-            production=production, 
-            blockchain_verified=True,
-            blockchain_transaction_hash__isnull=False
+            production=production, blockchain_verified=True, blockchain_transaction_hash__isnull=False
         ).exists()
 
     def _generate_verification_message(self, transparency_data: Dict) -> str:
         """Generate verification message based on transparency data."""
-        transparency_percentage = transparency_data.get('transparency_percentage', 0)
-        
+        transparency_percentage = transparency_data.get("transparency_percentage", 0)
+
         if transparency_percentage >= 95:
             return "Complete transparency with comprehensive documentation"
         elif transparency_percentage >= 85:
@@ -461,114 +469,130 @@ class CarbonTransparencyService:
         for level, threshold in self.VERIFICATION_THRESHOLDS.items():
             if current_score < threshold:
                 return {
-                    'target_score': threshold,
-                    'target_level': level,
-                    'points_needed': threshold - current_score,
-                    'description': f"Achieve {level} verification level"
+                    "target_score": threshold,
+                    "target_level": level,
+                    "points_needed": threshold - current_score,
+                    "description": f"Achieve {level} verification level",
                 }
-        
+
         return {
-            'target_score': 100,
-            'target_level': 'Perfect',
-            'points_needed': 100 - current_score,
-            'description': 'Perfect transparency documentation'
+            "target_score": 100,
+            "target_level": "Perfect",
+            "points_needed": 100 - current_score,
+            "description": "Perfect transparency documentation",
         }
 
     def _generate_transparency_achievements(self, transparency_data: Dict) -> List[Dict]:
         """Generate transparency achievements based on documentation."""
         achievements = []
-        transparency_percentage = transparency_data.get('transparency_percentage', 0)
-        category_breakdown = transparency_data.get('category_breakdown', {})
-        
+        transparency_percentage = transparency_data.get("transparency_percentage", 0)
+        category_breakdown = transparency_data.get("category_breakdown", {})
+
         # Overall transparency achievements
         if transparency_percentage >= 95:
-            achievements.append({
-                'title': 'Complete Transparency',
-                'description': 'Comprehensive farm documentation',
-                'icon': 'shield-check',
-                'level': 'gold'
-            })
+            achievements.append(
+                {
+                    "title": "Complete Transparency",
+                    "description": "Comprehensive farm documentation",
+                    "icon": "shield-check",
+                    "level": "gold",
+                }
+            )
         elif transparency_percentage >= 85:
-            achievements.append({
-                'title': 'High Transparency',
-                'description': 'Strong documentation practices',
-                'icon': 'shield',
-                'level': 'silver'
-            })
+            achievements.append(
+                {
+                    "title": "High Transparency",
+                    "description": "Strong documentation practices",
+                    "icon": "shield",
+                    "level": "silver",
+                }
+            )
         elif transparency_percentage >= 75:
-            achievements.append({
-                'title': 'Good Transparency',
-                'description': 'Solid documentation foundation',
-                'icon': 'check-circle',
-                'level': 'bronze'
-            })
+            achievements.append(
+                {
+                    "title": "Good Transparency",
+                    "description": "Solid documentation foundation",
+                    "icon": "check-circle",
+                    "level": "bronze",
+                }
+            )
 
         # Category-specific achievements
         for category, data in category_breakdown.items():
-            if data.get('completeness_percentage', 0) >= 90:
-                achievements.append({
-                    'title': f'Excellent {category.replace("_", " ").title()} Documentation',
-                    'description': f'Complete {category} event recording',
-                    'icon': 'file-check',
-                    'level': 'category'
-                })
+            if data.get("completeness_percentage", 0) >= 90:
+                achievements.append(
+                    {
+                        "title": f'Excellent {category.replace("_", " ").title()} Documentation',
+                        "description": f"Complete {category} event recording",
+                        "icon": "file-check",
+                        "level": "category",
+                    }
+                )
 
         return achievements
 
     def _generate_transparency_recommendations(self, production: History, verification_standards: Dict) -> List[Dict]:
         """Generate transparency improvement recommendations (non-competitive)."""
         recommendations = []
-        
-        transparency_percentage = verification_standards.get('transparency_percentage', 0)
-        category_breakdown = verification_standards.get('category_breakdown', {})
-        
+
+        transparency_percentage = verification_standards.get("transparency_percentage", 0)
+        category_breakdown = verification_standards.get("category_breakdown", {})
+
         # Documentation improvement recommendations
         if transparency_percentage < 85:
-            recommendations.append({
-                'category': 'Documentation',
-                'priority': 'High',
-                'title': 'Improve Farm Documentation',
-                'description': 'Add more detailed event documentation to increase transparency',
-                'action_items': [
-                    'Document routine farming activities',
-                    'Record equipment maintenance events',
-                    'Add soil management practices'
-                ],
-                'potential_improvement': f"+{85 - transparency_percentage:.0f} transparency points"
-            })
+            recommendations.append(
+                {
+                    "category": "Documentation",
+                    "priority": "High",
+                    "title": "Improve Farm Documentation",
+                    "description": "Add more detailed event documentation to increase transparency",
+                    "action_items": [
+                        "Document routine farming activities",
+                        "Record equipment maintenance events",
+                        "Add soil management practices",
+                    ],
+                    "potential_improvement": f"+{85 - transparency_percentage:.0f} transparency points",
+                }
+            )
 
         # Category-specific recommendations
         for category, data in category_breakdown.items():
-            if data.get('completeness_percentage', 0) < 70:
-                recommendations.append({
-                    'category': 'Category Improvement',
-                    'priority': 'Medium',
-                    'title': f'Improve {category.replace("_", " ").title()} Documentation',
-                    'description': f'Add more {category} events to strengthen transparency',
-                    'action_items': [f'Document {category} activities regularly'],
-                    'potential_improvement': f"Strengthen {category} transparency"
-                })
+            if data.get("completeness_percentage", 0) < 70:
+                recommendations.append(
+                    {
+                        "category": "Category Improvement",
+                        "priority": "Medium",
+                        "title": f'Improve {category.replace("_", " ").title()} Documentation',
+                        "description": f"Add more {category} events to strengthen transparency",
+                        "action_items": [f"Document {category} activities regularly"],
+                        "potential_improvement": f"Strengthen {category} transparency",
+                    }
+                )
 
         # Verification recommendations
-        if not verification_standards.get('usda_verified', False):
-            recommendations.append({
-                'category': 'Verification',
-                'priority': 'Medium',
-                'title': 'Add USDA Verification',
-                'description': 'Verify carbon calculations with USDA standards',
-                'action_items': ['Submit carbon data for USDA verification'],
-                'potential_improvement': 'Enhanced credibility'
-            })
+        if not verification_standards.get("usda_verified", False):
+            recommendations.append(
+                {
+                    "category": "Verification",
+                    "priority": "Medium",
+                    "title": "Add USDA Verification",
+                    "description": "Verify carbon calculations with USDA standards",
+                    "action_items": ["Submit carbon data for USDA verification"],
+                    "potential_improvement": "Enhanced credibility",
+                }
+            )
 
-        if not verification_standards.get('blockchain_verified', False):
-            recommendations.append({
-                'category': 'Verification',
-                'priority': 'Low',
-                'title': 'Add Blockchain Verification',
-                'description': 'Secure carbon data with blockchain verification',
-                'action_items': ['Enable blockchain verification for carbon records'],
-                'potential_improvement': 'Immutable verification'
-            })
+        if not verification_standards.get("blockchain_verified", False):
+            recommendations.append(
+                {
+                    "category": "Verification",
+                    "priority": "Low",
+                    "title": "Add Blockchain Verification",
+                    "description": "Secure carbon data with blockchain verification",
+                    "action_items": ["Enable blockchain verification for carbon records"],
+                    "potential_improvement": "Immutable verification",
+                }
+            )
 
         return recommendations
 
@@ -577,56 +601,60 @@ class CarbonTransparencyService:
     ) -> Dict:
         """Generate consumer-focused transparency insights."""
         insights = {
-            'transparency_story': '',
-            'verification_summary': '',
-            'trust_summary': '',
-            'carbon_context': '',
-            'achievements': []
+            "transparency_story": "",
+            "verification_summary": "",
+            "trust_summary": "",
+            "carbon_context": "",
+            "achievements": [],
         }
 
         # Get verification level
-        verification_level = getattr(production, 'verification_level', 'Limited')
-        
+        verification_level = getattr(production, "verification_level", "Limited")
+
         # Generate transparency story
-        if verification_level == 'Complete':
-            insights['transparency_story'] = 'This farm maintains complete transparency with comprehensive documentation of all farming activities'
-        elif verification_level == 'Comprehensive':
-            insights['transparency_story'] = 'This farm demonstrates strong transparency practices with detailed documentation'
-        elif verification_level == 'Good':
-            insights['transparency_story'] = 'This farm follows good transparency practices with solid documentation'
+        if verification_level == "Complete":
+            insights["transparency_story"] = (
+                "This farm maintains complete transparency with comprehensive documentation of all farming activities"
+            )
+        elif verification_level == "Comprehensive":
+            insights["transparency_story"] = (
+                "This farm demonstrates strong transparency practices with detailed documentation"
+            )
+        elif verification_level == "Good":
+            insights["transparency_story"] = "This farm follows good transparency practices with solid documentation"
         else:
-            insights['transparency_story'] = 'This farm is working to improve transparency through better documentation'
+            insights["transparency_story"] = "This farm is working to improve transparency through better documentation"
 
         # Generate verification summary
         verification_points = []
         if self._check_usda_verification(production):
-            verification_points.append('USDA verified carbon data')
+            verification_points.append("USDA verified carbon data")
         if self._check_blockchain_verification(production):
-            verification_points.append('Blockchain secured records')
-        
+            verification_points.append("Blockchain secured records")
+
         if verification_points:
-            insights['verification_summary'] = f"Verified through: {', '.join(verification_points)}"
+            insights["verification_summary"] = f"Verified through: {', '.join(verification_points)}"
         else:
-            insights['verification_summary'] = 'Working toward third-party verification'
+            insights["verification_summary"] = "Working toward third-party verification"
 
         # Generate trust summary from trust indicators
-        trust_score = trust_indicators.get('overall_score', 0)
+        trust_score = trust_indicators.get("overall_score", 0)
         if trust_score >= 80:
-            insights['trust_summary'] = 'High trust through verified transparency and documentation'
+            insights["trust_summary"] = "High trust through verified transparency and documentation"
         elif trust_score >= 60:
-            insights['trust_summary'] = 'Good transparency with reliable documentation'
+            insights["trust_summary"] = "Good transparency with reliable documentation"
         else:
-            insights['trust_summary'] = 'Building trust through improved transparency'
+            insights["trust_summary"] = "Building trust through improved transparency"
 
         # Generate carbon context (supporting role)
-        if equivalency_metrics and equivalency_metrics.get('context'):
-            context = equivalency_metrics['context']
-            if context.get('is_carbon_negative', False):
-                insights['carbon_context'] = 'Carbon negative production - removes CO₂ from atmosphere'
-            elif context.get('is_carbon_neutral', False):
-                insights['carbon_context'] = 'Carbon neutral production - balanced emissions'
+        if equivalency_metrics and equivalency_metrics.get("context"):
+            context = equivalency_metrics["context"]
+            if context.get("is_carbon_negative", False):
+                insights["carbon_context"] = "Carbon negative production - removes CO₂ from atmosphere"
+            elif context.get("is_carbon_neutral", False):
+                insights["carbon_context"] = "Carbon neutral production - balanced emissions"
             else:
-                insights['carbon_context'] = 'Working to reduce environmental impact'
+                insights["carbon_context"] = "Working to reduce environmental impact"
 
         return insights
 
@@ -687,7 +715,6 @@ class CarbonTransparencyService:
             "improvement_potential": max(0, net_emissions - estimated_best),
             "estimated": True,
         }
-
 
     def _get_emissions_interpretation(self, net_emissions: float) -> str:
         """Get interpretation of emissions level."""
@@ -929,7 +956,6 @@ class CarbonTransparencyService:
             )
 
         return badges
-
 
     def _clear_production_caches(self, production_id: int):
         """Clear all caches related to a production."""

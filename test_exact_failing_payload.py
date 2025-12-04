@@ -3,15 +3,17 @@
 Test the exact payload that's failing with the provided token.
 """
 
-import requests
 import json
+
+import requests
+
 
 def test_exact_failing_payload():
     """Test with the exact payload and token that's failing"""
     print("🔍 Testing EXACT failing payload with real token...")
-    
+
     url = "http://localhost:8000/api/carbon/calculate-event-carbon/"
-    
+
     # EXACT payload from user's error
     payload = {
         "event_type": "soil_management",
@@ -44,16 +46,16 @@ def test_exact_failing_payload():
             "temperature_range": "20-25°C",
             "observation": "",
             "parcel_id": 105,
-            "establishment_id": 44
-        }
+            "establishment_id": 44,
+        },
     }
-    
+
     # User's current token
     headers = {
         "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzYwMzAxNjg2LCJpYXQiOjE3NjAyOTk4ODYsImp0aSI6IjY2OTU4ZjFjYWZlMzQxNDI5YjM4MTNkMDMyZGFiODVkIiwidXNlcl9pZCI6NTZ9.aIhgnFC4dWTqscZW9FjuImcvABnqCuuxBglHLShs22g",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
     }
-    
+
     print(f"📤 Payload analysis:")
     print(f"   event_type: {payload['event_type']}")
     print(f"   type: {payload['event_data']['type']}")
@@ -61,13 +63,13 @@ def test_exact_failing_payload():
     print(f"   fuel_consumed: '{payload['event_data']['fuel_consumed']}' (empty string)")
     print(f"   equipment_hours: '{payload['event_data']['equipment_hours']}' (empty string)")
     print(f"   area_covered: '{payload['event_data']['area_covered']}' (empty string)")
-    
+
     try:
         response = requests.post(url, json=payload, headers=headers, timeout=10)
-        
+
         print(f"\n📨 API Response:")
         print(f"   Status Code: {response.status_code}")
-        
+
         if response.status_code == 200:
             result = response.json()
             print(f"   ✅ SUCCESS!")
@@ -83,12 +85,12 @@ def test_exact_failing_payload():
             except:
                 print(f"   ❌ FAILED!")
                 print(f"   Raw response: {response.text}")
-            
+
             if response.status_code == 500:
                 print(f"\n💥 500 ERROR CONFIRMED - Server-side issue!")
-            
+
             return False
-            
+
     except requests.exceptions.ConnectionError:
         print(f"\n🔌 CONNECTION ERROR: Can't connect to localhost:8000")
         return False
@@ -96,15 +98,16 @@ def test_exact_failing_payload():
         print(f"\n💥 REQUEST ERROR: {e}")
         return False
 
+
 if __name__ == "__main__":
     print("🔍 EXACT FAILING PAYLOAD TEST")
     print("=" * 50)
-    
+
     success = test_exact_failing_payload()
-    
+
     if not success:
         print(f"\n🔧 NEED TO DEBUG SERVER-SIDE ISSUE")
         print(f"   The payload has good data but server returns 500")
         print(f"   Will investigate the backend calculator...")
-    
+
     print(f"\n🏁 Test complete.")

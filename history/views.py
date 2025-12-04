@@ -29,8 +29,16 @@ from .constants import (
     WEATHER_EVENT_TYPE,
 )
 from .models import (
-    BusinessEvent, ChemicalEvent, EquipmentEvent, GeneralEvent, History, 
-    HistoryScan, PestManagementEvent, ProductionEvent, SoilManagementEvent, WeatherEvent
+    BusinessEvent,
+    ChemicalEvent,
+    EquipmentEvent,
+    GeneralEvent,
+    History,
+    HistoryScan,
+    PestManagementEvent,
+    ProductionEvent,
+    SoilManagementEvent,
+    WeatherEvent,
 )
 from .serializers import (
     BusinessEventSerializer,
@@ -438,10 +446,10 @@ class HistoryViewSet(viewsets.ModelViewSet):
 
                 # Determine event type based on name using comprehensive mapping
                 event_name = event_data.get("name", "").lower()
-                
+
                 # Comprehensive event type detection (matches frontend logic)
                 event_type_info = self._determine_template_event_type(event_name)
-                
+
                 # Create appropriate event based on detected type
                 if event_type_info["category"] == "chemical":
                     ChemicalEvent.objects.create(
@@ -477,7 +485,7 @@ class HistoryViewSet(viewsets.ModelViewSet):
                         date=scheduled_date,
                         type=event_type_info["sub_type"],
                         temperature=20.0,  # Default temperature
-                        humidity=60.0,     # Default humidity
+                        humidity=60.0,  # Default humidity
                         index=current_event_count,
                         created_by=history.operator,
                     )
@@ -487,8 +495,8 @@ class HistoryViewSet(viewsets.ModelViewSet):
                         description=f"{event_data.get('name', 'Soil Event')}: {event_data.get('efficiency_tips', '')}",
                         date=scheduled_date,
                         type=event_type_info["sub_type"],
-                        soil_ph=7.0,       # Default neutral pH
-                        organic_matter=3.5, # Default organic matter
+                        soil_ph=7.0,  # Default neutral pH
+                        organic_matter=3.5,  # Default organic matter
                         index=current_event_count,
                         created_by=history.operator,
                     )
@@ -544,82 +552,82 @@ class HistoryViewSet(viewsets.ModelViewSet):
         Comprehensive event type detection matching frontend logic
         Returns: {"category": str, "sub_type": str}
         """
-        name = event_name.lower() if event_name else ''
-        
+        name = event_name.lower() if event_name else ""
+
         # Chemical events (fertilizers, pesticides, herbicides, fungicides)
-        if any(term in name for term in ['fertiliz', 'nutrient', 'nitrogen', 'phosphor', 'potassium']):
+        if any(term in name for term in ["fertiliz", "nutrient", "nitrogen", "phosphor", "potassium"]):
             return {"category": "chemical", "sub_type": ChemicalEvent.FERTILIZER}
-        if any(term in name for term in ['spray', 'pesticide', 'insecticide', 'pest control']):
+        if any(term in name for term in ["spray", "pesticide", "insecticide", "pest control"]):
             return {"category": "chemical", "sub_type": ChemicalEvent.PESTICIDE}
-        if any(term in name for term in ['herbicide', 'weed', 'glyphosate']):
+        if any(term in name for term in ["herbicide", "weed", "glyphosate"]):
             return {"category": "chemical", "sub_type": ChemicalEvent.HERBICIDE}
-        if any(term in name for term in ['fungicide', 'fungus', 'disease control']):
+        if any(term in name for term in ["fungicide", "fungus", "disease control"]):
             return {"category": "chemical", "sub_type": ChemicalEvent.FUNGICIDE}
-        
+
         # Equipment events (machinery, fuel consumption, maintenance) - maintenance first
-        if any(term in name for term in ['maintenance', 'repair', 'service', 'calibration']):
+        if any(term in name for term in ["maintenance", "repair", "service", "calibration"]):
             return {"category": "equipment", "sub_type": EquipmentEvent.MAINTENANCE}
-        if any(term in name for term in ['equipment', 'machinery', 'tractor', 'harvester']):
+        if any(term in name for term in ["equipment", "machinery", "tractor", "harvester"]):
             return {"category": "equipment", "sub_type": EquipmentEvent.FUEL_CONSUMPTION}
-        if any(term in name for term in ['fuel', 'diesel', 'gasoline']):
+        if any(term in name for term in ["fuel", "diesel", "gasoline"]):
             return {"category": "equipment", "sub_type": EquipmentEvent.FUEL_CONSUMPTION}
-        if 'field preparation' in name or 'planting/seeding' in name:
+        if "field preparation" in name or "planting/seeding" in name:
             return {"category": "equipment", "sub_type": EquipmentEvent.FUEL_CONSUMPTION}
-        if any(term in name for term in ['preparation', 'tillage', 'cultivation', 'plowing']) and 'soil' not in name:
+        if any(term in name for term in ["preparation", "tillage", "cultivation", "plowing"]) and "soil" not in name:
             return {"category": "equipment", "sub_type": EquipmentEvent.FUEL_CONSUMPTION}
-        
+
         # Weather events (frost, drought, storms, temperature monitoring)
-        if any(term in name for term in ['weather', 'climate', 'temperature', 'monitoring weather']):
+        if any(term in name for term in ["weather", "climate", "temperature", "monitoring weather"]):
             return {"category": "weather", "sub_type": WeatherEvent.HIGH_TEMPERATURE}
-        if any(term in name for term in ['frost', 'freeze', 'cold protection']):
+        if any(term in name for term in ["frost", "freeze", "cold protection"]):
             return {"category": "weather", "sub_type": WeatherEvent.FROST}
-        if any(term in name for term in ['drought', 'water stress', 'irrigation need']):
+        if any(term in name for term in ["drought", "water stress", "irrigation need"]):
             return {"category": "weather", "sub_type": WeatherEvent.DROUGHT}
-        if any(term in name for term in ['storm', 'wind', 'hail', 'rain']):
+        if any(term in name for term in ["storm", "wind", "hail", "rain"]):
             return {"category": "weather", "sub_type": WeatherEvent.TROPICAL_STORM}
-        
+
         # Soil events (testing, amendments, management) - check soil + tillage specifically
-        if 'soil' in name and any(term in name for term in ['test', 'analysis', 'ph']):
+        if "soil" in name and any(term in name for term in ["test", "analysis", "ph"]):
             return {"category": "soil", "sub_type": SoilManagementEvent.SOIL_TEST}
-        if any(term in name for term in ['soil amendment', 'lime', 'compost', 'organic matter']):
+        if any(term in name for term in ["soil amendment", "lime", "compost", "organic matter"]):
             return {"category": "soil", "sub_type": SoilManagementEvent.ORGANIC_MATTER}
-        if any(term in name for term in ['soil preparation', 'soil management']):
+        if any(term in name for term in ["soil preparation", "soil management"]):
             return {"category": "soil", "sub_type": SoilManagementEvent.TILLAGE}
-        if 'soil' in name and 'tillage' in name:
+        if "soil" in name and "tillage" in name:
             return {"category": "soil", "sub_type": SoilManagementEvent.TILLAGE}
-        if any(term in name for term in ['ph management', 'ph adjustment', 'ph control']):
+        if any(term in name for term in ["ph management", "ph adjustment", "ph control"]):
             return {"category": "soil", "sub_type": SoilManagementEvent.PH_ADJUSTMENT}
-        
+
         # Pest management events (scouting, monitoring, biological control)
-        if any(term in name for term in ['scout', 'monitoring', 'inspection', 'pest monitoring']):
+        if any(term in name for term in ["scout", "monitoring", "inspection", "pest monitoring"]):
             return {"category": "pest", "sub_type": PestManagementEvent.SCOUTING}
-        if any(term in name for term in ['biological control', 'beneficial', 'predator']):
+        if any(term in name for term in ["biological control", "beneficial", "predator"]):
             return {"category": "pest", "sub_type": PestManagementEvent.BENEFICIAL_RELEASE}
-        if any(term in name for term in ['trap', 'pheromone', 'ipm']):
+        if any(term in name for term in ["trap", "pheromone", "ipm"]):
             return {"category": "pest", "sub_type": PestManagementEvent.TRAP_MONITORING}
-        
+
         # Business events (certification, audit, training)
-        if any(term in name for term in ['certif', 'organic', 'audit', 'compliance']):
+        if any(term in name for term in ["certif", "organic", "audit", "compliance"]):
             return {"category": "business", "sub_type": BusinessEvent.CERTIFICATION}
-        if any(term in name for term in ['training', 'education', 'workshop']):
+        if any(term in name for term in ["training", "education", "workshop"]):
             return {"category": "business", "sub_type": BusinessEvent.CERTIFICATION}
-        if any(term in name for term in ['record', 'documentation', 'reporting']):
+        if any(term in name for term in ["record", "documentation", "reporting"]):
             return {"category": "business", "sub_type": BusinessEvent.COMPLIANCE}
-        
+
         # Production events (biological/manual operations) - must be after more specific checks
-        if any(term in name for term in ['irrigation', 'watering', 'water application']):
+        if any(term in name for term in ["irrigation", "watering", "water application"]):
             return {"category": "production", "sub_type": ProductionEvent.IRRIGATION}
-        if any(term in name for term in ['harvest', 'picking', 'collection']):
+        if any(term in name for term in ["harvest", "picking", "collection"]):
             return {"category": "production", "sub_type": ProductionEvent.HARVESTING}
-        if 'planting' in name and not any(term in name for term in ['equipment', 'seeding']):
+        if "planting" in name and not any(term in name for term in ["equipment", "seeding"]):
             return {"category": "production", "sub_type": ProductionEvent.PLANTING}
-        if any(term in name for term in ['pruning', 'trimming', 'cutting back']):
+        if any(term in name for term in ["pruning", "trimming", "cutting back"]):
             return {"category": "production", "sub_type": ProductionEvent.PRUNING}
-        if any(term in name for term in ['bloom', 'flower', 'pollination']):
+        if any(term in name for term in ["bloom", "flower", "pollination"]):
             return {"category": "production", "sub_type": ProductionEvent.PLANTING}  # Use planting as fallback
-        if any(term in name for term in ['thinning', 'selective removal', 'crop management']):
+        if any(term in name for term in ["thinning", "selective removal", "crop management"]):
             return {"category": "production", "sub_type": ProductionEvent.PLANTING}  # Use planting as fallback
-        
+
         # Default fallback to production with irrigation
         return {"category": "production", "sub_type": ProductionEvent.IRRIGATION}
 
@@ -1043,7 +1051,6 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_428_PRECONDITION_REQUIRED,
                 )
 
-
             # Session deduplication check
             is_duplicate, original_scan, dedup_method = self.deduplication_service.check_comprehensive_duplicate(
                 privacy_data["session_hash"], privacy_data["ip_hash"], production_id
@@ -1452,7 +1459,6 @@ class HistoryScanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     permission_classes = (IsAuthenticated,)
     filter_backends = [filters.OrderingFilter]
-    
 
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
@@ -1642,24 +1648,24 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         parcels_post = self.request.POST.getlist("parcels", None)
         parcels_data = self.request.data.get("parcels", [])
         event_type = self.request.data.get("event_type", None)
-        
+
         # Use data.get instead of POST.getlist for JSON requests
         parcels = parcels_data if parcels_data else parcels_post
-        
+
         if event_type is None:
             raise Exception("Event type is required")
         if parcels is None or parcels is []:
             raise Exception("Parcel is required")
-        
+
         # Enhanced validation for structured fields
         self._validate_structured_fields(int(event_type), serializer.validated_data)
-        
+
         parcels = Parcel.objects.filter(id__in=[int(parcel) for parcel in parcels]).select_related("current_history")
 
         for parcel in parcels:
             if parcel.current_history is not None:
                 history = parcel.current_history
-                
+
                 index = (
                     history.history_weatherevent_events.count()
                     + history.history_chemicalevent_events.count()
@@ -1672,38 +1678,36 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 ) + 1
 
                 event_model = EVENT_TYPE_TO_MODEL.get(int(event_type), GeneralEvent)
-                
+
                 # Remove history and created_by from validated_data to prevent override
                 validated_data = serializer.validated_data.copy()
-                validated_data.pop('history', None)
-                validated_data.pop('created_by', None)
-                
+                validated_data.pop("history", None)
+                validated_data.pop("created_by", None)
+
                 event = event_model.objects.create(
                     history=history,
                     index=index,
                     created_by=self.request.user,
                     **validated_data,
                 )
-                
+
                 # Handle album images from S3 URLs
                 album_images = self.request.data.get("album_images", [])
-                
+
                 if album_images:
                     from .models import Gallery
+
                     gallery = Gallery.objects.create()
-                    
+
                     # Create GalleryImage records from S3 URLs
                     for image_url in album_images:
                         # Extract S3 key from URL if possible
                         s3_key = image_url.split("/")[-1] if "/" in image_url else None
-                        gallery_image = gallery.images.create(
-                            image_url=image_url,
-                            s3_key=s3_key
-                        )
-                    
+                        gallery_image = gallery.images.create(image_url=image_url, s3_key=s3_key)
+
                     # Associate album with event
                     event.album = gallery
-                
+
                 event.save()
 
     def update(self, request, *args, **kwargs):
@@ -1750,171 +1754,169 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         Enhanced validation for structured fields based on event type
         """
         from rest_framework.serializers import ValidationError
-        
+
         if event_type == CHEMICAL_EVENT_TYPE:
             # Validate NPK percentages don't exceed 100%
-            nitrogen = validated_data.get('nitrogen_percentage', 0) or 0
-            phosphorus = validated_data.get('phosphorus_percentage', 0) or 0
-            potassium = validated_data.get('potassium_percentage', 0) or 0
-            
+            nitrogen = validated_data.get("nitrogen_percentage", 0) or 0
+            phosphorus = validated_data.get("phosphorus_percentage", 0) or 0
+            potassium = validated_data.get("potassium_percentage", 0) or 0
+
             total_npk = nitrogen + phosphorus + potassium
             if total_npk > 100:
-                raise ValidationError(
-                    f"Total NPK percentages cannot exceed 100%. Current total: {total_npk}%"
-                )
-            
+                raise ValidationError(f"Total NPK percentages cannot exceed 100%. Current total: {total_npk}%")
+
             # Validate application method is valid if provided
-            app_method = validated_data.get('application_method_structured')
-            if app_method and app_method not in ['broadcast', 'injection', 'foliar', 'drip', 'banding']:
+            app_method = validated_data.get("application_method_structured")
+            if app_method and app_method not in ["broadcast", "injection", "foliar", "drip", "banding"]:
                 raise ValidationError(
                     f"Invalid application method: {app_method}. Must be one of: broadcast, injection, foliar, drip, banding"
                 )
-                
+
         elif event_type == EQUIPMENT_EVENT_TYPE:
             # Validate fuel consumed is positive
-            fuel_consumed = validated_data.get('fuel_consumed')
+            fuel_consumed = validated_data.get("fuel_consumed")
             if fuel_consumed is not None and fuel_consumed < 0:
                 raise ValidationError("Fuel consumed cannot be negative")
-            
+
             # Validate hours operated is positive
-            hours_operated = validated_data.get('hours_operated')
+            hours_operated = validated_data.get("hours_operated")
             if hours_operated is not None and hours_operated < 0:
                 raise ValidationError("Hours operated cannot be negative")
-            
+
             # Validate efficiency rating
-            efficiency = validated_data.get('operation_efficiency')
-            if efficiency and efficiency not in ['high', 'normal', 'low']:
-                raise ValidationError(
-                    f"Invalid efficiency rating: {efficiency}. Must be one of: high, normal, low"
-                )
-                
+            efficiency = validated_data.get("operation_efficiency")
+            if efficiency and efficiency not in ["high", "normal", "low"]:
+                raise ValidationError(f"Invalid efficiency rating: {efficiency}. Must be one of: high, normal, low")
+
         elif event_type == PRODUCTION_EVENT_TYPE:
             # Validate area covered is positive
-            area_covered = validated_data.get('area_covered')
+            area_covered = validated_data.get("area_covered")
             if area_covered is not None and area_covered <= 0:
                 raise ValidationError("Area covered must be greater than 0")
-            
+
             # Validate yield amount is positive
-            yield_amount = validated_data.get('yield_amount')
+            yield_amount = validated_data.get("yield_amount")
             if yield_amount is not None and yield_amount < 0:
                 raise ValidationError("Yield amount cannot be negative")
-            
+
             # Validate transportation distance is not negative
-            transport_distance = validated_data.get('transportation_distance')
+            transport_distance = validated_data.get("transportation_distance")
             if transport_distance is not None and transport_distance < 0:
                 raise ValidationError("Transportation distance cannot be negative")
-                
+
         elif event_type == BUSINESS_EVENT_TYPE:
             # Validate carbon credits earned is not negative
-            carbon_credits = validated_data.get('carbon_credits_earned')
+            carbon_credits = validated_data.get("carbon_credits_earned")
             if carbon_credits is not None and carbon_credits < 0:
                 raise ValidationError("Carbon credits earned cannot be negative")
-            
+
             # Validate investment amount is not negative
-            investment = validated_data.get('investment_amount')
+            investment = validated_data.get("investment_amount")
             if investment is not None and investment < 0:
                 raise ValidationError("Investment amount cannot be negative")
-            
+
             # Validate business type
-            business_type = validated_data.get('business_type')
+            business_type = validated_data.get("business_type")
             valid_business_types = [
-                'certification', 'carbon_credits', 'sustainability_audit', 'green_investment',
-                'supply_chain', 'consumer_engagement', 'regulatory_compliance', 'carbon_offset',
-                'sustainability_training', 'eco_certification'
+                "certification",
+                "carbon_credits",
+                "sustainability_audit",
+                "green_investment",
+                "supply_chain",
+                "consumer_engagement",
+                "regulatory_compliance",
+                "carbon_offset",
+                "sustainability_training",
+                "eco_certification",
             ]
             if business_type and business_type not in valid_business_types:
                 raise ValidationError(
                     f"Invalid business type: {business_type}. Must be one of: {', '.join(valid_business_types)}"
                 )
 
-    @action(detail=False, methods=['get'], url_path='structured-field-options')
+    @action(detail=False, methods=["get"], url_path="structured-field-options")
     def structured_field_options(self, request):
         """
         API endpoint to get available options for structured fields
         """
         options = {
-            'chemical_event': {
-                'application_methods': [
-                    {'value': 'broadcast', 'label': 'Broadcast/Spread'},
-                    {'value': 'injection', 'label': 'Injection/Banding'},
-                    {'value': 'foliar', 'label': 'Foliar Spray'},
-                    {'value': 'drip', 'label': 'Drip/Fertigation'},
-                    {'value': 'banding', 'label': 'Banding/Placement'},
+            "chemical_event": {
+                "application_methods": [
+                    {"value": "broadcast", "label": "Broadcast/Spread"},
+                    {"value": "injection", "label": "Injection/Banding"},
+                    {"value": "foliar", "label": "Foliar Spray"},
+                    {"value": "drip", "label": "Drip/Fertigation"},
+                    {"value": "banding", "label": "Banding/Placement"},
                 ]
             },
-            'equipment_event': {
-                'efficiency_ratings': [
-                    {'value': 'high', 'label': 'High Efficiency'},
-                    {'value': 'normal', 'label': 'Normal Efficiency'},
-                    {'value': 'low', 'label': 'Low Efficiency'},
+            "equipment_event": {
+                "efficiency_ratings": [
+                    {"value": "high", "label": "High Efficiency"},
+                    {"value": "normal", "label": "Normal Efficiency"},
+                    {"value": "low", "label": "Low Efficiency"},
                 ],
-                'fuel_units': [
-                    {'value': 'L', 'label': 'Liters'},
-                    {'value': 'gal', 'label': 'Gallons'},
+                "fuel_units": [
+                    {"value": "L", "label": "Liters"},
+                    {"value": "gal", "label": "Gallons"},
+                ],
+            },
+            "production_event": {
+                "area_units": [
+                    {"value": "ha", "label": "Hectares"},
+                    {"value": "acre", "label": "Acres"},
+                ],
+                "yield_units": [
+                    {"value": "kg", "label": "Kilograms"},
+                    {"value": "lb", "label": "Pounds"},
+                    {"value": "ton", "label": "Tons"},
+                ],
+                "efficiency_ratings": [
+                    {"value": "high", "label": "High Efficiency"},
+                    {"value": "normal", "label": "Normal Efficiency"},
+                    {"value": "low", "label": "Low Efficiency"},
+                ],
+            },
+            "business_event": {
+                "business_types": [
+                    {"value": "certification", "label": "Certification Event (Organic, Carbon, etc.)"},
+                    {"value": "carbon_credits", "label": "Carbon Credits Transaction"},
+                    {"value": "sustainability_audit", "label": "Sustainability Audit/Assessment"},
+                    {"value": "green_investment", "label": "Green Technology Investment"},
+                    {"value": "supply_chain", "label": "Supply Chain Optimization"},
+                    {"value": "consumer_engagement", "label": "Consumer Engagement Initiative"},
+                    {"value": "regulatory_compliance", "label": "Regulatory Compliance"},
+                    {"value": "carbon_offset", "label": "Carbon Offset Purchase"},
+                    {"value": "sustainability_training", "label": "Sustainability Training"},
+                    {"value": "eco_certification", "label": "Eco-Certification Process"},
                 ]
             },
-            'production_event': {
-                'area_units': [
-                    {'value': 'ha', 'label': 'Hectares'},
-                    {'value': 'acre', 'label': 'Acres'},
-                ],
-                'yield_units': [
-                    {'value': 'kg', 'label': 'Kilograms'},
-                    {'value': 'lb', 'label': 'Pounds'},
-                    {'value': 'ton', 'label': 'Tons'},
-                ],
-                'efficiency_ratings': [
-                    {'value': 'high', 'label': 'High Efficiency'},
-                    {'value': 'normal', 'label': 'Normal Efficiency'},
-                    {'value': 'low', 'label': 'Low Efficiency'},
-                ]
-            },
-            'business_event': {
-                'business_types': [
-                    {'value': 'certification', 'label': 'Certification Event (Organic, Carbon, etc.)'},
-                    {'value': 'carbon_credits', 'label': 'Carbon Credits Transaction'},
-                    {'value': 'sustainability_audit', 'label': 'Sustainability Audit/Assessment'},
-                    {'value': 'green_investment', 'label': 'Green Technology Investment'},
-                    {'value': 'supply_chain', 'label': 'Supply Chain Optimization'},
-                    {'value': 'consumer_engagement', 'label': 'Consumer Engagement Initiative'},
-                    {'value': 'regulatory_compliance', 'label': 'Regulatory Compliance'},
-                    {'value': 'carbon_offset', 'label': 'Carbon Offset Purchase'},
-                    {'value': 'sustainability_training', 'label': 'Sustainability Training'},
-                    {'value': 'eco_certification', 'label': 'Eco-Certification Process'},
-                ]
-            }
         }
         return Response(options)
-    
-    @action(detail=False, methods=['post'], url_path='validate-structured-fields')
+
+    @action(detail=False, methods=["post"], url_path="validate-structured-fields")
     def validate_structured_fields(self, request):
         """
         Validate structured field data without creating an event.
         Useful for real-time form validation in the frontend.
         """
         try:
-            event_type = request.data.get('event_type')
+            event_type = request.data.get("event_type")
             if event_type is None:
-                return Response(
-                    {'error': 'event_type is required'}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
+                return Response({"error": "event_type is required"}, status=status.HTTP_400_BAD_REQUEST)
+
             # Validate the structured fields
             try:
                 self._validate_structured_fields(int(event_type), request.data)
-                return Response({
-                    'valid': True,
-                    'message': 'All structured fields are valid'
-                })
+                return Response({"valid": True, "message": "All structured fields are valid"})
             except Exception as e:
-                return Response({
-                    'valid': False,
-                    'error': str(e),
-                    'field_errors': getattr(e, 'detail', {}) if hasattr(e, 'detail') else {}
-                }, status=status.HTTP_400_BAD_REQUEST)
-                
+                return Response(
+                    {
+                        "valid": False,
+                        "error": str(e),
+                        "field_errors": getattr(e, "detail", {}) if hasattr(e, "detail") else {},
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         except Exception as e:
-            return Response({
-                'error': f'Validation error: {str(e)}'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": f"Validation error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

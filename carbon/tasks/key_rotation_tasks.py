@@ -20,7 +20,6 @@ except ImportError:
     logger.warning("Celery not available - automated key rotation tasks disabled")
 
 
-
 if CELERY_AVAILABLE:
 
     @shared_task(bind=True, max_retries=3)

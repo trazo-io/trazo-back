@@ -6,8 +6,8 @@ from django.utils import timezone
 
 from ..models import CarbonEntry, CarbonSource, USDACalculationAudit, USDAComplianceRecord
 from .emission_factors import emission_factors
-from .enhanced_usda_factors import EnhancedUSDAFactors
 from .enhanced_emission_factors import EnhancedEmissionFactors
+from .enhanced_usda_factors import EnhancedUSDAFactors
 
 logger = logging.getLogger(__name__)
 
@@ -460,38 +460,47 @@ class EventCarbonCalculator:
         """
         try:
             from .verified_emission_factors import VerifiedEmissionFactors
+
             # Extract chemical data from event
             chemical_data = self._extract_chemical_event_data(event)
-            
+
             # Get chemical parameters for EPA calculation
-            chemical_type = chemical_data.get('chemical_type', 'FE')
-            volume_liters = chemical_data.get('volume_liters', 0.0)
-            area_hectares = chemical_data.get('area_hectares', 0.0)
-            npk_content = chemical_data.get('npk_content', {'N': 0, 'P': 0, 'K': 0})
-            application_method = chemical_data.get('application_method', 'broadcast')
-            
+            chemical_type = chemical_data.get("chemical_type", "FE")
+            volume_liters = chemical_data.get("volume_liters", 0.0)
+            area_hectares = chemical_data.get("area_hectares", 0.0)
+            npk_content = chemical_data.get("npk_content", {"N": 0, "P": 0, "K": 0})
+            application_method = chemical_data.get("application_method", "broadcast")
+            product_name = chemical_data.get("product_name", "")
+            chemical_subtype = chemical_data.get("chemical_subtype", "")
+
             # Use EPA/USDA verified emission factors for chemical calculations
+            # ENHANCED 2025-01-21: Pass chemical_subtype for explicit emission factor selection.
+            # Takes precedence over keyword detection from product_name.
+            # Supports: organic_herbicide, copper_fungicide, sulfur_fungicide, biological_fungicide,
+            #           organic_pesticide, biological_pesticide, organic_fertilizer, slow_release_fertilizer
             calculation_result = VerifiedEmissionFactors.calculate_chemical_application_emissions(
                 chemical_type=chemical_type,
                 volume_liters=volume_liters,
                 area_hectares=area_hectares,
                 npk_content=npk_content,
-                application_method=application_method
+                application_method=application_method,
+                product_name=product_name,
+                chemical_subtype=chemical_subtype,
             )
-            
-            base_emissions = calculation_result['co2e_kg']
-            breakdown = calculation_result['breakdown']
-            data_sources = calculation_result['data_sources']
-            limitations = calculation_result.get('limitations', '')
-            calculation_method = calculation_result['calculation_method']
-            
+
+            base_emissions = calculation_result["co2e_kg"]
+            breakdown = calculation_result["breakdown"]
+            data_sources = calculation_result["data_sources"]
+            limitations = calculation_result.get("limitations", "")
+            calculation_method = calculation_result["calculation_method"]
+
             # Calculate efficiency score based on EPA data
-            confidence_level = breakdown.get('confidence_level', 0.90)
+            confidence_level = breakdown.get("confidence_level", 0.90)
             efficiency_score = confidence_level * 100  # Convert to percentage
-            
+
             # Generate EPA-based recommendations
             recommendations = self._generate_epa_chemical_recommendations(event, base_emissions, breakdown)
-            
+
             result = {
                 "co2e": round(base_emissions, 3),
                 "efficiency_score": round(efficiency_score, 1),
@@ -501,15 +510,17 @@ class EventCarbonCalculator:
                 "breakdown": breakdown,
                 "limitations": limitations,
                 "recommendations": recommendations,
-                "confidence_level": confidence_level
+                "confidence_level": confidence_level,
             }
 
-            return self._add_enhanced_usda_metadata(result, event, chemical_data.get('crop_name', 'unknown'))
+            return self._add_enhanced_usda_metadata(result, event, chemical_data.get("crop_name", "unknown"))
 
         except Exception as e:
             # Return minimal safe calculation on error
             logger.error(f"Chemical event calculation failed: {e}")
-            logger.error(f"Event data: type={getattr(event, 'type', 'unknown')}, volume={getattr(event, 'volume', 'unknown')}, area={getattr(event, 'area', 'unknown')}")
+            logger.error(
+                f"Event data: type={getattr(event, 'type', 'unknown')}, volume={getattr(event, 'volume', 'unknown')}, area={getattr(event, 'area', 'unknown')}"
+            )
             return {
                 "co2e": 0.0,
                 "efficiency_score": 70.0,
@@ -517,7 +528,7 @@ class EventCarbonCalculator:
                 "error": str(e),
                 "calculation_method": "epa_fallback",
             }
-    
+
     def _extract_chemical_event_data(self, event) -> Dict[str, Any]:
         """Extract chemical event data for EPA/USDA calculations"""
         try:
@@ -525,129 +536,146 @@ class EventCarbonCalculator:
             crop_name = "unknown"
             if hasattr(event, "history") and event.history and hasattr(event.history, "product"):
                 crop_name = event.history.product.name
-            
+
             # Extract chemical type - handle None values properly
-            chemical_type = getattr(event, 'type', None)
-            if chemical_type is None or chemical_type == '':
-                chemical_type = 'FE'  # Default to fertilizer
-            elif chemical_type == '':
-                chemical_type = 'FE'  # Default to fertilizer for empty strings
-            
+            chemical_type = getattr(event, "type", None)
+            if chemical_type is None or chemical_type == "":
+                chemical_type = "FE"  # Default to fertilizer
+            elif chemical_type == "":
+                chemical_type = "FE"  # Default to fertilizer for empty strings
+
             # Extract volume (convert to liters)
             # Handle both old format (volume="3320 Kilograms") and new format (volume_applied="3320", volume_unit="kg")
-            volume_str = getattr(event, 'volume', None)
+            volume_str = getattr(event, "volume", None)
             if not volume_str:
                 # New frontend format: separate volume_applied and volume_unit fields
-                volume_applied = getattr(event, 'volume_applied', '50')
-                volume_unit = getattr(event, 'volume_unit', 'L')
-                
+                volume_applied = getattr(event, "volume_applied", "50")
+                volume_unit = getattr(event, "volume_unit", "L")
+
                 # Map common unit variations
                 unit_map = {
-                    'kg': 'Kilograms',
-                    'kilograms': 'Kilograms', 
-                    'l': 'Liters',
-                    'liters': 'Liters',
-                    'gal': 'Gallons',
-                    'gallons': 'Gallons'
+                    "kg": "Kilograms",
+                    "kilograms": "Kilograms",
+                    "l": "Liters",
+                    "liters": "Liters",
+                    "gal": "Gallons",
+                    "gallons": "Gallons",
                 }
-                
+
                 normalized_unit = unit_map.get(volume_unit.lower(), volume_unit)
                 volume_str = f"{volume_applied} {normalized_unit}"
-            
+
             volume_liters = self._convert_volume_to_liters(volume_str, event, crop_name)
-            
+
             # Extract area (convert to hectares)
             # Handle both old format (area="16.2 Hectares") and new format (area_treated="16.2", area_unit="ha")
-            area_str = getattr(event, 'area', None)
+            area_str = getattr(event, "area", None)
             if not area_str:
                 # New frontend format: separate area_treated and area_unit fields
-                area_treated = getattr(event, 'area_treated', '1.0')
-                area_unit = getattr(event, 'area_unit', 'ha')
-                
+                area_treated = getattr(event, "area_treated", "1.0")
+                area_unit = getattr(event, "area_unit", "ha")
+
                 # Map common unit variations
-                area_unit_map = {
-                    'ha': 'Hectares',
-                    'hectares': 'Hectares',
-                    'acres': 'Acres',
-                    'ac': 'Acres'
-                }
-                
+                area_unit_map = {"ha": "Hectares", "hectares": "Hectares", "acres": "Acres", "ac": "Acres"}
+
                 normalized_area_unit = area_unit_map.get(area_unit.lower(), area_unit)
                 area_str = f"{area_treated} {normalized_area_unit}"
-            
+
             area_hectares = self._convert_area_to_hectares(area_str, event, crop_name)
-            
+
             # Extract NPK content
             npk_content = self._get_structured_npk_content(event, crop_name)
-            
+
             # Extract application method
             application_method = self._get_structured_application_method(event, crop_name)
-            
+
+            # Extract product/commercial name for specific chemical type detection
+            # (e.g., organic herbicides, copper fungicides)
+            product_name = getattr(event, "commercial_name", "") or ""
+
+            # Extract explicit chemical_subtype for accurate emission factor selection
+            # This takes precedence over keyword detection from product_name
+            # Values: organic_herbicide, copper_fungicide, sulfur_fungicide, biological_fungicide,
+            #         organic_pesticide, biological_pesticide, organic_fertilizer, slow_release_fertilizer
+            chemical_subtype = getattr(event, "chemical_subtype", "") or ""
+
             return {
-                'chemical_type': chemical_type,
-                'crop_name': crop_name,
-                'volume_liters': volume_liters,
-                'area_hectares': area_hectares,
-                'npk_content': npk_content,
-                'application_method': application_method
+                "chemical_type": chemical_type,
+                "crop_name": crop_name,
+                "volume_liters": volume_liters,
+                "area_hectares": area_hectares,
+                "npk_content": npk_content,
+                "application_method": application_method,
+                "product_name": product_name,
+                "chemical_subtype": chemical_subtype,
             }
-            
+
         except Exception as e:
             logger.warning(f"Error extracting chemical data, using defaults: {e}")
             return {
-                'chemical_type': 'FE',
-                'crop_name': 'unknown',
-                'volume_liters': 50.0,
-                'area_hectares': 1.0,
-                'npk_content': {'N': 16, 'P': 16, 'K': 16},  # Default NPK
-                'application_method': 'broadcast'
+                "chemical_type": "FE",
+                "crop_name": "unknown",
+                "volume_liters": 50.0,
+                "area_hectares": 1.0,
+                "npk_content": {"N": 16, "P": 16, "K": 16},  # Default NPK
+                "application_method": "broadcast",
+                "product_name": "",
+                "chemical_subtype": "",
             }
-    
+
     def _generate_epa_chemical_recommendations(self, event, emissions: float, breakdown: dict) -> list:
         """Generate EPA-based recommendations for chemical events"""
         recommendations = []
-        
+
         try:
-            manufacturing_emissions = breakdown.get('manufacturing_emissions_kg_co2e', 0.0)
-            application_emissions = breakdown.get('application_emissions_kg_co2e', 0.0)
-            
+            manufacturing_emissions = breakdown.get("manufacturing_emissions_kg_co2e", 0.0)
+            application_emissions = breakdown.get("application_emissions_kg_co2e", 0.0)
+
             # High manufacturing emissions recommendations
             if manufacturing_emissions > application_emissions * 2:
-                recommendations.append({
-                    "type": "input_optimization",
-                    "message": "Consider slow-release fertilizers to reduce total application frequency",
-                    "impact": "High", 
-                    "source": "EPA Sustainable Agriculture Guidelines"
-                })
-                
+                recommendations.append(
+                    {
+                        "type": "input_optimization",
+                        "message": "Consider slow-release fertilizers to reduce total application frequency",
+                        "impact": "High",
+                        "source": "EPA Sustainable Agriculture Guidelines",
+                    }
+                )
+
             # High total emissions recommendations
             if emissions > 50:
-                recommendations.append({
-                    "type": "precision_agriculture",
-                    "message": "Use soil testing to apply only needed nutrients",
-                    "impact": "High",
-                    "source": "USDA Nutrient Management Guidelines"
-                })
-                
+                recommendations.append(
+                    {
+                        "type": "precision_agriculture",
+                        "message": "Use soil testing to apply only needed nutrients",
+                        "impact": "High",
+                        "source": "USDA Nutrient Management Guidelines",
+                    }
+                )
+
             # Application efficiency recommendations
-            if breakdown.get('application_method', '').lower() == 'broadcast':
-                recommendations.append({
-                    "type": "application_efficiency",
-                    "message": "Consider precision injection to reduce fertilizer waste",
-                    "impact": "Medium",
-                    "source": "EPA Agricultural Best Management Practices"
-                })
-            
+            if breakdown.get("application_method", "").lower() == "broadcast":
+                recommendations.append(
+                    {
+                        "type": "application_efficiency",
+                        "message": "Consider precision injection to reduce fertilizer waste",
+                        "impact": "Medium",
+                        "source": "EPA Agricultural Best Management Practices",
+                    }
+                )
+
             # EPA verification transparency
-            recommendations.append({
-                "type": "data_transparency",
-                "message": "Chemical carbon footprint calculated using EPA/USDA verified emission factors",
-                "impact": "Transparency",
-                "source": "EPA Greenhouse Gas Emission Factors Hub"
-            })
-            
+            recommendations.append(
+                {
+                    "type": "data_transparency",
+                    "message": "Chemical carbon footprint calculated using EPA/USDA verified emission factors",
+                    "impact": "Transparency",
+                    "source": "EPA Greenhouse Gas Emission Factors Hub",
+                }
+            )
+
             return recommendations
-            
+
         except Exception as e:
             logger.warning(f"Error generating EPA chemical recommendations: {e}")
             return []
@@ -659,73 +687,78 @@ class EventCarbonCalculator:
         """
         try:
             from .verified_emission_factors import VerifiedEmissionFactors
-            
+
             # Debug logging
-            logger.info(f"Production calculation: type={getattr(event, 'type', 'unknown')}, fuel_consumed={getattr(event, 'fuel_consumed', 'unknown')}, area_covered={getattr(event, 'area_covered', 'unknown')}")
-            
+            logger.info(
+                f"Production calculation: type={getattr(event, 'type', 'unknown')}, fuel_consumed={getattr(event, 'fuel_consumed', 'unknown')}, area_covered={getattr(event, 'area_covered', 'unknown')}"
+            )
+
             # Extract production data from event
             production_data = self._extract_production_event_data(event)
             logger.info(f"Extracted production data: {production_data}")
-            
+
             # Determine production type for EPA/USDA calculation
-            production_type = production_data.get('production_type', '')
-            area_covered = production_data.get('area_covered', 0.0)
-            fuel_consumed = production_data.get('fuel_consumed')
-            equipment_hours = production_data.get('equipment_hours')
-            
+            production_type = production_data.get("production_type", "")
+            area_covered = production_data.get("area_covered", 0.0)
+            fuel_consumed = production_data.get("fuel_consumed")
+            equipment_hours = production_data.get("equipment_hours")
+
             if event.type == "IR":  # Irrigation
                 # Use EPA electricity factors for irrigation pumps
-                water_volume_gallons = production_data.get('water_volume_gallons')
+                water_volume_gallons = production_data.get("water_volume_gallons")
                 if not water_volume_gallons:
-                    # Estimate based on area if volume not provided
-                    water_volume_gallons = area_covered * 1000  # Estimate 1000 gallons per acre
-                
+                    # ENHANCED: USDA-sourced irrigation water estimates
+                    # USDA NASS 2023: Average 1.5 acre-feet/acre/season = ~489,000 gal/acre/season
+                    # Single irrigation event: ~30,000-50,000 gallons/acre typical
+                    # Sources: ERS.USDA.gov, NASS Irrigation & Water Management Survey 2023
+                    water_volume_gallons = self._estimate_irrigation_water_volume(event, area_covered)
+
                 calculation_result = VerifiedEmissionFactors.calculate_drought_irrigation_emissions(
                     water_volume_gallons=water_volume_gallons
                 )
-                
-                base_emissions = calculation_result['co2e_kg']
-                data_sources = calculation_result['data_sources']
-                calculation_method = calculation_result['calculation_method']
-                breakdown = calculation_result['breakdown']
-                limitations = calculation_result.get('limitations', '')
-                
+
+                base_emissions = calculation_result["co2e_kg"]
+                data_sources = calculation_result["data_sources"]
+                calculation_method = calculation_result["calculation_method"]
+                breakdown = calculation_result["breakdown"]
+                limitations = calculation_result.get("limitations", "")
+
             elif event.type in ["HA", "PL", "GE", "PR", "IR"]:  # Harvesting, Planting, General, Pruning, Irrigation
                 # Use EPA/USDA production emission factors
                 calculation_result = VerifiedEmissionFactors.calculate_production_event_emissions(
                     production_type=production_type,
                     area_covered=area_covered,
                     fuel_consumed=fuel_consumed,
-                    equipment_hours=equipment_hours
+                    equipment_hours=equipment_hours,
                 )
-                
-                base_emissions = calculation_result['co2e_kg']
-                data_sources = calculation_result['data_sources']
-                calculation_method = calculation_result['calculation_method']
-                breakdown = calculation_result['breakdown']
-                limitations = calculation_result.get('limitations', '')
-                
+
+                base_emissions = calculation_result["co2e_kg"]
+                data_sources = calculation_result["data_sources"]
+                calculation_method = calculation_result["calculation_method"]
+                breakdown = calculation_result["breakdown"]
+                limitations = calculation_result.get("limitations", "")
+
             else:
                 # Fallback for unknown production types
                 calculation_result = VerifiedEmissionFactors.calculate_production_event_emissions(
                     production_type="general production",
                     area_covered=area_covered,
                     fuel_consumed=fuel_consumed,
-                    equipment_hours=equipment_hours
+                    equipment_hours=equipment_hours,
                 )
-                
-                base_emissions = calculation_result['co2e_kg']
-                data_sources = calculation_result['data_sources']
-                calculation_method = calculation_result['calculation_method']
-                breakdown = calculation_result['breakdown']
-                limitations = calculation_result.get('limitations', '')
-            
+
+                base_emissions = calculation_result["co2e_kg"]
+                data_sources = calculation_result["data_sources"]
+                calculation_method = calculation_result["calculation_method"]
+                breakdown = calculation_result["breakdown"]
+                limitations = calculation_result.get("limitations", "")
+
             # Apply crop-specific area if available
             area_modifier = self._get_crop_area_modifier(event)
             if area_modifier != 1.0:
                 base_emissions *= area_modifier
-                breakdown['crop_area_modifier'] = area_modifier
-            
+                breakdown["crop_area_modifier"] = area_modifier
+
             # Generate EPA-based recommendations
             recommendations = self._generate_epa_production_recommendations(event, base_emissions, calculation_method)
 
@@ -738,10 +771,10 @@ class EventCarbonCalculator:
                 "breakdown": breakdown,
                 "limitations": limitations,
                 "recommendations": recommendations,
-                "confidence_level": breakdown.get('confidence_level', 0.80)
+                "confidence_level": breakdown.get("confidence_level", 0.80),
             }
 
-            return self._add_enhanced_usda_metadata(result, event, production_data.get('crop_name', 'unknown'))
+            return self._add_enhanced_usda_metadata(result, event, production_data.get("crop_name", "unknown"))
 
         except Exception as e:
             logger.error(f"Production event calculation error: {e}")
@@ -754,20 +787,20 @@ class EventCarbonCalculator:
                 "data_sources": [],
                 "breakdown": {},
                 "limitations": "Calculation failed, using fallback values",
-                "recommendations": []
+                "recommendations": [],
             }
 
     def calculate_weather_event_impact(self, event) -> Dict[str, Any]:
         """
         Calculate carbon impact of weather events using VERIFIED EPA and USDA emission factors.
-        
+
         TRANSPARENCY: Uses only official government emission factors with clear documentation
         of data sources and limitations. No unverified estimates.
         """
         try:
             # Import verified emission factors
             from .verified_emission_factors import VerifiedEmissionFactors
-            
+
             base_emissions = 0.0
             calculation_result = None
             data_sources = []
@@ -776,123 +809,120 @@ class EventCarbonCalculator:
             if event.type == "FR":  # Frost protection
                 # Get temperature from direct attribute or extra_data
                 lower_temp_value = None
-                if hasattr(event, 'lower_temperature') and event.lower_temperature:
+                if hasattr(event, "lower_temperature") and event.lower_temperature:
                     lower_temp_value = event.lower_temperature
-                elif event.extra_data and 'lower_temperature' in event.extra_data:
-                    lower_temp_value = event.extra_data['lower_temperature']
-                
+                elif event.extra_data and "lower_temperature" in event.extra_data:
+                    lower_temp_value = event.extra_data["lower_temperature"]
+
                 if lower_temp_value:
                     temp = self._extract_numeric_value(lower_temp_value, default=32)
-                    
+
                     # Determine protection method from direct attribute or extra_data
-                    protection_method = 'heaters'  # Default
+                    protection_method = "heaters"  # Default
                     way_of_protection = None
-                    if hasattr(event, 'way_of_protection') and event.way_of_protection:
+                    if hasattr(event, "way_of_protection") and event.way_of_protection:
                         way_of_protection = event.way_of_protection
-                    elif event.extra_data and 'way_of_protection' in event.extra_data:
-                        way_of_protection = event.extra_data['way_of_protection']
-                    
+                    elif event.extra_data and "way_of_protection" in event.extra_data:
+                        way_of_protection = event.extra_data["way_of_protection"]
+
                     if way_of_protection:
                         way = way_of_protection.lower()
-                        if 'wind' in way or 'fan' in way:
-                            protection_method = 'wind_machines'
-                        elif 'heater' in way or 'smudge' in way:
-                            protection_method = 'heaters'
-                    
+                        if "wind" in way or "fan" in way:
+                            protection_method = "wind_machines"
+                        elif "heater" in way or "smudge" in way:
+                            protection_method = "heaters"
+
                     # Use verified EPA emission factors for frost protection - handles all edge cases
                     calculation_result = VerifiedEmissionFactors.calculate_frost_protection_emissions(
                         temperature_f=temp,
                         protection_method=protection_method,
-                        area_acres=1.0  # Default to 1 acre, could be enhanced with parcel data
+                        area_acres=1.0,  # Default to 1 acre, could be enhanced with parcel data
                     )
-                    
-                    base_emissions = calculation_result['co2e_kg']
-                    breakdown = calculation_result['breakdown']
+
+                    base_emissions = calculation_result["co2e_kg"]
+                    breakdown = calculation_result["breakdown"]
                     breakdown["weather_type"] = "FR"
-                    data_sources = calculation_result.get('data_sources', [])
-                    limitations = [calculation_result.get('limitations', '')]
-                    
+                    data_sources = calculation_result.get("data_sources", [])
+                    limitations = [calculation_result.get("limitations", "")]
+
                 else:
                     # No temperature provided - still return standard data sources for transparency
                     base_emissions = 0.0
                     breakdown = {
                         "weather_type": "FR",
                         "error": "Temperature required for verified calculation",
-                        "note": "Frost protection emissions depend on temperature - please provide lower_temperature field"
+                        "note": "Frost protection emissions depend on temperature - please provide lower_temperature field",
                     }
                     # Add data sources even when no calculation is possible
                     data_sources = [
                         "EPA Greenhouse Gas Emission Factors Hub (40 CFR Part 98)",
-                        "Equipment manufacturer specifications (Smudge Pot/Orchard Heater)"
+                        "Equipment manufacturer specifications (Smudge Pot/Orchard Heater)",
                     ]
                     limitations = ["Temperature data required for accurate calculation"]
 
             elif event.type == "DR":  # Drought - additional irrigation
                 # Get water deficit from direct attribute or extra_data
                 water_deficit_value = None
-                if hasattr(event, 'water_deficit') and event.water_deficit:
+                if hasattr(event, "water_deficit") and event.water_deficit:
                     water_deficit_value = event.water_deficit
-                elif event.extra_data and 'water_deficit' in event.extra_data:
-                    water_deficit_value = event.extra_data['water_deficit']
-                
+                elif event.extra_data and "water_deficit" in event.extra_data:
+                    water_deficit_value = event.extra_data["water_deficit"]
+
                 if water_deficit_value:
                     extra_water_m3 = self._extract_numeric_value(water_deficit_value, default=50)
                     # Convert m3 to gallons for EPA calculation (1 m3 = 264.172 gallons)
                     extra_water_gallons = extra_water_m3 * 264.172
-                    
+
                     # Use verified EPA/USDA factors for irrigation pumping
                     calculation_result = VerifiedEmissionFactors.calculate_drought_irrigation_emissions(
                         water_volume_gallons=extra_water_gallons
                     )
-                    
-                    base_emissions = calculation_result['co2e_kg']
-                    breakdown = calculation_result['breakdown']
+
+                    base_emissions = calculation_result["co2e_kg"]
+                    breakdown = calculation_result["breakdown"]
                     breakdown["extra_water_m3"] = extra_water_m3
                     breakdown["weather_type"] = "DR"
-                    data_sources = calculation_result['data_sources']
-                    limitations = [calculation_result.get('limitations', '')]
-                    
+                    data_sources = calculation_result["data_sources"]
+                    limitations = [calculation_result.get("limitations", "")]
+
                 else:
                     # No water deficit provided - still return standard data sources for transparency
                     base_emissions = 0.0
                     breakdown = {
                         "weather_type": "DR",
                         "error": "Water deficit required for verified calculation",
-                        "note": "Drought irrigation emissions depend on water volume - please provide water_deficit field"
+                        "note": "Drought irrigation emissions depend on water volume - please provide water_deficit field",
                     }
                     # Add data sources even when no calculation is possible
-                    data_sources = [
-                        "EPA eGRID2022 Summary Tables",
-                        "USDA NRCS Irrigation Energy Guidelines"
-                    ]
+                    data_sources = ["EPA eGRID2022 Summary Tables", "USDA NRCS Irrigation Energy Guidelines"]
                     limitations = ["Water deficit data required for accurate calculation"]
 
             elif event.type == "HL":  # Hailstorm - Using verified USDA diesel factors
                 # Extract hailstorm-specific fields
-                weight = self._extract_numeric_value(getattr(event, 'weight', '1'), default=1.0)
-                diameter = self._extract_numeric_value(getattr(event, 'diameter', '1'), default=1.0) 
-                duration = self._extract_numeric_value(getattr(event, 'duration', '1'), default=1.0)
-                
+                weight = self._extract_numeric_value(getattr(event, "weight", "1"), default=1.0)
+                diameter = self._extract_numeric_value(getattr(event, "diameter", "1"), default=1.0)
+                duration = self._extract_numeric_value(getattr(event, "duration", "1"), default=1.0)
+
                 # Calculate damage severity index (0-10 scale)
                 severity = min((weight * diameter) / 10, 10.0)
-                
+
                 # Use USDA verified diesel emission factor for cleanup equipment
-                diesel_factor = VerifiedEmissionFactors.get_emission_factor('diesel', 'diesel_fuel_mobile')
-                equipment_factor = VerifiedEmissionFactors.get_emission_factor('damage', 'debris_cleanup')
-                
+                diesel_factor = VerifiedEmissionFactors.get_emission_factor("diesel", "diesel_fuel_mobile")
+                equipment_factor = VerifiedEmissionFactors.get_emission_factor("damage", "debris_cleanup")
+
                 if diesel_factor and equipment_factor:
                     # Calculate cleanup emissions using verified factors
                     equipment_hours = severity * duration * 0.5  # Hours of equipment operation
                     fuel_gallons = equipment_hours * equipment_factor.value
                     cleanup_emissions = fuel_gallons * diesel_factor.value
-                    
+
                     # Protection measures (infrastructure/netting damage)
                     protection_emissions = 0.0
-                    if hasattr(event, 'way_of_protection') and event.way_of_protection:
+                    if hasattr(event, "way_of_protection") and event.way_of_protection:
                         protection_emissions = 2.0 * diesel_factor.value  # 2 gallons for protection setup/repair
-                    
+
                     base_emissions = cleanup_emissions + protection_emissions
-                    
+
                     breakdown = {
                         "weather_type": "HL",
                         "hail_weight_g": weight,
@@ -904,37 +934,39 @@ class EventCarbonCalculator:
                         "cleanup_emissions_kg": cleanup_emissions,
                         "protection_emissions_kg": protection_emissions,
                         "diesel_emission_factor": diesel_factor.value,
-                        "confidence_level": min(diesel_factor.confidence_level, equipment_factor.confidence_level)
+                        "confidence_level": min(diesel_factor.confidence_level, equipment_factor.confidence_level),
                     }
-                    
+
                     data_sources = [diesel_factor.source, equipment_factor.source]
                     limitations = [equipment_factor.notes]
-                    
+
                 else:
                     # Fallback if emission factors not available
                     base_emissions = 0.0
                     breakdown = {
-                        "weather_type": "HL", 
+                        "weather_type": "HL",
                         "error": "Verified emission factors not available",
-                        "note": "Hailstorm cleanup emissions require equipment fuel consumption data"
+                        "note": "Hailstorm cleanup emissions require equipment fuel consumption data",
                     }
 
             elif event.type == "HT":  # High temperatures - Using verified USDA electricity factors
                 # Extract temperature and duration
-                if hasattr(event, 'highest_temperature') and event.highest_temperature:
+                if hasattr(event, "highest_temperature") and event.highest_temperature:
                     highest_temp = self._extract_numeric_value(event.highest_temperature, default=90)
-                    
+
                     # Use USDA verified electricity emission factor for cooling systems
-                    electricity_factor = VerifiedEmissionFactors.get_emission_factor('electricity', 'electricity_us_avg')
-                    misting_factor = VerifiedEmissionFactors.get_emission_factor('equipment', 'misting_system')
-                    
+                    electricity_factor = VerifiedEmissionFactors.get_emission_factor(
+                        "electricity", "electricity_us_avg"
+                    )
+                    misting_factor = VerifiedEmissionFactors.get_emission_factor("equipment", "misting_system")
+
                     if electricity_factor and misting_factor and highest_temp > 95:
                         # Extreme heat requiring intervention
                         cooling_hours = 8  # 8 hours of cooling/misting
                         area_acres = 1.0  # Default to 1 acre
                         kwh_consumed = misting_factor.value * cooling_hours * area_acres
                         base_emissions = kwh_consumed * electricity_factor.value
-                        
+
                         breakdown = {
                             "weather_type": "HT",
                             "highest_temperature_f": highest_temp,
@@ -944,12 +976,14 @@ class EventCarbonCalculator:
                             "kwh_consumed": kwh_consumed,
                             "electricity_emission_factor": electricity_factor.value,
                             "misting_consumption_kwh_per_hour_per_acre": misting_factor.value,
-                            "confidence_level": min(electricity_factor.confidence_level, misting_factor.confidence_level)
+                            "confidence_level": min(
+                                electricity_factor.confidence_level, misting_factor.confidence_level
+                            ),
                         }
-                        
+
                         data_sources = [electricity_factor.source, misting_factor.source]
                         limitations = [misting_factor.notes]
-                        
+
                     else:
                         # No cooling required or factors not available
                         base_emissions = 0.0
@@ -957,7 +991,11 @@ class EventCarbonCalculator:
                             "weather_type": "HT",
                             "highest_temperature_f": highest_temp,
                             "cooling_required": False,
-                            "note": "No cooling intervention needed below 95°F" if highest_temp <= 95 else "Verified emission factors required"
+                            "note": (
+                                "No cooling intervention needed below 95°F"
+                                if highest_temp <= 95
+                                else "Verified emission factors required"
+                            ),
                         }
                 else:
                     # No temperature provided
@@ -965,42 +1003,48 @@ class EventCarbonCalculator:
                     breakdown = {
                         "weather_type": "HT",
                         "error": "Temperature required for verified calculation",
-                        "note": "High temperature emissions depend on temperature - please provide highest_temperature field"
+                        "note": "High temperature emissions depend on temperature - please provide highest_temperature field",
                     }
 
             elif event.type in ["TS", "HW", "HH", "LH"]:  # Other weather events - Conservative approach
                 # These weather types require specific field data for accurate calculations
                 # Using conservative approach with transparent limitations
                 base_emissions = 0.0  # No emissions assumed without specific data
-                
+
                 weather_type_names = {
                     "TS": "Tropical Storm",
-                    "HW": "High Winds", 
+                    "HW": "High Winds",
                     "HH": "High Humidity",
-                    "LH": "Low Humidity"
+                    "LH": "Low Humidity",
                 }
-                
+
                 breakdown = {
                     "weather_type": event.type,
                     "weather_name": weather_type_names.get(event.type, "Unknown"),
                     "calculation_status": "requires_specific_data",
-                    "note": "Emissions calculation requires specific meteorological data and response actions"
+                    "note": "Emissions calculation requires specific meteorological data and response actions",
                 }
-                
+
                 data_sources = ["USDA Agricultural Weather Guidelines"]
-                limitations = ["Specific emission calculation requires wind speed, duration, damage assessment, or humidity levels"]
+                limitations = [
+                    "Specific emission calculation requires wind speed, duration, damage assessment, or humidity levels"
+                ]
 
             # Calculate efficiency score based on emissions and method reliability
-            if calculation_result and 'breakdown' in calculation_result and 'confidence_level' in calculation_result['breakdown']:
-                confidence = calculation_result['breakdown']['confidence_level']
+            if (
+                calculation_result
+                and "breakdown" in calculation_result
+                and "confidence_level" in calculation_result["breakdown"]
+            ):
+                confidence = calculation_result["breakdown"]["confidence_level"]
                 efficiency_score = max(20, min(90, 80 - (base_emissions * 1.5)))
             else:
                 confidence = 0.5  # Lower confidence for non-verified calculations
                 efficiency_score = max(20, min(70, 60 - (base_emissions * 2)))
-            
+
             # Get transparency metadata
             metadata = VerifiedEmissionFactors.get_weather_calculation_metadata()
-            
+
             result = {
                 "co2e": round(base_emissions, 3),
                 "efficiency_score": round(efficiency_score, 1),
@@ -1014,7 +1058,7 @@ class EventCarbonCalculator:
                 "limitations": limitations if limitations else metadata["limitations"],
                 "confidence_score": confidence,
                 "transparency_note": metadata["transparency_note"],
-                "last_updated": metadata["last_updated"]
+                "last_updated": metadata["last_updated"],
             }
 
             return self._add_enhanced_usda_metadata(result, event)
@@ -1041,55 +1085,55 @@ class EventCarbonCalculator:
 
             # ENHANCED: Use structured equipment data
             equipment_data = self._get_structured_equipment_data(event, crop_name)
-            
+
             base_emissions = 0.0
             cost_estimate = 0.0
             efficiency_score = 60.0
 
             if event.type == "FC":  # Fuel Consumption
-                fuel_amount = equipment_data['fuel_amount']
-                fuel_type = equipment_data['fuel_type'].lower()
+                fuel_amount = equipment_data["fuel_amount"]
+                fuel_type = equipment_data["fuel_type"].lower()
 
                 emission_factor = self.FUEL_EMISSION_FACTORS.get(fuel_type, self.FUEL_EMISSION_FACTORS["diesel"])
                 base_emissions = fuel_amount * emission_factor
-                
+
                 # Apply efficiency modifier based on structured efficiency rating
                 efficiency_modifier = {
-                    'high': 0.85,    # 15% better efficiency
-                    'normal': 1.0,   # Standard emissions
-                    'low': 1.25      # 25% higher emissions
-                }.get(equipment_data['efficiency'], 1.0)
-                
+                    "high": 0.85,  # 15% better efficiency
+                    "normal": 1.0,  # Standard emissions
+                    "low": 1.25,  # 25% higher emissions
+                }.get(equipment_data["efficiency"], 1.0)
+
                 base_emissions *= efficiency_modifier
                 cost_estimate = fuel_amount * 1.2  # Approximate fuel cost per liter
-                efficiency_score = 90.0 if equipment_data['efficiency'] == 'high' else 70.0
+                efficiency_score = 90.0 if equipment_data["efficiency"] == "high" else 70.0
 
                 # Equipment type specific adjustments
-                equipment_type = equipment_data['equipment_type']
-                if 'large' in str(equipment_type).lower():
+                equipment_type = equipment_data["equipment_type"]
+                if "large" in str(equipment_type).lower():
                     base_emissions *= 1.3  # Large equipment uses more fuel
-                elif 'small' in str(equipment_type).lower():
+                elif "small" in str(equipment_type).lower():
                     base_emissions *= 0.8  # Small equipment is more efficient
 
             elif event.type in ["MN", "RE"]:  # Maintenance, Repair
                 # Use equipment type and hours for better estimation
-                hours = equipment_data['hours_operated']
-                equipment_type = equipment_data['equipment_type']
-                
+                hours = equipment_data["hours_operated"]
+                equipment_type = equipment_data["equipment_type"]
+
                 # Base emissions per hour by equipment type
                 base_rate = 2.0  # Default kg CO2e per hour
-                if 'tractor' in str(equipment_type).lower():
-                    if 'large' in str(equipment_type).lower():
+                if "tractor" in str(equipment_type).lower():
+                    if "large" in str(equipment_type).lower():
                         base_rate = 5.0
-                    elif 'medium' in str(equipment_type).lower():
+                    elif "medium" in str(equipment_type).lower():
                         base_rate = 3.5
                     else:
                         base_rate = 2.5
-                elif 'pump' in str(equipment_type).lower():
+                elif "pump" in str(equipment_type).lower():
                     base_rate = 1.5
-                elif 'harvester' in str(equipment_type).lower():
+                elif "harvester" in str(equipment_type).lower():
                     base_rate = 8.0
-                
+
                 base_emissions = hours * base_rate if hours > 0 else base_rate
                 cost_estimate = float(event.maintenance_cost or (hours * 50 if hours > 0 else 100))
 
@@ -1109,27 +1153,35 @@ class EventCarbonCalculator:
                 cost_estimate = 25.0
                 efficiency_score = 85.0
 
-            recommendations = self._generate_equipment_recommendations(event, base_emissions, cost_estimate, equipment_data)
+            recommendations = self._generate_equipment_recommendations(
+                event, base_emissions, cost_estimate, equipment_data
+            )
 
             result = {
                 "co2e": round(base_emissions, 3),
                 "efficiency_score": efficiency_score,
-                "calculation_method": "usda_fuel_factors_enhanced" if event.type == "FC" else "equipment_estimation_enhanced",
+                "calculation_method": (
+                    "usda_fuel_factors_enhanced" if event.type == "FC" else "equipment_estimation_enhanced"
+                ),
                 "data_source": "USDA Agricultural Research Service" if event.type == "FC" else "Industry Standards",
                 "verification_status": "factors_verified" if event.type == "FC" else "estimated",
                 "breakdown": {
-                    "fuel_amount": equipment_data['fuel_amount'],
-                    "fuel_type": equipment_data['fuel_type'],
-                    "equipment_type": equipment_data['equipment_type'],
-                    "area_worked": equipment_data['area_worked'],
-                    "hours_operated": equipment_data['hours_operated'],
-                    "operation_efficiency": equipment_data['efficiency'],
-                    "data_source": equipment_data['data_source'],
+                    "fuel_amount": equipment_data["fuel_amount"],
+                    "fuel_type": equipment_data["fuel_type"],
+                    "equipment_type": equipment_data["equipment_type"],
+                    "area_worked": equipment_data["area_worked"],
+                    "hours_operated": equipment_data["hours_operated"],
+                    "operation_efficiency": equipment_data["efficiency"],
+                    "data_source": equipment_data["data_source"],
                 },
                 "cost_analysis": {
                     "estimated_cost": cost_estimate,
                     "cost_per_co2e": cost_estimate / max(base_emissions, 0.1),
-                    "cost_per_hectare": cost_estimate / max(equipment_data['area_worked'], 0.1) if equipment_data['area_worked'] > 0 else 0,
+                    "cost_per_hectare": (
+                        cost_estimate / max(equipment_data["area_worked"], 0.1)
+                        if equipment_data["area_worked"] > 0
+                        else 0
+                    ),
                 },
                 "recommendations": recommendations,
             }
@@ -1147,7 +1199,7 @@ class EventCarbonCalculator:
         try:
             from .emission_factors import EmissionFactorsRegistry
             from .verified_emission_factors import VerifiedEmissionFactors
-            
+
             base_emissions = 0.0
             fuel_emissions = 0.0
             area_hectares = 0.0
@@ -1156,14 +1208,13 @@ class EventCarbonCalculator:
 
             # Get area managed - critical for proper scaling
             area_hectares = self._convert_area_to_hectares(
-                getattr(event, "area_covered", None) or 
-                getattr(event, "area", "1")
+                getattr(event, "area_covered", None) or getattr(event, "area", "1")
             )
-            
+
             # ENHANCED: Calculate fuel consumption emissions (standardized across event types)
-            fuel_consumed_raw = getattr(event, 'fuel_consumed', None)
-            equipment_hours_raw = getattr(event, 'equipment_hours', None)
-            
+            fuel_consumed_raw = getattr(event, "fuel_consumed", None)
+            equipment_hours_raw = getattr(event, "equipment_hours", None)
+
             # Convert string values to float for calculations
             fuel_consumed = None
             if fuel_consumed_raw:
@@ -1171,47 +1222,49 @@ class EventCarbonCalculator:
                     fuel_consumed = float(fuel_consumed_raw)
                 except (ValueError, TypeError):
                     fuel_consumed = None
-            
+
             equipment_hours = None
             if equipment_hours_raw:
                 try:
                     equipment_hours = float(equipment_hours_raw)
                 except (ValueError, TypeError):
                     equipment_hours = None
-            
+
             if fuel_consumed and fuel_consumed > 0:
                 # Use verified EPA emission factors for direct fuel combustion
-                fuel_unit = getattr(event, 'fuel_unit', 'L')
-                
+                fuel_unit = getattr(event, "fuel_unit", "L")
+
                 # Convert to gallons for EPA calculation
-                if fuel_unit == 'L':
+                if fuel_unit == "L":
                     fuel_gallons = float(fuel_consumed) / 3.78541
                 else:  # already in gallons
                     fuel_gallons = float(fuel_consumed)
-                
+
                 # EPA diesel factor: 10.21 kg CO2e per gallon
                 fuel_emissions = fuel_gallons * 10.21
                 confidence_score = 90.0  # High confidence with fuel data
                 data_completeness_factors.extend(["fuel_consumption_documented", "epa_factors_applied"])
-                
+
                 # Log fuel calculation details
-                logger.info(f"Soil Management fuel calculation: {fuel_consumed} {fuel_unit} = {fuel_gallons:.2f} gal = {fuel_emissions:.2f} kg CO2e")
-            
+                logger.info(
+                    f"Soil Management fuel calculation: {fuel_consumed} {fuel_unit} = {fuel_gallons:.2f} gal = {fuel_emissions:.2f} kg CO2e"
+                )
+
             # Map event types to emission factor keys
             event_type_mapping = {
-                "OM": "organic_matter",      # Organic Matter Addition
-                "CC": "cover_crops",         # Cover Crop
-                "CO": "composting",          # Composting
-                "TI": "tillage",            # Tillage
-                "ST": "soil_test",          # Soil Test
-                "PA": "ph_adjustment",       # pH Adjustment
+                "OM": "organic_matter",  # Organic Matter Addition
+                "CC": "cover_crops",  # Cover Crop
+                "CO": "composting",  # Composting
+                "TI": "tillage",  # Tillage
+                "ST": "soil_test",  # Soil Test
+                "PA": "ph_adjustment",  # pH Adjustment
             }
 
             # Get the appropriate emission factor for area-based calculation
             factor_key = event_type_mapping.get(event.type, "general")
             factor_data = EmissionFactorsRegistry.get_soil_management_factor(factor_key)
             emission_factor = factor_data["value"]  # kg CO2e per hectare
-            
+
             # Area-based emissions calculation
             area_emissions = 0.0
             if area_hectares > 0:
@@ -1222,10 +1275,73 @@ class EventCarbonCalculator:
                 area_hectares = 1.0
                 area_emissions = emission_factor
                 data_completeness_factors.append("area_assumed")
-            
-            # Combine fuel and area emissions for total impact
-            base_emissions = fuel_emissions + area_emissions
-            
+
+            # ============================================================================
+            # ENHANCED: IPCC 2006 Lime Dissolution CO₂ Emissions (PA events)
+            # Agricultural lime releases CO₂ as carbonates dissolve in acidic soil
+            # IPCC 2006 Vol 4, Ch 11, Sec 11.3.1: Limestone = 0.44 kg CO₂/kg
+            # ============================================================================
+            lime_dissolution_emissions = 0.0
+            lime_kg_applied = 0.0
+            lime_type_used = "limestone"
+            lime_factor_data = None
+
+            if event.type == "PA" and hasattr(event, "amendment_amount") and event.amendment_amount:
+                # Parse amendment_amount to extract lime quantity
+                lime_kg_applied = self._parse_lime_amount(event.amendment_amount)
+
+                if lime_kg_applied > 0:
+                    # Detect lime type from amendment_type or description
+                    lime_type_used = self._detect_lime_type(event)
+
+                    # Get IPCC-verified lime dissolution factor
+                    lime_factor_data = EmissionFactorsRegistry.get_lime_dissolution_factor(lime_type_used)
+                    lime_emission_factor = lime_factor_data["value"]  # kg CO₂ per kg lime
+
+                    # Calculate lime dissolution emissions
+                    lime_dissolution_emissions = lime_kg_applied * lime_emission_factor
+                    data_completeness_factors.append("ipcc_lime_dissolution_calculated")
+                    data_completeness_factors.append(f"lime_type_{lime_type_used}")
+
+                    logger.info(
+                        f"IPCC Lime Dissolution: {lime_kg_applied:.1f} kg {lime_type_used} × "
+                        f"{lime_emission_factor} kg CO₂/kg = {lime_dissolution_emissions:.2f} kg CO₂"
+                    )
+
+            # ============================================================================
+            # ENHANCED: Tillage Soil CO₂ Flux (TI events)
+            # Tillage disturbs soil → increased aeration → accelerated decomposition of SOM
+            # Based on Reicosky 1997, West & Post 2002, IPCC 2019 Guidelines
+            # ============================================================================
+            soil_flux_emissions = 0.0
+            tillage_depth_category = "medium"
+            soil_flux_factor_data = None
+
+            if event.type == "TI" and area_hectares > 0:
+                # Detect tillage depth from event data
+                tillage_depth_category = self._detect_tillage_depth(event)
+
+                # Get research-based soil CO₂ flux factor
+                soil_flux_factor_data = EmissionFactorsRegistry.get_tillage_soil_flux_factor(
+                    tillage_depth_category
+                )
+                soil_flux_factor = soil_flux_factor_data["value"]  # kg CO₂e per hectare
+
+                # Calculate soil CO₂ flux emissions
+                soil_flux_emissions = area_hectares * soil_flux_factor
+                data_completeness_factors.append("soil_co2_flux_calculated")
+                data_completeness_factors.append(f"tillage_depth_{tillage_depth_category}")
+
+                logger.info(
+                    f"Tillage Soil Flux: {area_hectares:.2f} ha × {soil_flux_factor} kg CO₂e/ha "
+                    f"({tillage_depth_category} depth) = {soil_flux_emissions:.2f} kg CO₂e"
+                )
+
+            # ============================================================================
+            # Combine all emission components
+            # ============================================================================
+            base_emissions = fuel_emissions + area_emissions + lime_dissolution_emissions + soil_flux_emissions
+
             # Adjust confidence score based on data availability
             if fuel_consumed and fuel_consumed > 0:
                 confidence_score = 90.0  # High confidence with fuel data
@@ -1235,21 +1351,29 @@ class EventCarbonCalculator:
                 confidence_score = 60.0  # Lower confidence with minimal data
 
             # Additional confidence factors based on available data
-            if hasattr(event, 'soil_ph') and event.soil_ph:
+            if hasattr(event, "soil_ph") and event.soil_ph:
                 confidence_score += 5.0
                 data_completeness_factors.append("soil_ph_available")
-                
-            if hasattr(event, 'organic_matter_percentage') and event.organic_matter_percentage:
+
+            if hasattr(event, "organic_matter_percentage") and event.organic_matter_percentage:
                 confidence_score += 5.0
                 data_completeness_factors.append("organic_matter_data")
-                
-            if hasattr(event, 'amendment_amount') and event.amendment_amount:
-                confidence_score += 10.0
+
+            if hasattr(event, "amendment_amount") and event.amendment_amount:
+                if lime_kg_applied > 0:
+                    confidence_score += 15.0  # Higher confidence with lime quantity used
+                else:
+                    confidence_score += 10.0
                 data_completeness_factors.append("amendment_quantity")
-                
-            if hasattr(event, 'test_results') and event.test_results:
+
+            if hasattr(event, "test_results") and event.test_results:
                 confidence_score += 10.0
                 data_completeness_factors.append("detailed_test_results")
+
+            # Boost confidence if IPCC/research factors were applied
+            if lime_dissolution_emissions > 0 or soil_flux_emissions > 0:
+                confidence_score += 5.0
+                data_completeness_factors.append("enhanced_scientific_factors_applied")
 
             # Cap confidence at 95%
             confidence_score = min(confidence_score, 95.0)
@@ -1260,13 +1384,46 @@ class EventCarbonCalculator:
             calculation_method = "usda_area_scaled_soil_factors"
             if fuel_consumed and fuel_consumed > 0:
                 calculation_method = "enhanced_fuel_plus_area_factors"
-            
+            if lime_dissolution_emissions > 0:
+                calculation_method = "ipcc_lime_dissolution_enhanced"
+            if soil_flux_emissions > 0:
+                calculation_method = "research_based_tillage_flux_enhanced"
+            if lime_dissolution_emissions > 0 and fuel_consumed and fuel_consumed > 0:
+                calculation_method = "comprehensive_lime_fuel_enhanced"
+            if soil_flux_emissions > 0 and fuel_consumed and fuel_consumed > 0:
+                calculation_method = "comprehensive_tillage_fuel_enhanced"
+
+            # Build enhanced calculation string
+            calc_parts = []
+            if fuel_emissions > 0:
+                calc_parts.append(f"Fuel: {round(fuel_emissions, 3)} kg CO₂e")
+            if area_emissions > 0:
+                calc_parts.append(f"Area: {area_hectares} ha × {emission_factor} = {round(area_emissions, 3)} kg CO₂e")
+            if lime_dissolution_emissions > 0:
+                calc_parts.append(
+                    f"Lime Dissolution (IPCC): {lime_kg_applied:.1f} kg × "
+                    f"{lime_factor_data['value']} = {round(lime_dissolution_emissions, 3)} kg CO₂"
+                )
+            if soil_flux_emissions > 0:
+                calc_parts.append(
+                    f"Soil Flux ({tillage_depth_category}): {area_hectares} ha × "
+                    f"{soil_flux_factor_data['value']} = {round(soil_flux_emissions, 3)} kg CO₂e"
+                )
+            calculation_string = " + ".join(calc_parts) + f" = {round(base_emissions, 3)} kg CO₂e"
+
+            # Build data sources list
+            data_sources = [factor_data["source"]]
+            if lime_factor_data:
+                data_sources.append(lime_factor_data["source"])
+            if soil_flux_factor_data:
+                data_sources.append(soil_flux_factor_data["source"])
+
             result = {
                 "co2e": round(base_emissions, 3),
                 "efficiency_score": confidence_score,
                 "calculation_method": calculation_method,
-                "data_source": factor_data["source"],
-                "verification_status": "usda_factors_verified",
+                "data_source": " | ".join(data_sources),
+                "verification_status": "usda_ipcc_factors_verified",
                 "emission_factor_used": {
                     "factor_type": factor_key,
                     "factor_value": emission_factor,
@@ -1278,9 +1435,11 @@ class EventCarbonCalculator:
                     "area_hectares": area_hectares,
                     "area_emissions": round(area_emissions, 3),
                     "fuel_emissions": round(fuel_emissions, 3),
+                    "lime_dissolution_emissions": round(lime_dissolution_emissions, 3),
+                    "soil_flux_emissions": round(soil_flux_emissions, 3),
                     "total_emissions": round(base_emissions, 3),
                     "emission_factor": emission_factor,
-                    "calculation": f"Fuel: {round(fuel_emissions, 3)} kg CO₂e + Area: {area_hectares} ha × {emission_factor} kg CO₂e/ha = {round(base_emissions, 3)} kg CO₂e",
+                    "calculation": calculation_string,
                     "confidence_score": confidence_score,
                     "data_completeness": data_completeness_factors,
                 },
@@ -1288,15 +1447,43 @@ class EventCarbonCalculator:
                     "soil_activity": event.type,
                     "area_managed": area_hectares,
                     "fuel_consumed": fuel_consumed or 0,
-                    "fuel_unit": getattr(event, 'fuel_unit', 'L'),
+                    "fuel_unit": getattr(event, "fuel_unit", "L"),
                     "equipment_hours": equipment_hours or 0,
                     "area_emissions": round(area_emissions, 3),
                     "fuel_emissions": round(fuel_emissions, 3),
+                    "lime_dissolution_emissions": round(lime_dissolution_emissions, 3),
+                    "soil_flux_emissions": round(soil_flux_emissions, 3),
                     "emission_factor": emission_factor,
                     "total_impact": base_emissions,
                 },
                 "recommendations": recommendations,
             }
+
+            # Add lime-specific data if applicable
+            if lime_dissolution_emissions > 0 and lime_factor_data:
+                result["lime_dissolution_details"] = {
+                    "lime_amount_kg": round(lime_kg_applied, 2),
+                    "lime_type": lime_type_used,
+                    "emission_factor": lime_factor_data["value"],
+                    "emission_factor_unit": lime_factor_data["unit"],
+                    "emissions_kg_co2": round(lime_dissolution_emissions, 3),
+                    "source": lime_factor_data["source"],
+                    "reference": lime_factor_data["reference"],
+                    "methodology": "IPCC 2006 Tier 1",
+                }
+
+            # Add tillage flux-specific data if applicable
+            if soil_flux_emissions > 0 and soil_flux_factor_data:
+                result["tillage_soil_flux_details"] = {
+                    "tillage_depth": tillage_depth_category,
+                    "area_hectares": round(area_hectares, 2),
+                    "emission_factor": soil_flux_factor_data["value"],
+                    "emission_factor_unit": soil_flux_factor_data["unit"],
+                    "emissions_kg_co2e": round(soil_flux_emissions, 3),
+                    "source": soil_flux_factor_data["source"],
+                    "reference": soil_flux_factor_data["reference"],
+                    "mechanism": "Soil organic matter decomposition from tillage disturbance",
+                }
 
             return self._add_enhanced_usda_metadata(result, event)
 
@@ -1307,7 +1494,7 @@ class EventCarbonCalculator:
                 "usda_factors_based": False,
                 "verification_status": "calculation_error",
                 "error": str(e),
-                "fallback_used": "general_soil_management_estimate"
+                "fallback_used": "general_soil_management_estimate",
             }
 
     def calculate_business_event_impact(self, event) -> Dict[str, Any]:
@@ -1323,27 +1510,27 @@ class EventCarbonCalculator:
 
             # ENHANCED: Use structured business data
             business_data = self._get_structured_business_data(event, crop_name)
-            
+
             base_emissions = 0.0
-            carbon_credits = business_data['carbon_credits_earned']
+            carbon_credits = business_data["carbon_credits_earned"]
             efficiency_score = 70.0
-            
+
             # Calculate based on business activity type
-            business_type = business_data['business_type']
-            
+            business_type = business_data["business_type"]
+
             if business_type == "carbon_credits":
                 # Carbon credits offset emissions
-                if business_data['carbon_credits_unit'] == 'kgCO2e':
+                if business_data["carbon_credits_unit"] == "kgCO2e":
                     base_emissions = -carbon_credits  # Direct offset in kg
-                elif business_data['carbon_credits_unit'] == 'tCO2e':
+                elif business_data["carbon_credits_unit"] == "tCO2e":
                     base_emissions = -carbon_credits * 1000  # Convert tonnes to kg
                 else:  # credits
                     base_emissions = -carbon_credits * 10  # Assume 10 kg per credit unit
                 efficiency_score = 95.0  # Very efficient for carbon goals
-                
+
             elif business_type == "certification":
                 # Certification events have minimal direct emissions but positive impact
-                cert_type = business_data['certification_type']
+                cert_type = business_data["certification_type"]
                 if cert_type == "carbon_neutral":
                     base_emissions = -50.0  # Significant carbon benefit
                     efficiency_score = 90.0
@@ -1356,26 +1543,26 @@ class EventCarbonCalculator:
                 else:
                     base_emissions = -10.0  # Basic certification benefit
                     efficiency_score = 75.0
-                    
+
             elif business_type == "sustainability_audit":
                 # Audits improve practices leading to long-term reductions
                 base_emissions = 0.5  # Small travel/documentation impact
                 efficiency_score = 85.0  # Good for identifying improvements
-                
+
             elif business_type == "verification":
                 # Verification builds consumer trust but has minimal impact
                 base_emissions = 1.0  # Small verification process impact
                 efficiency_score = 80.0
-                
+
             elif business_type == "compliance":
                 base_emissions = 0.5  # Minimal impact from documentation
                 efficiency_score = 70.0
-                
+
             elif business_type == "transparency":
                 # Transparency initiatives have very positive consumer impact
                 base_emissions = -5.0  # Small benefit from consumer awareness
                 efficiency_score = 88.0
-                
+
             # Legacy event type handling for backward compatibility
             elif event.type == "CE":  # Certification
                 if carbon_credits > 0:
@@ -1384,23 +1571,23 @@ class EventCarbonCalculator:
                 else:
                     base_emissions = -10.0  # Default certification benefit
                     efficiency_score = 80.0
-                    
+
             elif event.type in ["IN", "CM"]:  # Inspection, Compliance
                 base_emissions = 0.5
                 efficiency_score = 70.0
 
             # Apply sustainability practice bonus if applicable
-            practice = business_data['sustainability_practice']
+            practice = business_data["sustainability_practice"]
             if practice:
                 practice_benefits = {
-                    'cover_cropping': -15.0,
-                    'no_till': -25.0,
-                    'integrated_pest': -10.0,
-                    'water_conservation': -8.0,
-                    'renewable_energy': -50.0,
-                    'composting': -20.0,
-                    'biodiversity': -12.0,
-                    'soil_health': -18.0,
+                    "cover_cropping": -15.0,
+                    "no_till": -25.0,
+                    "integrated_pest": -10.0,
+                    "water_conservation": -8.0,
+                    "renewable_energy": -50.0,
+                    "composting": -20.0,
+                    "biodiversity": -12.0,
+                    "soil_health": -18.0,
                 }
                 practice_benefit = practice_benefits.get(practice, -5.0)
                 base_emissions += practice_benefit
@@ -1413,20 +1600,22 @@ class EventCarbonCalculator:
                 "efficiency_score": round(efficiency_score, 1),
                 "calculation_method": "carbon_focused_business_analysis",
                 "data_source": "Carbon Transparency Standards",
-                "verification_status": business_data['verification_status'],
+                "verification_status": business_data["verification_status"],
                 "breakdown": {
-                    "business_type": business_data['business_type'],
-                    "certification_type": business_data['certification_type'],
-                    "carbon_credits_earned": business_data['carbon_credits_earned'],
-                    "carbon_credits_unit": business_data['carbon_credits_unit'],
-                    "sustainability_practice": business_data['sustainability_practice'],
-                    "verification_status": business_data['verification_status'],
-                    "data_source": business_data['data_source'],
+                    "business_type": business_data["business_type"],
+                    "certification_type": business_data["certification_type"],
+                    "carbon_credits_earned": business_data["carbon_credits_earned"],
+                    "carbon_credits_unit": business_data["carbon_credits_unit"],
+                    "sustainability_practice": business_data["sustainability_practice"],
+                    "verification_status": business_data["verification_status"],
+                    "data_source": business_data["data_source"],
                 },
                 "transparency_metrics": {
                     "consumer_value": "high" if base_emissions < -20 else "medium" if base_emissions < 0 else "low",
-                    "verification_level": business_data['verification_status'],
-                    "carbon_impact": "positive" if base_emissions < 0 else "neutral" if base_emissions == 0 else "minimal",
+                    "verification_level": business_data["verification_status"],
+                    "carbon_impact": (
+                        "positive" if base_emissions < 0 else "neutral" if base_emissions == 0 else "minimal"
+                    ),
                 },
                 "recommendations": recommendations,
             }
@@ -1499,12 +1688,14 @@ class EventCarbonCalculator:
         """
         try:
             # Get event details for calculation
-            event_description = getattr(event, 'description', '') or getattr(event, 'name', '') or getattr(event, 'observation', '')
-            event_type = getattr(event, 'type', '')
-            
+            event_description = (
+                getattr(event, "description", "") or getattr(event, "name", "") or getattr(event, "observation", "")
+            )
+            event_type = getattr(event, "type", "")
+
             # Option A: Check for empty/minimal event data
             # If no meaningful content is provided, return 0.0 kg CO2e
-            if not event_description or event_description.strip() == '':
+            if not event_description or event_description.strip() == "":
                 return {
                     "co2e": 0.0,
                     "efficiency_score": 100.0,  # Perfect score for no emissions
@@ -1516,58 +1707,56 @@ class EventCarbonCalculator:
                         "duration_hours": 0.0,
                         "participants": 0,
                         "emission_factor": 0.0,
-                        "confidence_level": "high"
+                        "confidence_level": "high",
                     },
                     "recommendations": ["Add event description to calculate carbon impact"],
-                    "transparency_note": "No emissions calculated - no activity specified"
+                    "transparency_note": "No emissions calculated - no activity specified",
                 }
-            
+
             # Default parameters for general events
             duration_hours = 1.0
             participants = 1
-            
+
             # Try to extract duration from event data if available
-            if hasattr(event, 'extra_data') and event.extra_data:
-                duration_hours = float(event.extra_data.get('duration_hours', 1.0))
-                participants = int(event.extra_data.get('participants', 1))
-            
+            if hasattr(event, "extra_data") and event.extra_data:
+                duration_hours = float(event.extra_data.get("duration_hours", 1.0))
+                participants = int(event.extra_data.get("participants", 1))
+
             # Determine the appropriate general event type based on description
             general_event_type = self._classify_general_event_type(event_description, event_type)
-            
+
             # Calculate using enhanced emission factors
             calculation_result = EnhancedEmissionFactors.calculate_general_event_emissions(
-                event_type=general_event_type,
-                duration_hours=duration_hours,
-                participants=participants
+                event_type=general_event_type, duration_hours=duration_hours, participants=participants
             )
-            
-            base_emissions = calculation_result['co2e_kg']
-            
+
+            base_emissions = calculation_result["co2e_kg"]
+
             # Generate recommendations
             recommendations = self._generate_general_recommendations(event, base_emissions, general_event_type)
-            
+
             # Calculate efficiency score based on event type and impact
             efficiency_score = self._calculate_general_efficiency_score(general_event_type, base_emissions)
-            
+
             result = {
                 "co2e": round(base_emissions, 3),
                 "efficiency_score": efficiency_score,
-                "calculation_method": calculation_result['calculation_method'],
-                "data_source": calculation_result['source'],
+                "calculation_method": calculation_result["calculation_method"],
+                "data_source": calculation_result["source"],
                 "verification_status": "enhanced_factors",
                 "breakdown": {
                     "general_event_type": general_event_type,
                     "duration_hours": duration_hours,
                     "participants": participants,
-                    "emission_factor": calculation_result['emission_factor'],
-                    "confidence_level": calculation_result['confidence_level']
+                    "emission_factor": calculation_result["emission_factor"],
+                    "confidence_level": calculation_result["confidence_level"],
                 },
                 "recommendations": recommendations,
-                "transparency_note": f"Calculated using EPA-verified factors for {general_event_type} activities"
+                "transparency_note": f"Calculated using EPA-verified factors for {general_event_type} activities",
             }
-            
+
             return self._add_enhanced_usda_metadata(result, event)
-            
+
         except Exception as e:
             logger.warning(f"Error calculating general event impact: {e}")
             # Fallback to reasonable default instead of hardcoded 0.5
@@ -1577,12 +1766,9 @@ class EventCarbonCalculator:
                 "calculation_method": "general_event_fallback",
                 "data_source": "Default Estimation",
                 "verification_status": "estimated",
-                "breakdown": {
-                    "general_event_type": "documentation",
-                    "fallback_reason": str(e)
-                },
+                "breakdown": {"general_event_type": "documentation", "fallback_reason": str(e)},
                 "recommendations": [],
-                "error": str(e)
+                "error": str(e),
             }
 
     def create_carbon_entry_from_event(self, event, calculation_result: Dict[str, Any]) -> Optional["CarbonEntry"]:
@@ -1609,7 +1795,11 @@ class EventCarbonCalculator:
                 type="emission" if calculation_result.get("co2e", 0) > 0 else "offset",
                 source=carbon_source,
                 amount=abs(calculation_result.get("co2e", 0)),
-                year=getattr(event.date, 'year', timezone.now().year) if hasattr(event, "date") and event.date else timezone.now().year,
+                year=(
+                    getattr(event.date, "year", timezone.now().year)
+                    if hasattr(event, "date") and event.date
+                    else timezone.now().year
+                ),
                 description=f"Auto-calculated from {event.__class__.__name__} event: {calculation_result.get('calculation_method', 'unknown')}",
                 explanation_text=f"This carbon {'emission' if calculation_result.get('co2e', 0) > 0 else 'offset'} was automatically calculated from farm event data using USDA emission factors. Amount: {abs(calculation_result.get('co2e', 0)):.2f} kg CO2e from {event.__class__.__name__.lower().replace('event', '')} activity.",
                 usda_factors_based=calculation_result.get("usda_factors_based", False),
@@ -1660,202 +1850,207 @@ class EventCarbonCalculator:
         """
         try:
             # CRITICAL: Check chemical type first - only fertilizers have NPK
-            chemical_type = getattr(event, 'type', 'FE')
-            if chemical_type in ['PE', 'FU', 'HE']:  # Pesticides, Fungicides, Herbicides
+            chemical_type = getattr(event, "type", "FE")
+            if chemical_type in ["PE", "FU", "HE"]:  # Pesticides, Fungicides, Herbicides
                 return {"N": 0.0, "P": 0.0, "K": 0.0}  # NO NPK content
-            
+
             # Only for fertilizers (FE): Check if structured NPK fields are available and populated
-            if (hasattr(event, 'nitrogen_percentage') and event.nitrogen_percentage is not None and
-                hasattr(event, 'phosphorus_percentage') and event.phosphorus_percentage is not None and
-                hasattr(event, 'potassium_percentage') and event.potassium_percentage is not None):
-                
+            if (
+                hasattr(event, "nitrogen_percentage")
+                and event.nitrogen_percentage is not None
+                and hasattr(event, "phosphorus_percentage")
+                and event.phosphorus_percentage is not None
+                and hasattr(event, "potassium_percentage")
+                and event.potassium_percentage is not None
+            ):
+
                 return {
                     "N": float(event.nitrogen_percentage),
-                    "P": float(event.phosphorus_percentage), 
-                    "K": float(event.potassium_percentage)
+                    "P": float(event.phosphorus_percentage),
+                    "K": float(event.potassium_percentage),
                 }
-            
+
             # Fallback to parsing concentration string (only for fertilizers)
             concentration = self._get_intelligent_concentration(event.concentration, event, crop_name)
             return self._parse_npk_content(concentration, chemical_type)
-            
+
         except Exception as e:
             logger.warning(f"Error getting structured NPK content, using fallback: {e}")
-            chemical_type = getattr(event, 'type', 'FE')
-            if chemical_type in ['PE', 'FU', 'HE']:
+            chemical_type = getattr(event, "type", "FE")
+            if chemical_type in ["PE", "FU", "HE"]:
                 return {"N": 0.0, "P": 0.0, "K": 0.0}  # NO NPK for non-fertilizers
             concentration = self._get_intelligent_concentration(event.concentration, event, crop_name)
             return self._parse_npk_content(concentration, chemical_type)
-    
+
     def _get_structured_application_method(self, event, crop_name: str = "default") -> str:
         """
-        Get application method from structured field (application_method_structured) 
+        Get application method from structured field (application_method_structured)
         or fallback to way_of_application or application_method
         """
         try:
             # Check if structured application method field is available
-            if hasattr(event, 'application_method_structured') and event.application_method_structured:
+            if hasattr(event, "application_method_structured") and event.application_method_structured:
                 return event.application_method_structured
-            
+
             # Check for frontend application_method field
-            if hasattr(event, 'application_method') and event.application_method:
+            if hasattr(event, "application_method") and event.application_method:
                 return self._get_intelligent_application_method(event.application_method, event, crop_name)
-            
+
             # Fallback to legacy field
-            if hasattr(event, 'way_of_application') and event.way_of_application:
+            if hasattr(event, "way_of_application") and event.way_of_application:
                 return self._get_intelligent_application_method(event.way_of_application, event, crop_name)
-            
+
             # Default if no application method found
             return "broadcast"
-            
+
         except Exception as e:
             logger.warning(f"Error getting structured application method, using fallback: {e}")
             return "broadcast"
-    
+
     def _get_structured_equipment_data(self, event, crop_name: str = "default") -> Dict[str, Any]:
         """
         Get equipment data from structured fields or fallback to legacy fields
         """
         try:
             # Check for structured fields first
-            if (hasattr(event, 'fuel_consumed') and event.fuel_consumed is not None):
+            if hasattr(event, "fuel_consumed") and event.fuel_consumed is not None:
                 fuel_amount = float(event.fuel_consumed)
-                fuel_unit = getattr(event, 'fuel_unit', 'L')
-                
+                fuel_unit = getattr(event, "fuel_unit", "L")
+
                 # Convert to liters if needed
-                if fuel_unit == 'gal':
+                if fuel_unit == "gal":
                     fuel_amount *= 3.78541  # gallons to liters
-                elif fuel_unit == 'kg':
+                elif fuel_unit == "kg":
                     fuel_amount *= 1.2  # approximate kg to L for diesel
-                    
+
                 return {
-                    'fuel_amount': fuel_amount,
-                    'fuel_type': event.fuel_type or 'diesel',
-                    'equipment_type': getattr(event, 'equipment_type_structured', None) or event.equipment_name,
-                    'area_worked': float(getattr(event, 'area_worked', 0) or 0),
-                    'area_unit': getattr(event, 'area_unit', 'ha'),
-                    'hours_operated': float(getattr(event, 'hours_operated', 0) or 0),
-                    'efficiency': getattr(event, 'operation_efficiency', 'normal'),
-                    'data_source': 'structured_fields'
+                    "fuel_amount": fuel_amount,
+                    "fuel_type": event.fuel_type or "diesel",
+                    "equipment_type": getattr(event, "equipment_type_structured", None) or event.equipment_name,
+                    "area_worked": float(getattr(event, "area_worked", 0) or 0),
+                    "area_unit": getattr(event, "area_unit", "ha"),
+                    "hours_operated": float(getattr(event, "hours_operated", 0) or 0),
+                    "efficiency": getattr(event, "operation_efficiency", "normal"),
+                    "data_source": "structured_fields",
                 }
-            
+
             # Fallback to legacy fields
             return {
-                'fuel_amount': float(getattr(event, 'fuel_amount', 0) or 0),
-                'fuel_type': event.fuel_type or 'diesel', 
-                'equipment_type': event.equipment_name or 'general',
-                'area_worked': self._extract_numeric_value(event.area_covered or '', default=1.0),
-                'area_unit': 'ha',
-                'hours_operated': float(getattr(event, 'hours_used', 0) or 0),
-                'efficiency': 'normal',
-                'data_source': 'legacy_fields'
+                "fuel_amount": float(getattr(event, "fuel_amount", 0) or 0),
+                "fuel_type": event.fuel_type or "diesel",
+                "equipment_type": event.equipment_name or "general",
+                "area_worked": self._extract_numeric_value(event.area_covered or "", default=1.0),
+                "area_unit": "ha",
+                "hours_operated": float(getattr(event, "hours_used", 0) or 0),
+                "efficiency": "normal",
+                "data_source": "legacy_fields",
             }
-            
+
         except Exception as e:
             logger.warning(f"Error getting structured equipment data, using defaults: {e}")
             return {
-                'fuel_amount': 10.0,  # Default fuel consumption
-                'fuel_type': 'diesel',
-                'equipment_type': 'general',
-                'area_worked': 1.0,
-                'area_unit': 'ha',
-                'hours_operated': 2.0,
-                'efficiency': 'normal',
-                'data_source': 'defaults'
+                "fuel_amount": 10.0,  # Default fuel consumption
+                "fuel_type": "diesel",
+                "equipment_type": "general",
+                "area_worked": 1.0,
+                "area_unit": "ha",
+                "hours_operated": 2.0,
+                "efficiency": "normal",
+                "data_source": "defaults",
             }
-    
+
     def _get_structured_production_data(self, event, crop_name: str = "default") -> Dict[str, Any]:
         """
         Get production data from structured fields or fallback to legacy fields
         """
         try:
             # Check for structured fields first
-            if (hasattr(event, 'area_covered') and event.area_covered is not None):
+            if hasattr(event, "area_covered") and event.area_covered is not None:
                 area = float(event.area_covered)
-                area_unit = getattr(event, 'area_unit', 'ha')
-                
+                area_unit = getattr(event, "area_unit", "ha")
+
                 # Convert to hectares if needed
-                if area_unit == 'acres':
+                if area_unit == "acres":
                     area *= 0.404686  # acres to hectares
-                elif area_unit == 'm2':
+                elif area_unit == "m2":
                     area /= 10000  # m2 to hectares
-                elif area_unit == 'km2':
+                elif area_unit == "km2":
                     area *= 100  # km2 to hectares
-                    
+
                 return {
-                    'area_hectares': area,
-                    'yield_quantity': float(getattr(event, 'yield_quantity', 0) or 0),
-                    'yield_unit': getattr(event, 'yield_unit', 'kg'),
-                    'fuel_consumed': float(getattr(event, 'fuel_consumed', 0) or 0),
-                    'fuel_unit': getattr(event, 'fuel_unit', 'L'),
-                    'equipment_hours': float(getattr(event, 'equipment_hours', 0) or 0),
-                    'transportation_distance': float(getattr(event, 'transportation_distance', 0) or 0),
-                    'transportation_unit': getattr(event, 'transportation_unit', 'km'),
-                    'efficiency': getattr(event, 'production_efficiency', 'normal'),
-                    'data_source': 'structured_fields'
+                    "area_hectares": area,
+                    "yield_quantity": float(getattr(event, "yield_quantity", 0) or 0),
+                    "yield_unit": getattr(event, "yield_unit", "kg"),
+                    "fuel_consumed": float(getattr(event, "fuel_consumed", 0) or 0),
+                    "fuel_unit": getattr(event, "fuel_unit", "L"),
+                    "equipment_hours": float(getattr(event, "equipment_hours", 0) or 0),
+                    "transportation_distance": float(getattr(event, "transportation_distance", 0) or 0),
+                    "transportation_unit": getattr(event, "transportation_unit", "km"),
+                    "efficiency": getattr(event, "production_efficiency", "normal"),
+                    "data_source": "structured_fields",
                 }
-            
+
             # Fallback to legacy fields and history data
             area = 1.0  # Default area
-            if hasattr(event, 'history') and event.history and hasattr(event.history, 'parcel'):
-                parcel_area = getattr(event.history.parcel, 'area', '1')
+            if hasattr(event, "history") and event.history and hasattr(event.history, "parcel"):
+                parcel_area = getattr(event.history.parcel, "area", "1")
                 area = self._extract_numeric_value(str(parcel_area), default=1.0)
-                
+
             return {
-                'area_hectares': area,
-                'yield_quantity': 0.0,
-                'yield_unit': 'kg',
-                'fuel_consumed': 0.0,
-                'fuel_unit': 'L',
-                'equipment_hours': 0.0,
-                'transportation_distance': 0.0,
-                'transportation_unit': 'km',
-                'efficiency': 'normal',
-                'data_source': 'legacy_fields'
+                "area_hectares": area,
+                "yield_quantity": 0.0,
+                "yield_unit": "kg",
+                "fuel_consumed": 0.0,
+                "fuel_unit": "L",
+                "equipment_hours": 0.0,
+                "transportation_distance": 0.0,
+                "transportation_unit": "km",
+                "efficiency": "normal",
+                "data_source": "legacy_fields",
             }
-            
+
         except Exception as e:
             logger.warning(f"Error getting structured production data, using defaults: {e}")
             defaults = self._get_intelligent_defaults(event, crop_name)
             return {
-                'area_hectares': defaults.get('area', 1.0),
-                'yield_quantity': 0.0,
-                'yield_unit': 'kg',
-                'fuel_consumed': 0.0,
-                'fuel_unit': 'L',
-                'equipment_hours': 0.0,
-                'transportation_distance': 0.0,
-                'transportation_unit': 'km',
-                'efficiency': 'normal',
-                'data_source': 'defaults'
+                "area_hectares": defaults.get("area", 1.0),
+                "yield_quantity": 0.0,
+                "yield_unit": "kg",
+                "fuel_consumed": 0.0,
+                "fuel_unit": "L",
+                "equipment_hours": 0.0,
+                "transportation_distance": 0.0,
+                "transportation_unit": "km",
+                "efficiency": "normal",
+                "data_source": "defaults",
             }
-    
+
     def _get_structured_business_data(self, event, crop_name: str = "default") -> Dict[str, Any]:
         """
         Get business event data from structured fields
         """
         try:
             return {
-                'business_type': getattr(event, 'business_type', 'certification'),
-                'certification_type': getattr(event, 'certification_type', None),
-                'carbon_credits_earned': float(getattr(event, 'carbon_credits_earned', 0) or 0),
-                'carbon_credits_unit': getattr(event, 'carbon_credits_unit', 'tCO2e'),
-                'verification_status': getattr(event, 'verification_status', 'pending'),
-                'sustainability_practice': getattr(event, 'sustainability_practice', None),
-                'data_source': 'structured_fields' if hasattr(event, 'business_type') else 'legacy_fields'
+                "business_type": getattr(event, "business_type", "certification"),
+                "certification_type": getattr(event, "certification_type", None),
+                "carbon_credits_earned": float(getattr(event, "carbon_credits_earned", 0) or 0),
+                "carbon_credits_unit": getattr(event, "carbon_credits_unit", "tCO2e"),
+                "verification_status": getattr(event, "verification_status", "pending"),
+                "sustainability_practice": getattr(event, "sustainability_practice", None),
+                "data_source": "structured_fields" if hasattr(event, "business_type") else "legacy_fields",
             }
         except Exception as e:
             logger.warning(f"Error getting structured business data, using defaults: {e}")
             return {
-                'business_type': 'certification',
-                'certification_type': None,
-                'carbon_credits_earned': 0.0,
-                'carbon_credits_unit': 'tCO2e',
-                'verification_status': 'pending',
-                'sustainability_practice': None,
-                'data_source': 'defaults'
+                "business_type": "certification",
+                "certification_type": None,
+                "carbon_credits_earned": 0.0,
+                "carbon_credits_unit": "tCO2e",
+                "verification_status": "pending",
+                "sustainability_practice": None,
+                "data_source": "defaults",
             }
-    
+
     def _extract_production_event_data(self, event) -> Dict[str, Any]:
         """Extract production event data for EPA/USDA calculations"""
         try:
@@ -1865,58 +2060,58 @@ class EventCarbonCalculator:
                 crop_name = event.history.product.name
             elif hasattr(event, "history") and event.history and hasattr(event.history, "crop_type"):
                 crop_name = event.history.crop_type.name if event.history.crop_type else "unknown"
-            
+
             # Get structured production data
             structured_data = self._get_structured_production_data(event, crop_name)
-            
+
             # Determine production type based on event type
             production_type = self._get_production_type_name(event.type, crop_name)
-            
+
             # Extract specific production values
-            area_covered = structured_data['area_hectares'] * 2.47105  # Convert to acres for EPA calculations
-            fuel_consumed = structured_data['fuel_consumed']
-            equipment_hours = structured_data['equipment_hours']
-            
+            area_covered = structured_data["area_hectares"] * 2.47105  # Convert to acres for EPA calculations
+            fuel_consumed = structured_data["fuel_consumed"]
+            equipment_hours = structured_data["equipment_hours"]
+
             # Convert fuel to gallons if needed
-            if fuel_consumed and structured_data['fuel_unit'] == 'L':
+            if fuel_consumed and structured_data["fuel_unit"] == "L":
                 fuel_consumed = fuel_consumed / 3.78541  # Convert liters to gallons
-            
+
             # Estimate water volume for irrigation
             water_volume_gallons = None
             if event.type == "IR":  # Irrigation
-                if hasattr(event, 'volume') and event.volume:
+                if hasattr(event, "volume") and event.volume:
                     water_volume_gallons = self._convert_volume_to_gallons(event.volume, event, crop_name)
                 else:
                     # Estimate based on area (1000 gallons per acre is conservative)
                     water_volume_gallons = area_covered * 1000
-            
+
             return {
-                'production_type': production_type,
-                'crop_name': crop_name,
-                'area_covered': area_covered,
-                'fuel_consumed': fuel_consumed,
-                'equipment_hours': equipment_hours,
-                'water_volume_gallons': water_volume_gallons,
-                'structured_data': structured_data
+                "production_type": production_type,
+                "crop_name": crop_name,
+                "area_covered": area_covered,
+                "fuel_consumed": fuel_consumed,
+                "equipment_hours": equipment_hours,
+                "water_volume_gallons": water_volume_gallons,
+                "structured_data": structured_data,
             }
-            
+
         except Exception as e:
             logger.warning(f"Error extracting production data, using defaults: {e}")
             return {
-                'production_type': 'general production',
-                'crop_name': 'unknown',
-                'area_covered': 1.0,
-                'fuel_consumed': None,
-                'equipment_hours': None,
-                'water_volume_gallons': 1000,
-                'structured_data': {}
+                "production_type": "general production",
+                "crop_name": "unknown",
+                "area_covered": 1.0,
+                "fuel_consumed": None,
+                "equipment_hours": None,
+                "water_volume_gallons": 1000,
+                "structured_data": {},
             }
-    
+
     def _get_production_type_name(self, event_type: str, crop_name: str) -> str:
         """Get descriptive production type name for EPA calculations - handles ALL frontend types"""
         type_mapping = {
             "HA": f"harvesting {crop_name}",
-            "PL": f"planting {crop_name}", 
+            "PL": f"planting {crop_name}",
             "IR": f"irrigating {crop_name}",
             "PR": f"pruning {crop_name}",
             "cultivation": f"cultivating {crop_name}",
@@ -1924,102 +2119,108 @@ class EventCarbonCalculator:
             "weeding": f"weeding {crop_name}",
             "mulching": f"mulching {crop_name}",
             "transplanting": f"transplanting {crop_name}",
-            "GE": f"general production {crop_name}"
+            "GE": f"general production {crop_name}",
         }
         return type_mapping.get(event_type, f"general production {crop_name}")
-    
+
     def _convert_volume_to_gallons(self, volume_str: str, event, crop_name: str) -> float:
         """Convert volume string to gallons for EPA calculations"""
         try:
             volume_value = self._extract_numeric_value(volume_str, default=0)
             if volume_value == 0:
                 return 1000  # Default fallback
-                
+
             # Assume liters if no unit specified, convert to gallons
             return volume_value / 3.78541
-            
+
         except Exception as e:
             logger.warning(f"Error converting volume to gallons: {e}")
             return 1000
-    
+
     def _get_crop_area_modifier(self, event) -> float:
         """Get crop-specific area modifier for production calculations"""
         try:
             if hasattr(event, "history") and event.history and hasattr(event.history, "product"):
                 crop_name = event.history.product.name.lower()
-                
+
                 # High-intensity crops require more resources per acre
-                if any(crop in crop_name for crop in ['avocado', 'almond', 'walnut']):
+                if any(crop in crop_name for crop in ["avocado", "almond", "walnut"]):
                     return 1.3  # 30% higher resource intensity
-                elif any(crop in crop_name for crop in ['strawberry', 'tomato', 'pepper']):
+                elif any(crop in crop_name for crop in ["strawberry", "tomato", "pepper"]):
                     return 1.2  # 20% higher resource intensity
-                elif any(crop in crop_name for crop in ['herb', 'lettuce', 'spinach']):
+                elif any(crop in crop_name for crop in ["herb", "lettuce", "spinach"]):
                     return 0.8  # 20% lower resource intensity
-                    
+
             return 1.0  # No modifier
-            
+
         except Exception as e:
             return 1.0
-    
+
     def _generate_epa_production_recommendations(self, event, emissions: float, calculation_method: str) -> list:
         """Generate EPA-based recommendations for production events"""
         recommendations = []
-        
+
         try:
             # High emissions threshold (above 50 kg CO2e)
             if emissions > 50:
-                recommendations.append({
-                    "type": "efficiency_improvement",
-                    "message": "Consider upgrading to more fuel-efficient equipment",
-                    "impact": "High",
-                    "source": "EPA Mobile Source Emission Standards"
-                })
-                
+                recommendations.append(
+                    {
+                        "type": "efficiency_improvement",
+                        "message": "Consider upgrading to more fuel-efficient equipment",
+                        "impact": "High",
+                        "source": "EPA Mobile Source Emission Standards",
+                    }
+                )
+
             if emissions > 25:
-                recommendations.append({
-                    "type": "operational_optimization", 
-                    "message": "Optimize field operations timing to reduce multiple passes",
-                    "impact": "Medium",
-                    "source": "USDA Agricultural Energy Guidelines"
-                })
-            
+                recommendations.append(
+                    {
+                        "type": "operational_optimization",
+                        "message": "Optimize field operations timing to reduce multiple passes",
+                        "impact": "Medium",
+                        "source": "USDA Agricultural Energy Guidelines",
+                    }
+                )
+
             # Always include verification recommendation
             if calculation_method == "verified_usda_factors":
-                recommendations.append({
-                    "type": "data_quality",
-                    "message": "Carbon calculation uses verified EPA/USDA emission factors",
-                    "impact": "Transparency",
-                    "source": "EPA Greenhouse Gas Emission Factors Hub"
-                })
-            
+                recommendations.append(
+                    {
+                        "type": "data_quality",
+                        "message": "Carbon calculation uses verified EPA/USDA emission factors",
+                        "impact": "Transparency",
+                        "source": "EPA Greenhouse Gas Emission Factors Hub",
+                    }
+                )
+
             return recommendations
-            
+
         except Exception as e:
             logger.warning(f"Error generating EPA recommendations: {e}")
             return []
-    
+
     def _calculate_production_efficiency_score(self, breakdown: Dict, calculation_method: str) -> float:
         """Calculate efficiency score based on EPA calculation method"""
         try:
             base_score = 75.0
-            
+
             # Higher score for USDA-verified calculations
             if calculation_method == "verified_usda_factors":
                 base_score = 85.0
-            
+
             # Adjust based on calculation basis
-            calculation_basis = breakdown.get('calculation_basis', 'unknown')
-            if calculation_basis == 'actual_fuel_consumption':
+            calculation_basis = breakdown.get("calculation_basis", "unknown")
+            if calculation_basis == "actual_fuel_consumption":
                 base_score += 10  # Actual data is more accurate
-            elif calculation_basis == 'estimated_from_hours_and_area':
-                base_score += 5   # Good estimation method
-            
+            elif calculation_basis == "estimated_from_hours_and_area":
+                base_score += 5  # Good estimation method
+
             # Consider confidence level
-            confidence = breakdown.get('confidence_level', 0.8)
+            confidence = breakdown.get("confidence_level", 0.8)
             base_score *= confidence
-            
+
             return min(base_score, 95.0)  # Cap at 95%
-            
+
         except Exception as e:
             return 75.0
 
@@ -2031,9 +2232,9 @@ class EventCarbonCalculator:
         """
         try:
             # CRITICAL: Only fertilizers have NPK content
-            if chemical_type in ['PE', 'FU', 'HE']:  # Pesticides, Fungicides, Herbicides
+            if chemical_type in ["PE", "FU", "HE"]:  # Pesticides, Fungicides, Herbicides
                 return {"N": 0.0, "P": 0.0, "K": 0.0}
-            
+
             # For fertilizers (FE): Try to parse NPK format (N-P-K)
             if "-" in concentration_str:
                 parts = concentration_str.split("-")
@@ -2055,7 +2256,7 @@ class EventCarbonCalculator:
 
         except:
             # Even in error cases, respect chemical type
-            if chemical_type in ['PE', 'FU', 'HE']:
+            if chemical_type in ["PE", "FU", "HE"]:
                 return {"N": 0.0, "P": 0.0, "K": 0.0}
             else:
                 return {"N": 10.0, "P": 10.0, "K": 10.0}
@@ -2209,7 +2410,7 @@ class EventCarbonCalculator:
     def _convert_kg_to_liters(self, kg_amount: float, event=None) -> float:
         """
         Convert kilograms to liters using chemical-specific density.
-        
+
         Common agricultural chemical densities (kg/L):
         - Anhydrous ammonia (82-0-0): ~0.68 kg/L
         - Liquid fertilizers: ~1.2-1.4 kg/L
@@ -2218,29 +2419,29 @@ class EventCarbonCalculator:
         """
         try:
             # Get NPK content to identify chemical type
-            if event and hasattr(event, 'concentration'):
-                concentration = getattr(event, 'concentration', '')
-                if '82-0-0' in concentration or 'anhydrous' in concentration.lower():
+            if event and hasattr(event, "concentration"):
+                concentration = getattr(event, "concentration", "")
+                if "82-0-0" in concentration or "anhydrous" in concentration.lower():
                     # Anhydrous ammonia density
                     density = 0.68  # kg/L
                     return kg_amount / density
-            
+
             # Check if it's a high-nitrogen fertilizer (likely anhydrous ammonia)
-            if event and hasattr(event, 'type') and getattr(event, 'type') == 'FE':
+            if event and hasattr(event, "type") and getattr(event, "type") == "FE":
                 npk_content = self._get_structured_npk_content(event, "default")
-                nitrogen_percent = npk_content.get('N', 0)
-                
+                nitrogen_percent = npk_content.get("N", 0)
+
                 if nitrogen_percent >= 80:  # High nitrogen content (anhydrous ammonia)
                     density = 0.68  # kg/L for anhydrous ammonia
                     return kg_amount / density
                 elif nitrogen_percent >= 20:  # Liquid fertilizer
                     density = 1.3  # kg/L for typical liquid fertilizers
                     return kg_amount / density
-            
+
             # Default density for general agricultural chemicals
             density = 1.0  # kg/L (water-based solutions)
             return kg_amount / density
-            
+
         except Exception as e:
             logger.warning(f"Error converting kg to liters: {e}")
             # Fallback: assume water density
@@ -2278,6 +2479,308 @@ class EventCarbonCalculator:
                 defaults = self._get_intelligent_defaults(event, crop_name)
                 return defaults["area"]
             return 1.0  # Fallback default
+
+    # ============================================================================
+    # ENHANCED: Lime and Tillage Helper Methods (IPCC 2006 / Reicosky 1997)
+    # ============================================================================
+
+    def _parse_lime_amount(self, amendment_amount: str) -> float:
+        """
+        Parse amendment_amount string to extract lime quantity in kilograms.
+
+        Supports various formats:
+        - "2000 kg" or "2000kg"
+        - "2 tons" or "2 tonnes"
+        - "4000 lbs" or "4000 pounds"
+        - "2 t/ha" (tons per hectare)
+        - Just numeric value (assumes kg)
+
+        Returns:
+            float: Lime amount in kilograms (0.0 if parsing fails)
+        """
+        if not amendment_amount:
+            return 0.0
+
+        try:
+            amount_str = str(amendment_amount).lower().strip()
+
+            # Extract numeric value using regex
+            import re
+
+            # Match numbers including decimals and thousands separators
+            numeric_match = re.search(r"[\d,]+\.?\d*", amount_str.replace(",", ""))
+            if not numeric_match:
+                return 0.0
+
+            numeric_value = float(numeric_match.group())
+
+            # Convert to kg based on unit
+            if "ton" in amount_str or "tonne" in amount_str or amount_str.endswith("t"):
+                # Metric tons to kg
+                return numeric_value * 1000.0
+            elif "lb" in amount_str or "pound" in amount_str:
+                # Pounds to kg
+                return numeric_value * 0.453592
+            elif "kg" in amount_str or not any(
+                unit in amount_str for unit in ["ton", "lb", "pound", "t/ha"]
+            ):
+                # Already in kg or no unit specified (assume kg)
+                return numeric_value
+            else:
+                # Default: assume kg
+                return numeric_value
+
+        except Exception as e:
+            logger.warning(f"Failed to parse lime amount '{amendment_amount}': {e}")
+            return 0.0
+
+    def _detect_lime_type(self, event) -> str:
+        """
+        Detect lime type from event data.
+
+        Checks:
+        - amendment_type field
+        - description field
+        - notes field
+
+        Returns:
+            str: 'limestone' (CaCO3) or 'dolomite' (CaMg(CO3)2)
+        """
+        # Default to limestone (most common)
+        lime_type = "limestone"
+
+        # Check all possible fields for lime type indicators
+        fields_to_check = []
+
+        if hasattr(event, "amendment_type") and event.amendment_type:
+            fields_to_check.append(str(event.amendment_type).lower())
+        if hasattr(event, "description") and event.description:
+            fields_to_check.append(str(event.description).lower())
+        if hasattr(event, "notes") and event.notes:
+            fields_to_check.append(str(event.notes).lower())
+        if hasattr(event, "amendment_amount") and event.amendment_amount:
+            fields_to_check.append(str(event.amendment_amount).lower())
+
+        combined_text = " ".join(fields_to_check)
+
+        # Check for dolomite/dolomitic lime indicators
+        dolomite_indicators = [
+            "dolomite",
+            "dolomitic",
+            "mag lime",
+            "magnesium lime",
+            "camg",
+            "calcium magnesium",
+        ]
+
+        for indicator in dolomite_indicators:
+            if indicator in combined_text:
+                lime_type = "dolomite"
+                logger.info(f"Detected dolomite lime type from event data: '{indicator}'")
+                break
+
+        # Check for explicit limestone indicators (to confirm default)
+        limestone_indicators = [
+            "limestone",
+            "calcitic",
+            "ag lime",
+            "agricultural lime",
+            "caco3",
+            "calcium carbonate",
+        ]
+
+        for indicator in limestone_indicators:
+            if indicator in combined_text:
+                lime_type = "limestone"
+                logger.info(f"Confirmed limestone type from event data: '{indicator}'")
+                break
+
+        return lime_type
+
+    def _detect_tillage_depth(self, event) -> str:
+        """
+        Detect tillage depth category from event data.
+
+        Checks:
+        - tillage_depth field
+        - description field
+        - equipment_type field
+        - notes field
+
+        Returns:
+            str: 'shallow' (0-10cm), 'medium' (10-20cm), or 'deep' (>20cm)
+        """
+        # Default to medium if no depth indicators found
+        depth_category = "medium"
+
+        # Check for explicit tillage_depth field
+        if hasattr(event, "tillage_depth") and event.tillage_depth:
+            depth_str = str(event.tillage_depth).lower()
+
+            # Try to extract numeric depth value
+            import re
+
+            depth_match = re.search(r"(\d+)", depth_str)
+            if depth_match:
+                depth_cm = float(depth_match.group(1))
+
+                # Check if it's in inches (common in US)
+                if "in" in depth_str or "inch" in depth_str or '"' in depth_str:
+                    depth_cm = depth_cm * 2.54  # Convert inches to cm
+
+                # Categorize based on depth
+                if depth_cm <= 10:
+                    depth_category = "shallow"
+                elif depth_cm <= 20:
+                    depth_category = "medium"
+                else:
+                    depth_category = "deep"
+
+                logger.info(f"Detected tillage depth {depth_cm}cm → category: {depth_category}")
+                return depth_category
+
+        # Check description and equipment type for depth indicators
+        fields_to_check = []
+        if hasattr(event, "description") and event.description:
+            fields_to_check.append(str(event.description).lower())
+        if hasattr(event, "equipment_type") and event.equipment_type:
+            fields_to_check.append(str(event.equipment_type).lower())
+        if hasattr(event, "notes") and event.notes:
+            fields_to_check.append(str(event.notes).lower())
+
+        combined_text = " ".join(fields_to_check)
+
+        # Deep tillage indicators (typically >20cm)
+        deep_indicators = [
+            "deep tillage",
+            "deep plow",
+            "moldboard",
+            "chisel plow",
+            "subsoil",
+            "ripper",
+            "deep rip",
+            "primary tillage",
+            "conventional tillage",
+            "full inversion",
+        ]
+
+        # Shallow tillage indicators (typically 0-10cm)
+        shallow_indicators = [
+            "shallow",
+            "surface",
+            "disk harrow",
+            "harrow",
+            "cultivator",
+            "minimum till",
+            "reduced till",
+            "conservation till",
+            "no-till",
+            "strip till",
+        ]
+
+        # Check for deep tillage first (more emissions)
+        for indicator in deep_indicators:
+            if indicator in combined_text:
+                depth_category = "deep"
+                logger.info(f"Detected deep tillage from indicator: '{indicator}'")
+                return depth_category
+
+        # Check for shallow tillage
+        for indicator in shallow_indicators:
+            if indicator in combined_text:
+                depth_category = "shallow"
+                logger.info(f"Detected shallow tillage from indicator: '{indicator}'")
+                return depth_category
+
+        # Default to medium if no clear indicators
+        logger.info(f"No tillage depth indicators found, using default: {depth_category}")
+        return depth_category
+
+    def _estimate_irrigation_water_volume(self, event, area_acres: float) -> float:
+        """
+        Estimate irrigation water volume when not explicitly provided.
+
+        Uses USDA NASS 2023 Irrigation and Water Management Survey data:
+        - Average seasonal application: 1.5 acre-feet per acre (~489,000 gallons/acre/season)
+        - Typical single irrigation: 0.5-1.5 inches per event
+        - 1 inch of water per acre = 27,154 gallons
+
+        Sources:
+        - USDA ERS Irrigation & Water Use (ers.usda.gov)
+        - USDA NASS 2023 Irrigation Survey
+
+        Returns:
+            float: Estimated water volume in gallons
+        """
+        # Default to 1 acre if no area specified
+        if not area_acres or area_acres <= 0:
+            area_acres = 1.0
+
+        # Base estimation: moderate irrigation event (1 inch of water)
+        # 1 inch water per acre = 27,154 gallons
+        GALLONS_PER_INCH_PER_ACRE = 27154.0
+
+        # Default single irrigation: 1 inch (moderate)
+        irrigation_inches = 1.0
+
+        # Detect irrigation intensity from event data
+        fields_to_check = []
+        if hasattr(event, "description") and event.description:
+            fields_to_check.append(str(event.description).lower())
+        if hasattr(event, "notes") and event.notes:
+            fields_to_check.append(str(event.notes).lower())
+        if hasattr(event, "irrigation_type") and event.irrigation_type:
+            fields_to_check.append(str(event.irrigation_type).lower())
+
+        combined_text = " ".join(fields_to_check)
+
+        # Heavy irrigation indicators (1.5-2 inches)
+        heavy_indicators = [
+            "heavy",
+            "deep",
+            "flood",
+            "furrow flood",
+            "border flood",
+            "saturate",
+            "soak",
+            "drought recovery",
+        ]
+
+        # Light irrigation indicators (0.5 inches)
+        light_indicators = [
+            "light",
+            "supplement",
+            "drip",
+            "trickle",
+            "micro",
+            "deficit",
+            "maintenance",
+            "germination",
+        ]
+
+        # Check for heavy irrigation
+        for indicator in heavy_indicators:
+            if indicator in combined_text:
+                irrigation_inches = 1.75  # Heavy: 1.5-2 inches average
+                logger.info(f"Detected heavy irrigation from indicator: '{indicator}'")
+                break
+        else:
+            # Check for light irrigation
+            for indicator in light_indicators:
+                if indicator in combined_text:
+                    irrigation_inches = 0.5  # Light: 0.5 inches
+                    logger.info(f"Detected light irrigation from indicator: '{indicator}'")
+                    break
+
+        # Calculate total water volume
+        water_volume_gallons = area_acres * irrigation_inches * GALLONS_PER_INCH_PER_ACRE
+
+        logger.info(
+            f"USDA-based irrigation estimate: {area_acres} acres × {irrigation_inches} inches × "
+            f"{GALLONS_PER_INCH_PER_ACRE} gal/in/acre = {water_volume_gallons:.0f} gallons"
+        )
+
+        return water_volume_gallons
 
     def _get_intelligent_concentration(self, concentration_str: str, event=None, crop_name: str = "default") -> str:
         """Get intelligent concentration defaults for missing data"""
@@ -2492,7 +2995,7 @@ class EventCarbonCalculator:
                     "carbon_reduction": 6.0,
                 }
             )
-            if hasattr(event, 'lower_temperature'):
+            if hasattr(event, "lower_temperature"):
                 temp = self._extract_numeric_value(event.lower_temperature, default=32)
                 if temp < 28:  # Severe frost
                     recommendations.append(
@@ -2515,7 +3018,7 @@ class EventCarbonCalculator:
                     "carbon_reduction": 10.0,
                 }
             )
-            
+
         elif event.type == "HL":  # Hailstorm
             recommendations.append(
                 {
@@ -2526,7 +3029,7 @@ class EventCarbonCalculator:
                     "carbon_reduction": 50.0,
                 }
             )
-            if hasattr(event, 'diameter'):
+            if hasattr(event, "diameter"):
                 diameter = self._extract_numeric_value(event.diameter, default=1.0)
                 if diameter > 20:  # Large hail
                     recommendations.append(
@@ -2538,7 +3041,7 @@ class EventCarbonCalculator:
                             "carbon_reduction": 0.0,
                         }
                     )
-                    
+
         elif event.type == "HT":  # High temperatures
             recommendations.append(
                 {
@@ -2549,7 +3052,7 @@ class EventCarbonCalculator:
                     "carbon_reduction": 8.0,
                 }
             )
-            
+
         elif event.type in ["TS", "HW"]:  # Tropical storm, High winds
             recommendations.append(
                 {
@@ -2560,7 +3063,7 @@ class EventCarbonCalculator:
                     "carbon_reduction": 15.0,
                 }
             )
-            
+
         elif event.type in ["HH", "LH"]:  # Humidity issues
             recommendations.append(
                 {
@@ -2574,7 +3077,9 @@ class EventCarbonCalculator:
 
         return recommendations
 
-    def _generate_equipment_recommendations(self, event, emissions: float, cost: float, equipment_data: Dict[str, Any] = None) -> List[Dict[str, Any]]:
+    def _generate_equipment_recommendations(
+        self, event, emissions: float, cost: float, equipment_data: Dict[str, Any] = None
+    ) -> List[Dict[str, Any]]:
         """Generate recommendations for equipment events"""
         recommendations = []
 
@@ -2630,7 +3135,9 @@ class EventCarbonCalculator:
 
         return recommendations
 
-    def _generate_business_recommendations(self, event, emissions: float, business_data: Dict[str, Any] = None) -> List[Dict[str, Any]]:
+    def _generate_business_recommendations(
+        self, event, emissions: float, business_data: Dict[str, Any] = None
+    ) -> List[Dict[str, Any]]:
         """Generate recommendations for business events"""
         recommendations = []
 
@@ -2728,53 +3235,61 @@ class EventCarbonCalculator:
         Classify general event type based on description and type for appropriate emission factor selection.
         """
         description_lower = event_description.lower()
-        type_lower = event_type.lower() if event_type else ''
-        
+        type_lower = event_type.lower() if event_type else ""
+
         # Check for specific activity patterns in description
-        if any(keyword in description_lower for keyword in ['visit', 'inspection', 'consultation', 'meeting']):
-            return 'farm_visit'
-        elif any(keyword in description_lower for keyword in ['training', 'workshop', 'education', 'learning']):
-            return 'training_session'
-        elif any(keyword in description_lower for keyword in ['document', 'record', 'note', 'observation', 'report']):
-            return 'documentation'
-        elif any(keyword in description_lower for keyword in ['scout', 'monitor', 'check', 'survey', 'assess']):
+        if any(keyword in description_lower for keyword in ["visit", "inspection", "consultation", "meeting"]):
+            return "farm_visit"
+        elif any(keyword in description_lower for keyword in ["training", "workshop", "education", "learning"]):
+            return "training_session"
+        elif any(keyword in description_lower for keyword in ["document", "record", "note", "observation", "report"]):
+            return "documentation"
+        elif any(keyword in description_lower for keyword in ["scout", "monitor", "check", "survey", "assess"]):
             # Note: These should ideally be pest management events, but if they're general events, treat as documentation
-            return 'documentation'
+            return "documentation"
         else:
             # Default to documentation for unknown general events
-            return 'documentation'
+            return "documentation"
 
-    def _generate_general_recommendations(self, event, base_emissions: float, general_event_type: str) -> List[Dict[str, Any]]:
+    def _generate_general_recommendations(
+        self, event, base_emissions: float, general_event_type: str
+    ) -> List[Dict[str, Any]]:
         """
         Generate recommendations for general events based on event type and emissions.
         """
         recommendations = []
-        
-        if general_event_type == 'farm_visit' and base_emissions > 5.0:
-            recommendations.append({
-                "type": "efficiency",
-                "title": "Combine Farm Visits",
-                "description": "Schedule multiple activities in single visits to reduce transportation emissions",
-                "potential_savings": 50.0,
-                "carbon_reduction": 2.0,
-            })
-        elif general_event_type == 'training_session':
-            recommendations.append({
-                "type": "digitization",
-                "title": "Virtual Training Options",
-                "description": "Consider virtual training sessions to reduce travel-related emissions",
-                "potential_savings": 100.0,
-                "carbon_reduction": 5.0,
-            })
-        elif general_event_type == 'documentation' and base_emissions > 1.0:
-            recommendations.append({
-                "type": "efficiency",
-                "title": "Digital Documentation",
-                "description": "Use mobile apps and cloud storage to reduce paper usage and streamline record keeping",
-                "potential_savings": 25.0,
-                "carbon_reduction": 0.5,
-            })
-        
+
+        if general_event_type == "farm_visit" and base_emissions > 5.0:
+            recommendations.append(
+                {
+                    "type": "efficiency",
+                    "title": "Combine Farm Visits",
+                    "description": "Schedule multiple activities in single visits to reduce transportation emissions",
+                    "potential_savings": 50.0,
+                    "carbon_reduction": 2.0,
+                }
+            )
+        elif general_event_type == "training_session":
+            recommendations.append(
+                {
+                    "type": "digitization",
+                    "title": "Virtual Training Options",
+                    "description": "Consider virtual training sessions to reduce travel-related emissions",
+                    "potential_savings": 100.0,
+                    "carbon_reduction": 5.0,
+                }
+            )
+        elif general_event_type == "documentation" and base_emissions > 1.0:
+            recommendations.append(
+                {
+                    "type": "efficiency",
+                    "title": "Digital Documentation",
+                    "description": "Use mobile apps and cloud storage to reduce paper usage and streamline record keeping",
+                    "potential_savings": 25.0,
+                    "carbon_reduction": 0.5,
+                }
+            )
+
         return recommendations
 
     def _calculate_general_efficiency_score(self, general_event_type: str, base_emissions: float) -> float:
@@ -2783,13 +3298,13 @@ class EventCarbonCalculator:
         """
         # Base efficiency scores by type
         base_scores = {
-            'documentation': 80.0,  # Low impact activity
-            'training_session': 65.0,  # Medium impact but high value
-            'farm_visit': 60.0,  # Higher impact due to transportation
+            "documentation": 80.0,  # Low impact activity
+            "training_session": 65.0,  # Medium impact but high value
+            "farm_visit": 60.0,  # Higher impact due to transportation
         }
-        
+
         base_score = base_scores.get(general_event_type, 70.0)
-        
+
         # Adjust based on emissions level
         if base_emissions <= 0.5:
             return min(95.0, base_score + 15.0)  # Very low emissions

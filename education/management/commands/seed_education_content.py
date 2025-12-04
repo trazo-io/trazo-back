@@ -296,7 +296,7 @@ class Command(BaseCommand):
             "category": categories["farm_events"],
             "description": "Master all 8 event types to achieve 85%+ transparency scores and unlock premium market access",
             "difficulty": "beginner",
-            "required_plan": "all", 
+            "required_plan": "all",
             "estimated_duration": 60,
             "target_crops": "all crops",
             "is_featured": True,
@@ -1214,7 +1214,7 @@ Scan the QR code to see exactly how your food was grown."
 5. **Phase 5**: Export transparency leadership to new markets and products""",
                     "practical_steps": [
                         "Conduct market research on transparency premiums in your local area",
-                        "Develop transparency-focused value proposition and marketing materials", 
+                        "Develop transparency-focused value proposition and marketing materials",
                         "Identify and approach 3 potential premium market partners",
                         "Create transparency pricing strategy with specific premium targets",
                         "Set up systems to measure and track transparency ROI and customer feedback",

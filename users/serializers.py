@@ -191,9 +191,7 @@ class RegisterSerializer(BasicUserSerializer):
         Following 2025 security best practices
         """
         if User.objects.filter(email=value.lower()).exists():
-            raise serializers.ValidationError(
-                "A user with this email address already exists. Please sign in instead."
-            )
+            raise serializers.ValidationError("A user with this email address already exists. Please sign in instead.")
         return value.lower()
 
     def create(self, validated_data):

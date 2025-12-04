@@ -81,11 +81,11 @@ def calculate_production_event_carbon(sender, instance, created, **kwargs):
 def calculate_weather_event_carbon(sender, instance, created, **kwargs):
     """
     Weather events are TRANSPARENCY DOCUMENTATION ONLY - they don't generate emissions.
-    
-    Weather events document environmental conditions (frost, drought, hailstorm) for 
+
+    Weather events document environmental conditions (frost, drought, hailstorm) for
     agricultural transparency. They are NOT farmer responses that generate emissions.
-    
-    Per Trazo's transparency-first transformation: weather events provide transparency 
+
+    Per Trazo's transparency-first transformation: weather events provide transparency
     value without carbon emissions.
     """
     if created or kwargs.get("update_fields"):
@@ -99,7 +99,7 @@ def calculate_weather_event_carbon(sender, instance, created, **kwargs):
                 "efficiency_score": 100.0,
                 "calculation_method": "weather_transparency",
                 "usda_verified": False,
-                "transparency_note": "Weather events document environmental conditions for agricultural transparency - no emissions generated"
+                "transparency_note": "Weather events document environmental conditions for agricultural transparency - no emissions generated",
             }
 
             # Update without triggering signal again
