@@ -876,17 +876,21 @@ class ProductionEvent(CommonEvent):
     )
 
     # Sprint 3 Epic 3.2: Consumer Trust Fields
+    # Updated based on agricultural advisor + consumer trust analysis (2025-12-06)
+    # Optimized for: farmer practicality, consumer trust, transparency-first approach
     seeds_source = models.CharField(
         max_length=50,
         choices=[
-            ("local", "Local Supplier"),
-            ("imported", "Imported"),
-            ("farm_saved", "Farm Saved"),
-            ("certified", "Certified Organic"),
+            ("certified_organic", "Certified Organic Seeds"),
+            ("farm_saved", "Farm-Saved Seeds"),
+            ("local", "Local Nursery/Supplier"),
+            ("cooperative", "Farmer Cooperative"),
+            ("commercial", "Commercial Supplier"),
+            ("other", "Other"),
         ],
         blank=True,
         null=True,
-        help_text="Source of seeds/seedlings for consumer transparency",
+        help_text="Source of seeds/seedlings for consumer transparency (does not affect carbon calculations)",
     )
     water_source = models.CharField(
         max_length=50,

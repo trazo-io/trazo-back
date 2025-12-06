@@ -157,6 +157,30 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+    def _is_downgrade(self, current_plan, new_plan):
+        """
+        Determine if changing to new_plan is a downgrade.
+        Upgrade-only policy: Users must contact support to downgrade.
+        """
+        plan_order = {
+            "basic": 1,
+            "standard": 2,
+            "corporate": 3,
+            "enterprise": 4,
+        }
+
+        current_tier = 0
+        new_tier = 0
+
+        # Check slug for tier level (handles both monthly and yearly variants)
+        for key, tier in plan_order.items():
+            if key in current_plan.slug.lower():
+                current_tier = tier
+            if key in new_plan.slug.lower():
+                new_tier = tier
+
+        return new_tier < current_tier
+
     @action(detail=True, methods=["post"])
     def change_plan(self, request, pk=None):
         """Change subscription plan"""
@@ -165,6 +189,20 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
 
         try:
             plan = Plan.objects.get(id=plan_id, is_active=True)
+
+            # Check if this is a downgrade - Upgrade-only policy
+            if subscription.plan and self._is_downgrade(subscription.plan, plan):
+                logger.warning(
+                    f"Downgrade attempt blocked: Company {subscription.company_id} "
+                    f"tried to downgrade from {subscription.plan.name} to {plan.name}"
+                )
+                return Response(
+                    {
+                        "error": "Downgrades require contacting support. "
+                        "Please reach out to support@trazo.io"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
             if subscription.stripe_subscription_id:
                 # Update the subscription in Stripe
@@ -445,6 +483,7 @@ class CheckoutViewSet(ViewSet):
 
                 # Get the add-on
                 addon_slug_map = {
+                    "extraEstablishment": "extra-establishment",
                     "extraProduction": "extra-production",
                     "extraParcel": "extra-parcel",
                     "extraStorage": "extra-storage",
@@ -749,6 +788,9 @@ def stripe_webhook(request):
                 # Check if this is a payment method setup session
                 if data.get("mode") == "setup" and data.get("metadata", {}).get("setup_type") == "payment_method":
                     logger.info("Checkout session completed for payment method setup")
+                # Check if this is a blockchain verification subscription
+                elif data.get("metadata", {}).get("subscription_type") == "blockchain_verification":
+                    handle_blockchain_checkout_completed(data)
                 # Check if this is an add-on purchase
                 elif data.get("metadata", {}).get("is_addon_purchase") == "true":
                     handle_addon_purchase_completed(data)
@@ -768,6 +810,12 @@ def stripe_webhook(request):
                 handle_invoice_payment_succeeded(data)
             elif event_type == "invoice.payment_failed":
                 handle_invoice_payment_failed(data)
+            elif event_type == "customer.subscription.created":
+                # Check if this is a blockchain subscription
+                if data.get("metadata", {}).get("subscription_type") == "blockchain_verification":
+                    handle_blockchain_subscription_created(data)
+                else:
+                    handle_subscription_created(data)
             elif event_type == "customer.subscription.updated":
                 handle_subscription_updated(data)
             elif event_type == "customer.subscription.deleted":
@@ -824,6 +872,48 @@ def handle_checkout_session_completed(session):
             )
     except Exception as e:
         print(f"Error processing checkout session: {str(e)}")
+
+
+def handle_blockchain_checkout_completed(session):
+    """Process completed blockchain verification checkout session"""
+    try:
+        metadata = session.get("metadata", {})
+        company_id = metadata.get("company_id")
+
+        if not company_id:
+            logger.error("Missing company_id in blockchain checkout session metadata")
+            return
+
+        company = Company.objects.get(id=company_id)
+        company.blockchain_subscription_status = True
+        company.save()
+
+        logger.info(f"Blockchain subscription activated for company {company_id} via checkout.session.completed")
+    except Company.DoesNotExist:
+        logger.error(f"Company {company_id} not found for blockchain subscription")
+    except Exception as e:
+        logger.error(f"Error processing blockchain checkout session: {str(e)}")
+
+
+def handle_blockchain_subscription_created(subscription_data):
+    """Process blockchain verification subscription creation"""
+    try:
+        metadata = subscription_data.get("metadata", {})
+        company_id = metadata.get("company_id")
+
+        if not company_id:
+            logger.error("Missing company_id in blockchain subscription metadata")
+            return
+
+        company = Company.objects.get(id=company_id)
+        company.blockchain_subscription_status = True
+        company.save()
+
+        logger.info(f"Blockchain subscription activated for company {company_id} via customer.subscription.created")
+    except Company.DoesNotExist:
+        logger.error(f"Company {company_id} not found for blockchain subscription")
+    except Exception as e:
+        logger.error(f"Error processing blockchain subscription created: {str(e)}")
 
 
 def handle_invoice_payment_succeeded(invoice):
@@ -1197,15 +1287,15 @@ def handle_addon_purchase_completed(session):
                     subscription.save()
 
             elif addon_slug == "extraParcel" or addon_slug == "extraparcel":
-                # Increase allowed parcels
-                parcels_per_addon = 5  # Each add-on gives 5 more parcels
+                # Increase allowed parcels per establishment
+                parcels_per_addon = 1  # Each add-on gives 1 more parcel per establishment
                 additional_parcels = quantity * parcels_per_addon
 
                 # Update the plan features for this subscription
                 custom_features = subscription.plan.features.copy()
-                if "max_parcels" in custom_features:
-                    custom_features["max_parcels"] += additional_parcels
-                    logger.info(f"Adding {additional_parcels} parcels to subscription")
+                if "max_parcels_per_establishment" in custom_features:
+                    custom_features["max_parcels_per_establishment"] += additional_parcels
+                    logger.info(f"Adding {additional_parcels} parcels per establishment to subscription")
 
                     # Create or update custom plan
                     custom_plan_name = f"{subscription.plan.name} (Custom)"
@@ -1215,7 +1305,44 @@ def handle_addon_purchase_completed(session):
                         slug=custom_plan_slug,
                         defaults={
                             "name": custom_plan_name,
-                            "description": f"Custom plan with additional parcels",
+                            "description": "Custom plan with additional parcels per establishment",
+                            "price": subscription.plan.price,
+                            "interval": subscription.plan.interval,
+                            "features": custom_features,
+                            "is_active": False,
+                            "stripe_price_id": subscription.plan.stripe_price_id,
+                        },
+                    )
+
+                    if not created:
+                        # Update the existing custom plan
+                        custom_plan.features = custom_features
+                        custom_plan.save()
+
+                    # Update the subscription to use the custom plan
+                    subscription.plan = custom_plan
+                    subscription.save()
+
+            elif addon_slug == "extraEstablishment" or addon_slug == "extraestablishment":
+                # Increase allowed establishments
+                establishments_per_addon = 1  # Each add-on gives 1 more establishment
+                additional_establishments = quantity * establishments_per_addon
+
+                # Update the plan features for this subscription
+                custom_features = subscription.plan.features.copy()
+                if "max_establishments" in custom_features:
+                    custom_features["max_establishments"] += additional_establishments
+                    logger.info(f"Adding {additional_establishments} establishments to subscription")
+
+                    # Create or update custom plan
+                    custom_plan_name = f"{subscription.plan.name} (Custom)"
+                    custom_plan_slug = f"{subscription.plan.slug}-custom-{subscription.id}"
+
+                    custom_plan, created = Plan.objects.get_or_create(
+                        slug=custom_plan_slug,
+                        defaults={
+                            "name": custom_plan_name,
+                            "description": f"Custom plan with additional establishments",
                             "price": subscription.plan.price,
                             "interval": subscription.plan.interval,
                             "features": custom_features,
@@ -1401,8 +1528,8 @@ class BlockchainSubscriptionView(APIView):
                     }
                 ],
                 mode="subscription",
-                success_url=f"{settings.FRONTEND_URL}/admin/dashboard/establishment/{company.id}/carbon/credits?blockchain_subscription=success",
-                cancel_url=f"{settings.FRONTEND_URL}/pricing?blockchain_subscription=cancelled",
+                success_url=f"{settings.FRONTEND_URL}/admin/dashboard/subscription?blockchain_subscription=success&session_id={{CHECKOUT_SESSION_ID}}",
+                cancel_url=f"{settings.FRONTEND_URL}/admin/dashboard/subscription?blockchain_subscription=cancelled",
                 metadata={"company_id": company.id, "user_id": user.id, "subscription_type": "blockchain_verification"},
             )
 
@@ -1431,6 +1558,9 @@ class BlockchainSubscriptionStatusView(APIView):
         """
         Get blockchain subscription status for user's company
         GET /api/billing/subscription-status/
+
+        Query Parameters:
+            sync (bool): If true, validates status against Stripe (slower but authoritative)
         """
         try:
             user = request.user
@@ -1439,8 +1569,52 @@ class BlockchainSubscriptionStatusView(APIView):
             if not company:
                 return Response({"error": "No active company found for user"}, status=status.HTTP_400_BAD_REQUEST)
 
+            # Check if we should sync with Stripe
+            should_sync = request.query_params.get("sync", "").lower() in ["true", "1", "yes"]
+            session_id = request.query_params.get("session_id", "")
+
             # Get blockchain subscription status
             blockchain_subscribed = company.blockchain_subscription_status
+            stripe_validated = False
+
+            # Optional: Validate against Stripe if requested
+            if should_sync:
+                # Method 1: Validate via session_id (best for post-checkout sync)
+                if session_id and session_id.startswith("cs_"):
+                    try:
+                        session_status = self._validate_blockchain_session(session_id, company.id)
+                        if session_status:
+                            stripe_validated = True
+                            if not blockchain_subscribed:
+                                logger.info(
+                                    f"Activating blockchain subscription for company {company.id} "
+                                    f"via session validation: {session_id}"
+                                )
+                                company.blockchain_subscription_status = True
+                                company.save()
+                                blockchain_subscribed = True
+                    except Exception as e:
+                        logger.error(f"Error validating blockchain session {session_id}: {str(e)}")
+
+                # Method 2: Validate via customer_id (for regular sync)
+                elif hasattr(company, "subscription") and company.subscription.stripe_customer_id:
+                    try:
+                        stripe_blockchain_status = self._validate_blockchain_with_stripe(
+                            company.subscription.stripe_customer_id
+                        )
+                        if stripe_blockchain_status is not None:
+                            stripe_validated = True
+                            # Update database if out of sync
+                            if blockchain_subscribed != stripe_blockchain_status:
+                                logger.warning(
+                                    f"Blockchain status mismatch for company {company.id}: "
+                                    f"DB={blockchain_subscribed}, Stripe={stripe_blockchain_status}. Updating DB."
+                                )
+                                company.blockchain_subscription_status = stripe_blockchain_status
+                                company.save()
+                                blockchain_subscribed = stripe_blockchain_status
+                    except Exception as e:
+                        logger.error(f"Error validating blockchain status with Stripe: {str(e)}")
 
             # Get main subscription info if exists
             main_subscription_info = {}
@@ -1458,14 +1632,100 @@ class BlockchainSubscriptionStatusView(APIView):
             return Response(
                 {
                     "blockchainSubscribed": blockchain_subscribed,
+                    "stripeValidated": stripe_validated,
                     "company": {"id": company.id, "name": company.name},
                     "mainSubscription": main_subscription_info,
                 }
             )
 
         except Exception as e:
-            logger.error(f"Error getting subscription status: {str(e)}")
+            logger.error(f"Error getting subscription status: {str(e)}", exc_info=True)
             return Response({"error": "An unexpected error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def _validate_blockchain_with_stripe(self, stripe_customer_id):
+        """
+        Validate blockchain subscription status against Stripe.
+        Returns True if active blockchain subscription found, False if not, None if can't determine.
+        """
+        try:
+            # List all subscriptions for this customer
+            subscriptions = stripe.Subscription.list(customer=stripe_customer_id, status="active")
+            blockchain_price_id = getattr(settings, "STRIPE_BLOCKCHAIN_PRICE_ID", None)
+
+            for subscription in subscriptions.data:
+                # Check subscription metadata first
+                if subscription.metadata.get("subscription_type") == "blockchain_verification":
+                    return True
+
+                # Check line items
+                line_items = stripe.Subscription.list_line_items(subscription.id)
+                for item in line_items.data:
+                    # Check by price ID (preferred) or fall back to amount
+                    is_blockchain = (
+                        blockchain_price_id and item.price.id == blockchain_price_id
+                    ) or item.price.unit_amount == 500
+                    if is_blockchain:
+                        return True
+
+            return False
+        except stripe.error.StripeError as e:
+            logger.error(f"Stripe API error during blockchain validation: {str(e)}")
+            return None
+
+    def _validate_blockchain_session(self, session_id, company_id):
+        """
+        Validate blockchain subscription via Stripe checkout session.
+        Returns True if the session is complete and belongs to the company.
+
+        Security measures (2025 best practices):
+        - Server-side validation against Stripe API (never trust client)
+        - Company ownership verification (prevents account hijacking)
+        - Session type verification (prevents cross-session attacks)
+        - Time-based validation (prevents old session replay)
+        - Status verification (prevents incomplete payment fraud)
+        """
+        import time
+
+        try:
+            # Retrieve the checkout session from Stripe
+            session = stripe.checkout.Session.retrieve(session_id)
+
+            # Security: Validate session is complete
+            if session.status != "complete":
+                logger.warning(f"Blockchain session {session_id} is not complete: {session.status}")
+                return False
+
+            # Security: Time-based validation - reject sessions older than 1 hour
+            # This prevents replay attacks with old session IDs
+            session_age_seconds = time.time() - session.created
+            max_age_seconds = 3600  # 1 hour
+            if session_age_seconds > max_age_seconds:
+                logger.warning(
+                    f"Blockchain session {session_id} is too old: "
+                    f"{session_age_seconds:.0f}s > {max_age_seconds}s"
+                )
+                return False
+
+            # Security: Validate it's for the correct company (ownership check)
+            session_company_id = session.metadata.get("company_id")
+            if str(session_company_id) != str(company_id):
+                logger.warning(
+                    f"Blockchain session {session_id} company mismatch: "
+                    f"expected {company_id}, got {session_company_id}"
+                )
+                return False
+
+            # Security: Validate it's a blockchain subscription (type check)
+            if session.metadata.get("subscription_type") != "blockchain_verification":
+                logger.warning(f"Session {session_id} is not a blockchain subscription")
+                return False
+
+            logger.info(f"Blockchain session {session_id} validated successfully for company {company_id}")
+            return True
+
+        except stripe.error.StripeError as e:
+            logger.error(f"Stripe API error validating session {session_id}: {str(e)}")
+            return False
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -1538,38 +1798,90 @@ class StripeWebhookView(APIView):
         """Handle subscription creation"""
         try:
             customer_id = subscription["customer"]
+            metadata = subscription.get("metadata", {})
 
-            # Find company by Stripe customer ID
+            # PRIORITY 1: Check metadata for blockchain verification (most reliable)
+            subscription_type = metadata.get("subscription_type")
+            company_id = metadata.get("company_id")
+
+            if subscription_type == "blockchain_verification" and company_id:
+                try:
+                    company = Company.objects.get(id=company_id)
+                    company.blockchain_subscription_status = True
+                    company.save()
+                    logger.info(f"Blockchain subscription created via metadata for company {company_id}")
+                    return
+                except Company.DoesNotExist:
+                    logger.error(f"Company {company_id} not found from subscription metadata")
+
+            # PRIORITY 2: Find company by Stripe customer ID (fallback for existing subscriptions)
             company_subscription = Subscription.objects.filter(stripe_customer_id=customer_id).first()
 
             if company_subscription:
-                # Check if this is a blockchain verification subscription
+                # Check if this is a blockchain verification subscription by price ID
                 line_items = stripe.Subscription.list_line_items(subscription["id"])
+                blockchain_price_id = getattr(settings, "STRIPE_BLOCKCHAIN_PRICE_ID", None)
 
                 for item in line_items.data:
-                    if item.price.unit_amount == 500:  # $5.00 blockchain subscription
+                    # Check by price ID (preferred) or fall back to amount (500 = $5.00)
+                    is_blockchain = (
+                        blockchain_price_id and item.price.id == blockchain_price_id
+                    ) or item.price.unit_amount == 500
+                    if is_blockchain:
                         company_subscription.company.blockchain_subscription_status = True
                         company_subscription.company.save()
-                        logger.info(f"Blockchain subscription created for company {company_subscription.company.id}")
+                        logger.info(
+                            f"Blockchain subscription created for company {company_subscription.company.id} "
+                            f"(price_id: {item.price.id})"
+                        )
                         break
+            else:
+                logger.warning(
+                    f"No company subscription found for Stripe customer {customer_id}. "
+                    f"This may be a blockchain-only subscription without metadata."
+                )
         except Exception as e:
-            logger.error(f"Error handling subscription created: {str(e)}")
+            logger.error(f"Error handling subscription created: {str(e)}", exc_info=True)
 
     def handle_subscription_updated(self, subscription):
         """Handle subscription updates"""
         try:
             customer_id = subscription["customer"]
+            metadata = subscription.get("metadata", {})
 
-            # Find company by Stripe customer ID
+            # PRIORITY 1: Check metadata for blockchain verification
+            subscription_type = metadata.get("subscription_type")
+            company_id = metadata.get("company_id")
+
+            if subscription_type == "blockchain_verification" and company_id:
+                try:
+                    company = Company.objects.get(id=company_id)
+                    # For updates, check if subscription is still active
+                    is_active = subscription.get("status") in ["active", "trialing"]
+                    if company.blockchain_subscription_status != is_active:
+                        company.blockchain_subscription_status = is_active
+                        company.save()
+                        action = "activated" if is_active else "deactivated"
+                        logger.info(f"Blockchain subscription {action} via metadata for company {company_id}")
+                    return
+                except Company.DoesNotExist:
+                    logger.error(f"Company {company_id} not found from subscription metadata")
+
+            # PRIORITY 2: Find company by Stripe customer ID (fallback)
             company_subscription = Subscription.objects.filter(stripe_customer_id=customer_id).first()
 
             if company_subscription:
                 # Check current subscription items
                 line_items = stripe.Subscription.list_line_items(subscription["id"])
+                blockchain_price_id = getattr(settings, "STRIPE_BLOCKCHAIN_PRICE_ID", None)
 
                 has_blockchain = False
                 for item in line_items.data:
-                    if item.price.unit_amount == 500:  # $5.00 blockchain subscription
+                    # Check by price ID (preferred) or fall back to amount (500 = $5.00)
+                    is_blockchain = (
+                        blockchain_price_id and item.price.id == blockchain_price_id
+                    ) or item.price.unit_amount == 500
+                    if is_blockchain:
                         has_blockchain = True
                         break
 
@@ -1580,45 +1892,100 @@ class StripeWebhookView(APIView):
 
                     action = "activated" if has_blockchain else "deactivated"
                     logger.info(f"Blockchain subscription {action} for company {company_subscription.company.id}")
+            else:
+                logger.warning(f"No company subscription found for Stripe customer {customer_id} during update")
         except Exception as e:
-            logger.error(f"Error handling subscription updated: {str(e)}")
+            logger.error(f"Error handling subscription updated: {str(e)}", exc_info=True)
 
     def handle_subscription_deleted(self, subscription):
         """Handle subscription cancellation"""
         try:
             customer_id = subscription["customer"]
+            metadata = subscription.get("metadata", {})
 
-            # Find company by Stripe customer ID
+            # PRIORITY 1: Check metadata for blockchain verification
+            subscription_type = metadata.get("subscription_type")
+            company_id = metadata.get("company_id")
+
+            if subscription_type == "blockchain_verification" and company_id:
+                try:
+                    company = Company.objects.get(id=company_id)
+                    company.blockchain_subscription_status = False
+                    company.save()
+                    logger.info(f"Blockchain subscription cancelled via metadata for company {company_id}")
+                    return
+                except Company.DoesNotExist:
+                    logger.error(f"Company {company_id} not found from subscription metadata")
+
+            # PRIORITY 2: Find company by Stripe customer ID (fallback)
             company_subscription = Subscription.objects.filter(stripe_customer_id=customer_id).first()
 
             if company_subscription:
-                company_subscription.company.blockchain_subscription_status = False
-                company_subscription.company.save()
+                # Check if this was a blockchain subscription
+                line_items = stripe.Subscription.list_line_items(subscription["id"])
+                blockchain_price_id = getattr(settings, "STRIPE_BLOCKCHAIN_PRICE_ID", None)
 
-                logger.info(f"Blockchain subscription deactivated for company {company_subscription.company.id}")
+                for item in line_items.data:
+                    is_blockchain = (
+                        blockchain_price_id and item.price.id == blockchain_price_id
+                    ) or item.price.unit_amount == 500
+                    if is_blockchain:
+                        company_subscription.company.blockchain_subscription_status = False
+                        company_subscription.company.save()
+                        logger.info(
+                            f"Blockchain subscription deactivated for company {company_subscription.company.id}"
+                        )
+                        break
+            else:
+                logger.warning(f"No company subscription found for Stripe customer {customer_id} during deletion")
         except Exception as e:
-            logger.error(f"Error handling subscription deleted: {str(e)}")
+            logger.error(f"Error handling subscription deleted: {str(e)}", exc_info=True)
 
     def handle_payment_succeeded(self, invoice):
         """Handle successful payment"""
         try:
             customer_id = invoice["customer"]
+            metadata = invoice.get("subscription_details", {}).get("metadata", {})
 
-            # Ensure blockchain subscription remains active for successful payments
+            # PRIORITY 1: Check metadata for blockchain verification
+            subscription_type = metadata.get("subscription_type")
+            company_id = metadata.get("company_id")
+
+            if subscription_type == "blockchain_verification" and company_id:
+                try:
+                    company = Company.objects.get(id=company_id)
+                    company.blockchain_subscription_status = True
+                    company.save()
+                    logger.info(f"Blockchain payment succeeded via metadata for company {company_id}")
+                    return
+                except Company.DoesNotExist:
+                    logger.error(f"Company {company_id} not found from invoice metadata")
+
+            # PRIORITY 2: Find company by Stripe customer ID (fallback)
             company_subscription = Subscription.objects.filter(stripe_customer_id=customer_id).first()
 
             if company_subscription:
                 # Check if this payment includes blockchain verification
+                blockchain_price_id = getattr(settings, "STRIPE_BLOCKCHAIN_PRICE_ID", None)
+
                 for line in invoice["lines"]["data"]:
-                    if line.get("amount") == 500:  # $5.00 blockchain subscription
+                    price_id = line.get("price", {}).get("id")
+                    amount = line.get("amount")
+
+                    # Check by price ID (preferred) or fall back to amount (500 = $5.00)
+                    is_blockchain = (blockchain_price_id and price_id == blockchain_price_id) or amount == 500
+                    if is_blockchain:
                         company_subscription.company.blockchain_subscription_status = True
                         company_subscription.company.save()
                         logger.info(
-                            f"Blockchain subscription payment succeeded for company {company_subscription.company.id}"
+                            f"Blockchain subscription payment succeeded for company "
+                            f"{company_subscription.company.id} (price_id: {price_id})"
                         )
                         break
+            else:
+                logger.warning(f"No company subscription found for Stripe customer {customer_id} during payment")
         except Exception as e:
-            logger.error(f"Error handling payment succeeded: {str(e)}")
+            logger.error(f"Error handling payment succeeded: {str(e)}", exc_info=True)
 
     def handle_payment_failed(self, invoice):
         """Handle failed payment"""

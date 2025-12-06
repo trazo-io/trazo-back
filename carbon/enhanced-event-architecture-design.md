@@ -1,6 +1,39 @@
 # 🌱 ENHANCED EVENT INFORMATION ARCHITECTURE DESIGN
 
+> ## ⚠️ **DEPRECATION WARNING - CARBON-FIRST THINKING (Pre-Transparency Pivot)**
+>
+> **This document was written BEFORE Trazo's strategic pivot to transparency-first.**
+>
+> ### 🚨 DO NOT IMPLEMENT recommendations from this document without careful review
+>
+> **The Problem with Carbon-First Approach:**
+> - Recommends "carbon sequestration as HERO metric" → **WRONG** - Transparency score is the hero metric
+> - Suggests "carbon story impact" as primary focus → **WRONG** - Consumer trust through transparency is primary
+> - Proposes technical carbon displays prominently → **WRONG** - Carbon data should be in "Learn More" sections
+>
+> **What This Document Gets Wrong:**
+> 1. ❌ "Carbon Goldmine" as hero metric → Creates perverse incentive (less logging = better carbon score)
+> 2. ❌ Carbon-first consumer presentation → 87% of consumers don't understand CO2e
+> 3. ❌ Technical efficiency metrics for consumers → Fuel L/ha means nothing to shoppers
+>
+> **What's Still Useful from This Document:**
+> 1. ✅ Backend calculation accuracy improvements → Good for B2B/compliance (not consumer-facing)
+> 2. ✅ Field mapping completeness → Ensures accurate calculations behind the scenes
+> 3. ✅ USDA/IPCC methodology references → Scientific accuracy for regulatory compliance
+>
+> **The Correct Approach (Post-Transparency Pivot):**
+> - **Primary Consumer Metric**: Transparency Score (95% = 12 of 13 practices documented)
+> - **Carbon Data**: Available in expandable "Learn More" sections for interested users
+> - **Trust Indicators**: Verification badges, event counts, photo evidence
+> - **Incentive Alignment**: More events logged = Higher transparency score = REWARDED
+>
+> **Reference**: See `/CLAUDE.md` section "Strategic Architecture Transformation: Carbon-to-Transparency Shift"
+>
+> ---
+
 **TRAZO CARBON INTELLIGENCE AGENT - COMPREHENSIVE EVENT ENHANCEMENT PLAN**
+
+> ⚠️ **HISTORICAL CONTEXT**: This mission statement reflects pre-pivot thinking. The current mission is: "Build consumer trust through agricultural transparency, with carbon data as supporting B2B information."
 
 **Mission**: Transform Trazo's excellent event system foundation into the most trusted and engaging agricultural transparency platform by maximizing carbon story impact and consumer education.
 

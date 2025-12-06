@@ -2,6 +2,8 @@
 Consumer-specific API ViewSets for dynamic dashboard data
 """
 
+import logging
+import time
 from datetime import datetime, timedelta
 
 from django.contrib.auth import get_user_model
@@ -11,6 +13,8 @@ from django.utils import timezone
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+
+logger = logging.getLogger(__name__)
 
 from backend.constants import EngagementMilestones, get_carbon_score_from_co2e
 
@@ -37,9 +41,12 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["get"])
     def impact_dashboard(self, request):
         """Get comprehensive impact dashboard data"""
+        total_start = time.time()
         user = request.user
+        timings = {}
 
         # Get or create user impact summary
+        t0 = time.time()
         impact_summary, created = UserImpactSummary.objects.get_or_create(
             user=user,
             defaults={
@@ -51,30 +58,65 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
                 "better_choices_made": 0,
             },
         )
+        timings["get_or_create_summary"] = time.time() - t0
 
         # Update impact summary with latest data if needed
+        t0 = time.time()
         if created or impact_summary.last_updated < timezone.now() - timedelta(hours=1):
             self._update_impact_summary(user, impact_summary)
+            timings["update_impact_summary"] = time.time() - t0
+        else:
+            timings["update_impact_summary"] = "skipped (cached)"
 
         # Get recent scans for timeline
+        t0 = time.time()
         recent_scans = (
             HistoryScan.objects.filter(user=user)
             .select_related("history", "history__parcel__establishment")
             .order_by("-date")[:3]
         )
+        timings["query_recent_scans"] = time.time() - t0
+
+        # Serialize data
+        t0 = time.time()
+        impact_metrics_data = UserImpactSummarySerializer(impact_summary).data
+        timings["serialize_impact_metrics"] = time.time() - t0
+
+        t0 = time.time()
+        recent_scans_data = EnhancedHistoryScanSerializer(recent_scans, many=True, context={"request": request}).data
+        timings["serialize_recent_scans"] = time.time() - t0
+
+        t0 = time.time()
+        favorite_count = UserFavorite.objects.filter(user=user).count()
+        timings["query_favorite_count"] = time.time() - t0
+
+        t0 = time.time()
+        recommendations = self._get_retailer_recommendations()
+        timings["get_recommendations"] = time.time() - t0
+
+        t0 = time.time()
+        achievements = self._get_recent_achievements(user)
+        timings["get_achievements"] = time.time() - t0
 
         # Prepare response data
         dashboard_data = {
-            "impact_metrics": UserImpactSummarySerializer(impact_summary).data,
-            "recent_scans": EnhancedHistoryScanSerializer(recent_scans, many=True, context={"request": request}).data,
+            "impact_metrics": impact_metrics_data,
+            "recent_scans": recent_scans_data,
             "quick_stats": {
                 "better_choices": impact_summary.better_choices_made,
                 "local_farms": impact_summary.local_farms_found,
-                "favorite_count": UserFavorite.objects.filter(user=user).count(),
+                "favorite_count": favorite_count,
             },
-            "recommendations": self._get_retailer_recommendations(),
-            "achievements": self._get_recent_achievements(user),
+            "recommendations": recommendations,
+            "achievements": achievements,
         }
+
+        total_time = time.time() - total_start
+        print(
+            f"[IMPACT_DASHBOARD] Total time: {total_time:.3f}s | "
+            f"Timings: {timings}",
+            flush=True
+        )
 
         return Response(dashboard_data)
 
@@ -255,45 +297,60 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
 
     def _update_impact_summary(self, user, impact_summary):
         """Update user impact summary with latest data"""
+        update_timings = {}
+        total_start = time.time()
+
         # Count scans
+        t0 = time.time()
         total_scans = HistoryScan.objects.filter(user=user).count()
+        update_timings["count_scans"] = time.time() - t0
 
         # Count reviews
+        t0 = time.time()
         from reviews.models import Review
 
         total_reviews = Review.objects.filter(user=user).count()
+        update_timings["count_reviews"] = time.time() - t0
 
         # Calculate real carbon offset based on actual carbon entries
+        # OPTIMIZED: Use single query with aggregation instead of N+1 queries
+        t0 = time.time()
         from carbon.models import CarbonEntry
+        from django.db.models import Case, DecimalField, F, Sum, When
 
-        total_carbon_offset = 0
-        for scan in HistoryScan.objects.filter(user=user).select_related("history"):
-            if scan.history:
-                try:
-                    # Use the same logic as the serializer fix
-                    carbon_entry = CarbonEntry.objects.filter(production=scan.history).order_by("-created_at").first()
-                    if carbon_entry:
-                        # Use co2e_amount if available and non-zero, otherwise fall back to amount
-                        co2e = (
-                            carbon_entry.co2e_amount
-                            if carbon_entry.co2e_amount and carbon_entry.co2e_amount > 0
-                            else carbon_entry.amount
-                        )
-                        if co2e and co2e > 0:
-                            total_carbon_offset += float(co2e)
-                except Exception as e:
-                    continue
+        # Get all production IDs from user's scans
+        production_ids = HistoryScan.objects.filter(user=user).values_list("history_id", flat=True)
+        update_timings["get_production_ids"] = time.time() - t0
+
+        # Single aggregated query for carbon totals
+        t0 = time.time()
+        carbon_total = (
+            CarbonEntry.objects.filter(production_id__in=production_ids)
+            .annotate(
+                effective_co2e=Case(
+                    When(co2e_amount__gt=0, then=F("co2e_amount")),
+                    default=F("amount"),
+                    output_field=DecimalField(),
+                )
+            )
+            .aggregate(total=Sum("effective_co2e"))
+        )
+        update_timings["carbon_aggregation"] = time.time() - t0
+
+        total_carbon_offset = float(carbon_total["total"] or 0)
 
         # Convert to awareness metric rather than false "savings"
         carbon_offset = total_carbon_offset
 
         # Count unique establishments (use parcel__establishment relationship)
+        t0 = time.time()
         sustainable_farms = (
             HistoryScan.objects.filter(user=user, history__parcel__certified=True)  # Use parcel certified field instead
             .values("history__parcel__establishment")
             .distinct()
             .count()
         )
+        update_timings["count_sustainable_farms"] = time.time() - t0
 
         # Count local farms based on real data (disable for now until location logic is implemented)
         # For MVP: only count farms with verified local indicators or disable this metric
@@ -301,11 +358,13 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
 
         # Count better choices based on real data
         # For MVP: Count scans where user chose certified/sustainable options
+        t0 = time.time()
         better_choices = HistoryScan.objects.filter(user=user, history__parcel__certified=True).count()
 
         # If no certified data available, count scans with verified carbon entries
         if better_choices == 0:
             better_choices = HistoryScan.objects.filter(user=user, history__carbonentry__usda_verified=True).count()
+        update_timings["count_better_choices"] = time.time() - t0
 
         # Update impact summary
         impact_summary.total_scans = total_scans
@@ -316,9 +375,12 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
         impact_summary.better_choices_made = better_choices
 
         # Calculate US-friendly metrics
+        t0 = time.time()
         impact_summary.calculate_us_friendly_metrics()
+        update_timings["calculate_us_metrics"] = time.time() - t0
 
         # Update timestamps
+        t0 = time.time()
         first_scan = HistoryScan.objects.filter(user=user).order_by("date").first()
         last_scan = HistoryScan.objects.filter(user=user).order_by("-date").first()
 
@@ -326,8 +388,18 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
             impact_summary.first_scan_date = first_scan.date
         if last_scan:
             impact_summary.last_scan_date = last_scan.date
+        update_timings["get_scan_timestamps"] = time.time() - t0
 
+        t0 = time.time()
         impact_summary.save()
+        update_timings["save_summary"] = time.time() - t0
+
+        total_update_time = time.time() - total_start
+        print(
+            f"[IMPACT_DASHBOARD] _update_impact_summary total: {total_update_time:.3f}s | "
+            f"Details: {update_timings}",
+            flush=True
+        )
 
     def _get_retailer_recommendations(self):
         """Get retailer recommendations based on user's actual scan history"""

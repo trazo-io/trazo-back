@@ -348,10 +348,10 @@ class RetrieveEstablishmentSerializer(ModelSerializer):
 
 class EstablishmentSeriesSerializer(serializers.Serializer):
     scans = serializers.ListField()
-    sales = serializers.ListField()
+    reviews = serializers.ListField()
 
     class Meta:
-        fields = ["scans", "sales"]
+        fields = ["scans", "reviews"]
 
 
 class EstablishmentChartSerializer(serializers.Serializer):

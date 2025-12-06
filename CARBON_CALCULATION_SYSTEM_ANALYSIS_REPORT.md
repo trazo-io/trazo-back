@@ -1,8 +1,50 @@
 # Trazo Carbon Calculation System - Comprehensive Analysis Report
 
-**Date**: September 7, 2025  
-**Analysis Type**: System Architecture Review, Scientific Accuracy Assessment, USDA Integration Validation  
+**Date**: September 7, 2025
+**Analysis Type**: System Architecture Review, Scientific Accuracy Assessment, USDA Integration Validation
 **Test Environment**: Django 5.0 development environment with Poetry dependency management
+
+> ## 📋 **IMPORTANT CONTEXT: Transparency-First Mission**
+>
+> **This report focuses on carbon calculation accuracy for B2B and compliance purposes.**
+>
+> ### How to Interpret This Report:
+>
+> | Report Section | Applies To | Consumer-Facing? |
+> |----------------|-----------|------------------|
+> | Carbon Calculation Accuracy | B2B customers, regulatory compliance | ❌ No - Behind the scenes |
+> | USDA Emission Factors | Scientific accuracy for reports | ❌ No - Backend only |
+> | Performance Metrics | API response times | ❌ No - Technical infrastructure |
+> | "Areas for Enhancement" | Backend improvements | ⚠️ Review carefully |
+>
+> ### ⚠️ When Reading "Areas for Enhancement":
+>
+> **DO implement** recommendations that improve:
+> - Backend calculation accuracy (for B2B sustainability reports)
+> - USDA/EPA compliance (for regulatory requirements)
+> - API performance (for faster transparency score delivery)
+>
+> **DO NOT implement** recommendations that would:
+> - Put carbon metrics prominently in consumer interfaces (use transparency score instead)
+> - Add technical jargon to consumer-facing displays (CO2e, LCA, Scope 1/2/3)
+> - Create "carbon hero metrics" for consumers (87% don't understand CO2e)
+>
+> ### Trazo's Dual-System Approach:
+> ```
+> Consumer-Facing (QR Page):
+> 1. Transparency Score (95%) ← PRIMARY HERO METRIC
+> 2. Trust Indicators (verification badges, event counts)
+> 3. "Learn More" → Carbon details for interested users
+>
+> B2B/Compliance (Producer Dashboard, Reports):
+> 1. Full carbon calculations ← THIS REPORT'S FOCUS
+> 2. USDA-verified emission factors
+> 3. Regulatory compliance data
+> ```
+>
+> **Reference**: See `/CLAUDE.md` section "Strategic Architecture Transformation: Carbon-to-Transparency Shift"
+>
+> ---
 
 ## 🎯 Executive Summary
 

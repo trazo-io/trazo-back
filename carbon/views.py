@@ -4486,6 +4486,12 @@ class PublicProductionViewSet(viewsets.ViewSet):
                         except Exception as e:
                             album_data = None
 
+                    # Get production-level blockchain verification status
+                    # When a production is blockchain verified, all its events inherit that verification
+                    production_extra_data = production.extra_data or {}
+                    is_blockchain_verified = production_extra_data.get("blockchain_verified", False)
+                    blockchain_tx = production_extra_data.get("blockchain_transaction", "")
+
                     event_data = {
                         "id": event.id,
                         "type": event_category,
@@ -4499,6 +4505,9 @@ class PublicProductionViewSet(viewsets.ViewSet):
                         "area": getattr(event, "area", None),
                         "equipment": getattr(event, "commercial_name", None) or getattr(event, "equipment", None),
                         "album": album_data,
+                        # Blockchain verification - inherited from production level
+                        "blockchain_verified": is_blockchain_verified,
+                        "blockchain_transaction": blockchain_tx if is_blockchain_verified else "",
                     }
 
                     # Add event-type specific fields for better transparency
@@ -5509,6 +5518,12 @@ class PublicProductionViewSet(viewsets.ViewSet):
                         except (ValueError, AttributeError):
                             company_logo = None
 
+                    # Calculate establishment and parcel counts for company
+                    total_establishments = company.establishment_set.count()
+                    total_parcels = sum(
+                        est.parcels.count() for est in company.establishment_set.all()
+                    )
+
                     company_data = {
                         "id": company.id,
                         "name": company.name,
@@ -5524,6 +5539,9 @@ class PublicProductionViewSet(viewsets.ViewSet):
                         "primary_commodities": getattr(company, "primary_commodities", ""),
                         "sustainability_commitment": getattr(company, "sustainability_commitment", ""),
                         "logo": company_logo,
+                        # Company overview stats for consumer transparency
+                        "total_establishments": total_establishments,
+                        "total_parcels": total_parcels,
                         # NOTE: phone, email, fiscal_id intentionally excluded (private info)
                     }
 
@@ -5534,6 +5552,19 @@ class PublicProductionViewSet(viewsets.ViewSet):
             parcel_data = None
             if production.parcel:
                 parcel = production.parcel
+
+                # Get parcel images from album
+                parcel_images = []
+                if parcel.album:
+                    parcel_images = [
+                        {
+                            "id": img.id,
+                            "url": img.image.url if img.image else None,
+                            "caption": getattr(img, "caption", ""),
+                        }
+                        for img in parcel.album.images.all()[:5]  # Limit to 5 images
+                    ]
+
                 parcel_data = {
                     "id": parcel.id,
                     "name": parcel.name,
@@ -5547,6 +5578,24 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     "certified": getattr(parcel, "certified", False),
                     "unique_code": getattr(parcel, "unique_code", ""),
                     "agricultural_details": getattr(parcel, "agricultural_details", {}),
+                    # Transparency fields for consumer display
+                    "transparency_description": parcel.get_transparency_description(),
+                    "sustainability_practices": parcel.get_sustainability_practices(),
+                    "consumer_story": parcel.get_consumer_story(),
+                    "primary_crop": parcel.get_primary_crop(),
+                    "transparency_score": parcel.get_transparency_score(),
+                    "transparency_ready": parcel.is_transparency_ready(),
+                    # Location and address
+                    "address": getattr(parcel, "address", ""),
+                    # Parcel images for visual documentation
+                    "images": parcel_images,
+                    # Carbon/sustainability flags
+                    "carbon_calculation_enabled": getattr(
+                        parcel, "carbon_calculation_enabled", False
+                    ),
+                    "usda_compliance_eligible": getattr(
+                        parcel, "usda_compliance_eligible", False
+                    ),
                     # NOTE: contact_person, contact_phone, contact_email intentionally excluded (private info)
                 }
 
@@ -5563,6 +5612,13 @@ class PublicProductionViewSet(viewsets.ViewSet):
                 "company": company_data,
                 # Parcel/field data
                 "parcel": parcel_data,
+                # Production reputation from consumer reviews (0-5 scale)
+                "reputation": float(production.reputation) if production.reputation else 0,
+                # Product info
+                "product": {
+                    "id": production.product.id if production.product else None,
+                    "name": production.product.name if production.product else "Product",
+                },
             }
 
             return Response(response_data, status=status.HTTP_200_OK)

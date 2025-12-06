@@ -16,3 +16,8 @@ class Review(models.Model):
         on_delete=models.CASCADE,
         null=True,
     )
+    images = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of image URLs uploaded by the reviewer",
+    )

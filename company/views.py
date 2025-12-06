@@ -16,6 +16,7 @@ from rest_framework.response import Response
 from backend.permissions import CompanyNestedViewSet
 from history.models import History, HistoryScan
 from history.serializers import HistoryListOptionsSerializer
+from history.services.transparency_calculator import TransparencyCalculator
 from product.models import Parcel, Product
 from product.serializers import ProductListOptionsSerializer
 from reviews.models import Review
@@ -184,10 +185,21 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             total_histories = histories.annotate(day_of_week=ExtractWeekDay("date"))
             total_histories = total_histories.values("day_of_week").annotate(count=Count("id", distinct=True))
 
-            histories_with_review = histories.exclude(reviews__isnull=True)
-            histories_with_review = histories_with_review.annotate(day_of_week=ExtractWeekDay("date"))
-            histories_with_review = histories_with_review.values("day_of_week").annotate(
-                count=Count("id", distinct=True)
+            # Query reviews directly (not through HistoryScan) to include web reviews without scan
+            review_filter_kwargs = {"date__gte": datetime.now() - timedelta(days=7)}
+            if parcel is not None:
+                review_filter_kwargs["production__parcel__id"] = parcel.id
+            if product is not None:
+                review_filter_kwargs["production__product__id"] = product.id
+            reviews_by_day = (
+                Review.objects.filter(
+                    production__parcel__establishment=establishment,
+                    production__published=True,
+                    **review_filter_kwargs,
+                )
+                .annotate(day_of_week=ExtractWeekDay("date"))
+                .values("day_of_week")
+                .annotate(count=Count("id", distinct=True))
             )
 
             result_dict = {}
@@ -195,10 +207,10 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 if history["day_of_week"] not in result_dict:
                     result_dict[history["day_of_week"]] = {}
                 result_dict[history["day_of_week"]]["scans"] = history["count"]
-            for history in histories_with_review:
-                if history["day_of_week"] not in result_dict:
-                    result_dict[history["day_of_week"]] = {}
-                result_dict[history["day_of_week"]]["reviews"] = history["count"]
+            for review in reviews_by_day:
+                if review["day_of_week"] not in result_dict:
+                    result_dict[review["day_of_week"]] = {}
+                result_dict[review["day_of_week"]]["reviews"] = review["count"]
             today = datetime.now()
             one_week_ago = today - timedelta(days=6)
             date_range = [one_week_ago + timedelta(days=i) for i in range((today - one_week_ago).days + 1)]
@@ -234,12 +246,21 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             total_histories = total_histories.values("day_of_month", "month")
             total_histories = total_histories.annotate(count=Count("id", distinct=True))
 
-            histories_with_review = histories.exclude(reviews__isnull=True)
-            histories_with_review = histories_with_review.annotate(
-                day_of_month=ExtractDay("date"), month=ExtractMonth("date")
-            )
-            histories_with_review = histories_with_review.values("day_of_month", "month").annotate(
-                count=Count("id", distinct=True)
+            # Query reviews directly (not through HistoryScan) to include web reviews without scan
+            review_filter_kwargs = {"date__gte": datetime.now() - timedelta(days=31)}
+            if parcel is not None:
+                review_filter_kwargs["production__parcel__id"] = parcel.id
+            if product is not None:
+                review_filter_kwargs["production__product__id"] = product.id
+            reviews_by_day = (
+                Review.objects.filter(
+                    production__parcel__establishment=establishment,
+                    production__published=True,
+                    **review_filter_kwargs,
+                )
+                .annotate(day_of_month=ExtractDay("date"), month=ExtractMonth("date"))
+                .values("day_of_month", "month")
+                .annotate(count=Count("id", distinct=True))
             )
 
             result_dict = {}
@@ -251,14 +272,14 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 if day_of_month not in result_dict[month]:
                     result_dict[month][day_of_month] = {}
                 result_dict[month][day_of_month]["scans"] = history["count"]
-            for history in histories_with_review:
-                month = history["month"]
-                day_of_month = history["day_of_month"]
+            for review in reviews_by_day:
+                month = review["month"]
+                day_of_month = review["day_of_month"]
                 if month not in result_dict:
                     result_dict[month] = {}
                 if day_of_month not in result_dict[month]:
                     result_dict[month][day_of_month] = {}
-                result_dict[month][day_of_month]["reviews"] = history["count"]
+                result_dict[month][day_of_month]["reviews"] = review["count"]
             today = datetime.now()
             one_month_ago = today - timedelta(days=31)
             date_range = [one_month_ago + timedelta(days=i) for i in range((today - one_month_ago).days + 1)]
@@ -294,10 +315,22 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             total_histories = total_histories.values("month")
             total_histories = total_histories.annotate(count=Count("id", distinct=True))
 
-            histories_with_review = histories.exclude(reviews__isnull=True)
-            histories_with_review = histories_with_review.annotate(month=ExtractMonth("date"))
-            histories_with_review = histories_with_review.values("month")
-            histories_with_review = histories_with_review.annotate(count=Count("id", distinct=True))
+            # Query reviews directly (not through HistoryScan) to include web reviews without scan
+            review_filter_kwargs = {"date__gte": datetime.now() - timedelta(days=365)}
+            if parcel is not None:
+                review_filter_kwargs["production__parcel__id"] = parcel.id
+            if product is not None:
+                review_filter_kwargs["production__product__id"] = product.id
+            reviews_by_month = (
+                Review.objects.filter(
+                    production__parcel__establishment=establishment,
+                    production__published=True,
+                    **review_filter_kwargs,
+                )
+                .annotate(month=ExtractMonth("date"))
+                .values("month")
+                .annotate(count=Count("id", distinct=True))
+            )
 
             result_dict = {}
             for history in total_histories:
@@ -305,11 +338,11 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 if month not in result_dict:
                     result_dict[month] = {}
                 result_dict[month]["scans"] = history["count"]
-            for history in histories_with_review:
-                month = history["month"]
+            for review in reviews_by_month:
+                month = review["month"]
                 if month not in result_dict:
                     result_dict[month] = {}
-                result_dict[month]["reviews"] = history["count"]
+                result_dict[month]["reviews"] = review["count"]
 
             series_result = []
             series_result_reviews = []
@@ -330,8 +363,8 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     series_result_reviews.append(0)
 
         result = {
-            "scans_vs_sales": EstablishmentChartSerializer(
-                {"series": {"scans": series_result, "sales": series_result_reviews}},
+            "scans_vs_reviews": EstablishmentChartSerializer(
+                {"series": {"scans": series_result, "reviews": series_result_reviews}},
                 context={
                     "month_length": len(series_result) if period == "month" else None,
                     "period": period,
@@ -524,7 +557,8 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 "total_verified_events": dashboard_data.get("total_verified_events", 0),
                 "verification_breakdown": {
                     "usda_verified": dashboard_data.get("total_verified_events", 0),
-                    "blockchain_verified": 0,  # Will be updated later
+                    # FIX: Get blockchain_verified from comprehensive data verification_status
+                    "blockchain_verified": dashboard_data.get("verification_status", {}).get("blockchain_verified", 0),
                     "photo_verified": dashboard_data.get("total_photos", 0),
                     "third_party_verified": 0,
                 },
@@ -752,6 +786,8 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         """
         metrics = {
             "total_productions": 0,
+            "active_productions": 0,  # NEW: Only productions without finish_date
+            "completed_productions": 0,  # NEW: Productions with finish_date
             "total_carbon_entries": 0,
             "total_verified_events": 0,
             "total_photos": 0,
@@ -770,8 +806,12 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         for parcel in establishment.parcels.all():
             for history in parcel.histories.all():
-                # Production count
+                # Production count - track total, active, and completed separately
                 metrics["total_productions"] += 1
+                if history.finish_date is None:
+                    metrics["active_productions"] += 1
+                else:
+                    metrics["completed_productions"] += 1
 
                 # Carbon entries (already prefetched)
                 carbon_entries = history.carbonentry_set.all()
@@ -783,11 +823,16 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     if entry.co2e_amount:
                         total_carbon_emissions += abs(entry.co2e_amount)
 
-                # Event type breakdown (already prefetched)
+                # Event type breakdown - ALL 8 event types (already prefetched)
                 production_events = history.history_productionevent_events.all()
                 chemical_events = history.history_chemicalevent_events.all()
                 equipment_events = history.history_equipmentevent_events.all()
                 business_events = history.history_businessevent_events.all()
+                # FIX: Include the 4 missing event types
+                weather_events = history.history_weatherevent_events.all()
+                soil_events = history.history_soilmanagementevent_events.all()
+                pest_events = history.history_pestmanagementevent_events.all()
+                general_events = history.history_generalevent_events.all()
 
                 # Activity breakdown
                 product_name = history.product.name if history.product else "Unknown Product"
@@ -797,6 +842,10 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                         "chemical_events": 0,
                         "equipment_events": 0,
                         "business_events": 0,
+                        "weather_events": 0,  # NEW
+                        "soil_events": 0,  # NEW
+                        "pest_events": 0,  # NEW
+                        "general_events": 0,  # NEW
                         "total_events": 0,
                         "transparency_score": 0,
                         "carbon_footprint": 0,
@@ -807,9 +856,22 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 activity_data["chemical_events"] += len(chemical_events)
                 activity_data["equipment_events"] += len(equipment_events)
                 activity_data["business_events"] += len(business_events)
-                # Count total events for this production
+                # FIX: Include the 4 missing event types in counts
+                activity_data["weather_events"] += len(weather_events)
+                activity_data["soil_events"] += len(soil_events)
+                activity_data["pest_events"] += len(pest_events)
+                activity_data["general_events"] += len(general_events)
+
+                # Count total events for this production - ALL 8 event types
                 production_total_events = (
-                    len(production_events) + len(chemical_events) + len(equipment_events) + len(business_events)
+                    len(production_events)
+                    + len(chemical_events)
+                    + len(equipment_events)
+                    + len(business_events)
+                    + len(weather_events)  # NEW
+                    + len(soil_events)  # NEW
+                    + len(pest_events)  # NEW
+                    + len(general_events)  # NEW
                 )
                 activity_data["total_events"] += production_total_events
                 metrics["total_events"] += production_total_events  # Track establishment total
@@ -889,29 +951,30 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         if total_area_hectares and total_carbon_emissions > 0:
             metrics["carbon_intensity_per_hectare"] = total_carbon_emissions / total_area_hectares
 
-        # Calculate overall transparency score for establishment (FIXED: Direct calculation)
-        # SPECIAL CASE: Force correct calculation for establishment 41 (testing)
-        if establishment.id == 41:
-            metrics["transparency_percentage"] = 25.0  # Exactly what we expect: 1 production = 25%
-        elif metrics["total_productions"] > 0:
-            # ULTRA-SIMPLE calculation to avoid multiplication errors
-            transparency_score = 25.0  # Base 25% for having production(s)
+        # Calculate overall transparency score for establishment
+        # Uses the UNIFIED TransparencyCalculator for consistency with consumer QR pages
+        # This ensures producer dashboard shows SAME scores as consumer-facing pages
+        if metrics["total_productions"] > 0:
+            # Calculate transparency for each production using unified calculator
+            transparency_calculator = TransparencyCalculator()
+            production_scores = []
 
-            # Add bonuses but keep it simple
-            if metrics["total_events"] > 0:
-                bonus = min(25.0, metrics["total_events"] * 5.0)
-                transparency_score += bonus
+            for parcel in establishment.parcels.all():
+                for history in parcel.histories.all():
+                    try:
+                        result = transparency_calculator.calculate_transparency_score(history)
+                        score = result.get("transparency_percentage", 0)
+                        production_scores.append(score)
+                    except Exception as e:
+                        logger.warning(f"Failed to calculate transparency for history {history.id}: {e}")
+                        continue
 
-            if metrics["total_photos"] > 0:
-                bonus = min(10.0, metrics["total_photos"] * 3.0)
-                transparency_score += bonus
-
-            if metrics["total_verified_events"] > 0:
-                bonus = min(10.0, metrics["total_verified_events"] * 5.0)
-                transparency_score += bonus
-
-            # Ensure it's a reasonable percentage (cap at 100)
-            metrics["transparency_percentage"] = min(100.0, transparency_score)
+            # Average the transparency scores across all productions
+            # This gives establishment-level transparency that matches individual production scores
+            if production_scores:
+                metrics["transparency_percentage"] = round(sum(production_scores) / len(production_scores), 1)
+            else:
+                metrics["transparency_percentage"] = 0.0
         else:
             # No productions = 0% transparency
             metrics["transparency_percentage"] = 0.0
@@ -1005,8 +1068,16 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 )
 
             # Check blockchain verification for this production
-            blockchain_data = history.extra_data.get("blockchain", {}) if history.extra_data else {}
-            blockchain_verified = blockchain_data.get("verified", False)
+            # Check BOTH field locations for backwards compatibility
+            blockchain_verified = False
+            if history.extra_data and isinstance(history.extra_data, dict):
+                # Check root level first (current format)
+                blockchain_verified = history.extra_data.get("blockchain_verified", False)
+                # Fallback to nested format (legacy)
+                if not blockchain_verified:
+                    blockchain_data = history.extra_data.get("blockchain", {})
+                    if isinstance(blockchain_data, dict):
+                        blockchain_verified = blockchain_data.get("verified", False)
 
             # Build opportunity card for this production if it needs improvement
             missing_items = []
@@ -1119,10 +1190,18 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         metrics["trust_indicators_count"] = sum(trust_indicators)
 
         # CRITICAL FIX: Populate verification_status for frontend dashboard
-        # Count USDA verified productions (using same logic as main calculation above)
+        # Count verified productions - track UNIQUE productions with ANY verification type
+        # This prevents double-counting a production that has both blockchain AND USDA verification
         usda_verified_count = 0
+        blockchain_verified_count = 0
+        verified_production_ids = set()  # Track unique verified productions
+
         for parcel in establishment.parcels.all():
             for history in parcel.histories.all():
+                is_usda_verified = False
+                is_blockchain_verified = False
+
+                # Check USDA verification
                 carbon_entries = CarbonEntry.objects.filter(production=history)
                 total_entries = carbon_entries.count()
 
@@ -1131,29 +1210,42 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     usda_factors_based_entries = carbon_entries.filter(usda_factors_based=True).count()
 
                     # Production is USDA verified if majority of entries are USDA verified or factors-based
-                    production_usda_verified = usda_verified_entries > 0 or usda_factors_based_entries >= (
+                    is_usda_verified = usda_verified_entries > 0 or usda_factors_based_entries >= (
                         total_entries * 0.5
                     )
 
-                    if production_usda_verified:
+                    if is_usda_verified:
                         usda_verified_count += 1
 
-        # Count blockchain verified productions (based on extra_data.blockchain.verified)
-        blockchain_verified_count = 0
-        for parcel in establishment.parcels.all():
-            for history in parcel.histories.all():
-                if hasattr(history, "extra_data") and history.extra_data:
-                    blockchain_data = (
-                        history.extra_data.get("blockchain", {}) if isinstance(history.extra_data, dict) else {}
-                    )
-                    if blockchain_data.get("verified", False):
+                # Check blockchain verification
+                # Check BOTH field locations for backwards compatibility:
+                # - Root level: extra_data.blockchain_verified (current format)
+                # - Nested: extra_data.blockchain.verified (legacy format)
+                if hasattr(history, "extra_data") and history.extra_data and isinstance(history.extra_data, dict):
+                    # Check root level first (current format)
+                    is_blockchain_verified = history.extra_data.get("blockchain_verified", False)
+
+                    # Fallback to nested format (legacy)
+                    if not is_blockchain_verified:
+                        blockchain_data = history.extra_data.get("blockchain", {})
+                        if isinstance(blockchain_data, dict):
+                            is_blockchain_verified = blockchain_data.get("verified", False)
+
+                    if is_blockchain_verified:
                         blockchain_verified_count += 1
+
+                # Track unique verified productions (ANY verification type)
+                if is_usda_verified or is_blockchain_verified:
+                    verified_production_ids.add(history.id)
 
         # Populate verification status for frontend
         metrics["verification_status"] = {
             "usda_verified": usda_verified_count,
             "blockchain_verified": blockchain_verified_count,
             "photo_verified": metrics["total_photos"],  # Photos count serves as photo verification
+            # IMPORTANT: Total unique verified productions (not sum of verification types)
+            # A production with BOTH blockchain AND USDA counts as 1, not 2
+            "total_verified_productions": len(verified_production_ids),
         }
 
         return metrics
@@ -1241,59 +1333,133 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             }
 
     def _calculate_transparency_analytics(self, transparency_score, total_productions, total_events, establishment):
-        """Calculate real transparency analytics from actual data"""
-        from django.db import models
-        from django.db.models import Avg, Count
+        """
+        Calculate REAL transparency analytics from actual HistoryScan data.
 
-        from carbon.models import CarbonEntry
+        TRAZO TRANSPARENCY-FIRST MISSION: Show real data, not estimates.
+        This function returns actual QR scan metrics, not calculated estimates.
+        """
+        from datetime import timedelta
 
-        # Calculate consumer engagement based on actual QR scans and transparency data
-        # This uses a real engagement model based on transparency score and documented events
-        base_engagement = 15  # Baseline engagement for any transparency
-        transparency_boost = transparency_score * 35  # 35% max boost from transparency
-        events_boost = min(total_events * 2, 20)  # Events contribute up to 20% boost
-        consumer_engagement = int(base_engagement + transparency_boost + events_boost)
+        from django.db.models import Avg, Count, Q
+        from django.utils import timezone
 
-        # Calculate market trust score based on multiple real factors
-        trust_factors = {
-            "transparency_score": transparency_score * 30,  # 30 points max from transparency
-            "production_count": min(total_productions * 8, 25),  # 25 points max from productions
-            "events_documented": min(total_events * 2, 20),  # 20 points max from events
-            "company_verified": 10 if establishment.company else 0,  # 10 points for company
-            "location_verified": 10 if (establishment.city and establishment.state) else 0,  # 10 points for location
-            "area_documented": 5 if any(p.area for p in establishment.parcels.all()) else 0,  # 5 points for area
-        }
-        market_trust_score = int(sum(trust_factors.values()))
+        from history.models import History, HistoryScan
 
-        # Calculate potential improvements based on actual gaps
+        # Get all productions for this establishment
+        production_ids = History.objects.filter(parcel__establishment=establishment).values_list("id", flat=True)
+
+        # Get all high-quality scans (non-duplicate, non-bot) for establishment productions
+        now = timezone.now()
+        thirty_days_ago = now - timedelta(days=30)
+        sixty_days_ago = now - timedelta(days=60)
+
+        # Filter for high-quality scans only (not duplicates, low bot score)
+        quality_filter = Q(is_duplicate=False) & Q(bot_score__lt=0.3)
+
+        # Current month scans (last 30 days)
+        current_month_scans = HistoryScan.objects.filter(
+            history_id__in=production_ids, date__gte=thirty_days_ago
+        ).filter(quality_filter)
+
+        # Previous month scans (30-60 days ago) for growth calculation
+        previous_month_scans = HistoryScan.objects.filter(
+            history_id__in=production_ids, date__gte=sixty_days_ago, date__lt=thirty_days_ago
+        ).filter(quality_filter)
+
+        # All-time scans
+        all_time_scans = HistoryScan.objects.filter(history_id__in=production_ids).filter(quality_filter)
+
+        # === REAL METRICS ===
+
+        # 1. Monthly QR Scans (last 30 days)
+        monthly_qr_scans = current_month_scans.count()
+
+        # 2. Total QR Scans (all time)
+        total_qr_scans = all_time_scans.count()
+
+        # 3. Unique Visitors (unique session_hash)
+        unique_sessions = all_time_scans.values("session_hash").distinct().count()
+        monthly_unique_visitors = current_month_scans.values("session_hash").distinct().count()
+
+        # 4. Consumer Reach (unique countries)
+        countries_reached = all_time_scans.exclude(country_code="").values("country_code").distinct().count()
+
+        # 5. Geographic breakdown
+        top_countries = list(
+            all_time_scans.exclude(country_code="")
+            .values("country_code")
+            .annotate(scan_count=Count("id"))
+            .order_by("-scan_count")[:5]
+        )
+
+        # 6. Scan Growth % (month over month)
+        previous_month_count = previous_month_scans.count()
+        if previous_month_count > 0:
+            scan_growth_percent = round(((monthly_qr_scans - previous_month_count) / previous_month_count) * 100, 1)
+        else:
+            # If no previous data, show 100% growth if we have current scans
+            scan_growth_percent = 100 if monthly_qr_scans > 0 else 0
+
+        # 7. Average Engagement Score (real engagement from HistoryScan)
+        avg_engagement = all_time_scans.aggregate(avg_engagement=Avg("engagement_score"))["avg_engagement"] or 0
+
+        # 8. Scan Type Breakdown
+        scan_type_breakdown = dict(
+            all_time_scans.values("scan_type").annotate(count=Count("id")).values_list("scan_type", "count")
+        )
+
+        # 9. Referrer Type Breakdown (how consumers found the page)
+        referrer_breakdown = dict(
+            all_time_scans.values("referrer_type").annotate(count=Count("id")).values_list("referrer_type", "count")
+        )
+
+        # 10. Calculate recommendations based on REAL data
         recommendations = []
-        potential_impacts = []
-
-        if transparency_score < 0.3:
-            recommendations.append("Add 3+ events")
-            potential_impacts.append(30)
-        elif transparency_score < 0.7:
-            recommendations.append("Upload photos")
-            potential_impacts.append(20)
+        if total_qr_scans == 0:
+            recommendations.append(
+                {"action": "Share QR codes", "impact": "Start building consumer trust", "priority": "high"}
+            )
+        elif monthly_qr_scans < 10:
+            recommendations.append(
+                {"action": "Increase QR visibility", "impact": "More scans = more consumer trust", "priority": "medium"}
+            )
+        elif scan_growth_percent < 0:
+            recommendations.append(
+                {"action": "Re-engage consumers", "impact": "Reverse declining engagement", "priority": "high"}
+            )
         else:
-            recommendations.append("Share QR codes")
-            potential_impacts.append(10)
-
-        # Get actual average carbon data from productions
-        carbon_entries = CarbonEntry.objects.filter(establishment=establishment)
-        if carbon_entries.exists():
-            # Calculate from actual data
-            avg_carbon = carbon_entries.aggregate(avg_emissions=Avg("co2e_amount"))["avg_emissions"] or 0
-        else:
-            avg_carbon = 0
+            recommendations.append(
+                {"action": "Maintain momentum", "impact": "Continue growing consumer base", "priority": "low"}
+            )
 
         return {
-            "consumer_engagement_boost": consumer_engagement,
-            "market_trust_score": market_trust_score,
-            "recommended_action": recommendations[0] if recommendations else "Maintain excellence",
-            "potential_impact": potential_impacts[0] if potential_impacts else 5,
-            "trust_factors": trust_factors,
-            "average_carbon_footprint": round(avg_carbon, 2) if avg_carbon else None,
+            # === PRIMARY REAL METRICS (for Transparency Impact card) ===
+            "monthly_qr_scans": monthly_qr_scans,
+            "total_qr_scans": total_qr_scans,
+            "unique_visitors": unique_sessions,
+            "monthly_unique_visitors": monthly_unique_visitors,
+            "countries_reached": countries_reached,
+            "scan_growth_percent": scan_growth_percent,
+            "avg_engagement_score": round(avg_engagement * 100, 1),  # Convert to percentage
+            # === DETAILED BREAKDOWNS ===
+            "top_countries": top_countries,
+            "scan_type_breakdown": scan_type_breakdown,
+            "referrer_breakdown": referrer_breakdown,
+            # === CONTEXT DATA ===
+            "transparency_score_percent": round(transparency_score * 100, 1),
+            "total_productions": total_productions,
+            "total_events": total_events,
+            # === ACTIONABLE RECOMMENDATIONS ===
+            "recommendations": recommendations,
+            # === DATA QUALITY INDICATORS ===
+            "data_quality": {
+                "has_real_data": total_qr_scans > 0,
+                "data_period_days": 30,
+                "quality_filter_applied": True,
+                "bot_filtered": True,
+                "duplicates_filtered": True,
+            },
         }
 
     def _calculate_response_time(self):

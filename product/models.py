@@ -117,20 +117,40 @@ class Parcel(models.Model):
 
     def get_sustainability_practices(self):
         """Get sustainability practices narrative for consumers"""
-        return self.agricultural_details.get("sustainability_practices", "")
+        # Check multiple possible keys due to form field mapping
+        return (
+            self.agricultural_details.get("sustainability_practices")
+            or self.agricultural_details.get("cover_crop_management")
+            or self.agricultural_details.get("carbon_sequestration_practices")
+            or ""
+        )
 
     def get_consumer_story(self):
         """Get consumer story explaining why this parcel matters"""
-        return self.agricultural_details.get("consumer_story", "")
+        # Check multiple possible keys due to form field mapping
+        return (
+            self.agricultural_details.get("consumer_story")
+            or self.agricultural_details.get("consumer_narrative")
+            or ""
+        )
 
     def get_primary_crop(self):
         """Get primary crop focus for this parcel"""
-        return self.agricultural_details.get("primary_crop", "")
+        # Check multiple possible keys due to form field mapping
+        return (
+            self.agricultural_details.get("primary_crop")
+            or self.agricultural_details.get("crop_focus")
+            or ""
+        )
 
     def is_transparency_ready(self):
         """Check if parcel has sufficient transparency data for consumer display"""
         has_description = bool(self.description and len(self.description.strip()) >= 10)
-        has_practices = bool(self.agricultural_details.get("sustainability_practices"))
+        has_practices = bool(
+            self.agricultural_details.get("sustainability_practices")
+            or self.agricultural_details.get("cover_crop_management")
+            or self.agricultural_details.get("carbon_sequestration_practices")
+        )
         has_images = bool(self.album and self.album.images.exists())
 
         return has_description and (has_practices or has_images)
@@ -150,7 +170,11 @@ class Parcel(models.Model):
                 score += 20
 
         # Sustainability practices (30 points)
-        if self.agricultural_details.get("sustainability_practices"):
+        if (
+            self.agricultural_details.get("sustainability_practices")
+            or self.agricultural_details.get("cover_crop_management")
+            or self.agricultural_details.get("carbon_sequestration_practices")
+        ):
             score += 30
 
         # Visual documentation (20 points)

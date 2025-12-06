@@ -196,6 +196,7 @@ class ReviewsViewSet(viewsets.ModelViewSet):
                     "rating": review.rating,
                     "headline": review.headline or "",
                     "written_review": review.written_review or "",
+                    "images": review.images or [],
                     "production": (
                         review.production.period
                         if review.production and hasattr(review.production, "period")

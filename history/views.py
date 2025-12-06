@@ -186,7 +186,21 @@ class HistoryViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def update(self, request, *args, **kwargs):
-        """Override update to invalidate cache."""
+        """Override update to invalidate cache and enforce visibility rules."""
+        # BUSINESS RULE: Active (in-progress) productions cannot be made visible to consumers
+        # Only completed productions (those with finish_date) can be published
+        instance = self.get_object()
+        requested_published = request.data.get("published")
+
+        if requested_published is True and instance.finish_date is None:
+            return Response(
+                {
+                    "error": "Active productions cannot be made visible to consumers",
+                    "detail": "Complete the production first by setting a finish_date before making it visible.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         response = super().update(request, *args, **kwargs)
 
         # Invalidate cache for this parcel's history list
@@ -1745,6 +1759,58 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
+
+        # 🚨 DEBUG: Log all image-related data from request
+        delete_ids_raw = request.data.get("delete_image_ids", [])
+        album_images_raw = request.data.get("album_images", [])
+        print(f"[EventViewSet.update] 📸 Image data received:")
+        print(f"  - delete_image_ids RAW: {delete_ids_raw} (type: {type(delete_ids_raw)})")
+        print(f"  - album_images RAW: {album_images_raw} (type: {type(album_images_raw)})")
+        print(f"  - instance.album: {instance.album}")
+        if hasattr(instance, "album") and instance.album:
+            current_images = list(instance.album.images.values_list("id", "image_url", "image"))
+            print(f"  - current images in album: {current_images}")
+
+        # Handle deletion of existing images BEFORE the update
+        delete_image_ids = request.data.get("delete_image_ids", [])
+        if delete_image_ids and hasattr(instance, "album") and instance.album:
+            print(
+                f"[EventViewSet.update] 🗑️ Attempting to delete {len(delete_image_ids)} images: {delete_image_ids}"
+            )
+            # Check what images exist before deletion
+            existing_ids = list(instance.album.images.values_list("id", flat=True))
+            print(f"[EventViewSet.update] 🗑️ Images that exist in album: {existing_ids}")
+            matching_ids = [img_id for img_id in delete_image_ids if int(img_id) in existing_ids]
+            print(f"[EventViewSet.update] 🗑️ Matching IDs to delete: {matching_ids}")
+            deleted_count = instance.album.images.filter(id__in=delete_image_ids).delete()
+            print(f"[EventViewSet.update] 🗑️ Deleted {deleted_count[0]} images")
+            remaining = list(instance.album.images.values_list("id", flat=True))
+            print(f"[EventViewSet.update] 🗑️ Remaining images after delete: {remaining}")
+        else:
+            print(f"[EventViewSet.update] ⚠️ No deletion: delete_image_ids={delete_image_ids}, has_album={hasattr(instance, 'album') and instance.album}")
+
+        # Handle adding NEW images (S3 URLs) - handled here for ALL event types
+        album_images = request.data.get("album_images", [])
+        if album_images:
+            print(f"[EventViewSet.update] ➕ Adding {len(album_images)} new images")
+            from .models import Gallery
+
+            # Create album if doesn't exist
+            if not hasattr(instance, "album") or not instance.album:
+                instance.album = Gallery.objects.create()
+                instance.save(update_fields=["album"])
+                print(f"[EventViewSet.update] ➕ Created new album: {instance.album.id}")
+
+            # Add new images to album
+            for image_url in album_images:
+                s3_key = image_url.split("/")[-1] if "/" in image_url else None
+                gallery_image = instance.album.images.create(image_url=image_url, s3_key=s3_key)
+                print(f"[EventViewSet.update] ➕ Created image {gallery_image.id} with URL: {image_url[:50]}...")
+
+            final_images = list(instance.album.images.values_list("id", "image_url"))
+            print(f"[EventViewSet.update] ➕ Final images in album: {final_images}")
+        else:
+            print(f"[EventViewSet.update] ⚠️ No new images to add")
 
         # If event types match, proceed with normal update
         return super().update(request, *args, **kwargs)

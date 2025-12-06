@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from common.models import Gallery
+from common.serializers import GallerySerializer
 from company.models import Establishment
 from product.models import Parcel, Product
 from users.models import User
@@ -29,6 +30,41 @@ from .models import (
     SoilManagementEvent,
     WeatherEvent,
 )
+
+
+def serialize_event_album(event, request=None):
+    """
+    Helper function to serialize album with images for event objects.
+    Used by Update serializers to return full album data instead of just ID.
+    """
+    if not event.album:
+        return None
+
+    try:
+        images = []
+        for image in event.album.images.all():
+            # Prefer image_url (S3 URL) over file field
+            if image.image_url:
+                image_url = image.image_url
+            elif image.image:
+                image_url = request.build_absolute_uri(image.image.url) if request else image.image.url
+            else:
+                # Use placeholder image for testing
+                image_url = "https://via.placeholder.com/400x300/4CAF50/FFFFFF?text=Farming+Practice+Photo"
+
+            images.append(
+                {
+                    "id": image.id,
+                    "image": image_url,
+                    "caption": f"Farming practice photo {image.id}",
+                    "created_at": image.created_at.isoformat() if image.created_at else None,
+                }
+            )
+
+        return {"id": event.album.id, "images": images} if images else None
+    except Exception as e:
+        # Return None if there's any issue with album serialization
+        return None
 
 
 class EventSerializer(serializers.ModelSerializer):
@@ -286,6 +322,17 @@ class UpdateChemicalEventSerializer(serializers.ModelSerializer):
 
         return data
 
+    def to_representation(self, instance):
+        """Override to serialize album with images instead of just ID"""
+        data = super().to_representation(instance)
+
+        # Serialize album with images instead of just returning ID
+        if hasattr(instance, "album") and instance.album:
+            request = self.context.get("request")
+            data["album"] = serialize_event_album(instance, request)
+
+        return data
+
 
 class ChemicalEventSerializer(EventSerializer):
     type = serializers.SerializerMethodField()
@@ -343,8 +390,8 @@ class UpdateWeatherEventSerializer(serializers.ModelSerializer):
             )
             extra_data["water_deficit"] = water_deficit_value
         elif event_type == WeatherEvent.HAILSTORM:
-            extra_data["weight"] = data.pop("weight", None)
-            extra_data["diameter"] = data.pop("diameter", None)
+            # Sprint 2 Epic 2.1.3: Removed weight and diameter fields (excessive detail)
+            # Only keep duration and way_of_protection
             extra_data["duration"] = data.pop("duration", None)
             extra_data["way_of_protection"] = data.pop("way_of_protection", None)
         elif event_type == WeatherEvent.HIGH_TEMPERATURE:
@@ -409,8 +456,8 @@ class UpdateWeatherEventSerializer(serializers.ModelSerializer):
         elif type == WeatherEvent.DROUGHT:
             data["water_deficit"] = extra_data.get("water_deficit", 0)
         elif type == WeatherEvent.HAILSTORM:
-            data["weight"] = extra_data.get("weight", 0)
-            data["diameter"] = extra_data.get("diameter", 0)
+            # Sprint 2 Epic 2.1.3: Removed weight and diameter fields (excessive detail)
+            # Only expose duration and way_of_protection
             data["duration"] = extra_data.get("duration", 0)
             data["way_of_protection"] = extra_data.get("way_of_protection", "")
         elif type == WeatherEvent.HIGH_TEMPERATURE:
@@ -562,6 +609,11 @@ class UpdateWeatherEventSerializer(serializers.ModelSerializer):
                 data["extra_data"]["total_offsets"] = 0.0
                 data["extra_data"]["carbon_score"] = 50
 
+        # Serialize album with images instead of just returning ID
+        if hasattr(instance, "album") and instance.album:
+            request = self.context.get("request")
+            data["album"] = serialize_event_album(instance, request)
+
         return data
 
     def update(self, instance, validated_data):
@@ -608,37 +660,8 @@ class UpdateWeatherEventSerializer(serializers.ModelSerializer):
                 except Exception as e:
                     print(f"[UpdateWeatherEventSerializer.update] Error setting history: {e}")
 
-        # Handle album images from S3 URLs (modern approach)
-        album_images = request.data.get("album_images", []) if request else []
-
-        if album_images:
-            print(f"[UpdateWeatherEventSerializer.update] Processing {len(album_images)} album images from S3 URLs")
-            gallery = instance.album
-            if gallery is None:
-                gallery = Gallery.objects.create()
-                print(f"[UpdateWeatherEventSerializer.update] Created new gallery: {gallery.id}")
-
-            # Create GalleryImage records from S3 URLs
-            for image_url in album_images:
-                # Extract S3 key from URL if possible
-                s3_key = image_url.split("/")[-1] if "/" in image_url else None
-                gallery_image = gallery.images.create(image_url=image_url, s3_key=s3_key)
-                print(
-                    f"[UpdateWeatherEventSerializer.update] Created gallery image {gallery_image.id} with URL: {image_url}"
-                )
-
-            validated_data["album"] = gallery
-
-        # Legacy support: Handle file uploads (will be deprecated)
-        elif request and request.FILES:
-            album_data = request.FILES
-            gallery = instance.album
-            if gallery is None:
-                gallery = Gallery.objects.create()
-            for image_data in album_data.getlist("album[images]"):
-                gallery_image = gallery.images.create(image=image_data)
-                gallery_image.save()
-            validated_data["album"] = gallery
+        # NOTE: Album images (add/delete) are handled in EventViewSet.update
+        # This ensures consistent behavior across all event types
 
         # Call parent update
         updated_instance = super().update(instance, validated_data)
@@ -858,6 +881,17 @@ class UpdateProductionEventSerializer(serializers.ModelSerializer):
 
         return data
 
+    def to_representation(self, instance):
+        """Override to serialize album with images instead of just ID"""
+        data = super().to_representation(instance)
+
+        # Serialize album with images instead of just returning ID
+        if hasattr(instance, "album") and instance.album:
+            request = self.context.get("request")
+            data["album"] = serialize_event_album(instance, request)
+
+        return data
+
 
 class ProductionEventSerializer(EventSerializer):
     type = serializers.SerializerMethodField()
@@ -881,6 +915,17 @@ class UpdateGeneralEventSerializer(serializers.ModelSerializer):
     class Meta:
         model = GeneralEvent
         fields = "__all__"
+
+    def to_representation(self, instance):
+        """Override to serialize album with images instead of just ID"""
+        data = super().to_representation(instance)
+
+        # Serialize album with images instead of just returning ID
+        if hasattr(instance, "album") and instance.album:
+            request = self.context.get("request")
+            data["album"] = serialize_event_album(instance, request)
+
+        return data
 
 
 class GeneralEventSerializer(EventSerializer):
@@ -1491,6 +1536,13 @@ class PublicHistorySerializer(serializers.ModelSerializer):
             # Get basic event data without expensive carbon calculations
             events_data = []
 
+            # Extract blockchain verification data from production extra_data
+            blockchain_verified = False
+            blockchain_transaction = None
+            if history.extra_data:
+                blockchain_verified = history.extra_data.get("blockchain_verified", False)
+                blockchain_transaction = history.extra_data.get("blockchain_transaction")
+
             # Get events using minimal queries with correct related names
             chemical_events = history.history_chemicalevent_events.only(
                 "id",
@@ -1611,6 +1663,9 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "application_timing": getattr(event, "application_timing", None),
                         "target_pest_disease": getattr(event, "target_pest_disease", None),
                         "extra_data": getattr(event, "extra_data", None),
+                        # Blockchain verification fields from production
+                        "blockchain_verified": blockchain_verified,
+                        "blockchain_transaction": blockchain_transaction,
                     }
                 )
 
@@ -1652,6 +1707,9 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "photo_count": photo_count,
                         "commercial_name": None,
                         "album": album_data,
+                        # Blockchain verification fields from production
+                        "blockchain_verified": blockchain_verified,
+                        "blockchain_transaction": blockchain_transaction,
                     }
                 )
 
@@ -1697,6 +1755,9 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "album": album_data,
                         # 🌦️ WEATHER FIELDS: Add missing extra_data for weather-specific fields unification
                         "extra_data": getattr(event, "extra_data", None),
+                        # Blockchain verification fields from production
+                        "blockchain_verified": blockchain_verified,
+                        "blockchain_transaction": blockchain_transaction,
                     }
                 )
 
@@ -1759,6 +1820,9 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "photo_count": photo_count,
                         "commercial_name": None,
                         "album": album_data,
+                        # Blockchain verification fields from production
+                        "blockchain_verified": blockchain_verified,
+                        "blockchain_transaction": blockchain_transaction,
                     }
                 )
 
@@ -1836,6 +1900,9 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "temperature_range": getattr(event, "temperature_range", None),  # Temperature range
                         "equipment_used": getattr(event, "equipment_used", None),  # Equipment type used
                         "extra_data": getattr(event, "extra_data", None),  # Additional soil management data
+                        # Blockchain verification fields from production
+                        "blockchain_verified": blockchain_verified,
+                        "blockchain_transaction": blockchain_transaction,
                     }
                 )
 
@@ -1877,6 +1944,9 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "photo_count": photo_count,
                         "commercial_name": None,
                         "album": album_data,
+                        # Blockchain verification fields from production
+                        "blockchain_verified": blockchain_verified,
+                        "blockchain_transaction": blockchain_transaction,
                     }
                 )
 
@@ -1923,6 +1993,9 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "activity_name": getattr(event, "activity_name", None),
                         "duration": getattr(event, "duration", None),
                         "people_involved": getattr(event, "people_involved", None),
+                        # Blockchain verification fields from production
+                        "blockchain_verified": blockchain_verified,
+                        "blockchain_transaction": blockchain_transaction,
                     }
                 )
 
@@ -1975,6 +2048,9 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "photo_count": photo_count,
                         "commercial_name": None,
                         "album": album_data,
+                        # Blockchain verification fields from production
+                        "blockchain_verified": blockchain_verified,
+                        "blockchain_transaction": blockchain_transaction,
                     }
                 )
 
@@ -2311,6 +2387,17 @@ class UpdateEquipmentEventSerializer(serializers.ModelSerializer):
 
         return data
 
+    def to_representation(self, instance):
+        """Override to serialize album with images instead of just ID"""
+        data = super().to_representation(instance)
+
+        # Serialize album with images instead of just returning ID
+        if hasattr(instance, "album") and instance.album:
+            request = self.context.get("request")
+            data["album"] = serialize_event_album(instance, request)
+
+        return data
+
 
 class EquipmentEventSerializer(EventSerializer):
     type = serializers.SerializerMethodField()
@@ -2390,6 +2477,17 @@ class UpdateSoilManagementEventSerializer(serializers.ModelSerializer):
         print(f"[UpdateSoilManagementEventSerializer.to_internal_value] Final internal_value: {internal_value}")
         return internal_value
 
+    def to_representation(self, instance):
+        """Override to serialize album with images instead of just ID"""
+        data = super().to_representation(instance)
+
+        # Serialize album with images instead of just returning ID
+        if hasattr(instance, "album") and instance.album:
+            request = self.context.get("request")
+            data["album"] = serialize_event_album(instance, request)
+
+        return data
+
 
 class SoilManagementEventSerializer(EventSerializer):
     type = serializers.SerializerMethodField()
@@ -2414,6 +2512,17 @@ class UpdatePestManagementEventSerializer(serializers.ModelSerializer):
     class Meta:
         model = PestManagementEvent
         fields = "__all__"
+
+    def to_representation(self, instance):
+        """Override to serialize album with images instead of just ID"""
+        data = super().to_representation(instance)
+
+        # Serialize album with images instead of just returning ID
+        if hasattr(instance, "album") and instance.album:
+            request = self.context.get("request")
+            data["album"] = serialize_event_album(instance, request)
+
+        return data
 
 
 class PestManagementEventSerializer(EventSerializer):
@@ -2518,6 +2627,17 @@ class UpdateBusinessEventSerializer(serializers.ModelSerializer):
                     ]
                 }
             )
+
+        return data
+
+    def to_representation(self, instance):
+        """Override to serialize album with images instead of just ID"""
+        data = super().to_representation(instance)
+
+        # Serialize album with images instead of just returning ID
+        if hasattr(instance, "album") and instance.album:
+            request = self.context.get("request")
+            data["album"] = serialize_event_album(instance, request)
 
         return data
 

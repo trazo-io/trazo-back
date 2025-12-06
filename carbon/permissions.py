@@ -15,22 +15,45 @@ from rest_framework.exceptions import Throttled
 
 logger = logging.getLogger(__name__)
 
+# Rate limit configuration - can be overridden in settings
+# Production: 300 requests/hour (5 per minute) - reasonable for consumer QR pages
+# Development: No limit (DEBUG=True bypasses rate limiting)
+QR_RATE_LIMIT_REQUESTS = getattr(settings, "QR_RATE_LIMIT_REQUESTS", 300)
+QR_RATE_LIMIT_WINDOW = getattr(settings, "QR_RATE_LIMIT_WINDOW", 3600)  # 1 hour in seconds
+
 
 class PublicQRPermission(permissions.BasePermission):
     """
     Custom permission for public QR code endpoints.
     Implements rate limiting and basic security without breaking QR functionality.
+
+    IMPORTANT:
+    - Authenticated users bypass rate limiting (they have their own throttles)
+    - DEBUG mode bypasses rate limiting for development convenience
+    - Rate limits are configurable via settings.QR_RATE_LIMIT_REQUESTS
     """
 
     def has_permission(self, request, view):
-        # Only allow GET requests for public endpoints
+        # CRITICAL: Authenticated users bypass public rate limiting
+        # They're already subject to standard authentication throttles
+        # This allows producer dashboards to use these endpoints freely
+        if request.user and request.user.is_authenticated:
+            logger.debug(f"✅ PublicQRPermission: Authenticated user {request.user.id} - bypassing rate limit")
+            return True
+
+        # DEBUG mode: Skip rate limiting for development convenience
+        if settings.DEBUG:
+            logger.debug("✅ PublicQRPermission: DEBUG mode - bypassing rate limit")
+            return True
+
+        # Only allow GET requests for public (unauthenticated) endpoints
         if request.method != "GET":
             logger.warning(
                 f"🚨 PublicQRPermission: Non-GET request {request.method} blocked from {self._get_client_ip(request)}"
             )
             return False
 
-        # Implement rate limiting
+        # Implement rate limiting for unauthenticated requests only
         if not self._check_rate_limit(request):
             logger.warning(f"🚨 PublicQRPermission: Rate limit exceeded for {self._get_client_ip(request)}")
             raise Throttled(detail="Rate limit exceeded for public QR access")
@@ -52,8 +75,9 @@ class PublicQRPermission(permissions.BasePermission):
 
     def _check_rate_limit(self, request):
         """
-        Implement rate limiting: 60 requests per hour per IP.
-        More permissive than authentication-required endpoints but still protective.
+        Implement rate limiting: configurable requests per hour per IP.
+        Default: 300 requests/hour (5 per minute) - reasonable for consumer QR pages.
+        A single QR page load may trigger 3-5 API calls, so 60/hour was too restrictive.
         """
         ip = self._get_client_ip(request)
         cache_key = f"qr_rate_limit:{ip}"
@@ -61,12 +85,12 @@ class PublicQRPermission(permissions.BasePermission):
         # Get current request count
         current_count = cache.get(cache_key, 0)
 
-        # Rate limit: 60 requests per hour (1 per minute average)
-        if current_count >= 60:
+        # Rate limit check using configurable values
+        if current_count >= QR_RATE_LIMIT_REQUESTS:
             return False
 
-        # Increment counter with 1-hour expiry
-        cache.set(cache_key, current_count + 1, 3600)
+        # Increment counter with configurable expiry window
+        cache.set(cache_key, current_count + 1, QR_RATE_LIMIT_WINDOW)
         return True
 
     def _is_suspicious_user_agent(self, user_agent):
