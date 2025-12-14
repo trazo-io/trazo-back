@@ -10,6 +10,7 @@ from django.db.models import Avg
 import qrcode
 
 from backend.security.qr_security import generate_secure_qr_url
+from carbon.choices import FUEL_TYPES
 from common.models import Gallery
 from product.models import Parcel
 
@@ -171,6 +172,9 @@ class History(models.Model):
         """
         Calculate statistical confidence in carbon calculations (0-100%)
         Based on data completeness, measurement precision, verification status
+
+        ⚡ OPTIMIZATION: Uses prefetched event data when available (no queries),
+        falls back to .count() only when necessary.
         """
         score = 0
 
@@ -180,16 +184,50 @@ class History(models.Model):
         score += (completed_fields / len(required_fields)) * 40
 
         # Events documentation (30 points)
-        total_events = (
-            self.history_productionevent_events.count()
-            + self.history_chemicalevent_events.count()
-            + self.history_weatherevent_events.count()
-            + self.history_generalevent_events.count()
-            + self.history_equipmentevent_events.count()
-            + self.history_soilmanagementevent_events.count()
-            + self.history_pestmanagementevent_events.count()
-            + self.history_businessevent_events.count()
-        )
+        # ⚡ OPTIMIZATION: Use prefetched data if available, avoid COUNT queries
+        total_events = 0
+        try:
+            # Check if events are prefetched (from view's prefetch_related)
+            # Access the prefetch cache directly to avoid .count() queries
+            prefetch_cache = getattr(self, '_prefetched_objects_cache', {})
+
+            # Map relationship names to their prefetch cache keys
+            event_relations = [
+                'history_productionevent_events',
+                'history_chemicalevent_events',
+                'history_weatherevent_events',
+                'history_generalevent_events',
+                'history_equipmentevent_events',
+                'history_soilmanagementevent_events',
+                'history_pestmanagementevent_events',
+                'history_businessevent_events'
+            ]
+
+            # Try to use prefetched data, fall back to .count() if not available
+            if prefetch_cache:
+                # Events are prefetched, use cached list lengths (no queries)
+                for relation_name in event_relations:
+                    if relation_name in prefetch_cache:
+                        total_events += len(prefetch_cache[relation_name])
+                    else:
+                        # Fallback for this specific relation
+                        total_events += getattr(self, relation_name).count()
+            else:
+                # Not prefetched, use .count() (triggers queries)
+                for relation_name in event_relations:
+                    total_events += getattr(self, relation_name).count()
+        except Exception:
+            # Fallback for any edge cases - use .count()
+            total_events = (
+                self.history_productionevent_events.count()
+                + self.history_chemicalevent_events.count()
+                + self.history_weatherevent_events.count()
+                + self.history_generalevent_events.count()
+                + self.history_equipmentevent_events.count()
+                + self.history_soilmanagementevent_events.count()
+                + self.history_pestmanagementevent_events.count()
+                + self.history_businessevent_events.count()
+            )
         if total_events > 0:
             score += min(total_events * 3, 30)  # 3 points per event, max 30
 
@@ -634,6 +672,36 @@ class ChemicalEvent(CommonEvent):
         help_text="Structured application method",
     )
 
+    # Sprint 3 Epic 3.3: Application Fuel Tracking
+    # Tracks fuel consumed by application equipment (sprayers, spreaders, etc.)
+    # Important for accurate carbon emissions: application fuel often equals/exceeds manufacturing emissions
+    application_fuel_type = models.CharField(
+        max_length=30,
+        choices=FUEL_TYPES,
+        blank=True,
+        default="",
+        help_text="Fuel type for application equipment (EPA emission factor selection)",
+    )
+    application_fuel_consumed = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Fuel consumed by application equipment (sprayer, spreader, etc.)",
+    )
+    application_fuel_unit = models.CharField(
+        max_length=10,
+        choices=[
+            ("L", "Liters"),
+            ("gal", "Gallons"),
+            ("kg", "Kilograms"),
+            ("kWh", "Kilowatt-hours"),
+        ],
+        default="L",
+        blank=True,
+        help_text="Fuel unit for application equipment",
+    )
+
     # Environmental context fields for transparency
     weather_conditions = models.CharField(
         max_length=100, blank=True, null=True, help_text="Weather conditions during application for transparency"
@@ -837,6 +905,7 @@ class ProductionEvent(CommonEvent):
             ("L", "Liters"),
             ("gal", "Gallons"),
             ("kg", "Kilograms"),
+            ("kWh", "Kilowatt-hours"),
         ],
         default="L",
         blank=True,
@@ -892,31 +961,67 @@ class ProductionEvent(CommonEvent):
         null=True,
         help_text="Source of seeds/seedlings for consumer transparency (does not affect carbon calculations)",
     )
+    # Updated 2025-12-06: Aligned with transparency-first frontend choices
     water_source = models.CharField(
         max_length=50,
         choices=[
-            ("well", "Well Water"),
-            ("rainwater", "Rainwater Harvesting"),
-            ("municipal", "Municipal Supply"),
-            ("river", "River/Stream"),
-            ("recycled", "Recycled Water"),
+            ("well_groundwater", "Well/Groundwater"),
+            ("municipal", "Municipal Water Supply"),
+            ("rainwater_harvesting", "Rainwater Harvesting"),
+            ("irrigation_canal", "Irrigation Canal/District"),
+            ("river_stream", "River/Stream"),
+            ("pond_reservoir", "Pond/Reservoir"),
+            ("recycled_water", "Recycled/Reclaimed Water"),
+            ("other", "Other"),
         ],
         blank=True,
         null=True,
-        help_text="Water source for irrigation transparency",
+        help_text="Water source for irrigation transparency (does not affect carbon calculations)",
+    )
+
+    # USDA NASS 2023 Irrigation Fields - For Irrigation (IR) events
+    # These fields enable accurate water usage estimation for transparency reporting
+    irrigation_method = models.CharField(
+        max_length=30,
+        choices=[
+            ("flood", "Flood Irrigation"),
+            ("furrow", "Furrow Irrigation"),
+            ("drip", "Drip Irrigation"),
+            ("sprinkler", "Sprinkler System"),
+            ("center_pivot", "Center Pivot"),
+            ("sub_irrigation", "Sub-surface Irrigation"),
+            ("micro_sprinkler", "Micro-sprinkler"),
+            ("hand_watering", "Hand Watering"),
+            ("rain_fed", "Rain-fed Only"),
+        ],
+        blank=True,
+        null=True,
+        help_text="Irrigation method used (USDA NASS 2023 categories for transparency)",
+    )
+    irrigation_depth = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        help_text="Irrigation depth applied (USDA NASS: ~27,154 gal/acre per inch)",
+    )
+    irrigation_depth_unit = models.CharField(
+        max_length=10,
+        choices=[
+            ("inches", "Inches"),
+            ("cm", "Centimeters"),
+        ],
+        default="inches",
+        blank=True,
+        null=True,
+        help_text="Unit for irrigation depth measurement",
     )
 
     # Sprint 2 Epic 2.1: Equipment Maintenance fields (merged from EquipmentEvent)
     # These fields are used when production_type = 'EM' (Equipment Maintenance)
     fuel_type = models.CharField(
         max_length=20,
-        choices=[
-            ("diesel", "Diesel"),
-            ("gasoline", "Gasoline"),
-            ("natural_gas", "Natural Gas"),
-            ("lpg", "LPG"),
-            ("electric", "Electric"),
-        ],
+        choices=FUEL_TYPES,
         blank=True,
         null=True,
         help_text="Fuel type for equipment (EPA emission factor selection)",
@@ -1177,7 +1282,13 @@ class EquipmentEvent(CommonEvent):
     type = models.CharField(max_length=2, choices=EQUIPMENT_TYPE_CHOICES, default=MAINTENANCE)
     equipment_name = models.CharField(max_length=100, blank=True)
     fuel_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    fuel_type = models.CharField(max_length=50, blank=True)  # diesel, gasoline, etc.
+    fuel_type = models.CharField(
+        max_length=30,
+        choices=FUEL_TYPES,
+        blank=True,
+        default="",
+        help_text="Fuel type for EPA emission factor calculation",
+    )
     maintenance_cost = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     hours_used = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     area_covered = models.CharField(max_length=100, blank=True)
@@ -1214,6 +1325,7 @@ class EquipmentEvent(CommonEvent):
             ("L", "Liters"),
             ("gal", "Gallons"),
             ("kg", "Kilograms"),
+            ("kWh", "Kilowatt-hours"),
         ],
         default="L",
         blank=True,
@@ -1296,9 +1408,9 @@ class EquipmentEvent(CommonEvent):
                     f"Fuel consumption ({fuel_per_hour:.1f}L/hr) seems unreasonably low. Check values."
                 )
 
-        # Validate reasonable operating hours (max 24 hours per day)
-        if self.hours_operated and self.hours_operated > 24:
-            errors["hours_operated"] = "Hours operated cannot exceed 24 hours per day"
+        # Validate reasonable operating hours (max 1000 hours for multi-day operations)
+        if self.hours_operated and self.hours_operated > 1000:
+            errors["hours_operated"] = "Hours operated cannot exceed 1000 hours per event"
 
         if errors:
             raise ValidationError(errors)
@@ -1369,10 +1481,18 @@ class SoilManagementEvent(CommonEvent):
             ("L", "Liters"),
             ("gal", "Gallons"),
             ("kg", "Kilograms"),
+            ("kWh", "Kilowatt-hours"),
         ],
         default="L",
         blank=True,
         help_text="Fuel unit",
+    )
+    fuel_type = models.CharField(
+        max_length=30,
+        choices=FUEL_TYPES,
+        blank=True,
+        default="",
+        help_text="Fuel type for EPA emission factor calculation",
     )
     equipment_hours = models.DecimalField(
         max_digits=10, decimal_places=2, null=True, blank=True, help_text="Equipment operating hours"

@@ -473,11 +473,18 @@ class EventCarbonCalculator:
             product_name = chemical_data.get("product_name", "")
             chemical_subtype = chemical_data.get("chemical_subtype", "")
 
+            # Extract application fuel parameters (ADDED 2025-12-11)
+            application_fuel_type = chemical_data.get("application_fuel_type", "")
+            application_fuel_consumed = chemical_data.get("application_fuel_consumed", None)
+            application_fuel_unit = chemical_data.get("application_fuel_unit", "L")
+
             # Use EPA/USDA verified emission factors for chemical calculations
             # ENHANCED 2025-01-21: Pass chemical_subtype for explicit emission factor selection.
             # Takes precedence over keyword detection from product_name.
             # Supports: organic_herbicide, copper_fungicide, sulfur_fungicide, biological_fungicide,
             #           organic_pesticide, biological_pesticide, organic_fertilizer, slow_release_fertilizer
+            # ENHANCED 2025-12-11: Pass application fuel parameters for accurate fuel emission tracking.
+            # Enables tracking of actual fuel consumed by application equipment (electric, diesel, etc.)
             calculation_result = VerifiedEmissionFactors.calculate_chemical_application_emissions(
                 chemical_type=chemical_type,
                 volume_liters=volume_liters,
@@ -486,6 +493,9 @@ class EventCarbonCalculator:
                 application_method=application_method,
                 product_name=product_name,
                 chemical_subtype=chemical_subtype,
+                application_fuel_type=application_fuel_type,
+                application_fuel_consumed=application_fuel_consumed,
+                application_fuel_unit=application_fuel_unit,
             )
 
             base_emissions = calculation_result["co2e_kg"]
@@ -599,6 +609,13 @@ class EventCarbonCalculator:
             #         organic_pesticide, biological_pesticide, organic_fertilizer, slow_release_fertilizer
             chemical_subtype = getattr(event, "chemical_subtype", "") or ""
 
+            # Extract application fuel fields (ADDED 2025-12-11)
+            # Enables tracking of actual fuel consumed by application equipment
+            # Supports electric equipment with kWh units and alternative fuels
+            application_fuel_type = getattr(event, "application_fuel_type", "") or ""
+            application_fuel_consumed = getattr(event, "application_fuel_consumed", None)
+            application_fuel_unit = getattr(event, "application_fuel_unit", "L") or "L"
+
             return {
                 "chemical_type": chemical_type,
                 "crop_name": crop_name,
@@ -608,6 +625,9 @@ class EventCarbonCalculator:
                 "application_method": application_method,
                 "product_name": product_name,
                 "chemical_subtype": chemical_subtype,
+                "application_fuel_type": application_fuel_type,
+                "application_fuel_consumed": application_fuel_consumed,
+                "application_fuel_unit": application_fuel_unit,
             }
 
         except Exception as e:

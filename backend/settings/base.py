@@ -806,6 +806,12 @@ PHOTO_EVIDENCE_ALLOWED_TYPES = config("PHOTO_EVIDENCE_ALLOWED_TYPES", default="i
 )
 PHOTO_EVIDENCE_COMPRESSION_QUALITY = config("PHOTO_EVIDENCE_COMPRESSION_QUALITY", default=85, cast=int)
 
+# Google Cloud Vision API Configuration (MVP Photo Verification)
+# Free tier: 1,000 images/month. Cost after: ~$1.50/1,000 images
+GOOGLE_CLOUD_VISION_API_KEY = config("GOOGLE_CLOUD_VISION_API_KEY", default="")
+VISION_API_ENABLED = config("VISION_API_ENABLED", default=False, cast=bool)  # Enable real API calls
+VISION_API_BYPASS_IN_DEV = config("VISION_API_BYPASS_IN_DEV", default=True, cast=bool)  # Simulate success in dev
+
 # Enhanced DDoS Protection Configuration
 DDOS_PROTECTION_ENABLED = config("DDOS_PROTECTION_ENABLED", default=True, cast=bool)
 DDOS_THREAT_SCORE_THRESHOLD = config("DDOS_THREAT_SCORE_THRESHOLD", default=50, cast=int)

@@ -548,6 +548,20 @@ class CarbonEntryViewSet(viewsets.ModelViewSet):
 
             # Process and store photo
             file_data = uploaded_file.read()
+
+            # MVP Photo Verification: Perform combined validation (format + Vision API content check)
+            validation_result = photo_evidence_service.validate_and_analyze_photo(
+                file_data=file_data,
+                filename=uploaded_file.name,
+            )
+
+            if not validation_result["valid"]:
+                return Response(
+                    {"error": "Photo validation failed", "details": validation_result["errors"]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Store photo after validation passes
             result = photo_evidence_service.process_and_store_photo(
                 file_data=file_data,
                 filename=uploaded_file.name,
@@ -564,6 +578,7 @@ class CarbonEntryViewSet(viewsets.ModelViewSet):
             if not carbon_entry.evidence_photos:
                 carbon_entry.evidence_photos = []
 
+            # MVP Photo Verification: Include content validation results in photo record
             photo_record = {
                 "photo_id": result["photo_id"],
                 "photo_url": result["photo_url"],
@@ -571,20 +586,29 @@ class CarbonEntryViewSet(viewsets.ModelViewSet):
                 "upload_timestamp": result["metadata"]["upload_timestamp"],
                 "file_hash": result["metadata"]["file_hash"],
                 "file_size": result["metadata"]["file_size"],
+                # Vision API content validation results
+                "content_validation": validation_result.get("content_validation"),
+                "content_confidence": validation_result.get("content_confidence", 0),
+                "agricultural_labels": validation_result.get("agricultural_labels", []),
+                "content_bypassed": validation_result.get("content_bypassed", False),
             }
 
             carbon_entry.evidence_photos.append(photo_record)
             carbon_entry.save()
 
-            # Log the photo upload
+            # Log the photo upload with MVP Photo Verification info
+            content_status = validation_result.get("content_validation", "unknown")
             CarbonAuditLog.objects.create(
                 carbon_entry=carbon_entry,
                 user=request.user,
                 action="upload_photo_evidence",
-                details=f"Photo evidence uploaded: {uploaded_file.name}",
+                details=f"Photo evidence uploaded: {uploaded_file.name} (content_validation: {content_status})",
             )
 
-            logger.info(f"Photo evidence uploaded for carbon entry {carbon_entry.id} by user {request.user.id}")
+            logger.info(
+                f"Photo evidence uploaded for carbon entry {carbon_entry.id} by user {request.user.id} "
+                f"(content_validation: {content_status}, bypassed: {validation_result.get('content_bypassed', False)})"
+            )
 
             return Response(
                 {
@@ -592,6 +616,13 @@ class CarbonEntryViewSet(viewsets.ModelViewSet):
                     "photo_record": photo_record,
                     "total_photos": len(carbon_entry.evidence_photos),
                     "message": "Photo evidence uploaded successfully",
+                    # MVP Photo Verification: Include validation summary
+                    "content_validation": {
+                        "result": content_status,
+                        "confidence": validation_result.get("content_confidence", 0),
+                        "agricultural_content": len(validation_result.get("agricultural_labels", [])) > 0,
+                        "bypassed": validation_result.get("content_bypassed", False),
+                    },
                 }
             )
 
@@ -5436,9 +5467,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     "standard": "Standard",
                     "processing": "Processing Grade",
                 }
-                harvest_details["quality_grade"] = grade_labels.get(
-                    production.quality_grade, production.quality_grade
-                )
+                harvest_details["quality_grade"] = grade_labels.get(production.quality_grade, production.quality_grade)
             if getattr(production, "harvest_method", None):
                 method_labels = {
                     "manual": "Hand Harvested",
@@ -5460,7 +5489,12 @@ class PublicProductionViewSet(viewsets.ViewSet):
                 if hasattr(establishment, "album") and establishment.album and establishment.album.images.exists():
                     first_image = establishment.album.images.first()
                     try:
-                        if first_image and first_image.image and hasattr(first_image.image, "url") and first_image.image.url:
+                        if (
+                            first_image
+                            and first_image.image
+                            and hasattr(first_image.image, "url")
+                            and first_image.image.url
+                        ):
                             establishment_photo = first_image.image.url
                     except (ValueError, AttributeError):
                         establishment_photo = None
@@ -5520,9 +5554,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
 
                     # Calculate establishment and parcel counts for company
                     total_establishments = company.establishment_set.count()
-                    total_parcels = sum(
-                        est.parcels.count() for est in company.establishment_set.all()
-                    )
+                    total_parcels = sum(est.parcels.count() for est in company.establishment_set.all())
 
                     company_data = {
                         "id": company.id,
@@ -5590,12 +5622,8 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     # Parcel images for visual documentation
                     "images": parcel_images,
                     # Carbon/sustainability flags
-                    "carbon_calculation_enabled": getattr(
-                        parcel, "carbon_calculation_enabled", False
-                    ),
-                    "usda_compliance_eligible": getattr(
-                        parcel, "usda_compliance_eligible", False
-                    ),
+                    "carbon_calculation_enabled": getattr(parcel, "carbon_calculation_enabled", False),
+                    "usda_compliance_eligible": getattr(parcel, "usda_compliance_eligible", False),
                     # NOTE: contact_person, contact_phone, contact_email intentionally excluded (private info)
                 }
 

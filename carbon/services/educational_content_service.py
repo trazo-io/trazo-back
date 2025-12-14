@@ -39,7 +39,7 @@ class EducationalContentService:
                     },
                     {
                         "title": "How We Calculate",
-                        "content": "We take the farm's actual practices (fertilizer use, equipment, etc.) and apply USDA emission factors. This gives you a real, science-based carbon footprint.",
+                        "content": "We take the farm's actual practices (fertilizer use, fuel consumption, equipment type, etc.) and apply USDA emission factors. This gives you a real, science-based carbon footprint. The type of equipment matters—diesel-powered equipment has different emissions than electric-powered alternatives.",
                         "icon": "calculator",
                         "key_point": "Real farm data + USDA science = Accurate results",
                     },
@@ -68,9 +68,9 @@ class EducationalContentService:
                     },
                     {
                         "title": "Calculation Methodology",
-                        "content": "Each farm input (fertilizer, fuel, etc.) is multiplied by its corresponding USDA emission factor, then adjusted for regional and crop-specific conditions.",
+                        "content": "Each farm input (fertilizer, fuel, equipment, etc.) is multiplied by its corresponding USDA emission factor, then adjusted for regional and crop-specific conditions. Different equipment types use different factors—diesel equipment uses EPA fuel combustion factors (10.21 kg CO₂/gallon), while electric equipment uses EPA electricity grid factors (0.39 kg CO₂/kWh).",
                         "icon": "formula",
-                        "technical_detail": "CO2e = Σ(Input × USDA_Factor × Regional_Adjustment × Crop_Factor)",
+                        "technical_detail": "CO2e = Σ(Input × USDA_Factor × Regional_Adjustment × Crop_Factor) | Electric: Input_kWh × 0.39 kg CO₂/kWh",
                     },
                 ],
             },
@@ -103,7 +103,7 @@ class EducationalContentService:
                     "key_practices": [
                         {
                             "name": "Precision Drip Irrigation",
-                            "description": "Advanced water management reduces both water use and energy consumption",
+                            "description": "Advanced water management reduces both water use and energy consumption by delivering water directly to plant roots.",
                             "carbon_benefit": "12% reduction in irrigation emissions",
                             "adoption_rate": "78%",
                         },
@@ -126,7 +126,7 @@ class EducationalContentService:
                     "key_practices": [
                         {
                             "name": "Micro-Sprinkler Systems",
-                            "description": "Targeted water delivery minimizes waste and energy use",
+                            "description": "Targeted water delivery minimizes waste and energy use while reducing irrigation emissions.",
                             "carbon_benefit": "15% reduction in water-related emissions",
                             "adoption_rate": "82%",
                         }
@@ -141,8 +141,8 @@ class EducationalContentService:
                     "key_practices": [
                         {
                             "name": "No-Till Farming",
-                            "description": "Reduced tillage preserves soil carbon and cuts fuel use",
-                            "carbon_benefit": "20% reduction in fuel emissions, soil carbon sequestration",
+                            "description": "Reduced tillage preserves soil carbon and cuts fuel use. Farmers increasingly pair this practice with electric equipment alternatives to diesel-powered implements.",
+                            "carbon_benefit": "20% reduction in fuel emissions, soil carbon sequestration; electric equipment can reduce this further by 60-70%",
                             "adoption_rate": "65%",
                         },
                         {
@@ -420,10 +420,10 @@ class EducationalContentService:
                 },
                 {
                     "title": "Factors That Influence Scores",
-                    "content": "Farming efficiency, renewable energy use, local sourcing, sustainable practices, and waste reduction all contribute to higher carbon scores.",
+                    "content": "Farming efficiency, equipment type, local sourcing, sustainable practices, and waste reduction all contribute to higher carbon scores. The type of equipment used for farm operations makes a significant difference—electric equipment has substantially lower emissions than diesel-powered alternatives (60-70% reduction), improving overall farm sustainability.",
                     "icon": "trending-down",
                     "type": "process",
-                    "key_takeaway": "Multiple factors work together to create your final score",
+                    "key_takeaway": "Equipment choice significantly impacts your final score",
                 },
             ],
             "quick_facts": [
@@ -623,10 +623,10 @@ class EducationalContentService:
             "sections": [
                 {
                     "title": "Water Efficiency",
-                    "content": "Advanced irrigation systems like drip irrigation and micro-sprinklers deliver water directly to plant roots, reducing waste and energy use for pumping.",
+                    "content": "Advanced irrigation systems like drip irrigation and micro-sprinklers deliver water directly to plant roots, reducing waste and energy use for pumping. Electric-powered systems use significantly less energy per unit of water than diesel-powered alternatives, reducing overall carbon emissions from irrigation operations.",
                     "icon": "droplet",
                     "type": "example",
-                    "key_takeaway": "Efficient water use reduces carbon emissions",
+                    "key_takeaway": "Efficient water use and proper equipment selection reduce carbon emissions",
                 },
                 {
                     "title": "Soil Health",
@@ -637,16 +637,17 @@ class EducationalContentService:
                 },
                 {
                     "title": "Precision Agriculture",
-                    "content": "GPS-guided equipment and sensors help farmers apply exactly the right amount of fertilizer and pesticides where needed, reducing waste and emissions.",
+                    "content": "GPS-guided equipment and sensors help farmers apply exactly the right amount of fertilizer and pesticides where needed, reducing waste and emissions. Modern precision agriculture increasingly combines with electric equipment alternatives, further reducing farm carbon footprint.",
                     "icon": "target",
                     "type": "explanation",
-                    "key_takeaway": "Precision reduces waste and environmental impact",
+                    "key_takeaway": "Precision combined with electric equipment maximizes environmental benefit",
                 },
             ],
             "quick_facts": [
                 "Precision agriculture can reduce fertilizer use by 15-20%",
                 "Cover crops can sequester 0.5-2 tons CO2 per acre annually",
                 "No-till farming reduces fuel use by up to 50%",
+                "Electric equipment can reduce equipment emissions by 60-70% compared to diesel",
                 "Integrated pest management reduces pesticide use by 30-50%",
             ],
             "related_topics": ["regional-benchmarks", "carbon-scoring", "sustainability-metrics"],
@@ -747,7 +748,7 @@ class EducationalContentService:
         return {
             "title": "Beyond Carbon: Complete Sustainability",
             "subtitle": "Understanding the full environmental picture",
-            "overview": "While carbon footprint is important, complete sustainability includes water use, soil health, biodiversity, and social impact.",
+            "overview": "While carbon footprint is important, complete sustainability includes water use, soil health, biodiversity, equipment efficiency, and social impact. The technology and equipment type used for farm operations significantly influences overall farm sustainability.",
             "sections": [
                 {
                     "title": "Water Footprint",
@@ -770,12 +771,20 @@ class EducationalContentService:
                     "type": "example",
                     "key_takeaway": "Biodiversity support is essential for ecosystem health",
                 },
+                {
+                    "title": "Equipment Efficiency",
+                    "content": "The equipment used for farm operations significantly impacts sustainability. Electric equipment reduces operational carbon emissions by 60-70% compared to diesel alternatives, making it an important choice for reducing farm carbon footprint.",
+                    "icon": "zap",
+                    "type": "explanation",
+                    "key_takeaway": "Equipment type is a critical sustainability factor",
+                },
             ],
             "quick_facts": [
                 "Sustainable farms use 30% less water on average",
                 "Healthy soil can store 2-3x more carbon",
                 "Diverse farms support 50% more beneficial insects",
                 "Integrated practices reduce chemical inputs by 40%",
+                "Electric farm equipment reduces operational emissions by 60-70% vs diesel",
             ],
             "related_topics": ["farming-practices", "carbon-scoring"],
             "confidence_level": 87,

@@ -238,19 +238,57 @@ def local_file_upload(request):
             f"Processing file upload: {upload_file.name}, size: {upload_file.size}, type: {upload_file.content_type}"
         )
 
+        # Read file data
+        file_data = upload_file.read()
+
+        # MVP Photo Verification: Validate image content if it's a photo
+        content_validation = None
+        if upload_file.content_type and upload_file.content_type.startswith("image/"):
+            try:
+                from carbon.services.photo_evidence_service import photo_evidence_service
+
+                # Extract event type context for event-specific validation
+                event_type = request.data.get("event_type") or request.POST.get("event_type")
+                subtype = request.data.get("subtype") or request.POST.get("subtype")
+
+                validation_result = photo_evidence_service.validate_and_analyze_photo(
+                    file_data=file_data,
+                    filename=upload_file.name,
+                    event_type=event_type,
+                    subtype=subtype,
+                )
+                content_validation = {
+                    "valid": validation_result.get("valid", True),
+                    "content_validation": validation_result.get("content_validation"),
+                    "content_confidence": validation_result.get("content_confidence", 0),
+                    "agricultural_labels": validation_result.get("agricultural_labels", []),
+                    "content_bypassed": validation_result.get("content_bypassed", False),
+                    "warnings": validation_result.get("warnings", []),
+                }
+                logger.info(
+                    f"Image content validation: {content_validation.get('content_validation')} "
+                    f"(bypassed: {content_validation.get('content_bypassed')})"
+                )
+            except Exception as e:
+                logger.warning(f"Photo content validation failed (continuing anyway): {e}")
+                content_validation = {"error": str(e), "valid": True}
+
         # Create unique filename to prevent overwrites
         filename = f"{uuid.uuid4()}-{upload_file.name}"
 
         # Save the file
         save_path = f"uploads/{filename}"
-        path = default_storage.save(save_path, ContentFile(upload_file.read()))
+        path = default_storage.save(save_path, ContentFile(file_data))
 
         # Get the full URL
         file_url = request.build_absolute_uri(settings.MEDIA_URL + path)
         logger.info(f"File saved to {path}, URL: {file_url}")
 
-        # Return success response
-        return Response({"file_url": file_url, "path": path, "success": True})
+        # Return success response with MVP Photo Verification data
+        response_data = {"file_url": file_url, "path": path, "success": True}
+        if content_validation:
+            response_data["content_validation"] = content_validation
+        return Response(response_data)
 
     except UnicodeDecodeError as e:
         logger.error(f"Unicode decode error during file upload: {str(e)}")

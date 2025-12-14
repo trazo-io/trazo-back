@@ -12,6 +12,7 @@ class GalleryImage(models.Model):
     image = models.ImageField(upload_to="gallery_images/", blank=True, null=True)
     s3_key = models.CharField(max_length=255, blank=True, null=True)
     image_url = models.URLField(max_length=1000, blank=True, null=True)
+    extra_data = models.JSONField(blank=True, null=True, help_text="Stores Vision API validation results, GPS data, and other image metadata")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

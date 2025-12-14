@@ -8,7 +8,7 @@ Following Trazo's main goal: Authentic transparency leadership
 
 import logging
 
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Prefetch
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
@@ -19,7 +19,18 @@ from rest_framework.response import Response
 
 from carbon.services.calculator_service import CarbonCalculatorService
 
-from .models import History, HistoryScan
+from .models import (
+    History,
+    HistoryScan,
+    WeatherEvent,
+    ChemicalEvent,
+    ProductionEvent,
+    GeneralEvent,
+    EquipmentEvent,
+    SoilManagementEvent,
+    PestManagementEvent,
+    BusinessEvent,
+)
 from .serializers import PublicHistorySerializer
 from .services.transparency_calculator import TransparencyCalculator
 from .services.transparency_response_formatter import TransparencyResponseFormatter
@@ -37,9 +48,48 @@ def production_transparency_detail(request, production_id):
     This solves the farmer gaming incentive problem by rewarding honesty over competition
     """
     try:
-        # Get production with related data (optimized query)
+        # Get production with related data (optimized query with prefetch for all event types)
+        # This eliminates N+1 queries by prefetching all 8 event types with their albums and images
         history = get_object_or_404(
-            History.objects.select_related("product", "parcel__establishment__company", "parcel__establishment"),
+            History.objects.select_related(
+                "product",
+                "parcel__establishment__company",
+                "parcel__establishment"
+            ).prefetch_related(
+                # Prefetch all 8 event types with albums and images to avoid N+1 queries
+                Prefetch(
+                    "history_weatherevent_events",
+                    queryset=WeatherEvent.objects.select_related("album").prefetch_related("album__images")
+                ),
+                Prefetch(
+                    "history_chemicalevent_events",
+                    queryset=ChemicalEvent.objects.select_related("album").prefetch_related("album__images")
+                ),
+                Prefetch(
+                    "history_productionevent_events",
+                    queryset=ProductionEvent.objects.select_related("album").prefetch_related("album__images")
+                ),
+                Prefetch(
+                    "history_generalevent_events",
+                    queryset=GeneralEvent.objects.select_related("album").prefetch_related("album__images")
+                ),
+                Prefetch(
+                    "history_equipmentevent_events",
+                    queryset=EquipmentEvent.objects.select_related("album").prefetch_related("album__images")
+                ),
+                Prefetch(
+                    "history_soilmanagementevent_events",
+                    queryset=SoilManagementEvent.objects.select_related("album").prefetch_related("album__images")
+                ),
+                Prefetch(
+                    "history_pestmanagementevent_events",
+                    queryset=PestManagementEvent.objects.select_related("album").prefetch_related("album__images")
+                ),
+                Prefetch(
+                    "history_businessevent_events",
+                    queryset=BusinessEvent.objects.select_related("album").prefetch_related("album__images")
+                ),
+            ),
             id=production_id,
             published=True,  # Only published productions are publicly accessible
         )
@@ -148,6 +198,22 @@ def production_transparency_detail(request, production_id):
         if "events" in public_history_data:
             response_data["timeline_events"] = public_history_data["events"]
 
+        # ✅ FIX: Calculate USDA verification same way as frontend
+        # Frontend checks: extra_data?.carbon_calculation?.usda_compliance
+        # This matches frontend logic in UltraMobileProductionJourney.tsx lines 652-655
+        events_with_usda = 0
+        total_events = len(public_history_data.get("events", []))
+
+        for event in public_history_data.get("events", []):
+            # Check if event has usda_compliance in carbon_calculation
+            extra_data = event.get("extra_data", {})
+            carbon_calc = extra_data.get("carbon_calculation", {})
+            if carbon_calc.get("usda_compliance"):
+                events_with_usda += 1
+
+        # USDA verified if all events have USDA compliance (matches frontend 100% logic)
+        is_usda_verified = (total_events > 0 and events_with_usda == total_events)
+
         # Add progressive loading structure for backward compatibility
         response_data.update(
             {
@@ -195,6 +261,90 @@ def production_transparency_detail(request, production_id):
                 "api_version": "2.0",
                 "response_timestamp": timezone.now().isoformat(),
                 "trazo_transparency_certified": transparency_data["transparency_percentage"] >= 80,
+                # Additional fields for frontend compatibility with ProductDetail.tsx
+                "farmer": {
+                    # 🚨 CRITICAL FIX: Complete farmer/establishment data for ProductDetail.tsx
+                    "id": establishment.id if establishment else None,
+                    "name": establishment.name if establishment else "Farm",
+                    "description": establishment.description if establishment else "",
+                    "address": establishment.address if establishment else None,
+                    "city": establishment.city if establishment else None,
+                    "state": establishment.state if establishment else None,
+                    "country": establishment.country if establishment else None,
+                    "zone": establishment.zone if establishment else None,
+                    "latitude": establishment.latitude if establishment else None,
+                    "longitude": establishment.longitude if establishment else None,
+                    "contact_person": establishment.contact_person if establishment else None,
+                    "contact_phone": establishment.contact_phone if establishment else None,
+                    "contact_email": establishment.contact_email if establishment else None,
+                    "email": establishment.contact_email if establishment else None,  # Use contact_email field
+                    "phone": establishment.contact_phone if establishment else None,  # Use contact_phone field
+                    "zip_code": establishment.zip_code if establishment else None,
+                    "about": establishment.about if establishment else None,
+                    "main_activities": establishment.main_activities if establishment else None,
+                    "location_highlights": establishment.location_highlights if establishment else None,
+                    "custom_message": establishment.custom_message if establishment else None,
+                    "is_active": establishment.is_active if establishment else True,
+                    "crops_grown": establishment.crops_grown if establishment else None,
+                    "sustainability_practices": establishment.sustainability_practices if establishment else None,
+                    "employee_count": establishment.employee_count if establishment else None,
+                    "total_acreage": establishment.total_acreage if establishment else None,
+                    "year_established": establishment.year_established if establishment else None,
+                    "establishment_type": establishment.establishment_type if establishment else None,
+                    "farming_method": establishment.farming_method if establishment else None,
+                    "location": f"{establishment.city}, {establishment.state}" if establishment and establishment.city else None,
+                    "certifications": establishment.certifications if establishment else None,
+                    "climate_zone": establishment.climate_zone if establishment else None,
+                    "water_sources": establishment.water_sources if establishment else None,
+                    "soil_types": establishment.soil_types if establishment else None,
+                    "conservation_practices": establishment.conservation_practices if establishment else None,
+                    "irrigation_methods": establishment.irrigation_methods if establishment else None,
+                    # Nested company data
+                    "company": {
+                        "id": establishment.company.id if establishment and establishment.company else None,
+                        "name": establishment.company.name if establishment and establishment.company else "Company",
+                        "description": establishment.company.description if establishment and establishment.company else "",
+                        "address": establishment.company.address if establishment and establishment.company else None,
+                        "city": establishment.company.city if establishment and establishment.company else None,
+                        "state": establishment.company.state if establishment and establishment.company else None,
+                        "country": establishment.company.country if establishment and establishment.company else None,
+                        "email": establishment.company.contact_email if establishment and establishment.company else None,  # Company uses contact_email
+                        "phone": establishment.company.contact_phone if establishment and establishment.company else None,  # Company uses contact_phone
+                        "website": establishment.company.website if establishment and establishment.company else None,
+                        "facebook": establishment.company.facebook if establishment and establishment.company else None,
+                        "instagram": establishment.company.instagram if establishment and establishment.company else None,
+                        "logo": establishment.company.logo.url if establishment and establishment.company and establishment.company.logo else None,
+                        "fiscal_id": establishment.company.fiscal_id if establishment and establishment.company else None,
+                        "contact_email": establishment.company.contact_email if establishment and establishment.company else None,
+                        "total_establishments": establishment.company.establishment_set.count() if establishment and establishment.company else 0,
+                        "total_parcels": sum(e.parcels.count() for e in establishment.company.establishment_set.all()) if establishment and establishment.company else 0,
+                    } if establishment else {
+                        "name": "Company",
+                        "total_establishments": 0,
+                        "total_parcels": 0
+                    }
+                },
+                "product": {
+                    "name": history.product.name if history.product else "Farm Product"
+                },
+                "reputation": history.reputation or 0,
+                "isUsdaVerified": is_usda_verified,
+                "timeline": public_history_data.get("events", []),
+                # 🚨 CRITICAL FIX: Add missing fields that ProductDetail.tsx expects
+                "events": public_history_data.get("events", []),  # Alias for timeline for backward compatibility
+                "harvestDetails": {
+                    "amount": history.production_amount,
+                    "unit": history.production_unit,
+                    "lot_number": history.lot_id,
+                    "quality_grade": history.quality_grade,
+                    "harvest_method": history.harvest_method,
+                },
+                "parcel": {
+                    "id": history.parcel.id if history.parcel else None,
+                    "name": history.parcel.name if history.parcel else None,
+                    "area": history.parcel.area if history.parcel else None,
+                },
+                "images": public_history_data.get("images", []),  # Photo gallery for ProductDetail
             }
         )  # Close the response_data.update() call
 
@@ -225,8 +375,48 @@ def production_transparency_summary(request, production_id):
     Optimized for < 1 second response time
     """
     try:
+        # Get production with optimized queries (prefetch all event types with albums)
         history = get_object_or_404(
-            History.objects.select_related("product", "parcel__establishment"), id=production_id, published=True
+            History.objects.select_related(
+                "product",
+                "parcel__establishment"
+            ).prefetch_related(
+                # Prefetch all 8 event types with albums and images
+                Prefetch(
+                    "history_weatherevent_events",
+                    queryset=WeatherEvent.objects.select_related("album").prefetch_related("album__images")
+                ),
+                Prefetch(
+                    "history_chemicalevent_events",
+                    queryset=ChemicalEvent.objects.select_related("album").prefetch_related("album__images")
+                ),
+                Prefetch(
+                    "history_productionevent_events",
+                    queryset=ProductionEvent.objects.select_related("album").prefetch_related("album__images")
+                ),
+                Prefetch(
+                    "history_generalevent_events",
+                    queryset=GeneralEvent.objects.select_related("album").prefetch_related("album__images")
+                ),
+                Prefetch(
+                    "history_equipmentevent_events",
+                    queryset=EquipmentEvent.objects.select_related("album").prefetch_related("album__images")
+                ),
+                Prefetch(
+                    "history_soilmanagementevent_events",
+                    queryset=SoilManagementEvent.objects.select_related("album").prefetch_related("album__images")
+                ),
+                Prefetch(
+                    "history_pestmanagementevent_events",
+                    queryset=PestManagementEvent.objects.select_related("album").prefetch_related("album__images")
+                ),
+                Prefetch(
+                    "history_businessevent_events",
+                    queryset=BusinessEvent.objects.select_related("album").prefetch_related("album__images")
+                ),
+            ),
+            id=production_id,
+            published=True
         )
 
         # Quick transparency calculation (cached if possible)

@@ -7,7 +7,7 @@ import time
 from datetime import datetime, timedelta
 
 from django.contrib.auth import get_user_model
-from django.db.models import Max, Min
+from django.db.models import Max, Min, Prefetch
 from django.utils import timezone
 
 from rest_framework import permissions, status, viewsets
@@ -18,7 +18,18 @@ logger = logging.getLogger(__name__)
 
 from backend.constants import EngagementMilestones, get_carbon_score_from_co2e
 
-from .models import History, HistoryScan
+from .models import (
+    History,
+    HistoryScan,
+    WeatherEvent,
+    ChemicalEvent,
+    ProductionEvent,
+    GeneralEvent,
+    EquipmentEvent,
+    SoilManagementEvent,
+    PestManagementEvent,
+    BusinessEvent,
+)
 from .models_consumer import UserFavorite, UserImpactSummary, UserProductComparison, UserShoppingGoal
 from .serializers_consumer import (
     EnhancedHistoryScanSerializer,
@@ -198,11 +209,46 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
 
         product_ids = serializer.validated_data["products"]
 
-        # Get products with carbon data
+        # Get products with carbon data and optimized event queries
         products = (
             History.objects.filter(id__in=product_ids)
             .select_related("parcel__establishment")
-            .prefetch_related("carbonentry_set")
+            .prefetch_related(
+                "carbonentry_set",
+                # Prefetch all 8 event types with albums and images
+                Prefetch(
+                    "history_weatherevent_events",
+                    queryset=WeatherEvent.objects.select_related("album").prefetch_related("album__images")
+                ),
+                Prefetch(
+                    "history_chemicalevent_events",
+                    queryset=ChemicalEvent.objects.select_related("album").prefetch_related("album__images")
+                ),
+                Prefetch(
+                    "history_productionevent_events",
+                    queryset=ProductionEvent.objects.select_related("album").prefetch_related("album__images")
+                ),
+                Prefetch(
+                    "history_generalevent_events",
+                    queryset=GeneralEvent.objects.select_related("album").prefetch_related("album__images")
+                ),
+                Prefetch(
+                    "history_equipmentevent_events",
+                    queryset=EquipmentEvent.objects.select_related("album").prefetch_related("album__images")
+                ),
+                Prefetch(
+                    "history_soilmanagementevent_events",
+                    queryset=SoilManagementEvent.objects.select_related("album").prefetch_related("album__images")
+                ),
+                Prefetch(
+                    "history_pestmanagementevent_events",
+                    queryset=PestManagementEvent.objects.select_related("album").prefetch_related("album__images")
+                ),
+                Prefetch(
+                    "history_businessevent_events",
+                    queryset=BusinessEvent.objects.select_related("album").prefetch_related("album__images")
+                ),
+            )
         )
 
         comparison_results = []

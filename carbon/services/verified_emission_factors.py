@@ -291,6 +291,22 @@ class VerifiedEmissionFactors:
             last_updated="2025-10-11",
             notes="Transplanting operations require careful plant handling, transport, and more precise field work than direct seeding",
         ),
+        "thinning_diesel": EmissionFactor(
+            value=0.75,  # gallons diesel per hectare for thinning (lightweight manual operation)
+            unit="gallons_per_hectare",
+            source="USDA Agricultural Research Service - Lightweight Field Operations & Fruit Crop Management",
+            confidence_level=0.80,
+            last_updated="2025-12-10",
+            notes="Thinning is primarily manual labor with minimal fuel-intensive equipment. Lower than general production (2.5) due to hand-selection nature. Includes minimal mechanical assistance for removed fruit transport.",
+        ),
+        "cultivation_diesel": EmissionFactor(
+            value=3.2,  # gallons diesel per hectare for cultivation/weed control (high fuel intensity)
+            unit="gallons_per_hectare",
+            source="USDA Agricultural Research Service - Soil Preparation & Mechanical Weed Control",
+            confidence_level=0.82,
+            last_updated="2025-12-11",
+            notes="Mechanical cultivation and weed removal operations requiring powered equipment. Higher than general production due to repeated passes and soil disturbance equipment (cultivators, row tillers).",
+        ),
         "irrigation_water": EmissionFactor(
             value=0.85,  # kWh per 1000 gallons pumped (shallow to moderate lift)
             unit="kWh_per_1000_gallons",
@@ -600,168 +616,271 @@ class VerifiedEmissionFactors:
         equipment_hours: float = None,
         **kwargs,
     ) -> Dict[str, Any]:
-        """Calculate production event emissions using verified EPA/USDA factors"""
+        """Calculate production event emissions using verified EPA/USDA factors
 
-        # Determine production activity type - handles ALL frontend production types
-        production_type_lower = production_type.lower()
+        Production types map to database model codes:
+        - PL: Planting
+        - HA: Harvesting
+        - IR: Irrigation
+        - PR: Pruning
+        - TR: Transplanting
+        - EM: Equipment Maintenance
+        - CU: Cultivation
+        - TH: Thinning
+        """
 
-        if any(word in production_type_lower for word in ["harvest", "reap", "collect"]):
-            return cls._calculate_harvesting_emissions(area_covered, fuel_consumed, equipment_hours)
-        elif any(word in production_type_lower for word in ["transplant"]):
-            return cls._calculate_transplanting_emissions(area_covered, fuel_consumed, equipment_hours)
-        elif any(word in production_type_lower for word in ["plant", "seed", "sow"]):
-            return cls._calculate_planting_emissions(area_covered, fuel_consumed, equipment_hours)
-        elif any(word in production_type_lower for word in ["irrigat", "water"]):
-            water_gallons = kwargs.get("water_volume_gallons", area_covered * 1000)  # Estimate if not provided
-            return cls.calculate_drought_irrigation_emissions(water_gallons)
-        elif any(word in production_type_lower for word in ["prun", "trim"]):
-            # Pruning - typically manual with minimal fuel use
-            return cls._calculate_manual_operation_emissions(area_covered, fuel_consumed, equipment_hours, "pruning")
-        elif any(word in production_type_lower for word in ["cultivat", "till", "plow"]):
-            # Soil cultivation - high fuel intensity
-            return cls._calculate_cultivation_emissions(area_covered, fuel_consumed, equipment_hours)
-        elif any(word in production_type_lower for word in ["fertiliz", "nutrient"]):
-            # Fertilizer application - moderate fuel use
-            return cls._calculate_application_emissions(area_covered, fuel_consumed, equipment_hours, "fertilization")
-        elif any(word in production_type_lower for word in ["weed", "herbicide"]):
-            # Weed management - light equipment use
-            return cls._calculate_application_emissions(area_covered, fuel_consumed, equipment_hours, "weeding")
-        elif any(word in production_type_lower for word in ["mulch"]):
-            # Mulching - moderate equipment use
-            return cls._calculate_application_emissions(area_covered, fuel_consumed, equipment_hours, "mulching")
+        # Map production type codes to calculation methods
+        # Using database-defined codes from ProductionEvent model
+        PRODUCTION_TYPE_MAPPING = {
+            "PL": cls._calculate_planting_emissions,
+            "HA": cls._calculate_harvesting_emissions,
+            "IR": cls.calculate_drought_irrigation_emissions,
+            "TR": cls._calculate_transplanting_emissions,
+            "CU": cls._calculate_cultivation_emissions,
+            "TH": cls._calculate_thinning_emissions,
+            "PR": lambda ac, fc, eh, **kw: cls._calculate_manual_operation_emissions(ac, fc, eh, "pruning", **kw),
+            "EM": cls._calculate_general_production_emissions,
+        }
+
+        # Normalize production type to uppercase (database stores uppercase codes)
+        production_type_code = production_type.upper()
+
+        # Get the calculation method for this production type
+        if production_type_code in PRODUCTION_TYPE_MAPPING:
+            calc_method = PRODUCTION_TYPE_MAPPING[production_type_code]
+
+            # Special handling for irrigation which needs water_volume_gallons
+            if production_type_code == "IR":
+                water_gallons = kwargs.get("water_volume_gallons", area_covered * 1000)
+                return calc_method(water_gallons)
+            else:
+                return calc_method(area_covered, fuel_consumed, equipment_hours, **kwargs)
         else:
-            # General crop production operations
-            return cls._calculate_general_production_emissions(area_covered, fuel_consumed, equipment_hours)
+            # Fallback for unknown production types
+            return cls._calculate_general_production_emissions(area_covered, fuel_consumed, equipment_hours, **kwargs)
 
     @classmethod
     def _calculate_harvesting_emissions(
-        cls, area_covered: float, fuel_consumed: float = None, equipment_hours: float = None
+        cls, area_covered: float, fuel_consumed: float = None, equipment_hours: float = None, **kwargs
     ) -> Dict[str, Any]:
-        """Calculate harvesting emissions using USDA factors"""
+        """Calculate harvesting emissions using USDA factors - supports diesel and electric equipment"""
 
         diesel_factor = cls.EPA_DIESEL_FACTORS["agricultural_equipment"]
+        electricity_factor = cls.EPA_ELECTRICITY_FACTORS["electricity_us_avg"]
         harvesting_factor = cls.PRODUCTION_FACTORS["harvesting_diesel"]
+
+        # Convert Decimal types to float to prevent type errors in calculations
+        area_covered = float(area_covered)
+
+        # Extract fuel_type and energy_source from kwargs
+        fuel_type = kwargs.get("fuel_type", "diesel")  # Default to diesel for backwards compatibility
+        energy_source = kwargs.get("energy_source", "grid")  # Default to grid for electric
 
         if fuel_consumed:
             # Use actual fuel consumption
-            co2e_kg = fuel_consumed * diesel_factor.value
-            calculation_basis = "actual_fuel_consumption"
-        elif equipment_hours and area_covered:
-            # Estimate fuel consumption from equipment hours and area
-            area_hectares = area_covered * 0.404686  # Convert acres to hectares first
-            estimated_fuel = (area_hectares * harvesting_factor.value) * (
-                equipment_hours / 8.0
-            )  # Normalize to 8-hour workday
-            co2e_kg = estimated_fuel * diesel_factor.value
-            calculation_basis = "estimated_from_hours_and_area"
+            fuel_consumed = float(fuel_consumed)  # Convert Decimal to float for calculation
+            if fuel_type == "electric":
+                # Electric equipment - fuel_consumed is in kWh
+                if energy_source in ["solar", "wind"]:
+                    # Renewable energy sources have zero emissions
+                    co2e_kg = 0
+                    calculation_basis = "actual_electric_consumption_renewable"
+                else:
+                    # Grid-powered electricity
+                    co2e_kg = fuel_consumed * electricity_factor.value  # 0.39 kg CO₂/kWh
+                    calculation_basis = "actual_electric_consumption_grid"
+                area_hectares = area_covered * 0.404686
+            else:
+                # Diesel or other fuel - fuel_consumed is in gallons/liters
+                co2e_kg = fuel_consumed * diesel_factor.value
+                calculation_basis = "actual_diesel_consumption"
+                area_hectares = area_covered * 0.404686
+            # Skip validation for actual fuel consumption - farmers provide measured values
+            skip_validation = True
         else:
-            # Use USDA standard consumption per hectare
+            # Use USDA standard consumption per hectare (fixed: removed equipment_hours multiplier)
+            # USDA factors are designed for area-based calculations, not time-based
+            # Equipment hours are informational but should not scale the USDA factor
             area_hectares = area_covered * 0.404686  # Convert acres to hectares
             fuel_gallons = area_hectares * harvesting_factor.value
             co2e_kg = fuel_gallons * diesel_factor.value
             calculation_basis = "usda_standard_per_hectare"
+            skip_validation = False
 
         breakdown = {
             "production_activity": "harvesting",
             "area_covered_acres": area_covered,
             "area_covered_hectares": area_covered * 0.404686,
-            "diesel_emission_factor_kg_per_gallon": diesel_factor.value,
-            "usda_harvesting_factor_gallons_per_hectare": harvesting_factor.value,
+            "fuel_type": fuel_type,
             "calculation_basis": calculation_basis,
-            "confidence_level": min(diesel_factor.confidence_level, harvesting_factor.confidence_level),
+            "confidence_level": electricity_factor.confidence_level if fuel_type == "electric" else diesel_factor.confidence_level,
         }
 
+        # Add fuel-type specific breakdown information
+        if fuel_type == "electric":
+            breakdown["electricity_emission_factor_kg_per_kwh"] = electricity_factor.value
+            if energy_source in ["solar", "wind"]:
+                breakdown["energy_source"] = energy_source
+                breakdown["note"] = f"{energy_source.capitalize()}-powered equipment - zero emissions"
+            else:
+                breakdown["energy_source"] = "grid"
+                breakdown["electricity_emission_factor"] = f"{electricity_factor.value} kg CO₂/kWh (EPA eGRID)"
+        else:
+            breakdown["diesel_emission_factor_kg_per_gallon"] = diesel_factor.value
+            breakdown["usda_harvesting_factor_gallons_per_hectare"] = harvesting_factor.value
+
         if fuel_consumed:
-            breakdown["actual_fuel_consumed_gallons"] = fuel_consumed
+            fuel_unit = "kWh" if fuel_type == "electric" else "gallons"
+            breakdown[f"actual_fuel_consumed_{fuel_unit}"] = fuel_consumed
         if equipment_hours:
             breakdown["equipment_hours"] = equipment_hours
 
-        # Add validation for unrealistic results
-        validated_result = cls._validate_production_emissions(co2e_kg, area_covered, "harvesting", breakdown)
+        # Add validation for unrealistic results - only for USDA-based estimates
+        if skip_validation:
+            validated_result = {"co2e_kg": co2e_kg, "breakdown": breakdown, "warnings": [], "limitations": []}
+        else:
+            validated_result = cls._validate_production_emissions(co2e_kg, area_covered, "harvesting", breakdown)
 
         return {
             "co2e_kg": round(validated_result["co2e_kg"], 3),
-            "calculation_method": "verified_epa_usda_factors",
+            "calculation_method": "verified_epa_usda_factors_with_electric_support",
             "breakdown": validated_result["breakdown"],
-            "data_sources": [diesel_factor.source, harvesting_factor.source],
+            "data_sources": [diesel_factor.source if fuel_type != "electric" else electricity_factor.source, harvesting_factor.source],
             "limitations": validated_result.get("limitations", harvesting_factor.notes),
             "validation_warnings": validated_result.get("warnings", []),
         }
 
     @classmethod
     def _calculate_planting_emissions(
-        cls, area_covered: float, fuel_consumed: float = None, equipment_hours: float = None
+        cls, area_covered: float, fuel_consumed: float = None, equipment_hours: float = None, **kwargs
     ) -> Dict[str, Any]:
-        """Calculate planting emissions using USDA factors"""
+        """Calculate planting emissions using USDA factors - supports diesel and electric equipment"""
 
         diesel_factor = cls.EPA_DIESEL_FACTORS["agricultural_equipment"]
+        electricity_factor = cls.EPA_ELECTRICITY_FACTORS["electricity_us_avg"]
         planting_factor = cls.PRODUCTION_FACTORS["planting_diesel"]
+
+        # Convert Decimal types to float to prevent type errors in calculations
+        area_covered = float(area_covered)
+
+        # Extract fuel_type and energy_source from kwargs
+        fuel_type = kwargs.get("fuel_type", "diesel")  # Default to diesel for backwards compatibility
+        energy_source = kwargs.get("energy_source", "grid")  # Default to grid for electric
 
         if fuel_consumed:
             # Use actual fuel consumption
-            co2e_kg = fuel_consumed * diesel_factor.value
-            calculation_basis = "actual_fuel_consumption"
-        elif equipment_hours and area_covered:
-            # Estimate fuel consumption from equipment hours and area
-            area_hectares = area_covered * 0.404686  # Convert acres to hectares first
-            estimated_fuel = (area_hectares * planting_factor.value) * (
-                equipment_hours / 6.0
-            )  # Normalize to 6-hour planting day
-            co2e_kg = estimated_fuel * diesel_factor.value
-            calculation_basis = "estimated_from_hours_and_area"
+            fuel_consumed = float(fuel_consumed)  # Convert Decimal to float for calculation
+            if fuel_type == "electric":
+                # Electric equipment - fuel_consumed is in kWh
+                if energy_source in ["solar", "wind"]:
+                    # Renewable energy sources have zero emissions
+                    co2e_kg = 0
+                    calculation_basis = "actual_electric_consumption_renewable"
+                else:
+                    # Grid-powered electricity
+                    co2e_kg = fuel_consumed * electricity_factor.value  # 0.39 kg CO₂/kWh
+                    calculation_basis = "actual_electric_consumption_grid"
+                area_hectares = area_covered * 0.404686
+            else:
+                # Diesel or other fuel - fuel_consumed is in gallons/liters
+                co2e_kg = fuel_consumed * diesel_factor.value
+                calculation_basis = "actual_diesel_consumption"
+                area_hectares = area_covered * 0.404686
+            # Skip validation for actual fuel consumption - farmers provide measured values
+            skip_validation = True
         else:
-            # Use USDA standard consumption per hectare
+            # Use USDA standard consumption per hectare (fixed: removed equipment_hours multiplier)
+            # USDA factors are designed for area-based calculations, not time-based
+            # Equipment hours are informational but should not scale the USDA factor
             area_hectares = area_covered * 0.404686  # Convert acres to hectares
             fuel_gallons = area_hectares * planting_factor.value
             co2e_kg = fuel_gallons * diesel_factor.value
             calculation_basis = "usda_standard_per_hectare"
+            skip_validation = False
 
         breakdown = {
             "production_activity": "planting",
             "area_covered_acres": area_covered,
             "area_covered_hectares": area_covered * 0.404686,
-            "diesel_emission_factor_kg_per_gallon": diesel_factor.value,
-            "usda_planting_factor_gallons_per_hectare": planting_factor.value,
+            "fuel_type": fuel_type,
             "calculation_basis": calculation_basis,
-            "confidence_level": min(diesel_factor.confidence_level, planting_factor.confidence_level),
+            "confidence_level": electricity_factor.confidence_level if fuel_type == "electric" else diesel_factor.confidence_level,
         }
 
+        # Add fuel-type specific breakdown information
+        if fuel_type == "electric":
+            breakdown["electricity_emission_factor_kg_per_kwh"] = electricity_factor.value
+            if energy_source in ["solar", "wind"]:
+                breakdown["energy_source"] = energy_source
+                breakdown["note"] = f"{energy_source.capitalize()}-powered equipment - zero emissions"
+            else:
+                breakdown["energy_source"] = "grid"
+                breakdown["electricity_emission_factor"] = f"{electricity_factor.value} kg CO₂/kWh (EPA eGRID)"
+        else:
+            breakdown["diesel_emission_factor_kg_per_gallon"] = diesel_factor.value
+            breakdown["usda_planting_factor_gallons_per_hectare"] = planting_factor.value
+
         if fuel_consumed:
-            breakdown["actual_fuel_consumed_gallons"] = fuel_consumed
+            fuel_unit = "kWh" if fuel_type == "electric" else "gallons"
+            breakdown[f"actual_fuel_consumed_{fuel_unit}"] = fuel_consumed
         if equipment_hours:
             breakdown["equipment_hours"] = equipment_hours
 
+        # Add validation for unrealistic results (FIX #2) - only for USDA-based estimates
+        if skip_validation:
+            validated_result = {"co2e_kg": co2e_kg, "breakdown": breakdown, "warnings": [], "limitations": []}
+        else:
+            validated_result = cls._validate_production_emissions(co2e_kg, area_covered, "planting", breakdown)
+
         return {
-            "co2e_kg": round(co2e_kg, 3),
-            "calculation_method": "verified_epa_usda_factors",
-            "breakdown": breakdown,
-            "data_sources": [diesel_factor.source, planting_factor.source],
-            "limitations": planting_factor.notes,
+            "co2e_kg": round(validated_result["co2e_kg"], 3),
+            "calculation_method": "verified_epa_usda_factors_with_electric_support",
+            "breakdown": validated_result["breakdown"],
+            "data_sources": [diesel_factor.source if fuel_type != "electric" else electricity_factor.source, planting_factor.source],
+            "limitations": validated_result.get("limitations", planting_factor.notes),
+            "validation_warnings": validated_result.get("warnings", []),
         }
 
     @classmethod
     def _calculate_transplanting_emissions(
-        cls, area_covered: float, fuel_consumed: float = None, equipment_hours: float = None
+        cls, area_covered: float, fuel_consumed: float = None, equipment_hours: float = None, **kwargs
     ) -> Dict[str, Any]:
-        """Calculate transplanting emissions using USDA factors - higher than planting due to careful handling"""
+        """Calculate transplanting emissions using USDA factors - higher than planting due to careful handling, supports diesel and electric equipment"""
 
         diesel_factor = cls.EPA_DIESEL_FACTORS["agricultural_equipment"]
+        electricity_factor = cls.EPA_ELECTRICITY_FACTORS["electricity_us_avg"]
         transplanting_factor = cls.PRODUCTION_FACTORS["transplanting_diesel"]
+
+        # Convert Decimal types to float to prevent type errors in calculations
+        area_covered = float(area_covered)
+
+        # Extract fuel_type and energy_source from kwargs
+        fuel_type = kwargs.get("fuel_type", "diesel")  # Default to diesel for backwards compatibility
+        energy_source = kwargs.get("energy_source", "grid")  # Default to grid for electric
 
         if fuel_consumed:
             # Use actual fuel consumption
-            co2e_kg = fuel_consumed * diesel_factor.value
-            calculation_basis = "actual_fuel_consumption"
-        elif equipment_hours and area_covered:
-            # Estimate fuel consumption from equipment hours and area
-            area_hectares = area_covered * 0.404686  # Convert acres to hectares first
-            estimated_fuel = (area_hectares * transplanting_factor.value) * (
-                equipment_hours / 6.0
-            )  # Normalize to 6-hour transplanting day
-            co2e_kg = estimated_fuel * diesel_factor.value
-            calculation_basis = "estimated_from_hours_and_area"
+            fuel_consumed = float(fuel_consumed)  # Convert Decimal to float for calculation
+            if fuel_type == "electric":
+                # Electric equipment - fuel_consumed is in kWh
+                if energy_source in ["solar", "wind"]:
+                    # Renewable energy sources have zero emissions
+                    co2e_kg = 0
+                    calculation_basis = "actual_electric_consumption_renewable"
+                else:
+                    # Grid-powered electricity
+                    co2e_kg = fuel_consumed * electricity_factor.value  # 0.39 kg CO₂/kWh
+                    calculation_basis = "actual_electric_consumption_grid"
+                area_hectares = area_covered * 0.404686
+            else:
+                # Diesel or other fuel - fuel_consumed is in gallons/liters
+                co2e_kg = fuel_consumed * diesel_factor.value
+                calculation_basis = "actual_diesel_consumption"
+                area_hectares = area_covered * 0.404686
         else:
-            # Use USDA standard consumption per hectare (higher than planting)
+            # Use USDA standard consumption per hectare (fixed: removed equipment_hours multiplier)
+            # USDA factors are designed for area-based calculations, not time-based
+            # Equipment hours are informational but should not scale the USDA factor
             area_hectares = area_covered * 0.404686  # Convert acres to hectares
             fuel_gallons = area_hectares * transplanting_factor.value
             co2e_kg = fuel_gallons * diesel_factor.value
@@ -771,49 +890,83 @@ class VerifiedEmissionFactors:
             "production_activity": "transplanting",
             "area_covered_acres": area_covered,
             "area_covered_hectares": area_covered * 0.404686,
-            "diesel_emission_factor_kg_per_gallon": diesel_factor.value,
-            "usda_transplanting_factor_gallons_per_hectare": transplanting_factor.value,
+            "fuel_type": fuel_type,
             "calculation_basis": calculation_basis,
-            "confidence_level": min(diesel_factor.confidence_level, transplanting_factor.confidence_level),
+            "confidence_level": electricity_factor.confidence_level if fuel_type == "electric" else diesel_factor.confidence_level,
             "note": "Higher emissions than direct planting due to careful plant handling and transport requirements",
         }
 
+        # Add fuel-type specific breakdown information
+        if fuel_type == "electric":
+            breakdown["electricity_emission_factor_kg_per_kwh"] = electricity_factor.value
+            if energy_source in ["solar", "wind"]:
+                breakdown["energy_source"] = energy_source
+                breakdown["note"] = f"{energy_source.capitalize()}-powered equipment - zero emissions"
+            else:
+                breakdown["energy_source"] = "grid"
+                breakdown["electricity_emission_factor"] = f"{electricity_factor.value} kg CO₂/kWh (EPA eGRID)"
+        else:
+            breakdown["diesel_emission_factor_kg_per_gallon"] = diesel_factor.value
+            breakdown["usda_transplanting_factor_gallons_per_hectare"] = transplanting_factor.value
+
         if fuel_consumed:
-            breakdown["actual_fuel_consumed_gallons"] = fuel_consumed
+            fuel_unit = "kWh" if fuel_type == "electric" else "gallons"
+            breakdown[f"actual_fuel_consumed_{fuel_unit}"] = fuel_consumed
         if equipment_hours:
             breakdown["equipment_hours"] = equipment_hours
 
+        # Add validation for unrealistic results (FIX #2)
+        validated_result = cls._validate_production_emissions(co2e_kg, area_covered, "planting", breakdown)
+
         return {
-            "co2e_kg": round(co2e_kg, 3),
-            "calculation_method": "verified_epa_usda_factors_transplanting",
-            "breakdown": breakdown,
-            "data_sources": [diesel_factor.source, transplanting_factor.source],
-            "limitations": transplanting_factor.notes,
+            "co2e_kg": round(validated_result["co2e_kg"], 3),
+            "calculation_method": "verified_epa_usda_factors_with_electric_support",
+            "breakdown": validated_result["breakdown"],
+            "data_sources": [diesel_factor.source if fuel_type != "electric" else electricity_factor.source, transplanting_factor.source],
+            "limitations": validated_result.get("limitations", transplanting_factor.notes),
+            "validation_warnings": validated_result.get("warnings", []),
         }
 
     @classmethod
     def _calculate_general_production_emissions(
-        cls, area_covered: float, fuel_consumed: float = None, equipment_hours: float = None
+        cls, area_covered: float, fuel_consumed: float = None, equipment_hours: float = None, **kwargs
     ) -> Dict[str, Any]:
-        """Calculate general production emissions using USDA factors"""
+        """Calculate general production emissions using USDA factors - supports diesel and electric equipment"""
 
         diesel_factor = cls.EPA_DIESEL_FACTORS["agricultural_equipment"]
+        electricity_factor = cls.EPA_ELECTRICITY_FACTORS["electricity_us_avg"]
         production_factor = cls.PRODUCTION_FACTORS["crop_production_diesel"]
+
+        # Convert Decimal types to float to prevent type errors in calculations
+        area_covered = float(area_covered)
+
+        # Extract fuel_type and energy_source from kwargs
+        fuel_type = kwargs.get("fuel_type", "diesel")  # Default to diesel for backwards compatibility
+        energy_source = kwargs.get("energy_source", "grid")  # Default to grid for electric
 
         if fuel_consumed:
             # Use actual fuel consumption
-            co2e_kg = fuel_consumed * diesel_factor.value
-            calculation_basis = "actual_fuel_consumption"
-        elif equipment_hours and area_covered:
-            # Estimate fuel consumption from equipment hours and area
-            area_hectares = area_covered * 0.404686  # Convert acres to hectares first
-            estimated_fuel = (area_hectares * production_factor.value) * (
-                equipment_hours / 8.0
-            )  # Normalize to 8-hour workday
-            co2e_kg = estimated_fuel * diesel_factor.value
-            calculation_basis = "estimated_from_hours_and_area"
+            fuel_consumed = float(fuel_consumed)  # Convert Decimal to float for calculation
+            if fuel_type == "electric":
+                # Electric equipment - fuel_consumed is in kWh
+                if energy_source in ["solar", "wind"]:
+                    # Renewable energy sources have zero emissions
+                    co2e_kg = 0
+                    calculation_basis = "actual_electric_consumption_renewable"
+                else:
+                    # Grid-powered electricity
+                    co2e_kg = fuel_consumed * electricity_factor.value  # 0.39 kg CO₂/kWh
+                    calculation_basis = "actual_electric_consumption_grid"
+                area_hectares = area_covered * 0.404686
+            else:
+                # Diesel or other fuel - fuel_consumed is in gallons/liters
+                co2e_kg = fuel_consumed * diesel_factor.value
+                calculation_basis = "actual_diesel_consumption"
+                area_hectares = area_covered * 0.404686
         else:
-            # Use USDA standard consumption per hectare
+            # Use USDA standard consumption per hectare (fixed: removed equipment_hours multiplier)
+            # USDA factors are designed for area-based calculations, not time-based
+            # Equipment hours are informational but should not scale the USDA factor
             area_hectares = area_covered * 0.404686  # Convert acres to hectares
             fuel_gallons = area_hectares * production_factor.value
             co2e_kg = fuel_gallons * diesel_factor.value
@@ -823,23 +976,121 @@ class VerifiedEmissionFactors:
             "production_activity": "general_crop_production",
             "area_covered_acres": area_covered,
             "area_covered_hectares": area_covered * 0.404686,
-            "diesel_emission_factor_kg_per_gallon": diesel_factor.value,
-            "usda_production_factor_gallons_per_hectare": production_factor.value,
+            "fuel_type": fuel_type,
             "calculation_basis": calculation_basis,
-            "confidence_level": min(diesel_factor.confidence_level, production_factor.confidence_level),
+            "confidence_level": electricity_factor.confidence_level if fuel_type == "electric" else diesel_factor.confidence_level,
         }
 
+        # Add fuel-type specific breakdown information
+        if fuel_type == "electric":
+            breakdown["electricity_emission_factor_kg_per_kwh"] = electricity_factor.value
+            if energy_source in ["solar", "wind"]:
+                breakdown["energy_source"] = energy_source
+                breakdown["note"] = f"{energy_source.capitalize()}-powered equipment - zero emissions"
+            else:
+                breakdown["energy_source"] = "grid"
+                breakdown["electricity_emission_factor"] = f"{electricity_factor.value} kg CO₂/kWh (EPA eGRID)"
+        else:
+            breakdown["diesel_emission_factor_kg_per_gallon"] = diesel_factor.value
+            breakdown["usda_production_factor_gallons_per_hectare"] = production_factor.value
+
         if fuel_consumed:
-            breakdown["actual_fuel_consumed_gallons"] = fuel_consumed
+            fuel_unit = "kWh" if fuel_type == "electric" else "gallons"
+            breakdown[f"actual_fuel_consumed_{fuel_unit}"] = fuel_consumed
         if equipment_hours:
             breakdown["equipment_hours"] = equipment_hours
 
+        # Add validation for unrealistic results (FIX #2)
+        validated_result = cls._validate_production_emissions(co2e_kg, area_covered, "general_crop_production", breakdown)
+
         return {
-            "co2e_kg": round(co2e_kg, 3),
-            "calculation_method": "verified_epa_usda_factors",
-            "breakdown": breakdown,
-            "data_sources": [diesel_factor.source, production_factor.source],
-            "limitations": production_factor.notes,
+            "co2e_kg": round(validated_result["co2e_kg"], 3),
+            "calculation_method": "verified_epa_usda_factors_with_electric_support",
+            "breakdown": validated_result["breakdown"],
+            "data_sources": [diesel_factor.source if fuel_type != "electric" else electricity_factor.source, production_factor.source],
+            "limitations": validated_result.get("limitations", production_factor.notes),
+            "validation_warnings": validated_result.get("warnings", []),
+        }
+
+    @classmethod
+    def _calculate_thinning_emissions(
+        cls, area_covered: float, fuel_consumed: float = None, equipment_hours: float = None, **kwargs
+    ) -> Dict[str, Any]:
+        """Calculate thinning emissions using USDA factors - lightweight manual operation (FIX #3), supports diesel and electric equipment"""
+
+        diesel_factor = cls.EPA_DIESEL_FACTORS["agricultural_equipment"]
+        electricity_factor = cls.EPA_ELECTRICITY_FACTORS["electricity_us_avg"]
+        thinning_factor = cls.PRODUCTION_FACTORS["thinning_diesel"]  # 0.75 gal/ha (not 2.5)
+
+        # Extract fuel_type and energy_source from kwargs
+        fuel_type = kwargs.get("fuel_type", "diesel")  # Default to diesel for backwards compatibility
+        energy_source = kwargs.get("energy_source", "grid")  # Default to grid for electric
+
+        if fuel_consumed:
+            # Use actual fuel consumption
+            if fuel_type == "electric":
+                # Electric equipment - fuel_consumed is in kWh
+                if energy_source in ["solar", "wind"]:
+                    # Renewable energy sources have zero emissions
+                    co2e_kg = 0
+                    calculation_basis = "actual_electric_consumption_renewable"
+                else:
+                    # Grid-powered electricity
+                    co2e_kg = fuel_consumed * electricity_factor.value  # 0.39 kg CO₂/kWh
+                    calculation_basis = "actual_electric_consumption_grid"
+                area_hectares = area_covered * 0.404686
+            else:
+                # Diesel or other fuel - fuel_consumed is in gallons/liters
+                co2e_kg = fuel_consumed * diesel_factor.value
+                calculation_basis = "actual_diesel_consumption"
+                area_hectares = area_covered * 0.404686
+        else:
+            # Use USDA standard for thinning (0.75 gal/ha - lightweight operation)
+            # Fixed: Do NOT multiply by equipment_hours - thinning factor is area-based
+            area_hectares = area_covered * 0.404686  # Convert acres to hectares
+            fuel_gallons = area_hectares * thinning_factor.value
+            co2e_kg = fuel_gallons * diesel_factor.value
+            calculation_basis = "usda_standard_per_hectare"
+
+        breakdown = {
+            "production_activity": "thinning",
+            "area_covered_acres": area_covered,
+            "area_covered_hectares": area_covered * 0.404686,
+            "fuel_type": fuel_type,
+            "calculation_basis": calculation_basis,
+            "confidence_level": electricity_factor.confidence_level if fuel_type == "electric" else diesel_factor.confidence_level,
+            "note": "Thinning is primarily manual labor with minimal fuel-intensive equipment",
+        }
+
+        # Add fuel-type specific breakdown information
+        if fuel_type == "electric":
+            breakdown["electricity_emission_factor_kg_per_kwh"] = electricity_factor.value
+            if energy_source in ["solar", "wind"]:
+                breakdown["energy_source"] = energy_source
+                breakdown["note"] = f"{energy_source.capitalize()}-powered equipment - zero emissions"
+            else:
+                breakdown["energy_source"] = "grid"
+                breakdown["electricity_emission_factor"] = f"{electricity_factor.value} kg CO₂/kWh (EPA eGRID)"
+        else:
+            breakdown["diesel_emission_factor_kg_per_gallon"] = diesel_factor.value
+            breakdown["usda_thinning_factor_gallons_per_hectare"] = thinning_factor.value
+
+        if fuel_consumed:
+            fuel_unit = "kWh" if fuel_type == "electric" else "gallons"
+            breakdown[f"actual_fuel_consumed_{fuel_unit}"] = fuel_consumed
+        if equipment_hours:
+            breakdown["equipment_hours"] = equipment_hours
+
+        # Add validation for unrealistic results (FIX #2)
+        validated_result = cls._validate_production_emissions(co2e_kg, area_covered, "pruning", breakdown)
+
+        return {
+            "co2e_kg": round(validated_result["co2e_kg"], 3),
+            "calculation_method": "verified_epa_usda_factors_with_electric_support",
+            "breakdown": validated_result["breakdown"],
+            "data_sources": [diesel_factor.source if fuel_type != "electric" else electricity_factor.source, thinning_factor.source],
+            "limitations": validated_result.get("limitations", thinning_factor.notes),
+            "validation_warnings": validated_result.get("warnings", []),
         }
 
     @classmethod
@@ -893,44 +1144,87 @@ class VerifiedEmissionFactors:
 
     @classmethod
     def _calculate_cultivation_emissions(
-        cls, area_covered: float, fuel_consumed: float = None, equipment_hours: float = None
+        cls, area_covered: float, fuel_consumed: float = None, equipment_hours: float = None, **kwargs
     ) -> Dict[str, Any]:
-        """Calculate soil cultivation emissions using USDA factors - high fuel intensity"""
+        """Calculate soil cultivation emissions using USDA factors - high fuel intensity, supports diesel and electric equipment"""
 
         diesel_factor = cls.EPA_DIESEL_FACTORS["agricultural_equipment"]
+        electricity_factor = cls.EPA_ELECTRICITY_FACTORS["electricity_us_avg"]
+        cultivation_factor = cls.PRODUCTION_FACTORS["cultivation_diesel"]
+
+        # Convert Decimal types to float to prevent type errors in calculations
+        area_covered = float(area_covered)
+
+        # Extract fuel_type and energy_source from kwargs
+        fuel_type = kwargs.get("fuel_type", "diesel")  # Default to diesel for backwards compatibility
+        energy_source = kwargs.get("energy_source", "grid")  # Default to grid for electric
 
         if fuel_consumed:
-            co2e_kg = fuel_consumed * diesel_factor.value
-            calculation_basis = "actual_fuel_consumption"
-        elif equipment_hours and area_covered:
-            # Cultivation is fuel-intensive: 4.0 gallons per hectare (higher than planting)
-            area_hectares = area_covered * 0.404686
-            estimated_fuel = (area_hectares * 4.0) * (equipment_hours / 8.0)  # Normalize to 8-hour day
-            co2e_kg = estimated_fuel * diesel_factor.value
-            calculation_basis = "estimated_cultivation_intensity"
+            # Use actual fuel consumption
+            fuel_consumed = float(fuel_consumed)  # Convert Decimal to float for calculation
+            if fuel_type == "electric":
+                # Electric equipment - fuel_consumed is in kWh
+                if energy_source in ["solar", "wind"]:
+                    # Renewable energy sources have zero emissions
+                    co2e_kg = 0
+                    calculation_basis = "actual_electric_consumption_renewable"
+                else:
+                    # Grid-powered electricity
+                    co2e_kg = fuel_consumed * electricity_factor.value  # 0.39 kg CO₂/kWh
+                    calculation_basis = "actual_electric_consumption_grid"
+                area_hectares = area_covered * 0.404686
+            else:
+                # Diesel or other fuel - fuel_consumed is in gallons/liters
+                co2e_kg = fuel_consumed * diesel_factor.value
+                calculation_basis = "actual_diesel_consumption"
+                area_hectares = area_covered * 0.404686
         else:
-            # Use higher USDA factor for cultivation
+            # Use USDA standard for cultivation (fixed: removed equipment_hours multiplier)
+            # USDA factors are designed for area-based calculations, not time-based
+            # Equipment hours are informational but should not scale the USDA factor
             area_hectares = area_covered * 0.404686
-            fuel_gallons = area_hectares * 4.0  # 4.0 gal/hectare for cultivation
+            fuel_gallons = area_hectares * cultivation_factor.value
             co2e_kg = fuel_gallons * diesel_factor.value
-            calculation_basis = "usda_cultivation_standard"
+            calculation_basis = "usda_standard_per_hectare"
 
         breakdown = {
             "production_activity": "soil_cultivation",
             "area_covered_acres": area_covered,
             "area_covered_hectares": area_covered * 0.404686,
-            "diesel_emission_factor_kg_per_gallon": diesel_factor.value,
-            "cultivation_intensity_factor": 4.0,  # gallons per hectare
+            "fuel_type": fuel_type,
             "calculation_basis": calculation_basis,
-            "confidence_level": 0.85,
+            "confidence_level": electricity_factor.confidence_level if fuel_type == "electric" else diesel_factor.confidence_level,
         }
 
+        # Add fuel-type specific breakdown information
+        if fuel_type == "electric":
+            breakdown["electricity_emission_factor_kg_per_kwh"] = electricity_factor.value
+            if energy_source in ["solar", "wind"]:
+                breakdown["energy_source"] = energy_source
+                breakdown["note"] = f"{energy_source.capitalize()}-powered equipment - zero emissions"
+            else:
+                breakdown["energy_source"] = "grid"
+                breakdown["electricity_emission_factor"] = f"{electricity_factor.value} kg CO₂/kWh (EPA eGRID)"
+        else:
+            breakdown["diesel_emission_factor_kg_per_gallon"] = diesel_factor.value
+            breakdown["cultivation_intensity_factor"] = cultivation_factor.value
+
+        if fuel_consumed:
+            fuel_unit = "kWh" if fuel_type == "electric" else "gallons"
+            breakdown[f"actual_fuel_consumed_{fuel_unit}"] = fuel_consumed
+        if equipment_hours:
+            breakdown["equipment_hours"] = equipment_hours
+
+        # Add validation for unrealistic results
+        validated_result = cls._validate_production_emissions(co2e_kg, area_covered, "cultivation", breakdown)
+
         return {
-            "co2e_kg": round(co2e_kg, 3),
-            "calculation_method": "verified_epa_usda_factors",
-            "breakdown": breakdown,
-            "data_sources": [diesel_factor.source, "USDA Agricultural Energy Use - Cultivation Operations"],
-            "limitations": "Cultivation fuel use varies significantly with soil conditions and equipment",
+            "co2e_kg": round(validated_result["co2e_kg"], 3),
+            "calculation_method": "verified_epa_usda_factors_with_electric_support",
+            "breakdown": validated_result["breakdown"],
+            "data_sources": [diesel_factor.source if fuel_type != "electric" else electricity_factor.source, "USDA Agricultural Energy Use - Cultivation Operations"],
+            "limitations": validated_result.get("limitations", "Cultivation fuel use varies significantly with soil conditions and equipment"),
+            "validation_warnings": validated_result.get("warnings", []),
         }
 
     @classmethod
@@ -999,6 +1293,9 @@ class VerifiedEmissionFactors:
         application_method: str = "broadcast",
         product_name: str = "",
         chemical_subtype: str = "",
+        application_fuel_type: str = "",
+        application_fuel_consumed: float = None,
+        application_fuel_unit: str = "L",
     ) -> Dict[str, Any]:
         """
         Calculate chemical application emissions using EPA/USDA verified emission factors.
@@ -1012,6 +1309,11 @@ class VerifiedEmissionFactors:
         - Copper-based fungicides: 5.5 kg CO2e/kg AI (vs 4.5 for generic)
         - Sulfur-based fungicides, biological agents, organic pesticides, etc.
 
+        UPDATED 2025-12-11: Added application fuel tracking for electric and alternative fuels.
+        - Enables tracking of actual fuel consumed by application equipment
+        - Supports electric equipment with kWh units
+        - Falls back to estimated fuel consumption if actual consumption not provided
+
         Args:
             chemical_type: Type of chemical (herbicide, fungicide, pesticide, etc.)
             volume_liters: Volume applied in liters
@@ -1023,6 +1325,11 @@ class VerifiedEmissionFactors:
                             Takes precedence over product_name keyword detection.
                             Values: organic_herbicide, copper_fungicide, sulfur_fungicide, biological_fungicide,
                                     organic_pesticide, biological_pesticide, organic_fertilizer, etc.
+            application_fuel_type: Actual fuel type for application equipment (diesel, electric, etc.)
+                                  If provided, overrides estimated fuel consumption method
+            application_fuel_consumed: Actual fuel consumed by application equipment (in specified unit)
+                                      If provided with application_fuel_type, used instead of estimation
+            application_fuel_unit: Unit of application_fuel_consumed (L, gal, kg, kWh)
         """
 
         if volume_liters <= 0 or area_hectares <= 0:
@@ -1159,51 +1466,126 @@ class VerifiedEmissionFactors:
                 )
 
         # Application emissions (fuel for equipment)
-        # UPDATED: Real-world agricultural fuel consumption rates based on equipment type
-        # Source: Agricultural Engineering Standards, EPA Farm Equipment Data, USDA Energy Use Studies
-        application_rate_per_hectare = volume_liters / area_hectares  # L/ha
+        # SPRINT 3 EPIC 3.3: Application Fuel Tracking
+        # UPDATED 2025-12-11: Support for actual fuel tracking (diesel, electric, etc.)
+        # Falls back to estimated fuel consumption if actual consumption not provided
 
-        # Estimate fuel consumption based on application method and equipment type
-        # These values are based on real-world agricultural engineering data
-        if application_method.lower() in ["broadcast", "spray"]:
-            # Broadcast/spray methods CALIBRATED to research benchmarks:
-            # - Boom sprayer (field crops): 1.5-2.5 L diesel/ha
-            # - Airblast sprayer (orchards): 3.0-5.0 L diesel/ha
-            # - Hand sprayer (small scale): 0.8-1.2 L diesel/ha
-            # CALIBRATED: For pesticides/herbicides/fungicides - much lower fuel than fertilizers
-            fuel_consumption_per_ha = 0.8  # L diesel/ha (CALIBRATED for chemical efficiency)
-        elif application_method.lower() in ["airblast", "airblast_sprayer", "orchard_spray", "tree_spray"]:
-            # Orchard airblast sprayers - high fuel consumption for air movement
-            # Real-world range: 3.0-5.0 L diesel/ha depending on tree density
-            fuel_consumption_per_ha = 4.0  # L diesel/ha (apple orchards typical)
-        elif application_method.lower() in ["injection", "incorporation"]:
-            # Soil injection requires more power for penetration
-            # Real-world: 2.5-4.0 L diesel/ha for injection equipment
-            fuel_consumption_per_ha = 3.0  # L diesel/ha (2x previous estimate)
-        elif application_method.lower() in ["drip_irrigation", "drip", "micro_irrigation", "precision_irrigation"]:
-            # Drip irrigation - pumping system energy use
-            # Electric pumps common, but diesel backup: 0.5-1.0 L diesel/ha
-            fuel_consumption_per_ha = 0.7  # L diesel/ha (pumping energy)
-        elif application_method.lower() in ["foliar", "foliar_spray", "mist_blower"]:
-            # Foliar application with mist blowers CALIBRATED
-            # Real-world: 1.8-2.8 L diesel/ha for foliar equipment
-            fuel_consumption_per_ha = 1.0  # L diesel/ha (CALIBRATED for chemical efficiency)
-        elif application_method.lower() in ["aerial", "aircraft", "helicopter", "drone"]:
-            # Aerial application - aircraft fuel consumption
-            # Small aircraft: 8-12 L fuel/ha, helicopter: 15-20 L/ha
-            fuel_consumption_per_ha = 10.0  # L fuel/ha (aircraft typical)
-        elif application_method.lower() in ["hand", "backpack", "manual"]:
-            # Manual/backpack sprayers - minimal fuel (small engines)
-            # Real-world: 0.5-1.0 L fuel/ha for powered backpack sprayers
-            fuel_consumption_per_ha = 0.8  # L fuel/ha
+        # Check if actual fuel consumption is provided
+        if application_fuel_consumed is not None and application_fuel_consumed > 0 and application_fuel_type:
+            # Use actual application fuel data
+            application_fuel_consumed = float(application_fuel_consumed)  # Convert Decimal to float for calculation
+            calculation_basis = "actual_application_fuel"
+
+            # Convert to standard liters for tracking
+            if application_fuel_unit == "gal":
+                fuel_liters = application_fuel_consumed * 3.78541
+            elif application_fuel_unit == "kWh":
+                # For electricity, keep as-is for direct conversion to emissions
+                fuel_liters = application_fuel_consumed  # Will be treated as kWh below
+            elif application_fuel_unit == "kg":
+                # For solids, assume 1 kg ≈ 1 L volumetrically for estimation
+                fuel_liters = application_fuel_consumed
+            else:  # liters
+                fuel_liters = application_fuel_consumed
+
+            # Route to correct emission factor based on fuel type
+            if application_fuel_type.lower() == "electric":
+                # Electric equipment: use kWh consumption and electricity factor
+                application_fuel_kwh = fuel_liters  # Already in kWh if unit was kWh
+                electricity_factor = cls.EPA_ELECTRICITY_FACTORS["electricity_us_avg"]
+                application_emissions = application_fuel_kwh * electricity_factor.value
+                calculation_method_note = "Actual electric consumption (kWh)"
+            elif application_fuel_type.lower() == "diesel":
+                fuel_gallons = fuel_liters / 3.78541  # Convert to gallons
+                application_emissions = fuel_gallons * fuel_factor.value
+                calculation_method_note = "Actual diesel consumption"
+            elif application_fuel_type.lower() == "gasoline":
+                gasoline_factor = cls.EPA_FUEL_FACTORS.get("gasoline", fuel_factor)
+                fuel_gallons = fuel_liters / 3.78541  # Convert to gallons
+                application_emissions = fuel_gallons * gasoline_factor.value
+                calculation_method_note = "Actual gasoline consumption"
+            elif application_fuel_type.lower() == "propane":
+                propane_factor = cls.EPA_FUEL_FACTORS.get("propane", fuel_factor)
+                fuel_gallons = fuel_liters / 3.78541  # Convert to gallons
+                application_emissions = fuel_gallons * propane_factor.value
+                calculation_method_note = "Actual propane consumption"
+            elif application_fuel_type.lower() == "natural_gas":
+                # Natural gas factor is per cubic foot, estimate 1 cf ≈ 0.0283 m³
+                natural_gas_factor = cls.EPA_FUEL_FACTORS.get("natural_gas", fuel_factor)
+                # Assume 1 L natural gas ≈ 0.035 cubic feet
+                fuel_cubic_feet = fuel_liters * 0.035
+                application_emissions = fuel_cubic_feet * natural_gas_factor.value
+                calculation_method_note = "Actual natural gas consumption"
+            elif application_fuel_type.lower() == "biodiesel":
+                # Biodiesel is similar to diesel (slightly lower emissions)
+                biodiesel_factor = cls.EPA_FUEL_FACTORS.get("biodiesel", fuel_factor)
+                fuel_gallons = fuel_liters / 3.78541  # Convert to gallons
+                application_emissions = fuel_gallons * biodiesel_factor.value
+                calculation_method_note = "Actual biodiesel consumption"
+            elif application_fuel_type.lower() == "none" or application_fuel_type == "":
+                # Manual or non-fuel equipment
+                application_emissions = 0.0
+                calculation_method_note = "Manual application (no fuel)"
+            else:
+                # Unknown fuel type, use diesel as fallback
+                fuel_gallons = fuel_liters / 3.78541  # Convert to gallons
+                application_emissions = fuel_gallons * fuel_factor.value
+                calculation_method_note = f"Actual fuel consumption ({application_fuel_type}) - using diesel factor"
+
+            # For tracking
+            total_fuel_liters = fuel_liters
+            total_fuel_gallons = fuel_liters / 3.78541 if application_fuel_unit != "kWh" else 0
+
         else:
-            # Default for unknown methods - use field crop boom sprayer average
-            fuel_consumption_per_ha = 2.0  # L diesel/ha (realistic default)
+            # FALLBACK: Use estimated fuel consumption based on application method
+            calculation_basis = "estimated_application_fuel"
+            calculation_method_note = "Estimated based on application method and area"
 
-        total_fuel_liters = area_hectares * fuel_consumption_per_ha
-        total_fuel_gallons = total_fuel_liters / 3.78541  # Convert to gallons
+            # UPDATED: Real-world agricultural fuel consumption rates based on equipment type
+            # Source: Agricultural Engineering Standards, EPA Farm Equipment Data, USDA Energy Use Studies
+            application_rate_per_hectare = volume_liters / area_hectares  # L/ha
 
-        application_emissions = total_fuel_gallons * fuel_factor.value
+            # Estimate fuel consumption based on application method and equipment type
+            # These values are based on real-world agricultural engineering data
+            if application_method.lower() in ["broadcast", "spray"]:
+                # Broadcast/spray methods CALIBRATED to research benchmarks:
+                # - Boom sprayer (field crops): 1.5-2.5 L diesel/ha
+                # - Airblast sprayer (orchards): 3.0-5.0 L diesel/ha
+                # - Hand sprayer (small scale): 0.8-1.2 L diesel/ha
+                # CALIBRATED: For pesticides/herbicides/fungicides - much lower fuel than fertilizers
+                fuel_consumption_per_ha = 0.8  # L diesel/ha (CALIBRATED for chemical efficiency)
+            elif application_method.lower() in ["airblast", "airblast_sprayer", "orchard_spray", "tree_spray"]:
+                # Orchard airblast sprayers - high fuel consumption for air movement
+                # Real-world range: 3.0-5.0 L diesel/ha depending on tree density
+                fuel_consumption_per_ha = 4.0  # L diesel/ha (apple orchards typical)
+            elif application_method.lower() in ["injection", "incorporation"]:
+                # Soil injection requires more power for penetration
+                # Real-world: 2.5-4.0 L diesel/ha for injection equipment
+                fuel_consumption_per_ha = 3.0  # L diesel/ha (2x previous estimate)
+            elif application_method.lower() in ["drip_irrigation", "drip", "micro_irrigation", "precision_irrigation"]:
+                # Drip irrigation - pumping system energy use
+                # Electric pumps common, but diesel backup: 0.5-1.0 L diesel/ha
+                fuel_consumption_per_ha = 0.7  # L diesel/ha (pumping energy)
+            elif application_method.lower() in ["foliar", "foliar_spray", "mist_blower"]:
+                # Foliar application with mist blowers CALIBRATED
+                # Real-world: 1.8-2.8 L diesel/ha for foliar equipment
+                fuel_consumption_per_ha = 1.0  # L diesel/ha (CALIBRATED for chemical efficiency)
+            elif application_method.lower() in ["aerial", "aircraft", "helicopter", "drone"]:
+                # Aerial application - aircraft fuel consumption
+                # Small aircraft: 8-12 L fuel/ha, helicopter: 15-20 L/ha
+                fuel_consumption_per_ha = 10.0  # L fuel/ha (aircraft typical)
+            elif application_method.lower() in ["hand", "backpack", "manual"]:
+                # Manual/backpack sprayers - minimal fuel (small engines)
+                # Real-world: 0.5-1.0 L fuel/ha for powered backpack sprayers
+                fuel_consumption_per_ha = 0.8  # L fuel/ha
+            else:
+                # Default for unknown methods - use field crop boom sprayer average
+                fuel_consumption_per_ha = 2.0  # L diesel/ha (realistic default)
+
+            total_fuel_liters = area_hectares * fuel_consumption_per_ha
+            total_fuel_gallons = total_fuel_liters / 3.78541  # Convert to gallons
+
+            application_emissions = total_fuel_gallons * fuel_factor.value
 
         # Total emissions
         total_co2e = manufacturing_emissions + application_emissions
@@ -1587,15 +1969,22 @@ class VerifiedEmissionFactors:
             return {"co2e_kg": corrected_co2e, "breakdown": breakdown, "warnings": warnings, "limitations": limitations}
 
         elif emissions_per_hectare < operation_range["min"]:
-            underestimation_factor = operation_range["min"] / emissions_per_hectare
-            warnings.append(f"Low emissions: {underestimation_factor:.1f}x lower than typical range")
-            warnings.append(
-                f"Result: {emissions_per_hectare:.1f} kg CO₂e/ha, typical: {operation_range['min']}-{operation_range['max']} kg CO₂e/ha"
-            )
+            # Special case: zero emissions from renewable energy sources
+            if emissions_per_hectare == 0:
+                warnings.append("Zero emissions from renewable energy source (solar/wind)")
+                breakdown["emissions_per_hectare"] = 0
+                breakdown["realistic_range_kg_per_hectare"] = operation_range
+                breakdown["renewable_energy_credit"] = True
+            else:
+                underestimation_factor = operation_range["min"] / emissions_per_hectare
+                warnings.append(f"Low emissions: {underestimation_factor:.1f}x lower than typical range")
+                warnings.append(
+                    f"Result: {emissions_per_hectare:.1f} kg CO₂e/ha, typical: {operation_range['min']}-{operation_range['max']} kg CO₂e/ha"
+                )
 
-            # Don't correct low values, just warn
-            breakdown["emissions_per_hectare"] = emissions_per_hectare
-            breakdown["realistic_range_kg_per_hectare"] = operation_range
+                # Don't correct low values, just warn
+                breakdown["emissions_per_hectare"] = emissions_per_hectare
+                breakdown["realistic_range_kg_per_hectare"] = operation_range
 
         else:
             # Result is within realistic range

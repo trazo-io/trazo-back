@@ -6,6 +6,9 @@ from typing import Any, Dict, Optional
 from django.conf import settings
 from django.utils import timezone
 
+# Import custom fields utility for blockchain hash inclusion
+from history.custom_fields import get_custom_fields_for_blockchain_hash
+
 # Import web3 - required for production blockchain operations
 try:
     from web3 import Web3
@@ -224,6 +227,7 @@ class BlockchainCarbonService:
     def hash_carbon_data(self, carbon_data: Dict[str, Any]) -> str:
         """
         Create a SHA-256 hash of carbon data for blockchain storage.
+        Includes custom fields when present for immutability guarantee.
         """
         # Create a deterministic hash from carbon data
         hash_input = {
@@ -235,6 +239,12 @@ class BlockchainCarbonService:
             "usda_verified": carbon_data.get("usda_verified", False),
             "timestamp": carbon_data.get("timestamp", int(time.time())),
         }
+
+        # Include custom fields in hash if present (for immutability after verification)
+        custom_fields = carbon_data.get("custom_fields", [])
+        if custom_fields:
+            # Use the utility function that sorts and extracts only consumer-visible fields
+            hash_input["custom_fields"] = get_custom_fields_for_blockchain_hash(custom_fields)
 
         # Sort keys for deterministic hashing
         sorted_data = json.dumps(hash_input, sort_keys=True, separators=(",", ":"))

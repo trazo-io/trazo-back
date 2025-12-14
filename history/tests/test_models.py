@@ -1251,15 +1251,15 @@ class EquipmentEventValidationTestCase(TestCase):
         self.assertIn("area_worked", context.exception.error_dict)
 
     def test_excessive_hours_operated(self):
-        """Test that hours operated > 24 is rejected."""
+        """Test that hours operated > 1000 is rejected (max for multi-day operations)."""
         event = EquipmentEvent(
             history=self.history,
             created_by=self.user,
             description="Test excessive hours operated",
             date=timezone.now(),
             type=EquipmentEvent.FUEL_CONSUMPTION,
-            fuel_consumed=150.0,
-            hours_operated=30.0,  # More than 24 hours
+            fuel_consumed=5000.0,
+            hours_operated=1200.0,  # More than 1000 hours (max for multi-day operations)
         )
 
         with self.assertRaises(ValidationError) as context:
@@ -1267,7 +1267,7 @@ class EquipmentEventValidationTestCase(TestCase):
 
         # Check that hours_operated field is flagged
         self.assertIn("hours_operated", context.exception.error_dict)
-        self.assertIn("cannot exceed 24 hours", str(context.exception))
+        self.assertIn("cannot exceed 1000 hours", str(context.exception))
 
     def test_fuel_without_hours_validation(self):
         """Test validation when fuel is provided without hours."""

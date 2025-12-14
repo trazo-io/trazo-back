@@ -587,6 +587,9 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
     # Carbon context (SUPPORTING)
     carbon_footprint_avg = serializers.FloatField(help_text="Average carbon footprint per kg")
     carbon_negative_count = serializers.IntegerField(help_text="Carbon negative productions")
+    industry_percentile = serializers.IntegerField(
+        help_text="Industry percentile ranking (5-95, where 95=top performers) based on USDA benchmarks"
+    )
 
     # Business impact metrics
     transparency_engagement = serializers.FloatField(help_text="Transparency engagement score")
@@ -600,6 +603,7 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
         Calculate accurate metrics from backend data
         """
         from history.models import History, HistoryScan
+        from django.utils import timezone
 
         # Get current month date range
         now = timezone.now()
@@ -660,6 +664,7 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
         transparency_scores = []
         completeness_scores = []
         verification_levels = []
+        industry_percentiles = []
         usda_verified_count = 0
         blockchain_verified_count = 0
         carbon_negative_count = 0
@@ -682,9 +687,19 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
 
             if CarbonEntry.objects.filter(production=history, usda_verified=True).exists():
                 usda_verified_count += 1
-            # Check for blockchain verification using available fields
-            if CarbonEntry.objects.filter(production=history, verification_status="blockchain_verified").exists():
-                blockchain_verified_count += 1
+
+            # Check for blockchain verification in History.extra_data (not CarbonEntry)
+            # Matches the logic used in EstablishmentViewSet.dashboard_comprehensive()
+            if hasattr(history, "extra_data") and history.extra_data and isinstance(history.extra_data, dict):
+                # Check root level first (current format)
+                is_blockchain_verified = history.extra_data.get("blockchain_verified", False)
+                # Fallback to nested format (legacy)
+                if not is_blockchain_verified:
+                    blockchain_data = history.extra_data.get("blockchain", {})
+                    if isinstance(blockchain_data, dict):
+                        is_blockchain_verified = blockchain_data.get("verified", False)
+                if is_blockchain_verified:
+                    blockchain_verified_count += 1
 
             # Check for carbon negative productions
             carbon_entries = CarbonEntry.objects.filter(production=history)
@@ -706,10 +721,71 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
                 if production_amount and production_amount > 0:
                     carbon_footprints.append(net_footprint / production_amount)
 
+                # Calculate industry percentile for this production (USDA benchmark based)
+                # Uses the same logic as carbon/views.py ProductDetailView
+                try:
+                    from carbon.models import CarbonBenchmark
+
+                    crop_type = getattr(history, "crop_type", "unknown") or "unknown"
+                    crop_name = getattr(history, "crop_name", "") or ""
+                    current_year = history.start_date.year if history.start_date else timezone.now().year
+                    production_amount = getattr(history, "production_amount", None) or 1000
+                    net_footprint_per_kg = net_footprint / production_amount if production_amount > 0 else net_footprint
+
+                    # Try exact crop match first
+                    crop_benchmark = CarbonBenchmark.objects.filter(
+                        crop_type=crop_type, year=current_year, usda_verified=True
+                    ).first()
+
+                    if not crop_benchmark and crop_type != "unknown":
+                        # Try partial crop name matches
+                        crop_keywords = crop_name.lower().split()
+                        for keyword in crop_keywords:
+                            crop_benchmark = CarbonBenchmark.objects.filter(
+                                crop_type__icontains=keyword, year=current_year, usda_verified=True
+                            ).first()
+                            if crop_benchmark:
+                                break
+
+                    # Calculate percentile based on benchmark
+                    industry_percentile = 50  # Default
+                    if crop_benchmark:
+                        if net_footprint_per_kg <= 0:
+                            industry_percentile = 95  # Very good if carbon neutral/negative
+                        elif net_footprint_per_kg <= crop_benchmark.min_emissions:
+                            industry_percentile = 95  # Top performers
+                        elif net_footprint_per_kg >= crop_benchmark.max_emissions:
+                            industry_percentile = 5  # Bottom performers
+                        else:
+                            # Linear interpolation between min and max
+                            position = (net_footprint_per_kg - crop_benchmark.min_emissions) / (
+                                crop_benchmark.max_emissions - crop_benchmark.min_emissions
+                            )
+                            industry_percentile = max(5, min(95, int(95 - (position * 90))))
+                    else:
+                        # No benchmark available - estimate based on carbon score and offsets
+                        if total_offsets > 0:
+                            offset_percentage = min(100, (total_offsets / total_emissions) * 100) if total_emissions > 0 else 100
+                            if offset_percentage >= 100:
+                                industry_percentile = int(85 + min(15, ((offset_percentage - 100) / 50) * 15))
+                            else:
+                                industry_percentile = int(offset_percentage * 0.85)
+                        else:
+                            industry_percentile = 50
+
+                    industry_percentiles.append(industry_percentile)
+                except Exception:
+                    # Default to 50 if calculation fails
+                    industry_percentiles.append(50)
+            else:
+                # No carbon entries - default percentile
+                industry_percentiles.append(50)
+
         # Calculate averages
         transparency_score = sum(transparency_scores) / len(transparency_scores) if transparency_scores else 0
         documentation_completeness = sum(completeness_scores) / len(completeness_scores) if completeness_scores else 0
         carbon_footprint_avg = sum(carbon_footprints) / len(carbon_footprints) if carbon_footprints else 0
+        industry_percentile_avg = int(sum(industry_percentiles) / len(industry_percentiles)) if industry_percentiles else 50
 
         # Determine overall verification level
         verification_level_counts = {}
@@ -776,6 +852,7 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
             # Carbon context (SUPPORTING)
             "carbon_footprint_avg": round(carbon_footprint_avg, 3),
             "carbon_negative_count": carbon_negative_count,
+            "industry_percentile": industry_percentile_avg,
             # Business impact metrics
             "transparency_engagement": round(transparency_engagement, 2),
             # Subscription context

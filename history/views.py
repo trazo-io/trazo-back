@@ -1713,11 +1713,44 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
                     gallery = Gallery.objects.create()
 
-                    # Create GalleryImage records from S3 URLs
-                    for image_url in album_images:
+                    # Create GalleryImage records from S3 URLs with Vision API validation
+                    for idx, image_url in enumerate(album_images, 1):
                         # Extract S3 key from URL if possible
                         s3_key = image_url.split("/")[-1] if "/" in image_url else None
-                        gallery_image = gallery.images.create(image_url=image_url, s3_key=s3_key)
+
+                        # MVP Photo Verification: Run Vision API validation on event photos
+                        extra_data = {}
+                        try:
+                            from carbon.services.photo_evidence_service import PhotoEvidenceService
+                            import requests
+                            from django.conf import settings
+
+                            # Download image from URL for Vision API analysis
+                            response = requests.get(image_url, timeout=10)
+                            if response.status_code == 200:
+                                photo_service = PhotoEvidenceService()
+                                validation_result = photo_service.validate_and_analyze_photo(
+                                    file_data=response.content,
+                                    filename=s3_key or "photo.jpg"
+                                )
+                                # Store Vision API validation results in extra_data
+                                extra_data = {
+                                    "content_validation": validation_result.get("content_validation", "uncertain"),
+                                    "content_confidence": validation_result.get("content_confidence", 0),
+                                    "agricultural_labels": validation_result.get("agricultural_labels", []),
+                                    "content_bypassed": validation_result.get("content_bypassed", False),
+                                }
+                            else:
+                                extra_data = {"content_validation": "uncertain", "content_confidence": 0}
+                        except Exception as e:
+                            # Default to uncertain if validation fails
+                            extra_data = {"content_validation": "uncertain", "content_confidence": 0}
+
+                        gallery_image = gallery.images.create(
+                            image_url=image_url,
+                            s3_key=s3_key,
+                            extra_data=extra_data if extra_data else None
+                        )
 
                     # Associate album with event
                     event.album = gallery
@@ -1804,8 +1837,40 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             # Add new images to album
             for image_url in album_images:
                 s3_key = image_url.split("/")[-1] if "/" in image_url else None
-                gallery_image = instance.album.images.create(image_url=image_url, s3_key=s3_key)
-                print(f"[EventViewSet.update] ➕ Created image {gallery_image.id} with URL: {image_url[:50]}...")
+
+                # MVP Photo Verification: Run Vision API validation on event photos
+                extra_data = {}
+                try:
+                    from carbon.services.photo_evidence_service import PhotoEvidenceService
+                    import requests
+                    from django.conf import settings
+
+                    # Download image from URL for Vision API analysis
+                    response = requests.get(image_url, timeout=10)
+                    if response.status_code == 200:
+                        photo_service = PhotoEvidenceService()
+                        validation_result = photo_service.validate_and_analyze_photo(
+                            file_data=response.content,
+                            filename=s3_key or "photo.jpg"
+                        )
+                        # Store Vision API validation results in extra_data
+                        extra_data = {
+                            "content_validation": validation_result.get("content_validation", "uncertain"),
+                            "content_confidence": validation_result.get("content_confidence", 0),
+                            "agricultural_labels": validation_result.get("agricultural_labels", []),
+                            "content_bypassed": validation_result.get("content_bypassed", False),
+                        }
+                except Exception as e:
+                    print(f"[EventViewSet.update] ⚠️ Vision API validation failed for {image_url}: {e}")
+                    # Default to uncertain if validation fails
+                    extra_data = {"content_validation": "uncertain", "content_confidence": 0}
+
+                gallery_image = instance.album.images.create(
+                    image_url=image_url,
+                    s3_key=s3_key,
+                    extra_data=extra_data if extra_data else None
+                )
+                print(f"[EventViewSet.update] ➕ Created image {gallery_image.id} with Vision API: {extra_data.get('content_validation', 'skipped')}")
 
             final_images = list(instance.album.images.values_list("id", "image_url"))
             print(f"[EventViewSet.update] ➕ Final images in album: {final_images}")

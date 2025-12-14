@@ -192,6 +192,103 @@ class TimelineService:
         return getattr(event, "date", None)
 
     @staticmethod
+    def _check_valid_agricultural_content(event) -> bool:
+        """
+        MVP Photo Verification: Check if event photos contain valid agricultural content.
+
+        Returns True if:
+        - Photos are validated as agricultural content via Vision API, OR
+        - Validation was bypassed in development mode, OR
+        - No photos exist (skip this check)
+
+        Returns False if:
+        - Photos exist but Vision API marked them as invalid/non-agricultural
+        """
+        if not event.album or not event.album.images.exists():
+            # No photos - don't downgrade verification based on content
+            return True
+
+        for image in event.album.images.all():
+            # Check Vision API content validation results
+            if hasattr(image, "extra_data") and image.extra_data:
+                content_validation = image.extra_data.get("content_validation")
+                content_bypassed = image.extra_data.get("content_bypassed", False)
+
+                # Accept images that are:
+                # - Valid agricultural content
+                # - Likely agricultural content
+                # - Validation was bypassed (dev mode)
+                if content_validation in ["valid_agricultural", "likely_agricultural"] or content_bypassed:
+                    return True
+                elif content_validation in ["ai_generated", "stock_photo", "not_agricultural", "uncertain"]:
+                    # If ANY photo is invalid, the whole event is downgraded
+                    return False
+
+        # Default to True if no content validation data exists (for backward compatibility)
+        return True
+
+    @staticmethod
+    def _calculate_verification_level(event, event_type_id: int = None) -> str:
+        """
+        Calculate verification level for an event based on MVP tiered system.
+
+        Verification Levels:
+        - self_reported: No photo evidence (50% trust)
+        - photo_documented: Has photos without GPS/timestamp validation (65% trust)
+        - photo_verified: Has photos with GPS + timestamp verification (80% trust)
+        - data_verified: External data verification (weather, lab results) (85% trust)
+        - certified: Third-party or blockchain verified (100% trust)
+
+        MVP Photo Verification: Photos with invalid content (AI-generated, stock images)
+        are downgraded to self_reported level.
+        """
+        # Check for blockchain verification
+        has_blockchain_verification = False
+        if hasattr(event, "extra_data") and event.extra_data:
+            has_blockchain_verification = event.extra_data.get("blockchain_verified", False)
+
+        if has_blockchain_verification:
+            return "certified"
+
+        # Check for photos
+        has_photos = event.album is not None and event.album.images.exists()
+
+        # MVP Photo Verification: Check if photos contain valid agricultural content
+        has_valid_agricultural_content = TimelineService._check_valid_agricultural_content(event)
+
+        # If photos exist but contain invalid content, downgrade to self_reported
+        if has_photos and not has_valid_agricultural_content:
+            return "self_reported"
+
+        # Check for GPS data in photos
+        has_gps_data = False
+        if has_photos:
+            for image in event.album.images.all():
+                if hasattr(image, "extra_data") and image.extra_data:
+                    if image.extra_data.get("gps_latitude") or image.extra_data.get("latitude"):
+                        has_gps_data = True
+                        break
+
+        # Check for timestamp
+        has_timestamp = getattr(event, "date", None) is not None
+
+        # Event types that auto-upgrade to data_verified
+        # 0=Weather, 4=Equipment (FC), 5=Soil (ST), 7=Business (CE/CO)
+        data_verified_types = {0, 4, 5, 7}
+        is_data_verified_type = event_type_id in data_verified_types if event_type_id is not None else False
+
+        if is_data_verified_type:
+            return "data_verified"
+
+        if has_photos:
+            if has_gps_data and has_timestamp:
+                return "photo_verified"
+            else:
+                return "photo_documented"
+
+        return "self_reported"
+
+    @staticmethod
     def _format_chemical_event(event) -> Dict[str, Any]:
         """Format ChemicalEvent with proper security and validation."""
         # Determine chemical type safely
@@ -249,6 +346,9 @@ class TimelineService:
                 images = album.images.all()  # This won't hit the database due to prefetch
                 if images:
                     event_data["albums"] = [TimelineService._format_album_image(image) for image in images]
+
+            # MVP Photo Verification: Add verification level (event type 2 = Chemical)
+            event_data["verification_level"] = TimelineService._calculate_verification_level(event, event_type_id=2)
 
             return event_data
 
@@ -331,6 +431,9 @@ class TimelineService:
                 if images:
                     event_data["albums"] = [TimelineService._format_album_image(image) for image in images]
 
+            # MVP Photo Verification: Add verification level (event type 1 = Production)
+            event_data["verification_level"] = TimelineService._calculate_verification_level(event, event_type_id=1)
+
             return event_data
 
         except Exception as e:
@@ -362,6 +465,9 @@ class TimelineService:
                 images = album.images.all()
                 if images:
                     event_data["albums"] = [TimelineService._format_album_image(image) for image in images]
+
+            # MVP Photo Verification: Add verification level (event type 4 = Equipment)
+            event_data["verification_level"] = TimelineService._calculate_verification_level(event, event_type_id=4)
 
             return event_data
 
@@ -543,6 +649,9 @@ class TimelineService:
                 if images:
                     event_data["albums"] = [TimelineService._format_album_image(image) for image in images]
 
+            # MVP Photo Verification: Add verification level (event type 5 = Soil Management)
+            event_data["verification_level"] = TimelineService._calculate_verification_level(event, event_type_id=5)
+
             return event_data
 
         except Exception as e:
@@ -574,6 +683,9 @@ class TimelineService:
                 if images:
                     event_data["albums"] = [TimelineService._format_album_image(image) for image in images]
 
+            # MVP Photo Verification: Add verification level (event type 0 = Weather)
+            event_data["verification_level"] = TimelineService._calculate_verification_level(event, event_type_id=0)
+
             return event_data
 
         except Exception as e:
@@ -603,6 +715,9 @@ class TimelineService:
                 images = album.images.all()
                 if images:
                     event_data["albums"] = [TimelineService._format_album_image(image) for image in images]
+
+            # MVP Photo Verification: Add verification level (event type 3 = General)
+            event_data["verification_level"] = TimelineService._calculate_verification_level(event, event_type_id=3)
 
             return event_data
 
@@ -636,6 +751,9 @@ class TimelineService:
                 if images:
                     event_data["albums"] = [TimelineService._format_album_image(image) for image in images]
 
+            # MVP Photo Verification: Add verification level (event type 6 = Pest Management)
+            event_data["verification_level"] = TimelineService._calculate_verification_level(event, event_type_id=6)
+
             return event_data
 
         except Exception as e:
@@ -666,6 +784,9 @@ class TimelineService:
                 images = album.images.all()
                 if images:
                     event_data["albums"] = [TimelineService._format_album_image(image) for image in images]
+
+            # MVP Photo Verification: Add verification level (event type 7 = Business)
+            event_data["verification_level"] = TimelineService._calculate_verification_level(event, event_type_id=7)
 
             return event_data
 
