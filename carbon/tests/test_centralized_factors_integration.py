@@ -165,7 +165,8 @@ class CentralizedFactorsIntegrationTest(TestCase):
         chemical_event = ChemicalEvent.objects.create(
             history=history,
             commercial_name="NPK 10-10-10",
-            volume="100 kg",
+            volume="100",  # Numeric value (CharField stores as string)
+            extra_data={"volume_unit": "kg"},  # Unit stored separately per canonical format
             area=1.0,
             nitrogen_content=10.0,
             phosphorus_content=10.0,
@@ -177,7 +178,8 @@ class CentralizedFactorsIntegrationTest(TestCase):
         # Calculate carbon impact using centralized factors
         event_data = {
             "commercial_name": chemical_event.commercial_name,
-            "volume": "100 kg",
+            "volume": 100,  # Numeric value
+            "volume_unit": "kg",  # Separate unit (canonical format)
             "area": 1.0,
             "nitrogen_content": 10.0,
             "phosphorus_content": 10.0,

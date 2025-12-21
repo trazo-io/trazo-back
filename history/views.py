@@ -340,7 +340,11 @@ class HistoryViewSet(viewsets.ModelViewSet):
 
             # Process template events if provided
             if data.get("template_events"):
-                self._create_template_events(history, data["template_events"])
+                self._create_template_events(
+                    history,
+                    data["template_events"],
+                    template_id=data.get("template_id")
+                )
 
             # Create initial blockchain record for this production
             try:
@@ -432,18 +436,43 @@ class HistoryViewSet(viewsets.ModelViewSet):
 
         return "other"
 
-    def _create_template_events(self, history, template_events):
-        """Helper method to create events from template data"""
+    def _create_template_events(self, history, template_events, template_id=None):
+        """
+        Helper method to create events from template data.
+
+        IMPORTANT: Template data contains 'backend_event_fields' with all the
+        actual field values that should be used for event creation.
+        This method properly maps template data to event model fields.
+
+        If backend_event_fields is not in the payload, we look it up from the
+        database using template_id and event name for backwards compatibility.
+        """
         from datetime import datetime
 
         from django.utils import timezone
 
+        from carbon.models import EventTemplate
+
+        # Pre-fetch all EventTemplates for this template to avoid N+1 queries
+        template_events_db = {}
+        if template_id:
+            for et in EventTemplate.objects.filter(production_template_id=template_id):
+                template_events_db[et.name.lower()] = et.backend_event_fields or {}
+
         # Get current event count once
         current_event_count = 0
 
+        # Debug: log how many events we're processing
+        print(f"[DEBUG] Processing {len(template_events)} template events")
+
         for event_data in template_events:
+            event_name = event_data.get("name", "Unknown")
+
             if not event_data.get("enabled", True):
+                print(f"[DEBUG] Skipping disabled event: {event_name}")
                 continue
+
+            print(f"[DEBUG] Processing event: {event_name}")
 
             try:
                 # Parse the scheduled date
@@ -458,90 +487,180 @@ class HistoryViewSet(viewsets.ModelViewSet):
                 # Increment index for each event
                 current_event_count += 1
 
+                # Extract backend_event_fields - this contains all the actual field values
+                # If not in payload, look up from database using event name
+                backend_fields = event_data.get("backend_event_fields", {})
+                if not backend_fields and template_id:
+                    event_name_lower = event_data.get("name", "").lower()
+                    backend_fields = template_events_db.get(event_name_lower, {})
+
                 # Determine event type based on name using comprehensive mapping
                 event_name = event_data.get("name", "").lower()
 
                 # Comprehensive event type detection (matches frontend logic)
                 event_type_info = self._determine_template_event_type(event_name)
+                print(f"[DEBUG] Event '{event_data.get('name')}' detected as category='{event_type_info['category']}', sub_type='{event_type_info['sub_type']}'")
+
+                # Build description from template data
+                base_description = event_data.get("name", "Event")
+                efficiency_tips = event_data.get("efficiency_tips", "")
+                description = f"{base_description}: {efficiency_tips}" if efficiency_tips else base_description
 
                 # Create appropriate event based on detected type
                 if event_type_info["category"] == "chemical":
+                    # Extract all ChemicalEvent fields from backend_event_fields
+                    # Store volume_unit and area_unit in extra_data for frontend form compatibility
+                    extra_data = {
+                        "volume_unit": backend_fields.get("volume_unit", "L"),
+                        "area_unit": backend_fields.get("area_unit", "ha"),
+                    }
                     ChemicalEvent.objects.create(
                         history=history,
-                        description=f"{event_data.get('name', 'Chemical Event')}: {event_data.get('efficiency_tips', '')}",
+                        description=description,
                         date=scheduled_date,
-                        type=event_type_info["sub_type"],
-                        commercial_name=(
-                            event_data.get("carbon_sources", ["Unknown"])[0]
-                            if event_data.get("carbon_sources")
-                            else "Unknown"
-                        ),
-                        volume=event_data.get("typical_amounts", {}).get("fertilizer", "100"),
+                        type=backend_fields.get("type") or event_type_info["sub_type"],
+                        # Core chemical fields
+                        commercial_name=backend_fields.get("commercial_name", ""),
+                        volume=str(backend_fields.get("volume", "")) if backend_fields.get("volume") else "",
+                        concentration=backend_fields.get("concentration"),
+                        area=str(backend_fields.get("area", "")) if backend_fields.get("area") else "",
+                        way_of_application=backend_fields.get("way_of_application"),
+                        time_period=backend_fields.get("time_period"),
+                        observation=backend_fields.get("observation"),
+                        extra_data=extra_data,
+                        # Chemical subtype for accurate carbon emission calculations
+                        chemical_subtype=backend_fields.get("chemical_subtype"),
+                        # NPK percentages for fertilizers
+                        nitrogen_percentage=backend_fields.get("nitrogen_percentage"),
+                        phosphorus_percentage=backend_fields.get("phosphorus_percentage"),
+                        potassium_percentage=backend_fields.get("potassium_percentage"),
+                        # Structured application method
+                        application_method_structured=backend_fields.get("application_method_structured"),
+                        # Application fuel tracking for carbon calculations
+                        application_fuel_type=backend_fields.get("application_fuel_type", ""),
+                        application_fuel_consumed=backend_fields.get("application_fuel_consumed"),
+                        application_fuel_unit=backend_fields.get("application_fuel_unit", "L"),
+                        # Environmental context for transparency
+                        weather_conditions=backend_fields.get("weather_conditions"),
+                        application_timing=backend_fields.get("application_timing"),
+                        target_pest_disease=backend_fields.get("target_pest_disease"),
+                        # Consumer trust fields
+                        organic_approved=backend_fields.get("organic_approved"),
+                        buffer_zone_meters=backend_fields.get("buffer_zone"),
+                        # Standard fields
                         index=current_event_count,
                         created_by=history.operator,
                     )
                 elif event_type_info["category"] == "equipment":
                     EquipmentEvent.objects.create(
                         history=history,
-                        description=f"{event_data.get('name', 'Equipment Event')}: {event_data.get('efficiency_tips', '')}",
+                        description=description,
                         date=scheduled_date,
-                        type=event_type_info["sub_type"],
-                        equipment_name=event_data.get("name", "General Equipment"),
-                        fuel_type="diesel",
-                        fuel_amount=10.0,  # Default fuel consumption
+                        type=backend_fields.get("type") or event_type_info["sub_type"],
+                        equipment_name=backend_fields.get("equipment_name") or event_data.get("name", "General Equipment"),
+                        fuel_type=backend_fields.get("fuel_type", "diesel"),
+                        fuel_amount=backend_fields.get("fuel_consumed", 10.0),
+                        # Use hours_used (correct field name, not equipment_hours)
+                        hours_used=backend_fields.get("equipment_hours") or backend_fields.get("hours_used"),
+                        # Required field with no default
+                        area_covered=backend_fields.get("area_covered", 1.0),
+                        observation=backend_fields.get("observation"),
                         index=current_event_count,
                         created_by=history.operator,
                     )
                 elif event_type_info["category"] == "weather":
                     WeatherEvent.objects.create(
                         history=history,
-                        description=f"{event_data.get('name', 'Weather Event')}: {event_data.get('efficiency_tips', '')}",
+                        description=description,
                         date=scheduled_date,
-                        type=event_type_info["sub_type"],
-                        temperature=20.0,  # Default temperature
-                        humidity=60.0,  # Default humidity
+                        type=backend_fields.get("type") or event_type_info["sub_type"],
+                        temperature=backend_fields.get("temperature", 20.0),
+                        humidity=backend_fields.get("humidity", 60.0),
                         index=current_event_count,
                         created_by=history.operator,
                     )
                 elif event_type_info["category"] == "soil":
                     SoilManagementEvent.objects.create(
                         history=history,
-                        description=f"{event_data.get('name', 'Soil Event')}: {event_data.get('efficiency_tips', '')}",
+                        description=description,
                         date=scheduled_date,
-                        type=event_type_info["sub_type"],
-                        soil_ph=7.0,  # Default neutral pH
-                        organic_matter=3.5,  # Default organic matter
+                        type=backend_fields.get("type") or event_type_info["sub_type"],
+                        # Note: SoilManagementEvent doesn't have 'observation' field
+                        area_covered=backend_fields.get("area_covered"),
+                        area_unit=backend_fields.get("area_unit", "ha"),
+                        working_depth=backend_fields.get("working_depth"),
+                        depth_unit=backend_fields.get("depth_unit", "cm"),
+                        soil_texture=backend_fields.get("soil_texture"),
+                        soil_moisture=backend_fields.get("soil_moisture"),
+                        soil_ph=backend_fields.get("soil_ph", 7.0),
+                        # Correct field name: organic_matter_percentage (not organic_matter)
+                        organic_matter_percentage=backend_fields.get("organic_matter_percentage") or backend_fields.get("organic_matter", 3.5),
+                        fuel_consumed=backend_fields.get("fuel_consumed"),
+                        fuel_unit=backend_fields.get("fuel_unit", "L"),
+                        fuel_type=backend_fields.get("fuel_type", "diesel"),
+                        # Required fields
+                        amendment_type=backend_fields.get("amendment_type", "organic_mulch"),
+                        amendment_amount=backend_fields.get("amendment_amount", ""),
+                        equipment_hours=backend_fields.get("equipment_hours"),
+                        # Required NOT NULL field - must provide default
+                        production_efficiency=backend_fields.get("production_efficiency", "normal"),
                         index=current_event_count,
                         created_by=history.operator,
                     )
                 elif event_type_info["category"] == "pest":
+                    # Build extra_data for fields not in the model (field_area, travel_distance, etc.)
+                    pest_extra_data = backend_fields.get("extra_data", {})
                     PestManagementEvent.objects.create(
                         history=history,
-                        description=f"{event_data.get('name', 'Pest Event')}: {event_data.get('efficiency_tips', '')}",
+                        description=description,
                         date=scheduled_date,
-                        type=event_type_info["sub_type"],
-                        pest_type="general",
-                        severity_level="low",
+                        type=backend_fields.get("type") or event_type_info["sub_type"],
+                        # Correct model fields for PestManagementEvent
+                        pest_species=backend_fields.get("pest_species") or backend_fields.get("pest_type", "general pest"),
+                        pest_pressure_level=backend_fields.get("pest_pressure_level") or backend_fields.get("severity_level", "low"),
+                        beneficial_species=backend_fields.get("beneficial_species", ""),
+                        release_quantity=backend_fields.get("release_quantity", ""),
+                        ipm_strategy=backend_fields.get("ipm_strategy", "monitoring"),
+                        beneficial_insects_used=backend_fields.get("beneficial_insects_used"),
+                        chemical_free_period_days=backend_fields.get("chemical_free_period_days"),
+                        trap_count=backend_fields.get("trap_count"),
+                        damage_percentage=backend_fields.get("damage_percentage"),
+                        action_threshold_met=backend_fields.get("action_threshold_met", False),
+                        # Store additional fields (field_area, travel_distance, time_spent_hours) in extra_data
+                        extra_data=pest_extra_data if pest_extra_data else None,
                         index=current_event_count,
                         created_by=history.operator,
                     )
                 elif event_type_info["category"] == "business":
                     BusinessEvent.objects.create(
                         history=history,
-                        description=f"{event_data.get('name', 'Business Event')}: {event_data.get('efficiency_tips', '')}",
+                        description=description,
                         date=scheduled_date,
-                        type=event_type_info["sub_type"],
-                        certification_type="organic",
-                        compliance_status="compliant",
+                        type=backend_fields.get("type") or event_type_info["sub_type"],
+                        certification_type=backend_fields.get("certification_type", "organic"),
+                        compliance_status=backend_fields.get("compliance_status", "compliant"),
                         index=current_event_count,
                         created_by=history.operator,
                     )
                 elif event_type_info["category"] == "production":
                     ProductionEvent.objects.create(
                         history=history,
-                        description=f"{event_data.get('name', 'Production Event')}: {event_data.get('efficiency_tips', '')}",
+                        description=description,
                         date=scheduled_date,
-                        type=event_type_info["sub_type"],
+                        type=backend_fields.get("type") or event_type_info["sub_type"],
+                        observation=backend_fields.get("observation"),
+                        area_covered=backend_fields.get("area_covered"),
+                        area_unit=backend_fields.get("area_unit", "ha"),
+                        seeds_source=backend_fields.get("seeds_source"),
+                        yield_quantity=backend_fields.get("yield_quantity"),
+                        # Required field - model has default='kg' but we ensure it's set
+                        yield_unit=backend_fields.get("yield_unit", "kg"),
+                        fuel_consumed=backend_fields.get("fuel_consumed"),
+                        fuel_unit=backend_fields.get("fuel_unit", "L"),
+                        fuel_type=backend_fields.get("fuel_type", "diesel"),
+                        equipment_hours=backend_fields.get("equipment_hours"),
+                        # Required field - model has default='normal' but we ensure it's set
+                        production_efficiency=backend_fields.get("production_efficiency", "normal"),
                         index=current_event_count,
                         created_by=history.operator,
                     )
@@ -550,7 +669,7 @@ class HistoryViewSet(viewsets.ModelViewSet):
                     GeneralEvent.objects.create(
                         history=history,
                         name=event_data.get("name", "General Event"),
-                        description=f"{event_data.get('name', 'General Event')}: {event_data.get('efficiency_tips', '')}",
+                        description=description,
                         date=scheduled_date,
                         index=current_event_count,
                         created_by=history.operator,
@@ -558,6 +677,9 @@ class HistoryViewSet(viewsets.ModelViewSet):
 
             except Exception as e:
                 print(f"Error creating template event {event_data.get('name', 'Unknown')}: {e}")
+                import traceback
+
+                traceback.print_exc()
                 # Continue with other events even if one fails
                 continue
 
@@ -589,6 +711,11 @@ class HistoryViewSet(viewsets.ModelViewSet):
             return {"category": "equipment", "sub_type": EquipmentEvent.FUEL_CONSUMPTION}
         if any(term in name for term in ["preparation", "tillage", "cultivation", "plowing"]) and "soil" not in name:
             return {"category": "equipment", "sub_type": EquipmentEvent.FUEL_CONSUMPTION}
+        # Pruning and harvest involve machinery - classify as equipment
+        if any(term in name for term in ["pruning", "prune", "trimming", "cutting back"]):
+            return {"category": "equipment", "sub_type": EquipmentEvent.FUEL_CONSUMPTION}
+        if any(term in name for term in ["harvest", "picking", "collection"]):
+            return {"category": "equipment", "sub_type": EquipmentEvent.FUEL_CONSUMPTION}
 
         # Weather events (frost, drought, storms, temperature monitoring)
         if any(term in name for term in ["weather", "climate", "temperature", "monitoring weather"]):
@@ -600,7 +727,7 @@ class HistoryViewSet(viewsets.ModelViewSet):
         if any(term in name for term in ["storm", "wind", "hail", "rain"]):
             return {"category": "weather", "sub_type": WeatherEvent.TROPICAL_STORM}
 
-        # Soil events (testing, amendments, management) - check soil + tillage specifically
+        # Soil events (testing, amendments, management, mulching) - check soil + tillage specifically
         if "soil" in name and any(term in name for term in ["test", "analysis", "ph"]):
             return {"category": "soil", "sub_type": SoilManagementEvent.SOIL_TEST}
         if any(term in name for term in ["soil amendment", "lime", "compost", "organic matter"]):
@@ -611,6 +738,9 @@ class HistoryViewSet(viewsets.ModelViewSet):
             return {"category": "soil", "sub_type": SoilManagementEvent.TILLAGE}
         if any(term in name for term in ["ph management", "ph adjustment", "ph control"]):
             return {"category": "soil", "sub_type": SoilManagementEvent.PH_ADJUSTMENT}
+        # Mulching is a soil management activity
+        if any(term in name for term in ["mulch", "mulching", "cover crop"]):
+            return {"category": "soil", "sub_type": SoilManagementEvent.ORGANIC_MATTER}
 
         # Pest management events (scouting, monitoring, biological control)
         if any(term in name for term in ["scout", "monitoring", "inspection", "pest monitoring"]):
@@ -629,14 +759,11 @@ class HistoryViewSet(viewsets.ModelViewSet):
             return {"category": "business", "sub_type": BusinessEvent.COMPLIANCE}
 
         # Production events (biological/manual operations) - must be after more specific checks
+        # NOTE: Pruning and harvest are now handled in equipment section above (involve machinery)
         if any(term in name for term in ["irrigation", "watering", "water application"]):
             return {"category": "production", "sub_type": ProductionEvent.IRRIGATION}
-        if any(term in name for term in ["harvest", "picking", "collection"]):
-            return {"category": "production", "sub_type": ProductionEvent.HARVESTING}
         if "planting" in name and not any(term in name for term in ["equipment", "seeding"]):
             return {"category": "production", "sub_type": ProductionEvent.PLANTING}
-        if any(term in name for term in ["pruning", "trimming", "cutting back"]):
-            return {"category": "production", "sub_type": ProductionEvent.PRUNING}
         if any(term in name for term in ["bloom", "flower", "pollination"]):
             return {"category": "production", "sub_type": ProductionEvent.PLANTING}  # Use planting as fallback
         if any(term in name for term in ["thinning", "selective removal", "crop management"]):

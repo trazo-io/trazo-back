@@ -271,9 +271,10 @@ class Command(BaseCommand):
             description="Applied organic fertilizer",
             date=timezone.now() - datetime.timedelta(days=120),
             commercial_name="Organic Citrus Boost",
-            volume="40 kg",
+            volume="40",  # Numeric value (canonical format)
+            extra_data={"volume_unit": "kg"},  # Unit stored separately
             concentration="10-10-10",
-            area="Full field",
+            area="Full field",  # Descriptive text (not numeric)
             way_of_application="Drip system",
             time_period="Morning",
             observation="Used 40% less fertilizer than conventional methods",

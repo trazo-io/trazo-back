@@ -952,7 +952,8 @@ class TransparencyCalculator:
 
     def _has_blockchain_verification(self, history: History) -> bool:
         """Check if production has blockchain verification"""
-        if history.extra_data:
+        # BUGFIX: Check that extra_data is a dict before calling .get()
+        if history.extra_data and isinstance(history.extra_data, dict):
             return (
                 history.extra_data.get("blockchain_verified", False)
                 or history.extra_data.get("blockchain_hash") is not None

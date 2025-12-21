@@ -180,7 +180,8 @@ class Command(BaseCommand):
                 "description": "Application of organic compost fertilizer",
                 "date": start_date + datetime.timedelta(days=30),
                 "commercial_name": "NaturGrow Organic Compost",
-                "volume": "2000 kg",
+                "volume": "2000",  # Numeric value as string (model expects CharField)
+                "extra_data": {"volume_unit": "kg", "area_unit": "ha"},
                 "concentration": "100% organic",
                 "area": "Full field",
                 "way_of_application": "Ground spread",

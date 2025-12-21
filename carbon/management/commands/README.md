@@ -2,6 +2,41 @@
 
 This guide provides the exact process for setting up the complete carbon calculation system in staging and production environments, optimized for MVP launch in Iowa and California markets.
 
+## ⭐ RECOMMENDED: Master Seed Command (Single Source of Truth)
+
+**Use this ONE command for all production template seeding:**
+
+```bash
+# Full production seed (recommended for new deployments)
+poetry run python manage.py seed_production_templates
+
+# Preview what would be executed (no changes)
+poetry run python manage.py seed_production_templates --dry-run
+
+# Validate current state without seeding
+poetry run python manage.py seed_production_templates --validate-only
+
+# Force re-seed even if data exists
+poetry run python manage.py seed_production_templates --force
+```
+
+**What it does (in order):**
+1. ✅ Populates USDA crop types
+2. ✅ Creates production templates with event templates
+3. ✅ Adds equipment-specific events
+4. ✅ Adds regional agricultural practices
+5. ✅ Adds consumer transparency features
+6. ✅ Validates and fixes field formats to canonical specification
+
+**Benefits:**
+- **Single command**: No need to remember multiple commands or their order
+- **Idempotent**: Safe to run multiple times
+- **Field format validation**: Automatically fixes combined strings like "400 kg/ha" to canonical format
+- **Progress tracking**: Clear output showing what was created
+- **Dry-run mode**: Preview changes before executing
+
+---
+
 ## 🚀 **2025-01-21 UPDATE: USDA Integration Complete**
 
 **MAJOR IMPROVEMENT**: All production-critical commands now use **real-time USDA emission factors** instead of hardcoded carbon values. This ensures:

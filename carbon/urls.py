@@ -118,11 +118,12 @@ urlpatterns = [
         views.get_production_carbon_economics,
         name="production_carbon_economics",
     ),
-    path(
-        "productions/<int:production_id>/carbon-credits/",
-        views.get_carbon_credit_potential,
-        name="carbon_credit_potential",
-    ),
+    # DISABLED: Carbon credits hidden from UI per transparency-first decision
+    # path(
+    #     "productions/<int:production_id>/carbon-credits/",
+    #     views.get_carbon_credit_potential,
+    #     name="carbon_credit_potential",
+    # ),
     path(
         "establishments/<int:establishment_id>/carbon-summary/",
         views.get_establishment_carbon_summary,

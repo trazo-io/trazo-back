@@ -258,7 +258,12 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
             frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000")
 
             # Create a Stripe checkout session for the add-on
-            success_url_params = "success=true&from_addon=true"
+            # CRITICAL: Include session_id and company_id for frontend verification
+            # {CHECKOUT_SESSION_ID} is a Stripe placeholder that gets replaced with actual session ID
+            success_url_params = (
+                f"success=true&session_id={{CHECKOUT_SESSION_ID}}"
+                f"&company_id={str(subscription.company.id)}&from_addon=true"
+            )
 
             # If return_url is provided, add it to the success URL
             if return_url:
@@ -660,7 +665,47 @@ class CheckoutViewSet(ViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            # Get subscription ID from session
+            # Check if this is an add-on purchase (one-time payment, not subscription)
+            session_metadata = session.get("metadata", {})
+            is_addon_purchase = session_metadata.get("is_addon_purchase") == "true"
+
+            if is_addon_purchase:
+                # Add-on purchases use mode="payment" and don't have a subscription field
+                # The actual add-on processing is handled by the Stripe webhook
+                # Here we just verify payment success and return the company data
+                logger.info(f"Add-on purchase detected for session {session_id}")
+
+                try:
+                    company = Company.objects.get(id=company_id)
+                except Company.DoesNotExist:
+                    logger.error(f"Company with ID {company_id} not found for add-on purchase")
+                    return Response(
+                        {"success": False, "error": f"Company with ID {company_id} not found"},
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
+
+                # Return success with company data
+                try:
+                    company_data = RetrieveCompanySerializer(company, context={"request": request}).data
+                except Exception as serializer_error:
+                    logger.warning(f"Error serializing company for add-on: {serializer_error}")
+                    company_data = {
+                        "id": company.id,
+                        "name": company.name,
+                        "has_subscription": True,
+                    }
+
+                logger.info(f"Add-on purchase completed successfully for company {company_id}")
+                return Response(
+                    {
+                        "success": True,
+                        "message": "Add-on purchase completed",
+                        "company": company_data,
+                        "is_addon": True,
+                    }
+                )
+
+            # Get subscription ID from session (for regular subscription checkouts)
             subscription_id = session.get("subscription")
             if not subscription_id:
                 logger.warning(f"No subscription found in session {session_id}")
@@ -781,6 +826,12 @@ def stripe_webhook(request):
     data = event["data"]["object"]
 
     logger.info(f"Processing webhook event: {event_type}")
+
+    # Debug: Log metadata for checkout sessions
+    if event_type == "checkout.session.completed":
+        metadata = data.get("metadata", {})
+        logger.info(f"DEBUG checkout.session.completed - mode: {data.get('mode')}, metadata: {metadata}")
+        logger.info(f"DEBUG is_addon_purchase: {metadata.get('is_addon_purchase')}, addon_id: {metadata.get('addon_id')}")
 
     try:
         with transaction.atomic():
@@ -1403,10 +1454,9 @@ def handle_addon_purchase_completed(session):
                 Invoice.objects.create(
                     company=company,
                     subscription=subscription,
-                    stripe_invoice_id=payment_intent,
+                    stripe_invoice_id=payment_intent,  # Note: This is payment_intent ID, not invoice ID
                     amount=addon.price * quantity,
                     status="paid",
-                    description=f"{addon.name} x{quantity}",
                     invoice_date=timezone.now(),
                 )
 

@@ -197,9 +197,10 @@ class Command(BaseCommand):
             description="Premium nitrogen fertilizer application",
             date=timezone.now() - datetime.timedelta(days=22),
             commercial_name="Premium Citrus NPK 15-10-15",
-            volume="200 kg",
+            volume="200",  # Numeric value (canonical format)
+            extra_data={"volume_unit": "kg", "area_unit": "hectares"},  # Units stored separately
             concentration="15-10-15",
-            area="10 hectares",
+            area="10",  # Numeric value
             way_of_application="Broadcast",
             time_period="Morning",
             observation="Premium product - $3.8/kg, potential bulk savings available",
@@ -214,9 +215,10 @@ class Command(BaseCommand):
             description="Premium pesticide application",
             date=timezone.now() - datetime.timedelta(days=18),
             commercial_name="Premium Insect Control Pro",
-            volume="15 liters",
+            volume="15",  # Numeric value (canonical format)
+            extra_data={"volume_unit": "liters", "area_unit": "hectares"},  # Units stored separately
             concentration="10%",
-            area="10 hectares",
+            area="10",  # Numeric value
             way_of_application="Spray",
             time_period="Evening",
             observation="Premium product - $48/L, bulk options available",
@@ -397,9 +399,10 @@ class Command(BaseCommand):
             description="Bulk fertilizer purchase",
             date=timezone.now() - datetime.timedelta(days=150),
             commercial_name="Bulk Citrus NPK 15-10-15",
-            volume="400 kg",
+            volume="400",  # Numeric value (canonical format)
+            extra_data={"volume_unit": "kg", "area_unit": "hectares"},  # Units stored separately
             concentration="15-10-15",
-            area="8 hectares",
+            area="8",  # Numeric value
             way_of_application="Broadcast",
             time_period="Morning",
             observation="Bulk purchase - 18% savings vs premium, $2.3/kg",

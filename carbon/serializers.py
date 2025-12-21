@@ -57,7 +57,7 @@ class CropTypeSerializer(serializers.ModelSerializer):
             "emissions_per_hectare",
             "industry_average",
             "best_practice",
-            "carbon_credit_potential",
+            # "carbon_credit_potential",  # HIDDEN: B2B data, not exposed in UI
             "typical_cost_per_hectare",
             "fertilizer_cost_per_hectare",
             "fuel_cost_per_hectare",
@@ -214,7 +214,7 @@ class CropTemplateDetailSerializer(serializers.ModelSerializer):
             "emissions_per_hectare",
             "industry_average",
             "best_practice",
-            "carbon_credit_potential",
+            # "carbon_credit_potential",  # HIDDEN: B2B data, not exposed in UI
             "typical_cost_per_hectare",
             "fertilizer_cost_per_hectare",
             "fuel_cost_per_hectare",
@@ -345,6 +345,12 @@ class QuickEventTemplateSerializer(serializers.ModelSerializer):
             "backend_event_fields",
             "typical_amounts",
             "type",
+            # New display and organization fields
+            "display_priority",
+            "template_category",
+            "translation_key",
+            "efficiency_tips",
+            "typical_duration",
         ]
 
 

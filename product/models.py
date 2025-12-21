@@ -24,7 +24,7 @@ class Parcel(models.Model):
     certified = models.BooleanField(default=False, help_text="Certified by a professional")
     current_history = models.OneToOneField(
         "history.History",
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,  # SET_NULL so deleting production doesn't delete parcel
         blank=True,
         null=True,
         related_name="current_parcel",

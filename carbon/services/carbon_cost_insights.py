@@ -26,15 +26,12 @@ class CarbonCostInsights:
         """
         OPTIMIZED: Get simple carbon economics for a production without triggering USDA API calls.
         Uses cached carbon data from extra_data field instead of real-time calculations.
+
+        NOTE: carbon_credit_potential HIDDEN from UI per transparency-first decision.
+        Data retained in database for potential future B2B reports.
         """
         try:
             production = History.objects.get(id=production_id)
-
-            # Use cached carbon data from extra_data to avoid expensive calculations
-            cached_carbon_data = production.extra_data.get("carbon_summary", {}) if production.extra_data else {}
-
-            # Simple carbon credit calculation using cached data
-            carbon_potential = self.calculate_carbon_credit_potential_cached(production, cached_carbon_data)
 
             # Basic efficiency insights without triggering calculations
             efficiency_tips = self.get_carbon_efficiency_tips_cached(production)
@@ -43,7 +40,7 @@ class CarbonCostInsights:
             premium_eligibility = self.check_premium_pricing_eligibility_cached(production)
 
             return {
-                "carbon_credit_potential": carbon_potential,
+                # carbon_credit_potential HIDDEN: B2B data, not exposed in UI
                 "efficiency_tips": efficiency_tips,
                 "premium_eligibility": premium_eligibility,
                 "next_actions": self.get_next_carbon_actions_cached(production),
@@ -344,7 +341,11 @@ class CarbonCostInsights:
             ]
 
     def get_establishment_carbon_summary(self, establishment_id: int) -> Dict[str, Any]:
-        """Get carbon cost summary for entire establishment"""
+        """Get carbon cost summary for entire establishment
+
+        NOTE: carbon_credit_potential HIDDEN from UI per transparency-first decision.
+        Data retained in database for potential future B2B reports.
+        """
         try:
             from company.models import Establishment
 
@@ -353,13 +354,10 @@ class CarbonCostInsights:
             # Get all productions for this establishment
             productions = History.objects.filter(parcel__establishment=establishment)
 
-            total_carbon_potential = Decimal("0")
+            # Calculate basic carbon metrics (no credit data)
             total_sequestered = Decimal("0")
-
             for production in productions:
                 carbon_data = self.calculate_carbon_credit_potential(production)
-                if "potential_revenue" in carbon_data:
-                    total_carbon_potential += Decimal(str(carbon_data["potential_revenue"]))
                 if "tons_sequestered" in carbon_data:
                     total_sequestered += Decimal(str(carbon_data["tons_sequestered"]))
 
@@ -367,10 +365,7 @@ class CarbonCostInsights:
                 "establishment_name": establishment.name,
                 "total_productions": productions.count(),
                 "total_carbon_sequestered_tons": float(total_sequestered),
-                "total_carbon_credit_potential": float(total_carbon_potential),
-                "average_per_production": (
-                    float(total_carbon_potential / productions.count()) if productions.count() > 0 else 0
-                ),
+                # carbon_credit_potential HIDDEN: B2B data, not exposed in UI
                 "summary_date": timezone.now().isoformat(),
             }
 

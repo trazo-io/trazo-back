@@ -149,10 +149,11 @@ class EmissionFactorConsistencyTest(TestCase):
         # Test that calculator uses registry factors
         registry_nitrogen = emission_factors.get_fertilizer_factor("nitrogen")
 
-        # Create test chemical event data
+        # Create test chemical event data (using canonical format)
         test_event_data = {
             "commercial_name": "NPK 10-10-10",
-            "volume": "100 kg",
+            "volume": 100,  # Numeric value
+            "volume_unit": "kg",  # Separate unit
             "area": 1.0,  # hectares
             "nitrogen_content": 10.0,  # kg
             "phosphorus_content": 10.0,  # kg
@@ -187,7 +188,8 @@ class EmissionFactorBenchmarkTest(TestCase):
 
         test_data = {
             "commercial_name": "Urea",
-            "volume": "100 kg",
+            "volume": 100,  # Numeric value (canonical format)
+            "volume_unit": "kg",  # Separate unit
             "area": 1.0,
             "nitrogen_content": 46.0,  # 46% N content
             "phosphorus_content": 0.0,

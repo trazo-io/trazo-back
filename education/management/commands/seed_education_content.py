@@ -86,6 +86,7 @@ class Command(BaseCommand):
         self.create_market_success_content(categories)
         self.create_carbon_supporting_content(categories)
         self.create_compliance_simple_content(categories)
+        self.create_quick_add_mastery_content(categories)
         self.create_transparency_faqs()
 
         self.stdout.write(self.style.SUCCESS("Successfully seeded comprehensive education content!"))
@@ -1625,6 +1626,496 @@ This approach transforms compliance from a burden into a competitive advantage, 
 
         self.stdout.write(f"Created course: {course.title}")
 
+    def create_quick_add_mastery_content(self, categories):
+        """Create Quick Add Event mastery course content"""
+        course_data = {
+            "title": "Quick Add Event Mastery: Fast Transparency Logging",
+            "category": categories["farm_events"],
+            "description": "Master the Quick Add Event feature to log farming activities in under 60 seconds with full transparency scoring",
+            "difficulty": "beginner",
+            "required_plan": "all",
+            "estimated_duration": 25,
+            "target_crops": "all crops",
+            "is_featured": True,
+            "order": 2,
+        }
+
+        course, created = EducationCourse.objects.get_or_create(
+            title=course_data["title"], defaults=course_data
+        )
+
+        if created:
+            lessons_data = [
+                {
+                    "title": "Quick Add in 60 Seconds: Your Fastest Path to Transparency",
+                    "content_type": "video",
+                    "duration": 8,
+                    "order": 1,
+                    "content": """# Quick Add Event: Log Farm Activities in Under 60 Seconds
+
+## Why Quick Add Changes Everything
+
+### The Traditional Problem:
+- Manual event logging takes 5-10 minutes per event
+- Complex forms discourage consistent documentation
+- Farmers skip logging = Lower transparency scores
+- Incomplete records = Lost premium pricing opportunities
+
+### The Quick Add Solution:
+- **3-tap event creation**: Select type → Add details → Submit
+- **Smart defaults**: Pre-filled values based on your farm profile
+- **Photo-ready**: Camera integration for instant visual evidence
+- **Voice capture**: Speak your event details hands-free
+- **AI suggestions**: Intelligent recommendations based on season and crop
+
+## How Quick Add Works
+
+### Step 1: Choose Your Method (5 seconds)
+**Three Fast Ways to Start:**
+1. **📝 Smart Templates**: Pre-configured for 8 event types
+2. **🎤 Voice Capture**: Speak naturally about your activity
+3. **✨ AI Suggestions**: Let Trazo recommend based on your farm
+
+### Step 2: Select Event Type (10 seconds)
+**8 Event Types Available:**
+- 🌱 **Planting**: Seeds, transplants, crop establishment
+- 💧 **Irrigation**: Watering, drip systems, flood irrigation
+- 🌿 **Fertilization**: NPK applications, organic amendments
+- 🐛 **Pest Control**: IPM, pesticide applications
+- 🌾 **Herbicide**: Weed management applications
+- 🍄 **Fungicide**: Disease prevention and treatment
+- 🔧 **Pruning**: Maintenance, thinning, training
+- 📦 **Harvest**: Crop collection, yield recording
+
+### Step 3: Add Details (30-40 seconds)
+**Smart Forms Show Only What Matters:**
+- **Type-aware fields**: Only see relevant fields for your event type
+- **Smart defaults**: Pre-filled based on your past activities
+- **Quick photo**: One tap to add timestamped visual evidence
+- **Optional depth**: Add more details only if needed
+
+### Step 4: Review & Submit (10 seconds)
+**Before You Submit:**
+- Preview your event card (exactly as consumers will see it)
+- Verify photo quality and GPS location
+- Check description is consumer-friendly
+- Submit with one tap for blockchain verification
+
+## Quick Add Best Practices
+
+### For Maximum Transparency Impact:
+1. **Add Photos**: Events with photos earn +1-2 bonus transparency points
+2. **Use Clear Descriptions**: Write for consumers, not farm records
+3. **Log Same Day**: Real-time documentation is most credible
+4. **Include Context**: Weather conditions, reasons for activity
+
+### Sample Quick Add Flow:
+```
+[Open Quick Add] → [Select "Fertilization"] →
+[Smart form shows: NPK ratio, volume, method] →
+[Take photo of application] →
+[Preview shows: "Fertilizer application - organic compost..."] →
+[Submit] → Done! +4 transparency points in 45 seconds
+```
+
+## Voice Capture: Hands-Free Documentation
+
+### When to Use Voice:
+- **In the field**: While operating equipment
+- **Busy hands**: During application activities
+- **Quick notes**: Capturing observations on the go
+
+### How Voice Capture Works:
+1. Tap microphone icon in Quick Add
+2. Speak naturally: "Applied organic fertilizer to field 3..."
+3. AI transcribes and categorizes automatically
+4. Review and submit with one tap
+
+### Voice Tips:
+- Speak clearly near your phone
+- Include: what, where, how much, why
+- Mention weather or special conditions
+- Say "photo" to trigger camera
+
+## AI Smart Suggestions
+
+### Seasonal Intelligence:
+Trazo suggests events based on:
+- Current growing season for your crops
+- Weather patterns in your area
+- Your past documentation patterns
+- Common practices for your farm type
+
+### How to Use Suggestions:
+1. Open Quick Add during work hours
+2. See "Suggested for today" panel
+3. Tap suggestion to pre-fill form
+4. Customize details and submit
+
+## Transparency Score Impact
+
+### Each Quick Add Event Earns Points:
+- **Production events**: +2-3 transparency points
+- **Chemical applications**: +3-4 transparency points
+- **With photo evidence**: +1-2 bonus points
+- **With detailed description**: +1 bonus point
+
+### Weekly Goal:
+**Log 5-7 events per week** to maintain steady transparency growth
+- Average farm: 85%+ score achievable in 30 days
+- Daily logging: Just 3-5 minutes total
+- Premium unlocked: 15-30% pricing boost at 85%+""",
+                    "practical_steps": [
+                        "Open Quick Add and create your first event using smart templates",
+                        "Test all 3 creation methods: templates, voice capture, and AI suggestions",
+                        "Practice adding photos with each event for bonus transparency points",
+                        "Set a daily reminder to log at least 1 event per farm activity day",
+                        "Check your transparency score before and after logging 5 events",
+                    ],
+                    "transparency_impact": "Quick Add makes transparency logging effortless, enabling farmers to document activities consistently without disrupting workflow. Regular use can achieve 85%+ transparency scores within 30 days.",
+                },
+                {
+                    "title": "Choosing the Right Event Type: A Decision Guide",
+                    "content_type": "interactive",
+                    "duration": 10,
+                    "order": 2,
+                    "content": """# Choosing the Right Event Type
+
+## The 8 Event Types Explained
+
+### Understanding Event Categories
+
+Quick Add offers **8 event types** organized into two categories:
+
+**Production Events (Green icons):**
+- Focus on crop management and growth activities
+- Higher transparency points for core farming activities
+- Most common daily logging events
+
+**Chemical Events (Blue icons):**
+- Focus on input applications and treatments
+- Highest transparency points due to consumer interest
+- Require additional safety and application details
+
+## Event Type Decision Guide
+
+### 🌱 Planting Events
+**Use When:**
+- Sowing seeds directly in field
+- Transplanting seedlings
+- Establishing new crop areas
+- Cover crop seeding
+
+**Key Fields:**
+- Crop variety and source
+- Planting density/spacing
+- Soil preparation done
+- Seeds/seedlings quantity
+
+**Consumer Value:** "See exactly how crops are established"
+
+---
+
+### 💧 Irrigation Events
+**Use When:**
+- Running irrigation system
+- Manual watering activities
+- Adjusting irrigation schedule
+- Emergency drought response
+
+**Key Fields:**
+- Water volume applied
+- Irrigation method (drip, sprinkler, flood)
+- Duration of irrigation
+- Area covered
+
+**Consumer Value:** "Water stewardship and resource management"
+
+---
+
+### 🌿 Fertilization Events (Chemical - FE)
+**Use When:**
+- Applying synthetic fertilizers
+- Spreading organic compost/manure
+- Foliar feeding applications
+- Soil amendment applications
+
+**Key Fields:**
+- NPK ratio or composition
+- Volume/weight applied
+- Application method
+- Area treated
+
+**Consumer Value:** "Nutrient management for healthy crops"
+
+---
+
+### 🐛 Pest Control Events (Chemical - PE)
+**Use When:**
+- Applying insecticides
+- Using biological controls
+- IPM interventions
+- Beneficial insect releases
+
+**Key Fields:**
+- Product name and type
+- Concentration/rate
+- Target pest identified
+- Safety measures taken
+
+**Consumer Value:** "Crop protection with transparency"
+
+---
+
+### 🌾 Herbicide Events (Chemical - HE)
+**Use When:**
+- Pre-emergent weed control
+- Post-emergent herbicide application
+- Organic weed management
+- Cover crop termination
+
+**Key Fields:**
+- Herbicide product and type
+- Volume applied
+- Target weeds
+- Application method
+
+**Consumer Value:** "Weed management practices documented"
+
+---
+
+### 🍄 Fungicide Events (Chemical - FU)
+**Use When:**
+- Preventive disease treatment
+- Curative fungicide application
+- Organic disease control
+- Soil fungicide treatment
+
+**Key Fields:**
+- Fungicide product and type
+- Volume applied
+- Target disease
+- Application timing
+
+**Consumer Value:** "Disease prevention and crop health"
+
+---
+
+### 🔧 Pruning Events (Production)
+**Use When:**
+- Seasonal pruning activities
+- Maintenance trimming
+- Thinning fruit/flowers
+- Training young plants
+
+**Key Fields:**
+- Equipment used
+- Fuel consumed (if powered)
+- Area covered
+- Purpose/reason
+
+**Consumer Value:** "Crop care and quality management"
+
+---
+
+### 📦 Harvest Events (Production)
+**Use When:**
+- Crop collection activities
+- Recording yields
+- Quality sorting
+- Post-harvest handling
+
+**Key Fields:**
+- Yield quantity and unit
+- Equipment used
+- Transportation distance
+- Quality observations
+
+**Consumer Value:** "Harvest timing and handling transparency"
+
+## Quick Decision Flowchart
+
+```
+What are you doing?
+│
+├─ Applying something to crops?
+│   ├─ Nutrients/fertilizer → 🌿 Fertilization
+│   ├─ For insects/pests → 🐛 Pest Control
+│   ├─ For weeds → 🌾 Herbicide
+│   └─ For disease → 🍄 Fungicide
+│
+├─ Working with plants directly?
+│   ├─ Putting plants in ground → 🌱 Planting
+│   ├─ Cutting/trimming → 🔧 Pruning
+│   └─ Collecting crop → 📦 Harvest
+│
+└─ Managing water?
+    └─ Any watering activity → 💧 Irrigation
+```
+
+## Multiple Events in One Day
+
+### It's Normal to Log Multiple Events!
+- Morning irrigation + afternoon fertilization = 2 events
+- Harvest from field A + planting in field B = 2 events
+- Pest scouting + treatment = 2 events (scouting can be general observation)
+
+### Batch Logging Tip:
+If you did multiple activities, Quick Add supports sequential logging:
+1. Complete first event → Submit
+2. Tap "Add Another Event"
+3. Select next type → Complete → Submit
+4. Each event adds to transparency score""",
+                    "practical_steps": [
+                        "Review the 8 event types and identify which apply to your farm operations",
+                        "Log one event from each applicable category over the next week",
+                        "Practice using the decision flowchart for your next 3 field activities",
+                        "Set up Quick Add templates for your most common event types",
+                        "Test logging multiple events in one session using batch logging",
+                    ],
+                    "transparency_impact": "Choosing the correct event type ensures accurate transparency scoring and provides consumers with properly categorized information about farming practices.",
+                },
+                {
+                    "title": "Photos That Build Consumer Trust",
+                    "content_type": "video",
+                    "duration": 7,
+                    "order": 3,
+                    "content": """# Photos That Build Consumer Trust
+
+## Why Photos Matter in Quick Add
+
+### The Trust Multiplier:
+- Photos increase consumer trust by **67%**
+- Events with photos earn **+1-2 bonus transparency points**
+- Visual evidence creates emotional connection
+- Timestamped photos prove authenticity
+
+## Quick Photo Best Practices
+
+### The 3-Photo Rule
+For maximum impact, capture:
+
+**1. Context Photo (Wide)**
+- Shows overall scene: field, equipment, conditions
+- Establishes scale and location
+- 3-5 seconds to capture
+
+**2. Action Photo (Medium)**
+- Shows the activity in progress
+- Equipment being used, materials visible
+- 3-5 seconds to capture
+
+**3. Detail Photo (Close-up)**
+- Shows specific details: labels, measurements, results
+- Product labels, calibration settings, crop condition
+- 3-5 seconds to capture
+
+### One-Photo Quick Option
+When time is limited, prioritize:
+- **Chemical events**: Product label or equipment
+- **Production events**: Crop or field condition
+- **Harvest events**: Product quality and quantity
+
+## Photo Tips by Event Type
+
+### 🌿 Fertilization Photos
+**Best shots:**
+- Product bag/label with NPK visible
+- Spreader or application equipment
+- Field coverage pattern
+
+### 🐛 Pest Control Photos
+**Best shots:**
+- Target pest (if visible)
+- Product label and safety equipment
+- Application in progress
+
+### 💧 Irrigation Photos
+**Best shots:**
+- Irrigation system running
+- Soil moisture before/after
+- Water source or controller
+
+### 📦 Harvest Photos
+**Best shots:**
+- Harvest in progress
+- Yield quantity/bins
+- Product quality close-up
+
+## Technical Photo Quality
+
+### For Clear, Usable Photos:
+- **Lighting**: Early morning or late afternoon best
+- **Stability**: Use both hands, brace elbows
+- **Focus**: Tap screen on subject before shooting
+- **Clean lens**: Quick wipe removes field dust
+
+### Auto-Captured Metadata:
+Trazo automatically records:
+- ✅ GPS coordinates (verifies location)
+- ✅ Date and time (proves timing)
+- ✅ Device info (authenticity check)
+
+## Consumer Photo Impact
+
+### What Consumers See:
+- Your photos appear in production journey timeline
+- Timestamped captions show farming expertise
+- Multiple photos show thoroughness and care
+- Photo quality reflects professionalism
+
+### Building Visual Trust Story:
+```
+Example Consumer View:
+┌─────────────────────────────────┐
+│ 📷 June 15 - Organic Fertilizer │
+│    Application                  │
+│ ┌───────────────────────────┐   │
+│ │  [Photo: Farmer spreading │   │
+│ │   organic compost]        │   │
+│ └───────────────────────────┘   │
+│ "Applied organic compost for    │
+│  healthy soil and nutrient      │
+│  development. Our commitment    │
+│  to sustainable farming."       │
+│                                 │
+│ 🔒 Verified • 📍 Farm Field 3   │
+└─────────────────────────────────┘
+```
+
+## Quick Add Photo Workflow
+
+### Fastest Photo Process:
+1. **Before event**: Quick context photo (5 sec)
+2. **During event**: Start Quick Add form
+3. **Mid-form**: Tap camera icon
+4. **Capture**: Take 1-3 photos
+5. **Continue**: Complete form fields
+6. **Submit**: All photos auto-attached
+
+### Photo Storage:
+- Photos stored securely in Trazo
+- Compressed for fast loading on consumer QR pages
+- Original quality preserved for verification
+- Automatic backup prevents loss""",
+                    "practical_steps": [
+                        "Practice the 3-photo rule on your next farm activity",
+                        "Test Quick Add photo workflow: open form → add photos → complete",
+                        "Review your recent events and identify which could use better photos",
+                        "Set up your phone camera for quick access during field work",
+                        "Take sample photos in different lighting conditions to understand quality",
+                    ],
+                    "transparency_impact": "Photos transform text records into visual proof that consumers can see and trust. Events with quality photos consistently achieve higher engagement and trust scores.",
+                },
+            ]
+
+            for lesson_data in lessons_data:
+                lesson_data["course"] = course
+                lesson = EducationLesson.objects.create(**lesson_data)
+                self.stdout.write(f"  - Created lesson: {lesson.title}")
+
+        self.stdout.write(f"Created course: {course.title}")
+
     def create_transparency_faqs(self):
         """Create transparency-focused FAQ entries"""
         faqs_data = [
@@ -1668,6 +2159,128 @@ This approach transforms compliance from a burden into a competitive advantage, 
 
 **Results:** 6.5x higher engagement vs carbon-first pages, with 78% completion rates.""",
                 "category": "consumer_impact",
+                "is_featured": True,
+            },
+            # Quick Add Event FAQs
+            {
+                "question": "What is Quick Add Event and how does it work?",
+                "answer": """Quick Add Event is the fastest way to log farm activities:
+
+**3 Ways to Create Events:**
+1. **Smart Templates**: Pre-configured forms for 8 event types
+2. **Voice Capture**: Speak your event details hands-free
+3. **AI Suggestions**: Intelligent recommendations based on your farm
+
+**Simple 4-Step Process:**
+1. Choose creation method (5 seconds)
+2. Select event type (10 seconds)
+3. Add details with smart defaults (30-40 seconds)
+4. Review preview and submit (10 seconds)
+
+**Result:** Log complete events in under 60 seconds with full transparency scoring!""",
+                "category": "data_entry",
+                "is_featured": True,
+            },
+            {
+                "question": "Which event type should I choose in Quick Add?",
+                "answer": """Quick Add offers 8 event types in two categories:
+
+**Production Events (Green icons):**
+- 🌱 Planting: Seeds, transplants, crop establishment
+- 💧 Irrigation: Watering, drip systems, flood irrigation
+- 🔧 Pruning: Maintenance, thinning, training
+- 📦 Harvest: Crop collection, yield recording
+
+**Chemical Events (Blue icons):**
+- 🌿 Fertilization: NPK applications, organic amendments
+- 🐛 Pest Control: IPM, pesticide applications
+- 🌾 Herbicide: Weed management applications
+- 🍄 Fungicide: Disease prevention and treatment
+
+**Quick Decision:** If applying something to crops, use Chemical events. If working with plants directly or managing water, use Production events.""",
+                "category": "data_entry",
+                "is_featured": True,
+            },
+            {
+                "question": "How do I add photos in Quick Add?",
+                "answer": """Adding photos in Quick Add is simple and earns bonus transparency points:
+
+**While Creating Event:**
+1. Fill in event details as normal
+2. Tap the camera icon in the form
+3. Take 1-3 photos (context, action, detail shots)
+4. Photos auto-attach with GPS and timestamp
+5. Complete form and submit
+
+**Photo Tips for Maximum Impact:**
+- Clean phone lens before shooting
+- Use natural lighting when possible
+- Include product labels for chemical events
+- Show crop condition for production events
+
+**Transparency Bonus:** Events with photos earn +1-2 extra transparency points!""",
+                "category": "data_entry",
+                "is_featured": False,
+            },
+            {
+                "question": "Can I use voice to create events in Quick Add?",
+                "answer": """Yes! Voice Capture makes hands-free documentation easy:
+
+**How to Use:**
+1. Open Quick Add and tap the microphone icon
+2. Speak naturally: "Applied organic fertilizer to field 3, about 50 pounds per acre"
+3. Trazo AI transcribes and categorizes automatically
+4. Review the generated event details
+5. Add photos if needed and submit
+
+**Voice Tips:**
+- Speak clearly near your phone
+- Include: what, where, how much, why
+- Mention weather or special conditions
+- Works great while operating equipment
+
+**Best For:** Field work, busy hands, quick observations, equipment operation.""",
+                "category": "data_entry",
+                "is_featured": False,
+            },
+            {
+                "question": "What are smart defaults in Quick Add?",
+                "answer": """Smart defaults pre-fill common values to speed up event creation:
+
+**What Gets Pre-Filled:**
+- **Chemical events**: Common NPK ratios, application methods, volume defaults
+- **Irrigation**: Typical water volumes, methods, durations
+- **Harvest**: Yield units, equipment types
+- **All events**: Area covered, fuel consumption estimates
+
+**How It Works:**
+- Defaults are based on common farming practices
+- Values update based on your farm profile and past events
+- You can always override any default value
+- Smart defaults save 20-30 seconds per event
+
+**Pro Tip:** Review and adjust defaults for your first few events, then Quick Add learns your patterns!""",
+                "category": "data_entry",
+                "is_featured": False,
+            },
+            {
+                "question": "How does Quick Add affect my transparency score?",
+                "answer": """Each Quick Add event directly increases your transparency score:
+
+**Points Per Event Type:**
+- Production events (planting, irrigation, harvest): +2-3 points
+- Chemical applications (fertilizer, pest control): +3-4 points
+- With photo evidence: +1-2 bonus points
+- With detailed description: +1 bonus point
+
+**Weekly Goal for Success:**
+- Log 5-7 events per week for steady growth
+- Achievable: 85%+ score within 30 days
+- Time required: Just 3-5 minutes daily total
+
+**Premium Unlocked:**
+85%+ transparency score = 15-30% premium pricing opportunities!""",
+                "category": "transparency",
                 "is_featured": True,
             },
         ]

@@ -229,6 +229,25 @@ class EventTemplate(models.Model):
         ("hidden", "Hidden - Internal use only"),
     ]
 
+    # Display priority for template ordering in UI
+    DISPLAY_PRIORITY_CHOICES = [
+        (1, "Featured - Top of list"),
+        (2, "High - Upper section"),
+        (3, "Normal - Standard position"),
+        (4, "Low - Lower section"),
+        (5, "Archive - Bottom of list"),
+    ]
+
+    # Template category for grouping in UI
+    TEMPLATE_CATEGORY_CHOICES = [
+        ("core", "Core Farm Operations"),
+        ("seasonal", "Seasonal Activities"),
+        ("maintenance", "Maintenance & Equipment"),
+        ("monitoring", "Monitoring & Testing"),
+        ("certification", "Certification & Compliance"),
+        ("documentation", "Documentation"),
+    ]
+
     # Temporary: Keep both fields during migration
     crop_type = models.ForeignKey(
         CropType, on_delete=models.CASCADE, related_name="old_event_templates", null=True, blank=True
@@ -276,6 +295,24 @@ class EventTemplate(models.Model):
     usda_compliant = models.BooleanField(default=True, help_text="Meets USDA standards")
     emission_factor_source = models.CharField(max_length=200, default="USDA Agricultural Research Service")
 
+    # Display and organization (for UI presentation)
+    display_priority = models.IntegerField(
+        choices=DISPLAY_PRIORITY_CHOICES,
+        default=3,
+        help_text="Controls template ordering in UI (1=featured, 5=archive)"
+    )
+    template_category = models.CharField(
+        max_length=20,
+        choices=TEMPLATE_CATEGORY_CHOICES,
+        default="core",
+        help_text="Category for grouping templates in UI"
+    )
+    translation_key = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="i18n key for frontend translation (e.g., 'quickAdd.template.fertilization')"
+    )
+
     # Meta information
     is_active = models.BooleanField(default=True)
     is_default_enabled = models.BooleanField(default=True, help_text="Enabled by default in production creation")
@@ -286,7 +323,7 @@ class EventTemplate(models.Model):
 
     class Meta:
         db_table = "carbon_event_template"
-        ordering = ["production_template", "order_sequence", "timing", "name"]
+        ordering = ["production_template", "display_priority", "template_category", "order_sequence", "name"]
         verbose_name = "Event Template"
         verbose_name_plural = "Event Templates"
         unique_together = ("production_template", "name")
@@ -1327,8 +1364,33 @@ class USDAComplianceRecord(models.Model):
 
     @property
     def is_usda_verified(self):
-        """Check if this record represents USDA verification"""
-        return self.compliance_status == "compliant" and self.confidence_score >= 0.9
+        """
+        Check if USDA factors were used in this carbon calculation.
+
+        SEMANTIC CHANGE (2025-12-12): This property now means "USDA factors were used"
+        rather than "validation passed at high confidence".
+
+        In Trazo's methodology, we ALWAYS use USDA emission factors. This record
+        confirms that USDA validation occurred successfully and that USDA factors
+        were applied to the carbon calculation.
+
+        Returns True if:
+        - Validation completed successfully (method is not error)
+        - Crop type was identified (calculation ran with proper data)
+        - Record is not in a failed state
+        """
+        # If validation had an error, USDA factors were not successfully applied
+        if self.validation_method == "validation_error":
+            return False
+
+        # If we don't have a crop type, the validation didn't run properly
+        if not self.crop_type or self.crop_type == "unknown":
+            return False
+
+        # If we successfully validated (even with low confidence), USDA factors were used
+        # The confidence_score indicates how precise the calculation is, not whether
+        # USDA factors were actually applied
+        return self.validation_method in ["enhanced_api", "local_validation"]
 
     @property
     def needs_review(self):

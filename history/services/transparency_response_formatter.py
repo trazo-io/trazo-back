@@ -128,6 +128,7 @@ class TransparencyResponseFormatter:
     def _get_farm_context(self, production) -> Dict[str, Any]:
         """Get farm context without competitive elements"""
         establishment = production.parcel.establishment if production.parcel else None
+        company = establishment.company if establishment else None
 
         # Build harvest details if available
         harvest_details = {}
@@ -154,6 +155,28 @@ class TransparencyResponseFormatter:
             }
             harvest_details["harvest_method"] = method_labels.get(production.harvest_method, production.harvest_method)
 
+        # Build company sustainability data from onboarding metadata
+        # BUGFIX: Check that sustainability_metadata is a dict before calling .get()
+        company_sustainability = None
+        if company and company.sustainability_metadata and isinstance(company.sustainability_metadata, dict):
+            metadata = company.sustainability_metadata
+            # Extract sustainability goals - these are collected during company creation
+            sustainability_goals = metadata.get("sustainability_goals", [])
+            # Map goal IDs to consumer-friendly labels
+            goal_labels = {
+                "full_transparency": "Full Farming Transparency",
+                "carbon_reduction": "Environmental Impact Tracking",
+                "water_conservation": "Water Conservation",
+                "soil_health": "Soil Health Focus",
+                "biodiversity": "Biodiversity Protection",
+                "local_sourcing": "Local Community Support",
+            }
+            company_sustainability = {
+                "goals": [goal_labels.get(g, g) for g in sustainability_goals] if sustainability_goals else [],
+                "crop_focus": metadata.get("crop_template", {}).get("title") if metadata.get("crop_template") else None,
+                "commitment": company.sustainability_commitment,
+            }
+
         return {
             "farm_name": establishment.name if establishment else "Farm",
             "location": (
@@ -167,6 +190,8 @@ class TransparencyResponseFormatter:
                 "end": production.finish_date.isoformat() if production.finish_date else None,
             },
             "harvest_details": harvest_details if harvest_details else None,
+            # NEW: Company sustainability data from onboarding
+            "company_sustainability": company_sustainability,
         }
 
     def _get_impact_description(self, carbon_impact: Dict[str, Any]) -> str:

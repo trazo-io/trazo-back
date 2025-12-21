@@ -434,7 +434,15 @@ class CarbonTransparencyService:
         return "Limited"
 
     def _check_usda_verification(self, production: History) -> bool:
-        """Check if production has USDA verified carbon data."""
+        """
+        Check if production has USDA verified carbon data.
+
+        PHASE 1 FIX (2025-12-12): This now checks if USDA factors were used in the
+        carbon calculation (via USDAComplianceRecord.is_usda_verified property).
+
+        Returns True if at least one CarbonEntry exists with usda_verified=True,
+        which indicates USDA factors were applied to the carbon calculation.
+        """
         from ..models import CarbonEntry
 
         return CarbonEntry.objects.filter(production=production, usda_verified=True).exists()

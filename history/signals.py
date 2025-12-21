@@ -18,22 +18,16 @@ from .models import (
 def calculate_chemical_event_carbon(sender, instance, created, **kwargs):
     """
     Automatically calculate carbon impact when a chemical event is created or updated
+
+    PHASE 2 CONSOLIDATION (2025-12-12): CarbonEntry is now the single source of truth.
+    Removed dual-write to extra_data['carbon_calculation'] - using only CarbonEntry.
     """
     if created or kwargs.get("update_fields"):  # Only on create or specific field updates
         try:
             calculator = EventCarbonCalculator()
             calculation_result = calculator.calculate_chemical_event_impact(instance)
 
-            # Store calculation result in event's extra_data for future reference
-            if not hasattr(instance, "extra_data") or instance.extra_data is None:
-                instance.extra_data = {}
-
-            instance.extra_data["carbon_calculation"] = calculation_result
-
-            # Update without triggering signal again
-            ChemicalEvent.objects.filter(id=instance.id).update(extra_data=instance.extra_data)
-
-            # Create carbon entry if calculation has meaningful emissions (positive or negative)
+            # Create carbon entry as the authoritative source - single source of truth
             co2e_value = calculation_result.get("co2e", 0)
             if abs(co2e_value) > 0:
                 carbon_entry = calculator.create_carbon_entry_from_event(instance, calculation_result)
@@ -50,24 +44,18 @@ def calculate_chemical_event_carbon(sender, instance, created, **kwargs):
 def calculate_production_event_carbon(sender, instance, created, **kwargs):
     """
     Automatically calculate carbon impact when a production event is created or updated
+
+    PHASE 2 CONSOLIDATION (2025-12-12): CarbonEntry is now the single source of truth.
+    Removed dual-write to extra_data['carbon_calculation'] - using only CarbonEntry.
     """
     if created or kwargs.get("update_fields"):
         try:
             calculator = EventCarbonCalculator()
             calculation_result = calculator.calculate_production_event_impact(instance)
 
-            # Create carbon entry if calculation was successful
+            # Create carbon entry as the authoritative source - single source of truth
             if calculation_result.get("co2e", 0) > 0:
                 carbon_entry = calculator.create_carbon_entry_from_event(instance, calculation_result)
-
-                # Store calculation result in event's extra_data
-                if not hasattr(instance, "extra_data") or instance.extra_data is None:
-                    instance.extra_data = {}
-
-                instance.extra_data["carbon_calculation"] = calculation_result
-
-                # Update without triggering signal again
-                ProductionEvent.objects.filter(id=instance.id).update(extra_data=instance.extra_data)
 
                 print(
                     f"✅ Carbon calculation completed for Production Event {instance.id}: {calculation_result['co2e']} kg CO2e"
@@ -87,24 +75,14 @@ def calculate_weather_event_carbon(sender, instance, created, **kwargs):
 
     Per Trazo's transparency-first transformation: weather events provide transparency
     value without carbon emissions.
+
+    PHASE 2 CONSOLIDATION (2025-12-12): CarbonEntry is now the single source of truth.
+    Removed dual-write to extra_data['carbon_calculation'] - using only CarbonEntry.
     """
     if created or kwargs.get("update_fields"):
         try:
-            # Store transparency metadata in event's extra_data
-            if not hasattr(instance, "extra_data") or instance.extra_data is None:
-                instance.extra_data = {}
-
-            instance.extra_data["carbon_calculation"] = {
-                "co2e": 0.0,
-                "efficiency_score": 100.0,
-                "calculation_method": "weather_transparency",
-                "usda_verified": False,
-                "transparency_note": "Weather events document environmental conditions for agricultural transparency - no emissions generated",
-            }
-
-            # Update without triggering signal again
-            WeatherEvent.objects.filter(id=instance.id).update(extra_data=instance.extra_data)
-
+            # Weather events don't create carbon entries (no emissions)
+            # But we log for transparency tracking
             print(
                 f"✅ Transparency documentation recorded for Weather Event {instance.id}: 0.0 kg CO2e (transparency value only)"
             )
@@ -117,6 +95,9 @@ def calculate_weather_event_carbon(sender, instance, created, **kwargs):
 def calculate_general_event_carbon(sender, instance, created, **kwargs):
     """
     Automatically calculate minimal carbon impact for general events
+
+    PHASE 2 CONSOLIDATION (2025-12-12): CarbonEntry is now the single source of truth.
+    Removed dual-write to extra_data['carbon_calculation'] - using only CarbonEntry.
     """
     if created:  # Only for new general events
         try:
@@ -148,24 +129,10 @@ def calculate_general_event_carbon(sender, instance, created, **kwargs):
             if any(keyword in combined_text for keyword in impact_keywords):
                 carbon_entry = calculator.create_carbon_entry_from_event(instance, calculation_result)
 
-                # Store calculation result
-                if not hasattr(instance, "extra_data") or instance.extra_data is None:
-                    instance.extra_data = {}
-
-                instance.extra_data["carbon_calculation"] = calculation_result
-                GeneralEvent.objects.filter(id=instance.id).update(extra_data=instance.extra_data)
-
                 print(
                     f"✅ Carbon calculation completed for General Event {instance.id}: {calculation_result['co2e']} kg CO2e"
                 )
             else:
-                # Still store the calculation result even if no carbon entry is created
-                if not hasattr(instance, "extra_data") or instance.extra_data is None:
-                    instance.extra_data = {}
-
-                instance.extra_data["carbon_calculation"] = calculation_result
-                GeneralEvent.objects.filter(id=instance.id).update(extra_data=instance.extra_data)
-
                 print(
                     f"✅ General Event {instance.id} processed with minimal carbon impact: {calculation_result['co2e']} kg CO2e"
                 )
@@ -209,6 +176,9 @@ def cleanup_carbon_entries_on_event_delete(sender, instance, **kwargs):
 def calculate_equipment_event_carbon(sender, instance, created, **kwargs):
     """
     Automatically calculate carbon impact for equipment events
+
+    PHASE 2 CONSOLIDATION (2025-12-12): CarbonEntry is now the single source of truth.
+    Removed dual-write to extra_data['carbon_calculation'] - using only CarbonEntry.
     """
     if created:  # Only for new equipment events
         try:
@@ -217,15 +187,8 @@ def calculate_equipment_event_carbon(sender, instance, created, **kwargs):
             calculator = EventCarbonCalculator()
             calculation_result = calculator.calculate_equipment_event_impact(instance)
 
-            # Create carbon entry automatically
+            # Create carbon entry as the authoritative source - single source of truth
             carbon_entry = calculator.create_carbon_entry_from_event(instance, calculation_result)
-
-            # Store calculation result in event extra_data
-            if not hasattr(instance, "extra_data") or instance.extra_data is None:
-                instance.extra_data = {}
-
-            instance.extra_data["carbon_calculation"] = calculation_result
-            EquipmentEvent.objects.filter(id=instance.id).update(extra_data=instance.extra_data)
 
             print(
                 f"✅ Carbon calculation completed for Equipment Event {instance.id}: {calculation_result['co2e']} kg CO2e"
@@ -239,6 +202,9 @@ def calculate_equipment_event_carbon(sender, instance, created, **kwargs):
 def calculate_soil_management_event_carbon(sender, instance, created, **kwargs):
     """
     Automatically calculate carbon impact for soil management events
+
+    PHASE 2 CONSOLIDATION (2025-12-12): CarbonEntry is now the single source of truth.
+    Removed dual-write to extra_data['carbon_calculation'] - using only CarbonEntry.
     """
     if created:  # Only for new soil management events
         try:
@@ -247,15 +213,8 @@ def calculate_soil_management_event_carbon(sender, instance, created, **kwargs):
             calculator = EventCarbonCalculator()
             calculation_result = calculator.calculate_soil_management_event_impact(instance)
 
-            # Create carbon entry automatically
+            # Create carbon entry as the authoritative source - single source of truth
             carbon_entry = calculator.create_carbon_entry_from_event(instance, calculation_result)
-
-            # Store calculation result in event extra_data
-            if not hasattr(instance, "extra_data") or instance.extra_data is None:
-                instance.extra_data = {}
-
-            instance.extra_data["carbon_calculation"] = calculation_result
-            SoilManagementEvent.objects.filter(id=instance.id).update(extra_data=instance.extra_data)
 
             print(
                 f"✅ Carbon calculation completed for Soil Management Event {instance.id}: {calculation_result['co2e']} kg CO2e"
@@ -269,6 +228,9 @@ def calculate_soil_management_event_carbon(sender, instance, created, **kwargs):
 def calculate_pest_management_event_carbon(sender, instance, created, **kwargs):
     """
     Automatically calculate carbon impact for pest management events
+
+    PHASE 2 CONSOLIDATION (2025-12-12): CarbonEntry is now the single source of truth.
+    Removed dual-write to extra_data['carbon_calculation'] - using only CarbonEntry.
     """
     if created:  # Only for new pest management events
         try:
@@ -277,16 +239,10 @@ def calculate_pest_management_event_carbon(sender, instance, created, **kwargs):
             calculator = EventCarbonCalculator()
             calculation_result = calculator.calculate_pest_management_event_impact(instance)
 
-            # Create carbon entry automatically (only for significant impacts)
+            # Create carbon entry as the authoritative source - single source of truth
+            # Only create for significant impacts
             if abs(calculation_result["co2e"]) > 0.05:
                 carbon_entry = calculator.create_carbon_entry_from_event(instance, calculation_result)
-
-            # Store calculation result in event extra_data
-            if not hasattr(instance, "extra_data") or instance.extra_data is None:
-                instance.extra_data = {}
-
-            instance.extra_data["carbon_calculation"] = calculation_result
-            PestManagementEvent.objects.filter(id=instance.id).update(extra_data=instance.extra_data)
 
             print(
                 f"✅ Carbon calculation completed for Pest Management Event {instance.id}: {calculation_result['co2e']} kg CO2e"

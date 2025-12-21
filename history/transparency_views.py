@@ -48,8 +48,11 @@ def production_transparency_detail(request, production_id):
     This solves the farmer gaming incentive problem by rewarding honesty over competition
     """
     try:
-        # Get production with related data (optimized query with prefetch for all event types)
+        # Get production with related data (optimized query with prefetch for all event types and carbon data)
         # This eliminates N+1 queries by prefetching all 8 event types with their albums and images
+        # OPTIMIZATION (2025-12-12): Also prefetch CarbonEntry to support carbon data lookups
+        from carbon.models import CarbonEntry
+
         history = get_object_or_404(
             History.objects.select_related(
                 "product",
@@ -88,6 +91,12 @@ def production_transparency_detail(request, production_id):
                 Prefetch(
                     "history_businessevent_events",
                     queryset=BusinessEvent.objects.select_related("album").prefetch_related("album__images")
+                ),
+                # OPTIMIZATION (2025-12-12): Prefetch all CarbonEntry records for this production
+                # This eliminates separate queries when _get_event_carbon_data() is called
+                Prefetch(
+                    "carbonentry_set",
+                    queryset=CarbonEntry.objects.all().order_by("-created_at")
                 ),
             ),
             id=production_id,
@@ -198,21 +207,23 @@ def production_transparency_detail(request, production_id):
         if "events" in public_history_data:
             response_data["timeline_events"] = public_history_data["events"]
 
-        # ✅ FIX: Calculate USDA verification same way as frontend
-        # Frontend checks: extra_data?.carbon_calculation?.usda_compliance
-        # This matches frontend logic in UltraMobileProductionJourney.tsx lines 652-655
-        events_with_usda = 0
-        total_events = len(public_history_data.get("events", []))
+        # ✅ PHASE 1 FIX: Use CarbonEntry as single source of truth for USDA verification
+        # SEMANTIC CHANGE (2025-12-12): is_usda_verified now means "USDA factors were used"
+        # not "validation passed at high confidence"
+        from carbon.models import CarbonEntry
 
-        for event in public_history_data.get("events", []):
-            # Check if event has usda_compliance in carbon_calculation
-            extra_data = event.get("extra_data", {})
-            carbon_calc = extra_data.get("carbon_calculation", {})
-            if carbon_calc.get("usda_compliance"):
-                events_with_usda += 1
+        # Check if ALL carbon entries for this production have USDA verification
+        # This uses the fixed USDAComplianceRecord.is_usda_verified property which checks:
+        # - validation_method in ["enhanced_api", "local_validation"] (not error)
+        # - crop_type is identified (validation ran properly)
+        total_carbon_entries = CarbonEntry.objects.filter(production=history).count()
+        usda_verified_entries = CarbonEntry.objects.filter(
+            production=history,
+            usda_verified=True  # Uses the fixed is_usda_verified property
+        ).count()
 
-        # USDA verified if all events have USDA compliance (matches frontend 100% logic)
-        is_usda_verified = (total_events > 0 and events_with_usda == total_events)
+        # USDA verified if ALL carbon entries used USDA factors
+        is_usda_verified = (total_carbon_entries > 0 and usda_verified_entries == total_carbon_entries)
 
         # Add progressive loading structure for backward compatibility
         response_data.update(
@@ -563,7 +574,9 @@ def _get_verification_status(history):
     }
 
     # Look for organic certification in events or extra_data
-    if history.extra_data:
+    # BUGFIX: Check that extra_data is a dict before calling .get() to prevent
+    # "'str' object has no attribute 'get'" error for malformed data
+    if history.extra_data and isinstance(history.extra_data, dict):
         verifications["organic_certified"] = history.extra_data.get("organic_certified", False)
         verifications["blockchain_verified"] = history.extra_data.get("blockchain_verified", False)
 

@@ -179,11 +179,58 @@ class EventSerializer(serializers.ModelSerializer):
     def get_carbon_data(self, event):
         """
         Get carbon calculation data for the event.
-        First check if it's stored in extra_data, otherwise calculate it.
+
+        PHASE 3 CONSOLIDATION (2025-12-12): CarbonEntry is now the single source of truth.
+        Priority order:
+        1. CarbonEntry table (authoritative, normalized data)
+        2. extra_data (backward compatibility during transition)
+        3. On-demand calculation (fallback for missing data)
+
         OPTIMIZATION: Skip expensive calculations for list views.
         """
         try:
-            # Check if carbon calculation is already stored in extra_data
+            from carbon.models import CarbonEntry
+            from carbon.services.event_carbon_calculator import EventCarbonCalculator
+
+            # First, try to get from CarbonEntry - NOW PRIMARY SOURCE OF TRUTH
+            # FIX: Events have 'history' field (FK to History), not 'production'
+            # CarbonEntry.production is FK to History model
+            if hasattr(event, 'history') and event.history:
+                # OPTIMIZATION: Use prefetched carbon entries if available
+                # This avoids N+1 queries when the view has prefetched carbonentry_set
+                event_class_name = event.__class__.__name__
+                carbon_entry = None
+
+                # Try prefetched data first (Django caches prefetched results)
+                if hasattr(event.history, '_prefetched_objects_cache') and 'carbonentry_set' in event.history._prefetched_objects_cache:
+                    # Use prefetched data - filter in Python (fast, no DB query)
+                    for entry in event.history.carbonentry_set.all():
+                        if entry.description and event_class_name in entry.description:
+                            carbon_entry = entry
+                            break
+                else:
+                    # Fallback to DB query if not prefetched
+                    carbon_entries = CarbonEntry.objects.filter(
+                        production=event.history,
+                        description__icontains=event_class_name
+                    ).order_by("-created_at")
+                    if carbon_entries.exists():
+                        carbon_entry = carbon_entries.first()
+
+                if carbon_entry:
+                    return {
+                        "co2e": float(carbon_entry.co2e_amount or carbon_entry.amount),
+                        "efficiency_score": 90.0 if carbon_entry.usda_factors_based else 75.0,
+                        "usda_factors_based": carbon_entry.usda_factors_based,
+                        "verification_status": "verified" if carbon_entry.usda_verified else "calculated",
+                        "calculation_method": carbon_entry.data_source or "USDA Agricultural Emission Factors",
+                        "data_source": carbon_entry.data_source or "CarbonEntry",
+                        "recommendations": [],
+                        "event_type": event_class_name.lower().replace("event", ""),
+                        "timestamp": carbon_entry.created_at.isoformat() if carbon_entry.created_at else None,
+                    }
+
+            # Second, fall back to extra_data for backward compatibility with old events
             if hasattr(event, "extra_data") and event.extra_data and "carbon_calculation" in event.extra_data:
                 return event.extra_data["carbon_calculation"]
 
@@ -207,10 +254,13 @@ class EventSerializer(serializers.ModelSerializer):
                         "note": "Full calculation available in detail view",
                     }
 
-            # Full calculation only for detail views or when explicitly requested
-            from carbon.services.event_carbon_calculator import EventCarbonCalculator
-
-            calculator = EventCarbonCalculator()
+            # Third, calculate on-demand for events without stored calculations
+            # OPTIMIZATION: Reuse calculator instance for this request to avoid repeated USDA API key lookups
+            # Each EventCarbonCalculator init triggers get_usda_api_keys() which is expensive
+            request = self.context.get("request")
+            if request and not hasattr(request, '_carbon_calculator'):
+                request._carbon_calculator = EventCarbonCalculator()
+            calculator = request._carbon_calculator if request else EventCarbonCalculator()
 
             # Determine event type and calculate accordingly
             if isinstance(event, ChemicalEvent):
@@ -289,7 +339,8 @@ class EventSerializer(serializers.ModelSerializer):
 
         for image in event.album.images.all():
             # Check Vision API content validation results
-            if hasattr(image, "extra_data") and image.extra_data:
+            # BUGFIX: Check that extra_data is a dict before calling .get()
+            if hasattr(image, "extra_data") and image.extra_data and isinstance(image.extra_data, dict):
                 content_validation = image.extra_data.get("content_validation")
                 content_bypassed = image.extra_data.get("content_bypassed", False)
 
@@ -329,7 +380,8 @@ class EventSerializer(serializers.ModelSerializer):
         if has_photos:
             for image in event.album.images.all():
                 # Check if image has location metadata in extra_data
-                if hasattr(image, "extra_data") and image.extra_data:
+                # BUGFIX: Check that extra_data is a dict before calling .get()
+                if hasattr(image, "extra_data") and image.extra_data and isinstance(image.extra_data, dict):
                     if image.extra_data.get("gps_latitude") or image.extra_data.get("latitude"):
                         has_gps_data = True
                         break
@@ -338,8 +390,9 @@ class EventSerializer(serializers.ModelSerializer):
         has_timestamp = event.date is not None
 
         # Check for blockchain verification
+        # BUGFIX: Check that extra_data is a dict before calling .get()
         has_blockchain_verification = False
-        if hasattr(event, "extra_data") and event.extra_data:
+        if hasattr(event, "extra_data") and event.extra_data and isinstance(event.extra_data, dict):
             has_blockchain_verification = event.extra_data.get("blockchain_verified", False)
 
         # Determine event type ID for special handling
@@ -403,13 +456,63 @@ class EventSerializer(serializers.ModelSerializer):
 
 
 class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializer):
+    # 🚨 FIELD ALIASING: Accept frontend field names and map to backend model fields
+    # This allows the frontend to send consistent field names while the backend
+    # continues to use the existing database schema
+    # Frontend sends: volume_applied, area_treated, application_method
+    # Backend model expects: volume, area, way_of_application
+    volume_applied = serializers.CharField(
+        source="volume", allow_blank=True, allow_null=True, required=False
+    )
+    area_treated = serializers.CharField(
+        source="area", allow_blank=True, allow_null=True, required=False
+    )
+    application_method = serializers.CharField(
+        source="way_of_application", allow_blank=True, allow_null=True, required=False
+    )
+
     class Meta:
         model = ChemicalEvent
         fields = "__all__"
+        # Allow both old and new field names by making old fields optional
+        extra_kwargs = {
+            "volume": {"required": False, "allow_blank": True, "allow_null": True},
+            "area": {"required": False, "allow_blank": True, "allow_null": True},
+            "way_of_application": {"required": False, "allow_blank": True, "allow_null": True},
+        }
 
     def to_internal_value(self, data):
-        """Handle custom fields for chemical events."""
+        """
+        Handle custom fields AND field name aliasing for chemical events.
+        Accepts BOTH old field names (volume, area, way_of_application)
+        AND new field names (volume_applied, area_treated, application_method).
+        This ensures backward compatibility while supporting modern frontend conventions.
+        """
         data = data.copy()
+
+        # 🚨 FIELD NAME NORMALIZATION: Map frontend names → backend model names
+        # This allows frontend to send new names while backend uses existing model fields
+        # Priority: If new field name is provided, use it; otherwise fall back to old name
+        if "volume_applied" in data and "volume" not in data:
+            data["volume"] = data.pop("volume_applied")
+        elif "volume_applied" in data and "volume" in data:
+            # If both provided, prefer the explicitly named frontend field
+            data["volume"] = data.pop("volume_applied")
+
+        if "area_treated" in data and "area" not in data:
+            data["area"] = data.pop("area_treated")
+        elif "area_treated" in data and "area" in data:
+            data["area"] = data.pop("area_treated")
+
+        if "application_method" in data and "way_of_application" not in data:
+            data["way_of_application"] = data.pop("application_method")
+        elif "application_method" in data and "way_of_application" in data:
+            data["way_of_application"] = data.pop("application_method")
+
+        # Extract volume_unit and area_unit before they get removed
+        # These will be stored in extra_data for the serializer to read back
+        volume_unit = data.pop("volume_unit", None)
+        area_unit = data.pop("area_unit", None)
 
         # Handle custom fields (user-defined additional information)
         custom_fields = self.handle_custom_fields_input(data)
@@ -422,6 +525,12 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
 
         # Merge custom fields into extra_data
         internal_value["extra_data"] = self.merge_custom_fields(existing_extra_data, custom_fields, instance)
+
+        # Store volume_unit and area_unit in extra_data for frontend form compatibility
+        if volume_unit is not None:
+            internal_value["extra_data"]["volume_unit"] = volume_unit
+        if area_unit is not None:
+            internal_value["extra_data"]["area_unit"] = area_unit
 
         return internal_value
 
@@ -548,6 +657,99 @@ class ChemicalEventSerializer(EventSerializer):
     class Meta:
         model = ChemicalEvent
         fields = "__all__"
+
+    @staticmethod
+    def _parse_value_with_unit(raw_value, default_unit=""):
+        """
+        Parse a value that may be a combined string like "400 kg/ha" or a plain number.
+        Returns (numeric_value, unit_string).
+
+        Examples:
+            "400 kg/ha" -> (400.0, "kg/ha")
+            "15.5 L" -> (15.5, "L")
+            400 -> (400.0, default_unit)
+            "400" -> (400.0, default_unit)
+        """
+        import re
+
+        if raw_value is None or raw_value == "":
+            return (None, default_unit)
+
+        if isinstance(raw_value, (int, float)):
+            return (float(raw_value), default_unit)
+
+        raw_str = str(raw_value).strip()
+        if not raw_str:
+            return (None, default_unit)
+
+        # Try to extract numeric part and unit using regex
+        # Match: optional spaces, number (with optional decimals), optional spaces, unit text
+        match = re.match(r"^\s*([\d.]+)\s*(.*)$", raw_str)
+        if match:
+            try:
+                numeric_part = float(match.group(1))
+                unit_part = match.group(2).strip() if match.group(2) else default_unit
+                return (numeric_part, unit_part if unit_part else default_unit)
+            except ValueError:
+                pass
+
+        # Fallback: try to convert whole string to float
+        try:
+            return (float(raw_str), default_unit)
+        except ValueError:
+            # Last resort: return None with default unit
+            return (None, default_unit)
+
+    def to_representation(self, instance):
+        """
+        Override to ensure aliased field names are included and old names are removed.
+        This provides clean API responses with consistent field naming.
+
+        🔧 CRITICAL FIX: Parse combined strings like "400 kg/ha" into separate
+        numeric value and unit fields that the frontend form expects.
+
+        The unit information may come from:
+        1. Parsed from combined string (e.g., "400 kg/ha" → unit="kg/ha")
+        2. Stored in extra_data (for template-created events)
+        3. Default value (L for volume, ha for area)
+        """
+        data = super().to_representation(instance)
+
+        # Get extra_data for unit fallbacks (template events store units here)
+        extra_data = instance.extra_data or {}
+
+        # Default units from extra_data or fallbacks
+        default_volume_unit = extra_data.get("volume_unit", "L")
+        default_area_unit = extra_data.get("area_unit", "ha")
+
+        # Parse volume - may be combined string like "400 kg/ha"
+        volume_raw = instance.volume
+        volume_numeric, parsed_volume_unit = self._parse_value_with_unit(
+            volume_raw, default_volume_unit
+        )
+        data["volume_applied"] = volume_numeric
+        # Use parsed unit if it was extracted from the string, otherwise use default
+        data["volume_unit"] = parsed_volume_unit if parsed_volume_unit else default_volume_unit
+
+        # Parse area - may be combined string like "10 ha"
+        area_raw = instance.area
+        area_numeric, parsed_area_unit = self._parse_value_with_unit(
+            area_raw, default_area_unit
+        )
+        data["area_treated"] = area_numeric
+        # Use parsed unit if it was extracted from the string, otherwise use default
+        data["area_unit"] = parsed_area_unit if parsed_area_unit else default_area_unit
+
+        # Map application method
+        data["application_method"] = instance.way_of_application or ""
+
+        # Remove old backend field names to avoid confusion in frontend
+        # Frontend should only see: volume_applied, area_treated, application_method
+        data.pop("volume", None)
+        data.pop("area", None)
+        data.pop("way_of_application", None)
+
+        return data
 
     def get_type(self, chemical_event):
         type_display = chemical_event.get_type_display()
@@ -1770,7 +1972,11 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         Get chemical type with multiple fallback strategies.
         1. Use event.type if set (FE, PE, FU, HE)
         2. Infer from commercial_name (most reliable for incorrectly typed events)
-        3. Extract from carbon calculation data if available
+        3. Extract from extra_data carbon calculation breakdown (for old events)
+
+        NOTE: CarbonEntry stores calculated co2e values but not detailed breakdown data.
+        Breakdown details (including chemical_type) remain in extra_data for backward compatibility.
+        Future enhancement: Consider storing breakdown details in CarbonEntry JSONField.
         """
         # Primary: Use database type field if set
         if event.type and event.type in ["FE", "PE", "FU", "HE"]:
@@ -1795,10 +2001,13 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         elif "roundup" in commercial_name:
             return "HE"  # Pure roundup is typically herbicide
 
-        # Fallback 2: Extract from carbon calculation data (if name inference fails)
-        if hasattr(event, "extra_data") and event.extra_data:
+        # Fallback 2: Extract from extra_data carbon breakdown (backward compatibility)
+        # CarbonEntry doesn't store breakdown details, only consolidated co2e values
+        # This fallback handles old events that still have extra_data['carbon_calculation']
+        # BUGFIX: Check that extra_data is a dict before calling .get()
+        if hasattr(event, "extra_data") and event.extra_data and isinstance(event.extra_data, dict):
             carbon_data = event.extra_data.get("carbon_calculation", {})
-            breakdown = carbon_data.get("breakdown", {})
+            breakdown = carbon_data.get("breakdown", {}) if isinstance(carbon_data, dict) else {}
             carbon_chemical_type = breakdown.get("chemical_type")
             if carbon_chemical_type and carbon_chemical_type in ["FE", "PE", "FU", "HE"]:
                 return carbon_chemical_type
@@ -1819,10 +2028,11 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         - certified: Third-party or blockchain verified (100% trust)
         """
         # Check for GPS data in photos
+        # BUGFIX: Check that extra_data is a dict before calling .get()
         has_gps_data = False
         if has_photos and hasattr(event, "album") and event.album:
             for image in event.album.images.all():
-                if hasattr(image, "extra_data") and image.extra_data:
+                if hasattr(image, "extra_data") and image.extra_data and isinstance(image.extra_data, dict):
                     if image.extra_data.get("gps_latitude") or image.extra_data.get("latitude"):
                         has_gps_data = True
                         break
@@ -1901,9 +2111,10 @@ class PublicHistorySerializer(serializers.ModelSerializer):
             events_data = []
 
             # Extract blockchain verification data from production extra_data
+            # BUGFIX: Check that extra_data is a dict before calling .get()
             blockchain_verified = False
             blockchain_transaction = None
-            if history.extra_data:
+            if history.extra_data and isinstance(history.extra_data, dict):
                 blockchain_verified = history.extra_data.get("blockchain_verified", False)
                 blockchain_transaction = history.extra_data.get("blockchain_transaction")
 

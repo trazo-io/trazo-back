@@ -62,14 +62,57 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get"])
     def current_history(self, request, pk=None, parcel_pk=None, company_pk=None, establishment_pk=None):
+        """
+        OPTIMIZED: Get current history with prefetched related data.
+        Performance fix: Avoid N+1 queries by prefetching events, albums, and carbon entries.
+        """
+        from django.db.models import Prefetch
+        from carbon.models import CarbonEntry
+        from history.models import History
+
         establishments = self.company.establishment_set.all()
         parcel = get_object_or_404(
             Parcel,
             id=pk,
             establishment__in=establishments.all(),
         )
-        current_history = parcel.current_history
-        return Response(HistorySerializer(current_history).data)
+
+        if not parcel.current_history:
+            return Response(None)
+
+        # Optimized query with prefetch to avoid N+1 queries
+        current_history = History.objects.select_related(
+            'product', 'operator', 'crop_type', 'parcel', 'album'
+        ).prefetch_related(
+            # Prefetch all event types with their albums
+            'history_productionevent_events__album__images',
+            'history_productionevent_events__created_by',
+            'history_chemicalevent_events__album__images',
+            'history_chemicalevent_events__created_by',
+            'history_equipmentevent_events__album__images',
+            'history_equipmentevent_events__created_by',
+            'history_weatherevent_events__album__images',
+            'history_weatherevent_events__created_by',
+            'history_soilmanagementevent_events__album__images',
+            'history_soilmanagementevent_events__created_by',
+            'history_pestmanagementevent_events__album__images',
+            'history_pestmanagementevent_events__created_by',
+            'history_businessevent_events__album__images',
+            'history_businessevent_events__created_by',
+            'history_generalevent_events__album__images',
+            'history_generalevent_events__created_by',
+            # Prefetch carbon entries to avoid N+1 in serializer
+            Prefetch(
+                'carbonentry_set',
+                queryset=CarbonEntry.objects.only(
+                    'id', 'co2e_amount', 'amount', 'usda_factors_based',
+                    'usda_verified', 'data_source', 'description', 'created_at', 'production_id'
+                ).order_by('-created_at')
+            ),
+            # Note: 'members' is a SerializerMethodField, not a relation, so it can't be prefetched
+        ).get(pk=parcel.current_history.id)
+
+        return Response(HistorySerializer(current_history, context={'request': request}).data)
 
     @action(detail=True, methods=["get"])
     def history(self, request, pk=None, parcel_pk=None, company_pk=None, establishment_pk=None):
