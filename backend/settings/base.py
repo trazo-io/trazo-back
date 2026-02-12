@@ -791,8 +791,13 @@ REGISTRY_VERIFICATION_TIMEOUT = config("REGISTRY_VERIFICATION_TIMEOUT", default=
 
 # USDA API Configuration
 USDA_API_KEY = config("USDA_API_KEY", default="")
-USDA_FDC_API_KEY = config("USDA_FDC_API_KEY", default="")
 USDA_NASS_API_KEY = config("USDA_NASS_API_KEY", default="")
+
+# Country-Aware Carbon Configuration
+# Controls regional emission factors and USDA API integration.
+# "US": Enables NASS yield adjustments + US electricity factor.
+# "UY", "AR", "BR", etc.: Country-specific electricity, no NASS calls.
+TRAZO_OPERATING_COUNTRY = config("TRAZO_OPERATING_COUNTRY", default="US")
 
 # Carbon Security Configuration
 CARBON_SECURITY_ENABLED = config("CARBON_SECURITY_ENABLED", default=True, cast=bool)

@@ -913,26 +913,72 @@ class OptimizedCarbonCalculator:
         application_fuel_consumed = processed_event.get("application_fuel_consumed")
         application_fuel_unit = processed_event.get("application_fuel_unit", "L")
 
+        # DEBUG (2025-12-24): Log fuel fields to diagnose preview calculation issue
+        print(f"🔍 [calculate_chemical_impact_optimized] FUEL FIELDS:")
+        print(f"  - application_fuel_type: '{application_fuel_type}'")
+        print(f"  - application_fuel_consumed: {application_fuel_consumed}")
+        print(f"  - application_fuel_unit: '{application_fuel_unit}'")
+
         # Parse NPK content - only fertilizers have NPK
-        concentration = processed_event.get("concentration", "0-0-0")
+        # FIX (2025-12-24): Don't use NPK-style default for non-fertilizer chemicals
+        # This was causing fungicides/herbicides/pesticides to fail concentration parsing
+        concentration_raw = processed_event.get("concentration")
+        concentration_percentage = None  # For pesticides/herbicides/fungicides
+
+        # DEBUG (2025-12-24): Log concentration field specifically to diagnose fungicide calculation issue
+        print(f"🔍 [calculate_chemical_impact_optimized] CONCENTRATION DEBUG:")
+        print(
+            f"  - concentration_raw from processed_event: '{concentration_raw}' (type: {type(concentration_raw).__name__ if concentration_raw is not None else 'NoneType'})"
+        )
+        print(f"  - chemical_type: '{chemical_type}'")
         if chemical_type == "FE":  # Only fertilizers have NPK
             # Parse concentration like "10-10-10" or "1.5%"
-            if "-" in concentration:
-                parts = concentration.split("-")
+            # FIX (2025-12-24): Handle None concentration_raw properly
+            if concentration_raw is not None and "-" in str(concentration_raw):
+                parts = str(concentration_raw).split("-")
                 npk_content = {
                     "N": float(parts[0]) if len(parts) > 0 else 0,
                     "P": float(parts[1]) if len(parts) > 1 else 0,
                     "K": float(parts[2]) if len(parts) > 2 else 0,
                 }
             else:
-                # Default for non-NPK concentrations
+                # Default for non-NPK concentrations or None
                 npk_content = {"N": 0, "P": 0, "K": 0}
         else:
             # Pesticides, fungicides, herbicides have NO NPK content
             npk_content = {"N": 0, "P": 0, "K": 0}
+            # SPRINT 6 FIX (2025-12-23): Extract concentration percentage for active ingredient calculation
+            # Parse concentration like "2.5%" or "2.5" (numeric value as percentage)
+            # FIX (2025-12-24): Improved concentration parsing to properly handle user input
+            try:
+                if isinstance(concentration_raw, (int, float)):
+                    concentration_percentage = float(concentration_raw)
+                    print(f"  - Parsed concentration as int/float: {concentration_percentage}%")
+                elif concentration_raw and str(concentration_raw).strip():
+                    # Remove % symbol if present and convert to float
+                    conc_str = str(concentration_raw).replace("%", "").strip()
+                    if conc_str and "-" not in conc_str:  # Don't parse NPK-style strings
+                        concentration_percentage = float(conc_str)
+                        print(
+                            f"  - Parsed concentration from string '{concentration_raw}': {concentration_percentage}%"
+                        )
+                else:
+                    print(f"  - No valid concentration provided, will use calculation defaults")
+            except (ValueError, TypeError) as e:
+                concentration_percentage = None
+                logger.debug(f"Could not parse concentration: {concentration_raw}, error: {e}")
+                print(f"  - Failed to parse concentration '{concentration_raw}': {e}")
 
         # Use EPA/USDA verified emission factors (same as standard endpoint)
         try:
+            # SPRINT 6 FIX (2025-12-23): Extract chemical_subtype and product_name for accurate emission factors
+            # Without these, organic herbicide/pesticide/fungicide factors are ignored
+            chemical_subtype = processed_event.get("chemical_subtype", "")
+            product_name = processed_event.get("commercial_name", "")
+            # SPRINT 6 FIX (2025-12-24): Extract organic_approved for proper organic factor detection
+            # organic_approved can be: "omri_listed", "organic_equivalent", "organic_certified", etc.
+            organic_approved = processed_event.get("organic_approved", "")
+
             # Build kwargs for application fuel parameters (electric equipment support)
             calc_kwargs = {
                 "chemical_type": chemical_type,
@@ -940,7 +986,16 @@ class OptimizedCarbonCalculator:
                 "area_hectares": area_hectares,
                 "npk_content": npk_content,
                 "application_method": application_method,
+                # SPRINT 6 FIX: Include chemical_subtype and product_name for accurate emission factor selection
+                "chemical_subtype": chemical_subtype,
+                "product_name": product_name,
+                # SPRINT 6 FIX (2025-12-24): Pass organic_approved for accurate organic emission factors
+                "organic_approved": organic_approved,
             }
+
+            # SPRINT 6 FIX: Pass concentration for pesticides/herbicides/fungicides
+            if concentration_percentage is not None:
+                calc_kwargs["concentration"] = concentration_percentage
 
             # Add application fuel parameters if provided (for electric sprayers/spreaders)
             if application_fuel_type:
@@ -950,9 +1005,15 @@ class OptimizedCarbonCalculator:
             if application_fuel_unit:
                 calc_kwargs["application_fuel_unit"] = application_fuel_unit
 
-            calculation_result = VerifiedEmissionFactors.calculate_chemical_application_emissions(
-                **calc_kwargs
-            )
+            # DEBUG (2025-12-24): Log the final kwargs being passed to the calculation
+            print(f"🔍 [calculate_chemical_impact_optimized] CALLING VerifiedEmissionFactors with:")
+            for key, value in calc_kwargs.items():
+                print(f"  - {key}: {value}")
+
+            calculation_result = VerifiedEmissionFactors.calculate_chemical_application_emissions(**calc_kwargs)
+
+            # DEBUG (2025-12-24): Log the calculation result
+            print(f"🔍 [calculate_chemical_impact_optimized] RESULT: {calculation_result}")
 
             # Extract results
             co2e = calculation_result["co2e_kg"]
@@ -1246,6 +1307,14 @@ class OptimizedCarbonCalculator:
                 self.imp_strategy = event_data.get("imp_strategy", "")
                 # Add a minimal id for USDA metadata (prevents attribute error)
                 self.id = event_data.get("id", 1)
+                # Sprint 3 Epic 3.1: Add fuel/equipment fields for carbon calculation
+                self.fuel_consumed = event_data.get("fuel_consumed")
+                self.fuel_type = event_data.get("fuel_type", "diesel")
+                self.fuel_unit = event_data.get("fuel_unit", "L")
+                self.equipment_hours = event_data.get("equipment_hours")
+                self.production_efficiency = event_data.get("production_efficiency", "normal")
+                self.area_covered = event_data.get("area_covered")
+                self.area_unit = event_data.get("area_unit", "ha")
 
         mock_event = MockPestEvent(processed_event)
 
@@ -1289,6 +1358,12 @@ class OptimizedCarbonCalculator:
                 self.residue_management = event_data.get("residue_management")
                 self.weather_conditions = event_data.get("weather_conditions")
                 self.temperature_range = event_data.get("temperature_range")
+                # SPRINT 6 FIX (2025-12-26): Add amendment fields for lime dissolution calculation
+                # These are CRITICAL for IPCC lime dissolution emissions (0.44 kg CO2/kg limestone)
+                # Frontend sends: amendment_type (limestone/dolomite), amendment_amount, amendment_unit
+                self.amendment_type = event_data.get("amendment_type")
+                self.amendment_amount = event_data.get("amendment_amount")
+                self.amendment_unit = event_data.get("amendment_unit", "kg")
                 # Add a minimal id for USDA metadata (prevents attribute error)
                 self.id = event_data.get("id", 1)
 
@@ -1464,7 +1539,29 @@ class OptimizedEventProcessor:
         area_raw = event_data.get("area_treated") or event_data.get("area", 1.0)
         area_unit_provided = event_data.get("area_unit", "acres")
         application_method = event_data.get("application_method") or event_data.get("way_of_application", "broadcast")
-        concentration = event_data.get("concentration", "10-10-10")
+
+        # FIX (2025-12-24): Get chemical type BEFORE setting concentration default
+        # This allows us to use appropriate defaults based on chemical type
+        chemical_type = event_data.get("type", "FE")
+
+        # FIX (2025-12-24): Use appropriate default based on chemical type
+        # - Fertilizers (FE): Use NPK format "10-10-10" as default
+        # - Pesticides/Herbicides/Fungicides (PE/HE/FU): Use None (let calculation use its own defaults)
+        concentration_raw = event_data.get("concentration")
+        if concentration_raw is not None and str(concentration_raw).strip():
+            concentration = concentration_raw
+        elif chemical_type == "FE":
+            concentration = "10-10-10"  # NPK default for fertilizers
+        else:
+            # For PE/HE/FU, pass the actual value (None or empty) to let calculation handle defaults
+            concentration = concentration_raw
+
+        # DEBUG (2025-12-24): Log concentration extraction to diagnose fungicide calculation issue
+        print(f"🔍 [OptimizedEventProcessor._process_chemical_event] CONCENTRATION EXTRACTION:")
+        print(f"  - event_data keys: {list(event_data.keys())}")
+        print(f"  - chemical_type: '{chemical_type}'")
+        print(f"  - concentration from event_data: '{event_data.get('concentration')}' (raw)")
+        print(f"  - concentration (with type-appropriate default): '{concentration}'")
 
         # CRITICAL FIX: Parse combined strings like "400 kg/ha" into numeric + unit
         volume_value, parsed_volume_unit = cls._parse_value_with_unit(volume_raw, volume_unit_provided)
@@ -1487,8 +1584,9 @@ class OptimizedEventProcessor:
             logger.info(f"   🚨 VOLUME CONVERSION NEEDED: {volume_value} kg → ? L")
 
             # Parse NPK content to determine density
-            if "-" in concentration:
-                parts = concentration.split("-")
+            # FIX (2025-12-24): Handle None concentration when parsing NPK
+            if concentration and "-" in str(concentration):
+                parts = str(concentration).split("-")
                 npk_content = {
                     "N": float(parts[0]) if len(parts) > 0 else 0,
                     "P": float(parts[1]) if len(parts) > 1 else 0,
@@ -1552,6 +1650,11 @@ class OptimizedEventProcessor:
             "application_fuel_type": application_fuel_type,
             "application_fuel_consumed": application_fuel_consumed,
             "application_fuel_unit": application_fuel_unit,
+            # SPRINT 6 FIX (2025-12-23): Extract chemical_subtype for accurate emission factor selection
+            # Without this, organic herbicide/pesticide/fungicide factors are ignored
+            "chemical_subtype": event_data.get("chemical_subtype", ""),
+            "commercial_name": event_data.get("commercial_name", ""),
+            "active_ingredient": event_data.get("active_ingredient", ""),
         }
 
         # Event processing complete
@@ -1820,8 +1923,10 @@ class OptimizedEventProcessor:
     @classmethod
     def _process_soil_management_event(cls, event_data: Dict[str, Any]) -> Dict[str, Any]:
         """Process soil management event data efficiently"""
-        # Convert area from string to float, handle both area_worked and area fields
-        area_str = event_data.get("area_worked") or event_data.get("area", "1.0")
+        # SPRINT 6 FIX (2025-12-26): Handle area_covered field from frontend
+        # Frontend sends "area_covered", backend models use different field names
+        # Priority: area_covered (frontend) > area_worked > area (fallback)
+        area_str = event_data.get("area_covered") or event_data.get("area_worked") or event_data.get("area", "1.0")
         try:
             area_value = float(area_str)
         except (ValueError, TypeError):
@@ -1853,6 +1958,12 @@ class OptimizedEventProcessor:
             "residue_management": event_data.get("residue_management"),
             "weather_conditions": event_data.get("weather_conditions"),
             "temperature_range": event_data.get("temperature_range"),
+            # SPRINT 6 FIX (2025-12-26): Add amendment fields for lime dissolution calculation
+            # These are CRITICAL for IPCC lime dissolution emissions (0.44 kg CO2/kg limestone)
+            # Frontend sends: amendment_type (limestone/dolomite), amendment_amount, amendment_unit
+            "amendment_type": event_data.get("amendment_type"),
+            "amendment_amount": event_data.get("amendment_amount"),
+            "amendment_unit": event_data.get("amendment_unit", "kg"),
         }
 
     @classmethod
@@ -1870,6 +1981,14 @@ class OptimizedEventProcessor:
             ),
             "action_threshold_met": bool(event_data.get("action_threshold_met", False)),
             "ipm_strategy": event_data.get("ipm_strategy", ""),
+            # Sprint 3 Epic 3.1: Add fuel/equipment fields for carbon calculation
+            "fuel_consumed": event_data.get("fuel_consumed"),
+            "fuel_type": event_data.get("fuel_type", "diesel"),
+            "fuel_unit": event_data.get("fuel_unit", "L"),
+            "equipment_hours": event_data.get("equipment_hours"),
+            "production_efficiency": event_data.get("production_efficiency", "normal"),
+            "area_covered": event_data.get("area_covered"),
+            "area_unit": event_data.get("area_unit", "ha"),
         }
 
 
@@ -1888,6 +2007,13 @@ def calculate_event_carbon_impact_enhanced(request):
     - Intelligent caching at 4 levels
     - Circuit breaker for external APIs
     """
+    # DEBUG (2025-12-24): Log at entry point to confirm function is being called
+    print(f"🔍 [calculate_event_carbon_impact_enhanced] FUNCTION ENTRY - request received")
+    print(f"  - request.data: {request.data}")
+    # Log concentration specifically for debugging
+    event_data_for_debug = request.data.get("event_data", {})
+    print(f"  - CONCENTRATION in event_data: '{event_data_for_debug.get('concentration')}'")
+
     start_time = time.time()
 
     try:
@@ -2006,6 +2132,17 @@ def calculate_event_carbon_impact(request):
         event_type = request.data.get("event_type")  # 'chemical', 'production', 'weather', 'general', etc.
         event_data = request.data.get("event_data", {})
 
+        # DEBUG (2025-12-24): Log incoming request data to diagnose preview calculation issue
+        print(f"🔍 [calculate_event_carbon_impact] ENTRY POINT")
+        print(f"  - event_type received: '{event_type}' (type: {type(event_type).__name__})")
+        print(f"  - event_data keys: {list(event_data.keys())}")
+        if event_type == "chemical":
+            print(f"  - ✅ MATCHED 'chemical' condition")
+            print(f"  - application_fuel_type in data: {event_data.get('application_fuel_type')}")
+            print(f"  - application_fuel_consumed in data: {event_data.get('application_fuel_consumed')}")
+        else:
+            print(f"  - ❌ DID NOT match 'chemical' - got '{event_type}'")
+
         if not event_type:
             return Response({"error": "event_type is required"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -2053,6 +2190,23 @@ def calculate_event_carbon_impact(request):
                     self.temperature_range = event_data.get("temperature_range", "")
                     self.wind_speed = event_data.get("wind_speed", "")
                     self.time_period = event_data.get("time_period", "")
+                    # SPRINT 6 FIX (2025-12-23): Extract chemical_subtype for accurate emission factor selection
+                    # Without this, organic herbicide/pesticide factors are ignored and manufacturing emissions = 0
+                    self.chemical_subtype = event_data.get("chemical_subtype", "")
+                    # Also extract active_ingredient for product name detection fallback
+                    self.active_ingredient = event_data.get("active_ingredient", "")
+
+                    # FIX (2025-12-24): Add application fuel fields for accurate carbon preview
+                    # Without these, the preview only shows manufacturing emissions, not application fuel emissions
+                    self.application_fuel_type = event_data.get("application_fuel_type", "")
+                    self.application_fuel_consumed = event_data.get("application_fuel_consumed")
+                    self.application_fuel_unit = event_data.get("application_fuel_unit", "L")
+
+                    # DEBUG: Log the fuel fields received
+                    print(f"🔍 [MockEvent] Chemical fuel fields received:")
+                    print(f"  - application_fuel_type: {self.application_fuel_type}")
+                    print(f"  - application_fuel_consumed: {self.application_fuel_consumed}")
+                    print(f"  - application_fuel_unit: {self.application_fuel_unit}")
 
                 # Map production event data (use actual form data, not defaults)
                 elif event_type == "production":
@@ -8408,10 +8562,10 @@ def get_crop_templates(request):
 
         # Optimized query with select_related and prefetch_related to prevent N+1 queries
         # Before: 80+ queries per request | After: 2 queries total
-        queryset = ProductionTemplate.objects.filter(is_active=True).select_related(
-            "crop_type"
-        ).prefetch_related(
-            "event_templates"
+        queryset = (
+            ProductionTemplate.objects.filter(is_active=True)
+            .select_related("crop_type")
+            .prefetch_related("event_templates")
         )
 
         if crop_type_id:
@@ -9780,160 +9934,6 @@ def test_usda_apis(request):
         logger.error(f"Error testing USDA APIs: {e}")
         return Response(
             {"error": f"API test failed: {str(e)}", "timestamp": timezone.now().isoformat()},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
-
-
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def get_nutritional_carbon_analysis(request):
-    """NEW ENDPOINT: Get nutritional analysis and carbon efficiency for crops using FoodData Central API"""
-    try:
-        crop_type = request.query_params.get("crop_type", "corn")
-
-        from .services.real_usda_integration import RealUSDAAPIClient
-
-        usda_client = RealUSDAAPIClient()
-
-        # Get nutritional data from FoodData Central
-        nutritional_data = usda_client.get_nutritional_carbon_factors(crop_type)
-
-        if not nutritional_data:
-            return Response(
-                {"success": False, "error": "No nutritional data found for this crop", "crop_type": crop_type},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        return Response(
-            {
-                "success": True,
-                "crop_type": crop_type,
-                "nutritional_analysis": nutritional_data,
-                "api_source": "USDA FoodData Central",
-                "timestamp": timezone.now().isoformat(),
-            }
-        )
-
-    except Exception as e:
-        logger.error(f"Error getting nutritional carbon analysis: {e}")
-        return Response(
-            {
-                "success": False,
-                "error": f"Failed to get nutritional analysis: {str(e)}",
-                "timestamp": timezone.now().isoformat(),
-            },
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
-
-
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def get_complete_usda_analysis(request):
-    """NEW ENDPOINT: Get complete analysis using all three USDA APIs together"""
-    try:
-        crop_type = request.query_params.get("crop_type", "corn")
-        state = request.query_params.get("state", "IA")
-
-        # Get user's establishment data if available
-        area_hectares = float(request.query_params.get("area_hectares", 100))
-        yield_per_hectare = float(request.query_params.get("yield_per_hectare", 9000))
-        nitrogen_kg = float(request.query_params.get("nitrogen_kg", 150))
-        phosphorus_kg = float(request.query_params.get("phosphorus_kg", 50))
-        diesel_liters = float(request.query_params.get("diesel_liters", 80))
-
-        farm_practices = {
-            "area_hectares": area_hectares,
-            "yield_per_hectare": yield_per_hectare,
-            "inputs": {"nitrogen_kg": nitrogen_kg, "phosphorus_kg": phosphorus_kg, "diesel_liters": diesel_liters},
-        }
-
-        from .services.real_usda_integration import get_real_usda_carbon_data
-
-        # Get complete analysis with all APIs
-        complete_result = get_real_usda_carbon_data(crop_type, state, farm_practices)
-
-        return Response(
-            {
-                "success": True,
-                "analysis": complete_result,
-                "input_parameters": {"crop_type": crop_type, "state": state, "farm_practices": farm_practices},
-                "timestamp": timezone.now().isoformat(),
-            }
-        )
-
-    except Exception as e:
-        logger.error(f"Error getting complete USDA analysis: {e}")
-        return Response(
-            {
-                "success": False,
-                "error": f"Failed to get complete analysis: {str(e)}",
-                "timestamp": timezone.now().isoformat(),
-            },
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
-
-
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def test_fooddata_central_api(request):
-    """NEW ENDPOINT: Test FoodData Central API specifically"""
-    try:
-        crop_type = request.query_params.get("crop_type", "corn")
-
-        from .services.real_usda_integration import RealUSDAAPIClient
-
-        usda_client = RealUSDAAPIClient()
-
-        # Test FoodData Central API configuration
-        api_configured = bool(usda_client.fooddata_api_key)
-
-        if not api_configured:
-            return Response(
-                {"api_configured": False, "error": "FoodData Central API key not configured"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Test food composition data fetch
-        food_data = usda_client.get_food_composition_data(crop_type)
-
-        # Test nutritional analysis
-        nutritional_analysis = usda_client.get_nutritional_carbon_factors(crop_type)
-
-        test_results = {
-            "api_configured": api_configured,
-            "api_endpoint": usda_client.fooddata_base_url,
-            "test_crop": crop_type,
-            "food_search_test": {
-                "status": "success" if food_data and "foods" in food_data else "failed",
-                "foods_found": len(food_data.get("foods", [])) if food_data else 0,
-                "sample_food": food_data.get("foods", [{}])[0] if food_data and food_data.get("foods") else None,
-            },
-            "nutritional_analysis_test": {
-                "status": "success" if nutritional_analysis else "failed",
-                "has_nutrients": bool(nutritional_analysis.get("nutritional_data")) if nutritional_analysis else False,
-                "has_efficiency": (
-                    bool(nutritional_analysis.get("carbon_efficiency")) if nutritional_analysis else False
-                ),
-                "efficiency_rating": (
-                    nutritional_analysis.get("carbon_efficiency", {}).get("efficiency_rating")
-                    if nutritional_analysis
-                    else None
-                ),
-            },
-            "timestamp": timezone.now().isoformat(),
-        }
-
-        overall_status = (
-            test_results["food_search_test"]["status"] == "success"
-            and test_results["nutritional_analysis_test"]["status"] == "success"
-        )
-
-        return Response({"overall_status": "operational" if overall_status else "failed", "test_results": test_results})
-
-    except Exception as e:
-        logger.error(f"Error testing FoodData Central API: {e}")
-        return Response(
-            {"overall_status": "error", "error": f"API test failed: {str(e)}", "timestamp": timezone.now().isoformat()},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 

@@ -2,6 +2,7 @@ import logging
 import time
 from typing import Any, Dict, List, Optional
 
+from django.conf import settings
 from django.utils import timezone
 
 from ..models import CarbonEntry, CarbonSource, USDACalculationAudit, USDAComplianceRecord
@@ -166,20 +167,27 @@ class EventCarbonCalculator:
                 # Get coordinates if available
                 latitude = getattr(establishment, "latitude", None)
                 longitude = getattr(establishment, "longitude", None)
-                state = getattr(establishment, "state", "CA")  # Default to California
+                state = getattr(establishment, "state", None)
 
                 # If coordinates are available, use them
                 if latitude is not None and longitude is not None:
-                    return float(latitude), float(longitude), state
+                    return float(latitude), float(longitude), state or self._default_state()
 
                 # If no coordinates, use state for regional estimates
-                return None, None, state
+                return None, None, state or self._default_state()
 
         except Exception as e:
             logger.error(f"Error getting farm coordinates: {e}")
 
-        # Default fallback - assume California for unknown locations
-        return None, None, "CA"
+        return None, None, self._default_state()
+
+    @staticmethod
+    def _default_state():
+        """Return a sensible default state based on the operating country."""
+        country = getattr(settings, "TRAZO_OPERATING_COUNTRY", "US")
+        if country == "US":
+            return "CA"
+        return "Unknown"
 
     def _get_real_time_usda_factors(self, crop_type: str, state: str) -> Dict[str, float]:
         """NEW METHOD: Get real-time USDA emission factors"""
@@ -229,6 +237,376 @@ class EventCarbonCalculator:
         except Exception as e:
             logger.error(f"Error calculating confidence score: {e}")
             return 0.5  # Default medium confidence
+
+    # ==========================================================================================
+    # Sprint 5: Aggregate Event Support - Calculate carbon for multiple events logged as one summary
+    # ==========================================================================================
+
+    def _is_aggregate_event(self, event) -> bool:
+        """
+        Check if this is an aggregate/summary event (multiple events logged as one).
+        Sprint 5: Aggregate Event Logging feature.
+        """
+        try:
+            extra_data = getattr(event, "extra_data", None) or {}
+            return extra_data.get("is_summary", False) is True
+        except Exception:
+            return False
+
+    def _get_aggregate_extra_data(self, event) -> Dict[str, Any]:
+        """Extract extra_data from an aggregate event, safely handling None values."""
+        try:
+            return getattr(event, "extra_data", None) or {}
+        except Exception:
+            return {}
+
+    def _calculate_aggregate_fertilizer_impact(self, event, extra_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Calculate carbon impact for aggregate fertilizer events (multiple applications as one summary).
+        Uses pre-calculated NPK totals instead of individual event calculations.
+
+        Sprint 5: Aggregate Chemical Support - Fertilizer
+        """
+        try:
+            from .verified_emission_factors import VerifiedEmissionFactors
+
+            # Extract aggregate totals from extra_data
+            n_total_kg = float(extra_data.get("n_total_kg", 0) or 0)
+            p_total_kg = float(extra_data.get("p_total_kg", 0) or 0)
+            k_total_kg = float(extra_data.get("k_total_kg", 0) or 0)
+            event_count = int(extra_data.get("event_count", 1) or 1)
+            date_start = extra_data.get("date_start", "")
+            date_end = extra_data.get("date_end", "")
+
+            # Get fuel consumption if provided
+            fuel_total_liters = float(extra_data.get("fuel_consumption_total", 0) or 0)
+
+            # Calculate manufacturing emissions using EPA/USDA verified factors
+            # From verified_emission_factors.py:
+            # Nitrogen: 10.5 kg CO2/kg N
+            # Phosphorus: 1.19 kg CO2/kg P2O5
+            # Potassium: 0.65 kg CO2/kg K2O
+            n_emissions = n_total_kg * 10.5
+            p_emissions = p_total_kg * 1.19
+            k_emissions = k_total_kg * 0.65
+            manufacturing_emissions = n_emissions + p_emissions + k_emissions
+
+            # Calculate application fuel emissions if provided
+            # EPA Diesel Factor: 10.21 kg CO2/gallon = 2.698 kg CO2/liter
+            application_emissions = fuel_total_liters * 2.698 if fuel_total_liters > 0 else 0
+
+            total_emissions = manufacturing_emissions + application_emissions
+
+            breakdown = {
+                "is_aggregate": True,
+                "event_count": event_count,
+                "date_range": f"{date_start} to {date_end}" if date_start and date_end else "Multiple dates",
+                "nitrogen_total_kg": n_total_kg,
+                "nitrogen_emissions_kg_co2e": round(n_emissions, 3),
+                "phosphorus_total_kg": p_total_kg,
+                "phosphorus_emissions_kg_co2e": round(p_emissions, 3),
+                "potassium_total_kg": k_total_kg,
+                "potassium_emissions_kg_co2e": round(k_emissions, 3),
+                "manufacturing_emissions_kg_co2e": round(manufacturing_emissions, 3),
+                "application_fuel_liters": fuel_total_liters,
+                "application_emissions_kg_co2e": round(application_emissions, 3),
+                "confidence_level": 0.92,
+            }
+
+            return {
+                "co2e": round(total_emissions, 3),
+                "efficiency_score": 85.0,
+                "calculation_method": "aggregate_fertilizer_epa_usda",
+                "verification_status": "epa_usda_verified_aggregate",
+                "data_sources": [
+                    "EPA 40 CFR Part 98 (fuel combustion)",
+                    "USDA ARS (fertilizer manufacturing)",
+                    "IPCC 2006/2019 (N2O emissions)",
+                ],
+                "breakdown": breakdown,
+                "limitations": f"Aggregate calculation for {event_count} fertilizer applications",
+                "recommendations": [
+                    {
+                        "type": "aggregate_transparency",
+                        "message": f"This represents {event_count} fertilizer applications logged as one summary",
+                        "impact": "Transparency",
+                        "source": "Trazo Aggregate Logging",
+                    }
+                ],
+                "confidence_level": 0.92,
+            }
+
+        except Exception as e:
+            logger.error(f"Aggregate fertilizer calculation failed: {e}")
+            return {
+                "co2e": 0.0,
+                "efficiency_score": 70.0,
+                "verification_status": "aggregate_calculation_error",
+                "error": str(e),
+            }
+
+    def _calculate_aggregate_fungicide_impact(self, event, extra_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Calculate carbon impact for aggregate fungicide events (multiple applications as one summary).
+        Uses pre-calculated active ingredient total.
+
+        ENHANCED 2025-12-24: Support organic/biological fungicide variants with accurate emission factors.
+        Uses chemical_subtype from extra_data to select correct emission factor.
+
+        Sprint 5: Aggregate Chemical Support - Fungicide
+        """
+        try:
+            from .verified_emission_factors import VerifiedEmissionFactors
+
+            # Extract aggregate totals from extra_data
+            active_ingredient_kg = float(extra_data.get("active_ingredient_total_kg", 0) or 0)
+            event_count = int(extra_data.get("event_count", 1) or 1)
+            date_start = extra_data.get("date_start", "")
+            date_end = extra_data.get("date_end", "")
+
+            # ENHANCED 2025-12-24: Extract chemical_subtype for accurate emission factor
+            chemical_subtype = extra_data.get("chemical_subtype", "").lower()
+
+            # Get fuel consumption if provided
+            fuel_total_liters = float(extra_data.get("fuel_consumption_total", 0) or 0)
+
+            # ENHANCED 2025-12-24: Select emission factor based on chemical_subtype
+            # Default to synthetic fungicide if subtype not specified
+            emission_factor = 4.5  # Synthetic fungicide default
+            emission_factor_label = "synthetic fungicide"
+
+            if chemical_subtype in ["copper_fungicide", "copper"]:
+                # Copper-based fungicides (higher due to copper mining/refining)
+                copper_factor = VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["copper_fungicide_manufacturing"]
+                emission_factor = copper_factor.value  # 5.5 kg CO2/kg AI
+                emission_factor_label = "copper fungicide"
+            elif chemical_subtype in ["sulfur_fungicide", "sulfur"]:
+                # Sulfur-based fungicides (lower as sulfur is often a byproduct)
+                sulfur_factor = VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["sulfur_fungicide_manufacturing"]
+                emission_factor = sulfur_factor.value  # 1.8 kg CO2/kg
+                emission_factor_label = "sulfur fungicide"
+            elif chemical_subtype in ["biological_fungicide", "biological"]:
+                # Biological fungicides (fermentation-based production)
+                biological_factor = VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["biological_fungicide_manufacturing"]
+                emission_factor = biological_factor.value  # 2.0 kg CO2/kg
+                emission_factor_label = "biological fungicide"
+
+            # Calculate manufacturing emissions using selected emission factor
+            manufacturing_emissions = active_ingredient_kg * emission_factor
+
+            # Calculate application fuel emissions if provided
+            application_emissions = fuel_total_liters * 2.698 if fuel_total_liters > 0 else 0
+
+            total_emissions = manufacturing_emissions + application_emissions
+
+            breakdown = {
+                "is_aggregate": True,
+                "event_count": event_count,
+                "date_range": f"{date_start} to {date_end}" if date_start and date_end else "Multiple dates",
+                "active_ingredient_total_kg": active_ingredient_kg,
+                "chemical_subtype": chemical_subtype or "synthetic (default)",
+                "manufacturing_emissions_kg_co2e": round(manufacturing_emissions, 3),
+                "application_fuel_liters": fuel_total_liters,
+                "application_emissions_kg_co2e": round(application_emissions, 3),
+                "emission_factor_used": f"{emission_factor} kg CO2/kg AI ({emission_factor_label})",
+                "confidence_level": 0.90,
+            }
+
+            return {
+                "co2e": round(total_emissions, 3),
+                "efficiency_score": 82.0,
+                "calculation_method": "aggregate_fungicide_epa_usda",
+                "verification_status": "epa_usda_verified_aggregate",
+                "data_sources": [
+                    "EPA 40 CFR Part 98 (fuel combustion)",
+                    "Lal 2004 / Audsley (fungicide manufacturing LCA)",
+                ],
+                "breakdown": breakdown,
+                "limitations": f"Aggregate calculation for {event_count} fungicide applications",
+                "recommendations": [
+                    {
+                        "type": "aggregate_transparency",
+                        "message": f"This represents {event_count} fungicide applications logged as one summary",
+                        "impact": "Transparency",
+                        "source": "Trazo Aggregate Logging",
+                    }
+                ],
+                "confidence_level": 0.90,
+            }
+
+        except Exception as e:
+            logger.error(f"Aggregate fungicide calculation failed: {e}")
+            return {
+                "co2e": 0.0,
+                "efficiency_score": 70.0,
+                "verification_status": "aggregate_calculation_error",
+                "error": str(e),
+            }
+
+    def _calculate_aggregate_pesticide_impact(self, event, extra_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Calculate carbon impact for aggregate pesticide events (multiple applications as one summary).
+        Uses pre-calculated active ingredient total.
+
+        ENHANCED 2025-12-24: Support organic/biological pesticide variants with accurate emission factors.
+        Uses chemical_subtype from extra_data to select correct emission factor.
+
+        Sprint 5: Aggregate Chemical Support - Pesticide
+        """
+        try:
+            from .verified_emission_factors import VerifiedEmissionFactors
+
+            # Extract aggregate totals from extra_data
+            active_ingredient_kg = float(extra_data.get("active_ingredient_total_kg", 0) or 0)
+            event_count = int(extra_data.get("event_count", 1) or 1)
+            date_start = extra_data.get("date_start", "")
+            date_end = extra_data.get("date_end", "")
+
+            # ENHANCED 2025-12-24: Extract chemical_subtype for accurate emission factor
+            chemical_subtype = extra_data.get("chemical_subtype", "").lower()
+
+            # Get fuel consumption if provided
+            fuel_total_liters = float(extra_data.get("fuel_consumption_total", 0) or 0)
+
+            # ENHANCED 2025-12-24: Select emission factor based on chemical_subtype
+            # Default to synthetic pesticide if subtype not specified
+            emission_factor = 8.8  # Synthetic pesticide default
+            emission_factor_label = "synthetic pesticide"
+
+            if chemical_subtype in ["organic_pesticide", "organic"]:
+                # Organic pesticides (neem, pyrethrin) - naturally-derived
+                organic_factor = VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["organic_pesticide_manufacturing"]
+                emission_factor = organic_factor.value  # 3.5 kg CO2/kg
+                emission_factor_label = "organic pesticide"
+            elif chemical_subtype in ["biological_pesticide", "biological"]:
+                # Biological pesticides (Bt, Spinosad) - microbial-based
+                biological_factor = VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["biological_pesticide_manufacturing"]
+                emission_factor = biological_factor.value  # 2.5 kg CO2/kg
+                emission_factor_label = "biological pesticide"
+
+            # Calculate manufacturing emissions using selected emission factor
+            manufacturing_emissions = active_ingredient_kg * emission_factor
+
+            # Calculate application fuel emissions if provided
+            application_emissions = fuel_total_liters * 2.698 if fuel_total_liters > 0 else 0
+
+            total_emissions = manufacturing_emissions + application_emissions
+
+            breakdown = {
+                "is_aggregate": True,
+                "event_count": event_count,
+                "date_range": f"{date_start} to {date_end}" if date_start and date_end else "Multiple dates",
+                "active_ingredient_total_kg": active_ingredient_kg,
+                "chemical_subtype": chemical_subtype or "synthetic (default)",
+                "manufacturing_emissions_kg_co2e": round(manufacturing_emissions, 3),
+                "application_fuel_liters": fuel_total_liters,
+                "application_emissions_kg_co2e": round(application_emissions, 3),
+                "emission_factor_used": f"{emission_factor} kg CO2/kg AI ({emission_factor_label})",
+                "confidence_level": 0.90,
+            }
+
+            return {
+                "co2e": round(total_emissions, 3),
+                "efficiency_score": 80.0,
+                "calculation_method": "aggregate_pesticide_epa_usda",
+                "verification_status": "epa_usda_verified_aggregate",
+                "data_sources": [
+                    "EPA 40 CFR Part 98 (fuel combustion)",
+                    "Lal 2004 / Audsley (pesticide manufacturing LCA)",
+                ],
+                "breakdown": breakdown,
+                "limitations": f"Aggregate calculation for {event_count} pesticide applications",
+                "recommendations": [
+                    {
+                        "type": "aggregate_transparency",
+                        "message": f"This represents {event_count} pesticide applications logged as one summary",
+                        "impact": "Transparency",
+                        "source": "Trazo Aggregate Logging",
+                    }
+                ],
+                "confidence_level": 0.90,
+            }
+
+        except Exception as e:
+            logger.error(f"Aggregate pesticide calculation failed: {e}")
+            return {
+                "co2e": 0.0,
+                "efficiency_score": 70.0,
+                "verification_status": "aggregate_calculation_error",
+                "error": str(e),
+            }
+
+    def _calculate_aggregate_pest_scouting_impact(self, event, extra_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Calculate carbon impact for aggregate pest scouting events.
+        Pest scouting is observational and produces zero direct emissions.
+
+        Sprint 5: Aggregate Pest Scouting Support
+        """
+        try:
+            event_count = int(extra_data.get("event_count", 1) or 1)
+            date_start = extra_data.get("date_start", "")
+            date_end = extra_data.get("date_end", "")
+            field_area_total = float(extra_data.get("field_area_total", 0) or 0)
+            area_unit = extra_data.get("area_unit", "acres")
+            travel_distance_total = float(extra_data.get("travel_distance_total", 0) or 0)
+            distance_unit = extra_data.get("distance_unit", "miles")
+            pest_species_observed = extra_data.get("pest_species_observed", "")
+            average_pest_pressure = extra_data.get("average_pest_pressure", "")
+            observations_summary = extra_data.get("observations_summary", "")
+
+            breakdown = {
+                "is_aggregate": True,
+                "event_count": event_count,
+                "date_range": f"{date_start} to {date_end}" if date_start and date_end else "Multiple dates",
+                "field_area_total": field_area_total,
+                "area_unit": area_unit,
+                "travel_distance_total": travel_distance_total,
+                "distance_unit": distance_unit,
+                "pest_species_observed": pest_species_observed,
+                "average_pest_pressure": average_pest_pressure,
+                "carbon_impact": "zero",
+                "carbon_notes": "Pest scouting is observational and does not directly produce emissions",
+            }
+
+            return {
+                "co2e": 0.0,
+                "efficiency_score": 100.0,  # Perfect score - no emissions
+                "calculation_method": "aggregate_pest_scouting_zero_emission",
+                "verification_status": "verified_zero_emission",
+                "data_sources": ["Trazo Methodology - Observational activities produce zero direct emissions"],
+                "breakdown": breakdown,
+                "limitations": "Excludes indirect transportation emissions to/from fields",
+                "recommendations": [
+                    {
+                        "type": "aggregate_transparency",
+                        "message": f"This represents {event_count} scouting trips covering {field_area_total} {area_unit}",
+                        "impact": "Transparency",
+                        "source": "Trazo Aggregate Logging",
+                    },
+                    {
+                        "type": "ipm_benefit",
+                        "message": "Regular scouting enables targeted pest management, reducing chemical applications",
+                        "impact": "High",
+                        "source": "USDA IPM Guidelines",
+                    },
+                ],
+                "confidence_level": 1.0,  # High confidence - known zero emission activity
+                "transparency_bonus": True,  # Rewards farmer for transparency
+            }
+
+        except Exception as e:
+            logger.error(f"Aggregate pest scouting calculation failed: {e}")
+            return {
+                "co2e": 0.0,
+                "efficiency_score": 100.0,
+                "verification_status": "aggregate_calculation_error",
+                "error": str(e),
+            }
+
+    # ==========================================================================================
+    # End of Sprint 5: Aggregate Event Support
+    # ==========================================================================================
 
     def _create_usda_compliance_record(
         self, carbon_entry: CarbonEntry, event, calculation_data: Dict, confidence_score: float
@@ -347,8 +725,19 @@ class EventCarbonCalculator:
     def _add_enhanced_usda_metadata(self, result: Dict[str, Any], event, crop_name: str = "default") -> Dict[str, Any]:
         """Add enhanced USDA metadata to calculation results"""
         start_time = time.time()
+        country = getattr(settings, "TRAZO_OPERATING_COUNTRY", "US")
 
         try:
+            if country != "US":
+                # Non-US: skip NASS and USDA metadata entirely
+                result["nass_adjustment"] = {"applied": False, "reason": f"Not applicable for {country}"}
+                result["regional_factors"] = {}
+                result["usda_factors_based"] = False
+                result["verification_status"] = "factors_verified"
+                result["confidence_score"] = self._calculate_confidence_score(event, result)
+                result["calculation_time_ms"] = int((time.time() - start_time) * 1000)
+                return result
+
             state, county = self._get_establishment_location(event)
 
             # Get enhanced metadata
@@ -392,9 +781,24 @@ class EventCarbonCalculator:
                 "county": county,
             }
 
-            # Get regional factors used
+            # Get regional factors and apply NASS yield-based efficiency adjustment
             regional_factors = self._get_real_time_usda_factors(crop_name, state)
             result["regional_factors"] = regional_factors
+
+            original_co2e = result.get("co2e", 0)
+            if regional_factors.get("real_time") and regional_factors.get("benchmark_yield") and original_co2e > 0:
+                benchmark_yield = regional_factors["benchmark_yield"]
+                efficiency_factor = min(benchmark_yield / 150, 1.2) if benchmark_yield > 0 else 1.0
+                result["co2e"] = round(original_co2e / efficiency_factor, 3)
+                result["nass_adjustment"] = {
+                    "applied": True,
+                    "co2e_original": original_co2e,
+                    "co2e_adjusted": result["co2e"],
+                    "efficiency_factor": round(efficiency_factor, 4),
+                    "benchmark_yield": benchmark_yield,
+                }
+            else:
+                result["nass_adjustment"] = {"applied": False, "reason": "No real-time NASS data available"}
 
             calculation_time = int((time.time() - start_time) * 1000)  # Convert to milliseconds
             result["calculation_time_ms"] = calculation_time
@@ -457,9 +861,31 @@ class EventCarbonCalculator:
         Calculate carbon impact of chemical application events using EPA/USDA verified emission factors.
         ENHANCED: Uses only credible, government-sourced data for transparency.
         Includes both manufacturing and application emissions.
+
+        Sprint 5: Added support for aggregate events (multiple applications logged as one summary).
         """
         try:
             from .verified_emission_factors import VerifiedEmissionFactors
+
+            # Sprint 5: Check for aggregate events first
+            # Aggregate events have pre-calculated totals in extra_data
+            if self._is_aggregate_event(event):
+                extra_data = self._get_aggregate_extra_data(event)
+                chemical_type = getattr(event, "type", None) or extra_data.get("chemical_type", "FE")
+
+                # Route to appropriate aggregate calculator based on chemical type
+                if chemical_type == "FE":  # Fertilizer
+                    logger.info(f"Processing aggregate fertilizer event {event.id}")
+                    return self._calculate_aggregate_fertilizer_impact(event, extra_data)
+                elif chemical_type == "FU":  # Fungicide
+                    logger.info(f"Processing aggregate fungicide event {event.id}")
+                    return self._calculate_aggregate_fungicide_impact(event, extra_data)
+                elif chemical_type == "PE":  # Pesticide
+                    logger.info(f"Processing aggregate pesticide event {event.id}")
+                    return self._calculate_aggregate_pesticide_impact(event, extra_data)
+                else:
+                    logger.warning(f"Unknown aggregate chemical type: {chemical_type}, using fertilizer calculator")
+                    return self._calculate_aggregate_fertilizer_impact(event, extra_data)
 
             # Extract chemical data from event
             chemical_data = self._extract_chemical_event_data(event)
@@ -478,6 +904,11 @@ class EventCarbonCalculator:
             application_fuel_consumed = chemical_data.get("application_fuel_consumed", None)
             application_fuel_unit = chemical_data.get("application_fuel_unit", "L")
 
+            # Extract concentration for pesticides/herbicides/fungicides (ADDED 2025-12-24)
+            # FIX: Without concentration, the calculation assumes 100% active ingredient
+            # which vastly overestimates manufacturing emissions (e.g., 109 kg vs 10.9 kg)
+            concentration = chemical_data.get("concentration")
+
             # Use EPA/USDA verified emission factors for chemical calculations
             # ENHANCED 2025-01-21: Pass chemical_subtype for explicit emission factor selection.
             # Takes precedence over keyword detection from product_name.
@@ -485,6 +916,8 @@ class EventCarbonCalculator:
             #           organic_pesticide, biological_pesticide, organic_fertilizer, slow_release_fertilizer
             # ENHANCED 2025-12-11: Pass application fuel parameters for accurate fuel emission tracking.
             # Enables tracking of actual fuel consumed by application equipment (electric, diesel, etc.)
+            # ENHANCED 2025-12-24: Pass concentration for accurate active ingredient calculation.
+            # Ensures preview and dashboard show consistent manufacturing emissions.
             calculation_result = VerifiedEmissionFactors.calculate_chemical_application_emissions(
                 chemical_type=chemical_type,
                 volume_liters=volume_liters,
@@ -496,6 +929,7 @@ class EventCarbonCalculator:
                 application_fuel_type=application_fuel_type,
                 application_fuel_consumed=application_fuel_consumed,
                 application_fuel_unit=application_fuel_unit,
+                concentration=concentration,
             )
 
             base_emissions = calculation_result["co2e_kg"]
@@ -616,6 +1050,20 @@ class EventCarbonCalculator:
             application_fuel_consumed = getattr(event, "application_fuel_consumed", None)
             application_fuel_unit = getattr(event, "application_fuel_unit", "L") or "L"
 
+            # FIX (2025-12-24): Extract concentration for pesticides/herbicides/fungicides
+            # Without this, the calculation assumes 100% active ingredient which vastly overestimates emissions
+            # Concentration is stored as a string percentage (e.g., "2.5" for 2.5%)
+            concentration_raw = getattr(event, "concentration", None)
+            concentration = None
+            if concentration_raw and chemical_type != "FE":  # Only for non-fertilizers
+                try:
+                    # Handle both "2.5" and "2.5%" formats
+                    conc_str = str(concentration_raw).replace("%", "").strip()
+                    if conc_str and "-" not in conc_str:  # Skip NPK format like "10-10-10"
+                        concentration = float(conc_str)
+                except (ValueError, TypeError):
+                    concentration = None
+
             return {
                 "chemical_type": chemical_type,
                 "crop_name": crop_name,
@@ -628,6 +1076,7 @@ class EventCarbonCalculator:
                 "application_fuel_type": application_fuel_type,
                 "application_fuel_consumed": application_fuel_consumed,
                 "application_fuel_unit": application_fuel_unit,
+                "concentration": concentration,  # FIX: Add concentration for accurate AI calculation
             }
 
         except Exception as e:
@@ -725,7 +1174,36 @@ class EventCarbonCalculator:
 
             if event.type == "IR":  # Irrigation
                 # Use EPA electricity factors for irrigation pumps
-                water_volume_gallons = production_data.get("water_volume_gallons")
+                water_volume_gallons = None
+
+                # Sprint 4: Check for aggregate irrigation water_volume_total first
+                # This enables accurate carbon calculation for irrigation summaries
+                # (e.g., "12 irrigations in May totaling 50,000 gallons")
+                if hasattr(event, "water_volume_total") and event.water_volume_total:
+                    water_volume_total = float(event.water_volume_total)
+                    water_unit = getattr(event, "water_volume_unit", "gallons")
+
+                    # Convert to gallons based on unit
+                    if water_unit == "gallons":
+                        water_volume_gallons = water_volume_total
+                    elif water_unit == "liters":
+                        water_volume_gallons = water_volume_total * 0.264172  # L to gal
+                    elif water_unit == "acre_feet":
+                        water_volume_gallons = water_volume_total * 325851  # acre-ft to gal
+                    elif water_unit == "cubic_meters":
+                        water_volume_gallons = water_volume_total * 264.172  # m³ to gal
+                    else:
+                        water_volume_gallons = water_volume_total  # Assume gallons
+
+                    logger.info(
+                        f"Using aggregate water_volume_total: {water_volume_total} {water_unit} "
+                        f"= {water_volume_gallons:.0f} gallons"
+                    )
+
+                # Fall back to production_data or estimation
+                if not water_volume_gallons:
+                    water_volume_gallons = production_data.get("water_volume_gallons")
+
                 if not water_volume_gallons:
                     # ENHANCED: USDA-sourced irrigation water estimates
                     # USDA NASS 2023: Average 1.5 acre-feet/acre/season = ~489,000 gal/acre/season
@@ -745,11 +1223,17 @@ class EventCarbonCalculator:
 
             elif event.type in ["HA", "PL", "GE", "PR", "IR"]:  # Harvesting, Planting, General, Pruning, Irrigation
                 # Use EPA/USDA production emission factors
+                # Extract fuel_type and energy_source from event object for electric equipment support
+                fuel_type = getattr(event, "fuel_type", "diesel")  # Default to diesel if not specified
+                energy_source = getattr(event, "energy_source", "grid")  # Default to grid if not specified
+
                 calculation_result = VerifiedEmissionFactors.calculate_production_event_emissions(
                     production_type=production_type,
                     area_covered=area_covered,
                     fuel_consumed=fuel_consumed,
                     equipment_hours=equipment_hours,
+                    fuel_type=fuel_type,
+                    energy_source=energy_source,
                 )
 
                 base_emissions = calculation_result["co2e_kg"]
@@ -760,11 +1244,17 @@ class EventCarbonCalculator:
 
             else:
                 # Fallback for unknown production types
+                # Extract fuel_type and energy_source from event object for electric equipment support
+                fuel_type = getattr(event, "fuel_type", "diesel")  # Default to diesel if not specified
+                energy_source = getattr(event, "energy_source", "grid")  # Default to grid if not specified
+
                 calculation_result = VerifiedEmissionFactors.calculate_production_event_emissions(
                     production_type="general production",
                     area_covered=area_covered,
                     fuel_consumed=fuel_consumed,
                     equipment_hours=equipment_hours,
+                    fuel_type=fuel_type,
+                    energy_source=energy_source,
                 )
 
                 base_emissions = calculation_result["co2e_kg"]
@@ -773,11 +1263,11 @@ class EventCarbonCalculator:
                 breakdown = calculation_result["breakdown"]
                 limitations = calculation_result.get("limitations", "")
 
-            # Apply crop-specific area if available
-            area_modifier = self._get_crop_area_modifier(event)
-            if area_modifier != 1.0:
-                base_emissions *= area_modifier
-                breakdown["crop_area_modifier"] = area_modifier
+            # NOTE: Crop-specific modifiers REMOVED (2025-12-21)
+            # Research showed arbitrary modifiers (1.3x avocado, 0.8x lettuce) lacked scientific basis.
+            # Actual crop differences are already captured through measured fuel/fertilizer/energy usage.
+            # See: PMC 2024 Avocado LCA, California Almond/Walnut LCA studies.
+            # Trazo's "Direct Operational Emissions" philosophy: measure actual inputs, don't apply arbitrary multipliers.
 
             # Generate EPA-based recommendations
             recommendations = self._generate_epa_production_recommendations(event, base_emissions, calculation_method)
@@ -1342,9 +1832,7 @@ class EventCarbonCalculator:
                 tillage_depth_category = self._detect_tillage_depth(event)
 
                 # Get research-based soil CO₂ flux factor
-                soil_flux_factor_data = EmissionFactorsRegistry.get_tillage_soil_flux_factor(
-                    tillage_depth_category
-                )
+                soil_flux_factor_data = EmissionFactorsRegistry.get_tillage_soil_flux_factor(tillage_depth_category)
                 soil_flux_factor = soil_flux_factor_data["value"]  # kg CO₂e per hectare
 
                 # Calculate soil CO₂ flux emissions
@@ -1654,10 +2142,104 @@ class EventCarbonCalculator:
     def calculate_pest_management_event_impact(self, event) -> Dict[str, Any]:
         """
         Calculate carbon impact of pest management events (IPM practices)
+
+        Sprint 5: Added support for aggregate pest scouting events (multiple trips logged as one summary).
+        Sprint 3 Epic 3.1: Enhanced to use fuel/equipment fields for accurate carbon calculations.
         """
         try:
-            base_emissions = 0.0
+            # Sprint 5: Check for aggregate events first
+            # Aggregate scouting events have pre-calculated totals in extra_data
+            if self._is_aggregate_event(event):
+                extra_data = self._get_aggregate_extra_data(event)
+                pest_type = getattr(event, "type", None) or extra_data.get("pest_type", "SC")
 
+                # Currently only scouting (SC) supports aggregation
+                if pest_type == "SC":  # Scouting
+                    logger.info(f"Processing aggregate pest scouting event {event.id}")
+                    return self._calculate_aggregate_pest_scouting_impact(event, extra_data)
+                else:
+                    # For other pest management types, log warning and fall through to regular calculation
+                    logger.warning(
+                        f"Aggregate pest management type {pest_type} not supported, using regular calculation"
+                    )
+
+            # Sprint 3 Epic 3.1: Enhanced fuel/equipment calculation
+            fuel_emissions = 0.0
+            base_emissions = 0.0
+            confidence_score = 75.0
+            calculation_method = "integrated_pest_management_estimation"
+            data_source = "Industry Standards"
+            verification_status = "estimated"
+
+            # Extract fuel/equipment fields (Sprint 3 Epic 3.1)
+            fuel_consumed_raw = getattr(event, "fuel_consumed", None)
+            fuel_type = getattr(event, "fuel_type", "diesel") or "diesel"
+            fuel_unit = getattr(event, "fuel_unit", "L") or "L"
+            equipment_hours_raw = getattr(event, "equipment_hours", None)
+            production_efficiency = getattr(event, "production_efficiency", "normal") or "normal"
+            area_covered_raw = getattr(event, "area_covered", None)
+            area_unit = getattr(event, "area_unit", "ha") or "ha"
+
+            # Convert string values to float for calculations
+            fuel_consumed = None
+            if fuel_consumed_raw:
+                try:
+                    fuel_consumed = float(fuel_consumed_raw)
+                except (ValueError, TypeError):
+                    fuel_consumed = None
+
+            equipment_hours = None
+            if equipment_hours_raw:
+                try:
+                    equipment_hours = float(equipment_hours_raw)
+                except (ValueError, TypeError):
+                    equipment_hours = None
+
+            area_covered = None
+            if area_covered_raw:
+                try:
+                    area_covered = float(area_covered_raw)
+                except (ValueError, TypeError):
+                    area_covered = None
+
+            # Calculate fuel emissions if fuel data provided
+            if fuel_consumed and fuel_consumed > 0:
+                if fuel_type == "electric":
+                    # EPA eGRID 2023: 0.39 kg CO2e per kWh
+                    fuel_emissions = fuel_consumed * 0.39
+                    calculation_method = "epa_egrid_electricity"
+                    data_source = "EPA eGRID 2023"
+                    logger.info(
+                        f"Pest Management electric calculation: {fuel_consumed} {fuel_unit} × 0.39 = {fuel_emissions:.2f} kg CO2e"
+                    )
+                else:
+                    # Convert to gallons for EPA calculation
+                    if fuel_unit == "L":
+                        fuel_gallons = float(fuel_consumed) / 3.78541
+                    else:  # already in gallons
+                        fuel_gallons = float(fuel_consumed)
+
+                    # EPA diesel factor: 10.21 kg CO2e per gallon (EPA GHG Hub)
+                    # Apply fuel-specific factors
+                    fuel_factors = {
+                        "diesel": 10.21,
+                        "gasoline": 8.89,
+                        "natural_gas": 5.31,
+                        "lpg": 6.41,
+                    }
+                    emission_factor = fuel_factors.get(fuel_type, 10.21)
+                    fuel_emissions = fuel_gallons * emission_factor
+
+                    calculation_method = "epa_fuel_combustion"
+                    data_source = "EPA GHG Emission Factors Hub (40 CFR Part 98)"
+                    logger.info(
+                        f"Pest Management fuel calculation: {fuel_consumed} {fuel_unit} = {fuel_gallons:.2f} gal × {emission_factor} = {fuel_emissions:.2f} kg CO2e"
+                    )
+
+                confidence_score = 90.0  # High confidence with fuel data
+                verification_status = "epa_verified"
+
+            # Calculate base emissions based on pest management type
             if event.type == "BR":  # Beneficial Release
                 # Beneficial insect releases reduce need for chemical pesticides
                 base_emissions = -0.5  # Small negative impact (avoided chemicals)
@@ -1674,17 +2256,41 @@ class EventCarbonCalculator:
                 # IPM typically reduces chemical use
                 base_emissions = -1.0  # Avoided chemical applications
 
-            recommendations = self._generate_pest_recommendations(event, base_emissions)
+            # Total emissions = base + fuel
+            total_emissions = base_emissions + fuel_emissions
+
+            # Apply efficiency modifier (Sprint 3 Epic 3.1)
+            efficiency_modifier = 1.0
+            if production_efficiency == "high":
+                efficiency_modifier = 0.85  # 15% reduction for high efficiency
+                confidence_score = min(95.0, confidence_score + 5)
+            elif production_efficiency == "low":
+                efficiency_modifier = 1.15  # 15% increase for low efficiency
+                confidence_score = max(60.0, confidence_score - 10)
+
+            total_emissions = total_emissions * efficiency_modifier
+
+            recommendations = self._generate_pest_recommendations(event, total_emissions)
 
             result = {
-                "co2e": round(base_emissions, 3),
-                "efficiency_score": 75.0,
-                "calculation_method": "integrated_pest_management_estimation",
-                "data_source": "Industry Standards",
-                "verification_status": "estimated",
+                "co2e": round(total_emissions, 3),
+                "efficiency_score": confidence_score,
+                "calculation_method": calculation_method,
+                "data_source": data_source,
+                "verification_status": verification_status,
                 "breakdown": {
+                    "pest_activity": event.type,
                     "pest_management_type": event.type,
-                    "estimated_impact": base_emissions,
+                    "base_emissions": round(base_emissions, 3),
+                    "fuel_emissions": round(fuel_emissions, 3),
+                    "fuel_consumed": fuel_consumed,
+                    "fuel_unit": fuel_unit,
+                    "fuel_type": fuel_type,
+                    "equipment_hours": equipment_hours,
+                    "area_covered": area_covered,
+                    "area_unit": area_unit,
+                    "production_efficiency": production_efficiency,
+                    "efficiency_modifier": efficiency_modifier,
                 },
                 "recommendations": recommendations,
             }
@@ -1692,6 +2298,7 @@ class EventCarbonCalculator:
             return self._add_enhanced_usda_metadata(result, event)
 
         except Exception as e:
+            logger.error(f"Error calculating pest management impact: {e}")
             return {
                 "co2e": 0.0,
                 "efficiency_score": 75.0,
@@ -1820,7 +2427,7 @@ class EventCarbonCalculator:
                     if hasattr(event, "date") and event.date
                     else timezone.now().year
                 ),
-                description=f"Auto-calculated from {event.__class__.__name__} event: {calculation_result.get('calculation_method', 'unknown')}",
+                description=f"Auto-calculated from {event.__class__.__name__}(ID={event.id}) event: {calculation_result.get('calculation_method', 'unknown')}",
                 explanation_text=f"This carbon {'emission' if calculation_result.get('co2e', 0) > 0 else 'offset'} was automatically calculated from farm event data using USDA emission factors. Amount: {abs(calculation_result.get('co2e', 0)):.2f} kg CO2e from {event.__class__.__name__.lower().replace('event', '')} activity.",
                 usda_factors_based=calculation_result.get("usda_factors_based", False),
                 verification_status=calculation_result.get("verification_status", "estimated"),
@@ -2157,24 +2764,11 @@ class EventCarbonCalculator:
             logger.warning(f"Error converting volume to gallons: {e}")
             return 1000
 
-    def _get_crop_area_modifier(self, event) -> float:
-        """Get crop-specific area modifier for production calculations"""
-        try:
-            if hasattr(event, "history") and event.history and hasattr(event.history, "product"):
-                crop_name = event.history.product.name.lower()
-
-                # High-intensity crops require more resources per acre
-                if any(crop in crop_name for crop in ["avocado", "almond", "walnut"]):
-                    return 1.3  # 30% higher resource intensity
-                elif any(crop in crop_name for crop in ["strawberry", "tomato", "pepper"]):
-                    return 1.2  # 20% higher resource intensity
-                elif any(crop in crop_name for crop in ["herb", "lettuce", "spinach"]):
-                    return 0.8  # 20% lower resource intensity
-
-            return 1.0  # No modifier
-
-        except Exception as e:
-            return 1.0
+    # NOTE: _get_crop_area_modifier REMOVED (2025-12-21)
+    # Research showed arbitrary crop modifiers (1.3x avocado, 0.8x lettuce) lacked scientific basis.
+    # Peer-reviewed LCA studies show avocado (0.38-0.91 kg CO₂e/kg) is similar to lettuce (0.46 kg).
+    # Almond vs walnut only differs by ~5%, not 30%. Trazo's "Direct Operational Emissions" philosophy:
+    # actual crop differences are captured through measured fuel/fertilizer/energy usage, not arbitrary multipliers.
 
     def _generate_epa_production_recommendations(self, event, emissions: float, calculation_method: str) -> list:
         """Generate EPA-based recommendations for production events"""
@@ -2470,14 +3064,22 @@ class EventCarbonCalculator:
     def _convert_area_to_hectares(self, area_str: str, event=None, crop_name: str = "default") -> float:
         """Convert area string to hectares with intelligent defaults for missing data"""
         try:
+            # SPRINT 6 FIX (2025-12-26): Handle numeric types (Decimal, int, float) directly
+            # SoilManagementEvent stores area_covered as Decimal, not string
+            from decimal import Decimal
+
+            if isinstance(area_str, (int, float, Decimal)):
+                # Direct numeric value - assume hectares (check area_unit if needed)
+                return float(area_str) if area_str else 1.0
+
             # Check if area is missing or "Unknown"
-            if not area_str or area_str.lower() in ["unknown", "n/a", "na", "none", "null"]:
+            if not area_str or str(area_str).lower() in ["unknown", "n/a", "na", "none", "null"]:
                 if event:
                     defaults = self._get_intelligent_defaults(event, crop_name)
                     return defaults["area"]
                 return 1.0  # Fallback default
 
-            area_str = area_str.lower()
+            area_str = str(area_str).lower()
             number = self._extract_numeric_value(area_str)
 
             # If extraction failed, use intelligent defaults
@@ -2541,9 +3143,7 @@ class EventCarbonCalculator:
             elif "lb" in amount_str or "pound" in amount_str:
                 # Pounds to kg
                 return numeric_value * 0.453592
-            elif "kg" in amount_str or not any(
-                unit in amount_str for unit in ["ton", "lb", "pound", "t/ha"]
-            ):
+            elif "kg" in amount_str or not any(unit in amount_str for unit in ["ton", "lb", "pound", "t/ha"]):
                 # Already in kg or no unit specified (assume kg)
                 return numeric_value
             else:

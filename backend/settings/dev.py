@@ -305,8 +305,7 @@ BASE_CONSUMER_URL = "http://consumer.localhost:3000/"
 
 # USDA API Configuration - Use environment variables for security
 USDA_NASS_API_KEY = os.environ.get("USDA_NASS_API_KEY", None)
-USDA_ERS_API_KEY = os.environ.get("USDA_ERS_API_KEY", None)
-USDA_FOODDATA_API_KEY = os.environ.get("USDA_FOODDATA_API_KEY", None)
+TRAZO_OPERATING_COUNTRY = os.environ.get("TRAZO_OPERATING_COUNTRY", "US")
 
 # API Attribution (required by NASS Terms of Service)
 USDA_API_ATTRIBUTION = "This product uses the NASS API but is not endorsed or certified by NASS."

@@ -25,7 +25,6 @@ def apply_secure_settings(settings_dict):
     SECURE_SETTINGS_MAP = {
         "BLOCKCHAIN_PRIVATE_KEY": ("blockchain_private_key", "BLOCKCHAIN_PRIVATE_KEY"),
         "USDA_API_KEY": ("usda_api_key", "USDA_API_KEY"),
-        "USDA_FDC_API_KEY": ("usda_fdc_api_key", "USDA_FDC_API_KEY"),
         "USDA_NASS_API_KEY": ("usda_nass_api_key", "USDA_NASS_API_KEY"),
         "STRIPE_SECRET_KEY": ("stripe_secret_key", "STRIPE_SECRET_KEY"),
         "STRIPE_WEBHOOK_SECRET": ("stripe_webhook_secret", "STRIPE_WEBHOOK_SECRET"),
@@ -80,7 +79,6 @@ def get_usda_config():
     """
     return {
         "api_key": get_secure_key("usda_api_key", "USDA_API_KEY"),
-        "fdc_api_key": get_secure_key("usda_fdc_api_key", "USDA_FDC_API_KEY"),
         "nass_api_key": get_secure_key("usda_nass_api_key", "USDA_NASS_API_KEY"),
     }
 

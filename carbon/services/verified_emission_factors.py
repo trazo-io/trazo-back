@@ -19,9 +19,14 @@ Primary Data Sources:
 - USDA NRCS: Irrigation pumping energy guidelines
 """
 
+import logging
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, Dict, Optional
+
+from django.conf import settings
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -86,6 +91,92 @@ class VerifiedEmissionFactors:
             notes="US average electricity emission factor for delivered electricity. eGRID 2023: 767.2 lbs CO2/MWh at generator, plus 5.12% T&D losses = ~0.39 kg CO2/kWh delivered",
         )
     }
+
+    # COUNTRY-SPECIFIC ELECTRICITY EMISSION FACTORS
+    # Each country's grid operator provides annual emission intensity data.
+    COUNTRY_ELECTRICITY_FACTORS = {
+        "US": EmissionFactor(
+            value=0.39,
+            unit="kg_CO2_per_kWh",
+            source="EPA eGRID2023 (767.2 lbs/MWh + 5.12% T&D losses)",
+            confidence_level=0.95,
+            last_updated="2025-12-03",
+            notes="US average delivered electricity",
+        ),
+        "UY": EmissionFactor(
+            value=0.04,
+            unit="kg_CO2_per_kWh",
+            source="ADME Uruguay 2023 (~97% renewable grid)",
+            confidence_level=0.90,
+            last_updated="2025-06-01",
+            notes="Uruguay grid is predominantly wind + hydro",
+        ),
+        "AR": EmissionFactor(
+            value=0.35,
+            unit="kg_CO2_per_kWh",
+            source="CAMMESA Argentina 2023",
+            confidence_level=0.85,
+            last_updated="2025-06-01",
+            notes="Argentina mix of thermal + hydro + nuclear",
+        ),
+        "BR": EmissionFactor(
+            value=0.07,
+            unit="kg_CO2_per_kWh",
+            source="ONS Brazil 2023 (~80% hydro)",
+            confidence_level=0.90,
+            last_updated="2025-06-01",
+            notes="Brazil grid dominated by hydroelectric",
+        ),
+        "CL": EmissionFactor(
+            value=0.31,
+            unit="kg_CO2_per_kWh",
+            source="CEN Chile 2023",
+            confidence_level=0.85,
+            last_updated="2025-06-01",
+            notes="Chile transitioning to solar + wind",
+        ),
+        "CO": EmissionFactor(
+            value=0.13,
+            unit="kg_CO2_per_kWh",
+            source="XM Colombia 2023 (~70% hydro)",
+            confidence_level=0.85,
+            last_updated="2025-06-01",
+            notes="Colombia grid largely hydroelectric",
+        ),
+        "MX": EmissionFactor(
+            value=0.42,
+            unit="kg_CO2_per_kWh",
+            source="CENACE Mexico 2023",
+            confidence_level=0.85,
+            last_updated="2025-06-01",
+            notes="Mexico grid mix of gas, oil, hydro, wind",
+        ),
+        "PE": EmissionFactor(
+            value=0.19,
+            unit="kg_CO2_per_kWh",
+            source="COES Peru 2023 (~60% hydro)",
+            confidence_level=0.85,
+            last_updated="2025-06-01",
+            notes="Peru grid predominantly hydroelectric",
+        ),
+    }
+
+    @classmethod
+    def get_country_electricity_factor(cls, country_code=None):
+        """
+        Return the EmissionFactor for the operating country's electricity grid.
+        Falls back to US average with a warning if country is not mapped.
+        """
+        if country_code is None:
+            country_code = getattr(settings, "TRAZO_OPERATING_COUNTRY", "US")
+        factor = cls.COUNTRY_ELECTRICITY_FACTORS.get(country_code)
+        if factor is None:
+            logger.warning(
+                "No electricity factor for country '%s'; falling back to US average (0.39 kg CO2/kWh)",
+                country_code,
+            )
+            factor = cls.COUNTRY_ELECTRICITY_FACTORS["US"]
+        return factor
 
     # EPA VERIFIED CHEMICAL EMISSION FACTORS
     EPA_CHEMICAL_FACTORS = {
@@ -449,7 +540,7 @@ class VerifiedEmissionFactors:
 
         elif protection_method == "wind_machines":
             # Use EPA electricity emission factor
-            electricity_factor = cls.EPA_ELECTRICITY_FACTORS["electricity_us_avg"]
+            electricity_factor = cls.get_country_electricity_factor()
             equipment_consumption = cls.EQUIPMENT_CONSUMPTION["wind_machine"]
 
             # Calculate electricity consumption and emissions (ENHANCED - multiple units)
@@ -487,7 +578,7 @@ class VerifiedEmissionFactors:
         """Calculate drought irrigation emissions using verified factors"""
 
         # Use USDA NRCS irrigation pump efficiency data
-        electricity_factor = cls.EPA_ELECTRICITY_FACTORS["electricity_us_avg"]
+        electricity_factor = cls.get_country_electricity_factor()
         pump_consumption = cls.EQUIPMENT_CONSUMPTION["irrigation_pump"]
 
         # Calculate electricity consumption for pumping
@@ -649,10 +740,36 @@ class VerifiedEmissionFactors:
         if production_type_code in PRODUCTION_TYPE_MAPPING:
             calc_method = PRODUCTION_TYPE_MAPPING[production_type_code]
 
-            # Special handling for irrigation which needs water_volume_gallons
+            # Special handling for irrigation which can use diesel or electric pumps
+            # SPRINT 6 FIX (2025-12-25): Support diesel-powered irrigation pumps
             if production_type_code == "IR":
-                water_gallons = kwargs.get("water_volume_gallons", area_covered * 1000)
-                return calc_method(water_gallons)
+                fuel_type = kwargs.get("fuel_type", "electric")  # Default to electric for irrigation
+                energy_source = kwargs.get("energy_source", "grid")
+
+                # If farmer provides diesel fuel consumption, use direct diesel calculation
+                if fuel_consumed and fuel_type == "diesel":
+                    diesel_factor = cls.EPA_DIESEL_FACTORS["agricultural_equipment"]
+                    co2e_kg = float(fuel_consumed) * diesel_factor.value
+                    breakdown = {
+                        "production_activity": "irrigation",
+                        "fuel_type": "diesel",
+                        "actual_fuel_consumed_gallons": float(fuel_consumed),
+                        "diesel_emission_factor_kg_per_gallon": diesel_factor.value,
+                        "calculation_basis": "actual_diesel_consumption",
+                        "confidence_level": diesel_factor.confidence_level,
+                        "note": "Diesel-powered irrigation pump - actual fuel consumption provided",
+                    }
+                    return {
+                        "co2e_kg": round(co2e_kg, 3),
+                        "calculation_method": "verified_epa_diesel_irrigation",
+                        "breakdown": breakdown,
+                        "data_sources": [diesel_factor.source],
+                        "limitations": "Diesel-powered irrigation is less common but used for mobile/remote systems",
+                    }
+                else:
+                    # Use electric pump calculation based on water volume
+                    water_gallons = kwargs.get("water_volume_gallons", area_covered * 1000)
+                    return calc_method(water_gallons)
             else:
                 return calc_method(area_covered, fuel_consumed, equipment_hours, **kwargs)
         else:
@@ -666,7 +783,7 @@ class VerifiedEmissionFactors:
         """Calculate harvesting emissions using USDA factors - supports diesel and electric equipment"""
 
         diesel_factor = cls.EPA_DIESEL_FACTORS["agricultural_equipment"]
-        electricity_factor = cls.EPA_ELECTRICITY_FACTORS["electricity_us_avg"]
+        electricity_factor = cls.get_country_electricity_factor()
         harvesting_factor = cls.PRODUCTION_FACTORS["harvesting_diesel"]
 
         # Convert Decimal types to float to prevent type errors in calculations
@@ -713,7 +830,9 @@ class VerifiedEmissionFactors:
             "area_covered_hectares": area_covered * 0.404686,
             "fuel_type": fuel_type,
             "calculation_basis": calculation_basis,
-            "confidence_level": electricity_factor.confidence_level if fuel_type == "electric" else diesel_factor.confidence_level,
+            "confidence_level": (
+                electricity_factor.confidence_level if fuel_type == "electric" else diesel_factor.confidence_level
+            ),
         }
 
         # Add fuel-type specific breakdown information
@@ -745,7 +864,10 @@ class VerifiedEmissionFactors:
             "co2e_kg": round(validated_result["co2e_kg"], 3),
             "calculation_method": "verified_epa_usda_factors_with_electric_support",
             "breakdown": validated_result["breakdown"],
-            "data_sources": [diesel_factor.source if fuel_type != "electric" else electricity_factor.source, harvesting_factor.source],
+            "data_sources": [
+                diesel_factor.source if fuel_type != "electric" else electricity_factor.source,
+                harvesting_factor.source,
+            ],
             "limitations": validated_result.get("limitations", harvesting_factor.notes),
             "validation_warnings": validated_result.get("warnings", []),
         }
@@ -757,7 +879,7 @@ class VerifiedEmissionFactors:
         """Calculate planting emissions using USDA factors - supports diesel and electric equipment"""
 
         diesel_factor = cls.EPA_DIESEL_FACTORS["agricultural_equipment"]
-        electricity_factor = cls.EPA_ELECTRICITY_FACTORS["electricity_us_avg"]
+        electricity_factor = cls.get_country_electricity_factor()
         planting_factor = cls.PRODUCTION_FACTORS["planting_diesel"]
 
         # Convert Decimal types to float to prevent type errors in calculations
@@ -804,7 +926,9 @@ class VerifiedEmissionFactors:
             "area_covered_hectares": area_covered * 0.404686,
             "fuel_type": fuel_type,
             "calculation_basis": calculation_basis,
-            "confidence_level": electricity_factor.confidence_level if fuel_type == "electric" else diesel_factor.confidence_level,
+            "confidence_level": (
+                electricity_factor.confidence_level if fuel_type == "electric" else diesel_factor.confidence_level
+            ),
         }
 
         # Add fuel-type specific breakdown information
@@ -836,7 +960,10 @@ class VerifiedEmissionFactors:
             "co2e_kg": round(validated_result["co2e_kg"], 3),
             "calculation_method": "verified_epa_usda_factors_with_electric_support",
             "breakdown": validated_result["breakdown"],
-            "data_sources": [diesel_factor.source if fuel_type != "electric" else electricity_factor.source, planting_factor.source],
+            "data_sources": [
+                diesel_factor.source if fuel_type != "electric" else electricity_factor.source,
+                planting_factor.source,
+            ],
             "limitations": validated_result.get("limitations", planting_factor.notes),
             "validation_warnings": validated_result.get("warnings", []),
         }
@@ -848,7 +975,7 @@ class VerifiedEmissionFactors:
         """Calculate transplanting emissions using USDA factors - higher than planting due to careful handling, supports diesel and electric equipment"""
 
         diesel_factor = cls.EPA_DIESEL_FACTORS["agricultural_equipment"]
-        electricity_factor = cls.EPA_ELECTRICITY_FACTORS["electricity_us_avg"]
+        electricity_factor = cls.get_country_electricity_factor()
         transplanting_factor = cls.PRODUCTION_FACTORS["transplanting_diesel"]
 
         # Convert Decimal types to float to prevent type errors in calculations
@@ -877,6 +1004,9 @@ class VerifiedEmissionFactors:
                 co2e_kg = fuel_consumed * diesel_factor.value
                 calculation_basis = "actual_diesel_consumption"
                 area_hectares = area_covered * 0.404686
+            # SPRINT 6 FIX (2025-12-25): Skip validation for actual fuel consumption
+            # Farmers provide real measured values that should be trusted, not capped
+            skip_validation = True
         else:
             # Use USDA standard consumption per hectare (fixed: removed equipment_hours multiplier)
             # USDA factors are designed for area-based calculations, not time-based
@@ -885,6 +1015,7 @@ class VerifiedEmissionFactors:
             fuel_gallons = area_hectares * transplanting_factor.value
             co2e_kg = fuel_gallons * diesel_factor.value
             calculation_basis = "usda_standard_per_hectare"
+            skip_validation = False
 
         breakdown = {
             "production_activity": "transplanting",
@@ -892,7 +1023,9 @@ class VerifiedEmissionFactors:
             "area_covered_hectares": area_covered * 0.404686,
             "fuel_type": fuel_type,
             "calculation_basis": calculation_basis,
-            "confidence_level": electricity_factor.confidence_level if fuel_type == "electric" else diesel_factor.confidence_level,
+            "confidence_level": (
+                electricity_factor.confidence_level if fuel_type == "electric" else diesel_factor.confidence_level
+            ),
             "note": "Higher emissions than direct planting due to careful plant handling and transport requirements",
         }
 
@@ -915,14 +1048,21 @@ class VerifiedEmissionFactors:
         if equipment_hours:
             breakdown["equipment_hours"] = equipment_hours
 
-        # Add validation for unrealistic results (FIX #2)
-        validated_result = cls._validate_production_emissions(co2e_kg, area_covered, "planting", breakdown)
+        # Add validation for unrealistic results - only for USDA estimates, not actual fuel data
+        # SPRINT 6 FIX (2025-12-25): Skip validation when farmer provides actual fuel consumption
+        if skip_validation:
+            validated_result = {"co2e_kg": co2e_kg, "breakdown": breakdown, "warnings": [], "limitations": []}
+        else:
+            validated_result = cls._validate_production_emissions(co2e_kg, area_covered, "transplanting", breakdown)
 
         return {
             "co2e_kg": round(validated_result["co2e_kg"], 3),
             "calculation_method": "verified_epa_usda_factors_with_electric_support",
             "breakdown": validated_result["breakdown"],
-            "data_sources": [diesel_factor.source if fuel_type != "electric" else electricity_factor.source, transplanting_factor.source],
+            "data_sources": [
+                diesel_factor.source if fuel_type != "electric" else electricity_factor.source,
+                transplanting_factor.source,
+            ],
             "limitations": validated_result.get("limitations", transplanting_factor.notes),
             "validation_warnings": validated_result.get("warnings", []),
         }
@@ -934,7 +1074,7 @@ class VerifiedEmissionFactors:
         """Calculate general production emissions using USDA factors - supports diesel and electric equipment"""
 
         diesel_factor = cls.EPA_DIESEL_FACTORS["agricultural_equipment"]
-        electricity_factor = cls.EPA_ELECTRICITY_FACTORS["electricity_us_avg"]
+        electricity_factor = cls.get_country_electricity_factor()
         production_factor = cls.PRODUCTION_FACTORS["crop_production_diesel"]
 
         # Convert Decimal types to float to prevent type errors in calculations
@@ -978,7 +1118,9 @@ class VerifiedEmissionFactors:
             "area_covered_hectares": area_covered * 0.404686,
             "fuel_type": fuel_type,
             "calculation_basis": calculation_basis,
-            "confidence_level": electricity_factor.confidence_level if fuel_type == "electric" else diesel_factor.confidence_level,
+            "confidence_level": (
+                electricity_factor.confidence_level if fuel_type == "electric" else diesel_factor.confidence_level
+            ),
         }
 
         # Add fuel-type specific breakdown information
@@ -1001,13 +1143,18 @@ class VerifiedEmissionFactors:
             breakdown["equipment_hours"] = equipment_hours
 
         # Add validation for unrealistic results (FIX #2)
-        validated_result = cls._validate_production_emissions(co2e_kg, area_covered, "general_crop_production", breakdown)
+        validated_result = cls._validate_production_emissions(
+            co2e_kg, area_covered, "general_crop_production", breakdown
+        )
 
         return {
             "co2e_kg": round(validated_result["co2e_kg"], 3),
             "calculation_method": "verified_epa_usda_factors_with_electric_support",
             "breakdown": validated_result["breakdown"],
-            "data_sources": [diesel_factor.source if fuel_type != "electric" else electricity_factor.source, production_factor.source],
+            "data_sources": [
+                diesel_factor.source if fuel_type != "electric" else electricity_factor.source,
+                production_factor.source,
+            ],
             "limitations": validated_result.get("limitations", production_factor.notes),
             "validation_warnings": validated_result.get("warnings", []),
         }
@@ -1019,7 +1166,7 @@ class VerifiedEmissionFactors:
         """Calculate thinning emissions using USDA factors - lightweight manual operation (FIX #3), supports diesel and electric equipment"""
 
         diesel_factor = cls.EPA_DIESEL_FACTORS["agricultural_equipment"]
-        electricity_factor = cls.EPA_ELECTRICITY_FACTORS["electricity_us_avg"]
+        electricity_factor = cls.get_country_electricity_factor()
         thinning_factor = cls.PRODUCTION_FACTORS["thinning_diesel"]  # 0.75 gal/ha (not 2.5)
 
         # Extract fuel_type and energy_source from kwargs
@@ -1058,7 +1205,9 @@ class VerifiedEmissionFactors:
             "area_covered_hectares": area_covered * 0.404686,
             "fuel_type": fuel_type,
             "calculation_basis": calculation_basis,
-            "confidence_level": electricity_factor.confidence_level if fuel_type == "electric" else diesel_factor.confidence_level,
+            "confidence_level": (
+                electricity_factor.confidence_level if fuel_type == "electric" else diesel_factor.confidence_level
+            ),
             "note": "Thinning is primarily manual labor with minimal fuel-intensive equipment",
         }
 
@@ -1088,7 +1237,10 @@ class VerifiedEmissionFactors:
             "co2e_kg": round(validated_result["co2e_kg"], 3),
             "calculation_method": "verified_epa_usda_factors_with_electric_support",
             "breakdown": validated_result["breakdown"],
-            "data_sources": [diesel_factor.source if fuel_type != "electric" else electricity_factor.source, thinning_factor.source],
+            "data_sources": [
+                diesel_factor.source if fuel_type != "electric" else electricity_factor.source,
+                thinning_factor.source,
+            ],
             "limitations": validated_result.get("limitations", thinning_factor.notes),
             "validation_warnings": validated_result.get("warnings", []),
         }
@@ -1100,17 +1252,43 @@ class VerifiedEmissionFactors:
         fuel_consumed: float = None,
         equipment_hours: float = None,
         operation_type: str = "manual",
+        **kwargs,
     ) -> Dict[str, Any]:
-        """Calculate manual operations (pruning) emissions using EPA factors"""
+        """Calculate manual operations (pruning) emissions using EPA factors - supports diesel and electric equipment
+
+        SPRINT 6 FIX (2025-12-25): Added **kwargs to accept fuel_type and energy_source
+        from calculate_production_event_emissions() for electric equipment support.
+        """
+
+        diesel_factor = cls.EPA_DIESEL_FACTORS["agricultural_equipment"]
+        electricity_factor = cls.get_country_electricity_factor()
+
+        # Convert Decimal types to float to prevent type errors in calculations
+        area_covered = float(area_covered)
+
+        # Extract fuel_type and energy_source from kwargs
+        fuel_type = kwargs.get("fuel_type", "diesel")  # Default to diesel for backwards compatibility
+        energy_source = kwargs.get("energy_source", "grid")  # Default to grid for electric
 
         if fuel_consumed:
-            # Use actual fuel consumption with EPA factor
-            diesel_factor = cls.EPA_DIESEL_FACTORS["agricultural_equipment"]
-            co2e_kg = fuel_consumed * diesel_factor.value
-            calculation_basis = "actual_fuel_consumption"
+            # Use actual fuel consumption
+            fuel_consumed = float(fuel_consumed)  # Convert Decimal to float for calculation
+            if fuel_type == "electric":
+                # Electric equipment - fuel_consumed is in kWh
+                if energy_source in ["solar", "wind"]:
+                    # Renewable energy sources have zero emissions
+                    co2e_kg = 0
+                    calculation_basis = "actual_electric_consumption_renewable"
+                else:
+                    # Grid-powered electricity
+                    co2e_kg = fuel_consumed * electricity_factor.value  # 0.39 kg CO₂/kWh
+                    calculation_basis = "actual_electric_consumption_grid"
+            else:
+                # Diesel or other fuel - fuel_consumed is in gallons
+                co2e_kg = fuel_consumed * diesel_factor.value
+                calculation_basis = "actual_diesel_consumption"
         elif equipment_hours:
             # Estimate minimal fuel for manual operations with light equipment
-            diesel_factor = cls.EPA_DIESEL_FACTORS["agricultural_equipment"]
             estimated_fuel = equipment_hours * 0.5  # 0.5 gal/hour for light equipment
             co2e_kg = estimated_fuel * diesel_factor.value
             calculation_basis = "estimated_light_equipment"
@@ -1122,20 +1300,31 @@ class VerifiedEmissionFactors:
         breakdown = {
             "production_activity": operation_type,
             "area_covered_acres": area_covered,
+            "fuel_type": fuel_type,
             "calculation_basis": calculation_basis,
             "confidence_level": 0.75,  # Lower confidence for manual operations
         }
 
+        # Add fuel-type specific breakdown information
         if fuel_consumed:
-            breakdown["actual_fuel_consumed_gallons"] = fuel_consumed
-            breakdown["diesel_emission_factor_kg_per_gallon"] = cls.EPA_DIESEL_FACTORS["agricultural_equipment"].value
+            if fuel_type == "electric":
+                breakdown["electricity_emission_factor_kg_per_kwh"] = electricity_factor.value
+                breakdown["actual_fuel_consumed_kwh"] = fuel_consumed
+                if energy_source in ["solar", "wind"]:
+                    breakdown["energy_source"] = energy_source
+                    breakdown["note"] = f"{energy_source.capitalize()}-powered equipment - zero emissions"
+                else:
+                    breakdown["energy_source"] = "grid"
+            else:
+                breakdown["actual_fuel_consumed_gallons"] = fuel_consumed
+                breakdown["diesel_emission_factor_kg_per_gallon"] = diesel_factor.value
 
         return {
             "co2e_kg": round(co2e_kg, 3),
-            "calculation_method": "verified_epa_usda_factors",
+            "calculation_method": "verified_epa_usda_factors_with_electric_support",
             "breakdown": breakdown,
             "data_sources": (
-                [cls.EPA_DIESEL_FACTORS["agricultural_equipment"].source]
+                [electricity_factor.source if fuel_type == "electric" else diesel_factor.source]
                 if fuel_consumed
                 else ["Manual operation estimate"]
             ),
@@ -1149,7 +1338,7 @@ class VerifiedEmissionFactors:
         """Calculate soil cultivation emissions using USDA factors - high fuel intensity, supports diesel and electric equipment"""
 
         diesel_factor = cls.EPA_DIESEL_FACTORS["agricultural_equipment"]
-        electricity_factor = cls.EPA_ELECTRICITY_FACTORS["electricity_us_avg"]
+        electricity_factor = cls.get_country_electricity_factor()
         cultivation_factor = cls.PRODUCTION_FACTORS["cultivation_diesel"]
 
         # Convert Decimal types to float to prevent type errors in calculations
@@ -1193,7 +1382,9 @@ class VerifiedEmissionFactors:
             "area_covered_hectares": area_covered * 0.404686,
             "fuel_type": fuel_type,
             "calculation_basis": calculation_basis,
-            "confidence_level": electricity_factor.confidence_level if fuel_type == "electric" else diesel_factor.confidence_level,
+            "confidence_level": (
+                electricity_factor.confidence_level if fuel_type == "electric" else diesel_factor.confidence_level
+            ),
         }
 
         # Add fuel-type specific breakdown information
@@ -1222,8 +1413,13 @@ class VerifiedEmissionFactors:
             "co2e_kg": round(validated_result["co2e_kg"], 3),
             "calculation_method": "verified_epa_usda_factors_with_electric_support",
             "breakdown": validated_result["breakdown"],
-            "data_sources": [diesel_factor.source if fuel_type != "electric" else electricity_factor.source, "USDA Agricultural Energy Use - Cultivation Operations"],
-            "limitations": validated_result.get("limitations", "Cultivation fuel use varies significantly with soil conditions and equipment"),
+            "data_sources": [
+                diesel_factor.source if fuel_type != "electric" else electricity_factor.source,
+                "USDA Agricultural Energy Use - Cultivation Operations",
+            ],
+            "limitations": validated_result.get(
+                "limitations", "Cultivation fuel use varies significantly with soil conditions and equipment"
+            ),
             "validation_warnings": validated_result.get("warnings", []),
         }
 
@@ -1296,6 +1492,8 @@ class VerifiedEmissionFactors:
         application_fuel_type: str = "",
         application_fuel_consumed: float = None,
         application_fuel_unit: str = "L",
+        concentration: float = None,
+        organic_approved: str = "",
     ) -> Dict[str, Any]:
         """
         Calculate chemical application emissions using EPA/USDA verified emission factors.
@@ -1314,6 +1512,10 @@ class VerifiedEmissionFactors:
         - Supports electric equipment with kWh units
         - Falls back to estimated fuel consumption if actual consumption not provided
 
+        UPDATED 2025-12-23: Added concentration parameter for accurate active ingredient calculation.
+        - Uses user-entered concentration percentage for pesticides/herbicides/fungicides
+        - Falls back to typical defaults when concentration not provided
+
         Args:
             chemical_type: Type of chemical (herbicide, fungicide, pesticide, etc.)
             volume_liters: Volume applied in liters
@@ -1330,6 +1532,8 @@ class VerifiedEmissionFactors:
             application_fuel_consumed: Actual fuel consumed by application equipment (in specified unit)
                                       If provided with application_fuel_type, used instead of estimation
             application_fuel_unit: Unit of application_fuel_consumed (L, gal, kg, kWh)
+            concentration: Active ingredient concentration as percentage (e.g., 2.5 for 2.5%).
+                          Used to calculate actual active ingredient mass for pesticides/herbicides/fungicides.
         """
 
         if volume_liters <= 0 or area_hectares <= 0:
@@ -1362,82 +1566,121 @@ class VerifiedEmissionFactors:
         chemical_subtype_lower = chemical_subtype.lower() if chemical_subtype else ""
         product_name_lower = product_name.lower() if product_name else ""
 
-        # Check explicit subtype first, then fall back to keyword detection
+        # SPRINT 6 FIX (2025-12-24): Check organic_approved field for organic certification
+        # organic_approved can contain: "omri_listed", "organic_equivalent", "organic_certified", etc.
+        organic_approved_lower = (organic_approved or "").lower()
+        is_certified_organic = organic_approved_lower in [
+            "omri_listed",
+            "organic_equivalent",
+            "organic_certified",
+            "organic",
+            "usda_organic",
+            "certified_organic",
+        ]
+
+        # Check explicit subtype first, then organic_approved, then fall back to keyword detection
         is_organic_herbicide = (
             chemical_subtype_lower == "organic_herbicide"
             or chemical_subtype_lower == "organic"
             or (not chemical_subtype and cls._is_organic_herbicide(product_name_lower))
+            # SPRINT 6 FIX: Also check organic_approved for herbicides
+            or (is_certified_organic and chemical_type.lower() in ["herbicide", "he"])
         )
+        # SPRINT 6 FIX (2025-12-24): Always check product name for copper, not just when subtype is empty
+        # This ensures products like "Copper Hydroxide" with subtype "biological_fungicide" are correctly detected
         is_copper_fungicide = (
             chemical_subtype_lower == "copper_fungicide"
             or chemical_subtype_lower == "copper"
-            or (not chemical_subtype and cls._is_copper_fungicide(product_name_lower))
+            or cls._is_copper_fungicide(product_name_lower)  # Always check product name
         )
         is_sulfur_fungicide = chemical_subtype_lower in ["sulfur_fungicide", "sulfur"]
         is_biological_fungicide = chemical_subtype_lower in ["biological_fungicide", "biological"]
-        is_organic_pesticide = chemical_subtype_lower in ["organic_pesticide", "organic"]
+        is_organic_pesticide = (
+            chemical_subtype_lower in ["organic_pesticide", "organic"]
+            # SPRINT 6 FIX: Also check organic_approved for pesticides
+            or (is_certified_organic and chemical_type.lower() in ["pesticide", "pe"])
+        )
         is_biological_pesticide = chemical_subtype_lower in ["biological_pesticide", "biological"]
-        is_organic_fertilizer = chemical_subtype_lower in ["organic_fertilizer", "organic"]
+        is_organic_fertilizer = (
+            chemical_subtype_lower in ["organic_fertilizer", "organic"]
+            # SPRINT 6 FIX: Also check organic_approved for fertilizers
+            or (is_certified_organic and chemical_type.lower() in ["fertilizer", "fe"])
+        )
         is_slow_release_fertilizer = chemical_subtype_lower in ["slow_release_fertilizer", "slow_release"]
 
         # Manufacturing emissions (upstream) - ENHANCED for all chemical subtypes
-        if chemical_type.lower() == "pesticide":
+        # SPRINT 6 FIX (2025-12-23): Use user-provided concentration instead of hardcoded defaults
+        # Convert concentration percentage to decimal (e.g., 2.5% -> 0.025)
+        user_concentration = None
+        if concentration is not None and concentration > 0:
+            # User provided concentration as percentage, convert to decimal
+            user_concentration = concentration / 100.0 if concentration > 1 else concentration
+
+        if chemical_type.lower() in ["pesticide", "pe"]:
             # Check for organic or biological pesticide subtypes
             if is_organic_pesticide:
                 organic_pesticide_factor = cls.EPA_CHEMICAL_FACTORS["organic_pesticide_manufacturing"]
-                active_ingredient_percentage = 0.25  # Organic pesticides typically lower concentration
+                # Use user concentration if provided, else default for organic pesticides
+                active_ingredient_percentage = user_concentration if user_concentration else 0.25
                 active_ingredient_kg = total_fertilizer_kg * active_ingredient_percentage
                 manufacturing_emissions = active_ingredient_kg * organic_pesticide_factor.value
             elif is_biological_pesticide:
                 biological_pesticide_factor = cls.EPA_CHEMICAL_FACTORS["biological_pesticide_manufacturing"]
-                active_ingredient_percentage = 0.30  # Biological pesticides vary
+                # Use user concentration if provided, else default for biological pesticides
+                active_ingredient_percentage = user_concentration if user_concentration else 0.30
                 active_ingredient_kg = total_fertilizer_kg * active_ingredient_percentage
                 manufacturing_emissions = active_ingredient_kg * biological_pesticide_factor.value
             else:
                 # Use standard synthetic pesticide manufacturing emission factor
                 pesticide_factor = cls.EPA_CHEMICAL_FACTORS["pesticide_manufacturing"]
-                active_ingredient_percentage = 0.48  # Chlorpyrifos 48EC = 48% active ingredient
+                # SPRINT 6 FIX: Use user-entered concentration instead of hardcoded 48%
+                active_ingredient_percentage = user_concentration if user_concentration else 0.48
                 active_ingredient_kg = total_fertilizer_kg * active_ingredient_percentage
                 manufacturing_emissions = active_ingredient_kg * pesticide_factor.value
-        elif chemical_type.lower() == "herbicide":
+        elif chemical_type.lower() in ["herbicide", "he"]:
             # Check if organic/vinegar herbicide (acetic acid-based)
             if is_organic_herbicide:
                 # Use organic herbicide factor (acetic acid production: 0.64-1.2 kg CO2e/kg)
                 organic_herbicide_factor = cls.EPA_CHEMICAL_FACTORS["organic_herbicide_manufacturing"]
-                # Organic herbicides are typically 20-30% acetic acid concentration
-                active_ingredient_percentage = 0.25  # 25% acetic acid typical
+                # Use user concentration if provided, else default for organic herbicides
+                active_ingredient_percentage = user_concentration if user_concentration else 0.25
                 active_ingredient_kg = total_fertilizer_kg * active_ingredient_percentage
                 manufacturing_emissions = active_ingredient_kg * organic_herbicide_factor.value
             else:
                 # Use standard synthetic herbicide manufacturing emission factor
                 herbicide_factor = cls.EPA_CHEMICAL_FACTORS["herbicide_manufacturing"]
-                active_ingredient_percentage = 0.41  # Roundup PowerMAX = 41% glyphosate
+                # SPRINT 6 FIX: Use user-entered concentration instead of hardcoded 41%
+                active_ingredient_percentage = user_concentration if user_concentration else 0.41
                 active_ingredient_kg = total_fertilizer_kg * active_ingredient_percentage
                 manufacturing_emissions = active_ingredient_kg * herbicide_factor.value
-        elif chemical_type.lower() == "fungicide":
+        elif chemical_type.lower() in ["fungicide", "fu"]:
             # Check specific fungicide subtypes
             if is_copper_fungicide:
                 # Use copper-specific fungicide factor (higher due to copper mining/refining)
                 copper_fungicide_factor = cls.EPA_CHEMICAL_FACTORS["copper_fungicide_manufacturing"]
-                active_ingredient_percentage = 0.99  # Copper Sulfate Basic = 99% active
+                # Use user concentration if provided, else default for copper fungicides
+                active_ingredient_percentage = user_concentration if user_concentration else 0.99
                 active_ingredient_kg = total_fertilizer_kg * active_ingredient_percentage
                 manufacturing_emissions = active_ingredient_kg * copper_fungicide_factor.value
             elif is_sulfur_fungicide:
                 # Use sulfur-specific fungicide factor (lower due to byproduct nature)
                 sulfur_fungicide_factor = cls.EPA_CHEMICAL_FACTORS["sulfur_fungicide_manufacturing"]
-                active_ingredient_percentage = 0.90  # Sulfur fungicides typically 80-90% sulfur
+                # Use user concentration if provided, else default for sulfur fungicides
+                active_ingredient_percentage = user_concentration if user_concentration else 0.90
                 active_ingredient_kg = total_fertilizer_kg * active_ingredient_percentage
                 manufacturing_emissions = active_ingredient_kg * sulfur_fungicide_factor.value
             elif is_biological_fungicide:
                 # Use biological fungicide factor (fermentation-based production)
                 biological_fungicide_factor = cls.EPA_CHEMICAL_FACTORS["biological_fungicide_manufacturing"]
-                active_ingredient_percentage = 0.30  # Biological agents vary in concentration
+                # Use user concentration if provided, else default for biological fungicides
+                active_ingredient_percentage = user_concentration if user_concentration else 0.30
                 active_ingredient_kg = total_fertilizer_kg * active_ingredient_percentage
                 manufacturing_emissions = active_ingredient_kg * biological_fungicide_factor.value
             else:
                 # Use generic synthetic fungicide manufacturing emission factor
                 fungicide_factor = cls.EPA_CHEMICAL_FACTORS["fungicide_manufacturing"]
-                active_ingredient_percentage = 0.99  # Copper Sulfate Basic = 99% active
+                # SPRINT 6 FIX: Use user-entered concentration instead of hardcoded 99%
+                active_ingredient_percentage = user_concentration if user_concentration else 0.45
                 active_ingredient_kg = total_fertilizer_kg * active_ingredient_percentage
                 manufacturing_emissions = active_ingredient_kg * fungicide_factor.value
         else:
@@ -1492,7 +1735,7 @@ class VerifiedEmissionFactors:
             if application_fuel_type.lower() == "electric":
                 # Electric equipment: use kWh consumption and electricity factor
                 application_fuel_kwh = fuel_liters  # Already in kWh if unit was kWh
-                electricity_factor = cls.EPA_ELECTRICITY_FACTORS["electricity_us_avg"]
+                electricity_factor = cls.get_country_electricity_factor()
                 application_emissions = application_fuel_kwh * electricity_factor.value
                 calculation_method_note = "Actual electric consumption (kWh)"
             elif application_fuel_type.lower() == "diesel":
@@ -1599,6 +1842,7 @@ class VerifiedEmissionFactors:
             "manufacturing_emissions_kg_co2e": round(manufacturing_emissions, 3),
             "application_fuel_liters": total_fuel_liters,
             "application_fuel_gallons": round(total_fuel_gallons, 3),
+            "application_fuel_type": application_fuel_type or "diesel",  # Include fuel type for transparency
             "application_emissions_kg_co2e": round(application_emissions, 3),
             "application_method": application_method,
             "epa_diesel_factor_kg_co2_per_gallon": fuel_factor.value,
@@ -1606,39 +1850,53 @@ class VerifiedEmissionFactors:
         }
 
         # Add chemical-specific breakdown data including explicit subtype info
+        # FIX 2025-12-24: Use actual calculated values instead of hardcoded defaults
         breakdown["chemical_subtype_used"] = chemical_subtype if chemical_subtype else "auto-detected"
 
-        if chemical_type.lower() == "pesticide":
+        # Track if user provided concentration vs using default
+        concentration_source = "user_provided" if user_concentration else "default"
+
+        if chemical_type.lower() in ["pesticide", "pe"]:
             if is_organic_pesticide:
                 organic_pesticide_factor = cls.EPA_CHEMICAL_FACTORS["organic_pesticide_manufacturing"]
                 breakdown.update(
                     {
-                        "active_ingredient_percentage": 25,
-                        "active_ingredient_kg": total_fertilizer_kg * 0.25,
+                        # FIX: Use actual calculated values
+                        "active_ingredient_percentage": round(active_ingredient_percentage * 100, 1),
+                        "active_ingredient_kg": round(active_ingredient_kg, 3),
+                        "concentration_source": concentration_source,
                         "emission_factor_kg_co2_per_kg": organic_pesticide_factor.value,
                         "pesticide_subtype": "organic",
                         "note": "Organic pesticide (neem, pyrethrin) uses lower emission factor than synthetic pesticides",
-                        "confidence_level": min(organic_pesticide_factor.confidence_level, fuel_factor.confidence_level),
+                        "confidence_level": min(
+                            organic_pesticide_factor.confidence_level, fuel_factor.confidence_level
+                        ),
                     }
                 )
             elif is_biological_pesticide:
                 biological_pesticide_factor = cls.EPA_CHEMICAL_FACTORS["biological_pesticide_manufacturing"]
                 breakdown.update(
                     {
-                        "active_ingredient_percentage": 30,
-                        "active_ingredient_kg": total_fertilizer_kg * 0.30,
+                        # FIX: Use actual calculated values
+                        "active_ingredient_percentage": round(active_ingredient_percentage * 100, 1),
+                        "active_ingredient_kg": round(active_ingredient_kg, 3),
+                        "concentration_source": concentration_source,
                         "emission_factor_kg_co2_per_kg": biological_pesticide_factor.value,
                         "pesticide_subtype": "biological",
                         "note": "Biological pesticide (Bt, Spinosad) uses lower emission factor due to fermentation-based production",
-                        "confidence_level": min(biological_pesticide_factor.confidence_level, fuel_factor.confidence_level),
+                        "confidence_level": min(
+                            biological_pesticide_factor.confidence_level, fuel_factor.confidence_level
+                        ),
                     }
                 )
             else:
                 pesticide_factor = cls.EPA_CHEMICAL_FACTORS["pesticide_manufacturing"]
                 breakdown.update(
                     {
-                        "active_ingredient_percentage": 48,
-                        "active_ingredient_kg": total_fertilizer_kg * 0.48,
+                        # FIX: Use actual calculated values
+                        "active_ingredient_percentage": round(active_ingredient_percentage * 100, 1),
+                        "active_ingredient_kg": round(active_ingredient_kg, 3),
+                        "concentration_source": concentration_source,
                         "epa_pesticide_factor_kg_co2_per_kg": pesticide_factor.value,
                         "pesticide_subtype": "synthetic",
                         "confidence_level": min(pesticide_factor.confidence_level, fuel_factor.confidence_level),
@@ -1649,21 +1907,27 @@ class VerifiedEmissionFactors:
                 organic_herbicide_factor = cls.EPA_CHEMICAL_FACTORS["organic_herbicide_manufacturing"]
                 breakdown.update(
                     {
-                        "active_ingredient_percentage": 25,
-                        "active_ingredient_kg": total_fertilizer_kg * 0.25,
-                        "epa_organic_herbicide_factor_kg_co2_per_kg": organic_herbicide_factor.value,
+                        # FIX 2025-12-24: Use actual calculated values
+                        "active_ingredient_percentage": round(active_ingredient_percentage * 100, 1),
+                        "active_ingredient_kg": round(active_ingredient_kg, 3),
+                        "concentration_source": concentration_source,
+                        "emission_factor_kg_co2_per_kg": organic_herbicide_factor.value,
                         "herbicide_subtype": "organic",
                         "note": "Organic herbicide (acetic acid/vinegar) uses lower emission factor than synthetic herbicides",
-                        "confidence_level": min(organic_herbicide_factor.confidence_level, fuel_factor.confidence_level),
+                        "confidence_level": min(
+                            organic_herbicide_factor.confidence_level, fuel_factor.confidence_level
+                        ),
                     }
                 )
             else:
                 herbicide_factor = cls.EPA_CHEMICAL_FACTORS["herbicide_manufacturing"]
                 breakdown.update(
                     {
-                        "active_ingredient_percentage": 41,
-                        "active_ingredient_kg": total_fertilizer_kg * 0.41,
-                        "epa_herbicide_factor_kg_co2_per_kg": herbicide_factor.value,
+                        # FIX 2025-12-24: Use actual calculated values
+                        "active_ingredient_percentage": round(active_ingredient_percentage * 100, 1),
+                        "active_ingredient_kg": round(active_ingredient_kg, 3),
+                        "concentration_source": concentration_source,
+                        "emission_factor_kg_co2_per_kg": herbicide_factor.value,
                         "herbicide_subtype": "synthetic",
                         "confidence_level": min(herbicide_factor.confidence_level, fuel_factor.confidence_level),
                     }
@@ -1673,9 +1937,11 @@ class VerifiedEmissionFactors:
                 copper_fungicide_factor = cls.EPA_CHEMICAL_FACTORS["copper_fungicide_manufacturing"]
                 breakdown.update(
                     {
-                        "active_ingredient_percentage": 99,
-                        "active_ingredient_kg": total_fertilizer_kg * 0.99,
-                        "epa_copper_fungicide_factor_kg_co2_per_kg": copper_fungicide_factor.value,
+                        # FIX 2025-12-24: Use actual calculated values
+                        "active_ingredient_percentage": round(active_ingredient_percentage * 100, 1),
+                        "active_ingredient_kg": round(active_ingredient_kg, 3),
+                        "concentration_source": concentration_source,
+                        "emission_factor_kg_co2_per_kg": copper_fungicide_factor.value,
                         "fungicide_subtype": "copper",
                         "note": "Copper-based fungicide uses higher emission factor due to copper mining/refining energy intensity",
                         "confidence_level": min(copper_fungicide_factor.confidence_level, fuel_factor.confidence_level),
@@ -1685,8 +1951,10 @@ class VerifiedEmissionFactors:
                 sulfur_fungicide_factor = cls.EPA_CHEMICAL_FACTORS["sulfur_fungicide_manufacturing"]
                 breakdown.update(
                     {
-                        "active_ingredient_percentage": 90,
-                        "active_ingredient_kg": total_fertilizer_kg * 0.90,
+                        # FIX 2025-12-24: Use actual calculated values
+                        "active_ingredient_percentage": round(active_ingredient_percentage * 100, 1),
+                        "active_ingredient_kg": round(active_ingredient_kg, 3),
+                        "concentration_source": concentration_source,
                         "emission_factor_kg_co2_per_kg": sulfur_fungicide_factor.value,
                         "fungicide_subtype": "sulfur",
                         "note": "Sulfur-based fungicide uses lower emission factor as sulfur is often a byproduct of oil/gas refining",
@@ -1697,21 +1965,27 @@ class VerifiedEmissionFactors:
                 biological_fungicide_factor = cls.EPA_CHEMICAL_FACTORS["biological_fungicide_manufacturing"]
                 breakdown.update(
                     {
-                        "active_ingredient_percentage": 30,
-                        "active_ingredient_kg": total_fertilizer_kg * 0.30,
+                        # FIX 2025-12-24: Use actual calculated values
+                        "active_ingredient_percentage": round(active_ingredient_percentage * 100, 1),
+                        "active_ingredient_kg": round(active_ingredient_kg, 3),
+                        "concentration_source": concentration_source,
                         "emission_factor_kg_co2_per_kg": biological_fungicide_factor.value,
                         "fungicide_subtype": "biological",
                         "note": "Biological fungicide (Bacillus, Trichoderma) uses lower emission factor due to fermentation-based production",
-                        "confidence_level": min(biological_fungicide_factor.confidence_level, fuel_factor.confidence_level),
+                        "confidence_level": min(
+                            biological_fungicide_factor.confidence_level, fuel_factor.confidence_level
+                        ),
                     }
                 )
             else:
                 fungicide_factor = cls.EPA_CHEMICAL_FACTORS["fungicide_manufacturing"]
                 breakdown.update(
                     {
-                        "active_ingredient_percentage": 99,
-                        "active_ingredient_kg": total_fertilizer_kg * 0.99,
-                        "epa_fungicide_factor_kg_co2_per_kg": fungicide_factor.value,
+                        # FIX 2025-12-24: Use actual calculated values
+                        "active_ingredient_percentage": round(active_ingredient_percentage * 100, 1),
+                        "active_ingredient_kg": round(active_ingredient_kg, 3),
+                        "concentration_source": concentration_source,
+                        "emission_factor_kg_co2_per_kg": fungicide_factor.value,
                         "fungicide_subtype": "synthetic",
                         "confidence_level": min(fungicide_factor.confidence_level, fuel_factor.confidence_level),
                     }
@@ -1729,7 +2003,9 @@ class VerifiedEmissionFactors:
                         "fertilizer_subtype": "organic",
                         "emission_factor_kg_co2_per_kg": organic_fertilizer_factor.value,
                         "note": "Organic fertilizer (compost, manure) has minimal manufacturing emissions",
-                        "confidence_level": min(organic_fertilizer_factor.confidence_level, fuel_factor.confidence_level),
+                        "confidence_level": min(
+                            organic_fertilizer_factor.confidence_level, fuel_factor.confidence_level
+                        ),
                     }
                 )
             elif is_slow_release_fertilizer:

@@ -20,6 +20,7 @@ os.environ.setdefault("STRIPE_PUBLISHABLE_KEY", "pk_test_fake")
 os.environ.setdefault("STRIPE_SECRET_KEY", "sk_test_fake")
 os.environ.setdefault("BASE_TRAZO_URL", "http://localhost:3000/")
 os.environ.setdefault("ENVIRONMENT", "testing")
+os.environ.setdefault("TRAZO_OPERATING_COUNTRY", "US")
 
 from backend.settings.base import *
 

@@ -161,25 +161,20 @@ class APIRateLimiter:
 
 
 class RealUSDAAPIClient:
-    """Client for real USDA APIs - NASS QuickStats and ERS"""
+    """Client for USDA NASS QuickStats API"""
 
     def __init__(self):
-        # Real USDA API endpoints
         self.nass_base_url = "https://quickstats.nass.usda.gov/api"
-        self.ers_base_url = "https://api.ers.usda.gov"
-        self.fooddata_base_url = "https://api.nal.usda.gov/fdc/v1"
 
-        # API Keys loaded securely
+        # API Key loaded securely
         try:
             api_keys = get_secure_usda_keys()
             self.nass_api_key = api_keys.get("nass_api_key")
-            self.ers_api_key = api_keys.get("ers_api_key")
-            self.fooddata_api_key = api_keys.get("fooddata_api_key")
 
-            if not any([self.nass_api_key, self.ers_api_key, self.fooddata_api_key]):
-                logger.warning("No USDA API keys found in secure storage")
+            if not self.nass_api_key:
+                logger.warning("No USDA NASS API key found in secure storage")
             else:
-                logger.info("✅ USDA API keys loaded securely")
+                logger.info("USDA NASS API key loaded securely")
 
         except Exception as e:
             logger.error(f"Failed to load USDA API keys securely: {e}")
@@ -188,14 +183,11 @@ class RealUSDAAPIClient:
                 raise Exception(f"USDA API key loading failed in production: {e}")
 
             self.nass_api_key = getattr(settings, "USDA_NASS_API_KEY", None)
-            self.ers_api_key = getattr(settings, "USDA_ERS_API_KEY", None)
-            self.fooddata_api_key = getattr(settings, "USDA_FOODDATA_API_KEY", None)
 
         self.timeout = 30
 
-        # Rate limiters for different APIs
-        self.nass_rate_limiter = APIRateLimiter(calls_per_minute=10)  # Conservative limit
-        self.fooddata_rate_limiter = APIRateLimiter(calls_per_minute=30)  # Higher limit for FoodData Central
+        # Rate limiter for NASS API
+        self.nass_rate_limiter = APIRateLimiter(calls_per_minute=10)
 
         # Updated emission factors from USDA-ARS Corrected Research Findings 2025
         self.base_emission_factors = {
@@ -441,159 +433,6 @@ class RealUSDAAPIClient:
             logger.error(f"Error calculating carbon intensity: {e}")
             return {"error": str(e), "carbon_intensity": 0, "confidence_level": "low"}
 
-    def get_food_composition_data(self, crop_type: str) -> Dict[str, Any]:
-        """Fetch food composition data from USDA FoodData Central API"""
-        try:
-            if not self.fooddata_api_key:
-                logger.warning("FoodData Central API key not configured")
-                return {}
-
-            # Map crop types to food items
-            food_map = {
-                "corn": "sweet corn",
-                "soybeans": "soybeans",
-                "wheat": "wheat",
-                "citrus": "orange",
-                "almonds": "almonds",
-            }
-
-            search_term = food_map.get(crop_type.lower(), crop_type)
-
-            # Search for food items
-            search_params = {
-                "api_key": self.fooddata_api_key,
-                "query": search_term,
-                "dataType": "Foundation,SR Legacy",
-                "pageSize": 5,
-            }
-
-            # Apply rate limiting before making the request
-            self.fooddata_rate_limiter.wait_if_needed()
-
-            # Use circuit breaker for resilient API access
-            def make_fooddata_request():
-                return requests.get(
-                    f"{self.fooddata_base_url}/foods/search", params=search_params, timeout=self.timeout
-                )
-
-            try:
-                response = safe_api_call("fooddata", make_fooddata_request)
-            except CircuitBreakerOpenError:
-                logger.warning("FoodData Central API circuit breaker is open, using fallback")
-                return {}
-
-            if response.status_code == 200:
-                data = response.json()
-                logger.info(f"Successfully fetched FoodData Central data for {crop_type}")
-                return data
-            else:
-                logger.warning(f"FoodData Central API returned status {response.status_code}")
-                return {}
-
-        except requests.RequestException as e:
-            logger.error(f"FoodData Central API request failed: {e}")
-            return {}
-        except Exception as e:
-            logger.error(f"Unexpected error fetching FoodData Central data: {e}")
-            return {}
-
-    def get_nutritional_carbon_factors(self, crop_type: str) -> Dict[str, Any]:
-        """Get nutritional data to enhance carbon calculations"""
-        try:
-            food_data = self.get_food_composition_data(crop_type)
-
-            if not food_data or "foods" not in food_data:
-                return {}
-
-            # Extract relevant nutritional data from first result
-            if food_data["foods"]:
-                food_item = food_data["foods"][0]
-
-                # Get detailed nutrient info
-                food_id = food_item.get("fdcId")
-                if food_id:
-                    # Apply rate limiting before making the request
-                    self.fooddata_rate_limiter.wait_if_needed()
-
-                    detail_response = requests.get(
-                        f"{self.fooddata_base_url}/food/{food_id}",
-                        params={"api_key": self.fooddata_api_key},
-                        timeout=self.timeout,
-                    )
-
-                    if detail_response.status_code == 200:
-                        detail_data = detail_response.json()
-
-                        # Extract key nutrients
-                        nutrients = {}
-                        if "foodNutrients" in detail_data:
-                            for nutrient in detail_data["foodNutrients"]:
-                                name = nutrient.get("nutrient", {}).get("name", "")
-                                value = nutrient.get("amount", 0)
-                                unit = nutrient.get("nutrient", {}).get("unitName", "")
-
-                                if "Protein" in name:
-                                    nutrients["protein_g"] = value
-                                elif "Energy" in name and "kcal" in unit:
-                                    nutrients["energy_kcal"] = value
-                                elif "Carbohydrate" in name:
-                                    nutrients["carbs_g"] = value
-                                elif "Total lipid" in name:
-                                    nutrients["fat_g"] = value
-
-                        # Calculate nutritional efficiency factors
-                        carbon_efficiency = self._calculate_nutritional_efficiency(nutrients)
-
-                        return {
-                            "nutritional_data": nutrients,
-                            "carbon_efficiency": carbon_efficiency,
-                            "food_description": food_item.get("description", ""),
-                            "data_source": "USDA FoodData Central",
-                        }
-
-            return {}
-
-        except Exception as e:
-            logger.error(f"Error getting nutritional carbon factors: {e}")
-            return {}
-
-    def _calculate_nutritional_efficiency(self, nutrients: Dict[str, float]) -> Dict[str, Any]:
-        """Calculate carbon efficiency based on nutritional content"""
-        try:
-            # Nutritional density scoring
-            protein = nutrients.get("protein_g", 0)
-            energy = nutrients.get("energy_kcal", 0)
-
-            # Calculate protein efficiency (g protein per kg CO2e)
-            # Higher protein content = better carbon efficiency for nutrition
-            nutrition_score = 0
-
-            if protein > 0:
-                nutrition_score += min(protein * 2, 40)  # Max 40 points for protein
-
-            if energy > 0:
-                nutrition_score += min(energy / 10, 30)  # Max 30 points for energy
-
-            # Quality assessment
-            if nutrition_score >= 60:
-                efficiency_rating = "high"
-            elif nutrition_score >= 30:
-                efficiency_rating = "medium"
-            else:
-                efficiency_rating = "low"
-
-            return {
-                "nutrition_score": nutrition_score,
-                "efficiency_rating": efficiency_rating,
-                "protein_content": protein,
-                "energy_content": energy,
-                "carbon_nutrition_ratio": f"{protein:.2f}g protein per unit carbon",
-            }
-
-        except Exception as e:
-            logger.error(f"Error calculating nutritional efficiency: {e}")
-            return {"efficiency_rating": "unknown"}
-
     def _schedule_background_refresh(self, crop_type: str, state: str, year: int = None, data_type: str = "yield"):
         """Schedule background refresh of stale cache data"""
         try:
@@ -824,38 +663,4 @@ def get_real_usda_carbon_data(crop_type: str, state: str, farm_practices: Dict) 
 
         except Exception as e:
             logger.error(f"NASS connection test failed: {e}")
-            return False
-
-    def _test_fooddata_connection(self, api_key: str) -> bool:
-        """Test FoodData Central API connection with provided key"""
-        try:
-            test_url = "https://api.nal.usda.gov/fdc/v1/foods/search"
-            test_params = {"api_key": api_key, "query": "corn", "dataType": "Foundation", "pageSize": 1}
-
-            response = requests.get(test_url, params=test_params, timeout=10)
-
-            if response.status_code == 200:
-                data = response.json()
-                return "foods" in data and len(data.get("foods", [])) > 0
-
-            return False
-
-        except Exception as e:
-            logger.error(f"FoodData connection test failed: {e}")
-            return False
-
-    def _test_ers_connection(self, api_key: str) -> bool:
-        """Test ERS API connection with provided key"""
-        try:
-            # Note: ERS API endpoints may vary, this is a generic test
-            test_url = "https://api.ers.usda.gov/data/arms/surveydata"
-            test_params = {"api_key": api_key}
-
-            response = requests.get(test_url, params=test_params, timeout=10)
-
-            # ERS API may return different status codes for valid keys
-            return response.status_code in [200, 204]
-
-        except Exception as e:
-            logger.error(f"ERS connection test failed: {e}")
             return False

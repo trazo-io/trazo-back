@@ -186,6 +186,14 @@ class EnhancedUSDAFactors:
     def get_real_time_emission_factors(self, crop_type: str, state: str) -> Dict[str, float]:
         """NEW METHOD: Real-time USDA data fetching with caching - NOW WITH REAL APIs"""
         try:
+            # NASS is US-only; return base factors for other countries
+            country = getattr(settings, "TRAZO_OPERATING_COUNTRY", "US")
+            if country != "US":
+                base = self.base_usda_factors.copy()
+                base["data_source"] = "EPA verified factors"
+                base["real_time"] = False
+                return base
+
             # Use REAL USDA API integration
             real_client = RealUSDAAPIClient()
 
