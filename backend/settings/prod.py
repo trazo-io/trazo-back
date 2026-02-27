@@ -27,9 +27,11 @@ if not SECRET_KEY or len(SECRET_KEY) < 50:
     raise ValueError("Production requires a strong SECRET_KEY with at least 50 characters")
 
 # Database Configuration - Use individual environment variables for staging/production
-if config("DATABASE_URL", default=None):
-    # Use DATABASE_URL if available (Railway/Heroku style)
-    DATABASES = {"default": dj_database_url.parse(config("DATABASE_URL"))}
+# Use os.environ directly to avoid python-decouple file precedence issues
+database_url = os.environ.get("DATABASE_URL") or config("DATABASE_URL", default=None)
+if database_url:
+    # Use DATABASE_URL if available (DigitalOcean/Railway/Heroku style)
+    DATABASES = {"default": dj_database_url.parse(database_url)}
 else:
     # Use individual database variables (AWS Secrets Manager style)
     database_host = config("DATABASE_HOST")
