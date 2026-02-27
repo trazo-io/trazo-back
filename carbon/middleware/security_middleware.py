@@ -154,24 +154,27 @@ class CarbonSecurityMiddleware(MiddlewareMixin):
         }
 
         if method in limits:
-            limit_config = limits[method]
-            cache_key = f"rate_limit:{user_id}:{method}:{endpoint}:{int(time.time() // limit_config['window'])}"
+            try:
+                limit_config = limits[method]
+                cache_key = f"rate_limit:{user_id}:{method}:{endpoint}:{int(time.time() // limit_config['window'])}"
 
-            current_requests = cache.get(cache_key, 0)
-            if current_requests >= limit_config["requests"]:
-                logger.warning(f"Rate limit exceeded for user {user_id}: {method} {endpoint}")
-                return JsonResponse(
-                    {
-                        "error": "Rate limit exceeded",
-                        "message": f"Too many {method} requests. Please wait before trying again.",
-                        "retry_after": limit_config["window"],
-                        "code": "RATE_LIMIT_EXCEEDED",
-                    },
-                    status=429,
-                )
+                current_requests = cache.get(cache_key, 0)
+                if current_requests >= limit_config["requests"]:
+                    logger.warning(f"Rate limit exceeded for user {user_id}: {method} {endpoint}")
+                    return JsonResponse(
+                        {
+                            "error": "Rate limit exceeded",
+                            "message": f"Too many {method} requests. Please wait before trying again.",
+                            "retry_after": limit_config["window"],
+                            "code": "RATE_LIMIT_EXCEEDED",
+                        },
+                        status=429,
+                    )
 
-            # Increment counter
-            cache.set(cache_key, current_requests + 1, limit_config["window"])
+                # Increment counter
+                cache.set(cache_key, current_requests + 1, limit_config["window"])
+            except Exception:
+                pass  # Cache unavailable, skip rate limiting
 
         return None
 

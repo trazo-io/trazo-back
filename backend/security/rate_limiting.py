@@ -300,29 +300,37 @@ class SecurityMiddleware:
         self.ip_throttle = IPBasedThrottle()
 
     def __call__(self, request):
-        # Check if IP is blocked
-        ip = self.ddos_protection.get_client_ip(request)
-        if self.brute_force_protection.is_ip_blocked(ip):
-            logger.warning(f"Blocked IP {ip} attempted access to {request.path}")
-            return HttpResponse("Access denied", status=429)
+        try:
+            # Check if IP is blocked
+            ip = self.ddos_protection.get_client_ip(request)
+            if self.brute_force_protection.is_ip_blocked(ip):
+                logger.warning(f"Blocked IP {ip} attempted access to {request.path}")
+                return HttpResponse("Access denied", status=429)
 
-        # DDoS pattern analysis
-        is_suspicious, reason = self.ddos_protection.analyze_request_pattern(request)
-        if is_suspicious and "high_frequency" in reason:
-            logger.warning(f"DDoS attack detected from IP {ip}, blocking")
-            self.brute_force_protection.block_ip(ip, 1800)  # Block for 30 minutes
-            return HttpResponse("Rate limit exceeded", status=429)
+            # DDoS pattern analysis
+            is_suspicious, reason = self.ddos_protection.analyze_request_pattern(request)
+            if is_suspicious and "high_frequency" in reason:
+                logger.warning(f"DDoS attack detected from IP {ip}, blocking")
+                self.brute_force_protection.block_ip(ip, 1800)  # Block for 30 minutes
+                return HttpResponse("Rate limit exceeded", status=429)
+        except Exception as e:
+            # If cache/redis unavailable, allow request through (fail-open)
+            logger.debug(f"Security middleware error (allowing request): {e}")
 
         response = self.get_response(request)
 
-        # Record failed authentication attempts
-        if response.status_code in [401, 403] and any(
-            path in request.path for path in ["/login", "/signup", "/password"]
-        ):
-            self.brute_force_protection.record_failed_attempt(ip, request.path)
-        elif response.status_code == 200 and any(path in request.path for path in ["/login"]):
-            # Clear failed attempts on successful login
-            self.brute_force_protection.clear_failed_attempts(ip, request.path)
+        try:
+            # Record failed authentication attempts
+            ip = self.ddos_protection.get_client_ip(request)
+            if response.status_code in [401, 403] and any(
+                path in request.path for path in ["/login", "/signup", "/password"]
+            ):
+                self.brute_force_protection.record_failed_attempt(ip, request.path)
+            elif response.status_code == 200 and any(path in request.path for path in ["/login"]):
+                # Clear failed attempts on successful login
+                self.brute_force_protection.clear_failed_attempts(ip, request.path)
+        except Exception:
+            pass  # Cache unavailable, skip tracking
 
         return response
 

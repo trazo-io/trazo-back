@@ -154,8 +154,8 @@ EMAIL_USE_TLS = False if os.environ.get("EMAIL_DISABLE_TLS") == "True" else True
 # Use S3 in production
 DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
 
-# Redis Configuration - Remove SSL for Railway internal Redis
-REDIS_URL = config("REDIS_URL", default=None)
+# Redis Configuration - Use os.environ directly to avoid python-decouple file precedence issues
+REDIS_URL = os.environ.get("REDIS_URL")
 
 # Override Celery settings for production - No SSL for Railway internal Redis
 if REDIS_URL:

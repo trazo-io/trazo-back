@@ -423,51 +423,55 @@ class EnhancedRateLimitMiddleware(MiddlewareMixin):
 
     def process_request(self, request):
         """Process request for DDoS protection and rate limiting"""
-        # Check for DDoS patterns
-        should_block, reason, threat_score = self.ddos_protection.should_block_request(request)
+        try:
+            # Check for DDoS patterns
+            should_block, reason, threat_score = self.ddos_protection.should_block_request(request)
 
-        if should_block:
-            logger.warning(f"Request blocked from {self.ddos_protection.get_client_ip(request)}: {reason}")
-            return JsonResponse(
-                {
-                    "error": "Request blocked",
-                    "reason": "Security policy violation",
-                    "retry_after": 300,
-                },
-                status=429,
-            )
+            if should_block:
+                logger.warning(f"Request blocked from {self.ddos_protection.get_client_ip(request)}: {reason}")
+                return JsonResponse(
+                    {
+                        "error": "Request blocked",
+                        "reason": "Security policy violation",
+                        "retry_after": 300,
+                    },
+                    status=429,
+                )
 
-        # Check rate limits
-        is_allowed, limit_info = self.check_rate_limit(request, threat_score)
+            # Check rate limits
+            is_allowed, limit_info = self.check_rate_limit(request, threat_score)
 
-        if not is_allowed:
-            logger.warning(
-                f"Rate limit exceeded for {self.ddos_protection.get_client_ip(request)} "
-                f"on {limit_info['category']}: {limit_info['limit'] - limit_info['remaining']}/{limit_info['limit']}"
-            )
+            if not is_allowed:
+                logger.warning(
+                    f"Rate limit exceeded for {self.ddos_protection.get_client_ip(request)} "
+                    f"on {limit_info['category']}: {limit_info['limit'] - limit_info['remaining']}/{limit_info['limit']}"
+                )
 
-            response = JsonResponse(
-                {
-                    "error": "Rate limit exceeded",
-                    "limit": limit_info["limit"],
-                    "window": limit_info["window"],
-                    "retry_after": limit_info["reset"] - int(time.time()),
-                },
-                status=429,
-            )
+                response = JsonResponse(
+                    {
+                        "error": "Rate limit exceeded",
+                        "limit": limit_info["limit"],
+                        "window": limit_info["window"],
+                        "retry_after": limit_info["reset"] - int(time.time()),
+                    },
+                    status=429,
+                )
 
-            # Add rate limit headers
-            response["X-RateLimit-Limit"] = str(limit_info["limit"])
-            response["X-RateLimit-Remaining"] = "0"
-            response["X-RateLimit-Reset"] = str(limit_info["reset"])
-            response["X-RateLimit-Window"] = str(limit_info["window"])
-            response["Retry-After"] = str(limit_info["reset"] - int(time.time()))
+                # Add rate limit headers
+                response["X-RateLimit-Limit"] = str(limit_info["limit"])
+                response["X-RateLimit-Remaining"] = "0"
+                response["X-RateLimit-Reset"] = str(limit_info["reset"])
+                response["X-RateLimit-Window"] = str(limit_info["window"])
+                response["Retry-After"] = str(limit_info["reset"] - int(time.time()))
 
-            return response
+                return response
 
-        # Store limit info in request for response headers
-        request._rate_limit_info = limit_info
-        request._threat_score = threat_score
+            # Store limit info in request for response headers
+            request._rate_limit_info = limit_info
+            request._threat_score = threat_score
+        except Exception as e:
+            # If cache/redis unavailable, allow request through (fail-open)
+            logger.debug(f"Rate limit middleware error (allowing request): {e}")
 
         return None
 
@@ -503,19 +507,23 @@ class CircuitBreakerMiddleware(MiddlewareMixin):
 
     def get_circuit_status(self) -> Dict:
         """Get current circuit breaker status"""
-        return cache.get(
-            self.circuit_breaker_cache,
-            {
-                "state": "closed",  # closed, open, half_open
-                "failure_count": 0,
-                "last_failure_time": None,
-                "next_attempt_time": None,
-            },
-        )
+        default_status = {
+            "state": "closed",  # closed, open, half_open
+            "failure_count": 0,
+            "last_failure_time": None,
+            "next_attempt_time": None,
+        }
+        try:
+            return cache.get(self.circuit_breaker_cache, default_status)
+        except Exception:
+            return default_status
 
     def update_circuit_status(self, status: Dict):
         """Update circuit breaker status"""
-        cache.set(self.circuit_breaker_cache, status, 3600)  # Cache for 1 hour
+        try:
+            cache.set(self.circuit_breaker_cache, status, 3600)  # Cache for 1 hour
+        except Exception:
+            pass  # Cache unavailable, circuit breaker operates stateless
 
     def record_success(self):
         """Record successful request"""
@@ -554,39 +562,46 @@ class CircuitBreakerMiddleware(MiddlewareMixin):
 
     def process_request(self, request):
         """Check circuit breaker state before processing request"""
-        status = self.get_circuit_status()
-        now = time.time()
+        try:
+            status = self.get_circuit_status()
+            now = time.time()
 
-        if status["state"] == "open":
-            # Check if timeout has elapsed
-            if status.get("next_attempt_time", 0) <= now:
-                # Transition to half-open state
-                status.update(
-                    {
-                        "state": "half_open",
-                        "failure_count": 0,
-                    }
-                )
-                self.update_circuit_status(status)
-                logger.info("Circuit breaker: Transitioned to HALF_OPEN state")
-            else:
-                # Circuit is still open, reject request
-                return JsonResponse(
-                    {
-                        "error": "Service temporarily unavailable",
-                        "reason": "Circuit breaker is open",
-                        "retry_after": int(status.get("next_attempt_time", now) - now),
-                    },
-                    status=503,
-                )
+            if status["state"] == "open":
+                # Check if timeout has elapsed
+                if status.get("next_attempt_time", 0) <= now:
+                    # Transition to half-open state
+                    status.update(
+                        {
+                            "state": "half_open",
+                            "failure_count": 0,
+                        }
+                    )
+                    self.update_circuit_status(status)
+                    logger.info("Circuit breaker: Transitioned to HALF_OPEN state")
+                else:
+                    # Circuit is still open, reject request
+                    return JsonResponse(
+                        {
+                            "error": "Service temporarily unavailable",
+                            "reason": "Circuit breaker is open",
+                            "retry_after": int(status.get("next_attempt_time", now) - now),
+                        },
+                        status=503,
+                    )
+        except Exception as e:
+            # If cache/redis unavailable, allow request through (fail-open)
+            logger.debug(f"Circuit breaker middleware error (allowing request): {e}")
 
         return None
 
     def process_response(self, request, response):
         """Record success/failure based on response status"""
-        if response.status_code >= 500:
-            self.record_failure()
-        elif response.status_code < 400:
-            self.record_success()
+        try:
+            if response.status_code >= 500:
+                self.record_failure()
+            elif response.status_code < 400:
+                self.record_success()
+        except Exception:
+            pass  # Cache unavailable, skip circuit breaker tracking
 
         return response
