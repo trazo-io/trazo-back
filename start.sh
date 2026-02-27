@@ -7,7 +7,7 @@ set -e
 SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-backend.settings.prod}
 
 echo "=== Starting Django with settings: $SETTINGS_MODULE ==="
-python debug_startup.py
+python debug_startup.py || echo "=== Debug script reported issues (non-fatal) ==="
 
 echo "=== Debug Complete, Starting Migration ==="
 python manage.py migrate --settings=$SETTINGS_MODULE
