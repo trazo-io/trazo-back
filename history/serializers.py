@@ -1001,25 +1001,21 @@ class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
                 total_entries = carbon_entries.count()
 
                 if total_entries > 0:
-                    usda_verified_entries = carbon_entries.filter(usda_verified=True).count()
                     usda_factors_based_entries = carbon_entries.filter(usda_factors_based=True).count()
 
-                    # Production is USDA verified if majority of entries are USDA verified or factors-based
-                    production_usda_verified = usda_verified_entries > 0 or usda_factors_based_entries >= (
-                        total_entries * 0.5
-                    )
+                    # Production is USDA factors used if majority of entries are factors-based
+                    production_usda_factors_used = usda_factors_based_entries >= (total_entries * 0.5)
 
                     # Add to extra_data for frontend
                     if data.get("extra_data") is None:
                         data["extra_data"] = {}
 
-                    data["extra_data"]["usda_verified"] = production_usda_verified
+                    data["extra_data"]["usda_factors_used"] = production_usda_factors_used
                     data["extra_data"]["usda_verification_details"] = {
                         "total_entries": total_entries,
-                        "usda_verified_entries": usda_verified_entries,
                         "usda_factors_based_entries": usda_factors_based_entries,
                         "verification_percentage": (
-                            round((usda_verified_entries / total_entries * 100), 1) if total_entries > 0 else 0
+                            round((usda_factors_based_entries / total_entries * 100), 1) if total_entries > 0 else 0
                         ),
                     }
 
@@ -1067,7 +1063,7 @@ class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
                                 benchmark = CarbonBenchmark.objects.filter(
                                     crop_type=crop_type,
                                     year=instance.start_date.year if instance.start_date else 2025,
-                                    usda_verified=True,
+                                    usda_factors_used=True,
                                 ).first()
 
                                 if benchmark:
@@ -1087,10 +1083,10 @@ class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
                     data["extra_data"]["total_offsets"] = float(total_offsets)
                     data["extra_data"]["carbon_score"] = carbon_score
                 else:
-                    # No carbon entries, so not USDA verified
+                    # No carbon entries, so USDA factors not used
                     if data.get("extra_data") is None:
                         data["extra_data"] = {}
-                    data["extra_data"]["usda_verified"] = False
+                    data["extra_data"]["usda_factors_used"] = False
                     data["extra_data"]["total_emissions"] = 0.0
                     data["extra_data"]["total_offsets"] = 0.0
                     data["extra_data"]["carbon_score"] = 50
@@ -1101,7 +1097,7 @@ class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
                 # Fallback to existing logic
                 if data.get("extra_data") is None:
                     data["extra_data"] = {}
-                data["extra_data"]["usda_verified"] = False
+                data["extra_data"]["usda_factors_used"] = False
                 data["extra_data"]["total_emissions"] = 0.0
                 data["extra_data"]["total_offsets"] = 0.0
                 data["extra_data"]["carbon_score"] = 50
@@ -1726,25 +1722,21 @@ class OptimizedHistoryListSerializer(serializers.ModelSerializer):
             total_entries = carbon_entries.count()
 
             if total_entries > 0:
-                usda_verified_entries = carbon_entries.filter(usda_verified=True).count()
                 usda_factors_based_entries = carbon_entries.filter(usda_factors_based=True).count()
 
-                # Production is USDA verified if majority of entries are USDA verified or factors-based
-                production_usda_verified = usda_verified_entries > 0 or usda_factors_based_entries >= (
-                    total_entries * 0.5
-                )
+                # Production is USDA factors used if majority of entries are factors-based
+                production_usda_factors_used = usda_factors_based_entries >= (total_entries * 0.5)
 
                 # Add to extra_data for frontend
                 if data.get("extra_data") is None:
                     data["extra_data"] = {}
 
-                data["extra_data"]["usda_verified"] = production_usda_verified
+                data["extra_data"]["usda_factors_used"] = production_usda_factors_used
                 data["extra_data"]["usda_verification_details"] = {
                     "total_entries": total_entries,
-                    "usda_verified_entries": usda_verified_entries,
                     "usda_factors_based_entries": usda_factors_based_entries,
                     "verification_percentage": (
-                        round((usda_verified_entries / total_entries * 100), 1) if total_entries > 0 else 0
+                        round((usda_factors_based_entries / total_entries * 100), 1) if total_entries > 0 else 0
                     ),
                 }
 
@@ -1792,7 +1784,7 @@ class OptimizedHistoryListSerializer(serializers.ModelSerializer):
                             benchmark = CarbonBenchmark.objects.filter(
                                 crop_type=crop_type,
                                 year=instance.start_date.year if instance.start_date else 2025,
-                                usda_verified=True,
+                                usda_factors_used=True,
                             ).first()
 
                             if benchmark:
@@ -1812,10 +1804,10 @@ class OptimizedHistoryListSerializer(serializers.ModelSerializer):
                 data["extra_data"]["total_offsets"] = float(total_offsets)
                 data["extra_data"]["carbon_score"] = carbon_score
             else:
-                # No carbon entries, so not USDA verified
+                # No carbon entries, so USDA factors not used
                 if data.get("extra_data") is None:
                     data["extra_data"] = {}
-                data["extra_data"]["usda_verified"] = False
+                data["extra_data"]["usda_factors_used"] = False
                 data["extra_data"]["total_emissions"] = 0.0
                 data["extra_data"]["total_offsets"] = 0.0
                 data["extra_data"]["carbon_score"] = 50
@@ -1825,7 +1817,7 @@ class OptimizedHistoryListSerializer(serializers.ModelSerializer):
             # Fallback to existing logic
             if data.get("extra_data") is None:
                 data["extra_data"] = {}
-            data["extra_data"]["usda_verified"] = False
+            data["extra_data"]["usda_factors_used"] = False
             data["extra_data"]["total_emissions"] = 0.0
             data["extra_data"]["total_offsets"] = 0.0
             data["extra_data"]["carbon_score"] = 50

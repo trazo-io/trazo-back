@@ -45,7 +45,7 @@ class Migration(migrations.Migration):
 **Discovered Issues**:
 - `total_emissions` field doesn't exist (should be `amount`)
 - `carbon_entry_id` field doesn't exist in `CarbonSource` model
-- `blockchain_verified` field doesn't exist (should be `usda_verified`)
+- `blockchain_verified` field doesn't exist (should be `usda_factors_used`)
 
 **Solution Applied**: Updated all index definitions to reference actual model fields:
 ```sql
@@ -55,7 +55,7 @@ CREATE INDEX ... ON carbon_carbonsource (carbon_entry_id, source_type);
 
 -- After (working):
 CREATE INDEX ... ON carbon_carbonentry (amount);
-CREATE INDEX ... ON carbon_carbonsource (category, usda_verified);
+CREATE INDEX ... ON carbon_carbonsource (category, usda_factors_used);
 ```
 
 **Impact**: Database indexes now correctly target existing columns.

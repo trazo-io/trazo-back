@@ -136,7 +136,7 @@ class AdvancedCarbonAnalyticsService:
                     "net_cumulative": float(net_cumulative),
                     "description": entry.description[:100] + "..." if entry.description else "",
                     "confidence_level": entry.confidence_level,
-                    "usda_verified": entry.usda_factors_based,
+                    "usda_factors_used": entry.usda_factors_based,
                 }
             )
 

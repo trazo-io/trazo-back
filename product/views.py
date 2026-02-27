@@ -121,7 +121,6 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                         "co2e_amount",
                         "amount",
                         "usda_factors_based",
-                        "usda_verified",
                         "data_source",
                         "description",
                         "created_at",

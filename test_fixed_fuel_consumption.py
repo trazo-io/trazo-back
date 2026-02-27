@@ -121,7 +121,7 @@ def test_fuel_consumption_fix():
             co2e_value = result["co2e"]
             print(f"   ✅ CO₂e Result: {co2e_value} kg")
             print(f"   ✅ Calculation Method: {result['calculation_method']}")
-            print(f"   ✅ USDA Verified: {result['usda_verified']}")
+            print(f"   ✅ USDA Verified: {result['usda_factors_used']}")
 
             # Check if we got fallback error (indicates remaining issues)
             if "fallback_error" in result["calculation_method"]:
@@ -136,7 +136,7 @@ def test_fuel_consumption_fix():
                     "co2e": co2e_value,
                     "status": "SUCCESS",
                     "method": result["calculation_method"],
-                    "usda_verified": result["usda_verified"],
+                    "usda_factors_used": result["usda_factors_used"],
                 }
             )
 
@@ -169,7 +169,7 @@ def test_fuel_consumption_fix():
             print(f"      Fuel processed: {result['fuel_processed']}")
             print(f"      CO₂e: {result['co2e']} kg")
             print(f"      Method: {result['method']}")
-            print(f"      USDA Verified: {result['usda_verified']}")
+            print(f"      USDA Verified: {result['usda_factors_used']}")
         else:
             print(f"   ❌ {result['test']}")
             print(f"      Error: {result['error']}")

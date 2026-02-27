@@ -89,7 +89,7 @@ def test_screenshot_scenario_complete():
     print(f"✅ Carbon Calculation Result:")
     print(f"   CO2e Emissions: {result['co2e']:.3f} kg")
     print(f"   Efficiency Score: {result['efficiency_score']}/100")
-    print(f"   USDA Verified: {result['usda_verified']}")
+    print(f"   USDA Verified: {result['usda_factors_used']}")
     print(f"   Calculation Method: {result['calculation_method']}")
 
     if "breakdown" in result:
@@ -125,7 +125,7 @@ def test_screenshot_scenario_complete():
     print(f"\n📡 STEP 4: API Response Format Validation")
     print("-" * 40)
 
-    required_fields = ["co2e", "efficiency_score", "usda_verified", "calculation_method"]
+    required_fields = ["co2e", "efficiency_score", "usda_factors_used", "calculation_method"]
     api_format_valid = all(field in result for field in required_fields)
 
     print(f"Required fields present: {api_format_valid}")

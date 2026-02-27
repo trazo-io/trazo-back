@@ -179,7 +179,7 @@ class Command(BaseCommand):
                 "unit": unit,
                 "default_emission_factor": factor,
                 "description": description,
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "usda_factors_based": True,
             },
         )
@@ -194,7 +194,7 @@ class Command(BaseCommand):
             INSERT INTO carbon_carbonentry (
                 establishment_id, production_id, created_by_id, type, source_id,
                 amount, co2e_amount, year, description, timestamp, created_at, updated_at,
-                usda_verified, usda_factors_based, verification_status, data_source,
+                usda_factors_based, verification_status, data_source,
                 verification_level, trust_score, effective_amount, additionality_verified,
                 permanence_plan, baseline_data, audit_status, evidence_requirements_met,
                 documentation_complete, additionality_evidence, evidence_photos, evidence_documents,
@@ -203,7 +203,7 @@ class Command(BaseCommand):
                 verification_notes, verification_report_url, gps_coordinates, financial_analysis,
                 detected_patterns, third_party_verification_url
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
         """,
             [
@@ -219,7 +219,6 @@ class Command(BaseCommand):
                 now,  # timestamp
                 now,  # created_at
                 now,  # updated_at
-                True,  # usda_verified
                 True,  # usda_factors_based
                 "usda_verified",  # verification_status
                 "USDA Agricultural Research Service",  # data_source

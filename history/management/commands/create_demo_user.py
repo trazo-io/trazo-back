@@ -289,7 +289,7 @@ class Command(BaseCommand):
                     "Cover cropping between rows",
                     "Integrated pest management",
                 ],
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "data_source": "USDA ARS, UC ANR",
             },
         )
@@ -319,7 +319,7 @@ class Command(BaseCommand):
                     "Biological pest control",
                     "Composted citrus pulp recycling",
                 ],
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "data_source": "USDA ARS, UC ANR",
             },
         )

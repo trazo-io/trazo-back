@@ -63,7 +63,7 @@ class Command(BaseCommand):
                 source = CarbonSource.objects.get(name=name)
                 source.category = category
                 source.description = description
-                source.usda_verified = True
+                source.usda_factors_used = True
                 source.usda_factors_based = True
                 source.save()
                 self.stdout.write(f"   ✅ Updated {name} -> {category}")
@@ -94,7 +94,7 @@ class Command(BaseCommand):
                     "unit": unit,
                     "default_emission_factor": factor,
                     "description": description,
-                    "usda_verified": True,
+                    "usda_factors_used": True,
                     "usda_factors_based": factor > 0,  # Only emissions are USDA-based
                 },
             )
@@ -277,10 +277,9 @@ class Command(BaseCommand):
                 establishment=establishment,
                 source=source,
                 timestamp=date,
-                usda_verified=source.usda_verified,
+                usda_factors_based=source.usda_factors_based,
                 co2e_amount=co2e,
                 data_source="USDA Agricultural Research Service" if source.usda_factors_based else "Industry Standards",
-                usda_factors_based=source.usda_factors_based,
                 verification_status="production_verified",
                 additionality_evidence=f"Production-grade {entry_type} from {source.category}",
                 additionality_verified=True,

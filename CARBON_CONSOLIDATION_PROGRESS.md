@@ -16,26 +16,26 @@ This consolidation project makes **CarbonEntry the single source of truth**, eli
 ## ✅ Phase 1: Fix USDA Verification Semantics
 
 ### Changed Meaning
-- **Before**: `usda_verified` meant "validation passed at 90%+ confidence"
-- **After**: `usda_verified` means "USDA factors were used in the calculation"
+- **Before**: `usda_factors_based` meant "validation passed at 90%+ confidence"
+- **After**: `usda_factors_based` means "USDA factors were used in the calculation"
 
 ### Implementation
 **File**: `/carbon/models.py` (lines 1329-1356)
-- Changed `USDAComplianceRecord.is_usda_verified` property logic
+- Changed `USDAComplianceRecord.is_usda_factors_based` property logic
 - Now checks if validation method is `enhanced_api` or `local_validation`
 - No longer requires high confidence score (that's separate from factor usage)
 
 ### Data Migration
-**File**: `/carbon/migrations/0030_fix_usda_verified_field_semantics.py`
+**File**: `/carbon/migrations/0030_fix_usda_factors_based_field_semantics.py`
 - Created and ran data migration
-- Updated **297 CarbonEntry records** to `usda_verified=True`
+- Updated **297 CarbonEntry records** to `usda_factors_based=True`
 - All records with `validation_method` in ["enhanced_api", "local_validation"] now correctly marked
 
 ### API Fix
 **File**: `/history/transparency_views.py` (lines 201-217)
 - Updated transparency API endpoint to use CarbonEntry as source of truth
-- Now queries: `CarbonEntry.objects.filter(production=production, usda_verified=True)`
-- This uses the fixed USDAComplianceRecord.is_usda_verified property
+- Now queries: `CarbonEntry.objects.filter(production=production, usda_factors_based=True)`
+- This uses the fixed USDAComplianceRecord.is_usda_factors_based property
 
 ### Documentation
 **File**: `/carbon/services/carbon_transparency_service.py` (lines 436-448)
@@ -73,7 +73,7 @@ This caused:
    - ✅ Kept only CarbonEntry creation
 
 3. **WeatherEvent** (lines 68-91)
-   - ✅ Removed extra_data dual-write (was hardcoded usda_verified:false)
+   - ✅ Removed extra_data dual-write (was hardcoded usda_factors_based:false)
    - ✅ No CarbonEntry created (weather events have no emissions)
    - ✅ Still logs transparency documentation
 
@@ -123,7 +123,7 @@ This caused:
   - First tries to fetch from CarbonEntry table
   - Falls back to extra_data for backward compatibility
   - Calculates on-demand if neither available
-- **Note**: Returns `usda_verified` field from CarbonEntry using the fixed is_usda_verified property
+- **Note**: Returns `usda_factors_based` field from CarbonEntry using the fixed is_usda_factors_based property
 
 **File**: `/history/serializers.py` (lines 1796-1841)
 - **Method**: `_get_chemical_type_with_fallback()`
@@ -182,7 +182,7 @@ isUsdaVerified: true ✅
 ### Test 2: Migration Results
 ```
 Updated 297 CarbonEntry records
-All records with proper validation_method now have usda_verified=True ✅
+All records with proper validation_method now have usda_factors_based=True ✅
 ```
 
 ### Test 3: Signal Changes
@@ -228,7 +228,7 @@ Result: ONE authoritative source
 All three phases of carbon data consolidation have been successfully completed:
 
 ### Phase 1 ✅ - USDA Verification Semantics Fixed
-- Fixed the semantic meaning of `usda_verified` field
+- Fixed the semantic meaning of `usda_factors_based` field
 - Updated 297 CarbonEntry records with corrected data
 - API now correctly returns consistent values
 
@@ -261,8 +261,8 @@ All three phases of carbon data consolidation have been successfully completed:
 ## Files Modified
 
 ### Phase 1 - USDA Verification Fix
-- `/carbon/models.py` - Fixed is_usda_verified property
-- `/carbon/migrations/0030_fix_usda_verified_field_semantics.py` - Data migration (NEW)
+- `/carbon/models.py` - Fixed is_usda_factors_based property
+- `/carbon/migrations/0030_fix_usda_factors_based_field_semantics.py` - Data migration (NEW)
 - `/history/transparency_views.py` - Updated API endpoint
 - `/carbon/services/carbon_transparency_service.py` - Added documentation
 
@@ -312,7 +312,7 @@ After consolidation, three performance issues remained:
 ```python
 # High-traffic production-to-carbon lookups
 1. (production, -created_at) - Latest carbon entries first
-2. (production, usda_verified) - Verification filtering
+2. (production, usda_factors_based) - Verification filtering
 3. (production, verification_status) - Status filtering
 4. (establishment, -created_at) - Establishment-level queries
 ```

@@ -72,7 +72,7 @@ sequenceDiagram
 {
   "co2e": 45.7,
   "efficiency_score": 75.2,
-  "usda_verified": true,
+  "usda_factors_used": true,
   "calculation_method": "usda_enhanced_factors",
   "breakdown": {
     "nitrogen": 32.1,
@@ -145,7 +145,7 @@ def calculate_chemical_event_impact(self, event):
         'co2e': total_co2e,
         'breakdown': emissions,
         'efficiency_score': self._calculate_efficiency_score(event, total_co2e),
-        'usda_verified': factors['usda_verified']
+        'usda_factors_used': factors['usda_factors_used']
     }
 ```
 
@@ -172,7 +172,7 @@ def calculate_equipment_event_impact(self, event):
         'co2e': total_co2e,
         'fuel_emissions': fuel_emissions,
         'efficiency_factor': equipment_factor,
-        'usda_verified': fuel_factors['usda_verified']
+        'usda_factors_used': fuel_factors['usda_factors_used']
     }
 ```
 
@@ -208,7 +208,7 @@ sequenceDiagram
   "industry_average": 1500.0,
   "percentile_ranking": 85,
   "verification_status": {
-    "usda_verified": true,
+    "usda_factors_used": true,
     "blockchain_verified": true,
     "audit_status": "passed"
   },
@@ -247,7 +247,7 @@ class CarbonEntry(models.Model):
     timestamp = DateTimeField(default=timezone.now)
     
     # USDA verification fields
-    usda_verified = BooleanField(default=False)
+    usda_factors_used = BooleanField(default=False)
     usda_factors_based = BooleanField(default=False)
     verification_status = CharField(max_length=50, default='estimated')
     data_source = CharField(max_length=200, default='Unknown')
@@ -265,7 +265,7 @@ class CarbonSource(models.Model):
     unit = CharField(max_length=50)
     category = CharField(max_length=50)
     default_emission_factor = FloatField(default=0.0)
-    usda_verified = BooleanField(default=False)
+    usda_factors_used = BooleanField(default=False)
     usda_factors_based = BooleanField(default=False)
     verification_status = CharField(max_length=50, default='estimated')
     data_source = CharField(max_length=200, default='Unknown')
@@ -289,7 +289,7 @@ class RegionalEmissionFactor(models.Model):
     unit = CharField(max_length=50)
     adjustment_factor = FloatField(default=1.0)
     data_source = CharField(max_length=20, default='estimated')
-    usda_verified = BooleanField(default=False)
+    usda_factors_used = BooleanField(default=False)
     confidence_level = FloatField(default=0.8)
     valid_from = DateField()
     valid_until = DateField(null=True, blank=True)
@@ -314,7 +314,7 @@ class EnhancedUSDAFactors:
             'N_factor': self._get_nitrogen_emission_factor(),
             'P_factor': self._get_phosphorus_emission_factor(),
             'K_factor': self._get_potassium_emission_factor(),
-            'usda_verified': True
+            'usda_factors_used': True
         }
         
         # Cache for 24 hours
@@ -452,7 +452,7 @@ flowchart TD
 -- Indexes for fast carbon entry queries
 CREATE INDEX carbon_entry_production_year_idx ON carbon_carbonentry(production_id, year);
 CREATE INDEX carbon_entry_type_amount_idx ON carbon_carbonentry(type, amount);
-CREATE INDEX carbon_source_category_idx ON carbon_carbonsource(category, usda_verified);
+CREATE INDEX carbon_source_category_idx ON carbon_carbonsource(category, usda_factors_used);
 
 -- Partial index for active emission factors
 CREATE INDEX regional_factor_active_idx ON carbon_regionalemissionfactor(state, crop_type, factor_type) 

@@ -245,8 +245,8 @@ class History(models.Model):
         if total_events > 0:
             score += min(total_events * 3, 30)  # 3 points per event, max 30
 
-        # USDA verification (20 points)
-        if hasattr(self, "carbon_entries") and self.carbon_entries.filter(usda_verified=True).exists():
+        # USDA factors usage (20 points)
+        if hasattr(self, "carbon_entries") and self.carbon_entries.filter(usda_factors_based=True).exists():
             score += 20
 
         # Recent updates (10 points)

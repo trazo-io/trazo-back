@@ -2468,10 +2468,10 @@ class EventCarbonCalculator:
 
             compliance_record = USDAComplianceRecord.objects.filter(carbon_entry=carbon_entry).first()
             if compliance_record and compliance_record.is_usda_verified:
-                carbon_entry.usda_verified = True
-                carbon_entry.save(update_fields=["usda_verified"])
+                carbon_entry.usda_factors_based = True
+                carbon_entry.save(update_fields=["usda_factors_based"])
                 logger.info(
-                    f"✅ Updated carbon entry {carbon_entry.id} to usda_verified=True based on compliance record"
+                    f"✅ Updated carbon entry {carbon_entry.id} to usda_factors_based=True based on compliance record"
                 )
 
             # Create calculation audit record

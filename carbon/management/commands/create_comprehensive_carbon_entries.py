@@ -121,8 +121,8 @@ class Command(BaseCommand):
                     """
                     INSERT INTO carbon_carbonentry (
                         year, type, amount, description, created_by_id, establishment_id, production_id, source_id,
-                        timestamp, created_at, iot_device_id, updated_at, usda_verified, co2e_amount, data_source,
-                        usda_factors_based, verification_status, additionality_evidence, additionality_verified,
+                        timestamp, created_at, iot_device_id, updated_at, usda_factors_based, co2e_amount, data_source,
+                        verification_status, additionality_evidence, additionality_verified,
                         audit_scheduled_date, baseline_data, documentation_complete, evidence_requirements_met,
                         methodology_template, permanence_plan, registry_verification_id, third_party_verification_url,
                         external_verification_id, gps_coordinates, verification_notes, baseline_scenario,
@@ -130,7 +130,7 @@ class Command(BaseCommand):
                         registry_submission_id, verification_report_url, audit_status, effective_amount,
                         evidence_documents, evidence_photos, trust_score, verification_level
                     ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                     ) RETURNING id
                 """,
                     [
@@ -146,10 +146,9 @@ class Command(BaseCommand):
                         timezone.now(),  # created_at
                         "",  # iot_device_id
                         timezone.now(),  # updated_at
-                        calculation_result.get("usda_factors_based", False),  # usda_verified
+                        calculation_result.get("usda_factors_based", False),  # usda_factors_based
                         calculation_result.get("co2e", 0),  # co2e_amount
                         calculation_result.get("data_source", "USDA Agricultural Research Service"),  # data_source
-                        calculation_result.get("usda_factors_based", True),  # usda_factors_based
                         calculation_result.get("verification_status", "factors_verified"),  # verification_status
                         f"Auto-calculated from {event.__class__.__name__} event with USDA factors",  # additionality_evidence
                         True,  # additionality_verified
@@ -240,7 +239,7 @@ class Command(BaseCommand):
                 "unit": unit,
                 "default_emission_factor": emission_factor,
                 "description": description,
-                "usda_verified": calculation_result.get("usda_factors_based", True),
+                "usda_factors_used": calculation_result.get("usda_factors_based", True),
                 "usda_factors_based": calculation_result.get("usda_factors_based", True),
             },
         )
@@ -260,7 +259,7 @@ class Command(BaseCommand):
                     "unit": "event",
                     "default_emission_factor": 0.1,
                     "description": "Minimal carbon impact from general farm activities",
-                    "usda_verified": False,
+                    "usda_factors_used": False,
                     "usda_factors_based": False,
                 },
             )
@@ -332,7 +331,7 @@ class Command(BaseCommand):
                     "unit": "liters",
                     "default_emission_factor": 2.70,
                     "description": "Real-time fuel consumption from IoT devices",
-                    "usda_verified": True,
+                    "usda_factors_used": True,
                     "usda_factors_based": True,
                 },
             )
@@ -344,7 +343,7 @@ class Command(BaseCommand):
                     """
                     INSERT INTO carbon_carbonentry (
                         year, type, amount, description, created_by_id, establishment_id, production_id, source_id,
-                        timestamp, created_at, iot_device_id, updated_at, usda_verified, co2e_amount, data_source,
+                        timestamp, created_at, iot_device_id, updated_at, co2e_amount, data_source,
                         usda_factors_based, verification_status, additionality_evidence, additionality_verified,
                         audit_scheduled_date, baseline_data, documentation_complete, evidence_requirements_met,
                         methodology_template, permanence_plan, registry_verification_id, third_party_verification_url,
@@ -353,7 +352,7 @@ class Command(BaseCommand):
                         registry_submission_id, verification_report_url, audit_status, effective_amount,
                         evidence_documents, evidence_photos, trust_score, verification_level
                     ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                     ) RETURNING id
                 """,
                     [
@@ -369,7 +368,6 @@ class Command(BaseCommand):
                         timezone.now(),
                         device.device_id,
                         timezone.now(),
-                        True,
                         co2e_amount,
                         "IoT Device Real-time Monitoring",
                         True,

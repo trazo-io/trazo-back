@@ -40,13 +40,13 @@ class Command(BaseCommand):
                             INSERT INTO carbon_carbonentry (
                                 establishment_id, production_id, created_by_id, type, source_id,
                                 amount, co2e_amount, year, description, timestamp, created_at, updated_at,
-                                usda_verified, usda_factors_based, verification_status, data_source,
+                                usda_factors_based, verification_status, data_source,
                                 verification_level, trust_score, effective_amount, additionality_verified,
                                 permanence_plan, baseline_data, audit_status, evidence_requirements_met,
                                 documentation_complete, additionality_evidence, evidence_photos, evidence_documents,
                                 external_verification_id, iot_device_id, methodology_template
                             ) VALUES (
-                                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                             )
                         """,
                             [
@@ -62,7 +62,6 @@ class Command(BaseCommand):
                                 production.start_date,
                                 production.start_date,
                                 production.start_date,
-                                True,  # usda_verified
                                 True,  # usda_factors_based
                                 "usda_verified",
                                 "USDA Agricultural Research Service",
@@ -95,13 +94,13 @@ class Command(BaseCommand):
                             INSERT INTO carbon_carbonentry (
                                 establishment_id, production_id, created_by_id, type, source_id,
                                 amount, co2e_amount, year, description, timestamp, created_at, updated_at,
-                                usda_verified, usda_factors_based, verification_status, data_source,
+                                usda_factors_based, verification_status, data_source,
                                 verification_level, trust_score, effective_amount, additionality_verified,
                                 permanence_plan, baseline_data, audit_status, evidence_requirements_met,
                                 documentation_complete, additionality_evidence, evidence_photos, evidence_documents,
                                 external_verification_id, iot_device_id, methodology_template
                             ) VALUES (
-                                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                             )
                         """,
                             [
@@ -117,7 +116,6 @@ class Command(BaseCommand):
                                 production.start_date,
                                 production.start_date,
                                 production.start_date,
-                                True,  # usda_verified
                                 True,  # usda_factors_based
                                 "usda_verified",
                                 "USDA Agricultural Research Service",

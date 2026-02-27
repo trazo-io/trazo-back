@@ -34,11 +34,11 @@ class CropTypeAdmin(admin.ModelAdmin):
         "emissions_per_hectare",
         "total_templates_count",
         "total_events_count",
-        "usda_verified",
+        "usda_factors_used",
         "is_active",
         "created_at",
     )
-    list_filter = ("category", "usda_verified", "is_active", "created_at")
+    list_filter = ("category", "usda_factors_used", "is_active", "created_at")
     search_fields = ("name", "description", "data_source")
     prepopulated_fields = {"slug": ("name",)}
     readonly_fields = ("created_at", "updated_at", "total_templates_count", "total_events_count")
@@ -64,7 +64,7 @@ class CropTypeAdmin(admin.ModelAdmin):
         ),
         ("Premium Pricing Potential", {"fields": ("organic_premium", "sustainable_premium", "local_premium")}),
         ("Sustainability", {"fields": ("sustainability_opportunities",)}),
-        ("Meta Information", {"fields": ("usda_verified", "data_source", "created_at", "updated_at")}),
+        ("Meta Information", {"fields": ("usda_factors_used", "data_source", "created_at", "updated_at")}),
     )
 
     def get_queryset(self, request):

@@ -96,7 +96,7 @@ class Command(BaseCommand):
                     "unit": unit,
                     "default_emission_factor": factor,
                     "description": description,
-                    "usda_verified": True,
+                    "usda_factors_used": True,
                     "usda_factors_based": True,
                 },
             )
@@ -263,8 +263,8 @@ class Command(BaseCommand):
                     """
                     INSERT INTO carbon_carbonentry (
                         year, type, amount, description, created_by_id, establishment_id, production_id, source_id,
-                        timestamp, created_at, iot_device_id, updated_at, usda_verified, co2e_amount, data_source,
-                        usda_factors_based, verification_status, additionality_evidence, additionality_verified,
+                        timestamp, created_at, iot_device_id, updated_at, usda_factors_based, co2e_amount, data_source,
+                        verification_status, additionality_evidence, additionality_verified,
                         audit_scheduled_date, baseline_data, documentation_complete, evidence_requirements_met,
                         methodology_template, permanence_plan, registry_verification_id, third_party_verification_url,
                         external_verification_id, gps_coordinates, verification_notes, baseline_scenario,
@@ -272,7 +272,7 @@ class Command(BaseCommand):
                         registry_submission_id, verification_report_url, audit_status, effective_amount,
                         evidence_documents, evidence_photos, trust_score, verification_level
                     ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                     )
                 """,
                     [
@@ -291,7 +291,6 @@ class Command(BaseCommand):
                         True,
                         co2e,
                         "USDA Agricultural Research Service",
-                        True,
                         "usda_verified",
                         f"Production-ready {entry_type} from {source.category}",
                         True,
@@ -398,7 +397,7 @@ class Command(BaseCommand):
                             "unit": "tons_co2e",
                             "default_emission_factor": -1.0,  # Negative for offsets
                             "description": f"Purchased carbon offset credits from {project.name}",
-                            "usda_verified": True,
+                            "usda_factors_used": True,
                             "usda_factors_based": False,
                         },
                     )

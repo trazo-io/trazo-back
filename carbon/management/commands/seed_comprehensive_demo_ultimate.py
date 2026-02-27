@@ -508,7 +508,7 @@ class Command(BaseCommand):
                     "unit": unit,
                     "default_emission_factor": float(Decimal(str(factor))),
                     "description": description,
-                    "usda_verified": abs(factor) > 0.01,  # All significant factors are verified
+                    "usda_factors_used": abs(factor) > 0.01,  # All significant factors are verified
                     "usda_factors_based": abs(factor) > 0.01,
                     "verification_status": "usda_verified" if abs(factor) > 0.01 else "calculated",
                     "data_source": "USDA Agricultural Research Service / EPA / IPCC Guidelines",
@@ -543,7 +543,7 @@ class Command(BaseCommand):
                     "unit": unit,
                     "company_count": random.randint(250, 450),
                     "source": "USDA Agricultural Research Service 2024",
-                    "usda_verified": True,
+                    "usda_factors_used": True,
                     "crop_type": description,
                 },
             )
@@ -1370,7 +1370,6 @@ class Command(BaseCommand):
                 co2e_amount=co2e_amount,
                 description=description,
                 timestamp=event.date if hasattr(event, "date") else timezone.now(),
-                usda_verified=True,
                 usda_factors_based=True,
                 verification_status="usda_verified",
                 data_source="USDA Agricultural Research Service / IPCC Guidelines",
@@ -3443,7 +3442,6 @@ class Command(BaseCommand):
                         amount=abs(net_sequestration),
                         co2e_amount=-abs(net_sequestration),
                         description=f"Carbon credits generated from {production.name}",
-                        usda_verified=True,
                         verification_status="credit_eligible",
                         extra_data={
                             "credit_type": "agricultural_sequestration",
@@ -3505,7 +3503,7 @@ class Command(BaseCommand):
                 "minimum_score": 90,
                 "is_automatic": True,
                 "icon": "badges/carbon_negative_gold.png",
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
             {
                 "name": "Regenerative Agriculture Leader",
@@ -3517,7 +3515,7 @@ class Command(BaseCommand):
                 },
                 "minimum_score": 85,
                 "is_automatic": True,
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
             {
                 "name": "Premium Market Access",
@@ -3525,7 +3523,7 @@ class Command(BaseCommand):
                 "criteria": {"premium_pricing": True, "market_access": True, "quality_certification": True},
                 "minimum_score": 80,
                 "is_automatic": True,
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
         ]
 
@@ -3558,7 +3556,7 @@ class Command(BaseCommand):
                 net_footprint=-1609.3,  # Negative = net sequestration
                 carbon_score=92,  # High score for carbon negative operations
                 generated_at=timezone.now(),
-                usda_verified=True,
+                usda_factors_used=True,
                 # Enhanced transparency fields from migration 0028
                 detailed_breakdown={
                     "fertilizer_emissions": 438.2,

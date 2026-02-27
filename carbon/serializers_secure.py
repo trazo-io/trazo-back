@@ -73,7 +73,6 @@ class SecureCarbonEntrySerializer(serializers.ModelSerializer):
             "additionality_verified",
             "audit_status",
             # USDA compliance fields
-            "usda_verified",
             "usda_factors_based",
             "verification_status",
             "data_source",
@@ -101,7 +100,6 @@ class SecureCarbonEntrySerializer(serializers.ModelSerializer):
             "verification_badge",
             "created_at",
             "updated_at",
-            "usda_verified",
             "usda_factors_based",
         ]
 

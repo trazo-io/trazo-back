@@ -45,7 +45,7 @@ def create_manual_carbon_entries():
                 "category": "Fertilizer",
                 "unit": "kg CO2e",
                 "default_emission_factor": 5.8,  # USDA factor for nitrogen fertilizer
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "verification_status": "factors_verified",
                 "data_source": "USDA Agricultural Research Service",
             },
@@ -81,7 +81,7 @@ def create_manual_carbon_entries():
                 "category": "Fuel",
                 "unit": "kg CO2e",
                 "default_emission_factor": 2.68,  # USDA factor for diesel
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "verification_status": "factors_verified",
                 "data_source": "USDA Agricultural Research Service",
             },
@@ -117,7 +117,7 @@ def create_manual_carbon_entries():
                 "category": "Offset",
                 "unit": "kg CO2e",
                 "default_emission_factor": -0.5,  # Negative = carbon sequestration
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "verification_status": "factors_verified",
                 "data_source": "USDA NRCS Carbon Sequestration Guidelines",
             },
@@ -164,7 +164,7 @@ def create_manual_carbon_entries():
         print(f"Transparency Score: {production.transparency_score}%")
 
         # Calculate USDA verification percentage
-        usda_entries = CarbonEntry.objects.filter(production_id=125, usda_verified=True).count()
+        usda_entries = CarbonEntry.objects.filter(production_id=125, usda_factors_based=True).count()
         total_entries = CarbonEntry.objects.filter(production_id=125).count()
         usda_verification_pct = (usda_entries / total_entries * 100) if total_entries > 0 else 0
 

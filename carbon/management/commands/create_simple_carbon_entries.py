@@ -56,7 +56,6 @@ class Command(BaseCommand):
                         co2e_amount=co2e_amount,
                         year=production.start_date.year,
                         description=f"Fuel emissions for {production.name}",
-                        usda_verified=True,
                         usda_factors_based=True,
                         verification_status="usda_verified",
                         data_source="USDA Agricultural Research Service",
@@ -92,7 +91,6 @@ class Command(BaseCommand):
                         co2e_amount=co2e_amount,
                         year=production.start_date.year,
                         description=f"Soil carbon sequestration for {production.name}",
-                        usda_verified=True,
                         usda_factors_based=True,
                         verification_status="usda_verified",
                         data_source="USDA Agricultural Research Service",
@@ -126,7 +124,7 @@ class Command(BaseCommand):
                 "unit": "liters",
                 "default_emission_factor": 2.70,
                 "description": "Diesel fuel for agricultural equipment",
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "usda_factors_based": True,
             },
             {
@@ -135,7 +133,7 @@ class Command(BaseCommand):
                 "unit": "hectares",
                 "default_emission_factor": -2.5,  # Negative for sequestration
                 "description": "Carbon sequestration through soil management",
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "usda_factors_based": True,
             },
         ]

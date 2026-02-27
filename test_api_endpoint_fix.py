@@ -68,7 +68,7 @@ def test_general_event_api_endpoint():
             print(f"   Status: {response.status_code} OK")
             print(f"   CO2e: {result.get('co2e')} kg")
             print(f"   Method: {result.get('calculation_method')}")
-            print(f"   USDA Verified: {result.get('usda_verified')}")
+            print(f"   USDA Verified: {result.get('usda_factors_used')}")
             print(f"   Response Time: {result.get('response_time_ms'):.1f}ms")
 
             # Verify the fix worked
@@ -92,7 +92,7 @@ def test_general_event_api_endpoint():
             else:
                 print(f"   📝 METHOD: {method}")
 
-            if result.get("usda_verified"):
+            if result.get("usda_factors_used"):
                 print(f"   ✅ EPA/USDA VERIFIED: Now using government emission factors")
             else:
                 print(f"   ⚠️  NOT VERIFIED: Still using estimates")

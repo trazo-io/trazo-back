@@ -108,7 +108,7 @@ class CarbonTransparencyService:
                     transparency_data.get("transparency_percentage", 0)
                 ),
                 "carbon_data_verified": carbon_data["entry_count"] > 0,
-                "usda_verified": self._check_usda_verification(production),
+                "usda_factors_used": self._check_usda_verification(production),
                 "blockchain_verified": self._check_blockchain_verification(production),
                 "documentation_completeness": transparency_data.get("completeness_score", 0),
                 "category_breakdown": transparency_data.get("category_breakdown", {}),
@@ -440,12 +440,12 @@ class CarbonTransparencyService:
         PHASE 1 FIX (2025-12-12): This now checks if USDA factors were used in the
         carbon calculation (via USDAComplianceRecord.is_usda_verified property).
 
-        Returns True if at least one CarbonEntry exists with usda_verified=True,
+        Returns True if at least one CarbonEntry exists with usda_factors_based=True,
         which indicates USDA factors were applied to the carbon calculation.
         """
         from ..models import CarbonEntry
 
-        return CarbonEntry.objects.filter(production=production, usda_verified=True).exists()
+        return CarbonEntry.objects.filter(production=production, usda_factors_based=True).exists()
 
     def _check_blockchain_verification(self, production: History) -> bool:
         """Check if production has blockchain verified carbon data."""
@@ -578,7 +578,7 @@ class CarbonTransparencyService:
                 )
 
         # Verification recommendations
-        if not verification_standards.get("usda_verified", False):
+        if not verification_standards.get("usda_factors_used", False):
             recommendations.append(
                 {
                     "category": "Verification",
@@ -815,7 +815,7 @@ class CarbonTransparencyService:
         carbon_entries = CarbonEntry.objects.filter(production=production)
         if carbon_entries.exists():
             score += 20
-            if carbon_entries.filter(usda_verified=True).exists():
+            if carbon_entries.filter(usda_factors_based=True).exists():
                 score += 10
 
         # Event documentation (20 points)
@@ -838,7 +838,7 @@ class CarbonTransparencyService:
 
         # USDA verification (40 points)
         carbon_entries = CarbonEntry.objects.filter(production=production)
-        if carbon_entries.filter(usda_verified=True).exists():
+        if carbon_entries.filter(usda_factors_based=True).exists():
             score += 40
 
         # Blockchain verification (30 points)

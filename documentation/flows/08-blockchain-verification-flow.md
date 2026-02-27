@@ -603,7 +603,7 @@ class TestBlockchainIntegration(TestCase):
             'total_emissions': 1247.5,
             'total_offsets': 892.3,
             'crop_type': 'Citrus',
-            'usda_verified': True
+            'usda_factors_used': True
         }
         
         result = self.blockchain_service.create_carbon_record(

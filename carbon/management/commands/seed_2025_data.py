@@ -43,7 +43,7 @@ class Command(BaseCommand):
                     "unit": "kg",
                     "category": "transportation",
                     "default_emission_factor": 1.5,
-                    "usda_verified": True,
+                    "usda_factors_used": True,
                     "cost_per_unit": 2.0,
                 },
             )[0]
@@ -54,7 +54,7 @@ class Command(BaseCommand):
                     "unit": "kWh",
                     "category": "energy",
                     "default_emission_factor": 0.8,
-                    "usda_verified": True,
+                    "usda_factors_used": True,
                     "cost_per_unit": 0.15,
                 },
             )[0]
@@ -65,7 +65,7 @@ class Command(BaseCommand):
                     "unit": "kg",
                     "category": "waste",
                     "default_emission_factor": 0.3,
-                    "usda_verified": True,
+                    "usda_factors_used": True,
                     "cost_per_unit": 0.05,
                 },
             )[0]
@@ -76,7 +76,7 @@ class Command(BaseCommand):
                     "unit": "tree",
                     "category": "offset",
                     "default_emission_factor": -25.0,
-                    "usda_verified": True,
+                    "usda_factors_used": True,
                     "cost_per_unit": 10.0,
                 },
             )[0]
@@ -87,7 +87,7 @@ class Command(BaseCommand):
                     "unit": "credit",
                     "category": "offset",
                     "default_emission_factor": -10.0,
-                    "usda_verified": True,
+                    "usda_factors_used": True,
                     "cost_per_unit": 15.0,
                 },
             )[0]
@@ -111,7 +111,7 @@ class Command(BaseCommand):
                 "year": 2025,
                 "description": "2025 fertilization",
                 "cost": 150.0,
-                "usda_verified": True,
+                "usda_factors_based": True,
                 "timestamp": timezone.now() - datetime.timedelta(days=45),
             },
             {
@@ -125,7 +125,7 @@ class Command(BaseCommand):
                 "year": 2025,
                 "description": "2025 equipment operation",
                 "cost": 63.0,
-                "usda_verified": True,
+                "usda_factors_based": True,
                 "timestamp": timezone.now() - datetime.timedelta(days=40),
             },
             {
@@ -139,7 +139,7 @@ class Command(BaseCommand):
                 "year": 2025,
                 "description": "2025 product transport",
                 "cost": 30.0,
-                "usda_verified": True,
+                "usda_factors_based": True,
                 "timestamp": timezone.now() - datetime.timedelta(days=35),
             },
             {
@@ -153,7 +153,7 @@ class Command(BaseCommand):
                 "year": 2025,
                 "description": "2025 electricity usage",
                 "cost": 15.0,
-                "usda_verified": True,
+                "usda_factors_based": True,
                 "timestamp": timezone.now() - datetime.timedelta(days=30),
             },
             {
@@ -167,7 +167,7 @@ class Command(BaseCommand):
                 "year": 2025,
                 "description": "2025 waste management",
                 "cost": 2.5,
-                "usda_verified": True,
+                "usda_factors_based": True,
                 "timestamp": timezone.now() - datetime.timedelta(days=25),
             },
             {
@@ -181,7 +181,7 @@ class Command(BaseCommand):
                 "year": 2025,
                 "description": "2025 tree planting offset (20 trees)",
                 "cost": 200.0,
-                "usda_verified": True,
+                "usda_factors_based": True,
                 "timestamp": timezone.now() - datetime.timedelta(days=20),
             },
             {
@@ -195,7 +195,7 @@ class Command(BaseCommand):
                 "year": 2025,
                 "description": "2025 renewable energy credits",
                 "cost": 150.0,
-                "usda_verified": True,
+                "usda_factors_based": True,
                 "timestamp": timezone.now() - datetime.timedelta(days=15),
             },
         ]
@@ -235,7 +235,7 @@ class Command(BaseCommand):
                 "company_count": 120,
                 "unit": "kg CO2e/kg",
                 "source": "USDA 2025",
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "crop_type": "Oranges",
             },
         )
@@ -328,7 +328,7 @@ class Command(BaseCommand):
                 "total_offsets": 30.0,
                 "net_footprint": 95.0,
                 "carbon_score": 85,
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "cost_savings": 450.0,
                 "recommendations": json.dumps(
                     [
@@ -368,7 +368,7 @@ class Command(BaseCommand):
                 "minimum_score": 90,
                 "is_automatic": True,
                 "criteria": json.dumps({"carbon_score": 90}),
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
         )
 
@@ -379,7 +379,7 @@ class Command(BaseCommand):
                 "minimum_score": 75,
                 "is_automatic": True,
                 "criteria": json.dumps({"carbon_score": 75}),
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
         )
 
@@ -390,7 +390,7 @@ class Command(BaseCommand):
                 "minimum_score": 0,
                 "is_automatic": False,
                 "criteria": json.dumps({"usda_organic": True}),
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
         )
 

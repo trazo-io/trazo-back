@@ -599,7 +599,7 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 "total_photos": dashboard_data.get("total_photos", 0),
                 "total_verified_events": dashboard_data.get("total_verified_events", 0),
                 "verification_breakdown": {
-                    "usda_verified": dashboard_data.get("total_verified_events", 0),
+                    "usda_factors_used": dashboard_data.get("total_verified_events", 0),
                     # FIX: Get blockchain_verified from comprehensive data verification_status
                     "blockchain_verified": dashboard_data.get("verification_status", {}).get("blockchain_verified", 0),
                     "photo_verified": dashboard_data.get("total_photos", 0),
@@ -972,11 +972,10 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 total_entries = carbon_entries.count()
 
                 if total_entries > 0:
-                    usda_verified_entries = carbon_entries.filter(usda_verified=True).count()
                     usda_factors_based_entries = carbon_entries.filter(usda_factors_based=True).count()
 
-                    # Production is USDA verified if majority of entries are USDA verified or factors-based
-                    production_usda_verified = usda_verified_entries > 0 or usda_factors_based_entries >= (
+                    # Production is USDA verified if majority of entries are USDA factors-based
+                    production_usda_verified = usda_factors_based_entries >= (
                         total_entries * 0.5
                     )
 
@@ -1150,14 +1149,13 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             # Check carbon/USDA verification for this production
             carbon_entries = CarbonEntry.objects.filter(production=history)
             total_carbon_entries = carbon_entries.count()
-            usda_verified_entries = carbon_entries.filter(usda_verified=True).count() if total_carbon_entries > 0 else 0
             usda_factors_based_entries = (
                 carbon_entries.filter(usda_factors_based=True).count() if total_carbon_entries > 0 else 0
             )
 
             production_usda_verified = False
             if total_carbon_entries > 0:
-                production_usda_verified = usda_verified_entries > 0 or usda_factors_based_entries >= (
+                production_usda_verified = usda_factors_based_entries >= (
                     total_carbon_entries * 0.5
                 )
 
@@ -1221,7 +1219,7 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                         "missing_items": missing_items,
                         "current_events": event_count,
                         "current_photos": photos_count,
-                        "usda_verified": production_usda_verified,
+                        "usda_factors_used": production_usda_verified,
                         "blockchain_verified": blockchain_verified,
                         "potential_improvement": f"+{potential_improvement}% transparency",
                         "action_url": f"/admin/dashboard/establishment/{establishment.id}/parcel/{parcel.id}",
@@ -1300,11 +1298,10 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 total_entries = carbon_entries.count()
 
                 if total_entries > 0:
-                    usda_verified_entries = carbon_entries.filter(usda_verified=True).count()
                     usda_factors_based_entries = carbon_entries.filter(usda_factors_based=True).count()
 
-                    # Production is USDA verified if majority of entries are USDA verified or factors-based
-                    is_usda_verified = usda_verified_entries > 0 or usda_factors_based_entries >= (total_entries * 0.5)
+                    # Production is USDA verified if majority of entries are USDA factors-based
+                    is_usda_verified = usda_factors_based_entries >= (total_entries * 0.5)
 
                     if is_usda_verified:
                         usda_verified_count += 1

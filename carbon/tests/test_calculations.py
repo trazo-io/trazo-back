@@ -76,7 +76,7 @@ class TestCarbonFootprintCalculator(TransactionTestCase):
             best_practice=900.0,
             carbon_credit_potential=0.5,
             typical_cost_per_hectare=5000.0,
-            usda_verified=True,
+            usda_factors_used=True,
         )
 
         # Create test production
@@ -108,7 +108,7 @@ class TestCarbonFootprintCalculator(TransactionTestCase):
 
         self.assertAlmostEqual(result["total_emissions"], expected_total, delta=0.1)
         self.assertEqual(result["emissions_per_acre"], expected_total / 100.0)
-        self.assertTrue(result["usda_verified"])
+        self.assertTrue(result["usda_factors_used"])
         self.assertIn("fertilizer", result["breakdown"])
 
     def test_fuel_emissions_calculation(self):
@@ -206,7 +206,7 @@ class TestCarbonFootprintCalculator(TransactionTestCase):
             max_emissions=2500.0,
             unit="kg CO2e per hectare",
             source="USDA Test Data",
-            usda_verified=True,
+            usda_factors_used=True,
             crop_type="citrus",
         )
 
@@ -245,7 +245,7 @@ class TestEventCarbonCalculator(TestCase):
 
         self.assertAlmostEqual(result["total_emissions"], expected_emissions, delta=0.1)
         self.assertIn("breakdown", result)
-        self.assertTrue(result["usda_verified"])
+        self.assertTrue(result["usda_factors_used"])
         self.assertEqual(result["emission_source"], "fertilizer_application")
 
     def test_equipment_event_calculation(self):

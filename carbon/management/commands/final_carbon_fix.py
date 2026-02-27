@@ -37,7 +37,7 @@ class Command(BaseCommand):
                     "unit": "liters",
                     "default_emission_factor": 2.70,
                     "description": "Demo fuel emissions for testing",
-                    "usda_verified": True,
+                    "usda_factors_used": True,
                     "usda_factors_based": True,
                 },
             )
@@ -63,7 +63,7 @@ class Command(BaseCommand):
                         """
                         INSERT INTO carbon_carbonentry (
                             year, type, amount, description, created_by_id, establishment_id, production_id, source_id,
-                            timestamp, created_at, iot_device_id, updated_at, usda_verified, co2e_amount, data_source,
+                            timestamp, created_at, iot_device_id, updated_at, co2e_amount, data_source,
                             usda_factors_based, verification_status, additionality_evidence, additionality_verified,
                             audit_scheduled_date, baseline_data, documentation_complete, evidence_requirements_met,
                             methodology_template, permanence_plan, registry_verification_id, third_party_verification_url,
@@ -72,7 +72,7 @@ class Command(BaseCommand):
                             registry_submission_id, verification_report_url, audit_status, effective_amount,
                             evidence_documents, evidence_photos, trust_score, verification_level
                         ) VALUES (
-                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                         )
                     """,
                         [
@@ -88,7 +88,6 @@ class Command(BaseCommand):
                             now,  # created_at
                             "",  # iot_device_id
                             now,  # updated_at
-                            True,  # usda_verified
                             co2e_amount,  # co2e_amount
                             "USDA Agricultural Research Service",  # data_source
                             True,  # usda_factors_based

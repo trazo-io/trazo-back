@@ -68,7 +68,7 @@ practices.append("Local production")
 # NEW: Based on actual data
 if obj.history.parcel and obj.history.parcel.certified:
     practices.append("Certified sustainable")
-if carbon_entry and carbon_entry.usda_verified:
+if carbon_entry and carbon_entry.usda_factors_used:
     practices.append("Carbon verified")
 ```
 

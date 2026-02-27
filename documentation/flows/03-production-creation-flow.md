@@ -168,7 +168,7 @@ class CropType(models.Model):
     organic_premium = CharField(max_length=20, default='0%')
     sustainable_premium = CharField(max_length=20, default='0%')
     
-    usda_verified = BooleanField(default=False)
+    usda_factors_used = BooleanField(default=False)
     is_active = BooleanField(default=True)
 
 class ProductionTemplate(models.Model):
@@ -231,7 +231,7 @@ def _create_initial_blockchain_record(self, history, crop_type):
             'total_offsets': 0.0,
             'crop_type': crop_type.name,
             'calculation_method': 'initial_production_setup',
-            'usda_verified': False,
+            'usda_factors_used': False,
             'timestamp': int(history.start_date.timestamp()),
             'carbon_score': 50,  # Initial neutral score
             'industry_percentile': 50,
@@ -657,7 +657,7 @@ const CropCard: React.FC<CropCardProps> = ({ crop, isSelected, onClick }) => (
         <Badge colorScheme="green">
           {crop.category.replace('_', ' ')}
         </Badge>
-        {crop.usda_verified && (
+        {crop.usda_factors_used && (
           <Badge colorScheme="blue">
             USDA Verified
           </Badge>
@@ -697,7 +697,7 @@ class ProductionCreationCache:
         
         if not cached_data:
             crop_types = CropType.objects.filter(is_active=True).only(
-                'id', 'name', 'category', 'slug', 'usda_verified'
+                'id', 'name', 'category', 'slug', 'usda_factors_used'
             ).order_by('name')
             
             cached_data = CropTypeDropdownSerializer(crop_types, many=True).data

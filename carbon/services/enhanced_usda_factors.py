@@ -111,7 +111,7 @@ class USDAValidationResult:
             "validation_details": self.validation_details,
             "recommendations": self.recommendations,
             "timestamp": self.timestamp.isoformat(),
-            "usda_verified": self.is_compliant and self.confidence_score >= 0.9,
+            "usda_factors_used": self.is_compliant and self.confidence_score >= 0.9,
         }
 
 

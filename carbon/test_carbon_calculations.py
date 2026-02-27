@@ -113,7 +113,7 @@ class TestCarbonCalculations(TransactionTestCase):
             best_practice=900.0,
             carbon_credit_potential=0.5,
             typical_cost_per_hectare=5000.0,
-            usda_verified=True,
+            usda_factors_used=True,
         )
 
         self.production = History.objects.create(
@@ -132,7 +132,6 @@ class TestCarbonCalculations(TransactionTestCase):
             unit="kg N",
             category="Fertilizer",
             default_emission_factor=10.5,
-            usda_verified=True,
             usda_factors_based=True,
             verification_status="factors_verified",
             data_source="USDA Agricultural Research Service",
@@ -143,7 +142,6 @@ class TestCarbonCalculations(TransactionTestCase):
             unit="liters",
             category="Fuel",
             default_emission_factor=2.70,
-            usda_verified=True,
             usda_factors_based=True,
             verification_status="factors_verified",
             data_source="EPA Emission Factors 2023",
@@ -173,7 +171,7 @@ class TestCarbonCalculations(TransactionTestCase):
         # Expected: 200 kg N * 10.5 kg CO2e/kg N = 2100 kg CO2e
         self.assertEqual(result["total_emissions"], 2100.0)
         self.assertEqual(result["emissions_per_acre"], 21.0)  # 2100/100
-        self.assertTrue(result["usda_verified"])
+        self.assertTrue(result["usda_factors_used"])
 
     def test_fuel_emissions_calculation(self):
         """Test fuel emissions are calculated correctly"""
@@ -432,7 +430,7 @@ class TestEventCarbonCalculator(TestCase):
         # Expected: (100 * 10.5) + (50 * 1.25) + (30 * 0.60) = 1130.5
         self.assertAlmostEqual(result["total_emissions"], 1130.5, delta=0.1)
         self.assertIn("breakdown", result)
-        self.assertTrue(result["usda_verified"])
+        self.assertTrue(result["usda_factors_used"])
 
     def test_equipment_event_calculation(self):
         """Test carbon calculation for equipment events"""

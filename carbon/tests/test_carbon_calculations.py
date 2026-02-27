@@ -40,22 +40,22 @@ from carbon.services.circuit_breaker_enhanced import CircuitBreakerManager
 # Mock emission factor functions since they don't exist
 def get_fertilizer_factor(fertilizer_type):
     """Mock fertilizer factor function"""
-    return {"value": 11.0, "unit": "kg CO2e per kg N", "usda_verified": True}
+    return {"value": 11.0, "unit": "kg CO2e per kg N", "usda_factors_used": True}
 
 
 def get_fuel_factor(fuel_type):
     """Mock fuel factor function"""
-    return {"value": 2.70, "unit": "kg CO2e per liter", "usda_verified": True}
+    return {"value": 2.70, "unit": "kg CO2e per liter", "usda_factors_used": True}
 
 
 def get_electricity_factor(region):
     """Mock electricity factor function"""
-    return {"value": 0.5, "unit": "kg CO2e per kWh", "usda_verified": True}
+    return {"value": 0.5, "unit": "kg CO2e per kWh", "usda_factors_used": True}
 
 
 def get_irrigation_factor(irrigation_type):
     """Mock irrigation factor function"""
-    return {"value": 0.3, "unit": "kg CO2e per hectare", "usda_verified": True}
+    return {"value": 0.3, "unit": "kg CO2e per hectare", "usda_factors_used": True}
 
 
 from company.models import Company, Establishment
@@ -83,98 +83,98 @@ class EmissionFactorsTestCase(TestCase):
         if fertilizer_type == "invalid_fertilizer_type":
             raise ValueError("Invalid fertilizer type")
         factors = {
-            "nitrogen": {"value": 11.0, "unit": "kg CO2e per kg N", "usda_verified": True},
-            "phosphorus": {"value": 1.0, "unit": "kg CO2e per kg P2O5", "usda_verified": True},
-            "potassium": {"value": 0.7, "unit": "kg CO2e per kg K2O", "usda_verified": True},
+            "nitrogen": {"value": 11.0, "unit": "kg CO2e per kg N", "usda_factors_used": True},
+            "phosphorus": {"value": 1.0, "unit": "kg CO2e per kg P2O5", "usda_factors_used": True},
+            "potassium": {"value": 0.7, "unit": "kg CO2e per kg K2O", "usda_factors_used": True},
         }
-        return factors.get(fertilizer_type, {"value": 11.0, "unit": "kg CO2e per kg N", "usda_verified": True})
+        return factors.get(fertilizer_type, {"value": 11.0, "unit": "kg CO2e per kg N", "usda_factors_used": True})
 
     def get_fuel_factor(self, fuel_type):
         """Mock fuel factor function"""
         factors = {
-            "diesel": {"value": 2.70, "unit": "kg CO2e per liter", "usda_verified": True},
-            "gasoline": {"value": 2.32, "unit": "kg CO2e per liter", "usda_verified": True},
+            "diesel": {"value": 2.70, "unit": "kg CO2e per liter", "usda_factors_used": True},
+            "gasoline": {"value": 2.32, "unit": "kg CO2e per liter", "usda_factors_used": True},
         }
-        return factors.get(fuel_type, {"value": 2.70, "unit": "kg CO2e per liter", "usda_verified": True})
+        return factors.get(fuel_type, {"value": 2.70, "unit": "kg CO2e per liter", "usda_factors_used": True})
 
     def get_electricity_factor(self, region):
         """Mock electricity factor function"""
         factors = {
-            "CA": {"value": 0.3, "unit": "kg CO2e per kWh", "usda_verified": True},
-            "US_AVERAGE": {"value": 0.5, "unit": "kg CO2e per kWh", "usda_verified": True},
+            "CA": {"value": 0.3, "unit": "kg CO2e per kWh", "usda_factors_used": True},
+            "US_AVERAGE": {"value": 0.5, "unit": "kg CO2e per kWh", "usda_factors_used": True},
         }
-        return factors.get(region, {"value": 0.5, "unit": "kg CO2e per kWh", "usda_verified": True})
+        return factors.get(region, {"value": 0.5, "unit": "kg CO2e per kWh", "usda_factors_used": True})
 
     def get_irrigation_factor(self, irrigation_type):
         """Mock irrigation factor function"""
         factors = {
-            "drip": {"value": 0.2, "unit": "kg CO2e per hectare", "usda_verified": True},
-            "flood": {"value": 0.4, "unit": "kg CO2e per hectare", "usda_verified": True},
+            "drip": {"value": 0.2, "unit": "kg CO2e per hectare", "usda_factors_used": True},
+            "flood": {"value": 0.4, "unit": "kg CO2e per hectare", "usda_factors_used": True},
         }
-        return factors.get(irrigation_type, {"value": 0.3, "unit": "kg CO2e per hectare", "usda_verified": True})
+        return factors.get(irrigation_type, {"value": 0.3, "unit": "kg CO2e per hectare", "usda_factors_used": True})
 
     def test_get_fertilizer_factor_nitrogen(self):
         """Test nitrogen fertilizer emission factor"""
         factor = self.get_fertilizer_factor("nitrogen")
         self.assertEqual(factor["value"], 11.0)
         self.assertEqual(factor["unit"], "kg CO2e per kg N")
-        self.assertTrue(factor["usda_verified"])
+        self.assertTrue(factor["usda_factors_used"])
 
     def test_get_fertilizer_factor_phosphorus(self):
         """Test phosphorus fertilizer emission factor"""
         factor = self.get_fertilizer_factor("phosphorus")
         self.assertEqual(factor["value"], 1.0)
         self.assertEqual(factor["unit"], "kg CO2e per kg P2O5")
-        self.assertTrue(factor["usda_verified"])
+        self.assertTrue(factor["usda_factors_used"])
 
     def test_get_fertilizer_factor_potassium(self):
         """Test potassium fertilizer emission factor"""
         factor = self.get_fertilizer_factor("potassium")
         self.assertEqual(factor["value"], 0.7)
         self.assertEqual(factor["unit"], "kg CO2e per kg K2O")
-        self.assertTrue(factor["usda_verified"])
+        self.assertTrue(factor["usda_factors_used"])
 
     def test_get_fuel_factor_diesel(self):
         """Test diesel fuel emission factor"""
         diesel_factor = self.get_fuel_factor("diesel")
         self.assertEqual(diesel_factor["value"], 2.70)
         self.assertEqual(diesel_factor["unit"], "kg CO2e per liter")
-        self.assertTrue(diesel_factor["usda_verified"])
+        self.assertTrue(diesel_factor["usda_factors_used"])
 
     def test_get_fuel_factor_gasoline(self):
         """Test gasoline fuel emission factor"""
         gasoline_factor = self.get_fuel_factor("gasoline")
         self.assertEqual(gasoline_factor["value"], 2.32)
         self.assertEqual(gasoline_factor["unit"], "kg CO2e per liter")
-        self.assertTrue(gasoline_factor["usda_verified"])
+        self.assertTrue(gasoline_factor["usda_factors_used"])
 
     def test_get_electricity_factor_california(self):
         """Test California electricity grid emission factor"""
         ca_factor = self.get_electricity_factor("CA")
         self.assertEqual(ca_factor["value"], 0.3)
         self.assertEqual(ca_factor["unit"], "kg CO2e per kWh")
-        self.assertTrue(ca_factor["usda_verified"])
+        self.assertTrue(ca_factor["usda_factors_used"])
 
     def test_get_electricity_factor_us_average(self):
         """Test US average electricity grid emission factor"""
         avg_factor = self.get_electricity_factor("US_AVERAGE")
         self.assertEqual(avg_factor["value"], 0.5)
         self.assertEqual(avg_factor["unit"], "kg CO2e per kWh")
-        self.assertTrue(avg_factor["usda_verified"])
+        self.assertTrue(avg_factor["usda_factors_used"])
 
     def test_get_irrigation_factor_drip(self):
         """Test drip irrigation emission factor"""
         drip_factor = self.get_irrigation_factor("drip")
         self.assertEqual(drip_factor["value"], 0.2)
         self.assertEqual(drip_factor["unit"], "kg CO2e per hectare")
-        self.assertTrue(drip_factor["usda_verified"])
+        self.assertTrue(drip_factor["usda_factors_used"])
 
     def test_get_irrigation_factor_flood(self):
         """Test flood irrigation emission factor"""
         flood_factor = self.get_irrigation_factor("flood")
         self.assertEqual(flood_factor["value"], 0.4)
         self.assertEqual(flood_factor["unit"], "kg CO2e per hectare")
-        self.assertTrue(flood_factor["usda_verified"])
+        self.assertTrue(flood_factor["usda_factors_used"])
 
     def test_emission_factors_caching(self):
         """Test that emission factors are cached properly"""
@@ -195,8 +195,8 @@ class EmissionFactorsTestCase(TestCase):
     def test_emission_factor_metadata(self):
         """Test emission factor metadata includes source information"""
         factor = self.get_fertilizer_factor("nitrogen")
-        self.assertIn("usda_verified", factor)
-        self.assertTrue(factor["usda_verified"])
+        self.assertIn("usda_factors_used", factor)
+        self.assertTrue(factor["usda_factors_used"])
 
 
 class CarbonCalculatorTestCase(TestCase):
@@ -246,7 +246,7 @@ class CarbonCalculatorTestCase(TestCase):
 
         self.assertAlmostEqual(carbon_result["co2e_kg"], expected_co2e, places=1)
         self.assertEqual(carbon_result["emission_factor"], 11.0)
-        self.assertTrue(carbon_result["usda_verified"])
+        self.assertTrue(carbon_result["usda_factors_used"])
 
     def test_fertilizer_carbon_calculation_organic_adjustment(self):
         """Test organic fertilizer carbon calculation adjustments."""
@@ -311,7 +311,7 @@ class CarbonCalculatorTestCase(TestCase):
         self.assertIn("total_co2e_kg", total_footprint)
         self.assertIn("breakdown_by_category", total_footprint)
         self.assertIn("co2e_per_hectare", total_footprint)
-        self.assertIn("usda_verified_percentage", total_footprint)
+        self.assertIn("usda_factors_used_percentage", total_footprint)
 
         # Should be sum of all events
         self.assertGreater(total_footprint["total_co2e_kg"], 0)
@@ -410,7 +410,7 @@ class BlockchainVerificationTestCase(TestCase):
             co2e_amount=1100.0,
             year=2024,
             month=6,
-            usda_verified=True,
+            usda_factors_based=True,
             created_by=self.user,
         )
 
@@ -443,7 +443,7 @@ class BlockchainVerificationTestCase(TestCase):
                 co2e_amount=550.0 + i * 110,
                 year=2024,
                 month=6,
-                usda_verified=True,
+                usda_factors_based=True,
                 created_by=self.user,
             )
             carbon_entries.append(entry)
@@ -464,7 +464,7 @@ class BlockchainVerificationTestCase(TestCase):
             co2e_amount=67.0,
             year=2024,
             month=6,
-            usda_verified=True,
+            usda_factors_based=True,
             created_by=self.user,
         )
 
@@ -786,7 +786,7 @@ class CarbonReportingTestCase(TestCase):
                 co2e_amount=550.0 + i * 55,
                 year=2024,
                 month=i + 1,
-                usda_verified=True,
+                usda_factors_based=True,
                 created_by=self.user,
             )
             entries.append(entry)
@@ -799,7 +799,7 @@ class CarbonReportingTestCase(TestCase):
             data={
                 "total_emissions": sum(e.co2e_amount for e in entries),
                 "emissions_by_month": {str(e.month): e.co2e_amount for e in entries},
-                "usda_verified_percentage": 100.0,
+                "usda_factors_used_percentage": 100.0,
             },
             generated_by=self.user,
         )
@@ -817,7 +817,7 @@ class CarbonReportingTestCase(TestCase):
             description="Achieved 50% below industry average emissions",
             criteria={
                 "max_co2e_per_hectare": 500.0,
-                "min_usda_verified_percentage": 80.0,
+                "min_usda_factors_used_percentage": 80.0,
                 "sustainable_practices": ["cover_crops", "reduced_tillage"],
             },
             badge_level="gold",
@@ -840,7 +840,7 @@ class CarbonReportingTestCase(TestCase):
         #         year=year,
         #         total_co2e_kg=1000.0 - (year - 2022) * 100,  # Decreasing trend
         #         co2e_per_hectare=100.0 - (year - 2022) * 10,
-        #         usda_verified_percentage=80.0 + (year - 2022) * 5,
+        #         usda_factors_used_percentage=80.0 + (year - 2022) * 5,
         #     )
         #     footprints.append(footprint)
 

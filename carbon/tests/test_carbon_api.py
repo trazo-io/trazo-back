@@ -57,14 +57,14 @@ class CarbonCalculationAPITestCase(TestCase):
         self.assertIsInstance(response.data, dict)
 
         # Verify expected fields are present
-        expected_fields = ["co2e", "efficiency_score", "usda_verified", "calculation_method", "event_type", "timestamp"]
+        expected_fields = ["co2e", "efficiency_score", "usda_factors_used", "calculation_method", "event_type", "timestamp"]
         for field in expected_fields:
             self.assertIn(field, response.data, f"Missing expected field: {field}")
 
         # Verify data types
         self.assertIsInstance(response.data["co2e"], (int, float))
         self.assertIsInstance(response.data["efficiency_score"], (int, float))
-        self.assertIsInstance(response.data["usda_verified"], bool)
+        self.assertIsInstance(response.data["usda_factors_used"], bool)
         self.assertIsInstance(response.data["calculation_method"], str)
         self.assertIsInstance(response.data["event_type"], str)
 
@@ -319,8 +319,8 @@ class CarbonCalculationAPITestCase(TestCase):
         self.assertGreaterEqual(efficiency_score, 0)
         self.assertLessEqual(efficiency_score, 100)
 
-        # USDA verified should be boolean
-        self.assertIsInstance(response_data.get("usda_verified"), bool)
+        # USDA factors used should be boolean
+        self.assertIsInstance(response_data.get("usda_factors_used"), bool)
 
         # Strings should be strings
         self.assertIsInstance(response_data.get("calculation_method"), str)

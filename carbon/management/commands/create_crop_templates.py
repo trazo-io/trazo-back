@@ -62,7 +62,7 @@ class Command(BaseCommand):
                 "unit": "kg applied",
                 "category": "Fertilizer",
                 "default_emission_factor": 2.98,  # kg CO2e per kg fertilizer
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
             {
                 "name": "Citrus Pruning Equipment",
@@ -70,7 +70,7 @@ class Command(BaseCommand):
                 "unit": "liters diesel",
                 "category": "Fuel",
                 "default_emission_factor": 2.70,  # kg CO2e per liter diesel
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
             {
                 "name": "Citrus Irrigation System",
@@ -78,7 +78,7 @@ class Command(BaseCommand):
                 "unit": "kWh",
                 "category": "Energy",
                 "default_emission_factor": 0.45,  # kg CO2e per kWh (US average)
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
             # Almond-specific sources
             {
@@ -87,7 +87,7 @@ class Command(BaseCommand):
                 "unit": "kg N applied",
                 "category": "Fertilizer",
                 "default_emission_factor": 5.87,  # kg CO2e per kg N (includes N2O emissions)
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
             {
                 "name": "Almond Harvest Equipment",
@@ -95,7 +95,7 @@ class Command(BaseCommand):
                 "unit": "liters diesel",
                 "category": "Fuel",
                 "default_emission_factor": 2.70,
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
             {
                 "name": "Almond Pollination Transport",
@@ -103,7 +103,7 @@ class Command(BaseCommand):
                 "unit": "km transported",
                 "category": "Transport",
                 "default_emission_factor": 0.12,  # kg CO2e per km
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
             # Soybean-specific sources
             {
@@ -112,7 +112,7 @@ class Command(BaseCommand):
                 "unit": "liters diesel",
                 "category": "Fuel",
                 "default_emission_factor": 2.70,
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
             {
                 "name": "Soybean Herbicide Application",
@@ -120,7 +120,7 @@ class Command(BaseCommand):
                 "unit": "liters applied",
                 "category": "Chemical",
                 "default_emission_factor": 8.5,  # kg CO2e per liter herbicide
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
             {
                 "name": "Soybean Nitrogen Fixation Credit",
@@ -128,7 +128,7 @@ class Command(BaseCommand):
                 "unit": "kg N fixed",
                 "category": "Offset",
                 "default_emission_factor": -5.87,  # Negative = carbon credit
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
             # Corn-specific sources
             {
@@ -137,7 +137,7 @@ class Command(BaseCommand):
                 "unit": "kg N applied",
                 "category": "Fertilizer",
                 "default_emission_factor": 5.87,
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
             {
                 "name": "Corn Harvest Equipment",
@@ -145,7 +145,7 @@ class Command(BaseCommand):
                 "unit": "liters diesel",
                 "category": "Fuel",
                 "default_emission_factor": 2.70,
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
             {
                 "name": "Corn Drying Energy",
@@ -153,7 +153,7 @@ class Command(BaseCommand):
                 "unit": "cubic meters",
                 "category": "Energy",
                 "default_emission_factor": 2.0,  # kg CO2e per cubic meter natural gas
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
             # General sustainable practices (offsets)
             {
@@ -162,7 +162,7 @@ class Command(BaseCommand):
                 "unit": "hectares covered",
                 "category": "Offset",
                 "default_emission_factor": -1200,  # kg CO2e sequestered per hectare per year
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
             {
                 "name": "No-Till Practice Credit",
@@ -170,7 +170,7 @@ class Command(BaseCommand):
                 "unit": "hectares no-till",
                 "category": "Offset",
                 "default_emission_factor": -800,  # kg CO2e per hectare per year
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
             {
                 "name": "Precision Agriculture Efficiency",
@@ -178,7 +178,7 @@ class Command(BaseCommand):
                 "unit": "hectares precision managed",
                 "category": "Offset",
                 "default_emission_factor": -300,  # kg CO2e saved per hectare
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
         ]
 
@@ -222,7 +222,7 @@ class Command(BaseCommand):
                 "company_count": 150,
                 "unit": "kg CO2e per hectare per year",
                 "source": "Trazo Crop Templates",
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
             {
                 "industry": "Citrus Production",
@@ -235,7 +235,7 @@ class Command(BaseCommand):
                 "company_count": 120,
                 "unit": "kg CO2e per hectare per year",
                 "source": "Trazo Crop Templates",
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
             # Almond benchmarks
             {
@@ -249,7 +249,7 @@ class Command(BaseCommand):
                 "company_count": 200,
                 "unit": "kg CO2e per hectare per year",
                 "source": "Trazo Crop Templates",
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
             # Soybean benchmarks
             {
@@ -263,7 +263,7 @@ class Command(BaseCommand):
                 "company_count": 500,
                 "unit": "kg CO2e per hectare per year",
                 "source": "Trazo Crop Templates",
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
             # Corn benchmarks
             {
@@ -277,7 +277,7 @@ class Command(BaseCommand):
                 "company_count": 800,
                 "unit": "kg CO2e per hectare per year",
                 "source": "Trazo Crop Templates",
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
             {
                 "industry": "Vegetable Production",
@@ -290,7 +290,7 @@ class Command(BaseCommand):
                 "company_count": 300,
                 "unit": "kg CO2e per hectare per year",
                 "source": "Trazo Crop Templates",
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
         ]
 

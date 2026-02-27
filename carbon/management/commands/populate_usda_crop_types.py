@@ -316,7 +316,7 @@ class Command(BaseCommand):
                     "Adopt no-till practices (show sustainable soil management)",
                     "Install variable rate technology (provide detailed input tracking)",
                 ],
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "data_source": "USDA Economic Research Service - Corn Production",
             },
             {
@@ -348,7 +348,7 @@ class Command(BaseCommand):
                     "Practice crop rotation with legumes (demonstrate soil health improvement)",
                     "Adopt conservation tillage (document sustainable soil management)",
                 ],
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "data_source": "USDA Economic Research Service - Wheat Production",
             },
             {
@@ -380,7 +380,7 @@ class Command(BaseCommand):
                     "Plant cover crops in rotation (demonstrate soil health improvement)",
                     "Adopt direct seeding (show sustainable planting practices)",
                 ],
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "data_source": "USDA Agricultural Research Service - Rice Production",
             },
             # === OILSEEDS (3) ===
@@ -413,7 +413,7 @@ class Command(BaseCommand):
                     "Use precision agriculture (provide detailed input tracking for transparency)",
                     "Maximize nitrogen fixation (demonstrate natural farming practices)",
                 ],
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "data_source": "USDA Economic Research Service - Soybean Production",
             },
             {
@@ -445,7 +445,7 @@ class Command(BaseCommand):
                     "Plant cover crops for soil health (sequester carbon)",
                     "Adopt sustainable cotton certification (premium markets)",
                 ],
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "data_source": "USDA Agricultural Research Service - Cotton Production",
             },
             {
@@ -477,7 +477,7 @@ class Command(BaseCommand):
                     "Plant pollinator-friendly varieties (support bee populations)",
                     "Use crop rotation benefits (break pest cycles)",
                 ],
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "data_source": "USDA Agricultural Research Service - Sunflower Production",
             },
             # === TREE FRUITS (4) ===
@@ -510,7 +510,7 @@ class Command(BaseCommand):
                     "Use precision fertilizer application (reduce fertilizer emissions by 20%)",
                     "Convert to organic practices (premium pricing 15-30%)",
                 ],
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "data_source": "USDA Agricultural Research Service - California Citrus Production",
             },
             {
@@ -542,7 +542,7 @@ class Command(BaseCommand):
                     "Plant beneficial insect habitat (natural pest control)",
                     "Adopt organic certification (premium market access)",
                 ],
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "data_source": "USDA Agricultural Research Service - Apple Production",
             },
             {
@@ -574,7 +574,7 @@ class Command(BaseCommand):
                     "Use integrated pest management (reduce chemical inputs)",
                     "Adopt sustainable viticulture certification (premium pricing)",
                 ],
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "data_source": "USDA Agricultural Research Service - Grape Production",
             },
             {
@@ -606,7 +606,7 @@ class Command(BaseCommand):
                     "Plant beneficial insect habitat (natural pest control)",
                     "Use precision fertilizer application (reduce nutrient runoff)",
                 ],
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "data_source": "USDA Agricultural Research Service - Avocado Production",
             },
             # === TREE NUTS (1) ===
@@ -639,7 +639,7 @@ class Command(BaseCommand):
                     "Implement integrated pest management (reduce chemical inputs)",
                     "Convert hull waste to biochar (carbon sequestration opportunity)",
                 ],
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "data_source": "USDA Agricultural Research Service - California Almond Board",
             },
             # === VEGETABLES (5) ===
@@ -672,7 +672,7 @@ class Command(BaseCommand):
                     "Plant beneficial insect habitat (natural pest control)",
                     "Use precision fertilizer application (reduce nutrient runoff)",
                 ],
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "data_source": "USDA Agricultural Research Service - Vegetable Production",
             },
             {
@@ -704,7 +704,7 @@ class Command(BaseCommand):
                     "Use cover crops (prevent soil erosion)",
                     "Adopt integrated pest management (reduce chemical inputs)",
                 ],
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "data_source": "USDA Agricultural Research Service - Potato Production",
             },
             {
@@ -736,7 +736,7 @@ class Command(BaseCommand):
                     "Use beneficial insects for pest control (reduce pesticides)",
                     "Adopt protected cultivation (extend growing season)",
                 ],
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "data_source": "USDA Agricultural Research Service - Lettuce Production",
             },
             {
@@ -768,7 +768,7 @@ class Command(BaseCommand):
                     "Use drip irrigation (reduce water consumption)",
                     "Adopt mechanical weed control (reduce herbicides)",
                 ],
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "data_source": "USDA Agricultural Research Service - Carrot Production",
             },
             {
@@ -800,7 +800,7 @@ class Command(BaseCommand):
                     "Use cover crops in rotation (improve soil health)",
                     "Adopt mechanical cultivation (reduce herbicide use)",
                 ],
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "data_source": "USDA Agricultural Research Service - Onion Production",
             },
             # === BERRIES (1) ===
@@ -833,7 +833,7 @@ class Command(BaseCommand):
                     "Use beneficial insects for pest control (reduce chemicals)",
                     "Adopt organic certification (premium market access)",
                 ],
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "data_source": "USDA Agricultural Research Service - Berry Production",
             },
             # === LEGUMES (2) ===
@@ -866,7 +866,7 @@ class Command(BaseCommand):
                     "Use precision agriculture (optimize input efficiency)",
                     "Process shells into biochar (carbon sequestration opportunity)",
                 ],
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "data_source": "USDA Agricultural Research Service - Peanut Production",
             },
             {
@@ -898,7 +898,7 @@ class Command(BaseCommand):
                     "Use precision irrigation (optimize water efficiency)",
                     "Plant diverse forage mixes (enhance biodiversity and resilience)",
                 ],
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "data_source": "USDA Agricultural Research Service - Forage Production Systems",
             },
         ]

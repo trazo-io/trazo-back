@@ -51,7 +51,7 @@ def create_self_reported_offset():
             "unit": "kg CO2e",
             "category": "Offset",
             "default_emission_factor": -0.47,  # Negative for offset
-            "usda_verified": True,
+            "usda_factors_used": True,
         },
     )
 

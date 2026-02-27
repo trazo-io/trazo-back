@@ -478,7 +478,6 @@ class ComprehensiveChemicalBackendValidator:
                 co2e_amount=result.get("co2e", 0),
                 year=2024,
                 description=f"Carbon from fertilizer application (Event #{chemical_event.id})",
-                usda_verified=True,
                 usda_factors_based=True,
                 verification_status="factors_verified",
                 data_source="USDA Agricultural Research Service",
@@ -489,7 +488,7 @@ class ComprehensiveChemicalBackendValidator:
             print("✅ CarbonEntry created and linked to production")
             print(f"   - Entry ID: {carbon_entry.id}")
             print(f"   - CO2e Amount: {carbon_entry.co2e_amount:.3f} kg")
-            print(f"   - USDA Verified: {carbon_entry.usda_verified}")
+            print(f"   - USDA Verified: {carbon_entry.usda_factors_based}")
             print(f"   - Confidence: {carbon_entry.confidence_level}")
 
             # Verify data integrity
@@ -500,7 +499,7 @@ class ComprehensiveChemicalBackendValidator:
                 "chemical_event_id": chemical_event.id,
                 "carbon_entry_id": carbon_entry.id,
                 "data_integrity_ok": True,
-                "usda_verification": carbon_entry.usda_verified,
+                "usda_verification": carbon_entry.usda_factors_based,
             }
 
         except Exception as e:
@@ -524,7 +523,7 @@ class ComprehensiveChemicalBackendValidator:
             print(f"⚠️  Carbon amount ({carbon_entry.co2e_amount:.1f} kg) may be unreasonable")
 
         # Check USDA verification flags
-        if carbon_entry.usda_verified and carbon_entry.usda_factors_based:
+        if carbon_entry.usda_factors_based:
             print("✅ USDA verification flags properly set")
         else:
             print("⚠️  USDA verification flags not properly set")

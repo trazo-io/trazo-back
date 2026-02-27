@@ -154,7 +154,7 @@ class Migration(migrations.Migration):
 **Solution Applied**: Updated migration to reference actual model fields:
 - `total_emissions` → `amount`
 - `carbon_entry_id` → Removed invalid references
-- `blockchain_verified` → `usda_verified`
+- `blockchain_verified` → `usda_factors_used`
 
 #### Issue 3: PostgreSQL Function Immutability Requirements
 **Problem**: PostgreSQL requires functions in index expressions to be marked IMMUTABLE.

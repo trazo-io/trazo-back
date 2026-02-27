@@ -581,7 +581,7 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
     # Verification metrics
     verified_productions = serializers.IntegerField(help_text="Productions with carbon verification")
     total_productions = serializers.IntegerField(help_text="Total productions in establishment")
-    usda_verified_count = serializers.IntegerField(help_text="USDA verified productions")
+    usda_factors_used_count = serializers.IntegerField(help_text="Productions using USDA factors")
     blockchain_verified_count = serializers.IntegerField(help_text="Blockchain verified productions")
 
     # Carbon context (SUPPORTING)
@@ -666,7 +666,7 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
         completeness_scores = []
         verification_levels = []
         industry_percentiles = []
-        usda_verified_count = 0
+        usda_factors_used_count = 0
         blockchain_verified_count = 0
         carbon_negative_count = 0
         carbon_footprints = []
@@ -686,8 +686,8 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
             # Count USDA and blockchain verifications
             from carbon.models import CarbonEntry
 
-            if CarbonEntry.objects.filter(production=history, usda_verified=True).exists():
-                usda_verified_count += 1
+            if CarbonEntry.objects.filter(production=history, usda_factors_based=True).exists():
+                usda_factors_used_count += 1
 
             # Check for blockchain verification in History.extra_data (not CarbonEntry)
             # Matches the logic used in EstablishmentViewSet.dashboard_comprehensive()
@@ -735,7 +735,7 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
 
                     # Try exact crop match first
                     crop_benchmark = CarbonBenchmark.objects.filter(
-                        crop_type=crop_type, year=current_year, usda_verified=True
+                        crop_type=crop_type, year=current_year, usda_factors_used=True
                     ).first()
 
                     if not crop_benchmark and crop_type != "unknown":
@@ -743,7 +743,7 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
                         crop_keywords = crop_name.lower().split()
                         for keyword in crop_keywords:
                             crop_benchmark = CarbonBenchmark.objects.filter(
-                                crop_type__icontains=keyword, year=current_year, usda_verified=True
+                                crop_type__icontains=keyword, year=current_year, usda_factors_used=True
                             ).first()
                             if crop_benchmark:
                                 break
@@ -819,7 +819,7 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
             transparency_bonus = transparency_score * 2  # Transparency documentation adds value
             # Blockchain is actual on-chain verification; USDA factors are methodology, not verification
             blockchain_bonus = blockchain_verified_count * 15  # Blockchain adds trust (immutable records)
-            methodology_bonus = usda_verified_count * 5  # EPA/USDA factors are standard methodology
+            methodology_bonus = usda_factors_used_count * 5  # EPA/USDA factors are standard methodology
             verification_bonus = blockchain_bonus + methodology_bonus
 
             # Calculate transparency engagement score
@@ -855,7 +855,7 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
             # Verification metrics
             "verified_productions": verified_productions,
             "total_productions": total_productions,
-            "usda_verified_count": usda_verified_count,
+            "usda_factors_used_count": usda_factors_used_count,
             "blockchain_verified_count": blockchain_verified_count,
             # Carbon context (SUPPORTING)
             "carbon_footprint_avg": round(carbon_footprint_avg, 3),

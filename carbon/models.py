@@ -59,7 +59,7 @@ class CropType(models.Model):
     sustainability_opportunities = models.JSONField(default=list, help_text="List of sustainability practices")
 
     # Meta information
-    usda_verified = models.BooleanField(default=False)
+    usda_factors_used = models.BooleanField(default=False)
     data_source = models.CharField(max_length=200, default="USDA Agricultural Research Service")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -372,7 +372,6 @@ class CarbonSource(models.Model):
     unit = models.CharField(max_length=50, help_text="e.g. kg CO2e, liters, kWh")
     category = models.CharField(max_length=50, help_text="e.g., Fuel, Offset")
     default_emission_factor = models.FloatField(help_text="kg CO2e per unit, USDA-aligned", default=0.0)
-    usda_verified = models.BooleanField(default=False, help_text="Whether this source is verified by USDA")
     # New fields for better verification tracking
     usda_factors_based = models.BooleanField(default=False, help_text="Whether calculations use USDA emission factors")
     verification_status = models.CharField(
@@ -389,7 +388,6 @@ class CarbonSource(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=["category"]),
-            models.Index(fields=["usda_verified"]),
             models.Index(fields=["usda_factors_based"]),
             models.Index(fields=["verification_status"]),
         ]
@@ -404,7 +402,7 @@ class CarbonOffsetAction(models.Model):
     unit = models.CharField(max_length=50, help_text="e.g. trees planted, tons CO2 offset")
     verification_required = models.BooleanField(default=False)
     verification_process = models.TextField(blank=True)
-    usda_verified = models.BooleanField(default=False)
+    usda_factors_used = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -428,8 +426,7 @@ class CarbonEntry(models.Model):
     timestamp = models.DateTimeField(default=timezone.now)
     description = models.TextField(blank=True)
     iot_device_id = models.CharField(max_length=100, blank=True, help_text="ID of IoT device if automated entry")
-    usda_verified = models.BooleanField(default=False)
-    # New fields for better verification tracking
+    # Verification tracking
     usda_factors_based = models.BooleanField(default=False, help_text="Whether calculations use USDA emission factors")
     verification_status = models.CharField(
         max_length=50, default="estimated", help_text="factors_verified, estimated, calculation_error"
@@ -522,8 +519,11 @@ class CarbonEntry(models.Model):
             models.Index(fields=["year"]),
             models.Index(fields=["timestamp"]),
             models.Index(fields=["iot_device_id"]),
-            models.Index(fields=["usda_verified"]),
-            models.Index(fields=["usda_factors_based"]),
+            models.Index(
+                fields=["production", "usda_factors_based"],
+                name="carbon_production_factors_idx",
+                condition=models.Q(production__isnull=False),
+            ),
             models.Index(fields=["verification_status"]),
             models.Index(fields=["verification_level"]),
             models.Index(fields=["audit_status"]),
@@ -780,7 +780,7 @@ class CarbonBenchmark(models.Model):
     unit = models.CharField(max_length=50)
     source = models.CharField(max_length=200)
     last_updated = models.DateField(auto_now=True)
-    usda_verified = models.BooleanField(default=False)
+    usda_factors_used = models.BooleanField(default=False)
     crop_type = models.CharField(max_length=100, blank=True, help_text="Specific crop type if applicable")
     region = models.CharField(max_length=100, blank=True, help_text="Geographic region if applicable")
     created_at = models.DateTimeField(auto_now=True)
@@ -791,7 +791,7 @@ class CarbonBenchmark(models.Model):
         indexes = [
             models.Index(fields=["crop_type"]),
             models.Index(fields=["region"]),
-            models.Index(fields=["usda_verified"]),
+            models.Index(fields=["usda_factors_used"], name="carbon_carb_usda_fa_bench_idx"),
         ]
 
     def __str__(self):
@@ -810,7 +810,7 @@ class CarbonReport(models.Model):
         default=0, validators=[MinValueValidator(0), MaxValueValidator(100)], help_text="Score from 1 to 100"
     )
     generated_at = models.DateTimeField(default=timezone.now)
-    usda_verified = models.BooleanField(default=False)
+    usda_factors_used = models.BooleanField(default=False)
     document = models.FileField(upload_to="carbon_reports/", null=True, blank=True, help_text="Report document file")
 
     # Enhanced transparency fields from migration 0028
@@ -833,7 +833,10 @@ class CarbonReport(models.Model):
                 name="either_establishment_or_production_set_report",
             )
         ]
-        indexes = [models.Index(fields=["usda_verified"]), models.Index(fields=["carbon_score"])]
+        indexes = [
+            models.Index(fields=["usda_factors_used"], name="carbon_carb_usda_fa_report_idx"),
+            models.Index(fields=["carbon_score"]),
+        ]
 
     def __str__(self):
         return f'{self.establishment.name if self.establishment else "N/A"} - {self.period_start} to {self.period_end}'
@@ -886,12 +889,12 @@ class SustainabilityBadge(models.Model):
     )
     establishments = models.ManyToManyField("company.Establishment", related_name="badges", blank=True)
     productions = models.ManyToManyField("history.History", related_name="badges", blank=True)
-    usda_verified = models.BooleanField(default=False)
+    usda_factors_used = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        indexes = [models.Index(fields=["usda_verified"])]
+        indexes = [models.Index(fields=["usda_factors_used"], name="carbon_sust_usda_fa_badge_idx")]
 
     def __str__(self):
         return self.name
@@ -1444,8 +1447,8 @@ class RegionalEmissionFactor(models.Model):
     source_reference = models.CharField(max_length=500, blank=True, help_text="Reference to data source")
     confidence_level = models.FloatField(validators=[MinValueValidator(0.0), MaxValueValidator(1.0)], default=0.8)
 
-    # USDA verification
-    usda_verified = models.BooleanField(default=False, help_text="Verified by USDA data source")
+    # USDA factors
+    usda_factors_used = models.BooleanField(default=False, help_text="Whether this factor uses USDA data")
     usda_api_id = models.CharField(max_length=100, blank=True, help_text="USDA API identifier if applicable")
 
     # Temporal validity
@@ -1469,7 +1472,7 @@ class RegionalEmissionFactor(models.Model):
         indexes = [
             models.Index(fields=["state", "crop_type"]),
             models.Index(fields=["factor_type"]),
-            models.Index(fields=["usda_verified"]),
+            models.Index(fields=["usda_factors_used"], name="carbon_regi_usda_fa_factor_idx"),
             models.Index(fields=["valid_from", "valid_until"]),
             models.Index(fields=["data_source"]),
         ]

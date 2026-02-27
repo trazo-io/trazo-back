@@ -242,7 +242,7 @@ class Command(BaseCommand):
                     "unit": unit,
                     "default_emission_factor": factor,
                     "description": description,
-                    "usda_verified": factor > 0,
+                    "usda_factors_used": factor > 0,
                     "usda_factors_based": factor > 0,
                 },
             )
@@ -974,8 +974,8 @@ class Command(BaseCommand):
                     """
                     INSERT INTO carbon_carbonentry (
                         year, type, amount, description, created_by_id, establishment_id, production_id, source_id,
-                        timestamp, created_at, iot_device_id, updated_at, usda_verified, co2e_amount, data_source,
-                        usda_factors_based, verification_status, additionality_evidence, additionality_verified,
+                        timestamp, created_at, iot_device_id, updated_at, usda_factors_based, co2e_amount, data_source,
+                        verification_status, additionality_evidence, additionality_verified,
                         audit_scheduled_date, baseline_data, documentation_complete, evidence_requirements_met,
                         methodology_template, permanence_plan, registry_verification_id, third_party_verification_url,
                         external_verification_id, gps_coordinates, verification_notes, baseline_scenario,
@@ -983,7 +983,7 @@ class Command(BaseCommand):
                         registry_submission_id, verification_report_url, audit_status, effective_amount,
                         evidence_documents, evidence_photos, trust_score, verification_level
                     ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                     ) RETURNING id
                 """,
                     [
@@ -1002,7 +1002,6 @@ class Command(BaseCommand):
                         calculation_result.get("usda_factors_based", True),
                         co2e,
                         calculation_result.get("data_source", "USDA Agricultural Research Service"),
-                        calculation_result.get("usda_factors_based", True),
                         calculation_result.get("verification_status", "factors_verified"),
                         f"Calculated from verified {event.__class__.__name__} data",
                         True,
@@ -1192,8 +1191,8 @@ class Command(BaseCommand):
                     """
                     INSERT INTO carbon_carbonentry (
                         year, type, amount, description, created_by_id, establishment_id, production_id, source_id,
-                        timestamp, created_at, iot_device_id, updated_at, usda_verified, co2e_amount, data_source,
-                        usda_factors_based, verification_status, additionality_evidence, additionality_verified,
+                        timestamp, created_at, iot_device_id, updated_at, usda_factors_based, co2e_amount, data_source,
+                        verification_status, additionality_evidence, additionality_verified,
                         audit_scheduled_date, baseline_data, documentation_complete, evidence_requirements_met,
                         methodology_template, permanence_plan, registry_verification_id, third_party_verification_url,
                         external_verification_id, gps_coordinates, verification_notes, baseline_scenario,
@@ -1201,7 +1200,7 @@ class Command(BaseCommand):
                         registry_submission_id, verification_report_url, audit_status, effective_amount,
                         evidence_documents, evidence_photos, trust_score, verification_level
                     ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                     )
                 """,
                     [
@@ -1220,7 +1219,6 @@ class Command(BaseCommand):
                         True,
                         co2e,
                         "IoT Real-time Monitoring",
-                        True,
                         "iot_verified",
                         f"Automated monitoring from IoT device {device.device_id}",
                         True,
@@ -1329,8 +1327,8 @@ class Command(BaseCommand):
                     """
                     INSERT INTO carbon_carbonentry (
                         year, type, amount, description, created_by_id, establishment_id, production_id, source_id,
-                        timestamp, created_at, iot_device_id, updated_at, usda_verified, co2e_amount, data_source,
-                        usda_factors_based, verification_status, additionality_evidence, additionality_verified,
+                        timestamp, created_at, iot_device_id, updated_at, usda_factors_based, co2e_amount, data_source,
+                        verification_status, additionality_evidence, additionality_verified,
                         audit_scheduled_date, baseline_data, documentation_complete, evidence_requirements_met,
                         methodology_template, permanence_plan, registry_verification_id, third_party_verification_url,
                         external_verification_id, gps_coordinates, verification_notes, baseline_scenario,
@@ -1338,7 +1336,7 @@ class Command(BaseCommand):
                         registry_submission_id, verification_report_url, audit_status, effective_amount,
                         evidence_documents, evidence_photos, trust_score, verification_level
                     ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                     )
                 """,
                     [
@@ -1357,7 +1355,6 @@ class Command(BaseCommand):
                         False,
                         co2e,
                         "Carbon Offset Registry",
-                        False,
                         "third_party_verified",
                         f"{project.certification_standard} verified project",
                         True,

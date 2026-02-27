@@ -157,7 +157,7 @@ class Command(BaseCommand):
             "crop_types": CropType.objects.filter(is_active=True).count(),
             "production_templates": ProductionTemplate.objects.count(),
             "event_templates": EventTemplate.objects.count(),
-            "usda_verified": CropType.objects.filter(usda_verified=True).count(),
+            "usda_factors_used": CropType.objects.filter(usda_factors_used=True).count(),
         }
 
     def _print_current_state(self, state):
@@ -166,7 +166,7 @@ class Command(BaseCommand):
         self.stdout.write(f"  Crop Types: {state['crop_types']}")
         self.stdout.write(f"  Production Templates: {state['production_templates']}")
         self.stdout.write(f"  Event Templates: {state['event_templates']}")
-        self.stdout.write(f"  USDA Verified: {state['usda_verified']}")
+        self.stdout.write(f"  USDA Verified: {state['usda_factors_used']}")
         self.stdout.write("")
 
     def _is_already_seeded(self, state):

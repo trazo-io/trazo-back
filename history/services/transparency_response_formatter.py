@@ -211,7 +211,7 @@ class TransparencyResponseFormatter:
         """Get data sources for transparency"""
         sources = []
 
-        if carbon_data.get("usda_verified"):
+        if carbon_data.get("usda_factors_used"):
             sources.append("USDA Government Database")
         if carbon_data.get("blockchain_verified"):
             sources.append("Blockchain Verification")

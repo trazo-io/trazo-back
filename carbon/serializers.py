@@ -67,7 +67,7 @@ class CropTypeSerializer(serializers.ModelSerializer):
             "sustainable_premium",
             "local_premium",
             "sustainability_opportunities",
-            "usda_verified",
+            "usda_factors_used",
             "data_source",
             "is_active",
             "created_at",
@@ -224,7 +224,7 @@ class CropTemplateDetailSerializer(serializers.ModelSerializer):
             "sustainable_premium",
             "local_premium",
             "sustainability_opportunities",
-            "usda_verified",
+            "usda_factors_used",
             "data_source",
             "is_active",
             "production_templates",
@@ -357,7 +357,7 @@ class QuickEventTemplateSerializer(serializers.ModelSerializer):
 class CarbonSourceSerializer(serializers.ModelSerializer):
     class Meta:
         model = CarbonSource
-        fields = ["id", "name", "description", "unit", "category", "usda_verified"]
+        fields = ["id", "name", "description", "unit", "category", "usda_factors_based"]
 
 
 class CarbonOffsetActionSerializer(serializers.ModelSerializer):
@@ -386,7 +386,7 @@ class CarbonEntrySerializer(serializers.ModelSerializer):
             "source_id",
             "created_at",
             "created_by",
-            "usda_verified",
+            "usda_factors_based",
             "establishment_id",
             "production_id",
             "verification_level",
@@ -408,7 +408,7 @@ class CarbonEntrySerializer(serializers.ModelSerializer):
         read_only_fields = [
             "created_at",
             "created_by",
-            "usda_verified",
+            "usda_factors_based",
             "effective_amount",
             "evidence_requirements_met",
             "documentation_complete",

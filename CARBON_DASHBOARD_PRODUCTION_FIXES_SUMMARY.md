@@ -79,7 +79,7 @@ transparency_score = min(base_score + verification_bonus, 100)
     "verification_rate": 96.9
   },
   "entries_count": {
-    "usda_verified": 31,
+    "usda_factors_used": 31,
     "total": 32
   }
 }

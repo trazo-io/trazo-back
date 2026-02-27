@@ -59,7 +59,7 @@ def test_screenshot_calculation():
     print(f"\n⚡ CALCULATION RESULT:")
     print(f"   CO2e Emissions: {result['co2e']:.1f} kg")
     print(f"   Efficiency Score: {result['efficiency_score']}")
-    print(f"   USDA Verified: {result['usda_verified']}")
+    print(f"   USDA Verified: {result['usda_factors_used']}")
     print(f"   Method: {result['calculation_method']}")
 
     # Verify result is reasonable
@@ -150,7 +150,7 @@ def main():
         if 25 <= co2e <= 65:
             print(f"✅ VALIDATION SUCCESSFUL")
             print(f"   • Carbon calculation: {co2e:.1f} kg CO2e (scientifically accurate)")
-            print(f"   • USDA verified: {result['usda_verified']}")
+            print(f"   • USDA verified: {result['usda_factors_used']}")
             print(f"   • Frontend preview will now show accurate results")
             print(f"   • New application methods supported")
             print(f"")

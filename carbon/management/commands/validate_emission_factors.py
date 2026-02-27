@@ -68,7 +68,7 @@ class Command(BaseCommand):
             metadata = emission_factors.get_metadata()
             self.stdout.write(f"✓ Registry version: {metadata['version']}")
             self.stdout.write(f"✓ Data source: {metadata['data_source']}")
-            self.stdout.write(f"✓ USDA verified: {metadata['usda_verified']}")
+            self.stdout.write(f"✓ USDA verified: {metadata['usda_factors_used']}")
             self.stdout.write(f"✓ Total factors: {metadata['total_factors']}")
 
             # Test factor validation

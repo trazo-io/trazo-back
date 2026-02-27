@@ -1050,7 +1050,7 @@ class EmissionFactorsRegistry:
                 + len(cls.WATER_FACTORS)
                 + len(cls.SOIL_MANAGEMENT_FACTORS)
             ),
-            "usda_verified": True,
+            "usda_factors_used": True,
             "compliance_ready": True,
         }
 

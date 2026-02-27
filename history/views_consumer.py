@@ -406,7 +406,7 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
 
         # If no certified data available, count scans with verified carbon entries
         if better_choices == 0:
-            better_choices = HistoryScan.objects.filter(user=user, history__carbonentry__usda_verified=True).count()
+            better_choices = HistoryScan.objects.filter(user=user, history__carbonentry__usda_factors_based=True).count()
         update_timings["count_better_choices"] = time.time() - t0
 
         # Update impact summary

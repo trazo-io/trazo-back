@@ -490,13 +490,13 @@ class EventCarbonCalculator:
                 source=carbon_source,
                 amount=co2e_emissions,
                 description=f'Auto-calculated from {event.commercial_name} application',
-                usda_verified=carbon_source.usda_verified,
+                usda_factors_used=carbon_source.usda_factors_used,
                 created_by=event.created_by
             )
 
             return {
                 'co2e': co2e_emissions,
-                'usda_verified': carbon_source.usda_verified,
+                'usda_factors_used': carbon_source.usda_factors_used,
                 'calculation_method': 'usda_factors'
             }
 

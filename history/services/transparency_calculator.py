@@ -862,7 +862,7 @@ class TransparencyCalculator:
             "total_productions": 0,
             "total_documented_events": 0,
             "verification_breakdown": {
-                "usda_verified": 0,
+                "usda_factors_used": 0,
                 "blockchain_verified": 0,
                 "photo_verified": 0,
                 "third_party_verified": 0,
@@ -1000,7 +1000,7 @@ class TransparencyCalculator:
                 metrics["data_richness"]["events_with_photos"] += 1
             if verified_count > 0:
                 metrics["data_richness"]["events_with_verification"] += 1
-                metrics["verification_breakdown"]["usda_verified"] += verified_count
+                metrics["verification_breakdown"]["usda_factors_used"] += verified_count
 
     def _has_blockchain_verification(self, history: History) -> bool:
         """Check if production has blockchain verification"""

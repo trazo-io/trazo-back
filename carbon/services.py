@@ -46,7 +46,7 @@ class CoolFarmToolService:
                 "co2e": data.get("co2e", 0),  # kg CO2e
                 "breakdown": data.get("breakdown", {}),
                 "recommendations": data.get("recommendations", []),
-                "usda_verified": data.get("usda_verified", False),
+                "usda_factors_used": data.get("usda_factors_used", False),
             }
 
         except requests.exceptions.RequestException as e:
@@ -96,7 +96,7 @@ class CoolFarmToolService:
                 "Implement drip irrigation to save water and reduce emissions",
                 "Explore carbon offset programs",
             ],
-            "usda_verified": True,
+            "usda_factors_used": True,
         }
 
 

@@ -59,7 +59,7 @@ class ThirdPartyVerificationTestCase(TransactionTestCase):
             default_emission_factor=-1.0,
             unit="kg CO2e",
             description="No-till farming carbon offset",
-            usda_verified=True,
+            usda_factors_based=True,
         )
 
         self.tree_planting_source = CarbonSource.objects.create(
@@ -68,7 +68,7 @@ class ThirdPartyVerificationTestCase(TransactionTestCase):
             default_emission_factor=-2.5,
             unit="kg CO2e",
             description="Tree planting carbon offset",
-            usda_verified=True,
+            usda_factors_based=True,
         )
 
         # Create test carbon entries

@@ -56,7 +56,7 @@ class CarbonCalculationsTestCase(TransactionTestCase):
             source=self.emission_source,
             amount=1000.0,
             year=2025,
-            usda_verified=True,
+            usda_factors_based=True,
         )
 
         self.offset_entry = CarbonEntry.objects.create(
@@ -67,7 +67,7 @@ class CarbonCalculationsTestCase(TransactionTestCase):
             amount=500.0,
             effective_amount=400.0,  # 80% effectiveness
             year=2025,
-            usda_verified=True,
+            usda_factors_based=True,
         )
 
     def test_emissions_and_offsets_calculation(self):
@@ -139,7 +139,7 @@ class CarbonCalculationsTestCase(TransactionTestCase):
         entries = CarbonEntry.objects.filter(establishment=self.establishment, year=year)
 
         total_entries_count = entries.count()
-        usda_verified_count = entries.filter(usda_verified=True).count()
+        usda_verified_count = entries.filter(usda_factors_based=True).count()
 
         # Calculate transparency score
         transparency_score = 10
@@ -409,7 +409,7 @@ class APIResponseStructureTestCase(TransactionTestCase):
 
         # Test entries_count structure
         entries_count = response_data["entries_count"]
-        expected_count_fields = ["emissions", "offsets", "total", "usda_verified"]
+        expected_count_fields = ["emissions", "offsets", "total", "usda_factors_based"]
         for field in expected_count_fields:
             self.assertIn(field, entries_count)
             self.assertIsInstance(entries_count[field], int)
@@ -454,7 +454,7 @@ class APIResponseStructureTestCase(TransactionTestCase):
             "transparency_score": 54,
             "offset_ratio": 1.8,
             "performance_tier": {"tier": "Needs Improvement", "color": "red"},
-            "entries_count": {"emissions": 30, "offsets": 2, "total": 32, "usda_verified": 31},
+            "entries_count": {"emissions": 30, "offsets": 2, "total": 32, "usda_factors_based": 31},
             "has_data": True,
             "data_quality": {"completeness": 64, "verification_rate": 96.9},
             "calculated_at": timezone.now().isoformat(),

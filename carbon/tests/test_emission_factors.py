@@ -94,7 +94,7 @@ class TestEmissionFactorAccuracy(TestCase):
         self.assertIn("version", metadata)
         self.assertIn("last_updated", metadata)
         self.assertIn("EPA", metadata["data_source"])
-        self.assertTrue(metadata["usda_verified"])
+        self.assertTrue(metadata["usda_factors_used"])
 
 
 class TestEmissionFactorConsistency(TestCase):

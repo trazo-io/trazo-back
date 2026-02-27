@@ -143,7 +143,7 @@ class Command(BaseCommand):
                 "unit": "liters",
                 "category": "Fuel",
                 "default_emission_factor": 2.70,
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
         )
 
@@ -154,7 +154,7 @@ class Command(BaseCommand):
                 "unit": "kg",
                 "category": "Fertilizer",
                 "default_emission_factor": 5.5,
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
         )
 
@@ -173,7 +173,7 @@ class Command(BaseCommand):
             amount=150.5,
             year=current_year,
             description="Tractor fuel consumption - monthly average",
-            usda_verified=True,
+            usda_factors_based=True,
         )
 
         CarbonEntry.objects.create(
@@ -184,7 +184,7 @@ class Command(BaseCommand):
             amount=275.0,
             year=current_year,
             description="Spring fertilizer application",
-            usda_verified=True,
+            usda_factors_based=True,
         )
 
         # Offset entry
@@ -196,7 +196,7 @@ class Command(BaseCommand):
             amount=50.0,
             year=current_year,
             description="Tree planting carbon sequestration",
-            usda_verified=False,
+            usda_factors_based=False,
         )
 
         # Create summary footprint

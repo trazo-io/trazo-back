@@ -209,7 +209,7 @@ def test_production_events_with_units():
             co2e_value = result["co2e"]
             print(f"   ✅ CO₂e Result: {co2e_value} kg")
             print(f"   ✅ Calculation Method: {result['calculation_method']}")
-            print(f"   ✅ USDA Verified: {result['usda_verified']}")
+            print(f"   ✅ USDA Verified: {result['usda_factors_used']}")
 
             # Validate result is reasonable (not negative, not extremely high)
             if co2e_value < 0:
@@ -232,7 +232,7 @@ def test_production_events_with_units():
                     "status": status,
                     "unit_conversions_applied": processed_event.get("unit_conversions_applied", False),
                     "method": result["calculation_method"],
-                    "usda_verified": result["usda_verified"],
+                    "usda_factors_used": result["usda_factors_used"],
                 }
             )
 

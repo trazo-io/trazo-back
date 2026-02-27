@@ -347,7 +347,7 @@ class EnhancedCarbonCalculator:
             }
 
         # Count verified entries
-        verified_entries = carbon_entries.filter(Q(verified=True) | Q(usda_verified=True)).count()
+        verified_entries = carbon_entries.filter(Q(verified=True) | Q(usda_factors_based=True)).count()
         verified_percentage = (verified_entries / total_entries) * 100
 
         # Count entries with complete data

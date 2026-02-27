@@ -17,7 +17,7 @@ class Command(BaseCommand):
                 "unit": "trees planted",
                 "verification_required": True,
                 "verification_process": "Third-party verification of tree survival and growth rates",
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
             {
                 "name": "Renewable Energy Credits",
@@ -25,7 +25,7 @@ class Command(BaseCommand):
                 "unit": "kWh offset",
                 "verification_required": True,
                 "verification_process": "Renewable energy certificate tracking and verification",
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
             {
                 "name": "Methane Capture",
@@ -33,7 +33,7 @@ class Command(BaseCommand):
                 "unit": "kg CH4 captured",
                 "verification_required": True,
                 "verification_process": "EPA-verified methane capture measurements",
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
             {
                 "name": "Energy Efficiency",
@@ -41,7 +41,7 @@ class Command(BaseCommand):
                 "unit": "kWh saved",
                 "verification_required": False,
                 "verification_process": "Energy audit and measurement verification",
-                "usda_verified": False,
+                "usda_factors_used": False,
             },
             {
                 "name": "Composting",
@@ -49,7 +49,7 @@ class Command(BaseCommand):
                 "unit": "kg organic waste composted",
                 "verification_required": False,
                 "verification_process": "Composting facility records and measurements",
-                "usda_verified": False,
+                "usda_factors_used": False,
             },
             {
                 "name": "Verified Carbon Credits",
@@ -57,7 +57,7 @@ class Command(BaseCommand):
                 "unit": "tCO₂e",
                 "verification_required": True,
                 "verification_process": "VCS or Gold Standard registry verification",
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
         ]
 

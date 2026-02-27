@@ -68,7 +68,7 @@ def test_carbon_api_preview():
             print(f"   - CO2e: {result.get('co2e')} kg")
             print(f"   - Efficiency score: {result.get('efficiency_score')}")
             print(f"   - Event type: {result.get('event_type')}")
-            print(f"   - USDA verified: {result.get('usda_verified')}")
+            print(f"   - USDA verified: {result.get('usda_factors_used')}")
             print(f"   - Error: {result.get('error', 'None')}")
             print(f"   - Timestamp: {result.get('timestamp')}")
             return True

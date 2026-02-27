@@ -37,7 +37,7 @@ def test_optimized_calculator_fix():
         print(f"\n📥 Calculation Result:")
         print(f"   CO2e: {result.get('co2e')} kg")
         print(f"   Method: {result.get('calculation_method')}")
-        print(f"   USDA Verified: {result.get('usda_verified')}")
+        print(f"   USDA Verified: {result.get('usda_factors_used')}")
         print(f"   Efficiency Score: {result.get('efficiency_score')}")
 
         if "data_source" in result:
@@ -66,7 +66,7 @@ def test_optimized_calculator_fix():
         else:
             print(f"   📝 METHOD: {method}")
 
-        if result.get("usda_verified"):
+        if result.get("usda_factors_used"):
             print(f"   ✅ EPA/USDA VERIFIED: Using government emission factors")
         else:
             print(f"   ⚠️  NOT VERIFIED: Using estimates")

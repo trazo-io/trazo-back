@@ -137,7 +137,7 @@ def create_carbon_entry_from_calculation(event, calculation_result, user):
                 "category": event.__class__.__name__,
                 "unit": "kg CO2e",
                 "default_emission_factor": calculation_result.get("co2e", 0),
-                "usda_verified": calculation_result.get("usda_factors_based", False),
+                "usda_factors_used": calculation_result.get("usda_factors_based", False),
                 "verification_status": calculation_result.get("verification_status", "estimated"),
                 "data_source": calculation_result.get("data_source", "Event Calculation"),
             },

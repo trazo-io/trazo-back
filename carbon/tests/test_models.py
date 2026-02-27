@@ -65,7 +65,7 @@ class TestCropTypeModel(TestCase):
         self.assertEqual(crop.name, "Citrus (Oranges)")
         self.assertEqual(crop.category, "tree_fruit")
         self.assertTrue(crop.is_active)
-        self.assertFalse(crop.usda_verified)
+        self.assertFalse(crop.usda_factors_used)
         self.assertIsNotNone(crop.created_at)
         self.assertIsNotNone(crop.updated_at)
 
@@ -317,7 +317,6 @@ class TestCarbonSourceModel(TestCase):
             unit="kg N",
             category="Fertilizer",
             default_emission_factor=5.9,
-            usda_verified=True,
             usda_factors_based=True,
             verification_status="factors_verified",
             data_source="USDA Agricultural Research Service",
@@ -325,7 +324,7 @@ class TestCarbonSourceModel(TestCase):
 
         self.assertEqual(source.name, "Nitrogen Fertilizer")
         self.assertEqual(source.unit, "kg N")
-        self.assertTrue(source.usda_verified)
+        self.assertTrue(source.usda_factors_based)
         self.assertEqual(source.verification_status, "factors_verified")
 
     def test_carbon_source_string_representation(self):
@@ -376,7 +375,7 @@ class TestCarbonEntryModel(TransactionTestCase):
         self.assertEqual(entry.type, "emission")
         self.assertEqual(entry.amount, 100.0)
         self.assertEqual(entry.effective_amount, 100.0)  # Should equal amount for emissions
-        self.assertFalse(entry.usda_verified)
+        self.assertFalse(entry.usda_factors_based)
         self.assertEqual(entry.verification_status, "estimated")
 
     def test_carbon_entry_creation_offset(self):
@@ -679,7 +678,7 @@ class TestRegionalEmissionFactorModel(TestCase):
             data_source="usda_api",
             source_reference="USDA NRCS California",
             confidence_level=0.9,
-            usda_verified=True,
+            usda_factors_used=True,
             valid_from=date.today(),
             created_by=self.user,
         )
@@ -688,7 +687,7 @@ class TestRegionalEmissionFactorModel(TestCase):
         self.assertEqual(factor.crop_type, "Citrus")
         self.assertEqual(factor.factor_type, "nitrogen")
         self.assertEqual(factor.emission_factor, 6.2)
-        self.assertTrue(factor.usda_verified)
+        self.assertTrue(factor.usda_factors_used)
         self.assertEqual(factor.confidence_level, 0.9)
 
     def test_adjusted_emission_factor_property(self):
@@ -1093,7 +1092,7 @@ class TestCarbonIntegrations(TransactionTestCase):
             unit="kg N",
             category="Fertilizer",
             default_emission_factor=5.9,
-            usda_verified=True,
+            usda_factors_based=True,
         )
 
         # Create carbon entry
@@ -1105,7 +1104,7 @@ class TestCarbonIntegrations(TransactionTestCase):
             amount=100.0,
             co2e_amount=590.0,
             year=2024,
-            usda_verified=True,
+            usda_factors_based=True,
         )
 
         # Create USDA compliance record
@@ -1122,7 +1121,7 @@ class TestCarbonIntegrations(TransactionTestCase):
 
         # Verify the complete flow
         self.assertEqual(carbon_entry.source.name, "Nitrogen Fertilizer")
-        self.assertTrue(carbon_entry.usda_verified)
+        self.assertTrue(carbon_entry.usda_factors_based)
         self.assertTrue(compliance.is_usda_verified)
         self.assertEqual(compliance.confidence_level, "high")
 

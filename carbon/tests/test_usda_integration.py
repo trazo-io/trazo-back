@@ -79,7 +79,7 @@ def test_regional_emission_factor_model():
         data_source="usda_api",
         source_reference="USDA Agricultural Research Service - California Regional Study 2024",
         confidence_level=0.92,
-        usda_verified=True,
+        usda_factors_used=True,
         valid_from=date.today(),
         created_by=None,  # Would be set to actual user in real usage
     )
@@ -132,7 +132,7 @@ def test_usda_compliance_record_model():
 
         test_source, _ = CarbonSource.objects.get_or_create(
             name="Test USDA Source",
-            defaults={"category": "test", "description": "Test source for USDA compliance", "usda_verified": True},
+            defaults={"category": "test", "description": "Test source for USDA compliance", "usda_factors_based": True},
         )
 
         # Create a test carbon entry with establishment (satisfies constraint)

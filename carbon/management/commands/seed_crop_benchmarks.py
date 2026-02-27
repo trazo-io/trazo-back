@@ -216,7 +216,7 @@ class Command(BaseCommand):
                         "company_count": 50 if year == current_year else 45,  # Simulated data
                         "unit": "kg CO2e per kg",
                         "source": "USDA Agricultural Research Service",
-                        "usda_verified": True,
+                        "usda_factors_used": True,
                     },
                 )
 
@@ -232,7 +232,7 @@ class Command(BaseCommand):
                     benchmark.average_emissions = data["average_emissions"]
                     benchmark.min_emissions = data["min_emissions"]
                     benchmark.max_emissions = data["max_emissions"]
-                    benchmark.usda_verified = True
+                    benchmark.usda_factors_used = True
                     benchmark.save()
                     updated_count += 1
                     self.stdout.write(
@@ -276,7 +276,7 @@ class Command(BaseCommand):
                     "company_count": 100,
                     "unit": "kg CO2e per kg",
                     "source": "USDA Agricultural Research Service",
-                    "usda_verified": True,
+                    "usda_factors_used": True,
                 },
             )
 

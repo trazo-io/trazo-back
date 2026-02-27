@@ -185,7 +185,7 @@ def production_transparency_detail(request, production_public_id=None, productio
             "total_emissions": carbon_breakdown.get("total_emissions", 0),
             "total_offsets": carbon_breakdown.get("total_offsets", 0),
             "net_footprint": carbon_score,  # This should be calculated properly
-            "usda_verified": True,  # Based on your carbon calculation method
+            "usda_factors_used": True,  # Based on your carbon calculation method
             "calculation_method": "USDA_EPA_factors",
         }
 
@@ -243,12 +243,12 @@ def production_transparency_detail(request, production_public_id=None, productio
         # - validation_method in ["enhanced_api", "local_validation"] (not error)
         # - crop_type is identified (validation ran properly)
         total_carbon_entries = CarbonEntry.objects.filter(production=history).count()
-        usda_verified_entries = CarbonEntry.objects.filter(
-            production=history, usda_verified=True  # Uses the fixed is_usda_verified property
+        usda_factors_based_entries = CarbonEntry.objects.filter(
+            production=history, usda_factors_based=True
         ).count()
 
         # USDA verified if ALL carbon entries used USDA factors
-        is_usda_verified = total_carbon_entries > 0 and usda_verified_entries == total_carbon_entries
+        is_usda_verified = total_carbon_entries > 0 and usda_factors_based_entries == total_carbon_entries
 
         # Add progressive loading structure for backward compatibility
         response_data.update(

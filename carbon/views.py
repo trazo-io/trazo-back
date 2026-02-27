@@ -393,7 +393,6 @@ class CarbonEntryViewSet(viewsets.ModelViewSet):
                     serializer.validated_data["amount"] = result["co2e"]
                     # Use USDA factors but not actually USDA verified
                     serializer.validated_data["usda_factors_based"] = True
-                    serializer.validated_data["usda_verified"] = False  # No actual USDA verification
                     serializer.validated_data["verification_status"] = "factors_verified"
                     serializer.validated_data["data_source"] = "USDA Agricultural Research Service"
             except Exception as e:
@@ -1295,7 +1294,7 @@ class OptimizedCarbonCalculator:
                 "co2e": co2e_kg,
                 "efficiency_score": efficiency_score,
                 "calculation_method": f"usda_verified_{calculation_result['calculation_method']}",
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "breakdown": calculation_result.get("breakdown", {}),
                 "data_sources": calculation_result.get("data_sources", []),
                 "validation_warnings": calculation_result.get("validation_warnings", []),
@@ -1308,7 +1307,7 @@ class OptimizedCarbonCalculator:
                 "co2e": 0.0,
                 "efficiency_score": 50.0,
                 "calculation_method": "fallback_error",
-                "usda_verified": False,
+                "usda_factors_used": False,
                 "error": str(e),
             }
 
@@ -1372,7 +1371,7 @@ class OptimizedCarbonCalculator:
             "co2e": round(co2e, 3),
             "efficiency_score": round(efficiency_score, 1),
             "calculation_method": "optimized_equipment_with_electric_support",
-            "usda_verified": True,
+            "usda_factors_used": True,
             "breakdown": breakdown,
             "data_sources": [
                 "EPA eGRID 2023 (electricity)" if fuel_type == "electric" else "EPA 40 CFR Part 98 (diesel)"
@@ -1393,7 +1392,7 @@ class OptimizedCarbonCalculator:
             "co2e": 0.0,
             "efficiency_score": 100.0,
             "calculation_method": "general_event_zero_emissions",
-            "usda_verified": True,
+            "usda_factors_used": True,
             "data_source": "Trazo Direct Operational Methodology",
             "verification_status": "verified_zero",
         }
@@ -1410,7 +1409,7 @@ class OptimizedCarbonCalculator:
             "co2e": 0.0,  # Weather events don't generate emissions
             "efficiency_score": 100.0,  # Perfect score - transparency value
             "calculation_method": "weather_transparency",
-            "usda_verified": False,
+            "usda_factors_used": False,
             "transparency_note": "Weather events document environmental conditions for agricultural transparency",
         }
 
@@ -2560,7 +2559,7 @@ def calculate_event_carbon_impact(request):
             calculation_result = {
                 "co2e": 0.0,
                 "efficiency_score": 100.0,
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "calculation_method": "general_event_zero_emissions",
                 "recommendations": [],
                 "event_type": event_type,
@@ -2604,7 +2603,7 @@ def calculate_event_carbon_impact(request):
                 "details": str(e),
                 "co2e": 0.0,
                 "efficiency_score": 50.0,
-                "usda_verified": False,
+                "usda_factors_used": False,
                 "calculation_method": "error_fallback",
                 "event_type": event_type if "event_type" in locals() else "unknown",
                 "timestamp": timezone.now().isoformat(),
@@ -2840,7 +2839,7 @@ class CarbonEstablishmentSummaryViewSet(viewsets.ViewSet):
                 verification_bonus = 0
 
                 # Check USDA verification percentage
-                usda_verified_count = entries.filter(usda_verified=True).count()
+                usda_verified_count = entries.filter(usda_factors_based=True).count()
                 if total_entries_count > 0:
                     verification_ratio = usda_verified_count / total_entries_count
                     verification_bonus = verification_ratio * 30  # Max 30 bonus
@@ -2911,7 +2910,7 @@ class CarbonEstablishmentSummaryViewSet(viewsets.ViewSet):
                     "emissions": emissions_data["count"] or 0,
                     "offsets": offsets_data["count"] or 0,
                     "total": total_entries_count,
-                    "usda_verified": usda_verified_count,
+                    "usda_factors_used": usda_verified_count,
                 },
                 "photos_count": photo_count,
                 "active_productions_count": active_productions_count,
@@ -3004,7 +3003,7 @@ class CarbonEstablishmentSummaryViewSet(viewsets.ViewSet):
                 entries = entries.filter(type=entry_type)
 
             if verified_only:
-                entries = entries.filter(usda_verified=True)
+                entries = entries.filter(usda_factors_based=True)
 
             if search:
                 entries = entries.filter(
@@ -3225,7 +3224,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
 
                 # Try exact crop match first
                 crop_benchmark = CarbonBenchmark.objects.filter(
-                    crop_type=crop_type, year=current_year, usda_verified=True
+                    crop_type=crop_type, year=current_year, usda_factors_used=True
                 ).first()
 
                 if not crop_benchmark and crop_type != "unknown":
@@ -3233,7 +3232,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     crop_keywords = crop_name.lower().split()
                     for keyword in crop_keywords:
                         crop_benchmark = CarbonBenchmark.objects.filter(
-                            crop_type__icontains=keyword, year=current_year, usda_verified=True
+                            crop_type__icontains=keyword, year=current_year, usda_factors_used=True
                         ).first()
                         if crop_benchmark:
                             break
@@ -3315,7 +3314,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                 "per_kg_footprint": round(carbon_footprint_per_kg, 2),
                 "is_carbon_negative": net_footprint < 0,
                 "is_carbon_neutral": abs(net_footprint) < 0.1,
-                "verified_by_usda": verification_standards.get("usda_verified", False),
+                "verified_by_usda": verification_standards.get("usda_factors_used", False),
                 "blockchain_verified": verification_standards.get("blockchain_verified", False),
             }
 
@@ -3326,7 +3325,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     "verificationLevel": verification_level,
                     "carbonFootprint": round(carbon_footprint_per_kg, 2),
                     "carbonNegative": carbon_context["is_carbon_negative"],
-                    "usda_verified": carbon_context["verified_by_usda"],
+                    "usda_factors_used": carbon_context["verified_by_usda"],
                     "cache_hit": False,
                     "timestamp": timezone.now().isoformat(),
                 }
@@ -3347,7 +3346,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     "carbon_footprint_per_kg": carbon_footprint_per_kg,
                     "crop_type": crop_name,
                     "calculation_method": "transparency_first_usda_verification",
-                    "usda_verified": carbon_context["verified_by_usda"],
+                    "usda_factors_used": carbon_context["verified_by_usda"],
                     "documentation_completeness": transparency_data.get("completeness_score", 0),
                     "category_breakdown": transparency_data.get("category_breakdown", {}),
                     "timestamp": (
@@ -3566,7 +3565,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                 },
                 # VERIFICATION: Trust and verification information
                 "verificationData": {
-                    "usda_verified": carbon_context["verified_by_usda"],
+                    "usda_factors_used": carbon_context["verified_by_usda"],
                     "blockchain_verified": carbon_context["blockchain_verified"],
                     "verification_date": verification_standards.get("last_updated"),
                     "blockchain_verification": blockchain_verification,
@@ -3665,7 +3664,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     "unit": "kg CO₂",
                 },
                 "verificationData": {
-                    "usda_verified": False,
+                    "usda_factors_used": False,
                     "blockchain_verified": False,
                     "verification_date": None,
                     "blockchain_verification": {"verified": False, "error": str(e)},
@@ -3781,7 +3780,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                 "consumerInsights": transparency_data["consumerInsights"],
                 # Consumer-friendly fields (transparency-focused)
                 "environmental_impact": self._get_primary_equivalency(transparency_data["equivalencyMetrics"]),
-                "data_verified": carbon_data.get("usda_verified", False),
+                "data_verified": carbon_data.get("usda_factors_used", False),
                 "crop_type": getattr(production.crop_type, "name", "Unknown") if production.crop_type else "Unknown",
                 "achievements": self._generate_transparency_achievements(production, transparency_data),
                 # Public data only
@@ -3824,7 +3823,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
         """Generate consumer-friendly badges without internal details"""
         badges = []
 
-        if transparency_data["trustIndicators"].get("usda_verified"):
+        if transparency_data["trustIndicators"].get("usda_factors_used"):
             badges.append(
                 {
                     "type": "government_verified",
@@ -3899,7 +3898,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
             )
 
         # Verification achievements (non-competitive)
-        if transparency_data.get("trustIndicators", {}).get("usda_verified"):
+        if transparency_data.get("trustIndicators", {}).get("usda_factors_used"):
             achievements.append(
                 {
                     "type": "government_verified",
@@ -4821,13 +4820,13 @@ class PublicProductionViewSet(viewsets.ViewSet):
 
         return normalized
 
-    def _find_crop_benchmark(self, crop_name, year, usda_verified=True):
+    def _find_crop_benchmark(self, crop_name, year, usda_factors_used=True):
         """Find crop benchmark with flexible matching for plural/singular forms"""
         if not crop_name:
             return None
 
         # First try exact match
-        benchmark = CarbonBenchmark.objects.filter(crop_type=crop_name, year=year, usda_verified=usda_verified).first()
+        benchmark = CarbonBenchmark.objects.filter(crop_type=crop_name, year=year, usda_factors_used=usda_factors_used).first()
 
         if benchmark:
             return benchmark
@@ -4836,7 +4835,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
         normalized_crop = self._normalize_crop_name(crop_name)
         if normalized_crop != crop_name:
             benchmark = CarbonBenchmark.objects.filter(
-                crop_type=normalized_crop, year=year, usda_verified=usda_verified
+                crop_type=normalized_crop, year=year, usda_factors_used=usda_factors_used
             ).first()
 
             if benchmark:
@@ -4844,7 +4843,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
 
         # Try reverse matching - check if any benchmark crop names match our normalized name
         # This handles cases where benchmark has plural but product has singular
-        all_benchmarks = CarbonBenchmark.objects.filter(year=year, usda_verified=usda_verified)
+        all_benchmarks = CarbonBenchmark.objects.filter(year=year, usda_factors_used=usda_factors_used)
 
         for benchmark in all_benchmarks:
             if self._normalize_crop_name(benchmark.crop_type) == normalized_crop:
@@ -4857,7 +4856,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
         try:
             # Try to get benchmark for more accurate scoring with flexible matching
             year = production.start_date.year if production.start_date else timezone.now().year
-            benchmark = self._find_crop_benchmark(crop_type, year, usda_verified=True)
+            benchmark = self._find_crop_benchmark(crop_type, year, usda_factors_used=True)
 
             if benchmark:
                 # Use benchmark-based scoring
@@ -4905,7 +4904,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
         """Calculate industry percentile using existing logic"""
         try:
             year = production.start_date.year if production.start_date else timezone.now().year
-            benchmark = self._find_crop_benchmark(crop_type, year, usda_verified=True)
+            benchmark = self._find_crop_benchmark(crop_type, year, usda_factors_used=True)
 
             if benchmark and benchmark.average_emissions > 0:
                 # Convert net footprint to per-kg basis if we have production amount
@@ -4935,7 +4934,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
         """Get industry average emissions for the crop type"""
         try:
             year = production.start_date.year if production.start_date else timezone.now().year
-            benchmark = self._find_crop_benchmark(crop_type, year, usda_verified=True)
+            benchmark = self._find_crop_benchmark(crop_type, year, usda_factors_used=True)
 
             if benchmark:
                 return benchmark.average_emissions
@@ -5271,7 +5270,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                 return {
                     "co2e": float(carbon_entry.co2e_amount or carbon_entry.amount),
                     "efficiency_score": efficiency_score,
-                    "usda_verified": carbon_entry.usda_verified,  # Uses fixed is_usda_verified property
+                    "usda_factors_used": carbon_entry.usda_factors_based,
                     "calculation_method": carbon_entry.data_source or "USDA Agricultural Emission Factors",
                     "verification_confidence": confidence_percentage,
                     "cost_analysis": None,  # CarbonEntry doesn't store cost analysis data
@@ -5294,7 +5293,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     return {
                         "co2e": float(carbon_calc.get("co2e", 0)),
                         "efficiency_score": float(carbon_calc.get("efficiency_score", 0)),
-                        "usda_verified": carbon_calc.get("usda_factors_based", False),
+                        "usda_factors_used": carbon_calc.get("usda_factors_based", False),
                         "calculation_method": carbon_calc.get(
                             "calculation_method", "USDA Agricultural Emission Factors"
                         ),
@@ -5352,7 +5351,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                 return {
                     "co2e": float(result.get("co2e", 0)),
                     "efficiency_score": float(result.get("efficiency_score", 70)),
-                    "usda_verified": result.get("usda_verified", False),
+                    "usda_factors_used": result.get("usda_factors_used", False),
                     "calculation_method": result.get("calculation_method", "USDA Agricultural Emission Factors"),
                     "verification_confidence": "medium",  # On-demand calculations have medium confidence
                     "cost_analysis": result.get("cost_analysis") if result.get("cost_analysis") else None,
@@ -5693,7 +5692,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     "data_completeness": data_completeness,
                 },
                 "factors": {
-                    "usda_verified": self._check_usda_verification(production),
+                    "usda_factors_used": self._check_usda_verification(production),
                     "blockchain_verified": blockchain_verification and blockchain_verification.get("verified"),
                     "reputation_score": reputation,
                     "carbon_score": carbon_score,
@@ -5745,14 +5744,14 @@ class PublicProductionViewSet(viewsets.ViewSet):
             net_footprint = total_emissions - total_offsets
 
             carbon_score = CarbonEntry.calculate_carbon_score(total_emissions, total_offsets)
-            usda_verified = carbon_entries.filter(usda_verified=True).exists()
+            usda_factors_used = carbon_entries.filter(usda_factors_based=True).exists()
 
             return {
                 "carbon_score": carbon_score,
                 "total_emissions": float(total_emissions),
                 "total_offsets": float(total_offsets),
                 "net_footprint": float(net_footprint),
-                "usda_verified": usda_verified,
+                "usda_factors_used": usda_factors_used,
             }
         except:
             return {
@@ -5760,7 +5759,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                 "total_emissions": 0.0,
                 "total_offsets": 0.0,
                 "net_footprint": 0.0,
-                "usda_verified": False,
+                "usda_factors_used": False,
             }
 
     def _get_blockchain_verification(self, production, carbon_data):
@@ -5843,7 +5842,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
             )
 
         # USDA verification badge
-        if carbon_data.get("usda_verified", False):
+        if carbon_data.get("usda_factors_used", False):
             badges.append(
                 {
                     "id": "usda_verified",
@@ -5907,7 +5906,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                         "description": entry.description or f"{entry.type.title()} entry",
                         "amount": float(entry.amount),
                         "source": entry.source.name if entry.source else "Unknown source",
-                        "verified": entry.usda_verified,
+                        "verified": entry.usda_factors_based,
                         "index": idx,
                     }
                 )
@@ -6333,7 +6332,7 @@ class CarbonOffsetViewSet(viewsets.ViewSet):
                     "default_emission_factor": -1.0,  # Negative for offset
                     "unit": "kg CO2e",
                     "description": f"Carbon offset project: {source_id}",
-                    "usda_verified": True if source_id in ["no_till", "cover_crop", "reforestation"] else False,
+                    "usda_factors_used": True if source_id in ["no_till", "cover_crop", "reforestation"] else False,
                 },
             )
 
@@ -6391,8 +6390,7 @@ class CarbonOffsetViewSet(viewsets.ViewSet):
                 amount=amount,
                 year=year,
                 description=f"Carbon offset from {source_id} project: {amount} kg CO2e",
-                usda_verified=offset_source.usda_verified,
-                usda_factors_based=True,
+                usda_factors_based=offset_source.usda_factors_used,
                 verification_status="verified",
                 data_source=f"User-created offset: {source_id}",
                 # Verification system fields
@@ -8776,7 +8774,7 @@ def get_company_crop_options(request):
                 "season_length": "Year-round",
                 "market_demand": "High",
                 "transparency_ready": True,
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "avg_revenue": "$8,000-15,000/acre",
                 "difficulty": "Medium",
                 "common_events": ["Irrigation", "Pruning", "QR Generation", "Verification"],
@@ -8791,7 +8789,7 @@ def get_company_crop_options(request):
                 "season_length": "Feb-Oct",
                 "market_demand": "High",
                 "transparency_ready": True,
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "avg_revenue": "$4,000-8,000/acre",
                 "difficulty": "Advanced",
                 "common_events": ["Irrigation", "Harvest", "Transparency", "Certification"],
@@ -8806,7 +8804,7 @@ def get_company_crop_options(request):
                 "season_length": "Year-round",
                 "market_demand": "High",
                 "transparency_ready": True,
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "avg_revenue": "$12,000-20,000/acre",
                 "difficulty": "Advanced",
                 "common_events": ["Irrigation", "Harvest", "QR Tracking", "Export"],
@@ -8821,7 +8819,7 @@ def get_company_crop_options(request):
                 "season_length": "Apr-Oct",
                 "market_demand": "High",
                 "transparency_ready": True,
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "avg_revenue": "$800-1,200/acre",
                 "difficulty": "Easy",
                 "common_events": ["Planting", "Fertilization", "Tracking", "Harvest"],
@@ -8915,7 +8913,7 @@ def get_crop_template_detail(request, template_id):
                     "average_emissions": benchmark.average_emissions,
                     "min_emissions": benchmark.min_emissions,
                     "max_emissions": benchmark.max_emissions,
-                    "usda_verified": benchmark.usda_verified,
+                    "usda_factors_used": benchmark.usda_factors_used,
                 }
         except:
             pass

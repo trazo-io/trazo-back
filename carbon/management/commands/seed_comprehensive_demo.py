@@ -1437,7 +1437,7 @@ class Command(BaseCommand):
                     "unit": unit,
                     "category": category,
                     "default_emission_factor": factor,
-                    "usda_verified": True,
+                    "usda_factors_used": True,
                     "usda_factors_based": True,
                     "verification_status": "factors_verified",
                     "data_source": "USDA Agricultural Research Service",
@@ -1463,7 +1463,7 @@ class Command(BaseCommand):
                     "unit": unit,
                     "category": category,
                     "default_emission_factor": factor,
-                    "usda_verified": True,
+                    "usda_factors_used": True,
                     "usda_factors_based": True,
                     "verification_status": "factors_verified",
                     "data_source": "USDA Agricultural Research Service",
@@ -1509,7 +1509,7 @@ class Command(BaseCommand):
                     year=production.start_date.year,
                     description=description,
                     cost=amount * 0.05,  # Estimated cost
-                    usda_verified=True,
+                    usda_factors_based=True,
                     timestamp=production.start_date + datetime.timedelta(days=random.randint(30, 300)),
                 )
                 entries.append(entry)
@@ -1538,7 +1538,7 @@ class Command(BaseCommand):
                     year=production.start_date.year,
                     description=description,
                     cost=amount * 0.05,  # Estimated cost
-                    usda_verified=True,
+                    usda_factors_based=True,
                     timestamp=production.start_date + datetime.timedelta(days=random.randint(30, 300)),
                 )
                 entries.append(entry)
@@ -1569,7 +1569,7 @@ class Command(BaseCommand):
                     "company_count": random.randint(180, 320),
                     "unit": "kg CO2e/kg",
                     "source": "USDA Agricultural Research Service 2024",
-                    "usda_verified": True,
+                    "usda_factors_used": True,
                     "crop_type": crop_type,
                 },
             )
@@ -1614,7 +1614,7 @@ class Command(BaseCommand):
                         "total_offsets": total_offsets,
                         "net_footprint": net_footprint,
                         "carbon_score": int(carbon_score),
-                        "usda_verified": True,
+                        "usda_factors_used": True,
                         "cost_savings": random.randint(800, 2500),
                         "recommendations": json.dumps(
                             [
@@ -2053,7 +2053,7 @@ class Command(BaseCommand):
                     "minimum_score": min_score,
                     "is_automatic": is_auto,
                     "criteria": json.dumps(criteria),
-                    "usda_verified": True,
+                    "usda_factors_used": True,
                 },
             )
             badges_created.append(badge)

@@ -150,7 +150,7 @@ class Command(BaseCommand):
                     production.product.name if hasattr(production, "product") and production.product else "general"
                 ),
                 "calculation_method": "trazo_direct",
-                "usda_verified": False,
+                "usda_factors_used": False,
                 "timestamp": int(timezone.now().timestamp()),
                 "finalization_hash": finalization_hash,
             }

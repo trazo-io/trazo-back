@@ -45,7 +45,7 @@ class Command(BaseCommand):
                 "minimum_score": 50,
                 "is_automatic": True,
                 "criteria": {"net_footprint": 0},
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
             {
                 "name": "Water Conservation",
@@ -53,7 +53,7 @@ class Command(BaseCommand):
                 "minimum_score": 30,
                 "is_automatic": False,
                 "criteria": {"water_conservation": True},
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
             {
                 "name": "Organic Practices",
@@ -61,7 +61,7 @@ class Command(BaseCommand):
                 "minimum_score": 40,
                 "is_automatic": False,
                 "criteria": {"organic": True},
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
             {
                 "name": "Renewable Energy",
@@ -69,7 +69,7 @@ class Command(BaseCommand):
                 "minimum_score": 35,
                 "is_automatic": False,
                 "criteria": {"renewable_energy": True},
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
         ]
 
@@ -248,42 +248,42 @@ class Command(BaseCommand):
                 "unit": "kg",
                 "category": "fertilizer",
                 "default_emission_factor": 0.2,  # Low compared to synthetic
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
             "Solar-Powered Equipment": {
                 "description": "Equipment powered by on-farm solar panels",
                 "unit": "kWh",
                 "category": "energy",
                 "default_emission_factor": 0.05,
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
             "Drip Irrigation": {
                 "description": "Water-efficient irrigation system",
                 "unit": "liter",
                 "category": "water",
                 "default_emission_factor": 0.01,
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
             "Local Transportation": {
                 "description": "Short-distance transportation to local markets",
                 "unit": "km",
                 "category": "transport",
                 "default_emission_factor": 0.1,
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
             "Cover Cropping": {
                 "description": "Carbon sequestration through cover crops",
                 "unit": "hectare",
                 "category": "offset",
                 "default_emission_factor": -0.5,  # Negative = carbon removal
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
             "Renewable Energy Credits": {
                 "description": "Investment in renewable energy projects",
                 "unit": "credit",
                 "category": "offset",
                 "default_emission_factor": -1.0,
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
         }
 
@@ -314,7 +314,7 @@ class Command(BaseCommand):
                     "co2e_amount": amount,
                     "year": production.finish_date.year if production.finish_date else timezone.now().year,
                     "description": f"Emissions from {source_name.lower()} for {production.name}",
-                    "usda_verified": True,
+                    "usda_factors_based": True,
                 },
             )
 
@@ -334,7 +334,7 @@ class Command(BaseCommand):
                     "co2e_amount": amount,
                     "year": production.finish_date.year if production.finish_date else timezone.now().year,
                     "description": f"Offsets from {source_name.lower()} for {production.name}",
-                    "usda_verified": True,
+                    "usda_factors_based": True,
                 },
             )
 
@@ -355,7 +355,7 @@ class Command(BaseCommand):
                 "company_count": 50,
                 "unit": "kg CO2e/kg",
                 "source": "USDA SOE 2024",
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "region": "California",
             },
         )
@@ -375,7 +375,7 @@ class Command(BaseCommand):
                 "total_offsets": total_offsets,
                 "net_footprint": net_footprint,
                 "carbon_score": carbon_score,
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "cost_savings": 5000.0,
                 "recommendations": [
                     {

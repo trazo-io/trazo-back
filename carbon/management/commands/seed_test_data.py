@@ -442,7 +442,7 @@ class Command(BaseCommand):
                 "company_count": 150,
                 "unit": "kg CO2e per hectare",
                 "source": "USDA Agricultural Research Service",
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
         )
 
@@ -453,7 +453,7 @@ class Command(BaseCommand):
                 "description": "Exceptional carbon performance with net negative emissions",
                 "minimum_score": 80,
                 "is_automatic": True,
-                "usda_verified": True,
+                "usda_factors_used": True,
             },
         )
 

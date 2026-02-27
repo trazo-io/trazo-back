@@ -59,7 +59,7 @@ def test_fixed_harvesting_calculation():
         print(f"   ✅ CO₂e Result: {result['co2e']} kg")
         print(f"   ✅ Efficiency Score: {result['efficiency_score']}")
         print(f"   ✅ Calculation Method: {result['calculation_method']}")
-        print(f"   ✅ USDA Verified: {result['usda_verified']}")
+        print(f"   ✅ USDA Verified: {result['usda_factors_used']}")
 
         if "validation_warnings" in result and result["validation_warnings"]:
             print("   ⚠️ Validation Warnings:")
@@ -163,7 +163,7 @@ if __name__ == "__main__":
     print("=" * 60)
     print("✅ TESTING COMPLETE")
 
-    if result and result.get("usda_verified"):
+    if result and result.get("usda_factors_used"):
         print("🎉 SUCCESS: Fixed calculation is using USDA verified emission factors!")
     else:
         print("❌ ISSUE: Calculation may still have problems")

@@ -407,7 +407,7 @@ def test_all_production_events():
             co2e_value = result["co2e"]
             print(f"   ✅ CO₂e Result: {co2e_value} kg")
             print(f"   ✅ Calculation Method: {result['calculation_method']}")
-            print(f"   ✅ USDA Verified: {result['usda_verified']}")
+            print(f"   ✅ USDA Verified: {result['usda_factors_used']}")
 
             # Validate result is reasonable (not negative, not extremely high)
             if co2e_value < 0:
@@ -423,7 +423,7 @@ def test_all_production_events():
                     "co2e": co2e_value,
                     "status": "SUCCESS",
                     "method": result["calculation_method"],
-                    "usda_verified": result["usda_verified"],
+                    "usda_factors_used": result["usda_factors_used"],
                 }
             )
             successful_events += 1
@@ -475,7 +475,7 @@ def test_all_production_events():
     print()
 
     # USDA Verification Analysis
-    usda_verified = len([r for r in successful_results if r.get("usda_verified")])
+    usda_verified = len([r for r in successful_results if r.get("usda_factors_used")])
     print("🏛️ USDA VERIFICATION ANALYSIS:")
     print(f"   USDA Verified: {usda_verified}/{successful_events} events")
     print(f"   Verification Rate: {(usda_verified/successful_events)*100:.1f}%")

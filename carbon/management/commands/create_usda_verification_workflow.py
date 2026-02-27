@@ -49,7 +49,7 @@ class Command(BaseCommand):
                 "description": "Fertilizer application verified under USDA Organic Standards",
                 "default_emission_factor": 5.86,
                 "unit": "kg CO2e/kg N",
-                "usda_verified": True,  # Actually verified by USDA
+                "usda_factors_used": True,  # Actually verified by USDA
                 "usda_factors_based": True,
                 "verification_status": "usda_certified",
                 "data_source": "USDA National Organic Program",
@@ -60,7 +60,7 @@ class Command(BaseCommand):
                 "description": "Equipment operations verified under USDA Strengthening Organic Enforcement",
                 "default_emission_factor": 2.70,
                 "unit": "kg CO2e/L diesel",
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "usda_factors_based": True,
                 "verification_status": "usda_certified",
                 "data_source": "USDA Strengthening Organic Enforcement",
@@ -71,7 +71,7 @@ class Command(BaseCommand):
                 "description": "Soil management practice verified under USDA Climate Smart Agriculture",
                 "default_emission_factor": -2.5,  # Negative for sequestration
                 "unit": "kg CO2e/ha",
-                "usda_verified": True,
+                "usda_factors_used": True,
                 "usda_factors_based": True,
                 "verification_status": "usda_certified",
                 "data_source": "USDA Climate Smart Agriculture Program",
@@ -138,11 +138,11 @@ class Command(BaseCommand):
             "",
             "4. 💾 Update Trazo System",
             "   • Create CarbonCertification record",
-            "   • Mark relevant CarbonSources as usda_verified=True",
+            "   • Mark relevant CarbonSources as usda_factors_used=True",
             "   • Update verification_status to 'usda_certified'",
             "",
             "5. ✅ Events Now Show as USDA Verified",
-            "   • Events using certified sources show usda_verified=True",
+            "   • Events using certified sources show usda_factors_based=True",
             "   • Verification status shows 'usda_certified'",
             "   • Data source shows specific USDA program",
         ]

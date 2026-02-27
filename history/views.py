@@ -413,7 +413,7 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     "total_offsets": 0.0,
                     "crop_type": crop_type.name,
                     "calculation_method": "initial_production_setup",
-                    "usda_verified": False,
+                    "usda_factors_used": False,
                     "timestamp": int(start_date.timestamp()),
                     "carbon_score": 50,  # Initial neutral score
                     "industry_percentile": 50,

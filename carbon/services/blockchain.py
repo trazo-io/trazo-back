@@ -239,7 +239,7 @@ class BlockchainCarbonService:
             "total_offsets": str(carbon_data.get("total_offsets", 0)),
             "crop_type": carbon_data.get("crop_type", ""),
             "calculation_method": carbon_data.get("calculation_method", ""),
-            "usda_verified": carbon_data.get("usda_verified", False),
+            "usda_factors_used": carbon_data.get("usda_factors_used", False),
             "timestamp": carbon_data.get("timestamp", int(time.time())),
         }
 

@@ -83,7 +83,7 @@ def test_exact_planting_event():
         print(f"   ✅ Calculated CO₂e: {co2e_calculated} kg")
         print(f"   🎯 Expected CO₂e: {expected_co2e} kg")
         print(f"   📊 Calculation Method: {result['calculation_method']}")
-        print(f"   ✅ USDA Verified: {result['usda_verified']}")
+        print(f"   ✅ USDA Verified: {result['usda_factors_used']}")
 
         # Calculate accuracy
         difference = abs(co2e_calculated - expected_co2e)

@@ -575,7 +575,7 @@ class Command(BaseCommand):
                     attestation_count=offset_data.get('attestation_count', 0),
                     verified_by=offset_data.get('verified_by', ''),
                     external_verification_id=offset_data.get('external_verification_id', ''),
-                    usda_verified=True,
+                    usda_factors_used=True,
                     verification_status='factors_verified'
                 )
 
@@ -1244,7 +1244,7 @@ class CarbonEntryViewSet(viewsets.ModelViewSet):
             total_offsets=Sum('co2e_amount', filter=Q(type='offset')),
             avg_carbon_score=Avg('carbon_score'),
             entry_count=Count('id'),
-            usda_verified_count=Count('id', filter=Q(usda_factors_based=True))
+            usda_factors_used_count=Count('id', filter=Q(usda_factors_based=True))
         )
 
         return {
@@ -1252,7 +1252,7 @@ class CarbonEntryViewSet(viewsets.ModelViewSet):
             'total_offsets': aggregations['total_offsets'] or 0,
             'net_footprint': (aggregations['total_emissions'] or 0) - (aggregations['total_offsets'] or 0),
             'carbon_score': aggregations['avg_carbon_score'] or 0,
-            'verification_rate': (aggregations['usda_verified_count'] / aggregations['entry_count']) * 100 if aggregations['entry_count'] > 0 else 0
+            'verification_rate': (aggregations['usda_factors_used_count'] / aggregations['entry_count']) * 100 if aggregations['entry_count'] > 0 else 0
         }
 
 # File: trazo-back/carbon/services/performance_optimizer.py (NEW FILE)
@@ -1760,7 +1760,7 @@ Calculate carbon impact for agricultural events.
 {
   "co2e": 45.2,
   "efficiency_score": 85.0,
-  "usda_verified": true,
+  "usda_factors_used": true,
   "calculation_method": "enhanced_usda_factors",
   "recommendations": [
     {

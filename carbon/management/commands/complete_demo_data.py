@@ -87,7 +87,7 @@ class Command(BaseCommand):
                     "unit": unit,
                     "default_emission_factor": factor,
                     "description": description,
-                    "usda_verified": True,
+                    "usda_factors_used": True,
                     "usda_factors_based": True,
                 },
             )
@@ -147,7 +147,6 @@ class Command(BaseCommand):
                         co2e_amount=co2e_amount,
                         year=production.start_date.year,
                         description=f"{source_name} for {production.name}",
-                        usda_verified=True,
                         usda_factors_based=True,
                         verification_status="usda_verified",
                         data_source="USDA Agricultural Research Service",
@@ -171,7 +170,6 @@ class Command(BaseCommand):
                         co2e_amount=co2e_amount,
                         year=production.start_date.year,
                         description=f"{source_name} for {production.name}",
-                        usda_verified=True,
                         usda_factors_based=True,
                         verification_status="usda_verified",
                         data_source="USDA Agricultural Research Service",
@@ -198,7 +196,6 @@ class Command(BaseCommand):
                 "certification_body": "Verra",
                 "start_date": timezone.now().date() - timedelta(days=365),
                 "end_date": timezone.now().date() + timedelta(days=2555),  # ~7 years
-                "usda_verified": True,
             },
             {
                 "name": "Sustainable Agriculture Carbon Sequestration Program",
@@ -211,7 +208,6 @@ class Command(BaseCommand):
                 "certification_body": "Climate Action Reserve",
                 "start_date": timezone.now().date() - timedelta(days=180),
                 "end_date": timezone.now().date() + timedelta(days=1825),  # 5 years
-                "usda_verified": True,
             },
             {
                 "name": "California Renewable Energy Cooperative",
@@ -224,7 +220,6 @@ class Command(BaseCommand):
                 "certification_body": "Gold Standard Foundation",
                 "start_date": timezone.now().date() - timedelta(days=90),
                 "end_date": timezone.now().date() + timedelta(days=3650),  # 10 years
-                "usda_verified": False,
             },
         ]
 

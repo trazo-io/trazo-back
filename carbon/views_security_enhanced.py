@@ -190,7 +190,7 @@ def create_secure_carbon_offset(request):
                 "default_emission_factor": -1.0,  # Negative for offset
                 "unit": "kg CO2e",
                 "description": f"Carbon offset project: {source_id}",
-                "usda_verified": source_id in ["reforestation", "no_till", "cover_crop", "solar", "wind"],
+                "usda_factors_used": source_id in ["reforestation", "no_till", "cover_crop", "solar", "wind"],
                 "verification_status": "verified" if verification_level == "certified_project" else "estimated",
             },
         )
@@ -206,8 +206,7 @@ def create_secure_carbon_offset(request):
             year=year,
             description=f"Secure carbon offset: {source_id} - {amount} kg CO₂e",
             # USDA and verification fields
-            usda_verified=offset_source.usda_verified,
-            usda_factors_based=True,
+            usda_factors_based=offset_source.usda_factors_used,
             verification_status="verified",
             data_source=f"Secure offset creation: {source_id}",
             # Enhanced verification system fields
@@ -353,7 +352,7 @@ def create_secure_carbon_offset(request):
             "trust_adjustments": validation_result.get("trust_adjustments", {}),
             # Compliance information
             "compliance": {
-                "usda_verified": carbon_entry.usda_verified,
+                "usda_factors_used": carbon_entry.usda_factors_based,
                 "verification_complete": carbon_entry.documentation_complete,
                 "evidence_provided": carbon_entry.evidence_requirements_met,
             },

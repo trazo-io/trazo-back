@@ -98,7 +98,7 @@ class CarbonFootprintCalculator:
                 "efficiency_score": efficiency_score,
                 "benchmark": benchmark,
                 "recommendations": recommendations,
-                "usda_verified": True,
+                "usda_factors_used": True,
             }
 
         except Exception as e:
@@ -149,7 +149,7 @@ class CarbonFootprintCalculator:
         """Get industry benchmark data for the crop type and region"""
         try:
             benchmark = (
-                CarbonBenchmark.objects.filter(crop_type=crop_type, region=region, usda_verified=True)
+                CarbonBenchmark.objects.filter(crop_type=crop_type, region=region, usda_factors_used=True)
                 .order_by("-year")
                 .first()
             )

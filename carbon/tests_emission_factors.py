@@ -33,7 +33,7 @@ class EmissionFactorsRegistryTest(TestCase):
         self.assertIn("version", metadata)
         self.assertIn("last_updated", metadata)
         self.assertIn("data_source", metadata)
-        self.assertTrue(metadata["usda_verified"])
+        self.assertTrue(metadata["usda_factors_used"])
         self.assertTrue(metadata["compliance_ready"])
 
     def test_nitrogen_factor_consistency(self):
@@ -314,7 +314,7 @@ class CalculationAccuracyTest(TestCase):
         """Test that calculations include proper source attribution"""
         metadata = emission_factors.get_metadata()
 
-        self.assertTrue(metadata["usda_verified"])
+        self.assertTrue(metadata["usda_factors_used"])
         self.assertIn("EPA", metadata["data_source"])
         self.assertEqual(metadata["version"], emission_factors.VERSION)
 
