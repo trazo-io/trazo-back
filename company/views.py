@@ -13,7 +13,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from backend.permissions import CompanyNestedViewSet
+from backend.permissions import CompanyNestedViewSet, IsCompanyAdmin
 from history.models import History, HistoryScan
 from history.serializers import HistoryListOptionsSerializer
 from history.services.transparency_calculator import TransparencyCalculator
@@ -45,6 +45,11 @@ class CompanyViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     queryset = Company.objects.all()
     filter_backends = [filters.OrderingFilter]
 
+    def get_permissions(self):
+        if self.action in ["update", "partial_update", "destroy"]:
+            return [IsCompanyAdmin()]
+        return super().get_permissions()
+
     def get_serializer_class(self):
         if self.action == "create":
             return CreateCompanySerializer
@@ -60,7 +65,38 @@ class CompanyViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         company = serializer.save()
         WorksIn.objects.create(user=request.user, company=company, role=WorksIn.COMPANY_ADMIN)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        # Auto-start 14-day Starter trial for new companies
+        from subscriptions.models import Plan, Subscription
+
+        starter_plan = Plan.objects.filter(slug="starter", is_active=True).first()
+        if starter_plan:
+            now = timezone.now()
+            trial_end = now + timedelta(days=settings.TRIAL_PERIOD_DAYS)
+            Subscription.objects.create(
+                company=company,
+                plan=starter_plan,
+                status="trialing",
+                current_period_start=now,
+                current_period_end=trial_end,
+                trial_end=trial_end,
+            )
+            logger.info(
+                "Auto-started %d-day trial for new company %s",
+                settings.TRIAL_PERIOD_DAYS,
+                company.id,
+            )
+        else:
+            logger.warning(
+                "Starter plan not found! New company %s has no subscription.",
+                company.id,
+            )
+
+        # Re-serialize with RetrieveCompanySerializer to include subscription data
+        retrieve_serializer = RetrieveCompanySerializer(
+            company, context=self.get_serializer_context()
+        )
+        return Response(retrieve_serializer.data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["get"])
     def members(self, request, pk=None, company_pk=None):
@@ -78,7 +114,13 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     )
     filter_backends = [filters.OrderingFilter]
     serializer_class = UpdateEstablishmentSerializer
-    permission_classes = [IsAuthenticated, HasEstablishmentCreationPermission]
+
+    def get_permissions(self):
+        if self.action == "destroy":
+            return [IsCompanyAdmin()]
+        if self.action in ["create", "update", "partial_update"]:
+            return [IsAuthenticated(), HasEstablishmentCreationPermission()]
+        return super().get_permissions()
 
     def get_serializer_class(self):
         if self.action == "create" or self.action == "update" or self.action == "partial_update":
@@ -551,6 +593,7 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             # Use transparency from comprehensive metrics (now properly calculated)
             transparency_data = {
                 "overall_transparency_score": dashboard_data.get("transparency_percentage", 0),
+                "completeness_score": dashboard_data.get("completeness_score", 0),
                 "total_productions": dashboard_data.get("total_productions", 0),
                 "total_documented_events": dashboard_data.get("total_events", 0),
                 "total_photos": dashboard_data.get("total_photos", 0),
@@ -570,6 +613,8 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 },
                 # Add real transparency analytics
                 "transparency_analytics": transparency_analytics,
+                # Category breakdown for Documentation Coverage section
+                "transparency_breakdown": dashboard_data.get("transparency_breakdown", {}),
             }
 
             # Get carbon footprint summary
@@ -958,6 +1003,8 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             # Calculate transparency for each production using unified calculator
             transparency_calculator = TransparencyCalculator()
             production_scores = []
+            completeness_scores = []
+            all_category_breakdowns = []
 
             for parcel in establishment.parcels.all():
                 for history in parcel.histories.all():
@@ -965,19 +1012,74 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                         result = transparency_calculator.calculate_transparency_score(history)
                         score = result.get("transparency_percentage", 0)
                         production_scores.append(score)
+                        completeness_scores.append(result.get("completeness_score", 0))
+                        # Collect category breakdowns for aggregation
+                        consumer_cats = result.get("consumer_friendly_categories", {})
+                        if consumer_cats:
+                            all_category_breakdowns.append(consumer_cats)
                     except Exception as e:
                         logger.warning(f"Failed to calculate transparency for history {history.id}: {e}")
                         continue
 
             # Average the transparency scores across all productions
-            # This gives establishment-level transparency that matches individual production scores
             if production_scores:
                 metrics["transparency_percentage"] = round(sum(production_scores) / len(production_scores), 1)
             else:
                 metrics["transparency_percentage"] = 0.0
+
+            # Completeness score (weighted, accounts for photo verification penalties)
+            if completeness_scores:
+                metrics["completeness_score"] = round(sum(completeness_scores) / len(completeness_scores), 1)
+            else:
+                metrics["completeness_score"] = 0.0
+
+            # Aggregate category breakdowns across all productions
+            aggregated_categories = {}
+            if all_category_breakdowns:
+                all_keys = set()
+                for breakdown in all_category_breakdowns:
+                    all_keys.update(breakdown.keys())
+
+                for key in all_keys:
+                    total_actual = 0
+                    total_expected = 0
+                    total_photo_verified = 0
+                    completeness_values = []
+
+                    for breakdown in all_category_breakdowns:
+                        if key in breakdown:
+                            cat_data = breakdown[key]
+                            total_actual += cat_data.get("actual_count", 0)
+                            total_expected += cat_data.get("expected_count", 0)
+                            total_photo_verified += cat_data.get("photo_verified_count", 0)
+                            completeness_values.append(cat_data.get("completeness_percentage", 0))
+
+                    avg_completeness = (
+                        round(sum(completeness_values) / len(completeness_values), 1) if completeness_values else 0
+                    )
+
+                    # Build aggregated category with consumer-friendly fields preserved
+                    sample = next((b[key] for b in all_category_breakdowns if key in b), {})
+                    aggregated_categories[key] = {
+                        "actual_count": total_actual,
+                        "expected_count": total_expected,
+                        "photo_verified_count": total_photo_verified,
+                        "completeness_percentage": avg_completeness,
+                        "consumer_name": sample.get("consumer_name", key.title()),
+                        "consumer_description": sample.get("consumer_description", ""),
+                        "examples": sample.get("examples", ""),
+                        "documented": total_actual > 0,
+                        "transparency_level": sample.get("transparency_level", "No Data"),
+                        "requires_photos": sample.get("requires_photos", False),
+                        "photo_verification_rate": sample.get("photo_verification_rate", 0),
+                    }
+
+            metrics["transparency_breakdown"] = aggregated_categories
         else:
             # No productions = 0% transparency
             metrics["transparency_percentage"] = 0.0
+            metrics["completeness_score"] = 0.0
+            metrics["transparency_breakdown"] = {}
 
         # Calculate overall data completeness
         total_fields_available = 25  # Estimated total transparency fields available in database
@@ -989,10 +1091,7 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         # Get all current productions across all parcels
         current_productions = []
-        print(f"🔍 DEBUG: Checking establishment {establishment.id} - has {establishment.parcels.count()} parcels")
         for parcel in establishment.parcels.all():
-            histories_count = parcel.histories.count()
-            print(f"🔍 DEBUG: Parcel {parcel.id} ({parcel.name}) has {histories_count} histories")
             for history in parcel.histories.all():
                 # TRANSPARENCY-FIRST FIX: Only show active productions (no finish_date)
                 # This aligns with Trazo's mission to reward future transparency, not criticize past completeness
@@ -1006,11 +1105,6 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                             "start_date": history.start_date,
                         }
                     )
-                    print(
-                        f"🔍 DEBUG: Added production {history.id} - {str(history.crop_type) if history.crop_type else 'Unknown Crop'}"
-                    )
-
-        print(f"🔍 DEBUG: Found {len(current_productions)} current productions for establishment {establishment.id}")
 
         # Analyze each production for specific improvement opportunities
         for production_info in current_productions:
@@ -1210,9 +1304,7 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     usda_factors_based_entries = carbon_entries.filter(usda_factors_based=True).count()
 
                     # Production is USDA verified if majority of entries are USDA verified or factors-based
-                    is_usda_verified = usda_verified_entries > 0 or usda_factors_based_entries >= (
-                        total_entries * 0.5
-                    )
+                    is_usda_verified = usda_verified_entries > 0 or usda_factors_based_entries >= (total_entries * 0.5)
 
                     if is_usda_verified:
                         usda_verified_count += 1
@@ -1483,16 +1575,29 @@ class PublicEstablishmentViewSet(viewsets.ViewSet):
     permission_classes = []
 
     def retrieve(self, request, pk=None):
-        """Get public establishment data by ID"""
+        """Get public establishment data by ID or UUID"""
         try:
-            # Only show active establishments
-            establishment = get_object_or_404(Establishment.objects.select_related("company"), pk=pk, is_active=True)
+            # Support both UUID and integer lookups
+            import uuid as uuid_module
+
+            try:
+                public_uuid = uuid_module.UUID(str(pk))
+                establishment = get_object_or_404(
+                    Establishment.objects.select_related("company"), public_id=public_uuid, is_active=True
+                )
+            except (ValueError, AttributeError):
+                # Fall back to integer PK lookup for backward compatibility
+                establishment = get_object_or_404(
+                    Establishment.objects.select_related("company"), pk=pk, is_active=True
+                )
 
             # Use EstablishmentSerializer but filter sensitive data
             serializer = EstablishmentSerializer(establishment, context={"request": request})
             data = serializer.data
 
             # Remove sensitive fields for public view
+            # Include public_id (UUID) for external references
+            public_data_extra = {"public_id": str(establishment.public_id)}
             public_fields = [
                 "id",
                 "name",
@@ -1529,6 +1634,7 @@ class PublicEstablishmentViewSet(viewsets.ViewSet):
             ]
 
             public_data = {key: data[key] for key in public_fields if key in data}
+            public_data.update(public_data_extra)
 
             return Response(public_data, status=status.HTTP_200_OK)
 

@@ -219,29 +219,8 @@ CELERY_TASK_QUEUES = {
     },
 }
 
-# Celery Beat Schedule
-CELERY_BEAT_SCHEDULE = {
-    "generate-nightly-reports": {
-        "task": "carbon.tasks.generate_nightly_reports",
-        "schedule": crontab(hour=0, minute=0),  # Run at midnight
-        "options": {"queue": "carbon"},
-    },
-    "award-sustainability-badges": {
-        "task": "carbon.tasks.award_sustainability_badges",
-        "schedule": crontab(hour=1, minute=0),  # Run at 1 AM
-        "options": {"queue": "carbon"},
-    },
-    "cleanup-old-audit-logs": {
-        "task": "carbon.tasks.cleanup_old_audit_logs",
-        "schedule": crontab(hour=2, minute=0),  # Run at 2 AM
-        "options": {"queue": "carbon"},
-    },
-    "update-industry-benchmarks": {
-        "task": "carbon.tasks.update_industry_benchmarks",
-        "schedule": crontab(hour=3, minute=0),  # Run at 3 AM
-        "options": {"queue": "carbon"},
-    },
-}
+# Celery Beat Schedule is defined in backend/celery.py to keep all periodic
+# tasks in one authoritative location.  Do not add CELERY_BEAT_SCHEDULE here.
 
 # Redis Cache Configuration
 CACHES = {
@@ -282,7 +261,11 @@ COOLFARMTOOL_BASE_URL = config("COOLFARMTOOL_BASE_URL", default="https://api.coo
 COOLFARM_API_KEY = os.environ.get("COOLFARM_API_KEY", "")
 COOLFARM_API_URL = os.environ.get("COOLFARM_API_URL", "https://api.coolfarmtool.org/v1")
 
-# OpenAI API Configuration for Voice Processing
+# Deepgram API Configuration for Voice Transcription (Nova-3)
+DEEPGRAM_API_KEY = config("DEEPGRAM_API_KEY", default="")
+
+# OpenAI API Configuration for Voice Processing and AI Suggestions
+OPENAI_AVAILABLE = config("OPENAI_AVAILABLE", default=False, cast=bool)
 OPENAI_API_KEY = config("OPENAI_API_KEY", default="")
 OPENAI_MODEL = config("OPENAI_MODEL", default="gpt-3.5-turbo")
 OPENAI_MAX_TOKENS = config("OPENAI_MAX_TOKENS", default=500, cast=int)
@@ -694,10 +677,11 @@ SIMPLE_JWT = {
     "AUTH_COOKIE_SECURE": not DEBUG,  # Whether the auth cookies should be secure (https:// only).
     "AUTH_COOKIE_HTTP_ONLY": True,  # Http only cookie flag.It's not fetch by javascript.
     "AUTH_COOKIE_PATH": "/",  # The path of the auth cookie.
-    "AUTH_COOKIE_SAMESITE": (
-        "Lax" if DEBUG else "None"
-    ),  # Whether to set the flag restricting cookie leaks on cross-site requests. This can be 'Lax', 'Strict', or None to disable the flag.
+    "AUTH_COOKIE_SAMESITE": "Lax",  # Restrict cookie leaks on cross-site requests for CSRF protection.
 }
+
+# Trial configuration
+TRIAL_PERIOD_DAYS = 14
 
 # Stripe Settings
 STRIPE_PUBLIC_KEY = config("STRIPE_PUBLIC_KEY", default="")
@@ -745,13 +729,8 @@ USDA_VERIFICATION_ENABLED = config("USDA_VERIFICATION_ENABLED", default=True, ca
 CARBON_TRANSPARENCY_FOCUS = True  # Core mission: agricultural carbon transparency
 FARM_MANAGEMENT_FEATURES_DISABLED = True  # Stay focused on carbon, not farm optimization
 
-# Celery Beat Schedule for Blockchain Tasks
-CELERY_BEAT_SCHEDULE = {
-    "batch-submit-monthly-summaries": {
-        "task": "carbon.tasks.batch_submit_monthly_summaries",
-        "schedule": crontab(hour=2, minute=0, day_of_month=1),  # 2:00 AM UTC on 1st of each month
-    },
-}
+# (Blockchain beat task is defined in backend/celery.py alongside all other
+# periodic tasks — see the consolidated beat_schedule there.)
 
 
 # Social Authentication Settings

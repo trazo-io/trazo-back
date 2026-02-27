@@ -108,7 +108,7 @@ def test_invitation_email():
             invitee_name="Farm Worker",
             inviter=inviter,
             company=company,
-            role="DW",
+            role="VW",
             invitation_link="https://producer.trazo.io/invitation/ABC123XYZ",
             invitation_message="Welcome to our farm team! We look forward to working with you.",
         )
@@ -165,8 +165,8 @@ def test_template_rendering():
             "invitee_name": "Test Invitee",
             "inviter": User(first_name="Test", last_name="Admin"),
             "company": Company(name="Test Company"),
-            "role": "DW",
-            "role_display": "Domain Worker",
+            "role": "VW",
+            "role_display": "Viewer",
             "invitation_link": "https://example.com/invitation/123",
             "invitation_message": "Welcome to our team!",
         }

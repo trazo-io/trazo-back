@@ -1,6 +1,19 @@
-from django.conf import settings
-
 from rest_framework import permissions
+
+
+class IsCompanyAdminForSubscription(permissions.BasePermission):
+    """Only Company Admins can manage billing and subscriptions."""
+
+    message = "Only Company Admins can manage subscriptions."
+
+    def has_permission(self, request, view):
+        from users.models import WorksIn
+
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_staff or request.user.is_superuser:
+            return True
+        return WorksIn.objects.filter(user=request.user, role=WorksIn.COMPANY_ADMIN).exists()
 
 
 class HasEstablishmentCreationPermission(permissions.BasePermission):
@@ -26,10 +39,6 @@ class HasParcelCreationPermission(permissions.BasePermission):
     message = "Your subscription plan does not allow creating more parcels."
 
     def has_permission(self, request, view):
-        # Bypass check in development environment
-        if settings.DEBUG:
-            return True
-
         if request.method != "POST":
             return True
 
@@ -40,20 +49,10 @@ class HasParcelCreationPermission(permissions.BasePermission):
             return False
 
         try:
-            # Ensure establishment_id is an integer
             establishment_id = int(establishment_id)
             establishment = company.establishment_set.get(id=establishment_id)
-
-            # Debug output
-            print(f"Checking parcel creation permission for company: {company.id}, establishment: {establishment_id}")
-            print(f"Company can create parcel: {company.can_create_parcel(establishment)}")
-            print(f"Subscription plan: {company.subscription_plan}")
-            if company.subscription_plan:
-                print(f"Max parcels: {company.subscription_plan.features.get('max_parcels', 0)}")
-
             return company.can_create_parcel(establishment)
-        except Exception as e:
-            print(f"Error in HasParcelCreationPermission: {str(e)}")
+        except Exception:
             return False
 
 

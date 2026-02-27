@@ -143,7 +143,7 @@ class QRSecurityManager:
             url: QR code URL
 
         Returns:
-            Production ID if found, None otherwise
+            Production ID (integer) if found, None otherwise
         """
         try:
             # Try secure format first
@@ -151,7 +151,7 @@ class QRSecurityManager:
             if is_valid and payload:
                 return payload.get("id")
 
-            # Fallback to legacy format
+            # Fallback to legacy format (integer in path)
             parsed = urlparse(url)
             path_parts = parsed.path.strip("/").split("/")
 
@@ -159,12 +159,41 @@ class QRSecurityManager:
                 try:
                     return int(path_parts[1])
                 except ValueError:
+                    # Path segment may be a UUID - resolve to integer ID
                     pass
 
             return None
 
         except Exception as e:
             logger.error(f"Error extracting production ID from URL: {e}")
+            return None
+
+    def get_production_public_id_from_url(self, url: str) -> Optional[str]:
+        """
+        Extract production public_id (UUID) from a QR URL path.
+
+        Args:
+            url: QR code URL
+
+        Returns:
+            UUID string if found in the path, None otherwise
+        """
+        import uuid as uuid_module
+
+        try:
+            parsed = urlparse(url)
+            path_parts = parsed.path.strip("/").split("/")
+
+            if len(path_parts) >= 2 and path_parts[0] == "production":
+                try:
+                    return str(uuid_module.UUID(path_parts[1]))
+                except ValueError:
+                    pass
+
+            return None
+
+        except Exception as e:
+            logger.error(f"Error extracting production public_id from URL: {e}")
             return None
 
     def is_secure_qr_url(self, url: str) -> bool:

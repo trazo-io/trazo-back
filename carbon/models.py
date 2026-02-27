@@ -286,7 +286,10 @@ class EventTemplate(models.Model):
 
     # Backend event mapping
     backend_event_type = models.IntegerField(
-        help_text="Maps to backend event model: 0=Weather, 1=Chemical, 2=Production, 3=General, 4=Equipment, 5=Soil, 6=Pest"
+        help_text=(
+            "Maps to backend event model: 0=Weather, 1=Production, "
+            "2=Chemical, 3=General, 4=Equipment, 5=Soil, 6=Pest, 7=Business"
+        )
     )
     backend_event_fields = models.JSONField(default=dict, help_text="Default field values for backend event creation")
 
@@ -299,18 +302,18 @@ class EventTemplate(models.Model):
     display_priority = models.IntegerField(
         choices=DISPLAY_PRIORITY_CHOICES,
         default=3,
-        help_text="Controls template ordering in UI (1=featured, 5=archive)"
+        help_text="Controls template ordering in UI (1=featured, 5=archive)",
     )
     template_category = models.CharField(
         max_length=20,
         choices=TEMPLATE_CATEGORY_CHOICES,
         default="core",
-        help_text="Category for grouping templates in UI"
+        help_text="Category for grouping templates in UI",
     )
     translation_key = models.CharField(
         max_length=100,
         blank=True,
-        help_text="i18n key for frontend translation (e.g., 'quickAdd.template.fertilization')"
+        help_text="i18n key for frontend translation (e.g., 'quickAdd.template.fertilization')",
     )
 
     # Meta information

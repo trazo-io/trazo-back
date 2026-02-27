@@ -123,9 +123,7 @@ class Command(BaseCommand):
                 self.stdout.write(f"  Would create/update: {data['name']}")
                 continue
 
-            crop_type, created = CropType.objects.get_or_create(
-                slug=data["slug"], defaults=data
-            )
+            crop_type, created = CropType.objects.get_or_create(slug=data["slug"], defaults=data)
 
             if created:
                 stats["crops_created"] += 1
@@ -147,9 +145,7 @@ class Command(BaseCommand):
         template_data = self._get_template_data()
 
         # Build lookup dict for dry-run mode
-        crop_name_lookup = {
-            crop["slug"]: crop["name"] for crop in self._get_crop_type_data()
-        }
+        crop_name_lookup = {crop["slug"]: crop["name"] for crop in self._get_crop_type_data()}
 
         for crop_slug, tpl_data in template_data.items():
             # In dry-run mode, skip database queries
@@ -169,9 +165,7 @@ class Command(BaseCommand):
             template_slug = f"{crop_slug}_conventional"
 
             # Check if template exists
-            existing = ProductionTemplate.objects.filter(
-                crop_type=crop_type, slug=template_slug
-            ).first()
+            existing = ProductionTemplate.objects.filter(crop_type=crop_type, slug=template_slug).first()
 
             if existing:
                 stats["templates_skipped"] += 1
@@ -283,9 +277,7 @@ class Command(BaseCommand):
         self.stdout.write(f"   Active Events:         {total_events}")
 
         self.stdout.write(
-            self.style.SUCCESS(
-                f"\n✅ Production dropdown will show {total_crops} USDA-verified crop types!"
-            )
+            self.style.SUCCESS(f"\n✅ Production dropdown will show {total_crops} USDA-verified crop types!")
         )
 
     # =========================================================================
@@ -2203,8 +2195,7 @@ class Command(BaseCommand):
 
     def _get_lettuce_template(self):
         return {
-            "description": "Template for conventional lettuce production. "
-            "Fast-growing crop with food safety focus.",
+            "description": "Template for conventional lettuce production. " "Fast-growing crop with food safety focus.",
             "complexity": "intermediate",
             "setup_time": 6,
             "premium": "15-25%",

@@ -4,12 +4,12 @@ V2 Production Template Seed Command
 Creates comprehensive production templates with COMPLETE backend_event_fields for ALL event types.
 Every form field has smart defaults - no empty fields.
 
-Event Types:
+Event Types (from history/constants.py):
 - 0: Weather (WeatherEvent)
-- 1: Chemical (ChemicalEvent) - Fertilizers, Pesticides, Herbicides, Fungicides
-- 2: Production (ProductionEvent) - Planting, Harvest, Irrigation, Pruning, etc.
+- 1: Production (ProductionEvent) - Planting, Harvest, Irrigation, Pruning, Equipment Maintenance, etc.
+- 2: Chemical (ChemicalEvent) - Fertilizers, Pesticides, Herbicides, Fungicides
 - 3: General (GeneralEvent)
-- 4: Equipment (EquipmentEvent) - Legacy, merged to Production EM
+- 4: Equipment (EquipmentEvent) - Legacy, merged to Production EM subtype
 - 5: Soil (SoilManagementEvent)
 - 6: Pest (PestManagementEvent)
 - 7: Business (BusinessEvent)
@@ -26,7 +26,6 @@ from django.db import transaction
 
 from carbon.models import CropType, EventTemplate, ProductionTemplate
 
-
 # =============================================================================
 # SECTION 1: CROP-SPECIFIC CUSTOMIZATIONS (16 Crops - California Focus)
 # =============================================================================
@@ -34,43 +33,104 @@ from carbon.models import CropType, EventTemplate, ProductionTemplate
 CROP_CUSTOMIZATIONS = {
     # TREE CROPS - California Central Valley Focus
     "avocados": {
-        "npk": "8-3-9",
-        "nitrogen_pct": 8.0,
-        "phosphorus_pct": 3.0,
-        "potassium_pct": 9.0,
-        "commercial_name": "Avocado Special NPK 8-3-9 + 2MgO",
-        "common_pests": "Avocado thrips, Persea mite, Avocado lace bug, Phytophthora",
-        "beneficial_insects": "Predatory mites, Lacewings, Ladybugs",
+        # Primary fertilizer - YaraMila Complex (from demo avocado finished #2)
+        "npk": "12-11-18",
+        "nitrogen_pct": 12.0,
+        "phosphorus_pct": 11.0,
+        "potassium_pct": 18.0,
+        "commercial_name": "YaraMila Complex 12-11-18",
+        # Secondary fertigation (from demo avocado finished #7)
+        "secondary_fertilizer": "Fertiactyl GZ 13-0-5",
+        "secondary_npk": "13-0-5",
+        "secondary_nitrogen_pct": 13.0,
+        "secondary_phosphorus_pct": 0.0,
+        "secondary_potassium_pct": 5.0,
+        # Slow-release option (from demo avocado current #1)
+        "slow_release_fertilizer": "Osmocote Plus 15-9-12",
+        "slow_release_npk": "15-9-12",
+        # Fungicides (from demo avocado finished #4, current #3, #7)
+        "primary_fungicide": "Ridomil Gold SL (mefenoxam)",
+        "fungicide_subtype": "synthetic_fungicide",
+        "fungicide_target": "Phytophthora cinnamomi root rot",
+        "copper_fungicide": "Kocide 3000 (copper hydroxide)",
+        "copper_target": "Anthracnose (Colletotrichum gloeosporioides)",
+        # Herbicide (from demo avocado finished #14)
+        "herbicide": "Roundup PowerMax 3 (glyphosate)",
+        "herbicide_subtype": "synthetic_herbicide",
+        # Pest management (from demo)
+        "common_pests": "Persea mite (Oligonychus perseae), Avocado thrips (Scirtothrips perseae)",
+        "beneficial_insects": "Galendromus helveolus (predatory mite)",
+        "primary_pest_species": "Persea mite (Oligonychus perseae), Avocado thrips (Scirtothrips perseae)",
+        # Certification (from demo avocado finished #13)
+        "certification_standard": "GLOBALG.A.P. IFA v6",
+        "certification_body": "SCS Global Services",
+        "certification_type": "global_gap",
+        # Farm profile - Ventura County, California
         "irrigation_method": "drip",
-        "typical_area": 8.0,
-        "region": "California",
-        "timing_soil": "February - March",
-        "timing_plant": "Spring or Fall",
-        "timing_fertilize": "March - April",
-        "timing_irrigate": "April - October",
-        "timing_pest": "May - September",
-        "timing_harvest": "April - November",
-        "yield_per_ha": 12.0,
+        "water_source": "well_groundwater",
+        "soil_type": "sandy_loam",
+        "typical_area": 15.0,
+        "region": "Ventura County, California",
+        "timing_soil": "October - November",
+        "timing_plant": "March - April",
+        "timing_fertilize": "February - March",
+        "timing_irrigate": "Year-round",
+        "timing_pest": "March - October",
+        "timing_harvest": "February - September",
+        "yield_per_ha": 9.0,
         "yield_unit": "tons",
     },
     "citrus_oranges": {
-        "npk": "13-7-13",
+        # Primary fertilizer - Haifa Multi-K (from demo orange finished #2)
+        "npk": "13-0-46",
         "nitrogen_pct": 13.0,
-        "phosphorus_pct": 7.0,
-        "potassium_pct": 13.0,
-        "commercial_name": "Citrus Special NPK 13-7-13",
-        "common_pests": "Citrus psyllid, Red scale, Citrus leafminer, Thrips",
-        "beneficial_insects": "Parasitic wasps, Ladybugs, Lacewings",
-        "irrigation_method": "drip",
-        "typical_area": 10.0,
-        "region": "California",
+        "phosphorus_pct": 0.0,
+        "potassium_pct": 46.0,
+        "commercial_name": "Haifa Multi-K 13-0-46",
+        # Secondary fertilizers (from demo orange current #1, finished #8)
+        "secondary_fertilizer": "JR Peters Citrus FeEd 8-24-12",
+        "secondary_npk": "8-24-12",
+        "secondary_nitrogen_pct": 8.0,
+        "secondary_phosphorus_pct": 24.0,
+        "secondary_potassium_pct": 12.0,
+        "tertiary_fertilizer": "UAN-32 (32-0-0)",
+        "tertiary_npk": "32-0-0",
+        # Fungicide (from demo orange current #4)
+        "primary_fungicide": "Microthiol Disperss (micronized sulfur)",
+        "fungicide_subtype": "sulfur_fungicide",
+        "fungicide_target": "Citrus rust mite, Powdery mildew",
+        # Organic herbicide (from demo orange finished #16)
+        "herbicide": "Suppress EC (caprylic/capric acid)",
+        "herbicide_subtype": "organic_herbicide",
+        # Organic pesticide (from demo orange finished #17)
+        "organic_pesticide": "Surround WP (kaolin clay)",
+        "pesticide_subtype": "organic_pesticide",
+        "pesticide_target": "Sunburn protection, Pest barrier",
+        # Synthetic pesticide (from demo orange finished #4)
+        "synthetic_pesticide": "Delegate WG (spinetoram)",
+        "synthetic_pesticide_target": "Citrus leafminer (Phyllocnistis citrella)",
+        # Pest management (from demo)
+        "common_pests": "Citrus leafminer (Phyllocnistis citrella), California red scale (Aonidiella aurantii)",
+        "beneficial_insects": "Aphytis melinus (parasitic wasp)",
+        "primary_pest_species": "Citrus leafminer (Phyllocnistis citrella), California red scale (Aonidiella aurantii)",
+        "beneficial_release_quantity": "50,000/ha",
+        # Certification (from demo orange finished #15)
+        "certification_standard": "Primus GFS v4.0",
+        "certification_body": "Primus Auditing Ops (Azzule Systems)",
+        "certification_type": "sustainable_agriculture",
+        # Farm profile - Central Valley, California
+        "irrigation_method": "micro_sprinkler",
+        "water_source": "irrigation_canal",
+        "soil_type": "clay_loam",
+        "typical_area": 20.0,
+        "region": "Central Valley, California",
         "timing_soil": "January - February",
         "timing_plant": "March - April",
         "timing_fertilize": "February - March",
         "timing_irrigate": "March - October",
         "timing_pest": "April - September",
         "timing_harvest": "November - June",
-        "yield_per_ha": 30.0,
+        "yield_per_ha": 28.0,
         "yield_unit": "tons",
     },
     "apples": {
@@ -422,6 +482,9 @@ CROP_CUSTOMIZATIONS = {
     },
 }
 
+# Alias: DB has both "avocado" (singular) and "avocados" (plural) slugs
+CROP_CUSTOMIZATIONS["avocado"] = CROP_CUSTOMIZATIONS["avocados"]
+
 
 # =============================================================================
 # SECTION 2: EVENT TYPE BUILDER FUNCTIONS
@@ -444,14 +507,17 @@ def build_soil_event_fields(
     observation="Soil preparation and conditioning",
     soil_ph=None,
     organic_matter_pct=None,
+    amendment_type=None,
+    amendment_amount=None,
+    equipment_used="tractor_cultivator",
 ):
     """
     Build complete backend_event_fields for SoilManagementEvent (backend_event_type=5)
 
-    Subtypes: ST (Soil Testing), PA (Soil Preparation/Amendment), OM (Organic Matter),
-              CC (Cover Crop), TI (Tillage), CO (Compaction)
+    Subtypes: ST (Soil Testing), PA (pH Adjustment/Amendment), OM (Organic Matter),
+              CC (Cover Crop), TI (Tillage), CO (Composting)
     """
-    return {
+    fields = {
         "type": subtype,
         "observation": observation,
         "area_covered": area,
@@ -467,8 +533,15 @@ def build_soil_event_fields(
         "fuel_type": fuel_type,
         "equipment_hours": equipment_hours,
         "production_efficiency": efficiency,
-        "equipment_used": "tractor_cultivator",
+        "equipment_used": equipment_used,
     }
+
+    if amendment_type:
+        fields["amendment_type"] = amendment_type
+    if amendment_amount:
+        fields["amendment_amount"] = amendment_amount
+
+    return fields
 
 
 def build_production_event_fields(
@@ -529,7 +602,7 @@ def build_production_event_fields(
         fields["irrigation_depth_unit"] = irrigation_depth_unit
     elif subtype == "EM":
         fields["equipment_type"] = equipment_type or "tractor"
-        fields["equipment_operation_type"] = equipment_operation_type or "routine_maintenance"
+        fields["equipment_operation_type"] = equipment_operation_type or "MN"
 
     return fields
 
@@ -574,11 +647,8 @@ def build_chemical_event_fields(
         "commercial_name": commercial_name,
         "concentration": concentration,
         "volume": volume,
-        "volume_unit": volume_unit,
         "area": area,
-        "area_unit": area_unit,
         "way_of_application": application_method,
-        "application_method_structured": application_method,
         "application_fuel_type": fuel_type,
         "application_fuel_consumed": fuel_consumed,
         "application_fuel_unit": fuel_unit,
@@ -618,13 +688,13 @@ def build_pest_event_fields(
     action_threshold_met=False,
     trap_count=None,
     damage_percentage=None,
-    economic_threshold_met=False,
-    weather_conditions="calm_dry",
-    action_recommended=None,
+    area_covered=5.0,
+    area_unit="ha",
+    fuel_consumed=None,
+    fuel_unit=None,
+    fuel_type=None,
+    equipment_hours=None,
     observation="Pest management activity",
-    field_area=5.0,
-    travel_distance=1.5,
-    time_spent=2.0,
     crop_growth_stage="vegetative",
 ):
     """
@@ -633,7 +703,7 @@ def build_pest_event_fields(
     Subtypes: SC (Scouting), BR (Beneficial Release), TM (Trap Monitoring),
               PI (Physical Intervention), TA (Threshold Assessment), IP (IPM Implementation)
     """
-    return {
+    fields = {
         "type": subtype,
         "pest_species": pest_species,
         "pest_pressure_level": pest_pressure_level,
@@ -645,17 +715,23 @@ def build_pest_event_fields(
         "action_threshold_met": action_threshold_met,
         "trap_count": trap_count,
         "damage_percentage": damage_percentage,
-        "economic_threshold_met": economic_threshold_met,
-        "weather_conditions": weather_conditions,
-        "action_recommended": action_recommended,
+        "area_covered": area_covered,
+        "area_unit": area_unit,
         "observation": observation,
-        "extra_data": {
-            "field_area_hectares": field_area,
-            "travel_distance_km": travel_distance,
-            "time_spent_hours": time_spent,
-            "crop_growth_stage": crop_growth_stage,
-        },
     }
+
+    if fuel_consumed is not None:
+        fields["fuel_consumed"] = fuel_consumed
+        fields["fuel_unit"] = fuel_unit or "L"
+        fields["fuel_type"] = fuel_type or "diesel"
+    if equipment_hours is not None:
+        fields["equipment_hours"] = equipment_hours
+
+    fields["extra_data"] = {
+        "crop_growth_stage": crop_growth_stage,
+    }
+
+    return fields
 
 
 def build_business_event_fields(
@@ -668,6 +744,7 @@ def build_business_event_fields(
     verification_status="verified",
     sustainability_practice=None,
     verified_certifier_name=None,
+    certificate_number=None,
     observation="Business activity",
 ):
     """
@@ -675,7 +752,7 @@ def build_business_event_fields(
 
     Subtypes: CE (Certification), CM (Compliance), IN (Inspection)
     """
-    return {
+    fields = {
         "type": subtype,
         "name": name,
         "business_type": business_type,
@@ -688,10 +765,21 @@ def build_business_event_fields(
         "observation": observation,
     }
 
+    if certificate_number:
+        fields["certificate_number"] = certificate_number
+
+    return fields
+
 
 def build_weather_event_fields(
     subtype="FR",
     observation="Weather event recorded",
+    event_name=None,
+    temperature=None,
+    wind_speed=None,
+    duration_hours=None,
+    duration_days=None,
+    damage_description=None,
 ):
     """
     Build complete backend_event_fields for WeatherEvent (backend_event_type=0)
@@ -699,31 +787,50 @@ def build_weather_event_fields(
     Subtypes: FR (Frost), DR (Drought), HL (Hail), HT (Heat),
               TS (Storm), HW (High Wind), HH (High Humidity), LH (Low Humidity)
     """
+    extra_data = {}
+    if event_name:
+        extra_data["event_name"] = event_name
+    if temperature is not None:
+        if subtype == "FR":
+            extra_data["lower_temperature"] = str(temperature)
+        else:
+            extra_data["highest_temperature"] = str(temperature)
+    if wind_speed is not None:
+        extra_data["wind_speed"] = str(wind_speed)
+    if duration_hours is not None:
+        extra_data["duration_hours"] = duration_hours
+    if duration_days is not None:
+        extra_data["duration_days"] = duration_days
+    if damage_description:
+        extra_data["damage"] = damage_description
+
     return {
         "type": subtype,
         "observation": observation,
-        "extra_data": {},
+        "extra_data": extra_data,
     }
 
 
 def build_general_event_fields(
-    subtype="inspection",
+    activity_type="inspection",
     name="General Activity",
-    duration_hours=2.0,
-    participants=1,
+    activity_name="General farm activity",
+    duration="2",
+    people_involved=1,
     observation="General farm activity",
 ):
     """
     Build complete backend_event_fields for GeneralEvent (backend_event_type=3)
 
-    Subtypes: maintenance, planning, training, documentation, inspection,
-              meeting, community, other
+    Activity types: quality_control, maintenance, training, precision_ag,
+                    emergency, planning, documentation, inspection, meeting, other
     """
     return {
-        "type": subtype,
+        "activity_type": activity_type,
         "name": name,
-        "duration_hours": duration_hours,
-        "participants": participants,
+        "activity_name": activity_name,
+        "duration": str(duration),
+        "people_involved": people_involved,
         "observation": observation,
     }
 
@@ -740,8 +847,9 @@ def build_equipment_event_fields(
     observation="Equipment operation",
 ):
     """
-    Build complete backend_event_fields for EquipmentEvent (backend_event_type=4)
-    NOTE: Legacy - most equipment operations now use Production type EM
+    DEPRECATED: Equipment type (backend_event_type=4) is no longer supported in frontend.
+    Use build_production_event_fields(subtype="EM") instead.
+    Kept for backward compatibility only.
 
     Subtypes: MN (Maintenance), RE (Repair), CA (Calibration),
               FC (Fuel Consumption), BD (Breakdown), EI (Equipment Installation)
@@ -765,70 +873,78 @@ def build_equipment_event_fields(
 
 
 def get_tree_crop_events(crop_slug, crop_data):
-    """Generate events for tree crops (citrus, apples, grapes, avocados, almonds)"""
+    """Generate comprehensive events for tree crops (avocados, citrus, apples, grapes, almonds)"""
+    area = crop_data["typical_area"]
     return [
-        # 1. Winter Pruning
+        # === SOIL MANAGEMENT (backend_event_type=5) ===
+        # 1. Annual Soil Analysis
         {
-            "name": "Winter Pruning",
-            "event_type": "pruning",
-            "description": "Dormant season pruning for tree structure and health",
-            "timing": "December - February",
-            "frequency": "annual",
-            "carbon_category": "low",
-            "cost_estimate": 180.0,
-            "carbon_impact": 45.0,
-            "labor_hours": 6.0,
-            "typical_duration": "3-5 days",
-            "efficiency_tips": "Proper pruning increases fruit quality and reduces disease",
-            "sustainability_score": 9,
-            "qr_visibility": "low",
-            "consumer_message": "Expert tree care for healthy fruit",
-            "backend_event_type": 1,
-            "is_default_enabled": True,
-            "is_required": True,
-            "order_sequence": 1,
-            "backend_event_fields": build_production_event_fields(
-                subtype="PR",
-                area=crop_data["typical_area"],
-                fuel_consumed=10.0,
-                equipment_hours=6.0,
-                observation=f"Winter pruning for {crop_slug} tree structure",
-            ),
-        },
-        # 2. Soil Preparation
-        {
-            "name": "Soil Preparation",
+            "name": "Annual Soil Analysis",
             "event_type": "soil_management",
-            "description": "Pre-season soil preparation and amendment",
+            "description": f"Annual soil testing for pH, organic matter, and nutrient levels in {crop_slug} orchard",
             "timing": crop_data["timing_soil"],
             "frequency": "annual",
-            "carbon_category": "medium",
-            "cost_estimate": 120.0,
-            "carbon_impact": 35.0,
-            "labor_hours": 4.0,
-            "typical_duration": "1-2 days",
-            "efficiency_tips": "Cover crops improve soil health naturally",
-            "sustainability_score": 8,
-            "qr_visibility": "low",
-            "consumer_message": "Sustainable soil management practices",
+            "carbon_category": "low",
+            "cost_estimate": 85.0,
+            "carbon_impact": 5.0,
+            "labor_hours": 3.0,
+            "typical_duration": "1 day",
+            "efficiency_tips": "Take 20-30 soil samples per block for accurate results",
+            "sustainability_score": 9,
+            "qr_visibility": "medium",
+            "consumer_message": "Soil health monitoring for quality produce",
             "backend_event_type": 5,
             "is_default_enabled": True,
             "is_required": True,
-            "order_sequence": 2,
+            "order_sequence": 1,
             "backend_event_fields": build_soil_event_fields(
-                subtype="PA",
-                area=crop_data["typical_area"],
-                working_depth=25.0,
-                fuel_consumed=12.0,
-                equipment_hours=4.0,
-                observation=f"Soil preparation for {crop_slug} orchard",
+                subtype="ST",
+                area=area,
+                soil_ph=6.5,
+                organic_matter_pct=3.0,
+                soil_texture=crop_data.get("soil_type", "loam"),
+                fuel_consumed=0.0,
+                fuel_type="none",
+                equipment_hours=0.0,
+                observation=f"Annual soil analysis for {crop_slug} orchard",
             ),
         },
-        # 3. Spring Fertilization
+        # 2. Cover Crop / Compost Application
         {
-            "name": "Spring Fertilization",
+            "name": "Cover Crop / Compost Application",
+            "event_type": "soil_management",
+            "description": "Soil enrichment through cover crop planting or compost application",
+            "timing": "October - November",
+            "frequency": "annual",
+            "carbon_category": "negative",
+            "cost_estimate": 150.0,
+            "carbon_impact": -25.0,
+            "labor_hours": 5.0,
+            "typical_duration": "1-2 days",
+            "efficiency_tips": "Cover crops fix nitrogen naturally and prevent erosion",
+            "sustainability_score": 10,
+            "qr_visibility": "high",
+            "consumer_message": "Building healthy soil through natural methods",
+            "backend_event_type": 5,
+            "is_default_enabled": True,
+            "is_required": False,
+            "order_sequence": 2,
+            "backend_event_fields": build_soil_event_fields(
+                subtype="CC",
+                area=area,
+                fuel_consumed=8.0,
+                fuel_unit="gal",
+                equipment_hours=4.0,
+                amendment_type="Crimson Clover + White Mustard seed mix",
+                observation=f"Cover crop planting for {crop_slug} orchard soil health",
+            ),
+        },
+        # === CHEMICAL EVENTS (backend_event_type=2) ===
+        # 3. Base Fertilization
+        {
+            "name": "Base Fertilization",
             "event_type": "fertilization",
-            "description": f"{crop_slug.title()}-specific nutrition for spring growth",
+            "description": f"Primary NPK fertilization for {crop_slug} growth and production",
             "timing": crop_data["timing_fertilize"],
             "frequency": "annual",
             "carbon_category": "medium",
@@ -836,10 +952,10 @@ def get_tree_crop_events(crop_slug, crop_data):
             "carbon_impact": 125.0,
             "labor_hours": 2.0,
             "typical_duration": "1-2 days",
-            "efficiency_tips": "Soil testing optimizes nutrient application",
+            "efficiency_tips": "Soil testing optimizes nutrient application and reduces waste",
             "sustainability_score": 7,
             "qr_visibility": "medium",
-            "consumer_message": f"Specialized {crop_slug} nutrition for quality fruit",
+            "consumer_message": f"Precision nutrition for quality {crop_slug}",
             "backend_event_type": 2,
             "is_default_enabled": True,
             "is_required": True,
@@ -849,107 +965,873 @@ def get_tree_crop_events(crop_slug, crop_data):
                 chemical_subtype="synthetic_fertilizer",
                 commercial_name=crop_data["commercial_name"],
                 concentration=crop_data["npk"],
-                volume=300.0,
-                area=crop_data["typical_area"],
+                volume=area * 150,
+                area=area,
                 nitrogen_pct=crop_data["nitrogen_pct"],
                 phosphorus_pct=crop_data["phosphorus_pct"],
                 potassium_pct=crop_data["potassium_pct"],
-                application_method="broadcast",
-                application_timing="spring",
-                observation=f"Spring fertilization for {crop_slug}",
+                application_method="banded",
+                application_timing="fall",
+                observation=f"Base fertilization for {crop_slug}",
             ),
         },
-        # 4. Irrigation Management
+        # 4. Secondary Fertigation
         {
-            "name": "Irrigation Management",
+            "name": "Secondary Fertigation",
+            "event_type": "fertilization",
+            "description": "In-season fertigation through irrigation system for micronutrient support",
+            "timing": "June - August",
+            "frequency": "seasonal",
+            "carbon_category": "medium",
+            "cost_estimate": 180.0,
+            "carbon_impact": 85.0,
+            "labor_hours": 1.0,
+            "typical_duration": "2-3 hours",
+            "efficiency_tips": "Fertigation delivers nutrients directly to root zone with minimal waste",
+            "sustainability_score": 8,
+            "qr_visibility": "medium",
+            "consumer_message": "Targeted nutrition through efficient irrigation",
+            "backend_event_type": 2,
+            "is_default_enabled": True,
+            "is_required": False,
+            "order_sequence": 4,
+            "backend_event_fields": build_chemical_event_fields(
+                subtype="FE",
+                chemical_subtype="synthetic_fertilizer",
+                commercial_name=crop_data.get("secondary_fertilizer", crop_data["commercial_name"]),
+                concentration=crop_data.get("secondary_npk", crop_data["npk"]),
+                volume=area * 100,
+                area=area,
+                nitrogen_pct=crop_data.get("secondary_nitrogen_pct", crop_data["nitrogen_pct"]),
+                phosphorus_pct=crop_data.get("secondary_phosphorus_pct", crop_data["phosphorus_pct"]),
+                potassium_pct=crop_data.get("secondary_potassium_pct", crop_data["potassium_pct"]),
+                application_method="drip",
+                fuel_type="electric",
+                fuel_consumed=2.5,
+                fuel_unit="kWh",
+                application_timing="summer",
+                observation=f"Summer fertigation for {crop_slug}",
+            ),
+        },
+        # 5. Fungicide Prevention
+        {
+            "name": "Fungicide Prevention Treatment",
+            "event_type": "fertilization",
+            "description": "Preventive fungicide application targeting primary disease threats",
+            "timing": crop_data["timing_pest"],
+            "frequency": "as_needed",
+            "carbon_category": "medium",
+            "cost_estimate": 140.0,
+            "carbon_impact": 50.0,
+            "labor_hours": 2.0,
+            "typical_duration": "4-6 hours",
+            "efficiency_tips": "Preventive applications are more effective and use less product",
+            "sustainability_score": 6,
+            "qr_visibility": "high",
+            "consumer_message": "Disease prevention for healthy trees",
+            "backend_event_type": 2,
+            "is_default_enabled": True,
+            "is_required": False,
+            "order_sequence": 5,
+            "backend_event_fields": build_chemical_event_fields(
+                subtype="FU",
+                chemical_subtype=crop_data.get("fungicide_subtype", "synthetic_fungicide"),
+                commercial_name=crop_data.get("primary_fungicide", "Copper hydroxide fungicide"),
+                concentration="45",
+                volume=15.0,
+                area=area,
+                target_pest_disease=crop_data.get("fungicide_target", "Root rot, Anthracnose"),
+                fuel_consumed=4.5,
+                fuel_unit="L",
+                application_method="trunk_drench",
+                observation=f"Fungicide prevention for {crop_slug}",
+            ),
+        },
+        # 6. Organic/Copper Fungicide Spray
+        {
+            "name": "Organic Fungicide Spray",
+            "event_type": "fertilization",
+            "description": "Organic-approved copper or sulfur fungicide for preventive disease control",
+            "timing": crop_data["timing_pest"],
+            "frequency": "as_needed",
+            "carbon_category": "medium",
+            "cost_estimate": 120.0,
+            "carbon_impact": 45.0,
+            "labor_hours": 2.0,
+            "typical_duration": "4-6 hours",
+            "efficiency_tips": "Apply before rain for best coverage; OMRI-listed products available",
+            "sustainability_score": 8,
+            "qr_visibility": "high",
+            "consumer_message": "Organic-approved disease protection",
+            "backend_event_type": 2,
+            "is_default_enabled": True,
+            "is_required": False,
+            "order_sequence": 6,
+            "backend_event_fields": build_chemical_event_fields(
+                subtype="FU",
+                chemical_subtype="copper_fungicide",
+                commercial_name=crop_data.get("copper_fungicide", "Copper hydroxide fungicide"),
+                concentration="46",
+                volume=area * 2.24,
+                area=area,
+                target_pest_disease=crop_data.get("copper_target", "Anthracnose, Canker"),
+                fuel_consumed=7.0,
+                fuel_unit="gal",
+                organic_approved="organic",
+                application_method="airblast",
+                observation=f"Organic fungicide spray for {crop_slug}",
+            ),
+        },
+        # 7. Herbicide Application
+        {
+            "name": "Herbicide Application",
+            "event_type": "fertilization",
+            "description": "Targeted weed control in row middles and around tree bases",
+            "timing": "Post-harvest",
+            "frequency": "as_needed",
+            "carbon_category": "medium",
+            "cost_estimate": 95.0,
+            "carbon_impact": 40.0,
+            "labor_hours": 2.0,
+            "typical_duration": "4-6 hours",
+            "efficiency_tips": "Shielded sprayers prevent drift and protect trees",
+            "sustainability_score": 5,
+            "qr_visibility": "high",
+            "consumer_message": "Responsible weed management practices",
+            "backend_event_type": 2,
+            "is_default_enabled": True,
+            "is_required": False,
+            "order_sequence": 7,
+            "backend_event_fields": build_chemical_event_fields(
+                subtype="HE",
+                chemical_subtype=crop_data.get("herbicide_subtype", "synthetic_herbicide"),
+                commercial_name=crop_data.get("herbicide", "Post-emergent herbicide"),
+                concentration="48",
+                volume=area * 4.7,
+                area=area,
+                target_pest_disease="Broadleaf weeds, Annual grasses",
+                fuel_consumed=6.0,
+                fuel_unit="gal",
+                application_method="shielded_boom",
+                observation=f"Herbicide application for {crop_slug} orchard",
+            ),
+        },
+        # 8. Pesticide Treatment
+        {
+            "name": "Pesticide Treatment",
+            "event_type": "fertilization",
+            "description": "Targeted pesticide application when pest thresholds are exceeded",
+            "timing": crop_data["timing_pest"],
+            "frequency": "as_needed",
+            "carbon_category": "medium",
+            "cost_estimate": 160.0,
+            "carbon_impact": 55.0,
+            "labor_hours": 2.0,
+            "typical_duration": "4-6 hours",
+            "efficiency_tips": "Only apply when scouting confirms threshold exceeded",
+            "sustainability_score": 5,
+            "qr_visibility": "high",
+            "consumer_message": "Targeted treatment only when necessary",
+            "backend_event_type": 2,
+            "is_default_enabled": False,
+            "is_required": False,
+            "order_sequence": 8,
+            "backend_event_fields": build_chemical_event_fields(
+                subtype="PE",
+                chemical_subtype=crop_data.get("pesticide_subtype", "synthetic_pesticide"),
+                commercial_name=crop_data.get("synthetic_pesticide", "Targeted insecticide"),
+                concentration="25",
+                volume=3.0,
+                area=area,
+                target_pest_disease=crop_data.get("synthetic_pesticide_target", crop_data["common_pests"]),
+                fuel_consumed=8.0,
+                fuel_unit="gal",
+                application_method="airblast",
+                observation=f"Pesticide treatment for {crop_slug}",
+            ),
+        },
+        # === PRODUCTION EVENTS (backend_event_type=1) ===
+        # 9. Season Irrigation
+        {
+            "name": "Season Irrigation Program",
             "event_type": "irrigation",
-            "description": "Precision irrigation based on tree water needs",
+            "description": f"Season-long irrigation management using {crop_data['irrigation_method']} system",
             "timing": crop_data["timing_irrigate"],
             "frequency": "weekly",
             "carbon_category": "medium",
             "cost_estimate": 180.0,
             "carbon_impact": 78.0,
             "labor_hours": 2.0,
-            "typical_duration": "2-3 hours",
-            "efficiency_tips": "Micro-irrigation reduces water use by 30%",
+            "typical_duration": "Ongoing",
+            "efficiency_tips": "Soil moisture sensors optimize water use and reduce energy",
             "sustainability_score": 9,
             "qr_visibility": "medium",
             "consumer_message": "Efficient water management",
             "backend_event_type": 1,
             "is_default_enabled": True,
             "is_required": True,
-            "order_sequence": 4,
+            "order_sequence": 9,
             "backend_event_fields": build_production_event_fields(
                 subtype="IR",
-                area=crop_data["typical_area"],
-                fuel_consumed=12.0,
+                area=area,
+                fuel_consumed=85.0,
+                fuel_unit="kWh",
+                fuel_type="electric",
                 irrigation_method=crop_data["irrigation_method"],
-                irrigation_depth=2.0,
-                observation=f"Drip irrigation for {crop_slug} orchard",
+                water_source=crop_data.get("water_source", "well_groundwater"),
+                irrigation_depth=2.5,
+                observation=f"Season irrigation for {crop_slug} orchard",
             ),
         },
-        # 5. Pest and Disease Management
+        # 10. Annual Pruning
         {
-            "name": "Pest and Disease Management",
-            "event_type": "pest_control",
-            "description": f"Integrated approach for {crop_slug} pest control",
-            "timing": crop_data["timing_pest"],
-            "frequency": "as_needed",
-            "carbon_category": "medium",
-            "cost_estimate": 160.0,
-            "carbon_impact": 55.0,
-            "labor_hours": 3.0,
-            "typical_duration": "4-6 hours",
-            "efficiency_tips": "IPM reduces chemical treatments by 50%",
-            "sustainability_score": 8,
-            "qr_visibility": "high",
-            "consumer_message": "Responsible crop protection using beneficial insects",
-            "backend_event_type": 6,
-            "is_default_enabled": True,
-            "is_required": False,
-            "order_sequence": 5,
-            "backend_event_fields": build_pest_event_fields(
-                subtype="IP",
-                pest_species=crop_data["common_pests"],
-                pest_pressure_level="low",
-                beneficial_species=crop_data["beneficial_insects"],
-                release_quantity="500 per hectare",
-                ipm_strategy=f"Integrated pest management targeting {crop_slug} pests with beneficial insects",
-                beneficial_insects_used="yes",
-                chemical_free_period_days=30,
-                field_area=crop_data["typical_area"],
-                observation=f"IPM implementation for {crop_slug}",
-            ),
-        },
-        # 6. Harvest
-        {
-            "name": "Harvest",
-            "event_type": "harvest",
-            "description": "Careful harvest to maintain fruit quality",
-            "timing": crop_data["timing_harvest"],
+            "name": "Annual Structural Pruning",
+            "event_type": "pruning",
+            "description": "Structural pruning for canopy management, light penetration, and tree health",
+            "timing": "December - February",
             "frequency": "annual",
-            "carbon_category": "medium",
-            "cost_estimate": 320.0,
-            "carbon_impact": 95.0,
-            "labor_hours": 12.0,
-            "typical_duration": "5-10 days",
-            "efficiency_tips": "Optimal timing preserves fruit quality and shelf life",
-            "sustainability_score": 8,
-            "qr_visibility": "low",
-            "consumer_message": "Carefully harvested premium fruit",
+            "carbon_category": "low",
+            "cost_estimate": 180.0,
+            "carbon_impact": 45.0,
+            "labor_hours": 6.0,
+            "typical_duration": "3-5 days",
+            "efficiency_tips": "Proper pruning increases fruit quality and airflow",
+            "sustainability_score": 9,
+            "qr_visibility": "medium",
+            "consumer_message": "Expert tree care for healthy fruit",
             "backend_event_type": 1,
             "is_default_enabled": True,
             "is_required": True,
-            "order_sequence": 6,
+            "order_sequence": 10,
+            "backend_event_fields": build_production_event_fields(
+                subtype="PR",
+                area=area,
+                fuel_consumed=12.0,
+                fuel_unit="gal",
+                equipment_hours=24.0,
+                observation=f"Annual structural pruning for {crop_slug}",
+            ),
+        },
+        # 11. Harvest
+        {
+            "name": "Harvest",
+            "event_type": "harvest",
+            "description": "Careful harvest to maintain fruit quality and maximize grade",
+            "timing": crop_data["timing_harvest"],
+            "frequency": "annual",
+            "carbon_category": "low",
+            "cost_estimate": 320.0,
+            "carbon_impact": 25.0,
+            "labor_hours": 12.0,
+            "typical_duration": "5-10 days per pass",
+            "efficiency_tips": "Multiple harvest passes optimize fruit maturity and quality",
+            "sustainability_score": 8,
+            "qr_visibility": "medium",
+            "consumer_message": "Carefully harvested at peak quality",
+            "backend_event_type": 1,
+            "is_default_enabled": True,
+            "is_required": True,
+            "order_sequence": 11,
             "backend_event_fields": build_production_event_fields(
                 subtype="HA",
-                area=crop_data["typical_area"],
-                yield_quantity=crop_data["yield_per_ha"],
-                yield_unit=crop_data["yield_unit"],
-                fuel_consumed=8.0,
+                area=area,
+                yield_quantity=crop_data["yield_per_ha"] * area,
+                yield_unit="kg",
+                fuel_consumed=0.0,
+                fuel_type="none",
+                equipment_hours=0.0,
+                observation=f"Manual {crop_slug} harvest for premium quality",
+            ),
+        },
+        # 12. Planting / Replanting
+        {
+            "name": "Planting / Replanting",
+            "event_type": "planting",
+            "description": "New tree planting or replanting in blocks with declining production",
+            "timing": crop_data["timing_plant"],
+            "frequency": "as_needed",
+            "carbon_category": "low",
+            "cost_estimate": 250.0,
+            "carbon_impact": 35.0,
+            "labor_hours": 10.0,
+            "typical_duration": "2-3 days",
+            "efficiency_tips": "Select disease-resistant rootstock for long-term productivity",
+            "sustainability_score": 9,
+            "qr_visibility": "medium",
+            "consumer_message": "Investing in orchard renewal for future harvests",
+            "backend_event_type": 1,
+            "is_default_enabled": True,
+            "is_required": False,
+            "order_sequence": 12,
+            "backend_event_fields": build_production_event_fields(
+                subtype="PL",
+                area=2.5,
+                fuel_consumed=18.0,
+                fuel_unit="L",
+                fuel_type="biodiesel",
+                equipment_hours=10.0,
+                seeds_source="certified_organic",
+                observation=f"Replanting {crop_slug} in declining blocks",
+            ),
+        },
+        # 13. Cultivation / Weed Management
+        {
+            "name": "Mechanical Weed Management",
+            "event_type": "other",
+            "description": "Mechanical cultivation or flame weeding between tree rows",
+            "timing": "Spring - Summer",
+            "frequency": "as_needed",
+            "carbon_category": "low",
+            "cost_estimate": 85.0,
+            "carbon_impact": 30.0,
+            "labor_hours": 4.0,
+            "typical_duration": "1-2 days",
+            "efficiency_tips": "Reduces herbicide use while controlling weeds",
+            "sustainability_score": 8,
+            "qr_visibility": "medium",
+            "consumer_message": "Mechanical weed control reduces chemical use",
+            "backend_event_type": 1,
+            "is_default_enabled": True,
+            "is_required": False,
+            "order_sequence": 13,
+            "backend_event_fields": build_production_event_fields(
+                subtype="CU",
+                area=area,
+                fuel_consumed=45.0,
+                fuel_unit="gal",
+                fuel_type="propane",
                 equipment_hours=12.0,
-                transportation_distance=15.0,
-                observation=f"Careful {crop_slug} harvest for premium quality",
+                observation=f"Mechanical weed management for {crop_slug} orchard",
+            ),
+        },
+        # 14. Fruit Thinning
+        {
+            "name": "Fruit Thinning",
+            "event_type": "other",
+            "description": "Hand or mechanical thinning to optimize fruit size and quality",
+            "timing": "May - June",
+            "frequency": "annual",
+            "carbon_category": "neutral",
+            "cost_estimate": 200.0,
+            "carbon_impact": 0.0,
+            "labor_hours": 8.0,
+            "typical_duration": "3-5 days",
+            "efficiency_tips": "Removing 15% of fruitlets improves remaining fruit size",
+            "sustainability_score": 8,
+            "qr_visibility": "low",
+            "consumer_message": "Quality selection for premium fruit",
+            "backend_event_type": 1,
+            "is_default_enabled": False,
+            "is_required": False,
+            "order_sequence": 14,
+            "backend_event_fields": build_production_event_fields(
+                subtype="TH",
+                area=area,
+                fuel_consumed=0.0,
+                fuel_type="none",
+                equipment_hours=0.0,
+                observation=f"Hand thinning for {crop_slug} quality optimization",
+            ),
+        },
+        # 15. Equipment Maintenance
+        {
+            "name": "Equipment Maintenance",
+            "event_type": "equipment",
+            "description": "Scheduled maintenance on primary farm equipment (tractor, sprayer, pump)",
+            "timing": "Post-harvest",
+            "frequency": "annual",
+            "carbon_category": "low",
+            "cost_estimate": 85.0,
+            "carbon_impact": 15.0,
+            "labor_hours": 8.0,
+            "typical_duration": "1 day",
+            "efficiency_tips": "Regular maintenance improves fuel efficiency by 10-15%",
+            "sustainability_score": 7,
+            "qr_visibility": "low",
+            "consumer_message": "Well-maintained equipment for efficient farming",
+            "backend_event_type": 1,
+            "is_default_enabled": True,
+            "is_required": False,
+            "order_sequence": 15,
+            "backend_event_fields": build_production_event_fields(
+                subtype="EM",
+                area=0.0,
+                fuel_consumed=5.0,
+                fuel_unit="gal",
+                equipment_hours=8.0,
+                equipment_type="tractor",
+                equipment_operation_type="MN",
+                observation="Annual tractor service - oil change, filter, hydraulic check",
+            ),
+        },
+        # 16. Sprayer Calibration
+        {
+            "name": "Sprayer Calibration",
+            "event_type": "equipment",
+            "description": "Annual calibration of spray equipment for accurate chemical application",
+            "timing": "Pre-season",
+            "frequency": "annual",
+            "carbon_category": "neutral",
+            "cost_estimate": 45.0,
+            "carbon_impact": 10.0,
+            "labor_hours": 3.0,
+            "typical_duration": "3-4 hours",
+            "efficiency_tips": "Proper calibration reduces chemical waste by 20%",
+            "sustainability_score": 9,
+            "qr_visibility": "low",
+            "consumer_message": "Precise equipment calibration minimizes chemical use",
+            "backend_event_type": 1,
+            "is_default_enabled": True,
+            "is_required": False,
+            "order_sequence": 16,
+            "backend_event_fields": build_production_event_fields(
+                subtype="EM",
+                area=0.0,
+                fuel_consumed=4.5,
+                fuel_unit="gal",
+                fuel_type="gasoline",
+                equipment_hours=3.0,
+                equipment_type="sprayer",
+                equipment_operation_type="CA",
+                observation="Airblast sprayer nozzle calibration and coverage verification",
+            ),
+        },
+        # === PEST MANAGEMENT (backend_event_type=6) ===
+        # 17. Pest Scouting
+        {
+            "name": "Pest Scouting",
+            "event_type": "pest_control",
+            "description": f"Bi-weekly visual inspection for {crop_slug} pests and diseases",
+            "timing": crop_data["timing_pest"],
+            "frequency": "bi-weekly",
+            "carbon_category": "neutral",
+            "cost_estimate": 45.0,
+            "carbon_impact": 0.0,
+            "labor_hours": 2.0,
+            "typical_duration": "2-3 hours",
+            "efficiency_tips": "Systematic scouting prevents costly outbreaks",
+            "sustainability_score": 10,
+            "qr_visibility": "high",
+            "consumer_message": "Regular monitoring keeps crops healthy naturally",
+            "backend_event_type": 6,
+            "is_default_enabled": True,
+            "is_required": True,
+            "order_sequence": 17,
+            "backend_event_fields": build_pest_event_fields(
+                subtype="SC",
+                pest_species=crop_data.get("primary_pest_species", crop_data["common_pests"]),
+                pest_pressure_level="low",
+                beneficial_insects_used="yes",
+                action_threshold_met=False,
+                area_covered=area,
+                observation=f"Bi-weekly pest scouting for {crop_slug}",
+            ),
+        },
+        # 18. Trap Monitoring
+        {
+            "name": "Pest Trap Monitoring",
+            "event_type": "pest_control",
+            "description": "Sticky trap and pheromone trap monitoring for pest population tracking",
+            "timing": crop_data["timing_pest"],
+            "frequency": "bi-weekly",
+            "carbon_category": "neutral",
+            "cost_estimate": 35.0,
+            "carbon_impact": 0.0,
+            "labor_hours": 1.5,
+            "typical_duration": "1-2 hours",
+            "efficiency_tips": "4 traps per hectare provides reliable population data",
+            "sustainability_score": 10,
+            "qr_visibility": "medium",
+            "consumer_message": "Advanced monitoring tracks pest populations",
+            "backend_event_type": 6,
+            "is_default_enabled": True,
+            "is_required": False,
+            "order_sequence": 18,
+            "backend_event_fields": build_pest_event_fields(
+                subtype="TM",
+                pest_species=crop_data.get("primary_pest_species", crop_data["common_pests"]),
+                pest_pressure_level="low",
+                action_threshold_met=False,
+                trap_count=int(area * 4),
+                area_covered=area,
+                observation=f"Sticky trap monitoring for {crop_slug}",
+            ),
+        },
+        # 19. Beneficial Insect Release
+        {
+            "name": "Beneficial Insect Release",
+            "event_type": "pest_control",
+            "description": "Release of beneficial insects for biological pest control",
+            "timing": crop_data["timing_pest"],
+            "frequency": "as_needed",
+            "carbon_category": "neutral",
+            "cost_estimate": 200.0,
+            "carbon_impact": 0.0,
+            "labor_hours": 2.0,
+            "typical_duration": "2-3 hours",
+            "efficiency_tips": "Biological control reduces pesticide needs by 60%",
+            "sustainability_score": 10,
+            "qr_visibility": "high",
+            "consumer_message": "Natural pest control with beneficial insects",
+            "backend_event_type": 6,
+            "is_default_enabled": True,
+            "is_required": False,
+            "order_sequence": 19,
+            "backend_event_fields": build_pest_event_fields(
+                subtype="BR",
+                pest_species=crop_data.get("primary_pest_species", crop_data["common_pests"]),
+                pest_pressure_level="low",
+                beneficial_species=crop_data["beneficial_insects"],
+                release_quantity=crop_data.get("beneficial_release_quantity", "500 per hectare"),
+                beneficial_insects_used="yes",
+                area_covered=area,
+                observation=f"Beneficial insect release for {crop_slug}",
+            ),
+        },
+        # === WEATHER (backend_event_type=0) ===
+        # 20. Weather Event
+        {
+            "name": "Weather Event",
+            "event_type": "weather_protection",
+            "description": "Document significant weather events affecting the orchard",
+            "timing": "Year-round",
+            "frequency": "natural",
+            "carbon_category": "neutral",
+            "cost_estimate": 0.0,
+            "carbon_impact": 0.0,
+            "labor_hours": 0.5,
+            "typical_duration": "Variable",
+            "efficiency_tips": "Early documentation helps insurance claims and loss assessment",
+            "sustainability_score": 5,
+            "qr_visibility": "medium",
+            "consumer_message": "Weather transparency for informed consumers",
+            "backend_event_type": 0,
+            "is_default_enabled": True,
+            "is_required": False,
+            "order_sequence": 20,
+            "backend_event_fields": build_weather_event_fields(
+                subtype="HT",
+                event_name="Heat Wave",
+                temperature=42,
+                duration_days=3,
+                observation="Significant weather event affecting orchard",
+            ),
+        },
+        # === BUSINESS (backend_event_type=7) ===
+        # 21. Certification Audit
+        {
+            "name": "Certification Audit",
+            "event_type": "certification",
+            "description": "Third-party certification audit for food safety and sustainability standards",
+            "timing": "Annual",
+            "frequency": "annual",
+            "carbon_category": "neutral",
+            "cost_estimate": 500.0,
+            "carbon_impact": 0.0,
+            "labor_hours": 8.0,
+            "typical_duration": "1-2 days",
+            "efficiency_tips": "Maintain documentation year-round for smooth audits",
+            "sustainability_score": 9,
+            "qr_visibility": "high",
+            "consumer_message": "Third-party verified farming practices",
+            "backend_event_type": 7,
+            "is_default_enabled": True,
+            "is_required": False,
+            "order_sequence": 21,
+            "backend_event_fields": build_business_event_fields(
+                subtype="CE",
+                name=crop_data.get("certification_standard", "Food Safety Certification"),
+                business_type="certification",
+                certification_type=crop_data.get("certification_type", "global_gap"),
+                verification_status="verified",
+                verified_certifier_name=crop_data.get("certification_body", "Third-party auditor"),
+                observation=f"Annual certification audit for {crop_slug} operation",
+            ),
+        },
+        # === GENERAL (backend_event_type=3) ===
+        # 22. Quality Control / Worker Training
+        {
+            "name": "Quality Control & Training",
+            "event_type": "monitoring",
+            "description": "Water quality testing, worker safety training, and general farm quality activities",
+            "timing": "Quarterly / Annual",
+            "frequency": "quarterly",
+            "carbon_category": "neutral",
+            "cost_estimate": 65.0,
+            "carbon_impact": 0.0,
+            "labor_hours": 4.0,
+            "typical_duration": "2-6 hours",
+            "efficiency_tips": "Regular quality checks prevent costly problems",
+            "sustainability_score": 8,
+            "qr_visibility": "medium",
+            "consumer_message": "Quality assurance and worker safety programs",
+            "backend_event_type": 3,
+            "is_default_enabled": True,
+            "is_required": False,
+            "order_sequence": 22,
+            "backend_event_fields": build_general_event_fields(
+                activity_type="quality_control",
+                name="Quality Control & Training",
+                activity_name="Water quality testing and worker safety certification",
+                duration="4",
+                people_involved=2,
+                observation=f"Quality control and training for {crop_slug} operation",
+            ),
+        },
+    ]
+
+
+def get_shared_extra_events(crop_slug, crop_data, start_order=7):
+    """
+    Generate shared event templates for Weather, Business, General, Equipment Maintenance,
+    Soil Test, Fungicide, Herbicide, and Pest Scouting that apply to all crop categories.
+    """
+    area = crop_data["typical_area"]
+    return [
+        # Soil Test
+        {
+            "name": "Soil Analysis",
+            "event_type": "soil_management",
+            "description": "Soil testing for pH, organic matter, and nutrient levels",
+            "timing": crop_data["timing_soil"],
+            "frequency": "annual",
+            "carbon_category": "low",
+            "cost_estimate": 85.0,
+            "carbon_impact": 5.0,
+            "labor_hours": 3.0,
+            "typical_duration": "1 day",
+            "efficiency_tips": "Sample 20-30 cores per field for accuracy",
+            "sustainability_score": 9,
+            "qr_visibility": "medium",
+            "consumer_message": "Soil health monitoring for sustainable farming",
+            "backend_event_type": 5,
+            "is_default_enabled": True,
+            "is_required": True,
+            "order_sequence": start_order,
+            "backend_event_fields": build_soil_event_fields(
+                subtype="ST",
+                area=area,
+                soil_ph=6.5,
+                organic_matter_pct=3.0,
+                soil_texture=crop_data.get("soil_type", "loam"),
+                fuel_consumed=0.0,
+                fuel_type="none",
+                equipment_hours=0.0,
+                observation=f"Annual soil analysis for {crop_slug}",
+            ),
+        },
+        # Fungicide
+        {
+            "name": "Fungicide Treatment",
+            "event_type": "fertilization",
+            "description": "Preventive or curative fungicide application for disease control",
+            "timing": crop_data["timing_pest"],
+            "frequency": "as_needed",
+            "carbon_category": "medium",
+            "cost_estimate": 120.0,
+            "carbon_impact": 45.0,
+            "labor_hours": 2.0,
+            "typical_duration": "4-6 hours",
+            "efficiency_tips": "Preventive timing is more effective and uses less product",
+            "sustainability_score": 6,
+            "qr_visibility": "high",
+            "consumer_message": "Disease prevention for healthy crops",
+            "backend_event_type": 2,
+            "is_default_enabled": True,
+            "is_required": False,
+            "order_sequence": start_order + 1,
+            "backend_event_fields": build_chemical_event_fields(
+                subtype="FU",
+                chemical_subtype=crop_data.get("fungicide_subtype", "synthetic_fungicide"),
+                commercial_name=crop_data.get("primary_fungicide", "Preventive fungicide"),
+                concentration="45",
+                volume=area * 2.0,
+                area=area,
+                target_pest_disease=crop_data.get("fungicide_target", "Root rot, Blight"),
+                fuel_consumed=6.0,
+                fuel_unit="L",
+                application_method="broadcast",
+                observation=f"Fungicide treatment for {crop_slug}",
+            ),
+        },
+        # Herbicide
+        {
+            "name": "Herbicide Application",
+            "event_type": "fertilization",
+            "description": "Targeted weed control application",
+            "timing": "Pre-emergence or post-emergence",
+            "frequency": "as_needed",
+            "carbon_category": "medium",
+            "cost_estimate": 95.0,
+            "carbon_impact": 40.0,
+            "labor_hours": 2.0,
+            "typical_duration": "4-6 hours",
+            "efficiency_tips": "Band application reduces herbicide use by 50%",
+            "sustainability_score": 5,
+            "qr_visibility": "high",
+            "consumer_message": "Responsible weed management",
+            "backend_event_type": 2,
+            "is_default_enabled": True,
+            "is_required": False,
+            "order_sequence": start_order + 2,
+            "backend_event_fields": build_chemical_event_fields(
+                subtype="HE",
+                chemical_subtype=crop_data.get("herbicide_subtype", "synthetic_herbicide"),
+                commercial_name=crop_data.get("herbicide", "Post-emergent herbicide"),
+                concentration="48",
+                volume=area * 3.0,
+                area=area,
+                target_pest_disease="Broadleaf weeds, Annual grasses",
+                fuel_consumed=6.0,
+                fuel_unit="gal",
+                application_method="broadcast",
+                observation=f"Herbicide application for {crop_slug}",
+            ),
+        },
+        # Equipment Maintenance (Production EM subtype, NOT Equipment type 4)
+        {
+            "name": "Equipment Maintenance",
+            "event_type": "equipment",
+            "description": "Scheduled maintenance on primary farm equipment",
+            "timing": "Post-harvest",
+            "frequency": "annual",
+            "carbon_category": "low",
+            "cost_estimate": 85.0,
+            "carbon_impact": 15.0,
+            "labor_hours": 8.0,
+            "typical_duration": "1 day",
+            "efficiency_tips": "Regular maintenance improves fuel efficiency by 10-15%",
+            "sustainability_score": 7,
+            "qr_visibility": "low",
+            "consumer_message": "Well-maintained equipment for efficient farming",
+            "backend_event_type": 1,
+            "is_default_enabled": True,
+            "is_required": False,
+            "order_sequence": start_order + 3,
+            "backend_event_fields": build_production_event_fields(
+                subtype="EM",
+                area=0.0,
+                fuel_consumed=5.0,
+                fuel_unit="gal",
+                equipment_hours=8.0,
+                equipment_type="tractor",
+                equipment_operation_type="MN",
+                observation="Annual equipment service and maintenance",
+            ),
+        },
+        # Pest Scouting
+        {
+            "name": "Pest Scouting",
+            "event_type": "pest_control",
+            "description": f"Regular pest monitoring and population assessment for {crop_slug}",
+            "timing": crop_data["timing_pest"],
+            "frequency": "bi-weekly",
+            "carbon_category": "neutral",
+            "cost_estimate": 45.0,
+            "carbon_impact": 0.0,
+            "labor_hours": 2.0,
+            "typical_duration": "2-3 hours",
+            "efficiency_tips": "Systematic scouting prevents costly outbreaks",
+            "sustainability_score": 10,
+            "qr_visibility": "high",
+            "consumer_message": "Regular monitoring keeps crops healthy naturally",
+            "backend_event_type": 6,
+            "is_default_enabled": True,
+            "is_required": True,
+            "order_sequence": start_order + 4,
+            "backend_event_fields": build_pest_event_fields(
+                subtype="SC",
+                pest_species=crop_data.get("primary_pest_species", crop_data["common_pests"]),
+                pest_pressure_level="low",
+                beneficial_insects_used="yes",
+                action_threshold_met=False,
+                area_covered=area,
+                observation=f"Bi-weekly pest scouting for {crop_slug}",
+            ),
+        },
+        # Weather Event
+        {
+            "name": "Weather Event",
+            "event_type": "weather_protection",
+            "description": "Document significant weather events affecting the crop",
+            "timing": "Year-round",
+            "frequency": "natural",
+            "carbon_category": "neutral",
+            "cost_estimate": 0.0,
+            "carbon_impact": 0.0,
+            "labor_hours": 0.5,
+            "typical_duration": "Variable",
+            "efficiency_tips": "Early documentation helps insurance claims",
+            "sustainability_score": 5,
+            "qr_visibility": "medium",
+            "consumer_message": "Weather transparency for informed consumers",
+            "backend_event_type": 0,
+            "is_default_enabled": True,
+            "is_required": False,
+            "order_sequence": start_order + 5,
+            "backend_event_fields": build_weather_event_fields(
+                subtype="HT",
+                event_name="Extreme Weather",
+                observation="Significant weather event affecting crop",
+            ),
+        },
+        # Certification Audit
+        {
+            "name": "Certification Audit",
+            "event_type": "certification",
+            "description": "Third-party certification audit for food safety or sustainability",
+            "timing": "Annual",
+            "frequency": "annual",
+            "carbon_category": "neutral",
+            "cost_estimate": 500.0,
+            "carbon_impact": 0.0,
+            "labor_hours": 8.0,
+            "typical_duration": "1-2 days",
+            "efficiency_tips": "Maintain documentation year-round for smooth audits",
+            "sustainability_score": 9,
+            "qr_visibility": "high",
+            "consumer_message": "Third-party verified farming practices",
+            "backend_event_type": 7,
+            "is_default_enabled": True,
+            "is_required": False,
+            "order_sequence": start_order + 6,
+            "backend_event_fields": build_business_event_fields(
+                subtype="CE",
+                name=crop_data.get("certification_standard", "Food Safety Certification"),
+                business_type="certification",
+                certification_type=crop_data.get("certification_type", "sustainable_agriculture"),
+                verification_status="verified",
+                verified_certifier_name=crop_data.get("certification_body", "Third-party auditor"),
+                observation=f"Certification audit for {crop_slug} operation",
+            ),
+        },
+        # General - Worker Training / Quality Control
+        {
+            "name": "Quality Control & Training",
+            "event_type": "monitoring",
+            "description": "Worker safety training, quality testing, and general farm management",
+            "timing": "Quarterly / Annual",
+            "frequency": "quarterly",
+            "carbon_category": "neutral",
+            "cost_estimate": 65.0,
+            "carbon_impact": 0.0,
+            "labor_hours": 4.0,
+            "typical_duration": "2-6 hours",
+            "efficiency_tips": "Regular training improves safety and product quality",
+            "sustainability_score": 8,
+            "qr_visibility": "medium",
+            "consumer_message": "Quality assurance and worker safety programs",
+            "backend_event_type": 3,
+            "is_default_enabled": True,
+            "is_required": False,
+            "order_sequence": start_order + 7,
+            "backend_event_fields": build_general_event_fields(
+                activity_type="training",
+                name="Quality Control & Training",
+                activity_name="Worker safety and quality assurance program",
+                duration="4",
+                people_involved=10,
+                observation=f"Quality control and training for {crop_slug}",
             ),
         },
     ]
@@ -957,7 +1839,7 @@ def get_tree_crop_events(crop_slug, crop_data):
 
 def get_grain_events(crop_slug, crop_data):
     """Generate events for grain crops (corn, wheat, soybeans, rice)"""
-    return [
+    events = [
         # 1. Land Preparation
         {
             "name": "Land Preparation",
@@ -1078,7 +1960,7 @@ def get_grain_events(crop_slug, crop_data):
                 beneficial_species=crop_data["beneficial_insects"],
                 ipm_strategy=f"Integrated pest management with scouting for {crop_slug}",
                 beneficial_insects_used="no",
-                field_area=crop_data["typical_area"],
+                area_covered=crop_data["typical_area"],
                 crop_growth_stage="vegetative",
                 observation=f"Pest scouting for {crop_slug}",
             ),
@@ -1144,11 +2026,13 @@ def get_grain_events(crop_slug, crop_data):
             ),
         },
     ]
+    events.extend(get_shared_extra_events(crop_slug, crop_data, start_order=7))
+    return events
 
 
 def get_vegetable_events(crop_slug, crop_data):
     """Generate events for vegetable crops (tomatoes, potatoes, lettuce, carrots, onions)"""
-    return [
+    events = [
         # 1. Soil Preparation
         {
             "name": "Soil Preparation",
@@ -1302,7 +2186,7 @@ def get_vegetable_events(crop_slug, crop_data):
                 ipm_strategy=f"Organic IPM with beneficial insect releases for {crop_slug}",
                 beneficial_insects_used="yes",
                 chemical_free_period_days=30,
-                field_area=crop_data["typical_area"],
+                area_covered=crop_data["typical_area"],
                 crop_growth_stage="flowering",
                 observation=f"Beneficial insect release for {crop_slug}",
             ),
@@ -1339,11 +2223,13 @@ def get_vegetable_events(crop_slug, crop_data):
             ),
         },
     ]
+    events.extend(get_shared_extra_events(crop_slug, crop_data, start_order=7))
+    return events
 
 
 def get_berry_events(crop_slug, crop_data):
     """Generate events for berry crops (strawberries)"""
-    return [
+    events = [
         # 1. Bed Preparation
         {
             "name": "Bed Preparation",
@@ -1468,7 +2354,7 @@ def get_berry_events(crop_slug, crop_data):
                 ipm_strategy=f"Biological control for {crop_slug} with predatory mites",
                 beneficial_insects_used="yes",
                 chemical_free_period_days=21,
-                field_area=crop_data["typical_area"],
+                area_covered=crop_data["typical_area"],
                 crop_growth_stage="fruiting",
                 observation=f"Beneficial release for {crop_slug}",
             ),
@@ -1534,11 +2420,13 @@ def get_berry_events(crop_slug, crop_data):
             ),
         },
     ]
+    events.extend(get_shared_extra_events(crop_slug, crop_data, start_order=7))
+    return events
 
 
 def get_fiber_events(crop_slug, crop_data):
     """Generate events for fiber crops (cotton)"""
-    return [
+    events = [
         # 1. Land Preparation
         {
             "name": "Land Preparation",
@@ -1659,7 +2547,7 @@ def get_fiber_events(crop_slug, crop_data):
                 beneficial_species=crop_data["beneficial_insects"],
                 ipm_strategy=f"Integrated pest management for {crop_slug} with scouting",
                 beneficial_insects_used="no",
-                field_area=crop_data["typical_area"],
+                area_covered=crop_data["typical_area"],
                 crop_growth_stage="flowering",
                 observation=f"Pest scouting for {crop_slug}",
             ),
@@ -1725,6 +2613,8 @@ def get_fiber_events(crop_slug, crop_data):
             ),
         },
     ]
+    events.extend(get_shared_extra_events(crop_slug, crop_data, start_order=7))
+    return events
 
 
 # =============================================================================
@@ -1733,7 +2623,7 @@ def get_fiber_events(crop_slug, crop_data):
 
 
 class Command(BaseCommand):
-    help = "Create comprehensive production templates V2 with complete backend_event_fields for ALL event types"
+    help = "Create comprehensive production templates V3 with complete backend_event_fields for ALL 7 event types"
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -1751,16 +2641,20 @@ class Command(BaseCommand):
             action="store_true",
             help="Delete existing templates and recreate",
         )
+        parser.add_argument(
+            "--cleanup-v2",
+            action="store_true",
+            help="Remove old V2 templates after creating V3",
+        )
 
     def handle(self, *args, **options):
         dry_run = options.get("dry_run", False)
         specific_crop = options.get("crop")
         force = options.get("force", False)
+        cleanup_v2 = options.get("cleanup_v2", False)
 
         self.stdout.write(
-            self.style.NOTICE(
-                f"\n{'='*60}\n" f"Production Templates V2 - Complete Field Specifications\n" f"{'='*60}\n"
-            )
+            self.style.NOTICE(f"\n{'='*60}\n" f"Production Templates V3 - All 7 Event Types\n" f"{'='*60}\n")
         )
 
         if dry_run:
@@ -1785,6 +2679,7 @@ class Command(BaseCommand):
         created_templates = 0
         created_events = 0
         skipped_templates = 0
+        event_type_counts = {}
 
         with transaction.atomic():
             for crop_type in crop_types:
@@ -1793,11 +2688,11 @@ class Command(BaseCommand):
                 # Check if we have customization data for this crop
                 if crop_slug not in CROP_CUSTOMIZATIONS:
                     self.stdout.write(self.style.WARNING(f"  No customization data for {crop_slug}, using defaults"))
-                    crop_data = CROP_CUSTOMIZATIONS.get("corn")  # Use corn as fallback
+                    crop_data = CROP_CUSTOMIZATIONS.get("corn_field", list(CROP_CUSTOMIZATIONS.values())[0])
                 else:
                     crop_data = CROP_CUSTOMIZATIONS[crop_slug]
 
-                template_slug = f"{crop_slug}_conventional_v2"
+                template_slug = f"{crop_slug}_conventional_v3"
 
                 # Handle force mode
                 if force:
@@ -1809,11 +2704,12 @@ class Command(BaseCommand):
 
                 # Create template
                 template_data = {
-                    "name": f"{crop_type.name} - Conventional Production V2",
+                    "name": f"{crop_type.name} - Conventional Production V3",
                     "farming_approach": "conventional",
                     "description": (
-                        f"Comprehensive production practices for {crop_type.name.lower()} "
-                        f"with complete event field specifications. California-focused defaults."
+                        f"Comprehensive production template for {crop_type.name.lower()} "
+                        f"covering all 7 event types with real-world field defaults. "
+                        f"Aligned with demo data source of truth."
                     ),
                     "complexity_level": "intermediate",
                     "estimated_setup_time": 8,
@@ -1826,8 +2722,8 @@ class Command(BaseCommand):
                     "success_rate": 85.0,
                     "usda_reviewed": True,
                     "compliance_notes": (
-                        f"V2 template with complete backend_event_fields. "
-                        f"Based on USDA best practices for {crop_type.name.lower()}. "
+                        f"V3 template: all 7 event types, real commercial products, "
+                        f"USDA-verified emission factors. "
                         f"Region: {crop_data.get('region', 'California')}"
                     ),
                     "is_active": True,
@@ -1861,19 +2757,25 @@ class Command(BaseCommand):
                 elif crop_type.category == "berry":
                     events_data = get_berry_events(crop_slug, crop_data)
                 elif crop_type.category == "forage":
-                    events_data = get_fiber_events(crop_slug, crop_data)  # Similar pattern
-                else:  # fiber (cotton), other
+                    events_data = get_fiber_events(crop_slug, crop_data)
+                else:
                     events_data = get_fiber_events(crop_slug, crop_data)
 
                 # Create event templates
+                crop_event_count = 0
                 for event_data in events_data:
+                    evt_type = event_data["backend_event_type"]
+                    subtype = event_data["backend_event_fields"].get(
+                        "type", event_data["backend_event_fields"].get("activity_type", "N/A")
+                    )
+
                     if dry_run:
                         self.stdout.write(
-                            f"    [DRY RUN] Would create event: {event_data['name']} "
-                            f"(type={event_data['backend_event_type']}, "
-                            f"subtype={event_data['backend_event_fields'].get('type', 'N/A')})"
+                            f"    [DRY RUN] Would create: {event_data['name']} "
+                            f"(backend_type={evt_type}, subtype={subtype})"
                         )
                         created_events += 1
+                        crop_event_count += 1
                     else:
                         event_data["production_template"] = template
                         event, event_created = EventTemplate.objects.get_or_create(
@@ -1883,23 +2785,48 @@ class Command(BaseCommand):
                         )
                         if event_created:
                             created_events += 1
+                            crop_event_count += 1
                             self.stdout.write(
                                 f"    Event: {event.name} "
-                                f"(type={event.backend_event_type}, "
+                                f"(type={event.backend_event_type}, subtype={subtype}, "
                                 f"fields={len(event.backend_event_fields or {})})"
                             )
 
+                    # Track event type distribution
+                    event_type_counts[evt_type] = event_type_counts.get(evt_type, 0) + 1
+
+                self.stdout.write(f"    -> {crop_event_count} events for {crop_type.name}")
+
+            # Cleanup V2 templates if requested
+            if cleanup_v2 and not dry_run:
+                v2_count = ProductionTemplate.objects.filter(slug__endswith="_conventional_v2").delete()[0]
+                self.stdout.write(self.style.WARNING(f"\n  Cleaned up {v2_count} V2 templates"))
+
         # Summary
+        type_names = {
+            0: "Weather",
+            1: "Production",
+            2: "Chemical",
+            3: "General",
+            5: "Soil",
+            6: "Pest",
+            7: "Business",
+        }
         self.stdout.write(
             self.style.SUCCESS(
                 f"\n{'='*60}\n"
-                f"V2 Production Templates Creation Complete!\n"
+                f"V3 Production Templates Creation Complete!\n"
                 f"{'='*60}\n"
                 f"Created: {created_templates} production templates\n"
                 f"Created: {created_events} event templates\n"
                 f"Skipped: {skipped_templates} existing templates\n"
             )
         )
+
+        if event_type_counts:
+            self.stdout.write("\nEvent type distribution:")
+            for etype, count in sorted(event_type_counts.items()):
+                self.stdout.write(f"  {type_names.get(etype, f'Type {etype}')}: {count} events")
 
         if dry_run:
             self.stdout.write(self.style.WARNING("\nDRY RUN COMPLETE - Run without --dry-run to create records"))

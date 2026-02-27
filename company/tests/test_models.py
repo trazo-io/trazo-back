@@ -206,9 +206,9 @@ class CompanyViewSetTestCase(APITestCase):
         )
 
         # Set up user roles
-        WorksIn.objects.create(user=self.manager, company=self.company, role=WorksIn.DOMAIN_SUPERVISOR)
+        WorksIn.objects.create(user=self.manager, company=self.company, role=WorksIn.FARM_MANAGER)
 
-        WorksIn.objects.create(user=self.worker, company=self.company, role=WorksIn.DOMAIN_WORKER)
+        WorksIn.objects.create(user=self.worker, company=self.company, role=WorksIn.VIEWER)
 
     def test_list_companies_authenticated(self):
         """Test listing companies requires authentication."""
@@ -319,7 +319,7 @@ class EstablishmentViewSetTestCase(APITestCase):
             name="Test Establishment", company=self.company, description="For API testing"
         )
 
-        WorksIn.objects.create(user=self.manager, company=self.company, role=WorksIn.DOMAIN_SUPERVISOR)
+        WorksIn.objects.create(user=self.manager, company=self.company, role=WorksIn.FARM_MANAGER)
 
     def test_list_establishments_company_filtered(self):
         """Test that establishments are filtered by company access."""

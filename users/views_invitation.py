@@ -43,7 +43,7 @@ def create_invitation(request):
         # Extract invitation data
         email = request.data.get("email")
         invitee_name = request.data.get("invitee_name", "")
-        role = request.data.get("role", "DW")
+        role = request.data.get("role", "FM")
         invitation_message = request.data.get("message", "")
         establishments = request.data.get("establishments", [])
 
@@ -546,15 +546,63 @@ def signup_with_invitation(request):
         )
 
 
-def process_pending_invitation(user):
+def process_pending_invitation(user, invitation_code=None):
     """
-    Process any pending invitation for a user after login/signup
+    Process any pending invitation for a user after login/signup.
+    Looks up by explicit code first, then falls back to email match.
+    Returns invitation result dict or None.
     """
     try:
-        # This would be called from login/signup views
-        pass
+        invitation = None
 
-        # Implementation depends on how sessions are handled
+        # Try explicit invitation code first
+        if invitation_code:
+            try:
+                invitation = CompanyInvitation.objects.get(invitation_code=invitation_code)
+            except CompanyInvitation.DoesNotExist:
+                logger.warning(f"Invitation code not found: {invitation_code}")
+
+        # Fall back to finding pending invitation by email
+        if not invitation:
+            invitation = CompanyInvitation.objects.filter(
+                email__iexact=user.email, status=CompanyInvitation.STATUS_PENDING
+            ).first()
+
+        if not invitation:
+            return None
+
+        if not invitation.can_be_accepted():
+            logger.warning(f"Pending invitation for {user.email} cannot be accepted")
+            return None
+
+        # Verify email matches
+        if user.email.lower() != invitation.email.lower():
+            logger.warning(f"Invitation email mismatch: user={user.email}, invitation={invitation.email}")
+            return None
+
+        with transaction.atomic():
+            works_in = invitation.accept(user)
+
+        from subscriptions.models import Subscription
+
+        try:
+            company_subscription = Subscription.objects.get(company=invitation.company)
+            has_subscription = company_subscription.is_active()
+        except Subscription.DoesNotExist:
+            has_subscription = False
+
+        logger.info(f"Pending invitation processed for {user.email} -> {invitation.company.name}")
+
+        return {
+            "invitation_accepted": True,
+            "company": {
+                "id": invitation.company.id,
+                "name": invitation.company.name,
+            },
+            "role": works_in.role,
+            "redirect_to": "/admin/dashboard" if has_subscription else "/admin/dashboard/pricing",
+        }
+
     except Exception as e:
         logger.error(f"Error processing pending invitation: {str(e)}")
         return None

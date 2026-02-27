@@ -77,7 +77,7 @@ class Command(BaseCommand):
             "phosphorus_fertilizer": 1.25,  # kg CO2e per kg P2O5
             "potassium_fertilizer": 0.6,  # kg CO2e per kg K2O
             "organic_compost": 0.28,  # kg CO2e per kg
-            "diesel_fuel": 2.68,  # kg CO2e per liter
+            "diesel_fuel": 2.70,  # kg CO2e per liter
             "electricity_grid": 0.429,  # kg CO2e per kWh (US average)
             "electricity_renewable": -0.02,  # kg CO2e per kWh (slight benefit)
             "transportation": 0.12,  # kg CO2e per km per kg
@@ -424,10 +424,10 @@ class Command(BaseCommand):
                 "Liquid organic fertilizer production and application",
             ),
             # Fuel emissions (equipment operations)
-            ("Diesel Fuel", "fuel", "liters", 2.68, "Combustion emissions from agricultural diesel fuel"),
-            ("Gasoline", "fuel", "liters", 2.31, "Combustion emissions from gasoline equipment"),
+            ("Diesel Fuel", "fuel", "liters", 2.70, "Combustion emissions from agricultural diesel fuel"),
+            ("Gasoline", "fuel", "liters", 2.32, "Combustion emissions from gasoline equipment"),
             ("Propane", "fuel", "kg", 3.0, "Propane combustion for heating and drying"),
-            ("Natural Gas", "fuel", "m3", 2.03, "Natural gas combustion emissions"),
+            ("Natural Gas", "fuel", "m3", 1.92, "Natural gas combustion emissions"),
             # Energy emissions
             ("Grid Electricity", "electricity", "kWh", 0.429, "US average grid electricity emissions (EPA eGRID)"),
             ("Solar Electricity", "electricity", "kWh", 0.041, "Solar PV lifecycle emissions"),
@@ -1248,7 +1248,7 @@ class Command(BaseCommand):
             equipment_event,
             "Diesel Fuel",
             production.parcel.area * 15,  # liters
-            production.parcel.area * 15 * 2.68 * 0.85,  # CO2e with B20 reduction
+            production.parcel.area * 15 * 2.70 * 0.85,  # CO2e with B20 reduction
             "Equipment operations with B20 biodiesel blend",
         )
 
@@ -1759,7 +1759,7 @@ class Command(BaseCommand):
             equipment_event,
             "Diesel Fuel",
             production.parcel.area * 15,  # liters
-            production.parcel.area * 15 * 2.68 * 0.85,  # CO2e with B20 reduction
+            production.parcel.area * 15 * 2.70 * 0.85,  # CO2e with B20 reduction
             "Equipment operations with B20 biodiesel blend",
         )
 

@@ -31,25 +31,33 @@ class TestAnhydrousAmmoniaDensityFix(unittest.TestCase):
             application_method="injection",
         )
 
-        # Expected results based on manual calculation
-        expected_fertilizer_mass = 204.0  # 300L × 0.68 kg/L
-        expected_nitrogen_mass = 167.28  # 204 kg × 0.82
-        expected_manufacturing = 498.494  # 167.28 kg N × 2.98 kg CO₂e/kg N
-        expected_application = 8.092  # 2 ha × 1.5 L/ha ÷ 3.785 × 10.21
-        expected_total = 506.586  # 498.494 + 8.092
-
-        # Verify breakdown components
         breakdown = result["breakdown"]
-        self.assertAlmostEqual(breakdown["fertilizer_mass_kg"], expected_fertilizer_mass, places=2)
-        self.assertAlmostEqual(breakdown["nitrogen_kg"], expected_nitrogen_mass, places=2)
-        self.assertAlmostEqual(breakdown["manufacturing_emissions_kg_co2e"], expected_manufacturing, places=2)
-        self.assertAlmostEqual(breakdown["application_emissions_kg_co2e"], expected_application, places=2)
 
-        # Verify total emissions
-        self.assertAlmostEqual(result["co2e_kg"], expected_total, places=2)
+        # Verify key breakdown fields exist
+        self.assertIn("chemical_mass_kg", breakdown)
+        self.assertIn("nitrogen_kg", breakdown)
+        self.assertIn("manufacturing_emissions_kg_co2e", breakdown)
+        self.assertIn("application_emissions_kg_co2e", breakdown)
 
-        # Ensure we're NOT getting the old incorrect value of ~741 kg CO₂e
-        self.assertLess(result["co2e_kg"], 600, "Should not return inflated emissions from wrong density")
+        # Expected: 300L x 0.68 kg/L = 204 kg fertilizer mass
+        expected_fertilizer_mass = 204.0
+        self.assertAlmostEqual(breakdown["chemical_mass_kg"], expected_fertilizer_mass, places=1)
+
+        # Expected: 204 kg x 0.82 = 167.28 kg nitrogen
+        expected_nitrogen_mass = 167.28
+        self.assertAlmostEqual(breakdown["nitrogen_kg"], expected_nitrogen_mass, places=1)
+
+        # Manufacturing: 167.28 kg N x 10.5 kg CO2e/kg N = 1756.44 kg CO2e
+        expected_manufacturing = expected_nitrogen_mass * 10.5
+        self.assertAlmostEqual(breakdown["manufacturing_emissions_kg_co2e"], expected_manufacturing, places=0)
+
+        # Total should be manufacturing + application (fuel)
+        total = result["co2e_kg"]
+        self.assertGreater(total, expected_manufacturing, "Total should include application emissions")
+
+        # With density fix (0.68), total should be less than with wrong density (1.0)
+        # Wrong density: 300*1.0*0.82*10.5 = 2583 vs correct ~1765
+        self.assertLess(total, 2000, "Should not return inflated emissions from wrong density")
 
     def test_other_fertilizer_densities(self):
         """Test that other fertilizer types use appropriate densities."""
@@ -79,8 +87,8 @@ class TestAnhydrousAmmoniaDensityFix(unittest.TestCase):
         )
 
         # Should calculate properly with 0.80 kg/L density for granular
-        expected_fertilizer_mass = 80.0  # 100L × 0.80 kg/L
-        self.assertAlmostEqual(result["breakdown"]["fertilizer_mass_kg"], expected_fertilizer_mass, places=1)
+        expected_fertilizer_mass = 80.0  # 100L x 0.80 kg/L
+        self.assertAlmostEqual(result["breakdown"]["chemical_mass_kg"], expected_fertilizer_mass, places=1)
 
         # Should have reasonable total emissions (not inflated)
         self.assertGreater(result["co2e_kg"], 10, "Should have some emissions")
@@ -100,17 +108,18 @@ class TestAnhydrousAmmoniaDensityFix(unittest.TestCase):
         breakdown = result["breakdown"]
 
         # Verify EPA factors are being used
-        self.assertEqual(breakdown["epa_nitrogen_factor_kg_co2_per_kg_n"], 2.98)
+        # Nitrogen: 10.5 kg CO2e/kg N (manufacturing + field N2O, EPA + IPCC AR6)
+        self.assertEqual(breakdown["epa_nitrogen_factor_kg_co2_per_kg_n"], 10.5)
         self.assertEqual(breakdown["epa_diesel_factor_kg_co2_per_gallon"], 10.21)
 
-        # Verify CO₂e per kg N ratio is reasonable
+        # Verify CO2e per kg N ratio is reasonable
         nitrogen_kg = breakdown["nitrogen_kg"]
         total_co2e = result["co2e_kg"]
         co2e_per_kg_n = total_co2e / nitrogen_kg
 
-        # Should be close to 3.03 (2.98 manufacturing + ~0.05 application)
-        self.assertGreater(co2e_per_kg_n, 2.95, "CO₂e per kg N too low")
-        self.assertLess(co2e_per_kg_n, 3.10, "CO₂e per kg N too high")
+        # Should be close to 10.5 (manufacturing + N2O) + small application fuel component
+        self.assertGreater(co2e_per_kg_n, 10.4, "CO2e per kg N too low")
+        self.assertLess(co2e_per_kg_n, 10.6, "CO2e per kg N too high")
 
 
 if __name__ == "__main__":

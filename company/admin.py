@@ -17,9 +17,10 @@ class CompanyAdmin(admin.ModelAdmin):
 
 
 class EstablishmentAdmin(admin.ModelAdmin):
-    list_display = ("name", "city", "state", "company")
-    list_filter = ("name", "city", "state", "company")
-    search_fields = ("name", "city", "state", "company")
+    list_display = ("name", "public_id", "city", "state", "company")
+    list_filter = ("city", "state", "company")
+    search_fields = ("name", "city", "state", "public_id")
+    readonly_fields = ("public_id",)
 
 
 admin.site.register(Company, CompanyAdmin)

@@ -1,3 +1,6 @@
+import logging
+import os
+import uuid
 from io import BytesIO
 
 from django.conf import settings
@@ -8,11 +11,21 @@ from django.db import models
 from django.db.models import Avg
 
 import qrcode
+from PIL import Image
+from qrcode.image.styledpil import StyledPilImage
+from qrcode.image.styles.colormasks import SolidFillColorMask
+from qrcode.image.styles.moduledrawers import RoundedModuleDrawer
 
-from backend.security.qr_security import generate_secure_qr_url
+
 from carbon.choices import FUEL_TYPES
 from common.models import Gallery
 from product.models import Parcel
+
+logger = logging.getLogger(__name__)
+
+# Branded QR code configuration
+TRAZO_GREEN = (46, 125, 50)
+TRAZO_LEAF_LOGO = os.path.join(settings.BASE_DIR, "static", "img", "trazo-leaf.png")
 
 
 class History(models.Model):
@@ -24,6 +37,7 @@ class History(models.Model):
         (GARDEN, "Garden"),
     )
 
+    public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, db_index=True)
     name = models.CharField(max_length=150, blank=True, null=True, help_text="Production name")
     type = models.CharField(max_length=2, choices=HISTORY_TYPES, blank=True, null=True)
     extra_data = models.JSONField(blank=True, null=True)
@@ -189,18 +203,18 @@ class History(models.Model):
         try:
             # Check if events are prefetched (from view's prefetch_related)
             # Access the prefetch cache directly to avoid .count() queries
-            prefetch_cache = getattr(self, '_prefetched_objects_cache', {})
+            prefetch_cache = getattr(self, "_prefetched_objects_cache", {})
 
             # Map relationship names to their prefetch cache keys
             event_relations = [
-                'history_productionevent_events',
-                'history_chemicalevent_events',
-                'history_weatherevent_events',
-                'history_generalevent_events',
-                'history_equipmentevent_events',
-                'history_soilmanagementevent_events',
-                'history_pestmanagementevent_events',
-                'history_businessevent_events'
+                "history_productionevent_events",
+                "history_chemicalevent_events",
+                "history_weatherevent_events",
+                "history_generalevent_events",
+                "history_equipmentevent_events",
+                "history_soilmanagementevent_events",
+                "history_pestmanagementevent_events",
+                "history_businessevent_events",
             ]
 
             # Try to use prefetched data, fall back to .count() if not available
@@ -397,33 +411,23 @@ class History(models.Model):
         # Check if this is a new object
         is_new = not self.id
 
+        # Ensure public_id is set before first save
+        if not self.public_id:
+            self.public_id = uuid.uuid4()
+
         # Save first to get ID if this is a new object
         if is_new:
             super().save(*args, **kwargs)
 
-        # Generate secure QR URL with HMAC signature
-        secure_url = generate_secure_qr_url(
-            f"{settings.BASE_CONSUMER_URL}production/{self.id}",
-            self.id,
-            expiry_hours=24 * 365,  # 1 year expiry for production QR codes
-        )
+        # Clean consumer URL - UUID public_id is unguessable, no HMAC needed
+        consumer_url = f"{settings.BASE_CONSUMER_URL}production/{self.public_id}"
 
-        qr = qrcode.QRCode(
-            version=1,
-            error_correction=qrcode.constants.ERROR_CORRECT_L,
-            box_size=10,
-            border=4,
-        )
-        qr.add_data(secure_url)
-        qr.make(fit=True)
+        # Generate branded Trazo QR code
+        qr_image = self._generate_branded_qr(consumer_url)
 
-        img = qr.make_image(fill_color="black", back_color="white")
-
-        # Save the QR code image to a BytesIO object
         buf = BytesIO()
-        img.save(buf)
+        qr_image.save(buf, format="PNG")
 
-        # Set the `qr_code` field to be the contents of the BytesIO object
         self.qr_code.save(
             f"{self.name}-{self.start_date}.png",
             ContentFile(buf.getvalue()),
@@ -436,6 +440,48 @@ class History(models.Model):
             super().save(update_fields=["qr_code"])
         else:
             super().save(*args, **kwargs)
+
+    @staticmethod
+    def _generate_branded_qr(data_url):
+        """Generate a branded Trazo QR code with leaf logo, green styling, and CTA frame."""
+        # Step 1: Generate styled QR with green rounded modules
+        # box_size=20 produces ~660px output for high-quality print (300 DPI at 2.2")
+        qr = qrcode.QRCode(
+            version=None,
+            error_correction=qrcode.constants.ERROR_CORRECT_H,
+            box_size=20,
+            border=4,
+        )
+        qr.add_data(data_url)
+        qr.make(fit=True)
+
+        styled_img = qr.make_image(
+            image_factory=StyledPilImage,
+            module_drawer=RoundedModuleDrawer(),
+            color_mask=SolidFillColorMask(
+                back_color=(255, 255, 255),
+                front_color=TRAZO_GREEN,
+            ),
+        )
+
+        qr_img = styled_img.get_image().convert("RGBA")
+        qr_width, qr_height = qr_img.size
+
+        # Step 2: Overlay leaf logo in center (if available)
+        # 25% of QR width = ~6.25% of total area, safe with ERROR_CORRECT_H (30%)
+        if os.path.exists(TRAZO_LEAF_LOGO):
+            try:
+                logo_src = Image.open(TRAZO_LEAF_LOGO).convert("RGBA")
+                logo_target_size = int(qr_width * 0.25)
+
+                logo_resized = logo_src.resize((logo_target_size, logo_target_size), Image.LANCZOS)
+                logo_x = (qr_width - logo_target_size) // 2
+                logo_y = (qr_height - logo_target_size) // 2
+                qr_img.paste(logo_resized, (logo_x, logo_y), logo_resized)
+            except Exception as e:
+                logger.warning(f"Could not embed logo in QR code: {e}")
+
+        return qr_img.convert("RGB")
 
     @property
     def certificate_percentage(self):
@@ -452,8 +498,6 @@ class History(models.Model):
             for image_data in images:
                 gallery_image = gallery.images.create(image=image_data)
                 gallery_image.save()
-            print(gallery.id)
-            print(gallery.images.all())
             self.album = gallery
 
         # Handle finish_date with timezone awareness
@@ -468,7 +512,7 @@ class History(models.Model):
             finish_date = timezone.make_aware(finish_date)
 
         self.finish_date = finish_date
-        self.observation = history_data["observation"]
+        self.description = history_data.get("observation", "")
         self.published = True
         self.production_amount = history_data["production_amount"]
         self.lot_id = history_data["lot_id"]
@@ -714,12 +758,21 @@ class ChemicalEvent(CommonEvent):
     )
 
     # Sprint 3 Epic 3.2: Consumer Trust Fields
+    # Sprint 6 Fix: Expanded choices to match frontend organic certification options
+    # These detailed options provide better transparency for consumers about organic certification types
     organic_approved = models.CharField(
         max_length=20,
         choices=[
+            # Legacy choices (kept for backward compatibility)
             ("yes", "Yes - Organic Approved"),
             ("no", "No - Not Organic"),
             ("not_applicable", "Not Applicable"),
+            # New detailed organic certification options (Sprint 6)
+            ("omri_listed", "OMRI Listed - Organic certified"),
+            ("usda_nop_approved", "USDA NOP Approved - National Organic Program"),
+            ("organic_equivalent", "Organic Equivalent - Meets organic standards"),
+            ("not_organic", "Not Organic Approved - Conventional use only"),
+            ("transitional", "Transitional - In certification process"),
         ],
         blank=True,
         null=True,
@@ -976,7 +1029,7 @@ class ProductionEvent(CommonEvent):
         ],
         blank=True,
         null=True,
-        help_text="Water source for irrigation transparency (does not affect carbon calculations)",
+        help_text="Water source for irrigation - affects pump energy factor in carbon calculations (USDA NRCS)",
     )
 
     # USDA NASS 2023 Irrigation Fields - For Irrigation (IR) events
@@ -1056,12 +1109,37 @@ class ProductionEvent(CommonEvent):
         help_text="Type of equipment operation (for Equipment Maintenance events)",
     )
 
+    # MVP Target Market Fields
+    HARVEST_QUALITY_CHOICES = [
+        ("export_quality", "Export Quality"),
+        ("grade_a", "Grade A"),
+        ("grade_b", "Grade B"),
+        ("grade_c", "Grade C"),
+        ("domestic", "Domestic Market"),
+        ("processing", "Processing/Juice"),
+    ]
+    harvest_quality_grade = models.CharField(
+        max_length=20,
+        choices=HARVEST_QUALITY_CHOICES,
+        blank=True,
+        null=True,
+        help_text="Harvest quality grade for premium fruit operations (CA citrus, Uruguay exports)",
+    )
+    grain_moisture = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        help_text="Grain moisture percentage at harvest (Midwest corn/soy operations)",
+    )
+
     def clean(self):
         """Model-level validation for production event values and business logic"""
         errors = {}
 
         # Validate area_covered - must be positive for most operations
-        if self.area_covered is not None and self.area_covered <= 0:
+        # Equipment Maintenance (EM) can have area_covered=0
+        if self.area_covered is not None and self.area_covered <= 0 and self.type != "EM":
             errors["area_covered"] = "Area covered must be greater than 0"
 
         # Validate transportation_distance - cannot be negative
@@ -1687,6 +1765,66 @@ class PestManagementEvent(CommonEvent):
         blank=True, null=True, help_text="Days since last synthetic chemical application"
     )
 
+    # Sprint 3 Epic 3.1: Fuel/Equipment fields for carbon calculations (matching SoilManagementEvent)
+    area_covered = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Area covered during pest management activity",
+    )
+    area_unit = models.CharField(
+        max_length=10,
+        choices=[
+            ("ha", "Hectares"),
+            ("acres", "Acres"),
+            ("m2", "Square Meters"),
+        ],
+        default="ha",
+        blank=True,
+        help_text="Area unit",
+    )
+    fuel_consumed = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Fuel consumed during pest management activity",
+    )
+    fuel_unit = models.CharField(
+        max_length=10,
+        choices=[
+            ("L", "Liters"),
+            ("gal", "Gallons"),
+            ("kg", "Kilograms"),
+            ("kWh", "Kilowatt-hours"),
+        ],
+        default="L",
+        blank=True,
+        help_text="Fuel unit",
+    )
+    fuel_type = models.CharField(
+        max_length=30,
+        choices=FUEL_TYPES,
+        blank=True,
+        default="",
+        help_text="Fuel type for EPA emission factor calculation",
+    )
+    equipment_hours = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True, help_text="Equipment operating hours"
+    )
+    production_efficiency = models.CharField(
+        max_length=10,
+        choices=[
+            ("high", "High Efficiency"),
+            ("normal", "Normal Efficiency"),
+            ("low", "Low Efficiency"),
+        ],
+        default="normal",
+        blank=True,
+        help_text="Equipment efficiency level for carbon calculations",
+    )
+
     class Meta:
         verbose_name = "Pest Management Event"
         verbose_name_plural = "Pest Management Events"
@@ -1798,6 +1936,14 @@ class BusinessEvent(CommonEvent):
     # Sprint 3 Epic 3.2: Consumer Trust Fields
     verified_certifier_name = models.CharField(
         max_length=150, blank=True, null=True, help_text="Name of the certifying organization for consumer trust"
+    )
+
+    # MVP Target Market Fields - Export operations need certificate references
+    certificate_number = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Certificate reference number (GlobalG.A.P., phytosanitary, USDA Organic)",
     )
 
     observation = models.TextField(blank=True, null=True)

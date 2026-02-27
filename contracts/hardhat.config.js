@@ -22,7 +22,7 @@ module.exports = {
         ? [process.env.BLOCKCHAIN_PRIVATE_KEY]
         : [],
       chainId: 80002,
-      gasPrice: 2000000000, // 2 gwei
+      gasPrice: 30000000000, // 30 gwei (Amoy minimum is 25 gwei)
     },
     // Polygon Mainnet (for production)
     "polygon-mainnet": {
@@ -59,7 +59,7 @@ module.exports = {
     currency: "USD",
   },
   paths: {
-    sources: "./contracts",
+    sources: "./solidity",
     tests: "./test",
     cache: "./cache",
     artifacts: "./artifacts",

@@ -336,6 +336,7 @@ EVENT_IMPACTS = {
 # AUDIT FUNCTIONS
 # =====================================================================
 
+
 def audit_emissions_per_hectare():
     """Audit crop emission values against USDA benchmarks."""
     print("\n" + "=" * 80)
@@ -348,9 +349,12 @@ def audit_emissions_per_hectare():
     for crop_name, crop_data in TRAZO_CROPS.items():
         # Map to benchmark key
         slug = crop_name.lower().replace(" ", "_").replace("(", "").replace(")", "").replace("field", "field")
-        if slug == "corn_field_": slug = "corn_field"
-        if slug == "citrus_oranges_": slug = "citrus_oranges"
-        if slug == "hay_alfalfa_": slug = "hay_alfalfa"
+        if slug == "corn_field_":
+            slug = "corn_field"
+        if slug == "citrus_oranges_":
+            slug = "citrus_oranges"
+        if slug == "hay_alfalfa_":
+            slug = "hay_alfalfa"
 
         benchmark_key = None
         for key in USDA_BENCHMARKS.keys():
@@ -368,14 +372,22 @@ def audit_emissions_per_hectare():
         # Check if within range
         if benchmark["min"] <= emissions <= benchmark["max"]:
             if emissions == benchmark["typical"]:
-                perfect.append(f"✅ {crop_name}: {emissions} kg CO2e/ha (PERFECT - matches typical {benchmark['typical']})")
+                perfect.append(
+                    f"✅ {crop_name}: {emissions} kg CO2e/ha (PERFECT - matches typical {benchmark['typical']})"
+                )
             else:
-                perfect.append(f"✅ {crop_name}: {emissions} kg CO2e/ha (within range {benchmark['min']}-{benchmark['max']})")
+                perfect.append(
+                    f"✅ {crop_name}: {emissions} kg CO2e/ha (within range {benchmark['min']}-{benchmark['max']})"
+                )
         else:
             if emissions < benchmark["min"]:
-                issues.append(f"⚠️  {crop_name}: {emissions} kg CO2e/ha TOO LOW (benchmark: {benchmark['min']}-{benchmark['max']})")
+                issues.append(
+                    f"⚠️  {crop_name}: {emissions} kg CO2e/ha TOO LOW (benchmark: {benchmark['min']}-{benchmark['max']})"
+                )
             else:
-                issues.append(f"⚠️  {crop_name}: {emissions} kg CO2e/ha TOO HIGH (benchmark: {benchmark['min']}-{benchmark['max']})")
+                issues.append(
+                    f"⚠️  {crop_name}: {emissions} kg CO2e/ha TOO HIGH (benchmark: {benchmark['min']}-{benchmark['max']})"
+                )
 
     for item in perfect:
         print(item)
@@ -386,6 +398,7 @@ def audit_emissions_per_hectare():
     print(f"\n📊 ACCURACY SCORE: {accuracy_score:.1f}% ({len(perfect)}/{len(TRAZO_CROPS)} crops perfectly aligned)")
 
     return accuracy_score
+
 
 def audit_best_practice_reductions():
     """Verify best_practice values are realistic (20-35% reduction from industry average)."""
@@ -421,6 +434,7 @@ def audit_best_practice_reductions():
 
     return accuracy_score
 
+
 def audit_carbon_credit_potential():
     """Validate carbon credit potential values are reasonable."""
     print("\n" + "=" * 80)
@@ -447,9 +461,13 @@ def audit_carbon_credit_potential():
 
         # Check if credit potential is reasonable (typically 50-100% of reduction potential)
         if credit_potential < (max_reduction * 0.5):
-            warnings.append(f"⚠️  {crop_name}: Credit potential {credit_potential} is conservative (only {(credit_potential/max_reduction)*100:.0f}% of max)")
+            warnings.append(
+                f"⚠️  {crop_name}: Credit potential {credit_potential} is conservative (only {(credit_potential/max_reduction)*100:.0f}% of max)"
+            )
         elif credit_potential > max_reduction:
-            issues.append(f"❌ {crop_name}: Credit potential {credit_potential} exceeds achievable reduction {max_reduction}")
+            issues.append(
+                f"❌ {crop_name}: Credit potential {credit_potential} exceeds achievable reduction {max_reduction}"
+            )
 
     for item in perfect:
         print(item)
@@ -463,6 +481,7 @@ def audit_carbon_credit_potential():
 
     return accuracy_score
 
+
 def audit_event_carbon_impacts():
     """Audit event template carbon impacts using EPA/USDA factors."""
     print("\n" + "=" * 80)
@@ -475,22 +494,30 @@ def audit_event_carbon_impacts():
     # Planting (diesel)
     planting_diesel_gal = VERIFIED_FACTORS["planting_diesel"]  # 1.8 gal/ha
     planting_expected = planting_diesel_gal * VERIFIED_FACTORS["diesel_mobile"]
-    print(f"  Planting: {planting_expected:.1f} kg CO2e/ha ({planting_diesel_gal} gal diesel × {VERIFIED_FACTORS['diesel_mobile']} kg/gal)")
+    print(
+        f"  Planting: {planting_expected:.1f} kg CO2e/ha ({planting_diesel_gal} gal diesel × {VERIFIED_FACTORS['diesel_mobile']} kg/gal)"
+    )
 
     # Harvesting (diesel)
     harvest_diesel_gal = VERIFIED_FACTORS["harvesting_diesel"]  # 0.7 gal/ha
     harvest_expected = harvest_diesel_gal * VERIFIED_FACTORS["diesel_mobile"]
-    print(f"  Harvesting: {harvest_expected:.1f} kg CO2e/ha ({harvest_diesel_gal} gal diesel × {VERIFIED_FACTORS['diesel_mobile']} kg/gal)")
+    print(
+        f"  Harvesting: {harvest_expected:.1f} kg CO2e/ha ({harvest_diesel_gal} gal diesel × {VERIFIED_FACTORS['diesel_mobile']} kg/gal)"
+    )
 
     # Land Preparation (assume 3 gal/ha diesel for tillage)
     tillage_diesel_gal = 3.0
     tillage_expected = tillage_diesel_gal * VERIFIED_FACTORS["diesel_mobile"]
-    print(f"  Land Prep: {tillage_expected:.1f} kg CO2e/ha ({tillage_diesel_gal} gal diesel × {VERIFIED_FACTORS['diesel_mobile']} kg/gal)")
+    print(
+        f"  Land Prep: {tillage_expected:.1f} kg CO2e/ha ({tillage_diesel_gal} gal diesel × {VERIFIED_FACTORS['diesel_mobile']} kg/gal)"
+    )
 
     # Fertilization (corn example: 180 kg N/ha)
     corn_n_kg = 180
     fertilizer_expected = corn_n_kg * VERIFIED_FACTORS["nitrogen_fertilizer"]
-    print(f"  Fertilization (Corn): {fertilizer_expected:.1f} kg CO2e/ha ({corn_n_kg} kg N × {VERIFIED_FACTORS['nitrogen_fertilizer']} kg/kg N)")
+    print(
+        f"  Fertilization (Corn): {fertilizer_expected:.1f} kg CO2e/ha ({corn_n_kg} kg N × {VERIFIED_FACTORS['nitrogen_fertilizer']} kg/kg N)"
+    )
 
     print("\n📋 ACTUAL EVENT IMPACTS (from populate script):")
 
@@ -516,6 +543,7 @@ def audit_event_carbon_impacts():
     print("  - Land prep impacts (45-70 kg) align with tillage diesel (31 kg expected)")
 
     return 85.0  # Manual assessment score
+
 
 def check_trazo_philosophy_alignment():
     """Verify data aligns with Trazo's Direct Operational Emissions philosophy."""
@@ -547,6 +575,7 @@ def check_trazo_philosophy_alignment():
 
     return 70.0
 
+
 def generate_final_report():
     """Generate comprehensive carbon data quality report."""
     print("\n" + "=" * 80)
@@ -568,7 +597,11 @@ def generate_final_report():
     print("=" * 80)
 
     for category, score in scores.items():
-        grade = "A+" if score >= 95 else "A" if score >= 90 else "B+" if score >= 85 else "B" if score >= 80 else "C" if score >= 70 else "D"
+        grade = (
+            "A+"
+            if score >= 95
+            else "A" if score >= 90 else "B+" if score >= 85 else "B" if score >= 80 else "C" if score >= 70 else "D"
+        )
         print(f"  {category:25s}: {score:5.1f}% [{grade}]")
 
     print(f"\n  {'OVERALL CARBON DATA QUALITY':25s}: {overall_score:5.1f}% [{get_grade(overall_score)}]")
@@ -585,6 +618,7 @@ def generate_final_report():
 
     return overall_score
 
+
 def get_grade(score):
     """Convert numeric score to letter grade."""
     if score >= 95:
@@ -599,6 +633,7 @@ def get_grade(score):
         return "C"
     else:
         return "D"
+
 
 # =====================================================================
 # MAIN EXECUTION

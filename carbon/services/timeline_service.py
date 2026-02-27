@@ -228,18 +228,18 @@ class TimelineService:
         return True
 
     @staticmethod
-    def _calculate_verification_level(event, event_type_id: int = None) -> str:
+    def _calculate_verification_level(event) -> str:
         """
-        Calculate verification level for an event based on MVP tiered system.
+        Calculate verification level for an event based on evidence-based tiered system.
 
         Verification Levels:
         - self_reported: No photo evidence (50% trust)
         - photo_documented: Has photos without GPS/timestamp validation (65% trust)
         - photo_verified: Has photos with GPS + timestamp verification (80% trust)
-        - data_verified: External data verification (weather, lab results) (85% trust)
+        - data_verified: Reserved for future use when actual external data cross-referencing is implemented
         - certified: Third-party or blockchain verified (100% trust)
 
-        MVP Photo Verification: Photos with invalid content (AI-generated, stock images)
+        Photos with invalid content (AI-generated, stock images)
         are downgraded to self_reported level.
         """
         # Check for blockchain verification
@@ -271,14 +271,6 @@ class TimelineService:
 
         # Check for timestamp
         has_timestamp = getattr(event, "date", None) is not None
-
-        # Event types that auto-upgrade to data_verified
-        # 0=Weather, 4=Equipment (FC), 5=Soil (ST), 7=Business (CE/CO)
-        data_verified_types = {0, 4, 5, 7}
-        is_data_verified_type = event_type_id in data_verified_types if event_type_id is not None else False
-
-        if is_data_verified_type:
-            return "data_verified"
 
         if has_photos:
             if has_gps_data and has_timestamp:
@@ -348,7 +340,7 @@ class TimelineService:
                     event_data["albums"] = [TimelineService._format_album_image(image) for image in images]
 
             # MVP Photo Verification: Add verification level (event type 2 = Chemical)
-            event_data["verification_level"] = TimelineService._calculate_verification_level(event, event_type_id=2)
+            event_data["verification_level"] = TimelineService._calculate_verification_level(event)
 
             return event_data
 
@@ -432,7 +424,7 @@ class TimelineService:
                     event_data["albums"] = [TimelineService._format_album_image(image) for image in images]
 
             # MVP Photo Verification: Add verification level (event type 1 = Production)
-            event_data["verification_level"] = TimelineService._calculate_verification_level(event, event_type_id=1)
+            event_data["verification_level"] = TimelineService._calculate_verification_level(event)
 
             return event_data
 
@@ -467,7 +459,7 @@ class TimelineService:
                     event_data["albums"] = [TimelineService._format_album_image(image) for image in images]
 
             # MVP Photo Verification: Add verification level (event type 4 = Equipment)
-            event_data["verification_level"] = TimelineService._calculate_verification_level(event, event_type_id=4)
+            event_data["verification_level"] = TimelineService._calculate_verification_level(event)
 
             return event_data
 
@@ -650,7 +642,7 @@ class TimelineService:
                     event_data["albums"] = [TimelineService._format_album_image(image) for image in images]
 
             # MVP Photo Verification: Add verification level (event type 5 = Soil Management)
-            event_data["verification_level"] = TimelineService._calculate_verification_level(event, event_type_id=5)
+            event_data["verification_level"] = TimelineService._calculate_verification_level(event)
 
             return event_data
 
@@ -684,7 +676,7 @@ class TimelineService:
                     event_data["albums"] = [TimelineService._format_album_image(image) for image in images]
 
             # MVP Photo Verification: Add verification level (event type 0 = Weather)
-            event_data["verification_level"] = TimelineService._calculate_verification_level(event, event_type_id=0)
+            event_data["verification_level"] = TimelineService._calculate_verification_level(event)
 
             return event_data
 
@@ -717,7 +709,7 @@ class TimelineService:
                     event_data["albums"] = [TimelineService._format_album_image(image) for image in images]
 
             # MVP Photo Verification: Add verification level (event type 3 = General)
-            event_data["verification_level"] = TimelineService._calculate_verification_level(event, event_type_id=3)
+            event_data["verification_level"] = TimelineService._calculate_verification_level(event)
 
             return event_data
 
@@ -752,7 +744,7 @@ class TimelineService:
                     event_data["albums"] = [TimelineService._format_album_image(image) for image in images]
 
             # MVP Photo Verification: Add verification level (event type 6 = Pest Management)
-            event_data["verification_level"] = TimelineService._calculate_verification_level(event, event_type_id=6)
+            event_data["verification_level"] = TimelineService._calculate_verification_level(event)
 
             return event_data
 
@@ -786,7 +778,7 @@ class TimelineService:
                     event_data["albums"] = [TimelineService._format_album_image(image) for image in images]
 
             # MVP Photo Verification: Add verification level (event type 7 = Business)
-            event_data["verification_level"] = TimelineService._calculate_verification_level(event, event_type_id=7)
+            event_data["verification_level"] = TimelineService._calculate_verification_level(event)
 
             return event_data
 

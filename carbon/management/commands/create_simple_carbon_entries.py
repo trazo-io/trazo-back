@@ -124,7 +124,7 @@ class Command(BaseCommand):
                 "name": "Diesel Fuel",
                 "category": "fuel",
                 "unit": "liters",
-                "default_emission_factor": 2.68,
+                "default_emission_factor": 2.70,
                 "description": "Diesel fuel for agricultural equipment",
                 "usda_verified": True,
                 "usda_factors_based": True,

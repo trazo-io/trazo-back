@@ -4,8 +4,8 @@ Comprehensive validation script for Phase 1 electric equipment implementation
 Tests all 6 updated production event calculation methods
 """
 
-import sys
 import os
+import sys
 from decimal import Decimal
 
 # Add Django project to path
@@ -14,6 +14,7 @@ sys.path.insert(0, base_dir)
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.dev")
 
 import django
+
 django.setup()
 
 from carbon.services.verified_emission_factors import VerifiedEmissionFactors
@@ -66,18 +67,11 @@ class Phase1ValidationTests:
             result = method(area_covered=1.0, fuel_consumed=5.0, equipment_hours=2.0)
 
             # Should default to diesel calculation
-            self.assert_equal(
-                result["breakdown"]["fuel_type"],
-                "diesel",
-                f"{name}: Defaults to diesel fuel_type"
-            )
+            self.assert_equal(result["breakdown"]["fuel_type"], "diesel", f"{name}: Defaults to diesel fuel_type")
 
             # Diesel emission: 5.0 gallons * 10.21 kg/gal = 51.05 kg
             self.assert_equal(
-                result["co2e_kg"],
-                51.05,
-                f"{name}: Correct diesel calculation (5 gal * 10.21)",
-                tolerance=0.01
+                result["co2e_kg"], 51.05, f"{name}: Correct diesel calculation (5 gal * 10.21)", tolerance=0.01
             )
 
     def test_electric_grid_calculation(self):
@@ -100,33 +94,22 @@ class Phase1ValidationTests:
                 fuel_consumed=10.0,  # 10 kWh
                 equipment_hours=2.0,
                 fuel_type="electric",
-                energy_source="grid"
+                energy_source="grid",
             )
 
             # Electric emission: 10 kWh * 0.39 kg/kWh = 3.9 kg
             self.assert_equal(
-                result["co2e_kg"],
-                3.9,
-                f"{name}: Correct electric grid calculation (10 kWh * 0.39)",
-                tolerance=0.01
+                result["co2e_kg"], 3.9, f"{name}: Correct electric grid calculation (10 kWh * 0.39)", tolerance=0.01
             )
 
-            self.assert_equal(
-                result["breakdown"]["fuel_type"],
-                "electric",
-                f"{name}: fuel_type is electric"
-            )
+            self.assert_equal(result["breakdown"]["fuel_type"], "electric", f"{name}: fuel_type is electric")
 
-            self.assert_equal(
-                result["breakdown"]["energy_source"],
-                "grid",
-                f"{name}: energy_source is grid"
-            )
+            self.assert_equal(result["breakdown"]["energy_source"], "grid", f"{name}: energy_source is grid")
 
             self.assert_equal(
                 result["breakdown"]["calculation_basis"],
                 "actual_electric_consumption_grid",
-                f"{name}: calculation_basis is correct"
+                f"{name}: calculation_basis is correct",
             )
 
     def test_electric_solar_calculation(self):
@@ -149,21 +132,13 @@ class Phase1ValidationTests:
                 fuel_consumed=10.0,  # 10 kWh
                 equipment_hours=2.0,
                 fuel_type="electric",
-                energy_source="solar"
+                energy_source="solar",
             )
 
             # Solar: zero emissions
-            self.assert_equal(
-                result["co2e_kg"],
-                0.0,
-                f"{name}: Solar equipment has zero emissions"
-            )
+            self.assert_equal(result["co2e_kg"], 0.0, f"{name}: Solar equipment has zero emissions")
 
-            self.assert_equal(
-                result["breakdown"]["energy_source"],
-                "solar",
-                f"{name}: energy_source is solar"
-            )
+            self.assert_equal(result["breakdown"]["energy_source"], "solar", f"{name}: energy_source is solar")
 
     def test_electric_wind_calculation(self):
         """Test electric equipment with wind power (zero emissions)"""
@@ -171,11 +146,7 @@ class Phase1ValidationTests:
 
         method = VerifiedEmissionFactors._calculate_planting_emissions
         result = method(
-            area_covered=1.0,
-            fuel_consumed=10.0,
-            equipment_hours=2.0,
-            fuel_type="electric",
-            energy_source="wind"
+            area_covered=1.0, fuel_consumed=10.0, equipment_hours=2.0, fuel_type="electric", energy_source="wind"
         )
 
         self.assert_equal(result["co2e_kg"], 0.0, "Wind equipment has zero emissions")
@@ -187,18 +158,13 @@ class Phase1ValidationTests:
 
         # Diesel: 10.21 kg CO2/gal
         result = VerifiedEmissionFactors._calculate_planting_emissions(
-            area_covered=1.0,
-            fuel_consumed=1.0,
-            fuel_type="diesel"
+            area_covered=1.0, fuel_consumed=1.0, fuel_type="diesel"
         )
         self.assert_equal(result["co2e_kg"], 10.21, "Diesel factor is 10.21 kg/gal", tolerance=0.01)
 
         # Electric grid: 0.39 kg CO2/kWh
         result = VerifiedEmissionFactors._calculate_planting_emissions(
-            area_covered=1.0,
-            fuel_consumed=1.0,
-            fuel_type="electric",
-            energy_source="grid"
+            area_covered=1.0, fuel_consumed=1.0, fuel_type="electric", energy_source="grid"
         )
         self.assert_equal(result["co2e_kg"], 0.39, "Electric grid factor is 0.39 kg/kWh", tolerance=0.01)
 
@@ -208,46 +174,42 @@ class Phase1ValidationTests:
 
         # Test diesel breakdown
         result = VerifiedEmissionFactors._calculate_planting_emissions(
-            area_covered=1.0,
-            fuel_consumed=5.0,
-            fuel_type="diesel"
+            area_covered=1.0, fuel_consumed=5.0, fuel_type="diesel"
         )
 
         breakdown = result["breakdown"]
         required_diesel_fields = [
-            "production_activity", "area_covered_acres", "area_covered_hectares",
-            "fuel_type", "calculation_basis", "confidence_level",
-            "diesel_emission_factor_kg_per_gallon"
+            "production_activity",
+            "area_covered_acres",
+            "area_covered_hectares",
+            "fuel_type",
+            "calculation_basis",
+            "confidence_level",
+            "diesel_emission_factor_kg_per_gallon",
         ]
 
         for field in required_diesel_fields:
-            self.assert_equal(
-                field in breakdown,
-                True,
-                f"Diesel breakdown contains '{field}'"
-            )
+            self.assert_equal(field in breakdown, True, f"Diesel breakdown contains '{field}'")
 
         # Test electric breakdown
         result = VerifiedEmissionFactors._calculate_planting_emissions(
-            area_covered=1.0,
-            fuel_consumed=5.0,
-            fuel_type="electric",
-            energy_source="grid"
+            area_covered=1.0, fuel_consumed=5.0, fuel_type="electric", energy_source="grid"
         )
 
         breakdown = result["breakdown"]
         required_electric_fields = [
-            "production_activity", "area_covered_acres", "area_covered_hectares",
-            "fuel_type", "calculation_basis", "confidence_level",
-            "electricity_emission_factor_kg_per_kwh", "energy_source"
+            "production_activity",
+            "area_covered_acres",
+            "area_covered_hectares",
+            "fuel_type",
+            "calculation_basis",
+            "confidence_level",
+            "electricity_emission_factor_kg_per_kwh",
+            "energy_source",
         ]
 
         for field in required_electric_fields:
-            self.assert_equal(
-                field in breakdown,
-                True,
-                f"Electric breakdown contains '{field}'"
-            )
+            self.assert_equal(field in breakdown, True, f"Electric breakdown contains '{field}'")
 
     def test_api_dispatcher(self):
         """Test that the dispatcher passes kwargs correctly"""
@@ -255,11 +217,7 @@ class Phase1ValidationTests:
 
         # Test planting dispatcher
         result = VerifiedEmissionFactors.calculate_production_event_emissions(
-            production_type="Planting",
-            area_covered=1.0,
-            fuel_consumed=5.0,
-            fuel_type="electric",
-            energy_source="solar"
+            production_type="Planting", area_covered=1.0, fuel_consumed=5.0, fuel_type="electric", energy_source="solar"
         )
 
         self.assert_equal(result["co2e_kg"], 0.0, "Dispatcher passes electric solar to planting")
@@ -270,7 +228,7 @@ class Phase1ValidationTests:
             area_covered=1.0,
             fuel_consumed=10.0,
             fuel_type="electric",
-            energy_source="grid"
+            energy_source="grid",
         )
 
         self.assert_equal(result["co2e_kg"], 3.9, "Dispatcher passes electric grid to harvesting", tolerance=0.01)
@@ -293,26 +251,19 @@ class Phase1ValidationTests:
 
             # Test with identical inputs
             result = method(
-                area_covered=2.0,
-                fuel_consumed=8.0,
-                equipment_hours=3.0,
-                fuel_type="electric",
-                energy_source="grid"
+                area_covered=2.0, fuel_consumed=8.0, equipment_hours=3.0, fuel_type="electric", energy_source="grid"
             )
 
             # All should calculate: 8 kWh * 0.39 = 3.12 kg
             self.assert_equal(
-                result["co2e_kg"],
-                3.12,
-                f"{method_name}: Consistent electric calculation",
-                tolerance=0.01
+                result["co2e_kg"], 3.12, f"{method_name}: Consistent electric calculation", tolerance=0.01
             )
 
     def run_all_tests(self):
         """Run all validation tests"""
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print("PHASE 1 ELECTRIC EQUIPMENT BACKEND VALIDATION")
-        print("="*70)
+        print("=" * 70)
 
         self.test_backwards_compatibility()
         self.test_electric_grid_calculation()
@@ -323,18 +274,18 @@ class Phase1ValidationTests:
         self.test_api_dispatcher()
         self.test_all_methods_follow_pattern()
 
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print("TEST RESULTS")
-        print("="*70)
+        print("=" * 70)
 
         for result in self.test_results:
             print(result)
 
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print(f"PASSED: {self.passed}")
         print(f"FAILED: {self.failed}")
         print(f"TOTAL:  {self.passed + self.failed}")
-        print("="*70)
+        print("=" * 70)
 
         if self.failed == 0:
             print("\n✓✓✓ ALL TESTS PASSED - BACKEND READY FOR PHASE 1 ✓✓✓\n")

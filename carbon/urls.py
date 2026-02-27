@@ -67,6 +67,9 @@ urlpatterns = [
     ),
     path("voice/process-event/", views.process_voice_event, name="process-voice-event"),
     path("process-voice-event/", views.process_voice_event_ai, name="process-voice-event-ai"),
+    # Deepgram voice transcription endpoints
+    path("voice-config/", views.voice_config, name="voice-config"),
+    path("deepgram-token/", views.deepgram_token, name="deepgram-token"),
     # AI-powered smart event suggestions
     path("ai-event-suggestions/", views.get_ai_event_suggestions, name="ai-event-suggestions"),
     # USDA Government Data Integration

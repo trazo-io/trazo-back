@@ -28,6 +28,7 @@ from rest_framework.response import Response
 
 from company.models import Establishment
 from product.models import Parcel
+from subscriptions.storage_utils import check_storage_quota
 
 from .aws_utils import SecureAWSClient
 
@@ -75,6 +76,12 @@ def get_upload_urls(request):
     files_info = request.data.get("files", [])
     entity_type = request.data.get("entity_type", "misc")
     entity_id = request.data.get("entity_id", "")
+
+    # Storage quota check
+    total_upload_bytes = sum(f.get("size", 0) for f in files_info)
+    allowed, error_detail = check_storage_quota(request.user, total_upload_bytes)
+    if not allowed:
+        return Response(error_detail, status=413)
 
     # Validate S3 configuration
     is_valid, error_message = SecureAWSClient.validate_s3_configuration()
@@ -146,6 +153,12 @@ def get_presigned_url(request):
 
     if not filename or not file_type:
         return Response({"error": "Filename and fileType are required"}, status=400)
+
+    # Storage quota check (fileSize sent by frontend, default 2MB estimate)
+    file_size = request.data.get("fileSize", 2 * 1024 * 1024)
+    allowed, error_detail = check_storage_quota(request.user, file_size)
+    if not allowed:
+        return Response(error_detail, status=413)
 
     # Sanitize filename to avoid issues with spaces and special characters
     sanitized_filename = re.sub(r"[^\w\-_\.]", "_", filename)
@@ -237,6 +250,11 @@ def local_file_upload(request):
         logger.info(
             f"Processing file upload: {upload_file.name}, size: {upload_file.size}, type: {upload_file.content_type}"
         )
+
+        # Storage quota check
+        allowed, error_detail = check_storage_quota(request.user, upload_file.size)
+        if not allowed:
+            return Response(error_detail, status=413)
 
         # Read file data
         file_data = upload_file.read()

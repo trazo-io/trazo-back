@@ -22,17 +22,85 @@ class UserWorksInCompany(permissions.BasePermission):
         if not request.user.is_authenticated:
             return False
         if view.company is None and view.kwargs.get("company_pk") is None:
-            # We're at the Company level and don't have a Company pk (list or create actions)
-            # In this cases we have no company to check the user against, so we allow access and let
-            # AuthPermission check
             return True
         if WorksIn.objects.filter(user=request.user, company=view.company).exists():
             return True
         return False
 
 
+class IsCompanyAdmin(permissions.BasePermission):
+    """Only Company Admin (CA) role can access."""
+
+    def has_permission(self, request, view):
+        from users.models import WorksIn
+
+        if not request.user.is_authenticated:
+            return False
+        if view.company is None and view.kwargs.get("company_pk") is None:
+            return True
+        return WorksIn.objects.filter(user=request.user, company=view.company, role=WorksIn.COMPANY_ADMIN).exists()
+
+
+class IsCompanyAdminOrManager(permissions.BasePermission):
+    """Company Admin (CA) or Farm Manager (FM) can access."""
+
+    def has_permission(self, request, view):
+        from users.models import WorksIn
+
+        if not request.user.is_authenticated:
+            return False
+        if view.company is None and view.kwargs.get("company_pk") is None:
+            return True
+        return WorksIn.objects.filter(
+            user=request.user,
+            company=view.company,
+            role__in=[WorksIn.COMPANY_ADMIN, WorksIn.FARM_MANAGER],
+        ).exists()
+
+
+class ReadOnlyForViewers(permissions.BasePermission):
+    """Any company member can read; only CA/FM can write."""
+
+    def has_permission(self, request, view):
+        from users.models import WorksIn
+
+        if not request.user.is_authenticated:
+            return False
+        if view.company is None and view.kwargs.get("company_pk") is None:
+            return True
+        membership = WorksIn.objects.filter(user=request.user, company=view.company).first()
+        if not membership:
+            return False
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        return membership.role in [WorksIn.COMPANY_ADMIN, WorksIn.FARM_MANAGER]
+
+
+class ReadOnlyForViewersGlobal(permissions.BasePermission):
+    """Role-based read/write for ViewSets without company in URL.
+
+    Any authenticated user can read. Only users with CA/FM role in
+    at least one company can write. Use this for standalone ViewSets
+    (e.g. /carbon/, /histories/) that don't inherit CompanyNestedViewSet.
+    """
+
+    def has_permission(self, request, view):
+        from users.models import WorksIn
+
+        if not request.user.is_authenticated:
+            return False
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        if request.user.is_superuser:
+            return True
+        return WorksIn.objects.filter(
+            user=request.user,
+            role__in=[WorksIn.COMPANY_ADMIN, WorksIn.FARM_MANAGER],
+        ).exists()
+
+
 class CompanyNestedViewSet(viewsets.GenericViewSet):
-    permission_classes = [IsSuperUser | (UserWorksInCompany & AuthPermission)]
+    permission_classes = [IsSuperUser | (ReadOnlyForViewers & AuthPermission)]
     perms_map = {}
     company = None
     model = None

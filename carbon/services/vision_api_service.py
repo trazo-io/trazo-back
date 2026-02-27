@@ -182,8 +182,8 @@ class VisionAPIService:
                 # Use API key authentication
                 if self._api_key:
                     # For API key auth, we need to use REST transport
-                    from google.cloud.vision_v1 import ImageAnnotatorClient
                     from google.api_core.client_options import ClientOptions
+                    from google.cloud.vision_v1 import ImageAnnotatorClient
 
                     client_options = ClientOptions(
                         api_key=self._api_key,

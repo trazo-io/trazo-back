@@ -5,17 +5,20 @@ Shows exact SQL queries being executed.
 """
 import os
 import sys
-import django
-from django.test.utils import CaptureQueriesContext
-from django.db import connection
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings.dev')
-sys.path.insert(0, '/Users/oscarmunoz/dev/trazo/trazo-back')
+import django
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
+
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.settings.dev")
+sys.path.insert(0, "/Users/oscarmunoz/dev/trazo/trazo-back")
 django.setup()
 
 from django.test import RequestFactory
-from history.transparency_views import production_transparency_detail
+
 from history.models import History
+from history.transparency_views import production_transparency_detail
+
 
 def analyze_queries():
     """Analyze which queries are being executed."""
@@ -29,7 +32,7 @@ def analyze_queries():
     print(f"Analyzing production ID: {production_id}\n")
 
     factory = RequestFactory()
-    request = factory.get(f'/api/transparency/{production_id}/')
+    request = factory.get(f"/api/transparency/{production_id}/")
 
     with CaptureQueriesContext(connection) as context:
         response = production_transparency_detail(request, production_id)
@@ -39,7 +42,7 @@ def analyze_queries():
     duplicate_queries = {}
 
     for i, query in enumerate(context.captured_queries):
-        sql = query['sql']
+        sql = query["sql"]
 
         # Detect duplicate queries
         if sql in duplicate_queries:
@@ -73,14 +76,17 @@ def analyze_queries():
 
     # Check if prefetch is actually being used
     print("Checking Prefetch Usage:")
-    prefetch_queries = [q for q in context.captured_queries if 'history_history' in q['sql'] and 'event' in q['sql'].lower()]
+    prefetch_queries = [
+        q for q in context.captured_queries if "history_history" in q["sql"] and "event" in q["sql"].lower()
+    ]
     print(f"  Event-related queries: {len(prefetch_queries)}")
 
-    image_queries = [q for q in context.captured_queries if 'image' in q['sql'].lower()]
+    image_queries = [q for q in context.captured_queries if "image" in q["sql"].lower()]
     print(f"  Image queries: {len(image_queries)}")
 
-    gallery_queries = [q for q in context.captured_queries if 'gallery' in q['sql'].lower()]
+    gallery_queries = [q for q in context.captured_queries if "gallery" in q["sql"].lower()]
     print(f"  Gallery queries: {len(gallery_queries)}")
+
 
 if __name__ == "__main__":
     analyze_queries()

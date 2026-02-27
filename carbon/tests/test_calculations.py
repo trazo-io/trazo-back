@@ -118,10 +118,10 @@ class TestCarbonFootprintCalculator(TransactionTestCase):
         result = self.calculator.calculate_farm_footprint(inputs=inputs, crop_type="citrus", area=100.0)
 
         # Expected emissions:
-        # Diesel: 100 * 2.68 = 268 kg CO2e
-        # Gasoline: 20 * 2.31 = 46.2 kg CO2e
-        # Total: 314.2 kg CO2e
-        expected_total = (100.0 * 2.68) + (20.0 * 2.31)
+        # Diesel: 100 * 2.70 = 270 kg CO2e
+        # Gasoline: 20 * 2.32 = 46.4 kg CO2e
+        # Total: 316.4 kg CO2e
+        expected_total = (100.0 * 2.70) + (20.0 * 2.32)
 
         self.assertAlmostEqual(result["total_emissions"], expected_total, delta=0.1)
         self.assertIn("fuel", result["breakdown"])
@@ -171,7 +171,7 @@ class TestCarbonFootprintCalculator(TransactionTestCase):
 
         # Calculate expected emissions
         expected_fertilizer = (200.0 * 11.0) + (50.0 * 1.25) + (30.0 * 0.60)
-        expected_fuel = (100.0 * 2.68) + (20.0 * 2.31)
+        expected_fuel = (100.0 * 2.70) + (20.0 * 2.32)
         expected_electricity = 500.0 * 0.40
         expected_water = 1000.0 * 0.30
         expected_total = expected_fertilizer + expected_fuel + expected_electricity + expected_water
@@ -260,8 +260,8 @@ class TestEventCarbonCalculator(TestCase):
 
         result = self.calculator.calculate_event_carbon(event_data)
 
-        # Expected: 25 * 2.68 = 67.0 kg CO2e
-        expected_emissions = 25.0 * 2.68
+        # Expected: 25 * 2.70 = 67.5 kg CO2e
+        expected_emissions = 25.0 * 2.70
 
         self.assertEqual(result["total_emissions"], expected_emissions)
         self.assertEqual(result["emission_source"], "fuel_combustion")

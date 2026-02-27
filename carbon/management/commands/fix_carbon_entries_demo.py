@@ -32,7 +32,7 @@ class Command(BaseCommand):
 
             # Get or create carbon sources
             fuel_source = self.get_or_create_carbon_source(
-                "Diesel Fuel", "fuel", "liters", 2.68, "USDA verified diesel fuel emissions"
+                "Diesel Fuel", "fuel", "liters", 2.70, "USDA verified diesel fuel emissions"
             )
             fertilizer_source = self.get_or_create_carbon_source(
                 "Organic Fertilizer", "fertilizer", "kg", 0.45, "USDA verified organic fertilizer"

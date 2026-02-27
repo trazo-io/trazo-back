@@ -129,19 +129,13 @@ class Parcel(models.Model):
         """Get consumer story explaining why this parcel matters"""
         # Check multiple possible keys due to form field mapping
         return (
-            self.agricultural_details.get("consumer_story")
-            or self.agricultural_details.get("consumer_narrative")
-            or ""
+            self.agricultural_details.get("consumer_story") or self.agricultural_details.get("consumer_narrative") or ""
         )
 
     def get_primary_crop(self):
         """Get primary crop focus for this parcel"""
         # Check multiple possible keys due to form field mapping
-        return (
-            self.agricultural_details.get("primary_crop")
-            or self.agricultural_details.get("crop_focus")
-            or ""
-        )
+        return self.agricultural_details.get("primary_crop") or self.agricultural_details.get("crop_focus") or ""
 
     def is_transparency_ready(self):
         """Check if parcel has sufficient transparency data for consumer display"""

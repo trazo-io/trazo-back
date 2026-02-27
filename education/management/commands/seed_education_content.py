@@ -21,7 +21,7 @@ class Command(BaseCommand):
             {
                 "name": "Essential Farm Events Mastery",
                 "category_type": "farm_events",
-                "description": "Document the 8 core event types for maximum transparency scores",
+                "description": "Document the 7 core event types for maximum transparency scores",
                 "icon": "FaTractor",
                 "order": 2,
             },
@@ -192,33 +192,33 @@ class Command(BaseCommand):
 ### How Transparency Scores are Calculated
 **The MORE you document, the HIGHER your score:**
 
-**Production Events (20 points max):**
-- Planting activities: +3 points each
-- Irrigation events: +2 points each
-- Harvesting activities: +3 points each
-- Pruning/maintenance: +2 points each
+Trazo uses a **weighted category system** that evaluates how thoroughly you document each area of farming:
 
-**Chemical Applications (25 points max):**
-- Fertilizer applications: +4 points each
-- Pest/disease treatments: +3 points each
-- Soil amendments: +3 points each
-- *With photos: +1 bonus point each*
+**Growing Practices (30% of score):**
+- Planting, irrigation, harvesting, pruning activities
+- More events with complete details = higher category score
 
-**Equipment Operations (15 points max):**
-- Fuel consumption logs: +2 points each
-- Maintenance records: +2 points each
-- Equipment hours: +1 point each
+**Treatments & Applications (20% of score):**
+- Fertilizer, pest control, soil amendments
+- Photos are essential — missing photos on chemical events reduces your score significantly
 
-**Business Certifications (20 points max):**
-- Organic certification: +10 points
-- GAP certification: +5 points
-- Sustainability audits: +5 points
+**Soil & Land Care (18% of score):**
+- Soil preparation, composting, cover crops
+- Demonstrates long-term stewardship to consumers
 
-**Verification & Evidence (20 points max):**
-- Photos with timestamps: +2 points each
-- GPS coordinates: +1 point per event
-- USDA verification: +10 points
-- Blockchain verification: +5 points
+**Environmental Monitoring (12% of score):**
+- Weather events, climate observations
+- Shows awareness and adaptation to conditions
+
+**Business & Compliance (10% of score):**
+- Certifications, audits, compliance records
+- Adds credibility through official documentation
+
+**Photo Evidence (10% of score):**
+- Photos are critical — not just a bonus
+- **Essential events** (chemical applications) lose up to 50% of their value without photos
+- **Recommended events** (production activities) lose up to 25% without photos
+- Some events have no photo penalty (irrigation, maintenance)
 
 ## Why This Approach Builds Trust
 
@@ -245,18 +245,18 @@ class Command(BaseCommand):
 
 ### Week 1: Transparency Basics (Target: 30%)
 - Log 3 production events with photos
-- Add 2 equipment operation records
+- Add 2 chemical or soil management records
 - Complete farm profile information
 
 ### Week 2-3: Building Documentation (Target: 60%)
-- Add chemical application records
+- Add chemical application records with photos (essential for score)
 - Document business certifications
-- Include equipment maintenance logs
+- Include weather and pest management events
 
 ### Month 2: Advanced Transparency (Target: 85%+)
 - Comprehensive seasonal documentation
-- Photo evidence for all major events
-- Blockchain verification setup
+- Photo evidence for all major events (especially chemical applications)
+- Consider blockchain verification add-on for tamper-proof records
 - Consumer feedback integration
 
 ## Impact on Your Business
@@ -276,12 +276,12 @@ class Command(BaseCommand):
                     "practical_steps": [
                         "Check your current transparency score in dashboard",
                         "Log 3 different event types and watch score increase",
-                        "Add photos to 2 existing events for bonus points",
+                        "Add photos to chemical events — they are essential for maximum scores",
                         "Complete your farm story for consumer QR pages",
-                        "Set target transparency score for next month (aim for 10+ point increase)",
+                        "Set target transparency score for next month",
                         "Share QR code with friends to get consumer perspective",
                     ],
-                    "transparency_impact": "Each documented event increases transparency score and consumer trust. More events = higher score = premium pricing opportunities.",
+
                 },
             ]
 
@@ -293,9 +293,9 @@ class Command(BaseCommand):
     def create_farm_events_mastery_content(self, categories):
         """Create farm events mastery course content"""
         course_data = {
-            "title": "8 Essential Farm Events for Maximum Transparency",
+            "title": "7 Essential Farm Events for Maximum Transparency",
             "category": categories["farm_events"],
-            "description": "Master all 8 event types to achieve 85%+ transparency scores and unlock premium market access",
+            "description": "Master all 7 event types to achieve 85%+ transparency scores and unlock premium market access",
             "difficulty": "beginner",
             "required_plan": "all",
             "estimated_duration": 60,
@@ -317,7 +317,7 @@ class Command(BaseCommand):
 
 ## The 4 Core Production Event Types
 
-### 1. **Planting Activities** (+3 transparency points each)
+### 1. **Planting Activities**
 **Why Document**: Shows seasonal planning and crop selection decisions
 **Consumer Value**: "See how crops are established and planned"
 **Best Practices**:
@@ -326,7 +326,7 @@ class Command(BaseCommand):
 - Include soil preparation activities
 - Add GPS coordinates for field mapping
 
-### 2. **Irrigation Events** (+2 transparency points each)
+### 2. **Irrigation Events**
 **Why Document**: Demonstrates water stewardship and crop care
 **Consumer Value**: "Water management affects taste and sustainability"
 **Best Practices**:
@@ -335,7 +335,7 @@ class Command(BaseCommand):
 - Include soil moisture readings when available
 - Photo evidence of irrigation systems
 
-### 3. **Harvesting Activities** (+3 transparency points each)
+### 3. **Harvesting Activities**
 **Why Document**: Shows quality control and timing expertise
 **Consumer Value**: "Harvest timing determines freshness and flavor"
 **Best Practices**:
@@ -344,12 +344,12 @@ class Command(BaseCommand):
 - Include photos of harvest activities
 - Track quantities and storage methods
 
-### 4. **Pruning & Maintenance** (+2 transparency points each)
+### 4. **Pruning & Maintenance**
 **Why Document**: Shows ongoing crop care and attention
 **Consumer Value**: "Regular maintenance ensures healthy crops"
 **Best Practices**:
 - Log pruning schedules and techniques
-- Document equipment maintenance
+- Document equipment usage and maintenance
 - Record plant health observations
 - Include before/after photos
 
@@ -358,17 +358,17 @@ class Command(BaseCommand):
 ### Week 1: Start with Major Events
 - Document 2-3 production activities with basic information
 - Focus on adding photos and GPS coordinates
-- Target: 15% transparency score increase
+- Target: See your Growing Practices category score increase
 
 ### Month 1: Comprehensive Coverage
 - All production events documented with details
 - Regular maintenance activities logged
-- Target: 40-60% transparency score
+- Target: 40-60% overall transparency score
 
 ### Season 1: Complete Transparency
 - Full seasonal production cycle documented
 - Consumer-ready production story complete
-- Target: 85%+ transparency score
+- Target: 85%+ overall transparency score
 
 ## Real Impact on Consumer Trust
 
@@ -390,7 +390,7 @@ class Command(BaseCommand):
                         "Practice writing consumer-friendly event descriptions",
                         "Check transparency score improvement after logging events",
                     ],
-                    "transparency_impact": "Production events form the backbone of agricultural transparency. Complete documentation shows consumers the care and expertise that goes into growing their food.",
+
                 },
                 {
                     "title": "Chemical Applications: Building Consumer Confidence Through Transparency",
@@ -409,15 +409,15 @@ class Command(BaseCommand):
 
 ## The 3 High-Value Chemical Event Types
 
-### 1. **Fertilizer Applications** (+4 transparency points)
+### 1. **Fertilizer Applications**
 **Consumer Concern**: "What nutrients are added and why?"
 **Transparency Strategy**:
 - Document N-P-K ratios and application rates
 - Explain timing: "Applied during active growth for healthy development"
 - Include soil test results when available
-- Photo evidence of application methods and equipment
+- **Photos are essential** — chemical events without photos lose up to 50% of their transparency value
 
-### 2. **Pest & Disease Treatments** (+3 transparency points)
+### 2. **Pest & Disease Treatments**
 **Consumer Concern**: "How are pests managed safely?"
 **Transparency Strategy**:
 - Document pest identification and threshold levels
@@ -425,7 +425,7 @@ class Command(BaseCommand):
 - Record application methods and safety measures
 - Include IPM (Integrated Pest Management) context
 
-### 3. **Soil Amendments** (+3 transparency points)
+### 3. **Soil Amendments**
 **Consumer Concern**: "How is soil health maintained?"
 **Transparency Strategy**:
 - Document organic matter additions
@@ -433,7 +433,7 @@ class Command(BaseCommand):
 - Record application timing and methods
 - Include soil health improvement goals
 
-## Photo Evidence Strategy (+1 bonus point each)
+## Photo Evidence Strategy (Essential for Chemical Events)
 
 ### Essential Photos to Build Trust:
 1. **Before Application**: Show crop condition and pest/disease pressure
@@ -496,7 +496,7 @@ Protective equipment used and equipment cleaned after application."
                         "Test different photo angles and descriptions for maximum trust building",
                     ],
                     "cost_savings_potential": "Transparency in chemical applications can command 20-30% premium pricing",
-                    "transparency_impact": "Chemical transparency is the fastest way to build consumer trust. Honest documentation demonstrates expertise and care.",
+
                 },
             ]
 
@@ -673,7 +673,7 @@ protected crop quality while managing resources responsibly."
                         "Test your QR story with family/friends for clarity and trust building",
                         "Set up metrics tracking for QR page engagement and consumer feedback",
                     ],
-                    "transparency_impact": "QR code storytelling is your direct line to consumer hearts and minds. Authentic, well-told transparency stories can transform commodity crops into premium, trusted products that consumers actively seek out and pay more for.",
+
                 },
             ]
 
@@ -865,7 +865,7 @@ protected crop quality while managing resources responsibly."
                         "Set up automated backup and sync preferences in the Trazo app",
                         "Create photo quality standards and train farm team on mobile documentation best practices",
                     ],
-                    "transparency_impact": "Mobile documentation transforms transparency from a paperwork burden into a powerful competitive advantage, enabling real-time agricultural storytelling that builds consumer trust and premium market access.",
+
                 },
                 {
                     "title": "Blockchain Verification: Immutable Agricultural Records",
@@ -891,30 +891,33 @@ protected crop quality while managing resources responsibly."
 
 ## How Trazo's Blockchain Verification Works
 
-### Automatic Verification Process:
-1. **Event Documentation**: You record farming activity with photos and details
-2. **Data Hashing**: Trazo creates unique digital fingerprint of your data
-3. **Blockchain Recording**: Fingerprint recorded on Polygon blockchain
-4. **Verification Badge**: QR code displays blockchain verification icon
-5. **Consumer Verification**: Anyone can verify authenticity using blockchain explorer
+### How It Works (Step by Step):
+1. **Document Your Production**: Log all farming events as you normally do (planting, irrigation, fertilization, harvest, etc.)
+2. **Finish Your Production**: When you click "Finish Production," Trazo creates a unique digital fingerprint (hash) of ALL your documented events
+3. **Automatic Blockchain Submission**: Trazo's system submits this fingerprint to the Polygon blockchain, creating a permanent record
+4. **Verification Badge Appears**: Your product's QR code page now displays a "Blockchain Verified" badge with a link to the public record
+5. **Consumer Verification**: Anyone who scans the QR code can verify the data is authentic through Polygonscan (a public blockchain explorer)
+
+### Important: One Record Per Production
+Blockchain verification happens at the **production level**, not per individual event. When your production is finished, one blockchain transaction seals ALL the events documented during that production. This is more cost-effective and gives consumers a complete, verified picture of the entire growing cycle.
 
 ### What Gets Verified:
-- **Photo Metadata**: Timestamp, GPS coordinates, camera settings
-- **Event Details**: Activity type, materials used, quantities, dates
-- **Farmer Identity**: Cryptographic link to verified farm profile
-- **Data Integrity**: Mathematical proof data hasn't been altered
+- **All Farming Events**: Every event you documented during the production
+- **Carbon Calculations**: The environmental impact data for each activity
+- **Production Timeline**: Start date, finish date, and complete event history
+- **Data Integrity**: A mathematical fingerprint that proves nothing was changed after finalization
 
 ## Polygon Network: Fast, Affordable, Sustainable
 
 ### Why Trazo Uses Polygon:
-- **Low Cost**: Transactions cost pennies vs dollars on Ethereum
-- **Fast Confirmation**: Verification complete in seconds vs minutes
+- **Low Cost**: Transactions cost about $0.01 each
+- **Fast Confirmation**: Verification complete in seconds
 - **Energy Efficient**: 99.95% less energy than traditional blockchain
 - **Ethereum Compatible**: Benefits of Ethereum ecosystem without high costs
 
-### Understanding Verification Costs:
-- **Standard Verification**: $0.01-0.05 per event (included in subscription)
-- **Bulk Processing**: Multiple events bundled for efficiency
+### Verification Costs:
+- **One transaction per production**: Included in the Blockchain Verification add-on
+- **No per-event fees**: All events in a production are covered by one transaction
 - **No Hidden Fees**: Transparent pricing with no surprise costs
 - **ROI Positive**: Premium pricing easily covers verification costs
 
@@ -924,30 +927,42 @@ protected crop quality while managing resources responsibly."
 - **Blockchain Badge**: Prominent verification icon on product pages
 - **Verification Link**: Direct link to blockchain explorer for technical users
 - **Trust Messaging**: "This product's data is verified on blockchain"
-- **Timestamp Display**: Exact verification dates for all farming events
+- **Verification Date**: Shows when the production was permanently recorded
 
 ### Building Consumer Understanding:
 ```
-"✅ Blockchain Verified
-All farming data for this product has been permanently recorded on blockchain, 
-ensuring it cannot be altered or falsified. This gives you complete confidence 
+"Blockchain Verified
+All farming data for this product has been permanently recorded on blockchain,
+ensuring it cannot be altered or falsified. This gives you complete confidence
 in the accuracy of agricultural practices used to grow your food."
 ```
 
+## When Does Verification Happen?
+
+### The Timeline:
+1. **During production**: You document events normally. No blockchain activity yet.
+2. **You finish the production**: Trazo seals all events with a digital fingerprint (this happens instantly).
+3. **Monthly batch processing**: Trazo's system automatically submits all finalized productions to blockchain. This runs on the 1st of each month.
+4. **Badge appears**: After the blockchain transaction is confirmed (usually within minutes of submission), consumers see the verification badge on your QR page.
+
+### What This Means For You:
+- You don't need to do anything special for blockchain verification. Just document your farming as usual and finish your production when it's ready.
+- There may be a short delay between finishing a production and seeing the blockchain badge (up to the next monthly batch run).
+- Once verified, the record is permanent and cannot be changed by anyone, including Trazo.
+
 ## Setting Up Blockchain Verification
 
-### Initial Setup Requirements:
+### Requirements:
 - **Verified Trazo Account**: Complete farm verification process
-- **Standard Plan or Higher**: Blockchain verification included in paid plans
+- **Blockchain Verification Add-On**: Purchase the add-on from the subscription page
 - **Mobile Documentation**: Events must be documented through Trazo app
-- **GPS Enabled**: Location services required for verification
 
-### Step-by-Step Activation:
-1. **Enable Verification**: Toggle blockchain verification in account settings
-2. **Test Documentation**: Record test event and verify blockchain submission
-3. **Review Verification**: Check QR code displays verification badge
-4. **Monitor Costs**: Track verification usage in account dashboard
-5. **Consumer Education**: Inform customers about verification benefits
+### Getting Started:
+1. **Purchase the Add-On**: Go to your subscription page and add "Blockchain Verification" to your plan
+2. **Document as Usual**: Continue logging your farming events through the Trazo app
+3. **Finish Your Production**: When your production cycle is complete, click "Finish Production"
+4. **Verification Happens Automatically**: Your production will be submitted to blockchain in the next monthly batch
+5. **Share With Consumers**: Your QR code page will display the blockchain verification badge
 
 ## Verification Best Practices
 
@@ -1027,7 +1042,7 @@ in the accuracy of agricultural practices used to grow your food."
                         "Create consumer education materials explaining your blockchain verification",
                         "Set up verification priorities for different types of farming events based on value and importance",
                     ],
-                    "transparency_impact": "Blockchain verification transforms agricultural transparency from claims into mathematical proof, creating unshakeable consumer confidence that drives premium pricing and market access.",
+
                 },
             ]
 
@@ -1220,7 +1235,7 @@ Scan the QR code to see exactly how your food was grown."
                         "Create transparency pricing strategy with specific premium targets",
                         "Set up systems to measure and track transparency ROI and customer feedback",
                     ],
-                    "transparency_impact": "Converting transparency into premium pricing transforms agriculture from commodity business to premium brand business, creating sustainable competitive advantage and higher profitability through consumer trust and verification.",
+
                 },
             ]
 
@@ -1389,7 +1404,7 @@ This approach ensures carbon data supports your transparency story rather than r
                         "Create consumer-friendly explanations of your environmental impact improvements",
                         "Prepare B2B carbon reports for customers who specifically request carbon data",
                     ],
-                    "transparency_impact": "Understanding carbon data as supporting evidence helps you communicate environmental responsibility while maintaining focus on transparency as your primary consumer-facing value proposition.",
+
                 },
             ]
 
@@ -1615,7 +1630,7 @@ This approach transforms compliance from a burden into a competitive advantage, 
                         "Generate test compliance reports for your major certification and regulatory requirements",
                         "Create inspection preparation checklist using Trazo's automated report features",
                     ],
-                    "transparency_impact": "Compliance through transparency documentation eliminates the traditional burden of regulatory requirements while creating consumer-facing trust that drives premium pricing and market access.",
+
                 },
             ]
 
@@ -1640,9 +1655,7 @@ This approach transforms compliance from a burden into a competitive advantage, 
             "order": 2,
         }
 
-        course, created = EducationCourse.objects.get_or_create(
-            title=course_data["title"], defaults=course_data
-        )
+        course, created = EducationCourse.objects.get_or_create(title=course_data["title"], defaults=course_data)
 
         if created:
             lessons_data = [
@@ -1672,20 +1685,19 @@ This approach transforms compliance from a burden into a competitive advantage, 
 
 ### Step 1: Choose Your Method (5 seconds)
 **Three Fast Ways to Start:**
-1. **📝 Smart Templates**: Pre-configured for 8 event types
-2. **🎤 Voice Capture**: Speak naturally about your activity
-3. **✨ AI Suggestions**: Let Trazo recommend based on your farm
+1. **📝 Smart Templates**: Pre-configured for 7 event types with AI-powered crop-specific suggestions
+2. **🎤 Voice Capture**: Speak naturally — AI pre-fills key fields from your description
+3. **✨ AI Suggestions**: Let Trazo recommend based on your farm and season
 
 ### Step 2: Select Event Type (10 seconds)
-**8 Event Types Available:**
-- 🌱 **Planting**: Seeds, transplants, crop establishment
-- 💧 **Irrigation**: Watering, drip systems, flood irrigation
-- 🌿 **Fertilization**: NPK applications, organic amendments
-- 🐛 **Pest Control**: IPM, pesticide applications
-- 🌾 **Herbicide**: Weed management applications
-- 🍄 **Fungicide**: Disease prevention and treatment
-- 🔧 **Pruning**: Maintenance, thinning, training
-- 📦 **Harvest**: Crop collection, yield recording
+**7 Event Types Available:**
+- 🌱 **Production**: Planting, irrigation, harvesting, pruning, equipment use
+- 🧪 **Chemical**: Fertilizer, pesticide, herbicide, fungicide applications
+- 🌍 **Soil Management**: Soil tests, amendments, compost, cover crops
+- 🐛 **Pest Management**: Pest monitoring, biological controls, IPM
+- 🌦️ **Weather**: Frost, drought, hail, wind, climate observations
+- 📋 **Business**: Certifications, audits, compliance records
+- 📝 **General**: Agronomist visits, field observations, technical notes
 
 ### Step 3: Add Details (30-40 seconds)
 **Smart Forms Show Only What Matters:**
@@ -1699,26 +1711,26 @@ This approach transforms compliance from a burden into a competitive advantage, 
 - Preview your event card (exactly as consumers will see it)
 - Verify photo quality and GPS location
 - Check description is consumer-friendly
-- Submit with one tap for blockchain verification
+- Submit with one tap
 
 ## Quick Add Best Practices
 
 ### For Maximum Transparency Impact:
-1. **Add Photos**: Events with photos earn +1-2 bonus transparency points
+1. **Add Photos**: Photos are essential for chemical events — missing them can reduce your score by up to 50%
 2. **Use Clear Descriptions**: Write for consumers, not farm records
 3. **Log Same Day**: Real-time documentation is most credible
 4. **Include Context**: Weather conditions, reasons for activity
 
 ### Sample Quick Add Flow:
 ```
-[Open Quick Add] → [Select "Fertilization"] →
-[Smart form shows: NPK ratio, volume, method] →
+[Open Quick Add] → [Select "Chemical"] →
+[Smart form shows: product, NPK ratio, volume, method] →
 [Take photo of application] →
 [Preview shows: "Fertilizer application - organic compost..."] →
-[Submit] → Done! +4 transparency points in 45 seconds
+[Submit] → Done! Event logged in under 60 seconds
 ```
 
-## Voice Capture: Hands-Free Documentation
+## Voice Capture: Get a Head Start on Documentation
 
 ### When to Use Voice:
 - **In the field**: While operating equipment
@@ -1727,15 +1739,22 @@ This approach transforms compliance from a burden into a competitive advantage, 
 
 ### How Voice Capture Works:
 1. Tap microphone icon in Quick Add
-2. Speak naturally: "Applied organic fertilizer to field 3..."
-3. AI transcribes and categorizes automatically
-4. Review and submit with one tap
+2. Speak naturally: "Applied organic fertilizer to field 3, about 50 pounds per acre"
+3. AI pre-fills key fields from your description (typically 4-7 fields)
+4. **Review the pre-filled form** — add photos and complete remaining details
+5. Submit when everything looks correct
+
+### Important: Voice is a Fast-Start Tool
+- Voice pre-fills key fields but does **not** create a fully documented event
+- For maximum transparency scores, review and complete all fields after voice capture
+- Always add photos for chemical events — they are essential for your score
+- The Manual Add flow creates the most complete documentation
 
 ### Voice Tips:
 - Speak clearly near your phone
 - Include: what, where, how much, why
 - Mention weather or special conditions
-- Say "photo" to trigger camera
+- Always review and add details after voice capture
 
 ## AI Smart Suggestions
 
@@ -1754,11 +1773,14 @@ Trazo suggests events based on:
 
 ## Transparency Score Impact
 
-### Each Quick Add Event Earns Points:
-- **Production events**: +2-3 transparency points
-- **Chemical applications**: +3-4 transparency points
-- **With photo evidence**: +1-2 bonus points
-- **With detailed description**: +1 bonus point
+### How Events Affect Your Score:
+Your transparency score uses a **weighted category system**:
+- **Growing Practices** (30%): Production events like planting, irrigation, harvest
+- **Treatments** (20%): Chemical applications — photos are essential here
+- **Soil & Land Care** (18%): Soil management activities
+- **Environmental** (12%): Weather events and monitoring
+- **Business** (10%): Certifications and compliance
+- **Photo Evidence** (10%): Photos across all events, especially chemical
 
 ### Weekly Goal:
 **Log 5-7 events per week** to maintain steady transparency growth
@@ -1768,11 +1790,11 @@ Trazo suggests events based on:
                     "practical_steps": [
                         "Open Quick Add and create your first event using smart templates",
                         "Test all 3 creation methods: templates, voice capture, and AI suggestions",
-                        "Practice adding photos with each event for bonus transparency points",
+                        "Always add photos to chemical events — they are essential for your score",
                         "Set a daily reminder to log at least 1 event per farm activity day",
                         "Check your transparency score before and after logging 5 events",
                     ],
-                    "transparency_impact": "Quick Add makes transparency logging effortless, enabling farmers to document activities consistently without disrupting workflow. Regular use can achieve 85%+ transparency scores within 30 days.",
+
                 },
                 {
                     "title": "Choosing the Right Event Type: A Decision Guide",
@@ -1781,21 +1803,25 @@ Trazo suggests events based on:
                     "order": 2,
                     "content": """# Choosing the Right Event Type
 
-## The 8 Event Types Explained
+## The 7 Event Types Explained
 
 ### Understanding Event Categories
 
-Quick Add offers **8 event types** organized into two categories:
+Quick Add offers **7 event types** that cover all farming activities:
 
-**Production Events (Green icons):**
-- Focus on crop management and growth activities
-- Higher transparency points for core farming activities
+**Production Events:**
+- Core farming activities: planting, irrigation, harvesting, pruning, equipment use
+- The foundation of your Growing Practices category score (30% of total)
 - Most common daily logging events
 
-**Chemical Events (Blue icons):**
-- Focus on input applications and treatments
-- Highest transparency points due to consumer interest
-- Require additional safety and application details
+**Chemical Events:**
+- Fertilizer, pesticide, herbicide, and fungicide applications
+- Consumer interest is highest here — photos are essential
+- Missing photos on chemical events can reduce their transparency value by up to 50%
+
+**Supporting Events:**
+- Soil Management, Pest Management, Weather, Business, and General
+- Round out your transparency story across all weighted categories
 
 ## Event Type Decision Guide
 
@@ -1967,13 +1993,13 @@ If you did multiple activities, Quick Add supports sequential logging:
 3. Select next type → Complete → Submit
 4. Each event adds to transparency score""",
                     "practical_steps": [
-                        "Review the 8 event types and identify which apply to your farm operations",
+                        "Review the 7 event types and identify which apply to your farm operations",
                         "Log one event from each applicable category over the next week",
                         "Practice using the decision flowchart for your next 3 field activities",
                         "Set up Quick Add templates for your most common event types",
                         "Test logging multiple events in one session using batch logging",
                     ],
-                    "transparency_impact": "Choosing the correct event type ensures accurate transparency scoring and provides consumers with properly categorized information about farming practices.",
+
                 },
                 {
                     "title": "Photos That Build Consumer Trust",
@@ -1986,7 +2012,8 @@ If you did multiple activities, Quick Add supports sequential logging:
 
 ### The Trust Multiplier:
 - Photos increase consumer trust by **67%**
-- Events with photos earn **+1-2 bonus transparency points**
+- **Essential events** (chemical applications) lose up to **50%** of their transparency value without photos
+- **Recommended events** (production activities) lose up to **25%** without photos
 - Visual evidence creates emotional connection
 - Timestamped photos prove authenticity
 
@@ -2105,7 +2132,7 @@ Example Consumer View:
                         "Set up your phone camera for quick access during field work",
                         "Take sample photos in different lighting conditions to understand quality",
                     ],
-                    "transparency_impact": "Photos transform text records into visual proof that consumers can see and trust. Events with quality photos consistently achieve higher engagement and trust scores.",
+
                 },
             ]
 
@@ -2121,14 +2148,17 @@ Example Consumer View:
         faqs_data = [
             {
                 "question": "How does transparency scoring actually work?",
-                "answer": """Transparency scoring rewards comprehensive documentation:
+                "answer": """Transparency scoring rewards comprehensive documentation using a weighted category system:
 
-**The More You Log, The Higher Your Score:**
-- Production events (planting, irrigation, harvest): 3-4 points each
-- Chemical applications with photos: 4-5 points each  
-- Equipment operations and maintenance: 2-3 points each
-- Business certifications and audits: 5-10 points each
-- Photo evidence and verification: 1-2 bonus points each
+**Weighted Categories (The More You Log, The Higher Your Score):**
+- Growing Practices (30%): Planting, irrigation, harvest, pruning
+- Treatments & Applications (20%): Fertilizer, pest control, amendments
+- Soil & Land Care (18%): Soil preparation, composting, cover crops
+- Environmental Monitoring (12%): Weather events, climate observations
+- Business & Compliance (10%): Certifications, audits, compliance
+- Photo Evidence (10%): Photos across all events
+
+**Important:** Photos are essential for chemical events — missing them can reduce that event's score contribution by up to 50%.
 
 **Real Impact:** 85%+ transparency scores unlock 15-30% premium pricing opportunities.""",
                 "category": "transparency",
@@ -2167,9 +2197,9 @@ Example Consumer View:
                 "answer": """Quick Add Event is the fastest way to log farm activities:
 
 **3 Ways to Create Events:**
-1. **Smart Templates**: Pre-configured forms for 8 event types
-2. **Voice Capture**: Speak your event details hands-free
-3. **AI Suggestions**: Intelligent recommendations based on your farm
+1. **Smart Templates**: Pre-configured forms for 7 event types with AI-powered crop-specific suggestions
+2. **Voice Capture**: Speak naturally — AI pre-fills key fields from your description
+3. **AI Suggestions**: Intelligent recommendations based on your farm and season
 
 **Simple 4-Step Process:**
 1. Choose creation method (5 seconds)
@@ -2183,27 +2213,23 @@ Example Consumer View:
             },
             {
                 "question": "Which event type should I choose in Quick Add?",
-                "answer": """Quick Add offers 8 event types in two categories:
+                "answer": """Quick Add offers 7 event types:
 
-**Production Events (Green icons):**
-- 🌱 Planting: Seeds, transplants, crop establishment
-- 💧 Irrigation: Watering, drip systems, flood irrigation
-- 🔧 Pruning: Maintenance, thinning, training
-- 📦 Harvest: Crop collection, yield recording
+- 🌱 **Production**: Planting, irrigation, harvesting, pruning, equipment use
+- 🧪 **Chemical**: Fertilizer, pesticide, herbicide, fungicide applications
+- 🌍 **Soil Management**: Soil tests, amendments, compost, cover crops
+- 🐛 **Pest Management**: Pest monitoring, biological controls, IPM
+- 🌦️ **Weather**: Frost, drought, hail, wind, climate observations
+- 📋 **Business**: Certifications, audits, compliance records
+- 📝 **General**: Agronomist visits, field observations, technical notes
 
-**Chemical Events (Blue icons):**
-- 🌿 Fertilization: NPK applications, organic amendments
-- 🐛 Pest Control: IPM, pesticide applications
-- 🌾 Herbicide: Weed management applications
-- 🍄 Fungicide: Disease prevention and treatment
-
-**Quick Decision:** If applying something to crops, use Chemical events. If working with plants directly or managing water, use Production events.""",
+**Quick Decision:** If applying chemicals/fertilizer to crops, use Chemical. If working with plants directly (planting, irrigating, harvesting), use Production. For soil health work, use Soil Management.""",
                 "category": "data_entry",
                 "is_featured": True,
             },
             {
                 "question": "How do I add photos in Quick Add?",
-                "answer": """Adding photos in Quick Add is simple and earns bonus transparency points:
+                "answer": """Adding photos in Quick Add is simple and critical for your transparency score:
 
 **While Creating Event:**
 1. Fill in event details as normal
@@ -2218,28 +2244,29 @@ Example Consumer View:
 - Include product labels for chemical events
 - Show crop condition for production events
 
-**Transparency Bonus:** Events with photos earn +1-2 extra transparency points!""",
+**Why Photos Matter:** Chemical events without photos lose up to 50% of their transparency value. Production events without photos lose up to 25%. Always include photos for the best score.""",
                 "category": "data_entry",
                 "is_featured": False,
             },
             {
                 "question": "Can I use voice to create events in Quick Add?",
-                "answer": """Yes! Voice Capture makes hands-free documentation easy:
+                "answer": """Yes! Voice Capture gives you a head start on documentation:
 
 **How to Use:**
 1. Open Quick Add and tap the microphone icon
 2. Speak naturally: "Applied organic fertilizer to field 3, about 50 pounds per acre"
-3. Trazo AI transcribes and categorizes automatically
-4. Review the generated event details
-5. Add photos if needed and submit
+3. AI pre-fills key fields from your description (typically 4-7 fields)
+4. Review and complete the remaining fields
+5. Add photos (essential for chemical events) and submit
+
+**Important:** Voice pre-fills key fields but does not create a fully documented event. For maximum transparency scores, always review the form, complete all fields, and add photos.
 
 **Voice Tips:**
 - Speak clearly near your phone
 - Include: what, where, how much, why
-- Mention weather or special conditions
-- Works great while operating equipment
+- Always review and add details after voice capture
 
-**Best For:** Field work, busy hands, quick observations, equipment operation.""",
+**Best For:** Getting started fast in the field when your hands are busy.""",
                 "category": "data_entry",
                 "is_featured": False,
             },
@@ -2265,13 +2292,17 @@ Example Consumer View:
             },
             {
                 "question": "How does Quick Add affect my transparency score?",
-                "answer": """Each Quick Add event directly increases your transparency score:
+                "answer": """Each Quick Add event directly increases your transparency score through a weighted category system:
 
-**Points Per Event Type:**
-- Production events (planting, irrigation, harvest): +2-3 points
-- Chemical applications (fertilizer, pest control): +3-4 points
-- With photo evidence: +1-2 bonus points
-- With detailed description: +1 bonus point
+**How Categories Work:**
+- Growing Practices (30%): Planting, irrigation, harvest, pruning events
+- Treatments (20%): Chemical applications — photos essential here
+- Soil & Land Care (18%): Soil management activities
+- Environmental (12%): Weather events and monitoring
+- Business (10%): Certifications and compliance
+- Photo Evidence (10%): Photos across all event types
+
+**Key Tip:** Always add photos to chemical events — missing them reduces their transparency value by up to 50%.
 
 **Weekly Goal for Success:**
 - Log 5-7 events per week for steady growth

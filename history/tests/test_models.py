@@ -354,9 +354,9 @@ class HistoryViewSetTestCase(APITestCase):
         self.parcel = Parcel.objects.create(name="Test Parcel", establishment=self.establishment, area=15.0)
 
         # Set up user roles
-        WorksIn.objects.create(user=self.manager, company=self.company, role=WorksIn.DOMAIN_SUPERVISOR)
+        WorksIn.objects.create(user=self.manager, company=self.company, role=WorksIn.FARM_MANAGER)
 
-        WorksIn.objects.create(user=self.viewer, company=self.company, role=WorksIn.DOMAIN_WORKER)
+        WorksIn.objects.create(user=self.viewer, company=self.company, role=WorksIn.VIEWER)
 
         # Create test history event
         self.history = History.objects.create(

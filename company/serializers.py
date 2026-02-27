@@ -602,8 +602,9 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
         """
         Calculate accurate metrics from backend data
         """
-        from history.models import History, HistoryScan
         from django.utils import timezone
+
+        from history.models import History, HistoryScan
 
         # Get current month date range
         now = timezone.now()
@@ -765,7 +766,9 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
                     else:
                         # No benchmark available - estimate based on carbon score and offsets
                         if total_offsets > 0:
-                            offset_percentage = min(100, (total_offsets / total_emissions) * 100) if total_emissions > 0 else 100
+                            offset_percentage = (
+                                min(100, (total_offsets / total_emissions) * 100) if total_emissions > 0 else 100
+                            )
                             if offset_percentage >= 100:
                                 industry_percentile = int(85 + min(15, ((offset_percentage - 100) / 50) * 15))
                             else:
@@ -785,7 +788,9 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
         transparency_score = sum(transparency_scores) / len(transparency_scores) if transparency_scores else 0
         documentation_completeness = sum(completeness_scores) / len(completeness_scores) if completeness_scores else 0
         carbon_footprint_avg = sum(carbon_footprints) / len(carbon_footprints) if carbon_footprints else 0
-        industry_percentile_avg = int(sum(industry_percentiles) / len(industry_percentiles)) if industry_percentiles else 50
+        industry_percentile_avg = (
+            int(sum(industry_percentiles) / len(industry_percentiles)) if industry_percentiles else 50
+        )
 
         # Determine overall verification level
         verification_level_counts = {}

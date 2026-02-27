@@ -177,7 +177,7 @@ class BlockchainCarbonService:
                         return contract_data["abi"]
             return None
         except Exception as e:
-            print(f"Error loading contract ABI: {e}")
+            self.logger.error("Error loading contract ABI: %s", e)
             return None
 
     def get_carbon_contract_abi(self) -> list:
@@ -226,7 +226,9 @@ class BlockchainCarbonService:
 
     def hash_carbon_data(self, carbon_data: Dict[str, Any]) -> str:
         """
-        Create a SHA-256 hash of carbon data for blockchain storage.
+        Create a keccak256 hash of carbon data for blockchain storage.
+        Uses keccak256 to match the Solidity contract's verifyDataIntegrity().
+        Falls back to SHA-256 in development when web3 is unavailable.
         Includes custom fields when present for immutability guarantee.
         """
         # Create a deterministic hash from carbon data
@@ -248,6 +250,11 @@ class BlockchainCarbonService:
 
         # Sort keys for deterministic hashing
         sorted_data = json.dumps(hash_input, sort_keys=True, separators=(",", ":"))
+        # Use keccak256 to match Solidity contract, fallback to SHA-256 for dev without web3
+        if WEB3_AVAILABLE:
+            raw_hex = Web3.keccak(text=sorted_data).hex()
+            # Strip 0x prefix for consistency with bytes.fromhex() downstream
+            return raw_hex.removeprefix("0x")
         return hashlib.sha256(sorted_data.encode()).hexdigest()
 
     def create_carbon_record(self, production_id: int, carbon_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -300,56 +307,66 @@ class BlockchainCarbonService:
             producer_id = carbon_data.get("producer_id", production_id)
             crop_type = carbon_data.get("crop_type", "general")
 
+            # Gas price for Polygon Amoy (minimum 25 gwei)
+            gas_price = self.web3.to_wei("30", "gwei")
+
             # Check if producer is registered, if not register them first
             try:
                 producer_info = self.contract.functions.getProducer(producer_id).call()
                 if producer_info[0] == "0x0000000000000000000000000000000000000000":  # Not registered
                     # Register producer first
+                    nonce = self.web3.eth.get_transaction_count(self.account.address)
                     register_tx = self.contract.functions.registerProducer(
                         producer_id, self.account.address
-                    ).buildTransaction(
+                    ).build_transaction(
                         {
                             "from": self.account.address,
-                            "gas": 100000,
-                            "gasPrice": self.web3.toWei("2", "gwei"),  # Lower gas price for Polygon
-                            "nonce": self.web3.eth.getTransactionCount(self.account.address),
+                            "gas": 300000,
+                            "gasPrice": gas_price,
+                            "nonce": nonce,
+                            "chainId": self.web3.eth.chain_id,
                         }
                     )
 
-                    signed_register = self.web3.eth.account.signTransaction(register_tx, self.account.privateKey)
-                    register_hash = self.web3.eth.sendRawTransaction(signed_register.rawTransaction)
-                    self.web3.eth.waitForTransactionReceipt(register_hash, timeout=120)
-                    print(f"Producer {producer_id} registered successfully")
+                    blockchain_private_key = get_secure_blockchain_key()
+                    signed_register = self.web3.eth.account.sign_transaction(register_tx, blockchain_private_key)
+                    register_hash = self.web3.eth.send_raw_transaction(signed_register.raw_transaction)
+                    self.web3.eth.wait_for_transaction_receipt(register_hash, timeout=120)
+                    self.logger.info("Producer %s registered successfully", producer_id)
             except Exception as e:
-                print(f"Producer registration check failed: {e}")
+                self.logger.warning("Producer registration check failed: %s", e)
 
             # Build the monthly summary transaction
+            nonce = self.web3.eth.get_transaction_count(self.account.address)
             transaction = self.contract.functions.recordMonthlySummary(
                 hash_bytes, producer_id, production_id, total_emissions, total_offsets, crop_type
-            ).buildTransaction(
+            ).build_transaction(
                 {
                     "from": self.account.address,
-                    "gas": 300000,  # Higher gas limit for complex transaction
-                    "gasPrice": self.web3.toWei("2", "gwei"),  # Polygon gas price
-                    "nonce": self.web3.eth.getTransactionCount(self.account.address),
+                    "gas": 500000,  # ReentrancyGuard + AccessControl + storage needs ~400k
+                    "gasPrice": gas_price,
+                    "nonce": nonce,
+                    "chainId": self.web3.eth.chain_id,
                 }
             )
 
             # Sign and send transaction
-            # Get private key securely for transaction signing
             blockchain_private_key = get_secure_blockchain_key()
-            signed_txn = self.web3.eth.account.signTransaction(transaction, blockchain_private_key)
-            tx_hash = self.web3.eth.sendRawTransaction(signed_txn.rawTransaction)
+            signed_txn = self.web3.eth.account.sign_transaction(transaction, blockchain_private_key)
+            tx_hash = self.web3.eth.send_raw_transaction(signed_txn.raw_transaction)
 
             # Wait for transaction receipt
-            receipt = self.web3.eth.waitForTransactionReceipt(tx_hash, timeout=120)
+            receipt = self.web3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
+
+            # Ensure 0x prefix for consistency
+            tx_hex = tx_hash.hex() if tx_hash.hex().startswith("0x") else f"0x{tx_hash.hex()}"
 
             return {
-                "transaction_hash": tx_hash.hex(),
+                "transaction_hash": tx_hex,
                 "record_hash": record_hash,
                 "block_number": receipt["blockNumber"],
                 "gas_used": receipt["gasUsed"],
-                "verification_url": f"{self.explorer_url}/tx/{tx_hash.hex()}",
+                "verification_url": f"{self.explorer_url}/tx/{tx_hex}",
                 "blockchain_verified": True,
                 "network": self.network_name,
                 "contract_address": self.contract.address,
@@ -458,20 +475,23 @@ class BlockchainCarbonService:
                 # Convert credits to wei
                 credits_wei = int(credits * 1000)
 
-                transaction = self.contract.functions.issueCredits(production_id, credits_wei).buildTransaction(
+                gas_price = self.web3.to_wei("30", "gwei")
+                nonce = self.web3.eth.get_transaction_count(self.account.address)
+                transaction = self.contract.functions.issueCredits(production_id, credits_wei).build_transaction(
                     {
                         "from": self.account.address,
                         "gas": 100000,
-                        "gasPrice": self.web3.toWei("20", "gwei"),
-                        "nonce": self.web3.eth.getTransactionCount(self.account.address),
+                        "gasPrice": gas_price,
+                        "nonce": nonce,
+                        "chainId": self.web3.eth.chain_id,
                     }
                 )
 
                 # Get private key securely for transaction signing
                 blockchain_private_key = get_secure_blockchain_key()
-                signed_txn = self.web3.eth.account.signTransaction(transaction, blockchain_private_key)
-                tx_hash = self.web3.eth.sendRawTransaction(signed_txn.rawTransaction)
-                receipt = self.web3.eth.waitForTransactionReceipt(tx_hash, timeout=120)
+                signed_txn = self.web3.eth.account.sign_transaction(transaction, blockchain_private_key)
+                tx_hash = self.web3.eth.send_raw_transaction(signed_txn.raw_transaction)
+                receipt = self.web3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
 
                 return {
                     "success": True,
@@ -498,7 +518,8 @@ class BlockchainCarbonService:
 
     def submit_monthly_summary(self, producer_id, production_id, total_co2e, data_hash, raw_data):
         """
-        Submit monthly carbon summary to blockchain
+        Submit monthly carbon summary to blockchain.
+        Calls recordMonthlySummary(bytes32, uint256, uint256, uint256, uint256, string) on the contract.
         """
         try:
             if not self._is_blockchain_ready():
@@ -517,32 +538,76 @@ class BlockchainCarbonService:
             # Convert data hash to bytes32
             hash_bytes = bytes.fromhex(data_hash)
 
+            # Gas price for Polygon Amoy (minimum 25 gwei)
+            gas_price = self.web3.to_wei("30", "gwei")
+
             self.logger.info(
                 f"Submitting monthly summary: producer={producer_id}, production={production_id}, co2e={total_co2e_grams}g"
             )
 
-            # Call smart contract function
-            transaction = self._create_blockchain_transaction(
-                "recordMonthlySummary", hash_bytes, producer_id, production_id, total_co2e_grams
+            # Check if producer is registered, if not register them first
+            try:
+                producer_info = self.contract.functions.getProducer(producer_id).call()
+                if producer_info[0] == "0x0000000000000000000000000000000000000000":
+                    nonce = self.web3.eth.get_transaction_count(self.account.address)
+                    register_tx = self.contract.functions.registerProducer(
+                        producer_id, self.account.address
+                    ).build_transaction(
+                        {
+                            "from": self.account.address,
+                            "gas": 300000,
+                            "gasPrice": gas_price,
+                            "nonce": nonce,
+                            "chainId": self.web3.eth.chain_id,
+                        }
+                    )
+                    blockchain_private_key = get_secure_blockchain_key()
+                    signed = self.web3.eth.account.sign_transaction(register_tx, blockchain_private_key)
+                    reg_hash = self.web3.eth.send_raw_transaction(signed.raw_transaction)
+                    self.web3.eth.wait_for_transaction_receipt(reg_hash, timeout=120)
+                    self.logger.info(f"Producer {producer_id} registered successfully")
+            except Exception as e:
+                self.logger.warning(f"Producer registration check failed: {e}")
+
+            # Build the recordMonthlySummary transaction
+            # Contract signature: recordMonthlySummary(bytes32, uint256, uint256, uint256, uint256, string)
+            crop_type = raw_data.get("crop_type", "general") if isinstance(raw_data, dict) else "general"
+            nonce = self.web3.eth.get_transaction_count(self.account.address)
+            transaction = self.contract.functions.recordMonthlySummary(
+                hash_bytes, producer_id, production_id, total_co2e_grams, 0, crop_type
+            ).build_transaction(
+                {
+                    "from": self.account.address,
+                    "gas": 500000,
+                    "gasPrice": gas_price,
+                    "nonce": nonce,
+                    "chainId": self.web3.eth.chain_id,
+                }
             )
 
-            if transaction:
-                # Store raw data off-chain (encrypted)
-                self._store_encrypted_data(transaction["transactionHash"].hex(), raw_data)
+            # Sign and send
+            blockchain_private_key = get_secure_blockchain_key()
+            signed_txn = self.web3.eth.account.sign_transaction(transaction, blockchain_private_key)
+            tx_hash = self.web3.eth.send_raw_transaction(signed_txn.raw_transaction)
+            receipt = self.web3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
 
-                return {
-                    "success": True,
-                    "transaction_hash": transaction["transactionHash"].hex(),
-                    "block_number": transaction["blockNumber"],
-                    "gas_used": transaction["gasUsed"],
-                    "producer_id": producer_id,
-                    "production_id": production_id,
-                    "total_co2e": total_co2e,
-                    "data_hash": data_hash,
-                    "explorer_url": f"{self.explorer_url}/tx/{transaction['transactionHash'].hex()}",
-                }
-            else:
-                return None
+            # Ensure 0x prefix
+            tx_hex = tx_hash.hex() if tx_hash.hex().startswith("0x") else f"0x{tx_hash.hex()}"
+
+            self.logger.info(f"Monthly summary submitted: tx={tx_hex}, block={receipt['blockNumber']}")
+
+            return {
+                "success": True,
+                "transaction_hash": tx_hex,
+                "block_number": receipt["blockNumber"],
+                "gas_used": receipt["gasUsed"],
+                "producer_id": producer_id,
+                "production_id": production_id,
+                "total_co2e": total_co2e,
+                "data_hash": data_hash,
+                "network": self.network_name,
+                "explorer_url": f"{self.explorer_url}/tx/{tx_hex}",
+            }
 
         except Exception as e:
             self.logger.error(f"Error submitting monthly summary: {str(e)}")
@@ -567,9 +632,55 @@ class BlockchainCarbonService:
             "production_id": production_id,
             "total_co2e": total_co2e,
             "data_hash": data_hash,
-            "explorer_url": f"https://amoy.polygonscan.com/tx/{mock_hash}",
+            "explorer_url": f"{self.explorer_url}/tx/{mock_hash}",
             "mock": True,
         }
+
+    def read_on_chain_record(self, production_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Read the immutable CarbonRecord from the smart contract.
+
+        Calls getCarbonRecord(productionId) which is a free view call (no gas).
+        Returns the stored dataHash (bytes32) and other record fields, or None
+        if the production has no on-chain record.
+        """
+        try:
+            if not self._is_blockchain_ready() or not self.contract:
+                self.logger.info("Blockchain not available for on-chain read")
+                return None
+
+            record = self.contract.functions.getCarbonRecord(production_id).call()
+
+            # getCarbonRecord returns a tuple matching CarbonRecord struct:
+            # (dataHash, producerId, productionId, totalEmissions, totalOffsets,
+            #  netFootprint, entryCount, cropType, timestamp, usdaCompliant,
+            #  creditsIssued, creditsAmount)
+            data_hash_bytes = record[0]  # bytes32
+            timestamp = record[8]
+
+            # A zero timestamp means no record exists for this production
+            if timestamp == 0:
+                return None
+
+            # Convert bytes32 to hex string (no 0x prefix, matching our hash format)
+            data_hash_hex = data_hash_bytes.hex()
+
+            return {
+                "data_hash": data_hash_hex,
+                "producer_id": record[1],
+                "production_id": record[2],
+                "total_emissions": record[3],
+                "total_offsets": record[4],
+                "net_footprint": record[5],
+                "entry_count": record[6],
+                "crop_type": record[7],
+                "timestamp": timestamp,
+                "usda_compliant": record[9],
+            }
+
+        except Exception as e:
+            self.logger.error(f"Error reading on-chain record for production {production_id}: {e}")
+            return None
 
     def _store_encrypted_data(self, transaction_hash, raw_data):
         """

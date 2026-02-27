@@ -61,7 +61,7 @@ class InvitationFlowTestCase(APITestCase):
         # Create WorksIn relationships
         WorksIn.objects.create(user=self.admin_user, company=self.company_a, role=WorksIn.COMPANY_ADMIN)
 
-        WorksIn.objects.create(user=self.existing_user, company=self.company_a, role=WorksIn.DOMAIN_WORKER)
+        WorksIn.objects.create(user=self.existing_user, company=self.company_a, role=WorksIn.VIEWER)
 
     def test_create_invitation(self):
         """Test creating an invitation"""
@@ -70,7 +70,7 @@ class InvitationFlowTestCase(APITestCase):
         data = {
             "email": "newuser@test.com",
             "invitee_name": "New User",
-            "role": "DW",
+            "role": "VW",
             "message": "Join our team!",
             "establishments": [self.establishment_a.id],
         }
@@ -81,7 +81,7 @@ class InvitationFlowTestCase(APITestCase):
         # Verify invitation was created
         invitation = CompanyInvitation.objects.get(email="newuser@test.com")
         self.assertEqual(invitation.company, self.company_a)
-        self.assertEqual(invitation.role, "DW")
+        self.assertEqual(invitation.role, "VW")
         self.assertEqual(invitation.inviter, self.admin_user)
 
     def test_invitation_for_existing_user_company_transfer(self):
@@ -100,7 +100,7 @@ class InvitationFlowTestCase(APITestCase):
         data = {
             "email": "existing@user.com",
             "invitee_name": "Existing User",
-            "role": "DS",
+            "role": "FM",
             "message": "Come join Company B!",
             "establishments": [self.establishment_b.id],
         }
@@ -119,7 +119,7 @@ class InvitationFlowTestCase(APITestCase):
             email="existing@user.com",
             invitee_name="Existing User",
             company=self.company_b,
-            role="DS",
+            role="FM",
             inviter=self.admin_user,
             invitation_message="Join Company B!",
         )
@@ -137,7 +137,7 @@ class InvitationFlowTestCase(APITestCase):
 
         # Verify new role
         new_membership = WorksIn.objects.get(user=self.existing_user, company=self.company_b)
-        self.assertEqual(new_membership.role, "DS")
+        self.assertEqual(new_membership.role, "FM")
 
     def test_accept_invitation_unauthenticated_user(self):
         """Test accepting invitation for unauthenticated user"""
@@ -145,7 +145,7 @@ class InvitationFlowTestCase(APITestCase):
             email="newuser@test.com",
             invitee_name="New User",
             company=self.company_a,
-            role="DW",
+            role="VW",
             inviter=self.admin_user,
         )
 
@@ -159,7 +159,7 @@ class InvitationFlowTestCase(APITestCase):
     def test_rate_limiting_invitation_acceptance(self):
         """Test rate limiting on invitation acceptance"""
         invitation = CompanyInvitation.objects.create(
-            email="test@test.com", company=self.company_a, role="DW", inviter=self.admin_user
+            email="test@test.com", company=self.company_a, role="VW", inviter=self.admin_user
         )
 
         # Clear cache first
@@ -184,7 +184,7 @@ class InvitationFlowTestCase(APITestCase):
         invitation = CompanyInvitation.objects.create(
             email="expired@test.com",
             company=self.company_a,
-            role="DW",
+            role="VW",
             inviter=self.admin_user,
             expires_at=timezone.now() - timedelta(days=1),  # Expired yesterday
         )
@@ -213,7 +213,7 @@ class CompanyCodeJoinTestCase(APITestCase):
             name="Other Company", contact_phone="0987654321", invitation_code="OTHERCO"
         )
 
-        WorksIn.objects.create(user=self.existing_user, company=self.other_company, role=WorksIn.DOMAIN_WORKER)
+        WorksIn.objects.create(user=self.existing_user, company=self.other_company, role=WorksIn.VIEWER)
 
     def test_signup_with_valid_company_code(self):
         """Test signing up with a valid company code"""
@@ -235,7 +235,7 @@ class CompanyCodeJoinTestCase(APITestCase):
 
         # Verify default role
         membership = WorksIn.objects.get(user=user, company=self.company)
-        self.assertEqual(membership.role, WorksIn.DOMAIN_WORKER)
+        self.assertEqual(membership.role, WorksIn.VIEWER)
 
     def test_signup_with_invalid_company_code(self):
         """Test signing up with invalid company code"""
@@ -390,7 +390,7 @@ class EdgeCaseTestCase(APITestCase):
     def test_concurrent_invitation_acceptance(self):
         """Test handling of concurrent invitation acceptance"""
         invitation = CompanyInvitation.objects.create(
-            email="test@test.com", company=self.company, role="DW", inviter_id=1  # Assume admin exists
+            email="test@test.com", company=self.company, role="VW", inviter_id=1  # Assume admin exists
         )
 
         # This would require more complex testing with threading

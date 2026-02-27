@@ -302,7 +302,7 @@ class Command(BaseCommand):
                         fuel_amount = data.get("fuel_consumption", 0)
 
                         if fuel_amount > 0:
-                            co2e_amount = fuel_amount * 2.68  # Diesel emission factor
+                            co2e_amount = fuel_amount * 2.70  # Diesel emission factor
 
                             carbon_entry = self.create_iot_carbon_entry(
                                 device, data_point, fuel_amount, co2e_amount, user
@@ -330,7 +330,7 @@ class Command(BaseCommand):
                 defaults={
                     "category": "iot_fuel",
                     "unit": "liters",
-                    "default_emission_factor": 2.68,
+                    "default_emission_factor": 2.70,
                     "description": "Real-time fuel consumption from IoT devices",
                     "usda_verified": True,
                     "usda_factors_based": True,

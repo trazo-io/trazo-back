@@ -22,7 +22,7 @@ class CarbonFootprintCalculator:
             "fuel": {
                 "diesel": emission_factors.get_fuel_factor("diesel")["value"],
                 "gasoline": emission_factors.get_fuel_factor("gasoline")["value"],
-                "lpg": emission_factors.get_fuel_factor("lpg")["value"],
+                "propane": emission_factors.get_fuel_factor("propane")["value"],
             },
             "electricity": {
                 "grid": emission_factors.get_electricity_factor("grid")["value"],

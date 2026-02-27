@@ -85,11 +85,7 @@ def get_bulk_event_counts(history_ids):
 
     for EventModel in event_models:
         # Single query per event type with aggregation
-        counts = (
-            EventModel.objects.filter(history_id__in=history_ids)
-            .values("history_id")
-            .annotate(count=Count("id"))
-        )
+        counts = EventModel.objects.filter(history_id__in=history_ids).values("history_id").annotate(count=Count("id"))
         for item in counts:
             event_counts[item["history_id"]] += item["count"]
 

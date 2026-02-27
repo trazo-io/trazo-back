@@ -19,16 +19,16 @@ logger = logging.getLogger(__name__)
 from backend.constants import EngagementMilestones, get_carbon_score_from_co2e
 
 from .models import (
+    BusinessEvent,
+    ChemicalEvent,
+    EquipmentEvent,
+    GeneralEvent,
     History,
     HistoryScan,
-    WeatherEvent,
-    ChemicalEvent,
-    ProductionEvent,
-    GeneralEvent,
-    EquipmentEvent,
-    SoilManagementEvent,
     PestManagementEvent,
-    BusinessEvent,
+    ProductionEvent,
+    SoilManagementEvent,
+    WeatherEvent,
 )
 from .models_consumer import UserFavorite, UserImpactSummary, UserProductComparison, UserShoppingGoal
 from .serializers_consumer import (
@@ -123,11 +123,7 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
         }
 
         total_time = time.time() - total_start
-        print(
-            f"[IMPACT_DASHBOARD] Total time: {total_time:.3f}s | "
-            f"Timings: {timings}",
-            flush=True
-        )
+        print(f"[IMPACT_DASHBOARD] Total time: {total_time:.3f}s | " f"Timings: {timings}", flush=True)
 
         return Response(dashboard_data)
 
@@ -218,35 +214,35 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
                 # Prefetch all 8 event types with albums and images
                 Prefetch(
                     "history_weatherevent_events",
-                    queryset=WeatherEvent.objects.select_related("album").prefetch_related("album__images")
+                    queryset=WeatherEvent.objects.select_related("album").prefetch_related("album__images"),
                 ),
                 Prefetch(
                     "history_chemicalevent_events",
-                    queryset=ChemicalEvent.objects.select_related("album").prefetch_related("album__images")
+                    queryset=ChemicalEvent.objects.select_related("album").prefetch_related("album__images"),
                 ),
                 Prefetch(
                     "history_productionevent_events",
-                    queryset=ProductionEvent.objects.select_related("album").prefetch_related("album__images")
+                    queryset=ProductionEvent.objects.select_related("album").prefetch_related("album__images"),
                 ),
                 Prefetch(
                     "history_generalevent_events",
-                    queryset=GeneralEvent.objects.select_related("album").prefetch_related("album__images")
+                    queryset=GeneralEvent.objects.select_related("album").prefetch_related("album__images"),
                 ),
                 Prefetch(
                     "history_equipmentevent_events",
-                    queryset=EquipmentEvent.objects.select_related("album").prefetch_related("album__images")
+                    queryset=EquipmentEvent.objects.select_related("album").prefetch_related("album__images"),
                 ),
                 Prefetch(
                     "history_soilmanagementevent_events",
-                    queryset=SoilManagementEvent.objects.select_related("album").prefetch_related("album__images")
+                    queryset=SoilManagementEvent.objects.select_related("album").prefetch_related("album__images"),
                 ),
                 Prefetch(
                     "history_pestmanagementevent_events",
-                    queryset=PestManagementEvent.objects.select_related("album").prefetch_related("album__images")
+                    queryset=PestManagementEvent.objects.select_related("album").prefetch_related("album__images"),
                 ),
                 Prefetch(
                     "history_businessevent_events",
-                    queryset=BusinessEvent.objects.select_related("album").prefetch_related("album__images")
+                    queryset=BusinessEvent.objects.select_related("album").prefetch_related("album__images"),
                 ),
             )
         )
@@ -361,8 +357,9 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
         # Calculate real carbon offset based on actual carbon entries
         # OPTIMIZED: Use single query with aggregation instead of N+1 queries
         t0 = time.time()
-        from carbon.models import CarbonEntry
         from django.db.models import Case, DecimalField, F, Sum, When
+
+        from carbon.models import CarbonEntry
 
         # Get all production IDs from user's scans
         production_ids = HistoryScan.objects.filter(user=user).values_list("history_id", flat=True)
@@ -444,7 +441,7 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
         print(
             f"[IMPACT_DASHBOARD] _update_impact_summary total: {total_update_time:.3f}s | "
             f"Details: {update_timings}",
-            flush=True
+            flush=True,
         )
 
     def _get_retailer_recommendations(self):

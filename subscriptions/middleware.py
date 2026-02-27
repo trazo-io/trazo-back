@@ -1,4 +1,9 @@
+import logging
+
+from django.db.models import F
 from django.utils.functional import SimpleLazyObject
+
+logger = logging.getLogger(__name__)
 
 
 class SubscriptionMiddleware:
@@ -36,10 +41,29 @@ class UsageTrackingMiddleware:
             try:
                 company = request.user.active_company
                 if company and hasattr(company, "subscription"):
-                    company.subscription.scan_count += 1
-                    company.subscription.save(update_fields=["scan_count"])
+                    subscription = company.subscription
+                    plan_features = {}
+                    if hasattr(subscription, "plan") and subscription.plan:
+                        plan_features = subscription.plan.features or {}
+
+                    monthly_limit = plan_features.get("monthly_scan_limit", -1)
+
+                    # Only increment if under the limit (-1 = unlimited)
+                    if monthly_limit == -1 or subscription.scan_count < monthly_limit:
+                        from subscriptions.models import Subscription
+
+                        Subscription.objects.filter(
+                            id=subscription.id,
+                        ).update(scan_count=F("scan_count") + 1)
+                    else:
+                        logger.info(
+                            "Scan limit reached for company %s (limit=%d, count=%d). "
+                            "Analytics paused, QR page still accessible.",
+                            company.name,
+                            monthly_limit,
+                            subscription.scan_count,
+                        )
             except Exception as e:
-                # Log error but don't fail the request
-                print(f"Error tracking scan usage: {str(e)}")
+                logger.error("Error tracking scan usage: %s", str(e))
 
         return response

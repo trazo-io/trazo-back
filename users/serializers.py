@@ -265,13 +265,12 @@ class RegisterSerializer(BasicUserSerializer):
                     }
                 )
 
-            # Create WorksIn relationship with default role (Domain Worker)
+            # Create WorksIn relationship with default role (Viewer for code-based joins)
             works_in = WorksIn.objects.create(
-                user=user, company=company, role=WorksIn.DOMAIN_WORKER  # Default role for code-based joins
+                user=user, company=company, role=WorksIn.VIEWER  # Default role for code-based joins
             )
 
-            # 🚀 2025 Best Practice: Auto-assign Domain Workers to all company establishments
-            # This ensures they can immediately access existing operations
+            # Auto-assign to all company establishments for code-based joins
             from company.models import Establishment
 
             company_establishments = Establishment.objects.filter(company=company)
@@ -402,8 +401,8 @@ class InvitationCreateSerializer(serializers.Serializer):
     email = serializers.EmailField()
     invitee_name = serializers.CharField(max_length=100, required=False, allow_blank=True)
     role = serializers.ChoiceField(
-        choices=[("CA", "Company Admin"), ("DS", "Domain Supervisor"), ("DW", "Domain Worker"), ("DE", "Dealer")],
-        default="DW",
+        choices=[("CA", "Company Admin"), ("FM", "Farm Manager"), ("VW", "Viewer")],
+        default="FM",
     )
     message = serializers.CharField(max_length=500, required=False, allow_blank=True)
 

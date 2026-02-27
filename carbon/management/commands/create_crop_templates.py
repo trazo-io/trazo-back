@@ -69,7 +69,7 @@ class Command(BaseCommand):
                 "description": "Fuel consumption for citrus pruning operations",
                 "unit": "liters diesel",
                 "category": "Fuel",
-                "default_emission_factor": 2.68,  # kg CO2e per liter diesel
+                "default_emission_factor": 2.70,  # kg CO2e per liter diesel
                 "usda_verified": True,
             },
             {
@@ -94,7 +94,7 @@ class Command(BaseCommand):
                 "description": "Mechanical shaker and sweeper fuel consumption",
                 "unit": "liters diesel",
                 "category": "Fuel",
-                "default_emission_factor": 2.68,
+                "default_emission_factor": 2.70,
                 "usda_verified": True,
             },
             {
@@ -111,7 +111,7 @@ class Command(BaseCommand):
                 "description": "Tractor fuel for planting operations",
                 "unit": "liters diesel",
                 "category": "Fuel",
-                "default_emission_factor": 2.68,
+                "default_emission_factor": 2.70,
                 "usda_verified": True,
             },
             {
@@ -144,7 +144,7 @@ class Command(BaseCommand):
                 "description": "Combine harvester fuel consumption",
                 "unit": "liters diesel",
                 "category": "Fuel",
-                "default_emission_factor": 2.68,
+                "default_emission_factor": 2.70,
                 "usda_verified": True,
             },
             {

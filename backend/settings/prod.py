@@ -40,12 +40,11 @@ else:
         host = database_host
         port = config("DATABASE_PORT", default="5432")
 
-    # Debug output
-    print(f"=== DATABASE CONFIG DEBUG ===")
-    print(f"DATABASE_HOST raw: {database_host}")
-    print(f"Parsed host: {host}")
-    print(f"Parsed port: {port}")
-    print(f"=== END DEBUG ===")
+    import logging as _logging
+
+    _logging.getLogger(__name__).debug(
+        "Database connection: host=%s port=%s (raw DATABASE_HOST=%s)", host, port, database_host
+    )
 
     DATABASES = {
         "default": {
@@ -73,9 +72,11 @@ for host in additional_hosts:
     if host and host not in ALLOWED_HOSTS:
         ALLOWED_HOSTS.append(host)
 
-# Add wildcard hosts
+# Add wildcard hosts for PaaS platforms
 if "*.railway.app" not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append("*.railway.app")
+if "*.ondigitalocean.app" not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append("*.ondigitalocean.app")
 
 CSRF_TRUSTED_ORIGINS = [
     "https://*.trazo.io",
@@ -128,8 +129,14 @@ X_FRAME_OPTIONS = "DENY"
 SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-SERVER_EMAIL = os.environ.get("FROM_EMAIL_ADDRESS", "osmunogue@gmail.com")
-DEFAULT_FROM_EMAIL = config("FROM_EMAIL_ADDRESS", "osmunogue@gmail.com")
+SERVER_EMAIL = os.environ.get("FROM_EMAIL_ADDRESS", "noreply@trazo.io")
+DEFAULT_FROM_EMAIL = config("FROM_EMAIL_ADDRESS", default="noreply@trazo.io")
+
+# Frontend URL for email links (CTA buttons, upgrade links)
+FRONTEND_URL = config("FRONTEND_URL", default="https://app.trazo.io")
+
+# Support email shown in email body copy (distinct from envelope sender)
+SUPPORT_EMAIL = config("SUPPORT_EMAIL", default="hello@trazo.io")
 
 SENDGRID_API_KEY = config("SENDGRID_API_KEY", default=None)
 

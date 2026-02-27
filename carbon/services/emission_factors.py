@@ -166,40 +166,40 @@ class EmissionFactorsRegistry:
     # Reference: USDA Energy Efficiency and Conservation Guidelines
     FUEL_FACTORS = {
         "diesel": {
-            "value": 2.68,  # kg CO2e per liter
+            "value": 2.70,  # kg CO2e per liter (10.21 kg/gal ÷ 3.78541 L/gal)
             "unit": "kg CO2e per liter",
-            "source": "EPA Emission Factors for GHG Inventories 2023",
-            "reference": "USDA Energy Efficiency and Conservation Guidelines",
+            "source": "EPA 40 CFR Part 98 Table C-1",
+            "reference": "0.138 mmBtu/gal × 73.96 kg CO₂/mmBtu = 10.21 kg/gal",
             "confidence": "high",
-            "last_verified": "2024-12-27",
-            "notes": "Combustion emissions for agricultural diesel fuel",
+            "last_verified": "2026-02-15",
+            "notes": "Mobile combustion emissions for agricultural diesel fuel",
         },
         "gasoline": {
-            "value": 2.31,  # kg CO2e per liter
+            "value": 2.32,  # kg CO2e per liter (8.78 kg/gal ÷ 3.78541 L/gal)
             "unit": "kg CO2e per liter",
-            "source": "EPA Emission Factors for GHG Inventories 2023",
-            "reference": "USDA Energy Efficiency and Conservation Guidelines",
+            "source": "EPA 40 CFR Part 98 Table C-1",
+            "reference": "0.125 mmBtu/gal × 70.22 kg CO₂/mmBtu = 8.78 kg/gal",
             "confidence": "high",
-            "last_verified": "2024-12-27",
-            "notes": "Combustion emissions for gasoline engines",
+            "last_verified": "2026-02-15",
+            "notes": "Combustion emissions for motor gasoline engines",
         },
         "natural_gas": {
-            "value": 2.03,  # kg CO2e per m³
+            "value": 1.92,  # kg CO2e per m³ (0.0544 kg/scf × 35.3147 scf/m³)
             "unit": "kg CO2e per m³",
-            "source": "EPA Emission Factors for GHG Inventories 2023",
-            "reference": "USDA Energy Efficiency and Conservation Guidelines",
+            "source": "EPA 40 CFR Part 98 Table C-1",
+            "reference": "0.001026 mmBtu/scf × 53.06 kg CO₂/mmBtu = 0.0544 kg/scf",
             "confidence": "high",
-            "last_verified": "2024-12-27",
+            "last_verified": "2026-02-15",
             "notes": "Natural gas combustion for heating and processing",
         },
-        "lpg": {
-            "value": 1.70,  # kg CO2e per liter
+        "propane": {
+            "value": 1.51,  # kg CO2e per liter (5.72 kg/gal ÷ 3.78541 L/gal)
             "unit": "kg CO2e per liter",
-            "source": "EPA Emission Factors for GHG Inventories 2023",
-            "reference": "USDA Energy Efficiency and Conservation Guidelines",
+            "source": "EPA 40 CFR Part 98 Table C-1",
+            "reference": "0.091 mmBtu/gal × 62.87 kg CO₂/mmBtu = 5.72 kg/gal",
             "confidence": "high",
-            "last_verified": "2024-12-27",
-            "notes": "Liquefied petroleum gas combustion emissions",
+            "last_verified": "2026-02-15",
+            "notes": "Propane/LPG combustion emissions",
         },
     }
 
@@ -500,14 +500,14 @@ class EmissionFactorsRegistry:
             "impact_type": "carbon_sequestration",
         },
         "soil_test": {
-            "value": 0.05,  # kg CO2e per hectare (minimal impact)
+            "value": 0.0,  # kg CO2e per hectare — no direct operational emissions
             "unit": "kg CO2e per hectare",
-            "source": "USDA-ARS Soil Testing Research 2025",
-            "reference": "Soil sampling and laboratory analysis carbon footprint",
-            "confidence": "medium",
-            "last_verified": "2025-01-24",
-            "notes": "Minimal emissions from soil sampling, transportation, and lab analysis",
-            "impact_type": "minimal_emissions",
+            "source": "Trazo methodology: direct operational emissions only",
+            "reference": "Soil sampling uses manual tools (auger/probe) with no combustion. Lab analysis is Scope 3 (excluded).",
+            "confidence": "high",
+            "last_verified": "2025-02-21",
+            "notes": "Zero area-based emissions. If fuel is used (ATV/truck), it is captured separately via fuel_consumed field.",
+            "impact_type": "zero_direct_emissions",
         },
         "ph_adjustment": {
             "value": 0.3,  # kg CO2e per hectare (base application fuel emissions)
@@ -629,7 +629,7 @@ class EmissionFactorsRegistry:
         Get USDA-verified fuel emission factor for a specific fuel type.
 
         Args:
-            fuel_type (str): Fuel type ('diesel', 'gasoline', 'natural_gas', 'lpg')
+            fuel_type (str): Fuel type ('diesel', 'gasoline', 'natural_gas', 'propane')
 
         Returns:
             Dict containing factor value, metadata, and source information
@@ -785,8 +785,7 @@ class EmissionFactorsRegistry:
         factor_data["accessed_at"] = datetime.now().isoformat()
 
         logger.info(
-            f"Retrieved IPCC lime dissolution factor for {lime_type}: "
-            f"{factor_data['value']} {factor_data['unit']}"
+            f"Retrieved IPCC lime dissolution factor for {lime_type}: " f"{factor_data['value']} {factor_data['unit']}"
         )
         return factor_data
 
@@ -960,9 +959,10 @@ class EmissionFactorsRegistry:
         for use_type, data in cls.WATER_FACTORS.items():
             factors[f"water_{use_type}"] = data["value"]
 
-        # Add soil management factors
+        # Add soil management factors (skip nested dicts like tillage_soil_flux, lime_dissolution)
         for mgmt_type, data in cls.SOIL_MANAGEMENT_FACTORS.items():
-            factors[f"soil_{mgmt_type}"] = data["value"]
+            if isinstance(data, dict) and "value" in data:
+                factors[f"soil_{mgmt_type}"] = data["value"]
 
         logger.info(f"Retrieved {len(factors)} emission factors for backward compatibility")
         return factors
@@ -989,6 +989,10 @@ class EmissionFactorsRegistry:
             validation_results["categories"].append(category_name)
 
             for factor_name, factor_data in factors.items():
+                # Skip nested dict entries (e.g., tillage_soil_flux, lime_dissolution)
+                if not isinstance(factor_data, dict) or "value" not in factor_data:
+                    continue
+
                 validation_results["factor_count"] += 1
 
                 # Validate required fields
@@ -1973,5 +1977,5 @@ def get_usda_fuel_factors() -> Dict[str, float]:
         "diesel": factors["diesel"],
         "gasoline": factors["gasoline"],
         "natural_gas": factors["natural_gas"],
-        "lpg": factors["lpg"],
+        "propane": factors["propane"],
     }

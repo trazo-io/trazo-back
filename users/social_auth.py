@@ -13,6 +13,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from .models_invitation import CompanyInvitation
 from .serializers import BasicUserSerializer
 
 User = get_user_model()
@@ -30,6 +31,7 @@ class SocialAuthView(APIView):
         access_token = request.data.get("access_token")
         id_token = request.data.get("id_token")  # For Apple Sign In
         user_type = request.data.get("user_type", 4)  # Default to producer
+        invitation_code = request.data.get("invitation_code")
 
         if not provider:
             return Response({"error": "Provider is required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -37,15 +39,67 @@ class SocialAuthView(APIView):
         if provider == "google":
             # Google can send either access_token or id_token
             token = access_token or id_token
-            return self.handle_google_auth(token, user_type)
+            return self.handle_google_auth(token, user_type, invitation_code)
         elif provider == "facebook":
-            return self.handle_facebook_auth(access_token, user_type)
+            return self.handle_facebook_auth(access_token, user_type, invitation_code)
         elif provider == "apple":
-            return self.handle_apple_auth(id_token, request.data, user_type)
+            return self.handle_apple_auth(id_token, request.data, user_type, invitation_code)
         else:
             return Response({"error": "Invalid provider"}, status=status.HTTP_400_BAD_REQUEST)
 
-    def handle_google_auth(self, access_token, user_type):
+    def _process_invitation(self, user, invitation_code):
+        """
+        Process a pending invitation for a user during social auth.
+        Returns invitation result dict or None. Non-fatal - login still succeeds.
+        """
+        if not invitation_code:
+            return None
+
+        try:
+            invitation = CompanyInvitation.objects.get(invitation_code=invitation_code)
+
+            if not invitation.can_be_accepted():
+                logger.warning(f"Social auth invitation {invitation_code} cannot be accepted (expired/used)")
+                return None
+
+            # Verify email matches (case-insensitive)
+            if user.email.lower() != invitation.email.lower():
+                logger.warning(
+                    f"Social auth invitation email mismatch: user={user.email}, invitation={invitation.email}"
+                )
+                return None
+
+            works_in = invitation.accept(user)
+
+            # Get company subscription information
+            from subscriptions.models import Subscription
+
+            try:
+                company_subscription = Subscription.objects.get(company=invitation.company)
+                has_subscription = company_subscription.is_active()
+            except Subscription.DoesNotExist:
+                has_subscription = False
+
+            logger.info(f"Invitation {invitation_code} accepted via social auth for {user.email}")
+
+            return {
+                "invitation_accepted": True,
+                "company": {
+                    "id": invitation.company.id,
+                    "name": invitation.company.name,
+                },
+                "role": works_in.role,
+                "redirect_to": "/admin/dashboard" if has_subscription else "/admin/dashboard/pricing",
+            }
+
+        except CompanyInvitation.DoesNotExist:
+            logger.warning(f"Social auth invitation code not found: {invitation_code}")
+            return None
+        except Exception as e:
+            logger.error(f"Error processing invitation during social auth: {str(e)}")
+            return None
+
+    def handle_google_auth(self, access_token, user_type, invitation_code=None):
         """
         Verify Google access token/ID token and create/login user
         """
@@ -102,6 +156,7 @@ class SocialAuthView(APIView):
                     defaults={
                         "first_name": first_name,
                         "last_name": last_name,
+                        "is_active": True,  # Social auth users are active immediately
                         "is_verified": True,  # Social auth users are pre-verified
                         "user_type": user_type,
                         "social_auth_provider": "google",
@@ -119,24 +174,33 @@ class SocialAuthView(APIView):
                         user.last_name = last_name
                     user.save()
 
+                # Process invitation if provided
+                invitation_result = self._process_invitation(user, invitation_code)
+
+            # Refresh user from DB so serializer picks up new company relationships
+            if invitation_result:
+                user.refresh_from_db()
+
             # Generate tokens
             refresh = RefreshToken.for_user(user)
 
-            return Response(
-                {
-                    "user": BasicUserSerializer(user).data,
-                    "access": str(refresh.access_token),
-                    "refresh": str(refresh),
-                    "user_type": user.user_type,
-                },
-                status=status.HTTP_200_OK,
-            )
+            response_data = {
+                "user": BasicUserSerializer(user).data,
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+                "user_type": user.user_type,
+            }
+
+            if invitation_result:
+                response_data.update(invitation_result)
+
+            return Response(response_data, status=status.HTTP_200_OK)
 
         except Exception as e:
             logger.error(f"Google auth error: {str(e)}")
             return Response({"error": "Authentication failed"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    def handle_facebook_auth(self, access_token, user_type):
+    def handle_facebook_auth(self, access_token, user_type, invitation_code=None):
         """
         Verify Facebook access token and create/login user
         """
@@ -170,6 +234,7 @@ class SocialAuthView(APIView):
                     defaults={
                         "first_name": first_name,
                         "last_name": last_name,
+                        "is_active": True,
                         "is_verified": True,
                         "user_type": user_type,
                         "social_auth_provider": "facebook",
@@ -187,24 +252,33 @@ class SocialAuthView(APIView):
                         user.last_name = last_name
                     user.save()
 
+                # Process invitation if provided
+                invitation_result = self._process_invitation(user, invitation_code)
+
+            # Refresh user from DB so serializer picks up new company relationships
+            if invitation_result:
+                user.refresh_from_db()
+
             # Generate tokens
             refresh = RefreshToken.for_user(user)
 
-            return Response(
-                {
-                    "user": BasicUserSerializer(user).data,
-                    "access": str(refresh.access_token),
-                    "refresh": str(refresh),
-                    "user_type": user.user_type,
-                },
-                status=status.HTTP_200_OK,
-            )
+            response_data = {
+                "user": BasicUserSerializer(user).data,
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+                "user_type": user.user_type,
+            }
+
+            if invitation_result:
+                response_data.update(invitation_result)
+
+            return Response(response_data, status=status.HTTP_200_OK)
 
         except Exception as e:
             logger.error(f"Facebook auth error: {str(e)}")
             return Response({"error": "Authentication failed"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    def handle_apple_auth(self, id_token, request_data, user_type):
+    def handle_apple_auth(self, id_token, request_data, user_type, invitation_code=None):
         """
         Verify Apple ID token and create/login user
         """
@@ -250,6 +324,7 @@ class SocialAuthView(APIView):
                     defaults={
                         "first_name": first_name,
                         "last_name": last_name,
+                        "is_active": True,
                         "is_verified": True,
                         "user_type": user_type,
                         "social_auth_provider": "apple",
@@ -268,18 +343,27 @@ class SocialAuthView(APIView):
                         user.last_name = last_name
                     user.save()
 
+                # Process invitation if provided
+                invitation_result = self._process_invitation(user, invitation_code)
+
+            # Refresh user from DB so serializer picks up new company relationships
+            if invitation_result:
+                user.refresh_from_db()
+
             # Generate tokens
             refresh = RefreshToken.for_user(user)
 
-            return Response(
-                {
-                    "user": BasicUserSerializer(user).data,
-                    "access": str(refresh.access_token),
-                    "refresh": str(refresh),
-                    "user_type": user.user_type,
-                },
-                status=status.HTTP_200_OK,
-            )
+            response_data = {
+                "user": BasicUserSerializer(user).data,
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+                "user_type": user.user_type,
+            }
+
+            if invitation_result:
+                response_data.update(invitation_result)
+
+            return Response(response_data, status=status.HTTP_200_OK)
 
         except jwt.exceptions.InvalidTokenError as e:
             logger.error(f"Apple auth token error: {str(e)}")

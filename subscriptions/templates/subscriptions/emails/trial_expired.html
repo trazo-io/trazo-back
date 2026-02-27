@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your Trazo trial has ended</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: 'Inter', Arial, sans-serif; color: #333333;">
+
+  <!-- Outer wrapper -->
+  <table border="0" cellpadding="0" cellspacing="0" width="100%" role="presentation" style="background-color: #f5f5f5;">
+    <tr>
+      <td align="center" style="padding: 32px 16px;">
+
+        <!-- Container -->
+        <table border="0" cellpadding="0" cellspacing="0" width="600" role="presentation" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 8px;">
+
+          <!-- Header -->
+          <tr>
+            <td align="center" bgcolor="#4CAF50" style="background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%); padding: 32px 40px; border-radius: 8px 8px 0 0;">
+              <img src="{{ BASE_URL }}static/img/trazo2-white.png" alt="Trazo Logo" height="60" style="margin: 0 auto; padding-bottom: 10px;" />
+              <p style="margin: 0; color: #ffffff; font-size: 22px; font-weight: bold; font-family: 'Inter', Arial, sans-serif;">Your trial has ended</p>
+              <p style="margin: 8px 0 0 0; color: #c8e6c9; font-size: 14px; font-family: 'Inter', Arial, sans-serif;">Upgrade now to restore full access</p>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding: 40px;">
+
+              <!-- Greeting -->
+              <p style="margin: 0 0 16px 0; font-size: 16px; color: #333333; font-family: 'Inter', Arial, sans-serif;">Hi {{ company_name }},</p>
+
+              <!-- Opening message -->
+              <p style="margin: 0 0 24px 0; font-size: 15px; line-height: 1.6; color: #555555; font-family: 'Inter', Arial, sans-serif;">
+                Your 14-day free trial of Trazo ended today. Thank you for exploring how
+                Trazo can bring transparency to your agricultural operation and build trust
+                with your consumers.
+              </p>
+
+              <!-- Alert box -->
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" role="presentation" style="margin-bottom: 24px;">
+                <tr>
+                  <td style="background-color: #fff8e1; border-left: 4px solid #FFC107; border-radius: 4px; padding: 16px 20px;">
+                    <p style="margin: 0; font-size: 14px; color: #795548; font-family: 'Inter', Arial, sans-serif;">
+                      <strong>Your account is now in read-only mode.</strong> New QR codes, production
+                      events, and transparency reports have been paused. Upgrade to resume full access.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Safe box -->
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" role="presentation" style="margin-bottom: 24px;">
+                <tr>
+                  <td style="background-color: #f1f8f1; border: 1px solid #c8e6c9; border-radius: 4px; padding: 16px 20px;">
+                    <p style="margin: 0; font-size: 14px; color: #2E7D32; font-family: 'Inter', Arial, sans-serif;">
+                      <strong>Your data is safe.</strong> All your farms, production records, and
+                      transparency history are preserved and waiting for you.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Second message -->
+              <p style="margin: 0 0 24px 0; font-size: 15px; line-height: 1.6; color: #555555; font-family: 'Inter', Arial, sans-serif;">
+                Upgrading takes less than 2 minutes. Choose the plan that best fits your
+                operation size and unlock everything you built during the trial.
+              </p>
+
+              <!-- CTA button (bulletproof) -->
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" role="presentation" style="margin: 32px 0;">
+                <tr>
+                  <td align="center">
+                    <table border="0" cellpadding="0" cellspacing="0" role="presentation">
+                      <tr>
+                        <td align="center" bgcolor="#4CAF50" style="border-radius: 6px; background-color: #4CAF50;">
+                          <a href="{{ pricing_url }}" target="_blank" style="display: inline-block; padding: 14px 36px; font-size: 16px; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600; font-family: 'Inter', Arial, sans-serif;">Upgrade and Restore Access</a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Secondary link -->
+              <p style="margin: 12px 0 0 0; text-align: center; font-size: 13px; color: #888888; font-family: 'Inter', Arial, sans-serif;">
+                Need help choosing a plan? <a href="mailto:{{ support_email }}" style="color: #4CAF50; text-decoration: none;">Contact our team</a>
+                and we'll help you find the right fit.
+              </p>
+
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td align="center" bgcolor="#f9f9f9" style="background-color: #f9f9f9; border-top: 1px solid #eeeeee; padding: 24px 40px; border-radius: 0 0 8px 8px;">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" role="presentation">
+                <tr>
+                  <td style="padding: 0 0 10px 0; font-size: 12px; color: #999999; font-family: 'Inter', Arial, sans-serif;">
+                    Don't want to receive these emails? <a href="{{ app_url }}/admin/dashboard/settings" style="color: #999999; text-decoration: underline;">Manage email preferences</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin: 4px 0; font-size: 12px; color: #999999; font-family: 'Inter', Arial, sans-serif;">You are receiving this email because your Trazo trial has ended.</p>
+              <p style="margin: 4px 0; font-size: 12px; color: #999999; font-family: 'Inter', Arial, sans-serif;">&copy; {{ current_year }} Trazo &mdash; Agricultural Transparency Platform</p>
+              <p style="margin: 4px 0; font-size: 12px; font-family: 'Inter', Arial, sans-serif;"><a href="{{ app_url }}" style="color: #4CAF50; text-decoration: none;">Log in to your dashboard</a></p>
+            </td>
+          </tr>
+
+        </table>
+        <!-- /Container -->
+
+      </td>
+    </tr>
+  </table>
+  <!-- /Outer wrapper -->
+
+</body>
+</html>

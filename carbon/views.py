@@ -5,6 +5,8 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from backend.permissions import ReadOnlyForViewersGlobal
+
 # Conditional ratelimit import for staging compatibility
 try:
     from django.conf import settings
@@ -253,7 +255,7 @@ class EventTemplateViewSet(viewsets.ReadOnlyModelViewSet):
 class CarbonSourceViewSet(viewsets.ModelViewSet):
     queryset = CarbonSource.objects.all()
     serializer_class = CarbonSourceSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [ReadOnlyForViewersGlobal]
 
 
 class CarbonOffsetActionViewSet(viewsets.ReadOnlyModelViewSet):
@@ -268,7 +270,7 @@ class CarbonOffsetActionViewSet(viewsets.ReadOnlyModelViewSet):
 class CarbonEntryViewSet(viewsets.ModelViewSet):
     queryset = CarbonEntry.objects.all()
     serializer_class = CarbonEntrySerializer
-    permission_classes = [IsAuthenticated]  # Ensure authentication is required
+    permission_classes = [ReadOnlyForViewersGlobal]
 
     def get_queryset(self):
         user = self.request.user
@@ -879,7 +881,7 @@ class OptimizedCarbonCalculator:
         """Fallback emission factors for when USDA API is unavailable"""
         fallback_factors = {
             "fertilizer": {"nitrogen": 5.87, "phosphorus": 0.44, "potassium": 0.54},
-            "fuel": {"diesel": 2.68, "gasoline": 2.31},
+            "fuel": {"diesel": 2.70, "gasoline": 2.32},
             "electricity": {"grid": 0.42},
             "water": {"irrigation": 0.001},
         }
@@ -903,9 +905,9 @@ class OptimizedCarbonCalculator:
 
         # Extract processed data (now with proper unit conversions)
         chemical_type = processed_event.get("chemical_type", "FE")
-        volume_liters = processed_event.get("volume", 10)
-        area_hectares = processed_event.get("area", 1.0)  # Now properly converted to hectares
-        application_method = processed_event.get("application_method", "broadcast")
+        volume_liters = processed_event.get("volume") or 0
+        area_hectares = processed_event.get("area") or 0.0
+        application_method = processed_event.get("application_method") or "broadcast"
 
         # ELECTRIC APPLICATION EQUIPMENT SUPPORT (2025-12-14)
         # Extract application fuel data for sprayers, spreaders, etc.
@@ -913,24 +915,12 @@ class OptimizedCarbonCalculator:
         application_fuel_consumed = processed_event.get("application_fuel_consumed")
         application_fuel_unit = processed_event.get("application_fuel_unit", "L")
 
-        # DEBUG (2025-12-24): Log fuel fields to diagnose preview calculation issue
-        print(f"🔍 [calculate_chemical_impact_optimized] FUEL FIELDS:")
-        print(f"  - application_fuel_type: '{application_fuel_type}'")
-        print(f"  - application_fuel_consumed: {application_fuel_consumed}")
-        print(f"  - application_fuel_unit: '{application_fuel_unit}'")
-
         # Parse NPK content - only fertilizers have NPK
         # FIX (2025-12-24): Don't use NPK-style default for non-fertilizer chemicals
         # This was causing fungicides/herbicides/pesticides to fail concentration parsing
         concentration_raw = processed_event.get("concentration")
         concentration_percentage = None  # For pesticides/herbicides/fungicides
 
-        # DEBUG (2025-12-24): Log concentration field specifically to diagnose fungicide calculation issue
-        print(f"🔍 [calculate_chemical_impact_optimized] CONCENTRATION DEBUG:")
-        print(
-            f"  - concentration_raw from processed_event: '{concentration_raw}' (type: {type(concentration_raw).__name__ if concentration_raw is not None else 'NoneType'})"
-        )
-        print(f"  - chemical_type: '{chemical_type}'")
         if chemical_type == "FE":  # Only fertilizers have NPK
             # Parse concentration like "10-10-10" or "1.5%"
             # FIX (2025-12-24): Handle None concentration_raw properly
@@ -953,21 +943,180 @@ class OptimizedCarbonCalculator:
             try:
                 if isinstance(concentration_raw, (int, float)):
                     concentration_percentage = float(concentration_raw)
-                    print(f"  - Parsed concentration as int/float: {concentration_percentage}%")
                 elif concentration_raw and str(concentration_raw).strip():
                     # Remove % symbol if present and convert to float
                     conc_str = str(concentration_raw).replace("%", "").strip()
                     if conc_str and "-" not in conc_str:  # Don't parse NPK-style strings
                         concentration_percentage = float(conc_str)
-                        print(
-                            f"  - Parsed concentration from string '{concentration_raw}': {concentration_percentage}%"
-                        )
-                else:
-                    print(f"  - No valid concentration provided, will use calculation defaults")
             except (ValueError, TypeError) as e:
                 concentration_percentage = None
                 logger.debug(f"Could not parse concentration: {concentration_raw}, error: {e}")
-                print(f"  - Failed to parse concentration '{concentration_raw}': {e}")
+
+        # SUMMARY MODE: Use pre-calculated active ingredient total directly
+        is_summary = processed_event.get("is_summary")
+        is_summary_event = is_summary is True or str(is_summary).lower() == "true"
+        active_ingredient_total_kg = processed_event.get("active_ingredient_total_kg")
+
+        if is_summary_event and active_ingredient_total_kg:
+            try:
+                active_ingredient_kg = float(active_ingredient_total_kg)
+                chemical_subtype = processed_event.get("chemical_subtype", "")
+                product_name = processed_event.get("commercial_name", "")
+                event_count = processed_event.get("event_count", 1)
+
+                # Select emission factor based on chemical type and subtype
+                chemical_subtype_lower = (chemical_subtype or "").lower()
+                product_name_lower = (product_name or "").lower()
+
+                if chemical_type.lower() in ["fungicide", "fu"]:
+                    is_copper = chemical_subtype_lower in [
+                        "copper_fungicide",
+                        "copper",
+                    ] or VerifiedEmissionFactors._is_copper_fungicide(product_name_lower)
+                    if is_copper:
+                        factor = VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["copper_fungicide_manufacturing"]
+                        factor_label = "copper fungicide"
+                    elif chemical_subtype_lower in ["sulfur_fungicide", "sulfur"]:
+                        factor = VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["sulfur_fungicide_manufacturing"]
+                        factor_label = "sulfur fungicide"
+                    elif chemical_subtype_lower in ["biological_fungicide", "biological"]:
+                        factor = VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["biological_fungicide_manufacturing"]
+                        factor_label = "biological fungicide"
+                    else:
+                        factor = VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["fungicide_manufacturing"]
+                        factor_label = "synthetic fungicide"
+                elif chemical_type.lower() in ["pesticide", "pe"]:
+                    if chemical_subtype_lower in ["organic_pesticide", "organic"]:
+                        factor = VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["organic_pesticide_manufacturing"]
+                        factor_label = "organic pesticide"
+                    elif chemical_subtype_lower in ["biological_pesticide", "biological"]:
+                        factor = VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["biological_pesticide_manufacturing"]
+                        factor_label = "biological pesticide"
+                    else:
+                        factor = VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["pesticide_manufacturing"]
+                        factor_label = "synthetic pesticide"
+                elif chemical_type.lower() in ["herbicide", "he"]:
+                    if chemical_subtype_lower in ["organic_herbicide", "organic"]:
+                        factor = VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["organic_herbicide_manufacturing"]
+                        factor_label = "organic herbicide"
+                    else:
+                        factor = VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["herbicide_manufacturing"]
+                        factor_label = "synthetic herbicide"
+                else:
+                    # Fertilizer summary — use NPK-based calculation
+                    factor = None
+                    factor_label = "fertilizer"
+
+                if factor:
+                    manufacturing_emissions = active_ingredient_kg * factor.value
+                else:
+                    manufacturing_emissions = active_ingredient_kg * 1.0  # Generic fallback
+
+                # Application fuel emissions (with proper unit conversion)
+                # SUMMARY MODE FIX: Use fuel_consumption_total (aggregate) instead of
+                # application_fuel_consumed (individual) for summary events
+                application_emissions = 0.0
+                fuel_total_raw = processed_event.get("fuel_consumption_total")
+                summary_fuel = float(fuel_total_raw) if fuel_total_raw else 0.0
+                fuel_for_calc = (
+                    summary_fuel
+                    if summary_fuel > 0
+                    else (float(application_fuel_consumed) if application_fuel_consumed else 0.0)
+                )
+
+                # Initialize fuel breakdown defaults (used in breakdown dict even when fuel = 0)
+                app_fuel_type = (
+                    processed_event.get("fuel_type") or processed_event.get("application_fuel_type") or "diesel"
+                ).lower()
+                app_fuel_unit = (
+                    processed_event.get("fuel_unit") or processed_event.get("application_fuel_unit") or "L"
+                ).lower()
+                fuel_gallons = 0.0
+                fuel_liters = 0.0
+                app_factor = VerifiedEmissionFactors.EPA_FUEL_FACTORS.get(
+                    app_fuel_type,
+                    VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["application_fuel"],
+                )
+
+                if fuel_for_calc > 0:
+                    if app_fuel_type == "electric":
+                        electricity_factor = VerifiedEmissionFactors.get_country_electricity_factor()
+                        application_emissions = fuel_for_calc * electricity_factor.value
+                        fuel_liters = fuel_for_calc  # kWh stored as-is
+                    else:
+                        # Liquid fuels: convert to gallons, then use per-gallon factor
+                        if app_fuel_unit in ["gal", "gallons"]:
+                            fuel_gallons = fuel_for_calc
+                            fuel_liters = fuel_for_calc * 3.78541
+                        else:
+                            fuel_liters = fuel_for_calc
+                            fuel_gallons = fuel_for_calc / 3.78541
+                        application_emissions = fuel_gallons * app_factor.value
+
+                total_co2e = manufacturing_emissions + application_emissions
+
+                # Include original user input for display in CarbonImpactPreview
+                original_volume = processed_event.get("original_volume", volume_liters)
+                original_volume_unit = processed_event.get("original_volume_unit", "L")
+                original_area = processed_event.get("original_area", area_hectares)
+                original_area_unit = processed_event.get("original_area_unit", "hectares")
+
+                # Build subtype field for CarbonImpactPreview rendering
+                subtype_key = chemical_subtype_lower or "synthetic"
+                subtype_fields = {}
+                ctype_lower = chemical_type.lower()
+                if ctype_lower in ["fungicide", "fu"]:
+                    subtype_fields["fungicide_subtype"] = subtype_key
+                elif ctype_lower in ["pesticide", "pe"]:
+                    subtype_fields["pesticide_subtype"] = subtype_key
+                elif ctype_lower in ["herbicide", "he"]:
+                    subtype_fields["herbicide_subtype"] = subtype_key
+
+                breakdown = {
+                    # Aggregate identification
+                    "is_aggregate": True,
+                    "event_count": event_count,
+                    "active_ingredient_total_kg": active_ingredient_kg,
+                    "emission_factor_used": f"{factor.value if factor else 1.0} kg CO2/kg AI ({factor_label})",
+                    "manufacturing_emissions_kg_co2e": round(manufacturing_emissions, 3),
+                    "application_emissions_kg_co2e": round(application_emissions, 3),
+                    "chemical_type": chemical_type,
+                    # Fields matching individual event structure for CarbonImpactPreview
+                    "active_ingredient_percentage": concentration_percentage if concentration_percentage else 100.0,
+                    "active_ingredient_kg": round(active_ingredient_kg, 3),
+                    "emission_factor_kg_co2_per_kg": factor.value if factor else 1.0,
+                    "chemical_subtype_used": chemical_subtype or factor_label,
+                    "confidence_level": factor.confidence_level if factor else 0.85,
+                    "concentration_source": "aggregate_summary",
+                    # Fuel details for "Application Equipment" breakdown row
+                    "application_fuel_type": app_fuel_type if fuel_for_calc > 0 else None,
+                    "application_fuel_liters": round(fuel_liters, 3) if fuel_for_calc > 0 else None,
+                    "application_fuel_gallons": round(fuel_gallons, 3) if fuel_for_calc > 0 else None,
+                    "epa_diesel_factor_kg_co2_per_gallon": app_factor.value if fuel_for_calc > 0 else None,
+                    # Explanatory note
+                    "note": f"Aggregate of {event_count} {factor_label} applications. Total active ingredient: {active_ingredient_kg} kg.",
+                    # Display fields
+                    "volume_applied_liters": original_volume,
+                    "area_treated_hectares": original_area,
+                    "application_method": processed_event.get("application_method", "broadcast"),
+                }
+                # Add dynamic subtype field (e.g. "fungicide_subtype": "copper")
+                breakdown.update(subtype_fields)
+
+                return {
+                    "co2e": round(total_co2e, 3),
+                    "efficiency_score": 80.0,
+                    "calculation_method": f"summary_aggregate_{factor_label.replace(' ', '_')}",
+                    "breakdown": breakdown,
+                    "verification_status": "aggregate_summary",
+                    # Top-level display fields for CarbonImpactPreview
+                    "original_volume_applied": original_volume,
+                    "original_volume_unit": original_volume_unit,
+                    "original_area_treated": original_area,
+                    "original_area_unit": original_area_unit,
+                }
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Summary mode calculation failed, falling back to standard: {e}")
 
         # Use EPA/USDA verified emission factors (same as standard endpoint)
         try:
@@ -1005,15 +1154,7 @@ class OptimizedCarbonCalculator:
             if application_fuel_unit:
                 calc_kwargs["application_fuel_unit"] = application_fuel_unit
 
-            # DEBUG (2025-12-24): Log the final kwargs being passed to the calculation
-            print(f"🔍 [calculate_chemical_impact_optimized] CALLING VerifiedEmissionFactors with:")
-            for key, value in calc_kwargs.items():
-                print(f"  - {key}: {value}")
-
             calculation_result = VerifiedEmissionFactors.calculate_chemical_application_emissions(**calc_kwargs)
-
-            # DEBUG (2025-12-24): Log the calculation result
-            print(f"🔍 [calculate_chemical_impact_optimized] RESULT: {calculation_result}")
 
             # Extract results
             co2e = calculation_result["co2e_kg"]
@@ -1091,26 +1232,46 @@ class OptimizedCarbonCalculator:
         from carbon.services.verified_emission_factors import VerifiedEmissionFactors
 
         # Extract proper parameters for USDA calculation
-        production_type = processed_event.get("production_type", "general production")
-        area_covered = processed_event.get("area_covered", 1.0)  # Should be in acres
+        # production_type is now the raw type code (IR, PL, HA, etc.) for correct USDA routing
+        production_type = processed_event.get("production_type", "GE")
+        area_covered = processed_event.get("area_covered", 0.0)  # 0 when no area provided
         fuel_consumed = processed_event.get("fuel_consumed")
-        equipment_hours = processed_event.get("equipment_hours") or processed_event.get("duration_hours")
+        # Only use explicit equipment_hours from the form — don't fall back to duration_hours
+        # which defaults to 2.0 for all events and produces phantom "Equipment Hours: 2" in preview
+        equipment_hours = processed_event.get("equipment_hours")
 
         # CRITICAL FIX: Extract fuel_type for electric equipment support
         # Without this, electric equipment was defaulting to diesel calculations
         fuel_type = processed_event.get("fuel_type", "diesel")
         energy_source = processed_event.get("energy_source", "grid")  # For solar/wind scenarios
 
+        # Extract water volume for irrigation calculations
+        water_volume_gallons = processed_event.get("water_volume_gallons")
+
         try:
+            # Build kwargs for production calculation
+            calc_kwargs = {
+                "fuel_type": fuel_type,
+                "energy_source": energy_source,
+            }
+            # Pass water volume and source for irrigation if available
+            if water_volume_gallons is not None:
+                calc_kwargs["water_volume_gallons"] = water_volume_gallons
+            water_source = processed_event.get("water_source")
+            if water_source:
+                calc_kwargs["water_source"] = water_source
+            # Pass actual kWh for electric equipment (e.g. electric irrigation pumps)
+            fuel_consumed_kwh = processed_event.get("fuel_consumed_kwh")
+            if fuel_consumed_kwh is not None:
+                calc_kwargs["fuel_consumed_kwh"] = fuel_consumed_kwh
+
             # Use proper USDA verified emission factors with validation
-            # Pass fuel_type and energy_source via kwargs for electric equipment support
             calculation_result = VerifiedEmissionFactors.calculate_production_event_emissions(
                 production_type=production_type,
                 area_covered=area_covered,
                 fuel_consumed=fuel_consumed,
                 equipment_hours=equipment_hours,
-                fuel_type=fuel_type,
-                energy_source=energy_source,
+                **calc_kwargs,
             )
 
             # Extract results from USDA calculation
@@ -1142,8 +1303,7 @@ class OptimizedCarbonCalculator:
             }
 
         except Exception as e:
-            # Fallback to prevent API failures, but log the error
-            print(f"ERROR in production calculation: {e}")
+            logger.error(f"Error in production calculation: {e}")
             return {
                 "co2e": 0.0,
                 "efficiency_score": 50.0,
@@ -1168,7 +1328,7 @@ class OptimizedCarbonCalculator:
         ELECTRICITY_FACTOR = 0.39  # kg CO₂/kWh
 
         # EPA diesel factor (kg CO₂/liter) - converted from 10.21 kg/gallon
-        DIESEL_FACTOR = 2.68  # kg CO₂/liter
+        DIESEL_FACTOR = 2.70  # kg CO₂/liter (10.21 kg/gal ÷ 3.78541)
 
         if fuel_type == "electric":
             # Electric equipment - use kWh and EPA eGRID factor
@@ -1195,7 +1355,7 @@ class OptimizedCarbonCalculator:
             efficiency_score = min(90, max(40, 85 - (co2e * 0.5)))
         else:
             # Diesel or other fuel - use liters
-            fuel_amount = processed_event.get("fuel_amount_liters", 5)
+            fuel_amount = processed_event.get("fuel_amount_liters") or 0
             co2e = fuel_amount * DIESEL_FACTOR
             calculation_basis = "diesel_epa_cfr_part_98"
 
@@ -1221,52 +1381,22 @@ class OptimizedCarbonCalculator:
 
     def calculate_general_impact_optimized(self, processed_event: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Optimized general event calculation using enhanced EventCarbonCalculator.
-        Replaces hardcoded 0.5 kg CO2e with context-aware EPA-verified calculations.
+        General events are documentation/transparency activities (meetings, training,
+        record keeping, drone surveys, etc.) with no direct fuel combustion or
+        energy consumption that farmers control.
+
+        Per Trazo's carbon methodology (Direct Operational Emissions only),
+        general events return 0 kg CO2e — consistent with weather events
+        and observational pest scouting.
         """
-        try:
-            # Use the new EventCarbonCalculator with proper emission factors
-            from .services.event_carbon_calculator import EventCarbonCalculator
-
-            # Create a mock event object from processed_event data
-            class MockGeneralEvent:
-                def __init__(self, processed_data):
-                    self.description = processed_data.get("description", "")
-                    self.name = processed_data.get("name", "")
-                    self.observation = processed_data.get("observation", "")
-                    self.type = processed_data.get("type", "general")
-                    self.extra_data = processed_data.get("extra_data", {})
-
-            mock_event = MockGeneralEvent(processed_event)
-
-            # Use the enhanced calculator
-            calculator = EventCarbonCalculator()
-            result = calculator.calculate_general_event_impact(mock_event)
-
-            # Convert to optimized response format
-            return {
-                "co2e": round(result.get("co2e", 0), 3),
-                "efficiency_score": result.get("efficiency_score", 60.0),
-                "calculation_method": f"optimized_{result.get('calculation_method', 'general_enhanced')}",
-                "usda_verified": True,  # Now using EPA/USDA verified factors
-                "data_source": result.get("data_source", "EPA/USDA Enhanced Factors"),
-                "verification_status": result.get("verification_status", "enhanced_factors"),
-            }
-
-        except Exception as e:
-            import logging
-
-            logger = logging.getLogger(__name__)
-            logger.warning(f"Enhanced general calculation failed, using fallback: {e}")
-
-            # Improved fallback (reduced from 0.5 to 0.25)
-            return {
-                "co2e": 0.25,  # Reduced fallback value
-                "efficiency_score": 60.0,
-                "calculation_method": "optimized_general_fallback",
-                "usda_verified": False,
-                "fallback_reason": str(e),
-            }
+        return {
+            "co2e": 0.0,
+            "efficiency_score": 100.0,
+            "calculation_method": "general_event_zero_emissions",
+            "usda_verified": True,
+            "data_source": "Trazo Direct Operational Methodology",
+            "verification_status": "verified_zero",
+        }
 
     def calculate_weather_event_impact(self, processed_event: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -1534,11 +1664,11 @@ class OptimizedEventProcessor:
         # Backend/stored events use: volume, area, way_of_application
 
         # Get raw values - may be combined strings like "400 kg/ha"
-        volume_raw = event_data.get("volume_applied") or event_data.get("volume", 10)
+        volume_raw = event_data.get("volume_applied") or event_data.get("volume") or 0
         volume_unit_provided = event_data.get("volume_unit", "L")
-        area_raw = event_data.get("area_treated") or event_data.get("area", 1.0)
+        area_raw = event_data.get("area_treated") or event_data.get("area") or 0.0
         area_unit_provided = event_data.get("area_unit", "acres")
-        application_method = event_data.get("application_method") or event_data.get("way_of_application", "broadcast")
+        application_method = event_data.get("application_method") or event_data.get("way_of_application") or "broadcast"
 
         # FIX (2025-12-24): Get chemical type BEFORE setting concentration default
         # This allows us to use appropriate defaults based on chemical type
@@ -1555,13 +1685,6 @@ class OptimizedEventProcessor:
         else:
             # For PE/HE/FU, pass the actual value (None or empty) to let calculation handle defaults
             concentration = concentration_raw
-
-        # DEBUG (2025-12-24): Log concentration extraction to diagnose fungicide calculation issue
-        print(f"🔍 [OptimizedEventProcessor._process_chemical_event] CONCENTRATION EXTRACTION:")
-        print(f"  - event_data keys: {list(event_data.keys())}")
-        print(f"  - chemical_type: '{chemical_type}'")
-        print(f"  - concentration from event_data: '{event_data.get('concentration')}' (raw)")
-        print(f"  - concentration (with type-appropriate default): '{concentration}'")
 
         # CRITICAL FIX: Parse combined strings like "400 kg/ha" into numeric + unit
         volume_value, parsed_volume_unit = cls._parse_value_with_unit(volume_raw, volume_unit_provided)
@@ -1655,6 +1778,15 @@ class OptimizedEventProcessor:
             "chemical_subtype": event_data.get("chemical_subtype", ""),
             "commercial_name": event_data.get("commercial_name", ""),
             "active_ingredient": event_data.get("active_ingredient", ""),
+            # SUMMARY MODE SUPPORT: Pass through aggregate fields for summary events
+            # Convert string "true" from frontend JSON to boolean True
+            "is_summary": event_data.get("is_summary") in (True, "true", "True", "1"),
+            "active_ingredient_total_kg": event_data.get("active_ingredient_total_kg"),
+            "event_count": event_data.get("event_count"),
+            # Aggregate fuel fields for summary mode carbon calculation
+            "fuel_consumption_total": event_data.get("fuel_consumption_total"),
+            "fuel_type": event_data.get("application_fuel_type") or "diesel",
+            "fuel_unit": event_data.get("application_fuel_unit") or "L",
         }
 
         # Event processing complete
@@ -1681,7 +1813,8 @@ class OptimizedEventProcessor:
 
         try:
             # AREA CONVERSION - Convert to acres for USDA calculations
-            area_raw = event_data.get("area_covered", 1.0)
+            # Default to 0 when no area provided - empty forms should show 0 emissions
+            area_raw = event_data.get("area_covered") or 0.0
             area_unit = event_data.get("area_unit", "hectares")
 
             # Extract numeric value if string
@@ -1717,18 +1850,27 @@ class OptimizedEventProcessor:
                     fuel_value = float(fuel_consumed_raw)
 
                 if fuel_value and fuel_value > 0:
-                    # Convert fuel to gallons for EPA calculations
-                    fuel_consumed_gallons, fuel_audit = UnitConverter.convert_fuel_to_gallons(
-                        fuel_value, fuel_unit, fuel_type
-                    )
-                    conversion_audit.append(fuel_audit)
+                    if fuel_type == "electric":
+                        # Electric: value is in kWh, not liquid fuel
+                        # Skip gallon conversion — pass kWh directly
+                        fuel_consumed_gallons = None
+                        conversion_audit.append(f"Fuel: {fuel_value} kWh electric (no gallon conversion needed)")
+                    else:
+                        # Liquid fuel — convert to gallons for EPA calculations
+                        fuel_consumed_gallons, fuel_audit = UnitConverter.convert_fuel_to_gallons(
+                            fuel_value, fuel_unit, fuel_type
+                        )
+                        conversion_audit.append(fuel_audit)
 
-            # EQUIPMENT HOURS - Ensure proper float conversion
-            equipment_hours_raw = event_data.get("equipment_hours") or event_data.get("duration", 8.0)
-            try:
-                equipment_hours = float(equipment_hours_raw)
-            except (ValueError, TypeError):
-                equipment_hours = 8.0  # Default fallback
+            # EQUIPMENT HOURS - Only use actual user-provided values, no phantom defaults
+            equipment_hours_raw = event_data.get("equipment_hours")
+            if equipment_hours_raw:
+                try:
+                    equipment_hours = float(equipment_hours_raw)
+                except (ValueError, TypeError):
+                    equipment_hours = None
+            else:
+                equipment_hours = None
 
             # YIELD QUANTITY CONVERSION - Convert to kilograms
             yield_quantity_kg = None
@@ -1753,9 +1895,10 @@ class OptimizedEventProcessor:
                     yield_quantity_kg = None
 
             # WATER VOLUME CONVERSION - Convert to gallons for irrigation calculations
+            # Support both individual events (water_volume) and summary events (water_volume_total)
             water_volume_gallons = None
-            water_raw = event_data.get("water_volume")
-            water_unit = event_data.get("water_unit", "gallons")
+            water_raw = event_data.get("water_volume") or event_data.get("water_volume_total")
+            water_unit = event_data.get("water_unit") or event_data.get("water_volume_unit") or "gallons"
 
             if water_raw:
                 try:
@@ -1779,11 +1922,15 @@ class OptimizedEventProcessor:
                 logger.info(f"Production event unit conversions: {'; '.join(conversion_audit)}")
 
             # Return processed data with all conversions applied
+            raw_type_code = event_data.get("type", "PL")  # Default to Planting (matches frontend ProductionTab default)
             processed_data = {
-                "production_type": cls._map_production_type(event_data.get("type", "IR")),
+                "production_type": raw_type_code,  # Pass raw code (IR, PL, HA) for USDA routing
+                "production_type_label": cls._map_production_type(raw_type_code),  # Descriptive name for display
                 "area_covered": area_covered_acres,  # In acres for USDA calculations
                 "fuel_consumed": fuel_consumed_gallons,  # In gallons for EPA calculations
                 "equipment_hours": equipment_hours,
+                "fuel_type": fuel_type,
+                "energy_source": event_data.get("energy_source", "grid"),
                 "conversion_audit": conversion_audit,  # Track conversions for transparency
             }
 
@@ -1792,6 +1939,20 @@ class OptimizedEventProcessor:
                 processed_data["yield_quantity_kg"] = yield_quantity_kg
             if water_volume_gallons is not None:
                 processed_data["water_volume_gallons"] = water_volume_gallons
+
+            # Electric fuel: pass actual kWh for direct emission calculation
+            if fuel_type == "electric" and fuel_consumed_raw:
+                try:
+                    kwh_value = float(fuel_consumed_raw) if isinstance(fuel_consumed_raw, str) else fuel_consumed_raw
+                    if kwh_value and kwh_value > 0:
+                        processed_data["fuel_consumed_kwh"] = float(kwh_value)
+                except (ValueError, TypeError):
+                    pass
+
+            # Pass water_source for irrigation pump factor selection (USDA NRCS)
+            water_source = event_data.get("water_source")
+            if water_source:
+                processed_data["water_source"] = water_source
 
             # Mark that unit conversions were successfully applied
             processed_data["unit_conversions_applied"] = True
@@ -1832,8 +1993,10 @@ class OptimizedEventProcessor:
                 return default
 
             # Process with basic validation but no unit conversions
+            raw_type_code = event_data.get("type", "GE")
             processed_data = {
-                "production_type": cls._map_production_type(event_data.get("type", "GE")),
+                "production_type": raw_type_code,  # Pass raw code for USDA routing
+                "production_type_label": cls._map_production_type(raw_type_code),
                 "area_covered": safe_float(event_data.get("area_covered", 0)),
                 "equipment_hours": safe_float(event_data.get("equipment_hours", 0)),
                 "fuel_consumed": safe_float(event_data.get("fuel_consumed")),
@@ -1843,6 +2006,8 @@ class OptimizedEventProcessor:
                 "product_name": event_data.get("product_name", "Unknown Product"),
                 "equipment_type": event_data.get("equipment_type", ""),
                 "fuel_type": event_data.get("fuel_type", "diesel"),
+                "energy_source": event_data.get("energy_source", "grid"),
+                "water_source": event_data.get("water_source"),
                 # Add fallback indicators for debugging
                 "processing_method": "fallback_basic",
                 "unit_conversions_applied": False,
@@ -1856,13 +2021,16 @@ class OptimizedEventProcessor:
             logger.error(f"Fallback processing failed: {e}")
             # Absolute minimal fallback
             return {
-                "production_type": "general production",
+                "production_type": "GE",  # Raw code for USDA routing
+                "production_type_label": "general production",
                 "area_covered": 0.0,
                 "equipment_hours": 0.0,
                 "fuel_consumed": 0.0,
                 "yield_quantity": 0.0,
                 "water_volume": 0.0,
                 "product_name": "Unknown Product",
+                "fuel_type": "diesel",
+                "energy_source": "grid",
                 "processing_method": "emergency_fallback",
                 "unit_conversions_applied": False,
                 "fallback_reason": f"Emergency fallback due to: {e}",
@@ -1891,23 +2059,28 @@ class OptimizedEventProcessor:
         - Electric equipment uses EPA eGRID 2023 factor (0.39 kg CO₂/kWh)
         - Diesel equipment uses standard liters conversion
         """
-        fuel_consumed = event_data.get("fuel_consumed") or event_data.get("fuel_amount", 5)
+        fuel_consumed_raw = event_data.get("fuel_consumed") or event_data.get("fuel_amount")
+        fuel_consumed = float(fuel_consumed_raw) if fuel_consumed_raw else 0.0
         fuel_unit = event_data.get("fuel_unit", "L")
         fuel_type = event_data.get("fuel_type", "diesel")
         energy_source = event_data.get("energy_source", "grid")  # For solar/wind scenarios
+
+        # Parse hours - no phantom defaults
+        hours_raw = event_data.get("hours_operated") or event_data.get("hours_used")
+        hours_used = float(hours_raw) if hours_raw else 0.0
 
         # Handle electric equipment separately - preserve kWh
         if fuel_type == "electric" or fuel_unit.lower() in ["kwh", "kw/h", "kw"]:
             return {
                 "equipment_type": event_data.get("type", "FC"),
                 "fuel_type": "electric",
-                "fuel_consumed_kwh": float(fuel_consumed),  # Preserve kWh value
+                "fuel_consumed_kwh": fuel_consumed,
                 "energy_source": energy_source,
-                "hours_used": float(event_data.get("hours_operated") or event_data.get("hours_used", 2)),
+                "hours_used": hours_used,
             }
 
         # Convert fuel to liters for non-electric equipment
-        fuel_liters = float(fuel_consumed)
+        fuel_liters = fuel_consumed
         if fuel_unit == "gal":
             fuel_liters *= 3.78541  # gallons to liters
         elif fuel_unit == "kg":
@@ -1917,7 +2090,7 @@ class OptimizedEventProcessor:
             "equipment_type": event_data.get("type", "FC"),
             "fuel_type": fuel_type,
             "fuel_amount_liters": fuel_liters,
-            "hours_used": float(event_data.get("hours_operated") or event_data.get("hours_used", 2)),
+            "hours_used": hours_used,
         }
 
     @classmethod
@@ -1926,11 +2099,11 @@ class OptimizedEventProcessor:
         # SPRINT 6 FIX (2025-12-26): Handle area_covered field from frontend
         # Frontend sends "area_covered", backend models use different field names
         # Priority: area_covered (frontend) > area_worked > area (fallback)
-        area_str = event_data.get("area_covered") or event_data.get("area_worked") or event_data.get("area", "1.0")
+        area_str = event_data.get("area_covered") or event_data.get("area_worked") or event_data.get("area") or "0"
         try:
             area_value = float(area_str)
         except (ValueError, TypeError):
-            area_value = 1.0
+            area_value = 0.0
 
         return {
             "soil_type": event_data.get("type", "ST"),  # Default to Soil Testing
@@ -2007,13 +2180,6 @@ def calculate_event_carbon_impact_enhanced(request):
     - Intelligent caching at 4 levels
     - Circuit breaker for external APIs
     """
-    # DEBUG (2025-12-24): Log at entry point to confirm function is being called
-    print(f"🔍 [calculate_event_carbon_impact_enhanced] FUNCTION ENTRY - request received")
-    print(f"  - request.data: {request.data}")
-    # Log concentration specifically for debugging
-    event_data_for_debug = request.data.get("event_data", {})
-    print(f"  - CONCENTRATION in event_data: '{event_data_for_debug.get('concentration')}'")
-
     start_time = time.time()
 
     try:
@@ -2132,17 +2298,6 @@ def calculate_event_carbon_impact(request):
         event_type = request.data.get("event_type")  # 'chemical', 'production', 'weather', 'general', etc.
         event_data = request.data.get("event_data", {})
 
-        # DEBUG (2025-12-24): Log incoming request data to diagnose preview calculation issue
-        print(f"🔍 [calculate_event_carbon_impact] ENTRY POINT")
-        print(f"  - event_type received: '{event_type}' (type: {type(event_type).__name__})")
-        print(f"  - event_data keys: {list(event_data.keys())}")
-        if event_type == "chemical":
-            print(f"  - ✅ MATCHED 'chemical' condition")
-            print(f"  - application_fuel_type in data: {event_data.get('application_fuel_type')}")
-            print(f"  - application_fuel_consumed in data: {event_data.get('application_fuel_consumed')}")
-        else:
-            print(f"  - ❌ DID NOT match 'chemical' - got '{event_type}'")
-
         if not event_type:
             return Response({"error": "event_type is required"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -2202,19 +2357,38 @@ def calculate_event_carbon_impact(request):
                     self.application_fuel_consumed = event_data.get("application_fuel_consumed")
                     self.application_fuel_unit = event_data.get("application_fuel_unit", "L")
 
-                    # DEBUG: Log the fuel fields received
-                    print(f"🔍 [MockEvent] Chemical fuel fields received:")
-                    print(f"  - application_fuel_type: {self.application_fuel_type}")
-                    print(f"  - application_fuel_consumed: {self.application_fuel_consumed}")
-                    print(f"  - application_fuel_unit: {self.application_fuel_unit}")
+                    # Build extra_data for summary/aggregate mode carbon calculations
+                    # Aggregate calculators read fuel_consumption_total, fuel_type, etc. from extra_data
+                    # CRITICAL: Convert is_summary from string "true" to boolean True
+                    # Frontend sends strings via JSON, but _is_aggregate_event() checks `is True`
+                    is_summary_raw = event_data.get("is_summary")
+                    is_summary = is_summary_raw in (True, "true", "True", "1")
+                    self.extra_data = {
+                        "is_summary": is_summary,
+                        "event_count": event_data.get("event_count"),
+                        "active_ingredient_total_kg": event_data.get("active_ingredient_total_kg"),
+                        "fuel_consumption_total": event_data.get("fuel_consumption_total"),
+                        "fuel_type": event_data.get("application_fuel_type") or "diesel",
+                        "fuel_unit": event_data.get("application_fuel_unit") or "gal",
+                        "nitrogen_total_kg": event_data.get("nitrogen_total_kg"),
+                        "phosphorus_total_kg": event_data.get("phosphorus_total_kg"),
+                        "potassium_total_kg": event_data.get("potassium_total_kg"),
+                        "volume_applied": event_data.get("volume_applied"),
+                        "volume_unit": event_data.get("volume_unit"),
+                        "area_treated": event_data.get("area_treated"),
+                        "area_unit": event_data.get("area_unit"),
+                    }
 
                 # Map production event data (use actual form data, not defaults)
                 elif event_type == "production":
-                    self.type = event_data.get("type", "IR")  # Use actual type from form
+                    self.type = event_data.get(
+                        "type", "PL"
+                    )  # Default to Planting (matches frontend ProductionTab default)
 
                     # Map frontend form fields correctly for EPA calculations
+                    # Default to 0 when no area provided - preview should show 0 emissions for empty forms
                     self.area_covered = (
-                        float(event_data.get("area_covered", "1.0")) if event_data.get("area_covered") else 1.0
+                        float(event_data.get("area_covered", "0")) if event_data.get("area_covered") else 0.0
                     )
                     self.area_unit = event_data.get("area_unit", "ha")
 
@@ -2381,47 +2555,17 @@ def calculate_event_carbon_impact(request):
         elif event_type == "business":
             calculation_result = calculator.calculate_business_event_impact(mock_event)
         else:  # general or unknown
-            # For general events, calculate based on observation text analysis
-            try:
-                # Try to extract some meaningful data from observation for general events
-                observation = event_data.get("observation", "")
-                name = event_data.get("name", "")
-
-                # Basic CO2e estimation based on text content
-                base_co2e = 0.1  # Minimal default
-
-                # Simple keyword-based estimation for general events
-                text_to_analyze = f"{name} {observation}".lower()
-                if any(word in text_to_analyze for word in ["fuel", "diesel", "gas", "transport", "truck"]):
-                    base_co2e = 2.5  # Transport-related
-                elif any(word in text_to_analyze for word in ["electric", "solar", "renewable"]):
-                    base_co2e = 0.05  # Low carbon activities
-                elif any(word in text_to_analyze for word in ["organic", "compost", "mulch"]):
-                    base_co2e = -0.5  # Sequestration activities
-
-                calculation_result = {
-                    "co2e": base_co2e,
-                    "efficiency_score": 60.0,
-                    "usda_verified": False,
-                    "calculation_method": "general_event_text_analysis",
-                    "recommendations": [
-                        "Consider categorizing this activity into a specific event type for more accurate carbon tracking",
-                        "Add more specific details about resources used for better calculations",
-                    ],
-                    "event_type": event_type,
-                    "timestamp": timezone.now().isoformat(),
-                }
-            except Exception:
-                # Fallback if text analysis fails
-                calculation_result = {
-                    "co2e": 0.1,
-                    "efficiency_score": 50.0,
-                    "usda_verified": False,
-                    "calculation_method": "general_event_fallback",
-                    "recommendations": [],
-                    "event_type": event_type,
-                    "timestamp": timezone.now().isoformat(),
-                }
+            # General events are documentation/transparency activities with no direct
+            # fuel combustion. Per Trazo methodology: 0 kg CO2e (like weather events).
+            calculation_result = {
+                "co2e": 0.0,
+                "efficiency_score": 100.0,
+                "usda_verified": True,
+                "calculation_method": "general_event_zero_emissions",
+                "recommendations": [],
+                "event_type": event_type,
+                "timestamp": timezone.now().isoformat(),
+            }
 
         # Ensure required fields are present and enhance with verification info
         calculation_result["event_type"] = event_type
@@ -2496,13 +2640,13 @@ class SustainabilityBadgeViewSet(viewsets.ReadOnlyModelViewSet):
 class MicroOffsetViewSet(viewsets.ModelViewSet):
     queryset = MicroOffset.objects.all()
     serializer_class = MicroOffsetSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [ReadOnlyForViewersGlobal]
 
 
 class GreenPointsViewSet(viewsets.ModelViewSet):
     queryset = GreenPoints.objects.all()
     serializer_class = GreenPointsSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [ReadOnlyForViewersGlobal]
 
 
 class CarbonAuditLogViewSet(viewsets.ReadOnlyModelViewSet):
@@ -2514,19 +2658,19 @@ class CarbonAuditLogViewSet(viewsets.ReadOnlyModelViewSet):
 class CarbonOffsetProjectViewSet(viewsets.ModelViewSet):
     queryset = CarbonOffsetProject.objects.all()
     serializer_class = CarbonOffsetProjectSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [ReadOnlyForViewersGlobal]
 
 
 class CarbonOffsetPurchaseViewSet(viewsets.ModelViewSet):
     queryset = CarbonOffsetPurchase.objects.all()
     serializer_class = CarbonOffsetPurchaseSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [ReadOnlyForViewersGlobal]
 
 
 class CarbonOffsetCertificateViewSet(viewsets.ModelViewSet):
     queryset = CarbonOffsetCertificate.objects.all()
     serializer_class = CarbonOffsetCertificateSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [ReadOnlyForViewersGlobal]
 
 
 class CarbonFootprintCalculatorViewSet(viewsets.ViewSet):
@@ -2968,16 +3112,28 @@ class PublicProductionViewSet(viewsets.ViewSet):
     def qr_summary(self, request, pk=None):
         try:
             # SECURITY: Validate and sanitize all input parameters
-            try:
-                production_id = QRParameterValidator.validate_production_id(pk)
-                quick_mode = QRParameterValidator.validate_quick_mode(request.GET.get("quick"))
-                bust_cache = QRParameterValidator.validate_cache_bust(request.GET.get("bust_cache"))
-                logger.info(f"🔐 QR request validated - Production: {production_id}, Quick: {quick_mode}")
-            except ValidationError as e:
-                logger.warning(f"🚨 QR validation failed: {e}")
-                return Response({"error": "Invalid request parameters"}, status=status.HTTP_400_BAD_REQUEST)
+            # Support both UUID and integer lookups
+            import uuid as uuid_module
 
-            print(f"DEBUG: qr_summary called for production {production_id}")
+            lookup_kwargs = {"published": True}
+            try:
+                public_uuid = uuid_module.UUID(str(pk))
+                lookup_kwargs["public_id"] = public_uuid
+                production_id_str = str(public_uuid)
+            except (ValueError, AttributeError):
+                # Fall back to integer validation
+                try:
+                    production_id = QRParameterValidator.validate_production_id(pk)
+                    lookup_kwargs["id"] = production_id
+                    production_id_str = str(production_id)
+                except ValidationError as e:
+                    logger.warning(f"QR validation failed: {e}")
+                    return Response({"error": "Invalid request parameters"}, status=status.HTTP_400_BAD_REQUEST)
+
+            quick_mode = QRParameterValidator.validate_quick_mode(request.GET.get("quick"))
+            bust_cache = QRParameterValidator.validate_cache_bust(request.GET.get("bust_cache"))
+            logger.info(f"QR request validated - Production: {production_id_str}, Quick: {quick_mode}")
+
             # Phase 1 Optimization: Add caching for QR endpoint
             from django.core.cache import cache
 
@@ -2986,7 +3142,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
             from .services.blockchain import blockchain_service
 
             # Cache key for this production using validated ID
-            cache_key = f'qr_summary_{production_id}_v3_agricultural{"_quick" if quick_mode else ""}'
+            cache_key = f'qr_summary_{production_id_str}_v3_agricultural{"_quick" if quick_mode else ""}'
             cached_data = cache.get(cache_key) if not bust_cache else None
 
             # TEMPORARILY DISABLE CACHE FOR TESTING
@@ -3000,7 +3156,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
             production = (
                 History.objects.select_related("product", "parcel__establishment__company")
                 .prefetch_related("carbonentry_set__source")
-                .get(id=production_id, published=True)
+                .get(**lookup_kwargs)
             )
             establishment = production.parcel.establishment if production.parcel else None
 
@@ -3130,7 +3286,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     industry_percentile = max(5, min(95, int(carbon_score_temp * 0.9)))
 
             except Exception as e:
-                print(f"Error calculating crop-specific benchmarks: {e}")
+                logger.warning(f"Error calculating crop-specific benchmarks: {e}")
                 industry_percentile = 50
 
             # Calculate transparency score using TransparencyCalculator
@@ -3236,7 +3392,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                 )
 
             except Exception as e:
-                print(f"Error with blockchain verification: {e}")
+                logger.warning(f"Error with blockchain verification: {e}")
                 # Fallback blockchain verification for demo
                 blockchain_verification = {
                     "verified": True,
@@ -3326,7 +3482,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     )
 
             except Exception as e:
-                print(f"Error getting badges: {e}")
+                logger.warning(f"Error getting badges: {e}")
 
             # Generate crop-specific relatable footprint with bounds checking
             relatable_footprint = "Carbon neutral production"
@@ -3983,9 +4139,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
             industry_average = self._get_industry_average(crop_type, production)
 
             # === TIMELINE DATA (combined from all event types) ===
-            print(f"DEBUG: About to call TimelineService for production {production.id}")
             timeline_data = TimelineService.get_production_timeline(production, limit=10)
-            print(f"DEBUG: Finished calling TimelineService, got {len(timeline_data) if timeline_data else 0} events")
 
             # === ESTABLISHMENT AND PARCEL DATA ===
             # Get establishment photo from album
@@ -4159,7 +4313,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                         country = data.get("country_name")
                 except Exception as e:
                     # If geolocation fails, continue without it
-                    print(f"IP geolocation failed: {e}")
+                    logger.debug(f"IP geolocation failed: {e}")
 
             history_scan = HistoryScan.objects.create(
                 history=production,
@@ -4350,10 +4504,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
         except History.DoesNotExist:
             return Response({"error": "Production not found or not published"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            print(f"Error in complete_summary: {e}")
-            import traceback
-
-            traceback.print_exc()
+            logger.error(f"Error in complete_summary: {e}", exc_info=True)
             return Response(
                 {"error": "Internal server error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
@@ -4804,7 +4955,6 @@ class PublicProductionViewSet(viewsets.ViewSet):
         Instead of making one query per event, we fetch all carbon data once and cache it.
         """
         try:
-            print(f"DEBUG: _get_complete_timeline called for production {production.id}")
             timeline_events = []
 
             # PERFORMANCE OPTIMIZATION: Use prefetched carbonentry_set instead of additional queries
@@ -4892,7 +5042,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                         "description": getattr(event, "description", "") or getattr(event, "name", ""),
                         "observation": getattr(event, "observation", ""),
                         "date": event.date.isoformat() if event.date else None,
-                        "certified": getattr(event, "certified", True),
+                        "certified": getattr(production.parcel, "certified", False),
                         "index": getattr(event, "index", 0),
                         "volume": getattr(event, "volume", None),
                         "concentration": getattr(event, "concentration", None),
@@ -4906,18 +5056,6 @@ class PublicProductionViewSet(viewsets.ViewSet):
 
                     # Add event-type specific fields for better transparency
                     if event_category == "chemical":
-                        # 🔧 DEBUG: Log chemical event field extraction for event 178
-                        if event.id == 178:
-                            print(f"🔧 BACKEND DEBUG - Event 178 field extraction:")
-                            area_val = getattr(event, "area", "NO_FIELD")
-                            timing_val = getattr(event, "application_timing", "NO_FIELD")
-                            method_val = getattr(event, "way_of_application", "NO_FIELD")
-                            print(f"   event.area = '{area_val}' (type: {type(area_val)})")
-                            print(f"   event.application_timing = '{timing_val}' (type: {type(timing_val)})")
-                            print(f"   event.way_of_application = '{method_val}' (type: {type(method_val)})")
-                            print(f"   Current event_data.area = '{event_data.get('area', 'NOT_SET')}'")
-                            print(f"   Full event object type: {type(event)}")
-
                         # Add chemical-specific agricultural context fields
                         # 🔧 CRITICAL FIX: Ensure None values from getattr don't become empty strings
                         area_value = getattr(event, "area", None)
@@ -4948,20 +5086,6 @@ class PublicProductionViewSet(viewsets.ViewSet):
                             }
                         )
 
-                        # 🔧 DEBUG: Log final event_data for event 178
-                        if event.id == 178:
-                            print(f"🔧 BACKEND DEBUG - Event 178 FINAL event_data:")
-                            print(f"   event_data['area'] = '{event_data.get('area', 'NOT_SET')}'")
-                            print(
-                                f"   event_data['application_timing'] = '{event_data.get('application_timing', 'NOT_SET')}'"
-                            )
-                            print(
-                                f"   event_data['way_of_application'] = '{event_data.get('way_of_application', 'NOT_SET')}'"
-                            )
-                            print(
-                                f"   event_data['application_method'] = '{event_data.get('application_method', 'NOT_SET')}'"
-                            )
-                            print("🔧 Full event_data keys:", list(event_data.keys()))
                     elif event_category == "production":
                         # Add production-specific fields
                         event_data.update(
@@ -4976,11 +5100,6 @@ class PublicProductionViewSet(viewsets.ViewSet):
                         # CRITICAL: Include name field for operation name display
                         operation_name = getattr(event, "name", None) or getattr(event, "operation_name", None)
                         operation_type = getattr(event, "type", None)
-
-                        # DEBUG: Add debug info to the API response for Equipment events
-                        print(
-                            f"🔧 BACKEND DEBUG Equipment Event {event.id}: type='{operation_type}', name='{operation_name}'"
-                        )
 
                         event_data.update(
                             {
@@ -5073,7 +5192,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
 
             return timeline_events
         except Exception as e:
-            print(f"Error getting timeline: {e}")
+            logger.error(f"Error getting timeline: {e}")
             return []
 
     def _get_npk_ratio(self, event):
@@ -5188,7 +5307,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
             return self._calculate_event_carbon_on_demand(event, event_category, production)
 
         except Exception as e:
-            print(f"Error getting carbon data for event {event.id}: {e}")
+            logger.error(f"Error getting carbon data for event {event.id}: {e}")
             return None
 
     def _calculate_event_carbon_on_demand(self, event, event_category, production):
@@ -5242,7 +5361,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
             return None
 
         except Exception as e:
-            print(f"Error calculating carbon on-demand for event {event.id}: {e}")
+            logger.error(f"Error calculating carbon on-demand for event {event.id}: {e}")
             return None
 
     def _get_blockchain_verification(self, production):
@@ -5804,9 +5923,19 @@ class PublicProductionViewSet(viewsets.ViewSet):
         Uses the same TimelineService logic that works in the transparency endpoint.
         """
         try:
+            import uuid as uuid_module
+
             from django.core.cache import cache
 
             from history.models import History
+
+            # Support both UUID (public_id) and integer (legacy) lookups
+            lookup_kwargs = {"published": True}
+            try:
+                public_uuid = uuid_module.UUID(str(pk))
+                lookup_kwargs["public_id"] = public_uuid
+            except (ValueError, AttributeError):
+                lookup_kwargs["id"] = pk
 
             # Get the production object
             production = (
@@ -5822,28 +5951,14 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     "history_soilmanagementevent_events",
                     "history_pestmanagementevent_events",
                 )
-                .get(id=pk, published=True)
+                .get(**lookup_kwargs)
             )
-
-            # 🔧 DEBUG: Check production data
-            print(f"DEBUG: Getting complete summary for production {production.id}")
 
             # Use PublicHistorySerializer (same as working transparency endpoint)
             from history.serializers import PublicHistorySerializer
 
             public_history_serializer = PublicHistorySerializer(production, context={"request": request})
             public_history_data = public_history_serializer.data
-
-            # 🔧 DEBUG: Check if event 178 has correct data now
-            if "events" in public_history_data:
-                print(f"DEBUG: PublicHistorySerializer returned {len(public_history_data['events'])} events")
-                event_178 = next((e for e in public_history_data["events"] if str(e.get("id")) == "178"), None)
-                if event_178:
-                    print(
-                        f"DEBUG: Event 178 from PublicHistorySerializer - area: {event_178.get('area')}, application_timing: {event_178.get('application_timing')}, way_of_application: {event_178.get('way_of_application')}"
-                    )
-                else:
-                    print("DEBUG: Event 178 not found in PublicHistorySerializer events")
 
             # Build harvestDetails for consumer transparency
             harvest_details = {}
@@ -6499,24 +6614,13 @@ class CarbonProductionViewSet(viewsets.ReadOnlyModelViewSet):
         )
 
         establishment_id = self.request.query_params.get("establishment")
-        print(f"🚀 DEBUG - CarbonProductionViewSet.get_queryset() called with establishment={establishment_id}")
 
         if establishment_id:
             try:
                 establishment_id = int(establishment_id)
                 queryset = queryset.filter(parcel__establishment_id=establishment_id)
-                print(
-                    f"🔍 DEBUG - CarbonProductionViewSet: Filtered queryset for establishment {establishment_id}, found {queryset.count()} productions"
-                )
-                for prod in queryset:
-                    print(f"  Production {prod.id}: {prod.name}, finish_date: {prod.finish_date}")
             except (ValueError, TypeError):
-                print(f"❌ DEBUG - CarbonProductionViewSet: Invalid establishment_id: {establishment_id}")
                 pass
-        else:
-            print(
-                f"🔍 DEBUG - CarbonProductionViewSet: No establishment filter, returning all {queryset.count()} productions"
-            )
 
         return queryset
 
@@ -9346,6 +9450,12 @@ def get_usda_benchmark_comparison(request):
 @permission_classes([IsAuthenticated])
 def process_voice_event(request):
     """NEW ENDPOINT: Enhanced voice event processing with confidence-based auto-approval"""
+    company = request.user.get_active_company()
+    if not company or not company.has_feature("voice_recording"):
+        return Response(
+            {"error": "Voice recording is not available on your current plan. " "Please upgrade to Basic or higher."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
     try:
         voice_data = request.data
 
@@ -9407,6 +9517,12 @@ def process_voice_event_ai(request):
     Process voice input using AI for enhanced accuracy and natural language understanding.
     This endpoint uses OpenAI GPT for intelligent voice processing.
     """
+    company = request.user.get_active_company()
+    if not company or not company.has_feature("voice_recording"):
+        return Response(
+            {"error": "Voice recording is not available on your current plan. " "Please upgrade to Basic or higher."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
     try:
         transcript = request.data.get("transcript", "")
         crop_type = request.data.get("crop_type", "")
@@ -9416,10 +9532,10 @@ def process_voice_event_ai(request):
             return Response({"error": "transcript and crop_type are required"}, status=status.HTTP_400_BAD_REQUEST)
 
         # Import here to avoid circular imports
-        from .services.ai_voice_processor import process_voice_input_with_ai
+        from .services.ai_voice_processor import process_voice_with_ai
 
         # Process with AI
-        result = process_voice_input_with_ai(transcript, crop_type, language)
+        result = process_voice_with_ai(transcript, crop_type, language)
 
         return Response(result, status=status.HTTP_200_OK)
 
@@ -10904,4 +11020,95 @@ def smart_product_stats(request):
 
         return Response(
             {"error": "Stats retrieval failed", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+# ────────────────────────────────────────────────────────────────────────────────
+# Voice Configuration & Deepgram Token Endpoints
+# ────────────────────────────────────────────────────────────────────────────────
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def voice_config(request):
+    """Return which voice transcription provider is available."""
+    company = request.user.get_active_company()
+    if not company or not company.has_feature("voice_recording"):
+        return Response(
+            {"error": "Voice recording is not available on your current plan. " "Please upgrade to Basic or higher."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    provider = "deepgram" if getattr(settings, "DEEPGRAM_API_KEY", "") else "web_speech_api"
+    return Response({"provider": provider})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def deepgram_token(request):
+    """Generate a short-lived Deepgram API key for client-side WebSocket streaming.
+
+    Creates a temporary project key (60s TTL) with usage:write scope.
+    The browser uses this key via the WebSocket subprotocol ['token', key].
+    """
+    company = request.user.get_active_company()
+    if not company or not company.has_feature("voice_recording"):
+        return Response(
+            {"error": "Voice recording is not available on your current plan. " "Please upgrade to Basic or higher."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    import requests as http_requests
+
+    api_key = getattr(settings, "DEEPGRAM_API_KEY", "")
+    if not api_key:
+        return Response(
+            {"error": "Deepgram is not configured on this server."},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+    headers = {
+        "Authorization": f"Token {api_key}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        # Step 1: Get the project ID
+        projects_resp = http_requests.get(
+            "https://api.deepgram.com/v1/projects",
+            headers=headers,
+            timeout=10,
+        )
+        projects_resp.raise_for_status()
+        projects = projects_resp.json().get("projects", [])
+        if not projects:
+            return Response(
+                {"error": "No Deepgram project found."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        project_id = projects[0]["project_id"]
+
+        # Step 2: Create a temporary API key (60s TTL, usage:write only)
+        key_resp = http_requests.post(
+            f"https://api.deepgram.com/v1/projects/{project_id}/keys",
+            headers=headers,
+            json={
+                "comment": "trazo-voice-temp",
+                "scopes": ["usage:write"],
+                "time_to_live_in_seconds": 60,
+            },
+            timeout=10,
+        )
+        key_resp.raise_for_status()
+        data = key_resp.json()
+
+        return Response(
+            {
+                "token": data["key"],
+                "expires_in": 60,
+            }
+        )
+    except http_requests.exceptions.RequestException as e:
+        logger.error(f"Deepgram token request failed: {e}")
+        return Response(
+            {"error": "Failed to generate Deepgram token."},
+            status=status.HTTP_502_BAD_GATEWAY,
         )

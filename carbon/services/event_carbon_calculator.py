@@ -83,12 +83,10 @@ class EventCarbonCalculator:
 
     @property
     def FUEL_EMISSION_FACTORS(self):
-        """Get fuel emission factors from centralized registry"""
-        return {
-            "diesel": emission_factors.get_fuel_factor("diesel")["value"],
-            "gasoline": emission_factors.get_fuel_factor("gasoline")["value"],
-            "natural_gas": emission_factors.get_fuel_factor("natural_gas")["value"],
-        }
+        """Get fuel emission factors from centralized registry (choices.py)"""
+        from carbon.choices import FUEL_TYPE_FACTORS
+
+        return {fuel: data["value"] for fuel, data in FUEL_TYPE_FACTORS.items()}
 
     @property
     def APPLICATION_EFFICIENCY(self):
@@ -260,6 +258,43 @@ class EventCarbonCalculator:
         except Exception:
             return {}
 
+    def _calculate_aggregate_fuel_emissions(self, fuel_total: float, fuel_type: str, fuel_unit: str) -> float:
+        """
+        Calculate fuel emissions for aggregate events using the correct fuel type factor.
+        Supports diesel, gasoline, propane, biodiesel, electric, natural_gas, and 'none'.
+        Returns emissions in kg CO2e.
+        """
+        if fuel_total <= 0:
+            return 0.0
+
+        from .verified_emission_factors import VerifiedEmissionFactors
+
+        fuel_type_lower = (fuel_type or "diesel").lower()
+
+        # Handle electric equipment
+        if fuel_type_lower == "electric":
+            # fuel_total is in kWh when unit is kWh, convert if needed
+            kwh = fuel_total
+            if fuel_unit == "L" or fuel_unit == "gal":
+                # Nonsensical combination, but treat as kWh anyway
+                kwh = fuel_total
+            electricity_factor = VerifiedEmissionFactors.get_country_electricity_factor()
+            return kwh * electricity_factor.value
+
+        # Handle manual/no fuel
+        if fuel_type_lower == "none":
+            return 0.0
+
+        # Convert to gallons for liquid fuels
+        if fuel_unit == "gal":
+            fuel_gallons = fuel_total
+        else:
+            # Default assumes liters
+            fuel_gallons = fuel_total / 3.78541
+
+        fuel_factor, _ = VerifiedEmissionFactors._get_fuel_factor_for_type(fuel_type_lower)
+        return fuel_gallons * fuel_factor.value
+
     def _calculate_aggregate_fertilizer_impact(self, event, extra_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Calculate carbon impact for aggregate fertilizer events (multiple applications as one summary).
@@ -279,7 +314,9 @@ class EventCarbonCalculator:
             date_end = extra_data.get("date_end", "")
 
             # Get fuel consumption if provided
-            fuel_total_liters = float(extra_data.get("fuel_consumption_total", 0) or 0)
+            fuel_total = float(extra_data.get("fuel_consumption_total", 0) or 0)
+            fuel_type = extra_data.get("fuel_type", "diesel") or "diesel"
+            fuel_unit = extra_data.get("fuel_unit", "gal") or "gal"
 
             # Calculate manufacturing emissions using EPA/USDA verified factors
             # From verified_emission_factors.py:
@@ -291,9 +328,8 @@ class EventCarbonCalculator:
             k_emissions = k_total_kg * 0.65
             manufacturing_emissions = n_emissions + p_emissions + k_emissions
 
-            # Calculate application fuel emissions if provided
-            # EPA Diesel Factor: 10.21 kg CO2/gallon = 2.698 kg CO2/liter
-            application_emissions = fuel_total_liters * 2.698 if fuel_total_liters > 0 else 0
+            # Calculate application fuel emissions using correct fuel type
+            application_emissions = self._calculate_aggregate_fuel_emissions(fuel_total, fuel_type, fuel_unit)
 
             total_emissions = manufacturing_emissions + application_emissions
 
@@ -308,7 +344,9 @@ class EventCarbonCalculator:
                 "potassium_total_kg": k_total_kg,
                 "potassium_emissions_kg_co2e": round(k_emissions, 3),
                 "manufacturing_emissions_kg_co2e": round(manufacturing_emissions, 3),
-                "application_fuel_liters": fuel_total_liters,
+                "application_fuel_total": fuel_total,
+                "application_fuel_type": fuel_type,
+                "application_fuel_unit": fuel_unit,
                 "application_emissions_kg_co2e": round(application_emissions, 3),
                 "confidence_level": 0.92,
             }
@@ -365,10 +403,15 @@ class EventCarbonCalculator:
             date_end = extra_data.get("date_end", "")
 
             # ENHANCED 2025-12-24: Extract chemical_subtype for accurate emission factor
-            chemical_subtype = extra_data.get("chemical_subtype", "").lower()
+            # FIX: Check extra_data first, then fall back to model field
+            chemical_subtype = (
+                extra_data.get("chemical_subtype", "") or getattr(event, "chemical_subtype", "") or ""
+            ).lower()
 
             # Get fuel consumption if provided
-            fuel_total_liters = float(extra_data.get("fuel_consumption_total", 0) or 0)
+            fuel_total = float(extra_data.get("fuel_consumption_total", 0) or 0)
+            fuel_type = extra_data.get("fuel_type", "diesel") or "diesel"
+            fuel_unit = extra_data.get("fuel_unit", "gal") or "gal"
 
             # ENHANCED 2025-12-24: Select emission factor based on chemical_subtype
             # Default to synthetic fungicide if subtype not specified
@@ -394,8 +437,8 @@ class EventCarbonCalculator:
             # Calculate manufacturing emissions using selected emission factor
             manufacturing_emissions = active_ingredient_kg * emission_factor
 
-            # Calculate application fuel emissions if provided
-            application_emissions = fuel_total_liters * 2.698 if fuel_total_liters > 0 else 0
+            # Calculate application fuel emissions using correct fuel type
+            application_emissions = self._calculate_aggregate_fuel_emissions(fuel_total, fuel_type, fuel_unit)
 
             total_emissions = manufacturing_emissions + application_emissions
 
@@ -406,7 +449,9 @@ class EventCarbonCalculator:
                 "active_ingredient_total_kg": active_ingredient_kg,
                 "chemical_subtype": chemical_subtype or "synthetic (default)",
                 "manufacturing_emissions_kg_co2e": round(manufacturing_emissions, 3),
-                "application_fuel_liters": fuel_total_liters,
+                "application_fuel_total": fuel_total,
+                "application_fuel_type": fuel_type,
+                "application_fuel_unit": fuel_unit,
                 "application_emissions_kg_co2e": round(application_emissions, 3),
                 "emission_factor_used": f"{emission_factor} kg CO2/kg AI ({emission_factor_label})",
                 "confidence_level": 0.90,
@@ -463,10 +508,15 @@ class EventCarbonCalculator:
             date_end = extra_data.get("date_end", "")
 
             # ENHANCED 2025-12-24: Extract chemical_subtype for accurate emission factor
-            chemical_subtype = extra_data.get("chemical_subtype", "").lower()
+            # FIX: Check extra_data first, then fall back to model field
+            chemical_subtype = (
+                extra_data.get("chemical_subtype", "") or getattr(event, "chemical_subtype", "") or ""
+            ).lower()
 
             # Get fuel consumption if provided
-            fuel_total_liters = float(extra_data.get("fuel_consumption_total", 0) or 0)
+            fuel_total = float(extra_data.get("fuel_consumption_total", 0) or 0)
+            fuel_type = extra_data.get("fuel_type", "diesel") or "diesel"
+            fuel_unit = extra_data.get("fuel_unit", "gal") or "gal"
 
             # ENHANCED 2025-12-24: Select emission factor based on chemical_subtype
             # Default to synthetic pesticide if subtype not specified
@@ -487,8 +537,8 @@ class EventCarbonCalculator:
             # Calculate manufacturing emissions using selected emission factor
             manufacturing_emissions = active_ingredient_kg * emission_factor
 
-            # Calculate application fuel emissions if provided
-            application_emissions = fuel_total_liters * 2.698 if fuel_total_liters > 0 else 0
+            # Calculate application fuel emissions using correct fuel type
+            application_emissions = self._calculate_aggregate_fuel_emissions(fuel_total, fuel_type, fuel_unit)
 
             total_emissions = manufacturing_emissions + application_emissions
 
@@ -499,7 +549,9 @@ class EventCarbonCalculator:
                 "active_ingredient_total_kg": active_ingredient_kg,
                 "chemical_subtype": chemical_subtype or "synthetic (default)",
                 "manufacturing_emissions_kg_co2e": round(manufacturing_emissions, 3),
-                "application_fuel_liters": fuel_total_liters,
+                "application_fuel_total": fuel_total,
+                "application_fuel_type": fuel_type,
+                "application_fuel_unit": fuel_unit,
                 "application_emissions_kg_co2e": round(application_emissions, 3),
                 "emission_factor_used": f"{emission_factor} kg CO2/kg AI ({emission_factor_label})",
                 "confidence_level": 0.90,
@@ -1080,13 +1132,13 @@ class EventCarbonCalculator:
             }
 
         except Exception as e:
-            logger.warning(f"Error extracting chemical data, using defaults: {e}")
+            logger.warning(f"Error extracting chemical data, using zero defaults: {e}")
             return {
                 "chemical_type": "FE",
                 "crop_name": "unknown",
-                "volume_liters": 50.0,
-                "area_hectares": 1.0,
-                "npk_content": {"N": 16, "P": 16, "K": 16},  # Default NPK
+                "volume_liters": 0.0,
+                "area_hectares": 0.0,
+                "npk_content": {"N": 0, "P": 0, "K": 0},
                 "application_method": "broadcast",
                 "product_name": "",
                 "chemical_subtype": "",
@@ -1179,9 +1231,14 @@ class EventCarbonCalculator:
                 # Sprint 4: Check for aggregate irrigation water_volume_total first
                 # This enables accurate carbon calculation for irrigation summaries
                 # (e.g., "12 irrigations in May totaling 50,000 gallons")
-                if hasattr(event, "water_volume_total") and event.water_volume_total:
-                    water_volume_total = float(event.water_volume_total)
-                    water_unit = getattr(event, "water_volume_unit", "gallons")
+                # Check both model attribute and extra_data (aggregate events store in extra_data)
+                extra_data = getattr(event, "extra_data", None) or {}
+                raw_water_total = getattr(event, "water_volume_total", None) or extra_data.get("water_volume_total")
+                if raw_water_total:
+                    water_volume_total = float(raw_water_total)
+                    water_unit = getattr(event, "water_volume_unit", None) or extra_data.get(
+                        "water_volume_unit", "gallons"
+                    )
 
                     # Convert to gallons based on unit
                     if water_unit == "gallons":
@@ -1211,8 +1268,12 @@ class EventCarbonCalculator:
                     # Sources: ERS.USDA.gov, NASS Irrigation & Water Management Survey 2023
                     water_volume_gallons = self._estimate_irrigation_water_volume(event, area_covered)
 
+                # Extract water_source for pump factor selection
+                water_source = getattr(event, "water_source", None) or extra_data.get("water_source")
+
                 calculation_result = VerifiedEmissionFactors.calculate_drought_irrigation_emissions(
-                    water_volume_gallons=water_volume_gallons
+                    water_volume_gallons=water_volume_gallons,
+                    water_source=water_source,
                 )
 
                 base_emissions = calculation_result["co2e_kg"]
@@ -1221,7 +1282,14 @@ class EventCarbonCalculator:
                 breakdown = calculation_result["breakdown"]
                 limitations = calculation_result.get("limitations", "")
 
-            elif event.type in ["HA", "PL", "GE", "PR", "IR"]:  # Harvesting, Planting, General, Pruning, Irrigation
+            elif event.type in [
+                "HA",
+                "PL",
+                "GE",
+                "PR",
+                "IR",
+                "EM",
+            ]:  # Harvesting, Planting, General, Pruning, Irrigation, Equipment Maintenance
                 # Use EPA/USDA production emission factors
                 # Extract fuel_type and energy_source from event object for electric equipment support
                 fuel_type = getattr(event, "fuel_type", "diesel")  # Default to diesel if not specified
@@ -1325,7 +1393,9 @@ class EventCarbonCalculator:
                     lower_temp_value = event.extra_data["lower_temperature"]
 
                 if lower_temp_value:
-                    temp = self._extract_numeric_value(lower_temp_value, default=32)
+                    temp_c = self._extract_numeric_value(lower_temp_value, default=0)
+                    # Convert Celsius to Fahrenheit (frontend collects temperature in °C)
+                    temp = temp_c * 9 / 5 + 32
 
                     # Determine protection method from direct attribute or extra_data
                     protection_method = "heaters"  # Default
@@ -1409,9 +1479,9 @@ class EventCarbonCalculator:
 
             elif event.type == "HL":  # Hailstorm - Using verified USDA diesel factors
                 # Extract hailstorm-specific fields
-                weight = self._extract_numeric_value(getattr(event, "weight", "1"), default=1.0)
-                diameter = self._extract_numeric_value(getattr(event, "diameter", "1"), default=1.0)
-                duration = self._extract_numeric_value(getattr(event, "duration", "1"), default=1.0)
+                weight = self._extract_numeric_value(getattr(event, "weight", "0"), default=0.0)
+                diameter = self._extract_numeric_value(getattr(event, "diameter", "0"), default=0.0)
+                duration = self._extract_numeric_value(getattr(event, "duration", "0"), default=0.0)
 
                 # Calculate damage severity index (0-10 scale)
                 severity = min((weight * diameter) / 10, 10.0)
@@ -1462,7 +1532,9 @@ class EventCarbonCalculator:
             elif event.type == "HT":  # High temperatures - Using verified USDA electricity factors
                 # Extract temperature and duration
                 if hasattr(event, "highest_temperature") and event.highest_temperature:
-                    highest_temp = self._extract_numeric_value(event.highest_temperature, default=90)
+                    highest_temp_c = self._extract_numeric_value(event.highest_temperature, default=32)
+                    # Convert Celsius to Fahrenheit (frontend collects temperature in °C)
+                    highest_temp = highest_temp_c * 9 / 5 + 32
 
                     # Use USDA verified electricity emission factor for cooling systems
                     electricity_factor = VerifiedEmissionFactors.get_emission_factor(
@@ -1472,8 +1544,16 @@ class EventCarbonCalculator:
 
                     if electricity_factor and misting_factor and highest_temp > 95:
                         # Extreme heat requiring intervention
-                        cooling_hours = 8  # 8 hours of cooling/misting
-                        area_acres = 1.0  # Default to 1 acre
+                        # Use duration from event if available, otherwise estimate based on temperature
+                        duration_raw = getattr(event, "duration", None)
+                        if duration_raw:
+                            cooling_hours = self._extract_numeric_value(duration_raw, default=0)
+                        else:
+                            cooling_hours = max(0, (highest_temp - 95) * 2)  # Scale with temp severity
+                        area_acres = (
+                            self._extract_numeric_value(getattr(event, "area_covered", "0"), default=0.0) * 2.47105
+                            or 1.0
+                        )
                         kwh_consumed = misting_factor.value * cooling_hours * area_acres
                         base_emissions = kwh_consumed * electricity_factor.value
 
@@ -1644,22 +1724,23 @@ class EventCarbonCalculator:
                 elif "harvester" in str(equipment_type).lower():
                     base_rate = 8.0
 
-                base_emissions = hours * base_rate if hours > 0 else base_rate
-                cost_estimate = float(event.maintenance_cost or (hours * 50 if hours > 0 else 100))
+                base_emissions = hours * base_rate if hours > 0 else 0.0
+                cost_estimate = float(event.maintenance_cost or (hours * 50 if hours > 0 else 0))
 
             elif event.type == "CA":  # Calibration
-                base_emissions = 0.5  # Minimal impact
+                base_emissions = 0.0  # No direct emissions from calibration
                 cost_estimate = 50.0
                 efficiency_score = 95.0  # Well-calibrated equipment is efficient
 
             elif event.type == "BD":  # Breakdown
-                # Higher impact due to inefficiency and potential emergency repairs
-                base_emissions = 15.0
-                cost_estimate = float(event.maintenance_cost or 500)
+                # Use actual fuel/repair data if available, otherwise 0
+                repair_fuel = self._extract_numeric_value(getattr(event, "fuel_consumed", "0"), default=0.0)
+                base_emissions = repair_fuel * 2.70 if repair_fuel > 0 else 0.0  # diesel kg CO₂/L
+                cost_estimate = float(event.maintenance_cost or 0)
                 efficiency_score = 30.0  # Broken equipment is very inefficient
 
             elif event.type == "EI":  # Inspection
-                base_emissions = 0.2  # Very minimal impact
+                base_emissions = 0.0  # No direct emissions from inspection
                 cost_estimate = 25.0
                 efficiency_score = 85.0
 
@@ -1699,7 +1780,7 @@ class EventCarbonCalculator:
             return self._add_enhanced_usda_metadata(result, event)
 
         except Exception as e:
-            return {"co2e": 5.0, "efficiency_score": 60.0, "usda_factors_based": False, "error": str(e)}
+            return {"co2e": 0.0, "efficiency_score": 50.0, "usda_factors_based": False, "error": str(e)}
 
     def calculate_soil_management_event_impact(self, event) -> Dict[str, Any]:
         """
@@ -1718,7 +1799,7 @@ class EventCarbonCalculator:
 
             # Get area managed - critical for proper scaling
             area_hectares = self._convert_area_to_hectares(
-                getattr(event, "area_covered", None) or getattr(event, "area", "1")
+                getattr(event, "area_covered", None) or getattr(event, "area", "0")
             )
 
             # ENHANCED: Calculate fuel consumption emissions (standardized across event types)
@@ -1743,15 +1824,23 @@ class EventCarbonCalculator:
             if fuel_consumed and fuel_consumed > 0:
                 # Use verified EPA emission factors for direct fuel combustion
                 fuel_unit = getattr(event, "fuel_unit", "L")
+                fuel_type = getattr(event, "fuel_type", "diesel") or "diesel"
 
-                # Convert to gallons for EPA calculation
-                if fuel_unit == "L":
-                    fuel_gallons = float(fuel_consumed) / 3.78541
-                else:  # already in gallons
-                    fuel_gallons = float(fuel_consumed)
+                if fuel_type == "electric":
+                    # Electric equipment: use kWh directly
+                    fuel_emissions = float(fuel_consumed) * self.FUEL_EMISSION_FACTORS.get("electric", 0.39)
+                else:
+                    # Convert to gallons for EPA calculation
+                    if fuel_unit == "L":
+                        fuel_gallons = float(fuel_consumed) / 3.78541
+                    else:  # already in gallons
+                        fuel_gallons = float(fuel_consumed)
 
-                # EPA diesel factor: 10.21 kg CO2e per gallon
-                fuel_emissions = fuel_gallons * 10.21
+                    # Use centralized EPA factor for the actual fuel type
+                    emission_factor = self.FUEL_EMISSION_FACTORS.get(
+                        fuel_type, self.FUEL_EMISSION_FACTORS.get("diesel", 10.21)
+                    )
+                    fuel_emissions = fuel_gallons * emission_factor
                 confidence_score = 90.0  # High confidence with fuel data
                 data_completeness_factors.extend(["fuel_consumption_documented", "epa_factors_applied"])
 
@@ -1781,9 +1870,8 @@ class EventCarbonCalculator:
                 area_emissions = area_hectares * emission_factor
                 data_completeness_factors.append("area_documented")
             else:
-                # Default to 1 hectare if no area specified
-                area_hectares = 1.0
-                area_emissions = emission_factor
+                # No area provided - return 0 emissions (no phantom defaults)
+                area_emissions = 0.0
                 data_completeness_factors.append("area_assumed")
 
             # ============================================================================
@@ -1797,26 +1885,31 @@ class EventCarbonCalculator:
             lime_factor_data = None
 
             if event.type == "PA" and hasattr(event, "amendment_amount") and event.amendment_amount:
-                # Parse amendment_amount to extract lime quantity
-                lime_kg_applied = self._parse_lime_amount(event.amendment_amount)
+                # Detect lime type — returns None for non-carbonate amendments
+                # (e.g., gypsum/CaSO₄, sulfur) that do NOT release CO₂ from dissolution
+                lime_type_used = self._detect_lime_type(event)
 
-                if lime_kg_applied > 0:
-                    # Detect lime type from amendment_type or description
-                    lime_type_used = self._detect_lime_type(event)
+                if lime_type_used is not None:
+                    # Parse amendment_amount to extract lime quantity
+                    lime_kg_applied = self._parse_lime_amount(event.amendment_amount)
 
-                    # Get IPCC-verified lime dissolution factor
-                    lime_factor_data = EmissionFactorsRegistry.get_lime_dissolution_factor(lime_type_used)
-                    lime_emission_factor = lime_factor_data["value"]  # kg CO₂ per kg lime
+                    if lime_kg_applied > 0:
+                        # Get IPCC-verified lime dissolution factor
+                        lime_factor_data = EmissionFactorsRegistry.get_lime_dissolution_factor(lime_type_used)
+                        lime_emission_factor = lime_factor_data["value"]  # kg CO₂ per kg lime
 
-                    # Calculate lime dissolution emissions
-                    lime_dissolution_emissions = lime_kg_applied * lime_emission_factor
-                    data_completeness_factors.append("ipcc_lime_dissolution_calculated")
-                    data_completeness_factors.append(f"lime_type_{lime_type_used}")
+                        # Calculate lime dissolution emissions
+                        lime_dissolution_emissions = lime_kg_applied * lime_emission_factor
+                        data_completeness_factors.append("ipcc_lime_dissolution_calculated")
+                        data_completeness_factors.append(f"lime_type_{lime_type_used}")
 
-                    logger.info(
-                        f"IPCC Lime Dissolution: {lime_kg_applied:.1f} kg {lime_type_used} × "
-                        f"{lime_emission_factor} kg CO₂/kg = {lime_dissolution_emissions:.2f} kg CO₂"
-                    )
+                        logger.info(
+                            f"IPCC Lime Dissolution: {lime_kg_applied:.1f} kg {lime_type_used} × "
+                            f"{lime_emission_factor} kg CO₂/kg = {lime_dissolution_emissions:.2f} kg CO₂"
+                        )
+                else:
+                    data_completeness_factors.append("non_carbonate_amendment_no_dissolution")
+                    logger.info(f"Skipped IPCC lime dissolution: non-carbonate amendment detected")
 
             # ============================================================================
             # ENHANCED: Tillage Soil CO₂ Flux (TI events)
@@ -1853,6 +1946,10 @@ class EventCarbonCalculator:
             # Adjust confidence score based on data availability
             if fuel_consumed and fuel_consumed > 0:
                 confidence_score = 90.0  # High confidence with fuel data
+            elif event.type == "ST" and area_hectares > 0:
+                # Soil testing with no fuel = 0 emissions is scientifically correct
+                # (manual tools, no combustion) — high confidence in that result
+                confidence_score = 90.0
             elif area_hectares > 0:
                 confidence_score = 75.0  # Good confidence with area data only
             else:
@@ -1889,8 +1986,13 @@ class EventCarbonCalculator:
             recommendations = self._generate_soil_recommendations(event, base_emissions)
 
             # Determine calculation method based on data availability
-            calculation_method = "usda_area_scaled_soil_factors"
-            if fuel_consumed and fuel_consumed > 0:
+            if event.type == "ST" and (not fuel_consumed or fuel_consumed == 0):
+                calculation_method = "zero_direct_emissions_manual_sampling"
+            elif event.type == "ST" and fuel_consumed and fuel_consumed > 0:
+                calculation_method = "fuel_based_soil_sampling"
+            else:
+                calculation_method = "usda_area_scaled_soil_factors"
+            if fuel_consumed and fuel_consumed > 0 and event.type != "ST":
                 calculation_method = "enhanced_fuel_plus_area_factors"
             if lime_dissolution_emissions > 0:
                 calculation_method = "ipcc_lime_dissolution_enhanced"
@@ -1905,7 +2007,7 @@ class EventCarbonCalculator:
             calc_parts = []
             if fuel_emissions > 0:
                 calc_parts.append(f"Fuel: {round(fuel_emissions, 3)} kg CO₂e")
-            if area_emissions > 0:
+            if area_emissions != 0:
                 calc_parts.append(f"Area: {area_hectares} ha × {emission_factor} = {round(area_emissions, 3)} kg CO₂e")
             if lime_dissolution_emissions > 0:
                 calc_parts.append(
@@ -1997,7 +2099,7 @@ class EventCarbonCalculator:
 
         except Exception as e:
             return {
-                "co2e": 1.0,  # Default to 1.0 kg CO2e for general soil management
+                "co2e": 0.0,  # No phantom emissions on error
                 "efficiency_score": 45.0,
                 "usda_factors_based": False,
                 "verification_status": "calculation_error",
@@ -2007,107 +2109,30 @@ class EventCarbonCalculator:
 
     def calculate_business_event_impact(self, event) -> Dict[str, Any]:
         """
-        Calculate carbon impact of business events (often indirect)
-        Enhanced with structured carbon-focused fields.
+        Calculate carbon impact of business events.
+
+        Business events (certifications, audits, compliance) have negligible
+        direct operational emissions. Per Trazo's Direct Operational Emissions
+        methodology, lifecycle/indirect benefits are not quantified as CO2e.
         """
         try:
-            # Get crop information from the production
             crop_name = "default"
             if hasattr(event, "history") and event.history and hasattr(event.history, "product"):
                 crop_name = event.history.product.name
 
-            # ENHANCED: Use structured business data
             business_data = self._get_structured_business_data(event, crop_name)
-
-            base_emissions = 0.0
-            carbon_credits = business_data["carbon_credits_earned"]
-            efficiency_score = 70.0
-
-            # Calculate based on business activity type
-            business_type = business_data["business_type"]
-
-            if business_type == "carbon_credits":
-                # Carbon credits offset emissions
-                if business_data["carbon_credits_unit"] == "kgCO2e":
-                    base_emissions = -carbon_credits  # Direct offset in kg
-                elif business_data["carbon_credits_unit"] == "tCO2e":
-                    base_emissions = -carbon_credits * 1000  # Convert tonnes to kg
-                else:  # credits
-                    base_emissions = -carbon_credits * 10  # Assume 10 kg per credit unit
-                efficiency_score = 95.0  # Very efficient for carbon goals
-
-            elif business_type == "certification":
-                # Certification events have minimal direct emissions but positive impact
-                cert_type = business_data["certification_type"]
-                if cert_type == "carbon_neutral":
-                    base_emissions = -50.0  # Significant carbon benefit
-                    efficiency_score = 90.0
-                elif cert_type == "organic_usda":
-                    base_emissions = -20.0  # Moderate carbon benefit
-                    efficiency_score = 80.0
-                elif cert_type in ["regenerative", "sustainable_agriculture"]:
-                    base_emissions = -30.0  # Good carbon benefit
-                    efficiency_score = 85.0
-                else:
-                    base_emissions = -10.0  # Basic certification benefit
-                    efficiency_score = 75.0
-
-            elif business_type == "sustainability_audit":
-                # Audits improve practices leading to long-term reductions
-                base_emissions = 0.5  # Small travel/documentation impact
-                efficiency_score = 85.0  # Good for identifying improvements
-
-            elif business_type == "verification":
-                # Verification builds consumer trust but has minimal impact
-                base_emissions = 1.0  # Small verification process impact
-                efficiency_score = 80.0
-
-            elif business_type == "compliance":
-                base_emissions = 0.5  # Minimal impact from documentation
-                efficiency_score = 70.0
-
-            elif business_type == "transparency":
-                # Transparency initiatives have very positive consumer impact
-                base_emissions = -5.0  # Small benefit from consumer awareness
-                efficiency_score = 88.0
-
-            # Legacy event type handling for backward compatibility
-            elif event.type == "CE":  # Certification
-                if carbon_credits > 0:
-                    base_emissions = -carbon_credits
-                    efficiency_score = 90.0
-                else:
-                    base_emissions = -10.0  # Default certification benefit
-                    efficiency_score = 80.0
-
-            elif event.type in ["IN", "CM"]:  # Inspection, Compliance
-                base_emissions = 0.5
-                efficiency_score = 70.0
-
-            # Apply sustainability practice bonus if applicable
-            practice = business_data["sustainability_practice"]
-            if practice:
-                practice_benefits = {
-                    "cover_cropping": -15.0,
-                    "no_till": -25.0,
-                    "integrated_pest": -10.0,
-                    "water_conservation": -8.0,
-                    "renewable_energy": -50.0,
-                    "composting": -20.0,
-                    "biodiversity": -12.0,
-                    "soil_health": -18.0,
-                }
-                practice_benefit = practice_benefits.get(practice, -5.0)
-                base_emissions += practice_benefit
-                efficiency_score = min(efficiency_score + 10, 100.0)
-
-            recommendations = self._generate_business_recommendations(event, base_emissions, business_data)
+            recommendations = self._generate_business_recommendations(event, 0.0, business_data)
 
             result = {
-                "co2e": round(base_emissions, 3),
-                "efficiency_score": round(efficiency_score, 1),
-                "calculation_method": "carbon_focused_business_analysis",
-                "data_source": "Carbon Transparency Standards",
+                "co2e": 0.0,
+                "efficiency_score": 75.0,
+                "calculation_method": "direct_operational_emissions",
+                "data_source": "Trazo Direct Emissions Methodology",
+                "methodology_note": (
+                    "Business events (certifications, audits, compliance) have negligible "
+                    "direct operational emissions. Indirect/lifecycle benefits are tracked "
+                    "qualitatively via transparency score, not as CO2e values."
+                ),
                 "verification_status": business_data["verification_status"],
                 "breakdown": {
                     "business_type": business_data["business_type"],
@@ -2117,13 +2142,12 @@ class EventCarbonCalculator:
                     "sustainability_practice": business_data["sustainability_practice"],
                     "verification_status": business_data["verification_status"],
                     "data_source": business_data["data_source"],
+                    "direct_emissions_kg": 0.0,
                 },
                 "transparency_metrics": {
-                    "consumer_value": "high" if base_emissions < -20 else "medium" if base_emissions < 0 else "low",
+                    "consumer_value": "high",
                     "verification_level": business_data["verification_status"],
-                    "carbon_impact": (
-                        "positive" if base_emissions < 0 else "neutral" if base_emissions == 0 else "minimal"
-                    ),
+                    "carbon_impact": "neutral",
                 },
                 "recommendations": recommendations,
             }
@@ -2219,15 +2243,8 @@ class EventCarbonCalculator:
                     else:  # already in gallons
                         fuel_gallons = float(fuel_consumed)
 
-                    # EPA diesel factor: 10.21 kg CO2e per gallon (EPA GHG Hub)
-                    # Apply fuel-specific factors
-                    fuel_factors = {
-                        "diesel": 10.21,
-                        "gasoline": 8.89,
-                        "natural_gas": 5.31,
-                        "lpg": 6.41,
-                    }
-                    emission_factor = fuel_factors.get(fuel_type, 10.21)
+                    # EPA fuel factors from centralized registry (choices.py)
+                    emission_factor = self.FUEL_EMISSION_FACTORS.get(fuel_type, 10.21)
                     fuel_emissions = fuel_gallons * emission_factor
 
                     calculation_method = "epa_fuel_combustion"
@@ -2239,22 +2256,22 @@ class EventCarbonCalculator:
                 confidence_score = 90.0  # High confidence with fuel data
                 verification_status = "epa_verified"
 
-            # Calculate base emissions based on pest management type
+            # Pest management type context - only add base emissions when fuel data proves activity
             if event.type == "BR":  # Beneficial Release
-                # Beneficial insect releases reduce need for chemical pesticides
-                base_emissions = -0.5  # Small negative impact (avoided chemicals)
+                # Beneficial insect releases have no direct emissions without fuel data
+                pass  # base_emissions stays 0.0
 
             elif event.type == "SC":  # Scouting
-                # Travel emissions for scouting
-                base_emissions = 0.2  # Minimal transport impact
+                # Only count if fuel was consumed (driving to scout)
+                pass  # Fuel emissions already captured above
 
             elif event.type == "TM":  # Trap Monitoring
-                # Minimal impact from trap monitoring
-                base_emissions = 0.1
+                # Only count if fuel was consumed
+                pass  # Fuel emissions already captured above
 
             elif event.type == "IP":  # IPM Implementation
-                # IPM typically reduces chemical use
-                base_emissions = -1.0  # Avoided chemical applications
+                # IPM has no direct emissions
+                pass  # base_emissions stays 0.0
 
             # Total emissions = base + fuel
             total_emissions = base_emissions + fuel_emissions
@@ -2574,14 +2591,14 @@ class EventCarbonCalculator:
             }
 
         except Exception as e:
-            logger.warning(f"Error getting structured equipment data, using defaults: {e}")
+            logger.warning(f"Error getting structured equipment data, using zero defaults: {e}")
             return {
-                "fuel_amount": 10.0,  # Default fuel consumption
+                "fuel_amount": 0.0,
                 "fuel_type": "diesel",
                 "equipment_type": "general",
-                "area_worked": 1.0,
+                "area_worked": 0.0,
                 "area_unit": "ha",
-                "hours_operated": 2.0,
+                "hours_operated": 0.0,
                 "efficiency": "normal",
                 "data_source": "defaults",
             }
@@ -2723,14 +2740,14 @@ class EventCarbonCalculator:
             }
 
         except Exception as e:
-            logger.warning(f"Error extracting production data, using defaults: {e}")
+            logger.warning(f"Error extracting production data, using zero defaults: {e}")
             return {
                 "production_type": "general production",
                 "crop_name": "unknown",
-                "area_covered": 1.0,
+                "area_covered": 0.0,
                 "fuel_consumed": None,
                 "equipment_hours": None,
-                "water_volume_gallons": 1000,
+                "water_volume_gallons": None,
                 "structured_data": {},
             }
 
@@ -2741,6 +2758,7 @@ class EventCarbonCalculator:
             "PL": f"planting {crop_name}",
             "IR": f"irrigating {crop_name}",
             "PR": f"pruning {crop_name}",
+            "EM": "EM",
             "cultivation": f"cultivating {crop_name}",
             "fertilization": f"fertilizing {crop_name}",
             "weeding": f"weeding {crop_name}",
@@ -3154,7 +3172,7 @@ class EventCarbonCalculator:
             logger.warning(f"Failed to parse lime amount '{amendment_amount}': {e}")
             return 0.0
 
-    def _detect_lime_type(self, event) -> str:
+    def _detect_lime_type(self, event):
         """
         Detect lime type from event data.
 
@@ -3164,11 +3182,10 @@ class EventCarbonCalculator:
         - notes field
 
         Returns:
-            str: 'limestone' (CaCO3) or 'dolomite' (CaMg(CO3)2)
+            str or None: 'limestone' (CaCO3), 'dolomite' (CaMg(CO3)2),
+            or None for non-carbonate amendments (gypsum, sulfur, etc.)
+            that do NOT undergo lime dissolution.
         """
-        # Default to limestone (most common)
-        lime_type = "limestone"
-
         # Check all possible fields for lime type indicators
         fields_to_check = []
 
@@ -3183,6 +3200,35 @@ class EventCarbonCalculator:
 
         combined_text = " ".join(fields_to_check)
 
+        # ============================================================
+        # FIRST: Check for NON-CARBONATE amendments that do NOT release
+        # CO₂ from dissolution. These should have ZERO lime dissolution
+        # emissions regardless of the PA event type.
+        #
+        # Gypsum (CaSO₄) = calcium sulfate, no carbonate → no CO₂
+        # Sulfur (S) = used to lower pH, no carbonate → no CO₂
+        # Wood ash = primarily K₂CO₃ but negligible dissolution CO₂
+        # ============================================================
+        non_carbonate_indicators = [
+            "gypsum",
+            "caso4",
+            "calcium sulfate",
+            "sulfur",
+            "elemental sulfur",
+            "wood ash",
+            "iron sulfate",
+            "aluminum sulfate",
+            "ammonium sulfate",
+        ]
+
+        for indicator in non_carbonate_indicators:
+            if indicator in combined_text:
+                logger.info(
+                    f"Non-carbonate amendment detected: '{indicator}' — "
+                    f"skipping IPCC lime dissolution (no CO₂ from dissolution)"
+                )
+                return None
+
         # Check for dolomite/dolomitic lime indicators
         dolomite_indicators = [
             "dolomite",
@@ -3195,11 +3241,10 @@ class EventCarbonCalculator:
 
         for indicator in dolomite_indicators:
             if indicator in combined_text:
-                lime_type = "dolomite"
                 logger.info(f"Detected dolomite lime type from event data: '{indicator}'")
-                break
+                return "dolomite"
 
-        # Check for explicit limestone indicators (to confirm default)
+        # Check for explicit limestone indicators
         limestone_indicators = [
             "limestone",
             "calcitic",
@@ -3211,11 +3256,11 @@ class EventCarbonCalculator:
 
         for indicator in limestone_indicators:
             if indicator in combined_text:
-                lime_type = "limestone"
                 logger.info(f"Confirmed limestone type from event data: '{indicator}'")
-                break
+                return "limestone"
 
-        return lime_type
+        # Default to limestone (most common pH adjustment amendment)
+        return "limestone"
 
     def _detect_tillage_depth(self, event) -> str:
         """
@@ -3332,9 +3377,9 @@ class EventCarbonCalculator:
         Returns:
             float: Estimated water volume in gallons
         """
-        # Default to 1 acre if no area specified
+        # Return 0 gallons if no area specified - no phantom defaults
         if not area_acres or area_acres <= 0:
-            area_acres = 1.0
+            return 0.0
 
         # Base estimation: moderate irrigation event (1 inch of water)
         # 1 inch water per acre = 27,154 gallons
@@ -3616,8 +3661,9 @@ class EventCarbonCalculator:
                 }
             )
             if hasattr(event, "lower_temperature"):
-                temp = self._extract_numeric_value(event.lower_temperature, default=32)
-                if temp < 28:  # Severe frost
+                temp_c = self._extract_numeric_value(event.lower_temperature, default=0)
+                temp = temp_c * 9 / 5 + 32  # Convert °C to °F
+                if temp < 28:  # Severe frost (28°F = -2.2°C)
                     recommendations.append(
                         {
                             "type": "monitoring",

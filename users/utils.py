@@ -50,7 +50,7 @@ def send_invited_user_welcome_email(user, company, inviter, role):
         user_type = "producer" if user.user_type == PRODUCER else "consumer"
 
         # Role display mapping
-        role_display_map = {"CA": "Company Admin", "FM": "Farm Manager", "DW": "Domain Worker", "DE": "Dealer"}
+        role_display_map = {"CA": "Company Admin", "FM": "Farm Manager", "VW": "Viewer"}
 
         context = {
             "user": user,
@@ -172,7 +172,7 @@ def send_company_join_welcome_email(user, company, role):
     """
     try:
         # Role display mapping
-        role_display_map = {"CA": "Company Admin", "DS": "Domain Supervisor", "DW": "Domain Worker", "DE": "Dealer"}
+        role_display_map = {"CA": "Company Admin", "FM": "Farm Manager", "VW": "Viewer"}
 
         # Determine dashboard URL based on environment
         if hasattr(settings, "BASE_APP_URL"):
@@ -216,7 +216,7 @@ def send_company_welcome_verification_email(user, company, role, verification_co
         user_type = "producer" if user.user_type == PRODUCER else "consumer"
 
         # Role display mapping
-        role_display_map = {"CA": "Company Admin", "DS": "Domain Supervisor", "DW": "Domain Worker", "DE": "Dealer"}
+        role_display_map = {"CA": "Company Admin", "FM": "Farm Manager", "VW": "Viewer"}
 
         context = {
             "user": user,
@@ -275,7 +275,7 @@ def send_invitation_email(
             is_company_transfer = other_membership
 
         # Role display mapping
-        role_display_map = {"CA": "Company Admin", "DS": "Domain Supervisor", "DW": "Domain Worker", "DE": "Dealer"}
+        role_display_map = {"CA": "Company Admin", "FM": "Farm Manager", "VW": "Viewer"}
 
         context = {
             "invitee_name": invitee_name,

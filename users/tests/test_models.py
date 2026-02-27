@@ -195,7 +195,7 @@ class TestCompanyRelationships(TransactionTestCase):
         # Add user to both companies
         WorksIn.objects.create(user=self.user, company=self.company, role=WorksIn.COMPANY_ADMIN)
 
-        WorksIn.objects.create(user=self.user, company=company2, role=WorksIn.DOMAIN_SUPERVISOR)
+        WorksIn.objects.create(user=self.user, company=company2, role=WorksIn.FARM_MANAGER)
 
         # Check user is associated with both
         self.assertEqual(self.user.companies.count(), 2)
@@ -226,7 +226,7 @@ class TestWorksInModel(TransactionTestCase):
 
     def test_role_choices(self):
         """Test different role choices"""
-        roles = [WorksIn.COMPANY_ADMIN, WorksIn.DOMAIN_SUPERVISOR, WorksIn.DOMAIN_WORKER, WorksIn.DEALER]
+        roles = [WorksIn.COMPANY_ADMIN, WorksIn.FARM_MANAGER, WorksIn.VIEWER]
 
         for role in roles:
             works_in = WorksIn.objects.create(user=self.user, company=self.company, role=role)
@@ -236,7 +236,7 @@ class TestWorksInModel(TransactionTestCase):
     def test_establishments_in_charge(self):
         """Test establishments_in_charge relationship"""
         # Create manager role
-        works_in = WorksIn.objects.create(user=self.user, company=self.company, role=WorksIn.DOMAIN_SUPERVISOR)
+        works_in = WorksIn.objects.create(user=self.user, company=self.company, role=WorksIn.FARM_MANAGER)
 
         # Assign establishment
         works_in.establishments_in_charge.add(self.establishment)
@@ -251,7 +251,7 @@ class TestWorksInModel(TransactionTestCase):
             company=self.company, name="Second Farm", address="456 Farm Road", country="USA", created_by=self.user
         )
 
-        works_in = WorksIn.objects.create(user=self.user, company=self.company, role=WorksIn.DOMAIN_SUPERVISOR)
+        works_in = WorksIn.objects.create(user=self.user, company=self.company, role=WorksIn.FARM_MANAGER)
 
         # Assign both establishments
         works_in.establishments_in_charge.add(self.establishment, establishment2)

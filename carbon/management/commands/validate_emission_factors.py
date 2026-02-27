@@ -141,7 +141,7 @@ class Command(BaseCommand):
                     return False
 
             # Check fuel factors
-            fuel_factors = [("diesel", 2.68), ("gasoline", 2.31)]
+            fuel_factors = [("diesel", 2.70), ("gasoline", 2.32)]
 
             for fuel_name, expected_value in fuel_factors:
                 f1 = carbon_calc.usda_factors["fuel"][fuel_name]

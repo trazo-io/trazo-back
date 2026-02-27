@@ -3,25 +3,44 @@ from django.contrib import admin
 from .models import ChemicalEvent, GeneralEvent, History, HistoryScan, ProductionEvent, WeatherEvent
 
 
-class ChemicalEventInline(admin.TabularInline):
+class FinishedProductionReadOnlyInlineMixin:
+    """Make inline fields read-only when the parent production is finished."""
+
+    def has_add_permission(self, request, obj=None):
+        if obj and (obj.finish_date is not None or obj.published):
+            return False
+        return super().has_add_permission(request, obj)
+
+    def has_change_permission(self, request, obj=None):
+        if obj and (obj.finish_date is not None or obj.published):
+            return False
+        return super().has_change_permission(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        if obj and (obj.finish_date is not None or obj.published):
+            return False
+        return super().has_delete_permission(request, obj)
+
+
+class ChemicalEventInline(FinishedProductionReadOnlyInlineMixin, admin.TabularInline):
     model = ChemicalEvent
     extra = 1
     ordering = ("index",)
 
 
-class WeatherEventInline(admin.TabularInline):
+class WeatherEventInline(FinishedProductionReadOnlyInlineMixin, admin.TabularInline):
     model = WeatherEvent
     extra = 1
     ordering = ("index",)
 
 
-class GeneralEventInline(admin.TabularInline):
+class GeneralEventInline(FinishedProductionReadOnlyInlineMixin, admin.TabularInline):
     model = GeneralEvent
     extra = 1
     ordering = ("index",)
 
 
-class ProductionEventInline(admin.TabularInline):
+class ProductionEventInline(FinishedProductionReadOnlyInlineMixin, admin.TabularInline):
     model = ProductionEvent
     extra = 1
     ordering = ("index",)
@@ -32,10 +51,23 @@ class EventAdmin(admin.ModelAdmin):
     list_filter = ("date", "description")
     search_fields = ("date", "description")
 
+    def has_change_permission(self, request, obj=None):
+        if obj and hasattr(obj, "history") and obj.history:
+            if obj.history.finish_date is not None or obj.history.published:
+                return False
+        return super().has_change_permission(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        if obj and hasattr(obj, "history") and obj.history:
+            if obj.history.finish_date is not None or obj.history.published:
+                return False
+        return super().has_delete_permission(request, obj)
+
 
 class HistoryAdmin(admin.ModelAdmin):
     list_display = (
         "name",
+        "public_id",
         "start_date",
         "public_views",
         "unique_visitors",
@@ -63,10 +95,17 @@ class HistoryAdmin(admin.ModelAdmin):
     ]
 
     # Trust metrics and analytics in readonly fields
-    readonly_fields = ("public_views", "unique_visitors", "confidence_score", "transparency_score", "updated_at")
+    readonly_fields = (
+        "public_id",
+        "public_views",
+        "unique_visitors",
+        "confidence_score",
+        "transparency_score",
+        "updated_at",
+    )
 
     fieldsets = (
-        ("Basic Information", {"fields": ("name", "type", "description", "published")}),
+        ("Basic Information", {"fields": ("name", "public_id", "type", "description", "published")}),
         ("Timeline", {"fields": ("start_date", "finish_date")}),
         ("Production Details", {"fields": ("product", "parcel", "production_amount", "earning")}),
         (

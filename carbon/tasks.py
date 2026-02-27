@@ -50,7 +50,7 @@ def update_carbon_summaries():
     current_year = timezone.now().year
     # Placeholder logic for updating summaries
     # This will be expanded with detailed aggregation logic
-    print(f"Updating carbon summaries for year {current_year}")
+    logger.info("Updating carbon summaries for year %d", current_year)
     return f"Updated summaries for {current_year}"
 
 
@@ -651,20 +651,23 @@ def cleanup_old_iot_data():
 @shared_task(bind=True)
 def batch_submit_monthly_summaries(self):
     """
-    Celery task to submit monthly carbon summaries to blockchain.
+    Monthly reconciliation sweep for blockchain submissions.
     Runs on 1st of each month at 2:00 AM UTC.
-    Only processes companies with active blockchain subscriptions.
+
+    Primary submission now happens immediately at finalization time via
+    submit_production_to_blockchain(). This batch task is the safety net:
+    it catches any productions whose immediate submission failed (network
+    issues, gas spikes, Celery worker down, etc.).
+
+    Logic: Find all finalized productions (finish_date is set) that belong to
+    companies with active blockchain subscriptions and haven't been submitted
+    to blockchain yet. Uses the same _submit_single_production_to_blockchain()
+    function as the immediate task — no code duplication.
     """
     try:
         blockchain_service = BlockchainCarbonService()
 
-        # Get last month's date range
-        today = timezone.now().date()
-        first_day_current_month = today.replace(day=1)
-        last_day_previous_month = first_day_current_month - timedelta(days=1)
-        first_day_previous_month = last_day_previous_month.replace(day=1)
-
-        logger.info(f"Processing monthly summaries for period: {first_day_previous_month} to {last_day_previous_month}")
+        from history.models import History
 
         # Get companies with active blockchain subscriptions
         companies_with_blockchain = Company.objects.filter(blockchain_subscription_status=True)
@@ -676,88 +679,185 @@ def batch_submit_monthly_summaries(self):
         for company in companies_with_blockchain:
             logger.info(f"Processing company: {company.name} (ID: {company.id})")
 
-            # Get all productions for this company in the previous month
-            productions = ProductionTemplate.objects.filter(
+            # Find finalized productions not yet submitted to blockchain.
+            # A production is "finalized" when finish_date is set.
+            # A production is "not yet on blockchain" when extra_data has no
+            # blockchain_tx_hash, or extra_data is null.
+            productions = History.objects.filter(
                 parcel__establishment__company=company,
-                created_at__date__gte=first_day_previous_month,
-                created_at__date__lte=last_day_previous_month,
+                finish_date__isnull=False,
+            ).exclude(
+                extra_data__blockchain_tx_hash__isnull=False,
             )
 
             for production in productions:
                 try:
-                    # Get carbon entries for this production in the previous month
-                    carbon_entries = CarbonEntry.objects.filter(
-                        production=production,
-                        timestamp__date__gte=first_day_previous_month,
-                        timestamp__date__lte=last_day_previous_month,
-                    )
-
-                    if not carbon_entries.exists():
-                        logger.info(f"No carbon entries for production {production.id}, skipping")
-                        continue
-
-                    # Calculate monthly summary
-                    summary_data = carbon_entries.aggregate(total_co2e=Sum("co2e_amount"), entry_count=Count("id"))
-
-                    total_co2e = summary_data["total_co2e"] or 0
-                    entry_count = summary_data["entry_count"] or 0
-
-                    # Collect IoT data
-                    iot_data = collect_iot_data(production.id)
-
-                    # Create hash of raw data for integrity
-                    raw_data = {
-                        "production_id": production.id,
-                        "company_id": company.id,
-                        "period_start": first_day_previous_month.isoformat(),
-                        "period_end": last_day_previous_month.isoformat(),
-                        "total_co2e": float(total_co2e),
-                        "entry_count": entry_count,
-                        "entries": list(carbon_entries.values("id", "co2e_amount", "activity_type", "timestamp")),
-                        "iot_data": iot_data,
-                    }
-
-                    data_hash = hashlib.sha256(json.dumps(raw_data, sort_keys=True, default=str).encode()).hexdigest()
-
-                    # Submit to blockchain
-                    logger.info(f"Submitting monthly summary for production {production.id}")
-
-                    blockchain_result = blockchain_service.submit_monthly_summary(
-                        producer_id=company.id,
-                        production_id=production.id,
-                        total_co2e=total_co2e,
-                        data_hash=data_hash,
-                        raw_data=raw_data,
-                    )
-
-                    if blockchain_result and blockchain_result.get("success"):
+                    total_summaries += 1
+                    success = _submit_single_production_to_blockchain(production, company, blockchain_service)
+                    if success:
                         successful_summaries += 1
-                        logger.info(f"Successfully submitted summary for production {production.id}")
-                        logger.info(f"Transaction hash: {blockchain_result.get('transaction_hash')}")
                     else:
                         failed_summaries += 1
-                        logger.error(f"Failed to submit summary for production {production.id}: {blockchain_result}")
-
-                    total_summaries += 1
-
                 except Exception as e:
                     failed_summaries += 1
                     logger.error(f"Error processing production {production.id}: {str(e)}")
                     continue
 
-        logger.info(f"Monthly summary batch complete: {successful_summaries}/{total_summaries} successful")
+        logger.info(f"Blockchain batch complete: {successful_summaries}/{total_summaries} successful")
 
         return {
             "status": "completed",
             "total_summaries": total_summaries,
             "successful_summaries": successful_summaries,
             "failed_summaries": failed_summaries,
-            "processed_period": f"{first_day_previous_month} to {last_day_previous_month}",
         }
 
     except Exception as e:
         logger.error(f"Error in batch_submit_monthly_summaries: {str(e)}")
         raise self.retry(countdown=60, max_retries=3)
+
+
+def _submit_single_production_to_blockchain(production, company, blockchain_service):
+    """
+    Submit a single finalized production to blockchain.
+
+    Extracted from batch_submit_monthly_summaries so it can be called from:
+    1. The immediate submission task (at finalization time)
+    2. The monthly batch reconciliation (safety net for failures)
+
+    Returns True on success, False on failure.
+    """
+    # Skip if already submitted
+    if (
+        production.extra_data
+        and isinstance(production.extra_data, dict)
+        and production.extra_data.get("blockchain_tx_hash")
+    ):
+        logger.info(f"Production {production.id} already on blockchain, skipping")
+        return True
+
+    # Get ALL carbon entries for this production (entire lifecycle)
+    carbon_entries = CarbonEntry.objects.filter(production=production)
+
+    if not carbon_entries.exists():
+        logger.info(f"No carbon entries for production {production.id}, skipping")
+        return False
+
+    # Calculate total production summary
+    summary_data = carbon_entries.aggregate(total_co2e=Sum("co2e_amount"), entry_count=Count("id"))
+    total_co2e = summary_data["total_co2e"] or 0
+    entry_count = summary_data["entry_count"] or 0
+
+    # Include finalization hash — connects event integrity to
+    # the on-chain record:
+    # events -> finalization_hash -> production_hash -> blockchain
+    finalization_hash = None
+    finalization_event_count = 0
+    if production.extra_data and isinstance(production.extra_data, dict):
+        finalization_hash = production.extra_data.get("finalization_hash")
+        finalization_event_count = production.extra_data.get("finalization_event_count", 0)
+
+    # Build the complete production record for hashing
+    raw_data = {
+        "production_id": production.id,
+        "company_id": company.id,
+        "start_date": (production.start_date.isoformat() if production.start_date else None),
+        "finish_date": (production.finish_date.isoformat() if production.finish_date else None),
+        "total_co2e": float(total_co2e),
+        "entry_count": entry_count,
+        "entries": list(carbon_entries.values("id", "co2e_amount", "type", "timestamp")),
+        "finalization_hash": finalization_hash,
+        "finalization_event_count": finalization_event_count,
+    }
+
+    # Use keccak256 to match Solidity contract, fallback to SHA-256
+    sorted_raw = json.dumps(raw_data, sort_keys=True, default=str)
+    try:
+        from web3 import Web3
+
+        raw_hex = Web3.keccak(text=sorted_raw).hex()
+        data_hash = raw_hex.removeprefix("0x")
+    except ImportError:
+        data_hash = hashlib.sha256(sorted_raw.encode()).hexdigest()
+
+    # Submit to blockchain
+    logger.info(
+        f"Submitting production {production.id} to blockchain " f"({entry_count} entries, {total_co2e} kg CO2e)"
+    )
+
+    blockchain_result = blockchain_service.submit_monthly_summary(
+        producer_id=company.id,
+        production_id=production.id,
+        total_co2e=total_co2e,
+        data_hash=data_hash,
+        raw_data=raw_data,
+    )
+
+    if blockchain_result and blockchain_result.get("success"):
+        logger.info(f"Successfully submitted production {production.id}")
+        logger.info(f"Transaction hash: {blockchain_result.get('transaction_hash')}")
+
+        # Store blockchain result on this History record
+        if production.extra_data is None:
+            production.extra_data = {}
+        production.extra_data["blockchain_tx_hash"] = blockchain_result.get("transaction_hash")
+        production.extra_data["blockchain_block_number"] = blockchain_result.get("block_number")
+        production.extra_data["blockchain_network"] = blockchain_result.get("network", "")
+        production.extra_data["blockchain_submitted_at"] = timezone.now().isoformat()
+        production.extra_data["blockchain_verified"] = not blockchain_result.get("mock", False)
+        production.extra_data["blockchain_data_hash"] = data_hash
+        production.save(update_fields=["extra_data"])
+        return True
+    else:
+        logger.error(f"Failed to submit production {production.id}: {blockchain_result}")
+        return False
+
+
+@shared_task(bind=True, max_retries=3)
+def submit_production_to_blockchain(self, production_id):
+    """
+    Immediately submit a single finalized production to blockchain.
+
+    Triggered by finish_history() when the company has an active blockchain
+    subscription. This eliminates the gap between production finalization
+    and consumer-visible blockchain verification.
+
+    The monthly batch task acts as a safety net for any failures here.
+    """
+    try:
+        from history.models import History
+
+        production = History.objects.select_related("parcel__establishment__company").get(id=production_id)
+
+        company = (
+            production.parcel.establishment.company if production.parcel and production.parcel.establishment else None
+        )
+        if not company:
+            logger.error(f"No company found for production {production_id}")
+            return {"status": "error", "error": "No company found"}
+
+        if not company.blockchain_subscription_status:
+            logger.info(f"Company {company.id} has no blockchain subscription, skipping production {production_id}")
+            return {"status": "skipped", "reason": "no_blockchain_subscription"}
+
+        blockchain_service = BlockchainCarbonService()
+        success = _submit_single_production_to_blockchain(production, company, blockchain_service)
+
+        if success:
+            return {
+                "status": "success",
+                "production_id": production_id,
+                "tx_hash": (production.extra_data or {}).get("blockchain_tx_hash"),
+            }
+        else:
+            raise Exception(f"Blockchain submission failed for production {production_id}")
+
+    except History.DoesNotExist:
+        logger.error(f"Production {production_id} not found")
+        return {"status": "error", "error": "Production not found"}
+    except Exception as e:
+        logger.error(f"Error submitting production {production_id} to blockchain: {e}")
+        raise self.retry(countdown=30, exc=e)
 
 
 @shared_task

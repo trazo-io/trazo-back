@@ -48,6 +48,7 @@ Trazo is an agricultural carbon transparency platform that enables farmers to tr
 - [Production Timeline Flow](./05-production-timeline-flow.md) - Event sequencing and history tracking
 
 ### 3. Carbon Calculation and Verification Flows
+- [Transparency Scoring & Photo Tiers](../TRANSPARENCY_SCORING_AND_PHOTO_TIERS.md) - 3-tier photo system, category weights, score calculation
 - [Carbon Calculation Flow](./06-carbon-calculation-flow.md) - Real-time USDA-based calculations
 - [USDA API Integration Flow](./07-usda-api-integration-flow.md) - Emission factor retrieval and caching
 - [Blockchain Verification Flow](./08-blockchain-verification-flow.md) - Immutable record creation

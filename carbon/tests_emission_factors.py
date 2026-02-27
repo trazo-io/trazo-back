@@ -1,8 +1,15 @@
 """
 Unit Tests for Emission Factors Consistency
 
-These tests ensure that all carbon calculation modules use consistent USDA-verified
+These tests ensure that all carbon calculation modules use consistent EPA/USDA-verified
 emission factors and prevent future data inconsistencies.
+
+Current Factor Values (as of v3.2.0):
+- Nitrogen: 10.5 kg CO2e per kg N (EPA + IPCC AR6)
+- Phosphorus: 1.25 kg CO2e per kg P2O5 (EPA + LCA studies)
+- Potassium: 0.60 kg CO2e per kg K2O (EPA + IFA)
+- Diesel: 2.70 kg CO2e per liter / 10.21 kg CO2e per gallon (EPA 40 CFR Part 98)
+- Gasoline: 2.32 kg CO2e per liter / 8.78 kg CO2e per gallon (EPA 40 CFR Part 98)
 """
 
 import unittest
@@ -30,12 +37,12 @@ class EmissionFactorsRegistryTest(TestCase):
         self.assertTrue(metadata["compliance_ready"])
 
     def test_nitrogen_factor_consistency(self):
-        """Test that nitrogen factor is the correct USDA value"""
+        """Test that nitrogen factor is the correct EPA/IPCC value"""
         nitrogen_factor = emission_factors.get_fertilizer_factor("nitrogen")
 
-        self.assertEqual(nitrogen_factor["value"], 11.0)
+        self.assertEqual(nitrogen_factor["value"], 10.5)
         self.assertEqual(nitrogen_factor["unit"], "kg CO2e per kg N")
-        self.assertIn("USDA", nitrogen_factor["source"])
+        self.assertIn("EPA", nitrogen_factor["source"])
         self.assertEqual(nitrogen_factor["confidence"], "high")
 
     def test_all_fertilizer_factors_present(self):
@@ -46,11 +53,11 @@ class EmissionFactorsRegistryTest(TestCase):
             factor = emission_factors.get_fertilizer_factor(nutrient)
             self.assertIsInstance(factor["value"], (int, float))
             self.assertGreater(factor["value"], 0)
-            self.assertIn("USDA", factor["source"])
+            self.assertIn("EPA", factor["source"])
 
     def test_all_fuel_factors_present(self):
         """Test that all required fuel factors are present"""
-        required_fuels = ["diesel", "gasoline", "natural_gas", "lpg"]
+        required_fuels = ["diesel", "gasoline", "natural_gas", "propane"]
 
         for fuel in required_fuels:
             factor = emission_factors.get_fuel_factor(fuel)
@@ -107,7 +114,7 @@ class EmissionFactorsRegistryTest(TestCase):
 
         self.assertIn("nitrogen", simple_factors)
         self.assertIn("diesel", simple_factors)
-        self.assertEqual(simple_factors["nitrogen"], 11.0)
+        self.assertEqual(simple_factors["nitrogen"], 10.5)
         self.assertIsInstance(simple_factors["nitrogen"], (int, float))
 
 
@@ -122,14 +129,13 @@ class CalculatorConsistencyTest(TestCase):
 
     def test_nitrogen_factor_consistency_across_calculators(self):
         """Test that all calculators use the same nitrogen factor"""
-        # Get nitrogen factors from all calculators
         carbon_calc_nitrogen = self.carbon_calculator.usda_factors["fertilizer"]["nitrogen"]
         enhanced_usda_nitrogen = self.enhanced_usda.base_usda_factors["nitrogen"]
         event_calc_nitrogen = self.event_calculator.USDA_FERTILIZER_FACTORS["nitrogen"]
         registry_nitrogen = emission_factors.get_fertilizer_factor("nitrogen")["value"]
 
-        # All should be equal to the correct USDA value
-        expected_value = 11.0
+        # All should be equal to the correct EPA/IPCC value
+        expected_value = 10.5
 
         self.assertEqual(carbon_calc_nitrogen, expected_value)
         self.assertEqual(enhanced_usda_nitrogen, expected_value)
@@ -137,7 +143,7 @@ class CalculatorConsistencyTest(TestCase):
         self.assertEqual(registry_nitrogen, expected_value)
 
         # Verify none use the old incorrect values
-        old_incorrect_values = [5.86, 6.7]  # Both old values should not be used
+        old_incorrect_values = [5.86, 6.7, 11.0]
         for old_value in old_incorrect_values:
             self.assertNotEqual(carbon_calc_nitrogen, old_value)
             self.assertNotEqual(enhanced_usda_nitrogen, old_value)
@@ -150,7 +156,7 @@ class CalculatorConsistencyTest(TestCase):
         event_calc_phosphorus = self.event_calculator.USDA_FERTILIZER_FACTORS["phosphorus"]
         registry_phosphorus = emission_factors.get_fertilizer_factor("phosphorus")["value"]
 
-        expected_value = 0.20
+        expected_value = 1.25
 
         self.assertEqual(carbon_calc_phosphorus, expected_value)
         self.assertEqual(enhanced_usda_phosphorus, expected_value)
@@ -164,7 +170,7 @@ class CalculatorConsistencyTest(TestCase):
         event_calc_potassium = self.event_calculator.USDA_FERTILIZER_FACTORS["potassium"]
         registry_potassium = emission_factors.get_fertilizer_factor("potassium")["value"]
 
-        expected_value = 0.15
+        expected_value = 0.60
 
         self.assertEqual(carbon_calc_potassium, expected_value)
         self.assertEqual(enhanced_usda_potassium, expected_value)
@@ -172,41 +178,65 @@ class CalculatorConsistencyTest(TestCase):
         self.assertEqual(registry_potassium, expected_value)
 
     def test_diesel_factor_consistency(self):
-        """Test diesel factor consistency"""
+        """Test diesel factor consistency across per-liter calculators and registry"""
+        # CarbonFootprintCalculator and EnhancedUSDAFactors use per-liter from registry
         carbon_calc_diesel = self.carbon_calculator.usda_factors["fuel"]["diesel"]
         enhanced_usda_diesel = self.enhanced_usda.base_usda_factors["diesel"]
-        event_calc_diesel = self.event_calculator.FUEL_EMISSION_FACTORS["diesel"]
         registry_diesel = emission_factors.get_fuel_factor("diesel")["value"]
 
-        expected_value = 2.68
+        expected_per_liter = 2.70
 
-        self.assertEqual(carbon_calc_diesel, expected_value)
-        self.assertEqual(enhanced_usda_diesel, expected_value)
-        self.assertEqual(event_calc_diesel, expected_value)
-        self.assertEqual(registry_diesel, expected_value)
+        self.assertEqual(carbon_calc_diesel, expected_per_liter)
+        self.assertEqual(enhanced_usda_diesel, expected_per_liter)
+        self.assertEqual(registry_diesel, expected_per_liter)
+
+        # EventCarbonCalculator uses per-gallon from choices.py (EPA 40 CFR Part 98)
+        event_calc_diesel = self.event_calculator.FUEL_EMISSION_FACTORS["diesel"]
+        expected_per_gallon = 10.21
+
+        self.assertEqual(event_calc_diesel, expected_per_gallon)
+
+        # Verify mathematical equivalence: per-gallon / 3.78541 ≈ per-liter
+        self.assertAlmostEqual(
+            expected_per_gallon / 3.78541,
+            expected_per_liter,
+            places=1,
+            msg="Per-gallon and per-liter diesel factors should be equivalent",
+        )
 
     def test_gasoline_factor_consistency(self):
-        """Test gasoline factor consistency"""
+        """Test gasoline factor consistency across per-liter calculators and registry"""
+        # CarbonFootprintCalculator and EnhancedUSDAFactors use per-liter from registry
         carbon_calc_gasoline = self.carbon_calculator.usda_factors["fuel"]["gasoline"]
         enhanced_usda_gasoline = self.enhanced_usda.base_usda_factors["gasoline"]
-        event_calc_gasoline = self.event_calculator.FUEL_EMISSION_FACTORS["gasoline"]
         registry_gasoline = emission_factors.get_fuel_factor("gasoline")["value"]
 
-        expected_value = 2.31
+        expected_per_liter = 2.32
 
-        self.assertEqual(carbon_calc_gasoline, expected_value)
-        self.assertEqual(enhanced_usda_gasoline, expected_value)
-        self.assertEqual(event_calc_gasoline, expected_value)
-        self.assertEqual(registry_gasoline, expected_value)
+        self.assertEqual(carbon_calc_gasoline, expected_per_liter)
+        self.assertEqual(enhanced_usda_gasoline, expected_per_liter)
+        self.assertEqual(registry_gasoline, expected_per_liter)
+
+        # EventCarbonCalculator uses per-gallon from choices.py (EPA 40 CFR Part 98)
+        event_calc_gasoline = self.event_calculator.FUEL_EMISSION_FACTORS["gasoline"]
+        expected_per_gallon = 8.78
+
+        self.assertEqual(event_calc_gasoline, expected_per_gallon)
+
+        # Verify mathematical equivalence: per-gallon / 3.78541 ≈ per-liter
+        self.assertAlmostEqual(
+            expected_per_gallon / 3.78541,
+            expected_per_liter,
+            places=1,
+            msg="Per-gallon and per-liter gasoline factors should be equivalent",
+        )
 
     def test_all_calculators_use_registry(self):
         """Test that all calculators are using the centralized registry"""
-        # This test ensures no hardcoded values remain
-
         # Check that factors are accessed through the registry
         with patch.object(emission_factors, "get_fertilizer_factor") as mock_fertilizer:
             mock_fertilizer.return_value = {
-                "value": 5.86,
+                "value": 99.99,
                 "unit": "test",
                 "source": "test",
                 "confidence": "high",
@@ -221,18 +251,18 @@ class CalculatorConsistencyTest(TestCase):
             # Verify registry was called
             mock_fertilizer.assert_called()
 
-    def test_no_hardcoded_nitrogen_67_remaining(self):
-        """Test that the incorrect 6.7 value is not used anywhere"""
-        incorrect_value = 6.7
+    def test_no_hardcoded_old_nitrogen_remaining(self):
+        """Test that the old incorrect nitrogen values are not used anywhere"""
+        old_incorrect_values = [5.86, 6.7, 11.0]
 
         # Check all calculator instances
-        self.assertNotEqual(self.carbon_calculator.usda_factors["fertilizer"]["nitrogen"], incorrect_value)
-        self.assertNotEqual(self.enhanced_usda.base_usda_factors["nitrogen"], incorrect_value)
-        self.assertNotEqual(self.event_calculator.USDA_FERTILIZER_FACTORS["nitrogen"], incorrect_value)
+        for incorrect_value in old_incorrect_values:
+            self.assertNotEqual(self.carbon_calculator.usda_factors["fertilizer"]["nitrogen"], incorrect_value)
+            self.assertNotEqual(self.enhanced_usda.base_usda_factors["nitrogen"], incorrect_value)
+            self.assertNotEqual(self.event_calculator.USDA_FERTILIZER_FACTORS["nitrogen"], incorrect_value)
 
     def test_factor_metadata_accessible(self):
         """Test that factor metadata is accessible from calculators"""
-        # Test that we can get metadata from the registry
         nitrogen_metadata = emission_factors.get_fertilizer_factor("nitrogen")
 
         self.assertIn("source", nitrogen_metadata)
@@ -249,26 +279,19 @@ class CalculationAccuracyTest(TestCase):
         self.event_calculator = EventCarbonCalculator()
 
     def test_nitrogen_calculation_accuracy(self):
-        """Test that nitrogen-based calculations use correct factor"""
-        # Mock event for testing
-        mock_event = MagicMock()
-        mock_event.type = "FE"  # Fertilizer
-        mock_event.concentration = "20-10-10"  # 20% nitrogen
-        mock_event.volume = "100L"
-        mock_event.area = "1ha"
-        mock_event.way_of_application = "broadcast"
-        mock_event.history.product.name = "corn"
-
+        """Test that nitrogen-based calculations use correct factor (10.5 kg CO2e/kg N)"""
         # Calculate expected emissions
-        # 100L with 20% N = 20kg N
-        # 20kg N * 5.86 kg CO2e per kg N = 117.2 kg CO2e (before efficiency adjustments)
-        expected_base = 20 * 5.86  # 117.2
+        # 20kg N * 10.5 kg CO2e per kg N = 210.0 kg CO2e (before efficiency adjustments)
+        nitrogen_factor = emission_factors.get_fertilizer_factor("nitrogen")["value"]
+        expected_base = 20 * nitrogen_factor  # 20 * 10.5 = 210.0
 
-        # This should NOT equal the old calculation (20 * 6.7 = 134)
-        old_incorrect_calculation = 20 * 6.7  # 134
+        # This should NOT equal the old calculations
+        old_calculations = [20 * 6.7, 20 * 5.86, 20 * 11.0]
 
-        self.assertNotEqual(expected_base, old_incorrect_calculation)
-        self.assertEqual(expected_base, 117.2)
+        for old_calc in old_calculations:
+            self.assertNotEqual(expected_base, old_calc)
+
+        self.assertEqual(expected_base, 210.0)
 
     def test_calculation_consistency_across_modules(self):
         """Test that the same inputs produce consistent results across modules"""
@@ -279,18 +302,20 @@ class CalculationAccuracyTest(TestCase):
         carbon_calc = CarbonFootprintCalculator()
         carbon_result = carbon_calc._calculate_fertilizer_emissions(fertilizer_data)
 
-        # Expected result: 10 kg * 5.86 kg CO2e per kg = 58.6 kg CO2e
-        expected = 10 * 5.86
+        # Expected result: 10 kg * 10.5 kg CO2e per kg = 105.0 kg CO2e
+        expected = 10 * 10.5
 
         self.assertEqual(carbon_result, expected)
-        self.assertNotEqual(carbon_result, 10 * 6.7)  # Not the old incorrect value
+        # Verify not using old incorrect values
+        self.assertNotEqual(carbon_result, 10 * 6.7)
+        self.assertNotEqual(carbon_result, 10 * 5.86)
 
     def test_factor_source_attribution(self):
         """Test that calculations include proper source attribution"""
         metadata = emission_factors.get_metadata()
 
         self.assertTrue(metadata["usda_verified"])
-        self.assertIn("USDA", metadata["data_source"])
+        self.assertIn("EPA", metadata["data_source"])
         self.assertEqual(metadata["version"], emission_factors.VERSION)
 
 
@@ -299,9 +324,6 @@ class RegressionTest(TestCase):
 
     def test_no_duplicate_factor_definitions(self):
         """Ensure no duplicate factor definitions exist"""
-        # This test would fail if someone added hardcoded factors again
-
-        # Check that import and usage of emission_factors is consistent
         from carbon.services.emission_factors import EmissionFactorsRegistry
         from carbon.services.emission_factors import emission_factors as ef1
 
@@ -312,12 +334,10 @@ class RegressionTest(TestCase):
         n2 = ef2.get_fertilizer_factor("nitrogen")["value"]
 
         self.assertEqual(n1, n2)
-        self.assertEqual(n1, 5.86)
+        self.assertEqual(n1, 10.5)
 
     def test_import_consistency(self):
         """Test that all modules import and use factors consistently"""
-        # This would catch if someone bypassed the registry
-
         from carbon.services.calculator import CarbonFootprintCalculator
         from carbon.services.enhanced_usda_factors import EnhancedUSDAFactors
         from carbon.services.event_carbon_calculator import EventCarbonCalculator
@@ -326,14 +346,14 @@ class RegressionTest(TestCase):
         calc2 = EnhancedUSDAFactors()
         calc3 = EventCarbonCalculator()
 
-        # All should use same nitrogen factor
+        # All should use same nitrogen factor from the centralized registry
         n1 = calc1.usda_factors["fertilizer"]["nitrogen"]
         n2 = calc2.base_usda_factors["nitrogen"]
         n3 = calc3.USDA_FERTILIZER_FACTORS["nitrogen"]
 
         self.assertEqual(n1, n2)
         self.assertEqual(n2, n3)
-        self.assertEqual(n1, 5.86)
+        self.assertEqual(n1, 10.5)
 
     def test_version_tracking(self):
         """Test that factor versions are properly tracked"""
@@ -348,12 +368,14 @@ class RegressionTest(TestCase):
         current_factors = emission_factors.get_all_factors_simple()
 
         # Define expected values (these should not change without proper process)
+        # Fertilizer factors from registry (EPA/IPCC verified)
+        # Fuel factors from registry (per-liter, EPA 40 CFR Part 98)
         expected_critical_factors = {
-            "nitrogen": 5.86,
-            "phosphorus": 0.20,
-            "potassium": 0.15,
-            "diesel": 2.68,
-            "gasoline": 2.31,
+            "nitrogen": 10.5,
+            "phosphorus": 1.25,
+            "potassium": 0.60,
+            "diesel": 2.70,
+            "gasoline": 2.32,
         }
 
         for factor_name, expected_value in expected_critical_factors.items():

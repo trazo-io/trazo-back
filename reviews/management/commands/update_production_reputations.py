@@ -35,20 +35,13 @@ class Command(BaseCommand):
                 production.refresh_from_db()
 
                 self.stdout.write(
-                    self.style.SUCCESS(
-                        f"Production {production_id}: "
-                        f"{old_reputation} → {production.reputation}"
-                    )
+                    self.style.SUCCESS(f"Production {production_id}: " f"{old_reputation} → {production.reputation}")
                 )
             except History.DoesNotExist:
-                self.stdout.write(
-                    self.style.ERROR(f"Production {production_id} not found")
-                )
+                self.stdout.write(self.style.ERROR(f"Production {production_id} not found"))
         else:
             # Update all productions with reviews
-            productions_with_reviews = History.objects.filter(
-                reviews__isnull=False
-            ).distinct()
+            productions_with_reviews = History.objects.filter(reviews__isnull=False).distinct()
 
             total = productions_with_reviews.count()
             updated = 0
@@ -57,9 +50,7 @@ class Command(BaseCommand):
 
             for production in productions_with_reviews:
                 # Calculate expected reputation
-                avg_rating = Review.objects.filter(production=production).aggregate(
-                    Avg("rating")
-                )["rating__avg"]
+                avg_rating = Review.objects.filter(production=production).aggregate(Avg("rating"))["rating__avg"]
                 expected_reputation = round(avg_rating, 2) if avg_rating else 0.00
 
                 if abs(production.reputation - expected_reputation) > 0.01:
@@ -68,16 +59,9 @@ class Command(BaseCommand):
                     production.refresh_from_db()
                     updated += 1
 
-                    self.stdout.write(
-                        f"  Production {production.id}: "
-                        f"{old_reputation} → {production.reputation}"
-                    )
+                    self.stdout.write(f"  Production {production.id}: " f"{old_reputation} → {production.reputation}")
 
             if updated > 0:
-                self.stdout.write(
-                    self.style.SUCCESS(f"\n✅ Updated {updated} production(s)")
-                )
+                self.stdout.write(self.style.SUCCESS(f"\n✅ Updated {updated} production(s)"))
             else:
-                self.stdout.write(
-                    self.style.SUCCESS("\n✅ All reputations are already correct")
-                )
+                self.stdout.write(self.style.SUCCESS("\n✅ All reputations are already correct"))

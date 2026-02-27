@@ -115,3 +115,9 @@ logs/security.log*
 logs/*.log
 
 staticfiles/
+
+# Hardhat / Solidity contracts
+contracts/node_modules/
+contracts/cache/
+contracts/artifacts/
+contracts/package-lock.json

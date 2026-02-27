@@ -30,14 +30,14 @@ class TestEmissionFactorConsistency(TestCase):
         nitrogen_factor = emission_factors.get_fertilizer_factor("nitrogen")
 
         # According to recent Nature research, global average is 10.48 kg CO2e/kg N
-        # The current value of 11.0 is within reasonable range
-        self.assertEqual(nitrogen_factor["value"], 11.0)
+        # Current value of 10.5 is within acceptable range (EPA + IPCC AR6)
+        self.assertEqual(nitrogen_factor["value"], 10.5)
         self.assertEqual(nitrogen_factor["unit"], "kg CO2e per kg N")
-        self.assertIn("USDA", nitrogen_factor["source"])
+        self.assertIn("EPA", nitrogen_factor["source"])
 
         # Check components match research findings
-        self.assertAlmostEqual(nitrogen_factor["production_component"], 3.2, delta=0.5)
-        self.assertAlmostEqual(nitrogen_factor["field_component"], 7.8, delta=0.5)
+        self.assertAlmostEqual(nitrogen_factor["production_component"], 2.6, delta=0.5)
+        self.assertAlmostEqual(nitrogen_factor["field_component"], 7.9, delta=0.5)
 
     def test_phosphorus_emission_factor(self):
         """Verify phosphorus emission factor"""
@@ -53,8 +53,8 @@ class TestEmissionFactorConsistency(TestCase):
         gasoline_factor = emission_factors.get_fuel_factor("gasoline")
 
         # EPA standard values
-        self.assertEqual(diesel_factor["value"], 2.68)  # kg CO2e per liter
-        self.assertEqual(gasoline_factor["value"], 2.31)  # kg CO2e per liter
+        self.assertEqual(diesel_factor["value"], 2.70)  # kg CO2e per liter
+        self.assertEqual(gasoline_factor["value"], 2.32)  # kg CO2e per liter
 
 
 class TestCarbonCalculations(TransactionTestCase):
@@ -131,7 +131,7 @@ class TestCarbonCalculations(TransactionTestCase):
             name="Nitrogen Fertilizer",
             unit="kg N",
             category="Fertilizer",
-            default_emission_factor=11.0,
+            default_emission_factor=10.5,
             usda_verified=True,
             usda_factors_based=True,
             verification_status="factors_verified",
@@ -142,7 +142,7 @@ class TestCarbonCalculations(TransactionTestCase):
             name="Diesel Fuel",
             unit="liters",
             category="Fuel",
-            default_emission_factor=2.68,
+            default_emission_factor=2.70,
             usda_verified=True,
             usda_factors_based=True,
             verification_status="factors_verified",
@@ -170,9 +170,9 @@ class TestCarbonCalculations(TransactionTestCase):
 
         result = self.calculator.calculate_farm_footprint(inputs=inputs, crop_type="citrus", area=100.0)
 
-        # Expected: 200 kg N * 11.0 kg CO2e/kg N = 2200 kg CO2e
-        self.assertEqual(result["total_emissions"], 2200.0)
-        self.assertEqual(result["emissions_per_acre"], 22.0)  # 2200/100
+        # Expected: 200 kg N * 10.5 kg CO2e/kg N = 2100 kg CO2e
+        self.assertEqual(result["total_emissions"], 2100.0)
+        self.assertEqual(result["emissions_per_acre"], 21.0)  # 2100/100
         self.assertTrue(result["usda_verified"])
 
     def test_fuel_emissions_calculation(self):
@@ -192,9 +192,9 @@ class TestCarbonCalculations(TransactionTestCase):
 
         result = self.calculator.calculate_farm_footprint(inputs=inputs, crop_type="citrus", area=100.0)
 
-        # Expected: 50 liters * 2.68 kg CO2e/liter = 134 kg CO2e
-        self.assertEqual(result["total_emissions"], 134.0)
-        self.assertEqual(result["emissions_per_acre"], 1.34)
+        # Expected: 50 liters * 2.70 kg CO2e/liter = 135 kg CO2e
+        self.assertEqual(result["total_emissions"], 135.0)
+        self.assertEqual(result["emissions_per_acre"], 1.35)
 
     def test_combined_emissions_calculation(self):
         """Test calculation with multiple emission sources"""
@@ -210,8 +210,8 @@ class TestCarbonCalculations(TransactionTestCase):
         )
 
         # Calculate expected emissions
-        expected_fertilizer = (200.0 * 11.0) + (50.0 * 1.25) + (30.0 * 0.60)
-        expected_fuel = (100.0 * 2.68) + (20.0 * 2.31)
+        expected_fertilizer = (200.0 * 10.5) + (50.0 * 1.25) + (30.0 * 0.60)
+        expected_fuel = (100.0 * 2.70) + (20.0 * 2.32)
         expected_electricity = 500.0 * 0.40
         expected_water = 1000.0 * 0.30
         expected_total = expected_fertilizer + expected_fuel + expected_electricity + expected_water
@@ -429,8 +429,8 @@ class TestEventCarbonCalculator(TestCase):
 
         result = self.calculator.calculate_event_carbon(event_data)
 
-        # Expected: (100 * 11.0) + (50 * 1.25) + (30 * 0.60) = 1180.5
-        self.assertAlmostEqual(result["total_emissions"], 1180.5, delta=0.1)
+        # Expected: (100 * 10.5) + (50 * 1.25) + (30 * 0.60) = 1130.5
+        self.assertAlmostEqual(result["total_emissions"], 1130.5, delta=0.1)
         self.assertIn("breakdown", result)
         self.assertTrue(result["usda_verified"])
 
@@ -440,8 +440,8 @@ class TestEventCarbonCalculator(TestCase):
 
         result = self.calculator.calculate_event_carbon(event_data)
 
-        # Expected: 25 * 2.68 = 67.0
-        self.assertEqual(result["total_emissions"], 67.0)
+        # Expected: 25 * 2.70 = 67.5
+        self.assertEqual(result["total_emissions"], 67.5)
         self.assertEqual(result["emission_source"], "fuel_combustion")
 
 

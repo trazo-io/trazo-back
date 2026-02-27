@@ -33,7 +33,7 @@ class Command(BaseCommand):
                 defaults={
                     "category": "fuel",
                     "unit": "liters",
-                    "default_emission_factor": 2.68,
+                    "default_emission_factor": 2.70,
                     "description": "Demo fuel emissions",
                     "usda_verified": True,
                     "usda_factors_based": True,

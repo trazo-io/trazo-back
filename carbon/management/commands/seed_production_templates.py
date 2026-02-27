@@ -117,9 +117,7 @@ class Command(BaseCommand):
 
         self.stdout.write("")
         self.stdout.write(self.style.SUCCESS("=" * 70))
-        self.stdout.write(
-            self.style.SUCCESS("  TRAZO MASTER SEED - Production Templates")
-        )
+        self.stdout.write(self.style.SUCCESS("  TRAZO MASTER SEED - Production Templates"))
         self.stdout.write(self.style.SUCCESS("=" * 70))
         self.stdout.write("")
 
@@ -128,9 +126,7 @@ class Command(BaseCommand):
             return
 
         if self.dry_run:
-            self.stdout.write(
-                self.style.WARNING("DRY RUN MODE - No changes will be made")
-            )
+            self.stdout.write(self.style.WARNING("DRY RUN MODE - No changes will be made"))
             self.stdout.write("")
 
         # Check current state
@@ -140,11 +136,7 @@ class Command(BaseCommand):
         # Check if already seeded
         if self._is_already_seeded(current_state) and not self.force:
             self.stdout.write("")
-            self.stdout.write(
-                self.style.SUCCESS(
-                    "Production templates already seeded. Use --force to re-seed."
-                )
-            )
+            self.stdout.write(self.style.SUCCESS("Production templates already seeded. Use --force to re-seed."))
             self.stdout.write("")
             self._run_field_format_validation()
             return
@@ -179,11 +171,7 @@ class Command(BaseCommand):
 
     def _is_already_seeded(self, state):
         """Check if templates have already been seeded."""
-        return (
-            state["crop_types"] >= 19
-            and state["production_templates"] >= 19
-            and state["event_templates"] >= 100
-        )
+        return state["crop_types"] >= 19 and state["production_templates"] >= 19 and state["event_templates"] >= 100
 
     def _execute_seed_sequence(self):
         """Execute the seeding sequence in correct order."""
@@ -236,12 +224,8 @@ class Command(BaseCommand):
         after_et = EventTemplate.objects.count()
         self.stats["production_templates_created"] = after_pt - before_pt
         self.stats["event_templates_created"] = after_et - before_et
-        self.stdout.write(
-            f"  Created {self.stats['production_templates_created']} production templates"
-        )
-        self.stdout.write(
-            f"  Created {self.stats['event_templates_created']} event templates"
-        )
+        self.stdout.write(f"  Created {self.stats['production_templates_created']} production templates")
+        self.stdout.write(f"  Created {self.stats['event_templates_created']} event templates")
 
     def _seed_equipment_events(self):
         """Step 3: Add equipment-specific events."""
@@ -249,9 +233,7 @@ class Command(BaseCommand):
         call_command("enhance_production_templates_with_equipment", verbosity=0)
         after_count = EventTemplate.objects.count()
         self.stats["equipment_events_added"] = after_count - before_count
-        self.stdout.write(
-            f"  Added {self.stats['equipment_events_added']} equipment events"
-        )
+        self.stdout.write(f"  Added {self.stats['equipment_events_added']} equipment events")
 
     def _seed_regional_practices(self):
         """Step 4: Add regional agricultural practices."""
@@ -274,11 +256,7 @@ class Command(BaseCommand):
                 self.stdout.write(f"  Added regional practices for: {state}")
             except Exception as e:
                 self.warnings.append(f"Regional practices ({state}): {str(e)}")
-                self.stdout.write(
-                    self.style.WARNING(
-                        f"  Warning: Could not add regional practices for {state}: {e}"
-                    )
-                )
+                self.stdout.write(self.style.WARNING(f"  Warning: Could not add regional practices for {state}: {e}"))
 
     def _seed_consumer_transparency(self):
         """Step 5: Add consumer transparency features."""
@@ -292,11 +270,7 @@ class Command(BaseCommand):
             self.stdout.write(f"  Added transparency features for: {self.region}")
         except Exception as e:
             self.warnings.append(f"Consumer transparency: {str(e)}")
-            self.stdout.write(
-                self.style.WARNING(
-                    f"  Warning: Could not add transparency features: {e}"
-                )
-            )
+            self.stdout.write(self.style.WARNING(f"  Warning: Could not add transparency features: {e}"))
 
     def _validate_and_fix_field_formats(self):
         """Step 6: Validate and fix field formats to canonical specification."""
@@ -396,9 +370,7 @@ class Command(BaseCommand):
                         )
 
         if issues:
-            self.stdout.write(
-                self.style.WARNING(f"  Found {len(issues)} field format issues:")
-            )
+            self.stdout.write(self.style.WARNING(f"  Found {len(issues)} field format issues:"))
             for issue in issues[:10]:  # Show first 10
                 self.stdout.write(
                     f"    - {issue['template']}.{issue['field']}: "
@@ -409,9 +381,7 @@ class Command(BaseCommand):
             self.stdout.write("")
             self.stdout.write("  Run without --validate-only to fix these issues")
         else:
-            self.stdout.write(
-                self.style.SUCCESS("  All field formats are canonical")
-            )
+            self.stdout.write(self.style.SUCCESS("  All field formats are canonical"))
 
     def _run_validation_only(self):
         """Run validation without seeding."""
@@ -430,13 +400,9 @@ class Command(BaseCommand):
         self.stdout.write(self.style.HTTP_INFO("MVP Readiness Check"))
         self.stdout.write("-" * 50)
         try:
-            call_command(
-                "validate_mvp_readiness", region="all", detailed=True, verbosity=1
-            )
+            call_command("validate_mvp_readiness", region="all", detailed=True, verbosity=1)
         except Exception as e:
-            self.stdout.write(
-                self.style.WARNING(f"  Could not run MVP validation: {e}")
-            )
+            self.stdout.write(self.style.WARNING(f"  Could not run MVP validation: {e}"))
 
     def _run_post_seed_validation(self):
         """Run validation after seeding."""
@@ -447,27 +413,17 @@ class Command(BaseCommand):
         # Validate field formats
         issues = self._count_field_format_issues()
         if issues > 0:
-            self.stdout.write(
-                self.style.WARNING(
-                    f"  Field format issues remaining: {issues}"
-                )
-            )
+            self.stdout.write(self.style.WARNING(f"  Field format issues remaining: {issues}"))
         else:
-            self.stdout.write(
-                self.style.SUCCESS("  All field formats are canonical")
-            )
+            self.stdout.write(self.style.SUCCESS("  All field formats are canonical"))
 
         # MVP readiness
         try:
-            call_command(
-                "validate_mvp_readiness", region="all", detailed=False, verbosity=0
-            )
+            call_command("validate_mvp_readiness", region="all", detailed=False, verbosity=0)
             self.stdout.write(self.style.SUCCESS("  MVP readiness: PASSED"))
         except Exception as e:
             self.warnings.append(f"MVP validation: {str(e)}")
-            self.stdout.write(
-                self.style.WARNING(f"  MVP readiness check failed: {e}")
-            )
+            self.stdout.write(self.style.WARNING(f"  MVP readiness check failed: {e}"))
 
     def _count_field_format_issues(self):
         """Count field format issues without fixing."""
@@ -494,27 +450,15 @@ class Command(BaseCommand):
         self.stdout.write("")
 
         if self.dry_run:
-            self.stdout.write(
-                self.style.WARNING("DRY RUN - No changes were made")
-            )
+            self.stdout.write(self.style.WARNING("DRY RUN - No changes were made"))
             self.stdout.write("")
 
         self.stdout.write("Summary:")
-        self.stdout.write(
-            f"  Crop Types Created: {self.stats['crop_types_created']}"
-        )
-        self.stdout.write(
-            f"  Production Templates Created: {self.stats['production_templates_created']}"
-        )
-        self.stdout.write(
-            f"  Event Templates Created: {self.stats['event_templates_created']}"
-        )
-        self.stdout.write(
-            f"  Equipment Events Added: {self.stats['equipment_events_added']}"
-        )
-        self.stdout.write(
-            f"  Field Format Issues Fixed: {self.stats['field_format_issues']}"
-        )
+        self.stdout.write(f"  Crop Types Created: {self.stats['crop_types_created']}")
+        self.stdout.write(f"  Production Templates Created: {self.stats['production_templates_created']}")
+        self.stdout.write(f"  Event Templates Created: {self.stats['event_templates_created']}")
+        self.stdout.write(f"  Equipment Events Added: {self.stats['equipment_events_added']}")
+        self.stdout.write(f"  Field Format Issues Fixed: {self.stats['field_format_issues']}")
 
         if self.errors:
             self.stdout.write("")

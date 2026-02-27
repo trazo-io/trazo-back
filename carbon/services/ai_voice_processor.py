@@ -84,8 +84,11 @@ class AIVoiceProcessor:
             if not OPENAI_AVAILABLE or not self.api_key:
                 return self._fallback_processing(transcript, crop_type, language)
 
+            # Pre-process transcript to fix common speech-to-text errors
+            processed_transcript = self._preprocess_transcript(transcript)
+
             # Create AI prompt for agricultural event extraction
-            prompt = self._create_extraction_prompt(transcript, crop_type, language)
+            prompt = self._create_extraction_prompt(processed_transcript, crop_type, language)
 
             # Call OpenAI API
             response = self.openai.chat.completions.create(
@@ -115,54 +118,106 @@ class AIVoiceProcessor:
             logger.error(f"AI voice processing failed: {e}")
             return self._fallback_processing(transcript, crop_type, language)
 
+    def _preprocess_transcript(self, transcript: str) -> str:
+        """Pre-process transcript to fix common speech-to-text errors for agricultural terms."""
+        import re
+
+        processed = transcript
+
+        # Fix NPK patterns where speech recognition merges numbers
+        # "NPK 1010" or "NPK1010" → "NPK 10-10-10"
+        processed = re.sub(r"\bNPK\s*(\d{2})(\d{2})(\d{2})\b", r"NPK \1-\2-\3", processed, flags=re.IGNORECASE)
+        # "NPK 101010" → "NPK 10-10-10"
+        processed = re.sub(r"\bNPK\s*(\d{1,2})(\d{1,2})(\d{1,2})\b", r"NPK \1-\2-\3", processed, flags=re.IGNORECASE)
+        # "ten ten ten" or "10 10 10" after NPK → "10-10-10"
+        processed = re.sub(
+            r"\bNPK\s+(\d{1,2})\s+(\d{1,2})\s+(\d{1,2})\b", r"NPK \1-\2-\3", processed, flags=re.IGNORECASE
+        )
+        # "dash" spoken literally: "10 dash 10 dash 10" → "10-10-10"
+        processed = re.sub(r"(\d+)\s*dash\s*(\d+)\s*dash\s*(\d+)", r"\1-\2-\3", processed, flags=re.IGNORECASE)
+
+        return processed
+
     def _get_system_prompt(self, language: str) -> str:
         """Get the system prompt for the AI model based on language."""
 
         prompts = {
-            "en-US": """You are an expert agricultural assistant specializing in carbon footprint tracking for farms. 
-            Your job is to parse voice inputs from farmers and extract structured information about farm activities.
-            
-            You must respond with valid JSON containing these fields:
-            - event_type: One of [fertilization, irrigation, pesticide, equipment, harvest, planting, soil_management, general]
-            - confidence: Integer 0-100 representing your confidence in the classification
-            - detected_amounts: Array of amounts with units (e.g., ["50 pounds", "2 hours", "1.5 acres"])
-            - detected_products: Array of products mentioned (e.g., ["NPK fertilizer", "glyphosate", "diesel"])
-            - detected_systems: Array of systems/methods (e.g., ["drip irrigation", "broadcast", "tractor"])
-            - area_covered: Estimated area if mentioned or can be inferred
-            - duration: Time duration if mentioned
-            - carbon_impact_estimate: Estimated CO2e impact in kg (be conservative)
-            - description: Clean, professional description of the activity
-            - recommendations: Array of efficiency or carbon reduction suggestions
-            
-            Focus on accuracy and be conservative with estimates. If unsure, indicate lower confidence.""",
-            "es-ES": """Eres un asistente agrícola experto especializado en seguimiento de huella de carbono para granjas.
-            Tu trabajo es analizar entradas de voz de agricultores y extraer información estructurada sobre actividades agrícolas.
-            
-            Debes responder con JSON válido conteniendo estos campos:
-            - event_type: Uno de [fertilization, irrigation, pesticide, equipment, harvest, planting, soil_management, general]
-            - confidence: Entero 0-100 representando tu confianza en la clasificación
-            - detected_amounts: Array de cantidades con unidades
-            - detected_products: Array de productos mencionados
-            - detected_systems: Array de sistemas/métodos
-            - area_covered: Área estimada si se menciona
-            - duration: Duración si se menciona
-            - carbon_impact_estimate: Impacto estimado de CO2e en kg
-            - description: Descripción limpia y profesional de la actividad
-            - recommendations: Array de sugerencias de eficiencia o reducción de carbono""",
-            "pt-BR": """Você é um assistente agrícola especialista em rastreamento de pegada de carbono para fazendas.
-            Seu trabalho é analisar entradas de voz de agricultores e extrair informações estruturadas sobre atividades agrícolas.
-            
-            Você deve responder com JSON válido contendo estes campos:
-            - event_type: Um de [fertilization, irrigation, pesticide, equipment, harvest, planting, soil_management, general]
-            - confidence: Inteiro 0-100 representando sua confiança na classificação
-            - detected_amounts: Array de quantidades com unidades
-            - detected_products: Array de produtos mencionados
-            - detected_systems: Array de sistemas/métodos
-            - area_covered: Área estimada se mencionada
-            - duration: Duração se mencionada
-            - carbon_impact_estimate: Impacto estimado de CO2e em kg
-            - description: Descrição limpa e profissional da atividade
-            - recommendations: Array de sugestões de eficiência ou redução de carbono""",
+            "en-US": """You are an expert agricultural assistant for a farm transparency platform.
+Your job is to parse voice inputs from farmers and extract structured information about farm activities
+to help them document their farming practices transparently.
+
+You must respond with valid JSON containing these fields:
+- event_type: One of [fertilization, irrigation, pesticide, herbicide, fungicide, harvest, planting, pruning, transplanting, cultivation, thinning, soil_management, general]. Use "cultivation" for tractor/equipment usage, field operations, or machinery work.
+- confidence: Integer 0-100 representing your confidence in the classification
+- detected_amounts: Array of structured amounts (e.g., [{"value": 200, "unit": "lbs", "category": "weight"}, {"value": 2, "unit": "hours", "category": "time"}])
+- detected_products: Array of products mentioned (e.g., ["NPK 10-10-10", "glyphosate", "diesel"])
+- detected_systems: Array of systems/methods (e.g., ["drip irrigation", "broadcast", "tractor"])
+- npk_ratio: If fertilizer event and NPK mentioned, extract as "N-P-K" format (e.g., "10-10-10"). null if not mentioned.
+- concentration: Chemical concentration if mentioned (e.g., "10-10-10" for NPK, "50%" for liquid). null if not mentioned.
+- commercial_name: Product or brand name if mentioned. null if not mentioned.
+- application_method: Method of application if mentioned (broadcast, banded, foliar, drip, spray, etc.). null if not mentioned.
+- area_covered: Area with unit if mentioned (e.g., {"value": 2, "unit": "hectares"}). null if not mentioned.
+- duration: Time duration if mentioned (e.g., {"value": 6, "unit": "hours"}). null if not mentioned.
+- fuel_amount: Fuel consumption if mentioned (e.g., {"value": 15, "unit": "gallons"}). null if not mentioned.
+- water_source: If irrigation, water source if mentioned. null if not mentioned.
+- description: Clean, professional description of the activity
+
+CRITICAL INSTRUCTIONS:
+- For NPK ratios: "ten ten ten" means "10-10-10". Always format as N-P-K with hyphens.
+- For amounts: Always separate value and unit. "200 pounds per acre" -> value:200, unit:"lbs"
+- Prefer specific event types: use "herbicide" when weed-related, "fungicide" when disease/mold-related, "pruning" when trimming/cutting branches.
+- If unsure about a value, set it to null rather than guess.
+- Focus on extracting actionable farming data for transparency documentation.""",
+            "es-ES": """Eres un asistente agrícola experto para una plataforma de transparencia agrícola.
+Tu trabajo es analizar entradas de voz de agricultores y extraer información estructurada sobre actividades agrícolas
+para ayudarlos a documentar sus prácticas agrícolas de forma transparente.
+
+Debes responder con JSON válido conteniendo estos campos:
+- event_type: Uno de [fertilization, irrigation, pesticide, herbicide, fungicide, harvest, planting, pruning, transplanting, cultivation, thinning, soil_management, general]. Usar "cultivation" para uso de tractor/equipo, operaciones de campo, o trabajo con maquinaria.
+- confidence: Entero 0-100 representando tu confianza en la clasificación
+- detected_amounts: Array de cantidades estructuradas (e.g., [{"value": 200, "unit": "lbs", "category": "weight"}])
+- detected_products: Array de productos mencionados
+- detected_systems: Array de sistemas/métodos
+- npk_ratio: Si es evento de fertilizante y se menciona NPK, extraer como "N-P-K" (e.g., "10-10-10"). null si no se menciona.
+- concentration: Concentración química si se menciona. null si no se menciona.
+- commercial_name: Nombre del producto o marca si se menciona. null si no se menciona.
+- application_method: Método de aplicación si se menciona. null si no se menciona.
+- area_covered: Área con unidad si se menciona (e.g., {"value": 2, "unit": "hectáreas"}). null si no se menciona.
+- duration: Duración si se menciona (e.g., {"value": 6, "unit": "horas"}). null si no se menciona.
+- fuel_amount: Consumo de combustible si se menciona. null si no se menciona.
+- water_source: Si es irrigación, fuente de agua si se menciona. null si no se menciona.
+- description: Descripción limpia y profesional de la actividad
+
+INSTRUCCIONES CRÍTICAS:
+- Para NPK: "diez diez diez" significa "10-10-10". Siempre formatear como N-P-K con guiones.
+- Para cantidades: Siempre separar valor y unidad.
+- Preferir tipos específicos: usar "herbicide" para malezas, "fungicide" para enfermedades, "pruning" para poda.
+- Si no estás seguro de un valor, establecerlo como null en vez de adivinar.""",
+            "pt-BR": """Você é um assistente agrícola especialista para uma plataforma de transparência agrícola.
+Seu trabalho é analisar entradas de voz de agricultores e extrair informações estruturadas sobre atividades agrícolas
+para ajudá-los a documentar suas práticas agrícolas de forma transparente.
+
+Você deve responder com JSON válido contendo estes campos:
+- event_type: Um de [fertilization, irrigation, pesticide, herbicide, fungicide, harvest, planting, pruning, transplanting, cultivation, thinning, soil_management, general]. Usar "cultivation" para uso de trator/equipamento, operações de campo, ou trabalho com maquinaria.
+- confidence: Inteiro 0-100 representando sua confiança na classificação
+- detected_amounts: Array de quantidades estruturadas (e.g., [{"value": 200, "unit": "lbs", "category": "weight"}])
+- detected_products: Array de produtos mencionados
+- detected_systems: Array de sistemas/métodos
+- npk_ratio: Se evento de fertilizante e NPK mencionado, extrair como "N-P-K" (e.g., "10-10-10"). null se não mencionado.
+- concentration: Concentração química se mencionada. null se não mencionada.
+- commercial_name: Nome do produto ou marca se mencionado. null se não mencionado.
+- application_method: Método de aplicação se mencionado. null se não mencionado.
+- area_covered: Área com unidade se mencionada (e.g., {"value": 2, "unit": "hectares"}). null se não mencionada.
+- duration: Duração se mencionada (e.g., {"value": 6, "unit": "horas"}). null se não mencionada.
+- fuel_amount: Consumo de combustível se mencionado. null se não mencionado.
+- water_source: Se irrigação, fonte de água se mencionada. null se não mencionada.
+- description: Descrição limpa e profissional da atividade
+
+INSTRUÇÕES CRÍTICAS:
+- Para NPK: "dez dez dez" significa "10-10-10". Sempre formatar como N-P-K com hifens.
+- Para quantidades: Sempre separar valor e unidade.
+- Preferir tipos específicos: usar "herbicide" para ervas daninhas, "fungicide" para doenças, "pruning" para poda.
+- Se não tem certeza de um valor, definir como null em vez de adivinhar.""",
         }
 
         return prompts.get(language, prompts["en-US"])
@@ -170,18 +225,25 @@ class AIVoiceProcessor:
     def _create_extraction_prompt(self, transcript: str, crop_type: str, language: str) -> str:
         """Create the extraction prompt for the AI model."""
 
+        ag_hints = """
+AGRICULTURAL PATTERN RECOGNITION HINTS:
+- NPK ratios are commonly spoken as "ten ten ten" meaning "10-10-10" (Nitrogen-Phosphorus-Potassium)
+- Common fertilizers: Urea (46-0-0), DAP (18-46-0), Triple Super (0-46-0), Potash (0-0-60), MAP (11-52-0)
+- Units: "per acre", "per hectare", "pounds", "kilograms", "gallons", "liters"
+- Methods: broadcast, banded, foliar, drip, sprinkler, flood, ground spray, aerial
+
+Extract ALL mentioned quantities with their units. Be especially careful with:
+1. NPK ratios - always format as N-P-K (e.g., "10-10-10")
+2. Amounts with units - separate value from unit
+3. Product names - preserve the commercial name exactly as spoken"""
+
         prompts = {
             "en-US": f"""Parse this farmer's voice input and extract agricultural event information:
 
 Voice Input: "{transcript}"
 Crop Type: {crop_type}
 Date: Today
-
-Extract and structure the agricultural activity information. Consider:
-- What type of farm activity was performed?
-- What amounts, products, or equipment were mentioned?
-- What area was covered or time duration?
-- Estimate the carbon impact based on the activity type and scale
+{ag_hints}
 
 Respond with JSON only.""",
             "es-ES": f"""Analiza esta entrada de voz del agricultor y extrae información del evento agrícola:
@@ -189,12 +251,7 @@ Respond with JSON only.""",
 Entrada de Voz: "{transcript}"
 Tipo de Cultivo: {crop_type}
 Fecha: Hoy
-
-Extrae y estructura la información de la actividad agrícola. Considera:
-- ¿Qué tipo de actividad agrícola se realizó?
-- ¿Qué cantidades, productos o equipos se mencionaron?
-- ¿Qué área se cubrió o duración de tiempo?
-- Estima el impacto de carbono basado en el tipo y escala de actividad
+{ag_hints}
 
 Responde solo con JSON.""",
             "pt-BR": f"""Analise esta entrada de voz do agricultor e extraia informações do evento agrícola:
@@ -202,12 +259,7 @@ Responde solo con JSON.""",
 Entrada de Voz: "{transcript}"
 Tipo de Cultura: {crop_type}
 Data: Hoje
-
-Extraia e estruture as informações da atividade agrícola. Considere:
-- Que tipo de atividade agrícola foi realizada?
-- Que quantidades, produtos ou equipamentos foram mencionados?
-- Que área foi coberta ou duração de tempo?
-- Estime o impacto de carbono baseado no tipo e escala da atividade
+{ag_hints}
 
 Responda apenas com JSON.""",
         }
@@ -227,14 +279,19 @@ Responda apenas com JSON.""",
             "detected_products": ai_response.get("detected_products", []),
             "detected_systems": ai_response.get("detected_systems", []),
             "confidence": min(max(ai_response.get("confidence", 0), 0), 100),
-            "suggested_carbon_impact": ai_response.get("carbon_impact_estimate", 0),
-            "area_covered": ai_response.get("area_covered", ""),
-            "duration": ai_response.get("duration", ""),
-            "recommendations": ai_response.get("recommendations", []),
+            # Structured fields for direct form mapping
+            "npk_ratio": ai_response.get("npk_ratio"),
+            "concentration": ai_response.get("concentration"),
+            "commercial_name": ai_response.get("commercial_name"),
+            "application_method": ai_response.get("application_method"),
+            "water_source": ai_response.get("water_source"),
+            "area_covered": ai_response.get("area_covered"),
+            "duration": ai_response.get("duration"),
+            "fuel_amount": ai_response.get("fuel_amount"),
+            # Metadata
             "processing_time": processing_time,
             "source": "openai_gpt",
             "model_used": self.model,
-            "raw_ai_response": ai_response,
             "original_transcript": original_transcript,
         }
 
@@ -245,7 +302,10 @@ Responda apenas com JSON.""",
         """
         logger.info("Using fallback pattern matching for voice processing")
 
-        # Enhanced pattern matching (better than current mock)
+        # Pre-process transcript
+        processed = self._preprocess_transcript(transcript)
+
+        # Enhanced pattern matching
         patterns = {
             "fertilization": {
                 "keywords": [
@@ -257,19 +317,35 @@ Responda apenas com JSON.""",
                     "nitrogen",
                     "phosphorus",
                     "potassium",
+                    "urea",
                 ],
-                "es": ["fertilizante", "fertilizar", "aplicar", "esparcir", "npk", "nitrógeno"],
-                "pt": ["fertilizante", "fertilizar", "aplicar", "espalhar", "npk", "nitrogênio"],
+                "es": ["fertilizante", "fertilizar", "aplicar", "esparcir", "npk", "nitrógeno", "urea"],
+                "pt": ["fertilizante", "fertilizar", "aplicar", "espalhar", "npk", "nitrogênio", "ureia"],
             },
             "irrigation": {
                 "keywords": ["irrigate", "irrigation", "water", "watered", "sprinkler", "drip", "flood"],
                 "es": ["irrigar", "irrigación", "regar", "agua", "aspersores", "goteo"],
                 "pt": ["irrigar", "irrigação", "regar", "água", "aspersores", "gotejamento"],
             },
+            "herbicide": {
+                "keywords": ["herbicide", "weed", "weeds", "weed control"],
+                "es": ["herbicida", "maleza", "malezas"],
+                "pt": ["herbicida", "erva daninha", "ervas daninhas"],
+            },
+            "fungicide": {
+                "keywords": ["fungicide", "fungus", "mildew", "blight", "rot", "mold"],
+                "es": ["fungicida", "hongo", "mildiú", "tizón", "moho"],
+                "pt": ["fungicida", "fungo", "míldio", "ferrugem", "mofo"],
+            },
             "pesticide": {
-                "keywords": ["spray", "sprayed", "pesticide", "herbicide", "insecticide", "fungicide"],
-                "es": ["rociar", "pesticida", "herbicida", "insecticida", "fungicida"],
-                "pt": ["pulverizar", "pesticida", "herbicida", "inseticida", "fungicida"],
+                "keywords": ["spray", "sprayed", "pesticide", "insecticide", "pest"],
+                "es": ["rociar", "pesticida", "insecticida", "plaga"],
+                "pt": ["pulverizar", "pesticida", "inseticida", "praga"],
+            },
+            "pruning": {
+                "keywords": ["prune", "pruning", "trim", "trimming", "cut branches"],
+                "es": ["podar", "poda", "recortar"],
+                "pt": ["podar", "poda", "aparar"],
             },
             "equipment": {
                 "keywords": ["tractor", "equipment", "machine", "fuel", "diesel", "mowed", "plowed"],
@@ -283,7 +359,7 @@ Responda apenas com JSON.""",
             },
         }
 
-        text_lower = transcript.lower()
+        text_lower = processed.lower()
         detected_type = "general"
         confidence = 30  # Lower confidence for fallback
 
@@ -302,54 +378,48 @@ Responda apenas com JSON.""",
         import re
 
         amount_patterns = [
-            r"(\d+(?:\.\d+)?)\s*(?:pounds?|lbs?|kg|kilograms?|tons?|libras?|quilos?)",
-            r"(\d+(?:\.\d+)?)\s*(?:gallons?|liters?|litros?)",
-            r"(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|horas?)",
-            r"(\d+(?:\.\d+)?)\s*(?:acres?|hectares?|hectáreas?)",
+            (r"(\d+(?:\.\d+)?)\s*(?:pounds?|lbs?)", "lbs", "weight"),
+            (r"(\d+(?:\.\d+)?)\s*(?:kg|kilograms?|quilos?|libras?)", "kg", "weight"),
+            (r"(\d+(?:\.\d+)?)\s*(?:tons?)", "tons", "weight"),
+            (r"(\d+(?:\.\d+)?)\s*(?:gallons?)", "gal", "volume"),
+            (r"(\d+(?:\.\d+)?)\s*(?:liters?|litros?)", "L", "volume"),
+            (r"(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|horas?)", "hours", "time"),
+            (r"(\d+(?:\.\d+)?)\s*(?:acres?)", "acres", "area"),
+            (r"(\d+(?:\.\d+)?)\s*(?:hectares?|hectáreas?)", "ha", "area"),
         ]
 
         detected_amounts = []
-        for pattern in amount_patterns:
-            matches = re.findall(pattern, transcript, re.IGNORECASE)
-            detected_amounts.extend(matches)
+        for pattern, unit, category in amount_patterns:
+            matches = re.findall(pattern, processed, re.IGNORECASE)
+            for match in matches:
+                detected_amounts.append({"value": float(match), "unit": unit, "category": category})
+
+        # Extract NPK ratio
+        npk_ratio = None
+        npk_match = re.search(r"(\d{1,2})-(\d{1,2})-(\d{1,2})", processed)
+        if npk_match:
+            npk_ratio = f"{npk_match.group(1)}-{npk_match.group(2)}-{npk_match.group(3)}"
 
         return {
             "type": detected_type,
-            "description": transcript,
+            "description": processed,
             "date": time.strftime("%Y-%m-%d"),
             "detected_amounts": detected_amounts,
             "detected_products": [],
             "detected_systems": [],
             "confidence": confidence,
-            "suggested_carbon_impact": self._estimate_carbon_fallback(detected_type, detected_amounts),
-            "processing_time": 50,  # Simulated fast processing
+            "npk_ratio": npk_ratio,
+            "concentration": npk_ratio,
+            "commercial_name": None,
+            "application_method": None,
+            "water_source": None,
+            "area_covered": None,
+            "duration": None,
+            "fuel_amount": None,
+            "processing_time": 50,
             "source": "pattern_matching_fallback",
             "original_transcript": transcript,
         }
-
-    def _estimate_carbon_fallback(self, event_type: str, amounts: List[str]) -> float:
-        """Estimate carbon impact for fallback processing."""
-
-        base_impacts = {
-            "fertilization": 2.5,
-            "irrigation": 1.5,
-            "pesticide": 3.0,
-            "equipment": 8.0,
-            "harvest": 1.0,
-            "general": 1.0,
-        }
-
-        base = base_impacts.get(event_type, 1.0)
-
-        # Scale based on detected amounts
-        if amounts:
-            try:
-                first_amount = float(amounts[0])
-                return round(base * (first_amount / 10), 2)
-            except (ValueError, IndexError):
-                pass
-
-        return base
 
 
 def process_voice_with_ai(transcript: str, crop_type: str, language: str = "en-US") -> Dict[str, Any]:
@@ -389,12 +459,16 @@ async def _fetch_recent_events_from_db(establishment_id: str, parcel_id: str) ->
         # Calculate 30 days ago
         thirty_days_ago = timezone.now() - timedelta(days=30)
 
-        # Query recent histories for this parcel
+        # Query active histories for this parcel (not filtered by start_date,
+        # since established productions may have started months ago but still
+        # have recent events we need for AI context)
         @sync_to_async
         def get_recent_histories():
             return list(
                 History.objects.filter(
-                    parcel_id=parcel_id, parcel__establishment_id=establishment_id, start_date__gte=thirty_days_ago
+                    parcel_id=parcel_id,
+                    parcel__establishment_id=establishment_id,
+                    finish_date__isnull=True,  # Active (not finished) productions
                 ).prefetch_related(
                     "history_weatherevent_events",
                     "history_chemicalevent_events",
@@ -408,10 +482,9 @@ async def _fetch_recent_events_from_db(establishment_id: str, parcel_id: str) ->
 
         histories = await get_recent_histories()
         recent_events = []
+        all_events = []
 
         for history in histories:
-            # Get all events from this history
-            all_events = []
 
             # Weather events
             for event in history.history_weatherevent_events.all():
@@ -536,39 +609,41 @@ async def generate_ai_event_suggestions(
         if farm_context:
             context_info += f"\nFarm Context: {json.dumps(farm_context, indent=2)}"
 
-        # Create AI prompt for smart suggestions
-        system_prompt = """You are an expert agricultural advisor specializing in carbon-smart farming practices. 
+        # Create AI prompt for smart suggestions (transparency-first aligned)
+        system_prompt = """You are an expert agricultural advisor for a farm transparency platform.
         Generate 3 intelligent, context-aware event suggestions for farmers based on their crop type, season, location, and recent activities.
-        
+
+        CRITICAL RULES:
+        - ONLY suggest actual farm operations that a farmer physically performs in the field
+        - Each suggestion must be a specific, actionable task with measurable inputs/outputs
+        - NEVER suggest workshops, tours, educational events, marketing activities, or meetings
+        - NEVER suggest consumer engagement, certifications, or administrative tasks
+        - Good examples: "Apply pre-bloom nitrogen fertilizer", "Dormant season pruning", "Drip irrigation system flush"
+        - Bad examples: "Nutrient Management Workshop", "Consumer Farm Tour", "Sustainability Certification Review"
+
         Focus on:
-        1. Seasonal timing and relevance
-        2. Carbon impact optimization (both reduction and sequestration opportunities)
-        3. Practical implementation
-        4. Cost-effectiveness
-        5. Consumer visibility for QR code transparency
-        
-        Provide suggestions that are:
-        - Timely for the current season
-        - Carbon-focused (emphasize carbon benefits)
-        - Practical and implementable
-        - Varying in priority (high/medium/low)
-        - Include efficiency tips and best practices
-        
+        1. Seasonal timing — what specific crop operation is needed RIGHT NOW for this crop stage
+        2. Agronomic accuracy — match real farming calendars for the crop and region
+        3. Practical specificity — include rates, methods, equipment, or techniques
+        4. Operational variety — suggest different operation types (not all fertilization)
+
+        Category MUST be one of: fertilization, irrigation, pest_control, harvest, cultivation, soil_management, pruning
+
         Return ONLY a valid JSON object with this exact structure:
         {
             "suggestions": [
                 {
                     "id": "unique_id",
-                    "name": "Event Name",
-                    "description": "Brief description",
-                    "reasoning": "Why this suggestion is relevant now",
+                    "name": "Specific Operation Name",
+                    "description": "What the farmer physically does, with specifics",
+                    "reasoning": "Why this operation is needed now for this crop",
                     "carbon_impact": 25.5,
                     "priority": "high|medium|low",
                     "confidence": 85,
-                    "timing_relevance": "Perfect timing for current season",
+                    "timing_relevance": "Why now is the right time",
                     "efficiency_tips": ["tip1", "tip2"],
                     "estimated_duration": "2-3 hours",
-                    "category": "fertilization|irrigation|pest_control|harvest|equipment|soil_management",
+                    "category": "fertilization|irrigation|pest_control|harvest|cultivation|soil_management|pruning",
                     "seasonal_relevance": 90,
                     "best_practices": ["practice1", "practice2"]
                 }
@@ -577,14 +652,26 @@ async def generate_ai_event_suggestions(
             "ai_confidence": 85
         }"""
 
+        # Build recent events instruction
+        recent_events_instruction = ""
+        if recent_events_context:
+            recent_events_instruction = f"""
+        IMPORTANT — The farmer has ALREADY completed these recent events:
+        {', '.join(recent_events_context)}
+        DO NOT suggest operations the farmer has already done recently.
+        Suggest COMPLEMENTARY activities they haven't done yet this season."""
+
         user_prompt = f"""
-        Generate smart agricultural event suggestions for:
+        Generate 3 specific farm operations for:
         {context_info}
-        
+
         Current month: {datetime.now().strftime('%B')}
-        
-        Consider typical {crop_type} farming calendar for {season} season.
-        Focus on carbon transparency and consumer-visible sustainability practices.
+        {recent_events_instruction}
+
+        Consider the typical {crop_type} agronomic calendar for {season} season in this region.
+        What specific field operations should a {crop_type} farmer be doing RIGHT NOW?
+        Think about: crop stage, pest/disease pressure, nutrient timing, water needs, pruning windows.
+        Each suggestion must be a hands-on farm task, not a workshop, tour, or administrative activity.
         """
 
         # Call OpenAI API
@@ -639,139 +726,239 @@ async def generate_ai_event_suggestions(
 
 def _generate_fallback_suggestions(crop_type: str, season: str = None, location: str = None) -> dict:
     """
-    Generate fallback suggestions when AI is unavailable.
+    Generate crop-aware fallback suggestions when AI is unavailable.
+    Suggestions are tailored to the specific crop type and current season.
     """
     current_month = datetime.now().month
     season = season or _get_season_from_month(current_month)
 
-    # Season-based suggestions
+    # Crop-aware seasonal suggestions
+    crop = crop_type or "crops"
+    crop_lower = crop.lower()
+
+    # Determine if crop is a perennial (tree/vine) or annual
+    perennial_keywords = [
+        "orange",
+        "citrus",
+        "avocado",
+        "apple",
+        "grape",
+        "vine",
+        "tree",
+        "mango",
+        "peach",
+        "cherry",
+        "lemon",
+        "lime",
+        "olive",
+        "walnut",
+        "almond",
+        "pecan",
+        "blueberry",
+        "coffee",
+        "cacao",
+    ]
+    is_perennial = any(kw in crop_lower for kw in perennial_keywords)
+
     seasonal_suggestions = {
         "spring": [
             {
-                "id": f"spring_soil_prep_{crop_type}",
-                "name": "Soil Preparation & Testing",
-                "description": "Prepare soil and conduct nutrient analysis for optimal growing conditions",
-                "reasoning": "Spring is ideal for soil preparation and testing before planting season",
+                "id": f"spring_nutrition_{crop_type}",
+                "name": f"{crop} Spring Nutrition Program",
+                "description": f"Apply balanced fertilization to support {crop} spring growth and flowering",
+                "reasoning": f"Spring is critical for {crop} nutrient uptake during active growth phase",
                 "carbon_impact": 15.0,
                 "priority": "high",
-                "confidence": 75,
-                "timing_relevance": "Perfect timing for spring soil preparation",
-                "efficiency_tips": ["Test soil pH and nutrients", "Add organic matter to improve soil health"],
+                "confidence": 80,
+                "timing_relevance": f"Optimal fertilization window for {crop} spring growth",
+                "efficiency_tips": [
+                    f"Soil test before fertilizing {crop}",
+                    "Split applications for better uptake",
+                ],
                 "estimated_duration": "3-4 hours",
-                "category": "soil_management",
+                "category": "fertilization",
                 "seasonal_relevance": 95,
-                "best_practices": ["Use organic amendments", "Test before applying fertilizers"],
+                "best_practices": [
+                    "Use soil test results to guide application rates",
+                    "Apply during cool morning hours",
+                ],
             },
             {
-                "id": f"spring_planting_{crop_type}",
-                "name": "Precision Planting",
-                "description": "Plant crops using precision agriculture techniques for optimal yield",
-                "reasoning": "Spring planting season with focus on precision for carbon efficiency",
-                "carbon_impact": -5.0,  # Negative = carbon sequestration
+                "id": f"spring_pest_scout_{crop_type}",
+                "name": f"{crop} Pest Scouting",
+                "description": f"Early-season pest and disease monitoring for {crop}",
+                "reasoning": f"Spring pest emergence requires early detection for effective {crop} management",
+                "carbon_impact": 5.0,
                 "priority": "high",
-                "confidence": 80,
-                "timing_relevance": "Optimal spring planting window",
-                "efficiency_tips": ["Use GPS guidance", "Optimize plant spacing"],
-                "estimated_duration": "6-8 hours",
-                "category": "equipment",
+                "confidence": 78,
+                "timing_relevance": f"Critical early detection window for {crop} pests",
+                "efficiency_tips": [
+                    "Scout field edges and hotspots first",
+                    "Document pest pressure levels for transparency",
+                ],
+                "estimated_duration": "1-2 hours",
+                "category": "pest_control",
                 "seasonal_relevance": 90,
-                "best_practices": ["Precision seed placement", "Soil moisture monitoring"],
+                "best_practices": [
+                    "Use IPM thresholds before treating",
+                    "Record findings for consumer transparency",
+                ],
             },
         ],
         "summer": [
             {
                 "id": f"summer_irrigation_{crop_type}",
-                "name": "Smart Irrigation Management",
-                "description": "Implement efficient irrigation systems to optimize water use",
-                "reasoning": "Summer heat requires efficient water management for crop health and carbon efficiency",
+                "name": f"{crop} Irrigation Management",
+                "description": f"Optimize water delivery for {crop} during peak demand",
+                "reasoning": f"Summer heat increases {crop} water demand — efficient irrigation is critical",
                 "carbon_impact": 20.0,
                 "priority": "high",
                 "confidence": 85,
-                "timing_relevance": "Critical for summer crop management",
-                "efficiency_tips": ["Use soil moisture sensors", "Schedule irrigation during cooler hours"],
-                "estimated_duration": "2-3 hours setup",
+                "timing_relevance": f"Peak water demand period for {crop}",
+                "efficiency_tips": [
+                    "Use soil moisture sensors to avoid over-watering",
+                    "Irrigate during cooler hours to reduce evaporation",
+                ],
+                "estimated_duration": "2-3 hours",
                 "category": "irrigation",
                 "seasonal_relevance": 95,
-                "best_practices": ["Drip irrigation systems", "Smart controllers"],
+                "best_practices": [
+                    "Drip irrigation for water efficiency",
+                    "Monitor soil moisture at root zone depth",
+                ],
             },
             {
                 "id": f"summer_pest_monitoring_{crop_type}",
-                "name": "Integrated Pest Monitoring",
-                "description": "Monitor and manage pests using sustainable IPM practices",
-                "reasoning": "Summer pest pressure requires proactive, sustainable management",
+                "name": f"{crop} Integrated Pest Monitoring",
+                "description": f"Monitor and manage pest pressure on {crop} using sustainable IPM",
+                "reasoning": f"Summer pest pressure on {crop} requires proactive sustainable management",
                 "carbon_impact": 12.0,
                 "priority": "medium",
-                "confidence": 75,
-                "timing_relevance": "Peak pest activity season",
-                "efficiency_tips": ["Regular scouting", "Use beneficial insects"],
+                "confidence": 78,
+                "timing_relevance": f"Peak pest activity period for {crop}",
+                "efficiency_tips": [
+                    "Scout weekly and record pest counts",
+                    "Use beneficial insects where possible",
+                ],
                 "estimated_duration": "1-2 hours weekly",
                 "category": "pest_control",
                 "seasonal_relevance": 85,
-                "best_practices": ["IPM protocols", "Biological controls"],
+                "best_practices": [
+                    "Follow IPM protocols",
+                    "Document all scouting for transparency records",
+                ],
             },
         ],
         "fall": [
             {
                 "id": f"fall_harvest_{crop_type}",
-                "name": "Efficient Harvest Operations",
-                "description": "Harvest crops using fuel-efficient equipment and timing",
-                "reasoning": "Fall harvest season with focus on efficiency and carbon optimization",
+                "name": f"{crop} Harvest" if is_perennial else f"{crop} Harvest Operations",
+                "description": f"Harvest {crop} with quality monitoring and efficient handling",
+                "reasoning": f"{'Fruit maturity assessment and picking' if is_perennial else 'Fall harvest season'} for {crop}",
                 "carbon_impact": 35.0,
                 "priority": "high",
                 "confidence": 90,
-                "timing_relevance": "Peak harvest season",
-                "efficiency_tips": ["Optimize equipment routes", "Monitor fuel consumption"],
-                "estimated_duration": "8-12 hours",
+                "timing_relevance": f"{'Check Brix and maturity before harvest' if is_perennial else 'Peak harvest window'} for {crop}",
+                "efficiency_tips": [
+                    "Monitor quality indicators before harvest",
+                    "Optimize equipment routes for fuel efficiency",
+                ],
+                "estimated_duration": "6-12 hours",
                 "category": "harvest",
                 "seasonal_relevance": 95,
-                "best_practices": ["Equipment maintenance", "Fuel efficiency monitoring"],
+                "best_practices": [
+                    "Quality grade assessment at harvest",
+                    "Document yield per area for transparency",
+                ],
             },
             {
-                "id": f"fall_cover_crops_{crop_type}",
-                "name": "Cover Crop Establishment",
-                "description": "Plant cover crops for soil health and carbon sequestration",
-                "reasoning": "Fall is ideal for establishing cover crops for winter soil protection",
-                "carbon_impact": -25.0,  # Negative = carbon sequestration
+                "id": f"fall_soil_{crop_type}",
+                "name": f"Post-{'Harvest' if is_perennial else 'Season'} Soil Care for {crop}",
+                "description": f"Soil health maintenance after {crop} growing season",
+                "reasoning": f"Fall is ideal for restoring soil health after {crop} production",
+                "carbon_impact": -20.0,
                 "priority": "medium",
                 "confidence": 80,
-                "timing_relevance": "Optimal cover crop planting window",
-                "efficiency_tips": ["Choose appropriate species", "Consider nitrogen fixers"],
-                "estimated_duration": "4-6 hours",
+                "timing_relevance": f"Optimal window for soil recovery after {crop} season",
+                "efficiency_tips": [
+                    "Soil test to assess nutrient depletion",
+                    "Add organic matter or cover crops",
+                ],
+                "estimated_duration": "3-5 hours",
                 "category": "soil_management",
-                "seasonal_relevance": 90,
-                "best_practices": ["Diverse species mix", "No-till establishment"],
+                "seasonal_relevance": 88,
+                "best_practices": [
+                    "Cover cropping for soil protection",
+                    "Document soil health practices for transparency",
+                ],
             },
         ],
         "winter": [
             {
-                "id": f"winter_equipment_maintenance_{crop_type}",
-                "name": "Equipment Winterization",
-                "description": "Maintain and prepare equipment for next season efficiency",
-                "reasoning": "Winter downtime is perfect for equipment maintenance and efficiency upgrades",
+                "id": f"winter_maintenance_{crop_type}",
+                "name": f"{'Pruning & Training' if is_perennial else 'Equipment Maintenance'} for {crop}",
+                "description": (
+                    f"Winter pruning and canopy management for {crop} trees"
+                    if is_perennial
+                    else f"Maintain and prepare equipment for next {crop} season"
+                ),
+                "reasoning": (
+                    f"Dormant season is ideal for {crop} structural pruning"
+                    if is_perennial
+                    else f"Winter downtime is perfect for equipment maintenance"
+                ),
                 "carbon_impact": 8.0,
-                "priority": "medium",
-                "confidence": 70,
-                "timing_relevance": "Ideal maintenance window",
-                "efficiency_tips": ["Service engines", "Check fuel systems"],
+                "priority": "high" if is_perennial else "medium",
+                "confidence": 75,
+                "timing_relevance": (
+                    f"Dormant pruning window for {crop}" if is_perennial else "Ideal maintenance window"
+                ),
+                "efficiency_tips": (
+                    [
+                        "Remove dead and crossing branches",
+                        "Shape canopy for light penetration",
+                    ]
+                    if is_perennial
+                    else [
+                        "Service engines and check fuel systems",
+                        "Calibrate application equipment",
+                    ]
+                ),
                 "estimated_duration": "4-8 hours",
                 "category": "equipment",
-                "seasonal_relevance": 80,
-                "best_practices": ["Preventive maintenance", "Fuel efficiency upgrades"],
+                "seasonal_relevance": 82,
+                "best_practices": (
+                    [
+                        "Sanitize pruning tools between trees",
+                        "Document pruning for transparency records",
+                    ]
+                    if is_perennial
+                    else [
+                        "Preventive maintenance schedule",
+                        "Document equipment condition",
+                    ]
+                ),
             },
             {
                 "id": f"winter_planning_{crop_type}",
-                "name": "Carbon Planning & Analysis",
-                "description": "Plan next season's carbon optimization strategies",
-                "reasoning": "Winter planning time for analyzing carbon performance and planning improvements",
+                "name": f"{crop} Season Planning & Soil Analysis",
+                "description": f"Plan next season's {crop} management and analyze soil data",
+                "reasoning": f"Winter is the best time to review {crop} performance and plan improvements",
                 "carbon_impact": 0.0,
-                "priority": "low",
-                "confidence": 65,
-                "timing_relevance": "Good time for planning and analysis",
-                "efficiency_tips": ["Review carbon data", "Plan efficiency improvements"],
+                "priority": "medium",
+                "confidence": 70,
+                "timing_relevance": f"Planning window for next {crop} season",
+                "efficiency_tips": [
+                    "Review last season's yield and input data",
+                    "Order inputs early for better pricing",
+                ],
                 "estimated_duration": "2-4 hours",
                 "category": "soil_management",
-                "seasonal_relevance": 70,
-                "best_practices": ["Data analysis", "Efficiency planning"],
+                "seasonal_relevance": 75,
+                "best_practices": [
+                    "Use transparency records to identify improvements",
+                    "Set goals for next season's documentation",
+                ],
             },
         ],
     }
@@ -780,7 +967,7 @@ def _generate_fallback_suggestions(crop_type: str, season: str = None, location:
 
     return {
         "suggestions": suggestions,
-        "reasoning": f"Fallback suggestions for {crop_type} during {season} season based on typical farming calendar and carbon best practices",
+        "reasoning": f"Suggested activities for {crop} during {season} season based on typical farming calendar and best practices",
         "context": {"season": season, "crop_type": crop_type, "location": location, "current_month": current_month},
         "ai_confidence": 65,
         "generated_at": datetime.now().isoformat(),

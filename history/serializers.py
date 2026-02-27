@@ -7,11 +7,6 @@ from product.models import Parcel, Product
 from users.models import User
 from users.serializers import BasicUserSerializer
 
-from .custom_fields import (
-    extract_custom_fields_for_display,
-    merge_custom_fields_into_extra_data,
-    validate_custom_fields,
-)
 from .constants import (
     BUSINESS_EVENT_TYPE,
     CHEMICAL_EVENT_TYPE,
@@ -21,6 +16,11 @@ from .constants import (
     PRODUCTION_EVENT_TYPE,
     SOIL_MANAGEMENT_EVENT_TYPE,
     WEATHER_EVENT_TYPE,
+)
+from .custom_fields import (
+    extract_custom_fields_for_display,
+    merge_custom_fields_into_extra_data,
+    validate_custom_fields,
 )
 from .models import (
     BusinessEvent,
@@ -195,27 +195,56 @@ class EventSerializer(serializers.ModelSerializer):
             # First, try to get from CarbonEntry - NOW PRIMARY SOURCE OF TRUTH
             # FIX: Events have 'history' field (FK to History), not 'production'
             # CarbonEntry.production is FK to History model
-            if hasattr(event, 'history') and event.history:
+            if hasattr(event, "history") and event.history:
                 # OPTIMIZATION: Use prefetched carbon entries if available
                 # This avoids N+1 queries when the view has prefetched carbonentry_set
                 event_class_name = event.__class__.__name__
                 carbon_entry = None
 
+                # FIX: Include event ID in search to match correct CarbonEntry
+                # Previously, searching by class name only caused ALL events of the same type
+                # to get the carbon value from the most recently created CarbonEntry
+                event_id_pattern = f"{event_class_name}(ID={event.id})"
+
                 # Try prefetched data first (Django caches prefetched results)
-                if hasattr(event.history, '_prefetched_objects_cache') and 'carbonentry_set' in event.history._prefetched_objects_cache:
+                if (
+                    hasattr(event.history, "_prefetched_objects_cache")
+                    and "carbonentry_set" in event.history._prefetched_objects_cache
+                ):
                     # Use prefetched data - filter in Python (fast, no DB query)
                     for entry in event.history.carbonentry_set.all():
-                        if entry.description and event_class_name in entry.description:
+                        if entry.description and event_id_pattern in entry.description:
                             carbon_entry = entry
                             break
+                    # Fallback: try matching by class name only for legacy CarbonEntries
+                    if not carbon_entry:
+                        for entry in event.history.carbonentry_set.all():
+                            if (
+                                entry.description
+                                and event_class_name in entry.description
+                                and f"(ID=" not in entry.description
+                            ):
+                                carbon_entry = entry
+                                break
                 else:
                     # Fallback to DB query if not prefetched
+                    # First try exact event ID match
                     carbon_entries = CarbonEntry.objects.filter(
-                        production=event.history,
-                        description__icontains=event_class_name
+                        production=event.history, description__icontains=event_id_pattern
                     ).order_by("-created_at")
                     if carbon_entries.exists():
                         carbon_entry = carbon_entries.first()
+                    else:
+                        # Fallback for legacy CarbonEntries without event ID in description
+                        carbon_entries = (
+                            CarbonEntry.objects.filter(
+                                production=event.history, description__icontains=event_class_name
+                            )
+                            .exclude(description__contains="(ID=")
+                            .order_by("-created_at")
+                        )
+                        if carbon_entries.exists():
+                            carbon_entry = carbon_entries.first()
 
                 if carbon_entry:
                     return {
@@ -258,7 +287,7 @@ class EventSerializer(serializers.ModelSerializer):
             # OPTIMIZATION: Reuse calculator instance for this request to avoid repeated USDA API key lookups
             # Each EventCarbonCalculator init triggers get_usda_api_keys() which is expensive
             request = self.context.get("request")
-            if request and not hasattr(request, '_carbon_calculator'):
+            if request and not hasattr(request, "_carbon_calculator"):
                 request._carbon_calculator = EventCarbonCalculator()
             calculator = request._carbon_calculator if request else EventCarbonCalculator()
 
@@ -363,7 +392,7 @@ class EventSerializer(serializers.ModelSerializer):
         - self_reported: No photo evidence (50% trust)
         - photo_documented: Has photos without GPS/timestamp validation (65% trust)
         - photo_verified: Has photos with GPS + timestamp verification (80% trust)
-        - data_verified: External data verification (weather, lab results) (85% trust)
+        - data_verified: Reserved for future use when actual external data cross-referencing is implemented
         - certified: Third-party or blockchain verified (100% trust)
 
         MVP Photo Verification: Photos with invalid content (AI-generated, stock images)
@@ -395,51 +424,10 @@ class EventSerializer(serializers.ModelSerializer):
         if hasattr(event, "extra_data") and event.extra_data and isinstance(event.extra_data, dict):
             has_blockchain_verification = event.extra_data.get("blockchain_verified", False)
 
-        # Determine event type ID for special handling
-        event_type_id = None
-        if isinstance(event, WeatherEvent):
-            event_type_id = 0
-        elif isinstance(event, ProductionEvent):
-            event_type_id = 1
-        elif isinstance(event, ChemicalEvent):
-            event_type_id = 2
-        elif isinstance(event, GeneralEvent):
-            event_type_id = 3
-        elif isinstance(event, EquipmentEvent):
-            event_type_id = 4
-        elif isinstance(event, SoilManagementEvent):
-            event_type_id = 5
-        elif isinstance(event, PestManagementEvent):
-            event_type_id = 6
-        elif isinstance(event, BusinessEvent):
-            event_type_id = 7
-
-        # Get subtype for special handling
-        subtype = getattr(event, "type", None)
-
-        # Data-verified event types (weather, equipment fuel, soil test, business cert)
-        data_verified_types = {
-            0: True,  # All weather events
-            4: ["FC"],  # Equipment fuel consumption
-            5: ["ST"],  # Soil test
-            7: ["CE", "CO"],  # Business certification/compliance
-        }
-
-        # Check if this event type/subtype should use data verification
-        is_data_verified_type = False
-        if event_type_id in data_verified_types:
-            type_config = data_verified_types[event_type_id]
-            if type_config is True:
-                is_data_verified_type = True
-            elif subtype in type_config:
-                is_data_verified_type = True
-
         # Determine verification level using tiered logic
+        # Blockchain verification is shown via the BLOCKCHAIN SECURED badge.
+        # "certified" tier is reserved for actual third-party certification bodies.
         if has_blockchain_verification:
-            return "certified"
-
-        if is_data_verified_type:
-            # Weather and other data-verified types get data_verified by default
             return "data_verified"
 
         if has_photos:
@@ -461,12 +449,8 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
     # continues to use the existing database schema
     # Frontend sends: volume_applied, area_treated, application_method
     # Backend model expects: volume, area, way_of_application
-    volume_applied = serializers.CharField(
-        source="volume", allow_blank=True, allow_null=True, required=False
-    )
-    area_treated = serializers.CharField(
-        source="area", allow_blank=True, allow_null=True, required=False
-    )
+    volume_applied = serializers.CharField(source="volume", allow_blank=True, allow_null=True, required=False)
+    area_treated = serializers.CharField(source="area", allow_blank=True, allow_null=True, required=False)
     application_method = serializers.CharField(
         source="way_of_application", allow_blank=True, allow_null=True, required=False
     )
@@ -488,6 +472,7 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
         AND new field names (volume_applied, area_treated, application_method).
         This ensures backward compatibility while supporting modern frontend conventions.
         """
+        print("🔴🔴🔴 SPRINT 6 - UpdateChemicalEventSerializer.to_internal_value CALLED! 🔴🔴🔴")
         data = data.copy()
 
         # 🚨 FIELD NAME NORMALIZATION: Map frontend names → backend model names
@@ -514,6 +499,30 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
         volume_unit = data.pop("volume_unit", None)
         area_unit = data.pop("area_unit", None)
 
+        # SPRINT 6 FIX (2025-12-24): Extract frontend's extra_data BEFORE super() call
+        # Frontend sends fields like active_ingredient, application_details, weather_conditions, etc.
+        # These need to be preserved and merged with existing extra_data
+
+        # SPRINT 6 DEBUG: Log incoming request data (using print for visibility)
+        print(f"🔴 SPRINT 6 DEBUG - Incoming data keys: {list(data.keys())}")
+        print(f"🔴 SPRINT 6 DEBUG - Incoming extra_data: {data.get('extra_data', 'NOT PRESENT')}")
+        print(f"🔴 SPRINT 6 DEBUG - Incoming active_ingredient: {data.get('active_ingredient', 'NOT PRESENT')}")
+
+        frontend_extra_data = data.pop("extra_data", {}) or {}
+
+        # Extract fields that DON'T have model columns into extra_data.
+        # IMPORTANT: weather_conditions, application_timing, target_pest_disease
+        # ARE model columns - do NOT pop them from data or they won't save to DB.
+        extra_data_only_fields = [
+            "active_ingredient",
+            "application_details",
+        ]
+        for field_name in extra_data_only_fields:
+            if field_name in data:
+                value = data.pop(field_name)
+                # Use empty string to allow clearing (not just truthy values)
+                frontend_extra_data[field_name] = value if value is not None else ""
+
         # Handle custom fields (user-defined additional information)
         custom_fields = self.handle_custom_fields_input(data)
 
@@ -523,8 +532,27 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
         instance = getattr(self, "instance", None)
         existing_extra_data = instance.extra_data if instance and instance.extra_data else {}
 
-        # Merge custom fields into extra_data
-        internal_value["extra_data"] = self.merge_custom_fields(existing_extra_data, custom_fields, instance)
+        # SPRINT 6 FIX: Merge frontend extra_data with existing extra_data
+        # This preserves fields like carbon_calculation while adding new fields
+        merged_extra_data = {**existing_extra_data, **frontend_extra_data}
+
+        # SPRINT 6 DEBUG: Log what we're saving (using print for visibility)
+        print(f"🔴 SPRINT 6 DEBUG - frontend_extra_data: {frontend_extra_data}")
+        print(f"🔴 SPRINT 6 DEBUG - existing_extra_data: {existing_extra_data}")
+        print(f"🔴 SPRINT 6 DEBUG - merged_extra_data: {merged_extra_data}")
+
+        # SPRINT 6 FIX: Handle custom_fields directly to avoid merge_custom_fields overwriting our merged_extra_data
+        # The merge_custom_fields function prioritizes existing_extra_data which would overwrite our merged data
+        # So we handle custom_fields inline here
+        if custom_fields:
+            # New custom_fields provided - use them
+            merged_extra_data["custom_fields"] = custom_fields
+        elif instance and instance.extra_data and "custom_fields" in instance.extra_data:
+            # No new custom_fields - preserve existing
+            merged_extra_data["custom_fields"] = instance.extra_data["custom_fields"]
+
+        internal_value["extra_data"] = merged_extra_data
+        print(f"🔴 SPRINT 6 DEBUG - FINAL internal_value['extra_data']: {internal_value['extra_data']}")
 
         # Store volume_unit and area_unit in extra_data for frontend form compatibility
         if volume_unit is not None:
@@ -533,6 +561,8 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
             internal_value["extra_data"]["area_unit"] = area_unit
 
         return internal_value
+
+    # NOTE: Single to_representation method below (after validate) handles all field extraction
 
     def validate(self, data):
         """
@@ -635,7 +665,14 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
         return data
 
     def to_representation(self, instance):
-        """Override to serialize album with images instead of just ID"""
+        """
+        Extract fields from extra_data so the frontend can read them at top level
+        when loading an event for editing. Handles:
+        - Unit fields (volume_unit, area_unit)
+        - Environmental context fields
+        - Fields without model columns (active_ingredient, application_details)
+        - Album serialization
+        """
         data = super().to_representation(instance)
 
         # Serialize album with images instead of just returning ID
@@ -645,6 +682,31 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
 
         # Include custom fields in response for frontend display
         data = self.add_custom_fields_to_representation(data, instance)
+
+        # Guard: instance may be an OrderedDict (validated data) during create, not a model instance
+        extra_data = (
+            getattr(instance, "extra_data", None)
+            or (instance.get("extra_data") if isinstance(instance, dict) else {})
+            or {}
+        )
+
+        # Extract unit fields from extra_data for frontend form compatibility
+        data["volume_unit"] = extra_data.get("volume_unit", "L")
+        data["area_unit"] = extra_data.get("area_unit", "ha")
+
+        # Environmental context: model columns with extra_data fallback for legacy events
+        data["weather_conditions"] = extra_data.get("weather_conditions", "") or data.get("weather_conditions") or ""
+        data["application_timing"] = extra_data.get("application_timing", "") or data.get("application_timing") or ""
+        data["target_pest_disease"] = (
+            extra_data.get("target_pest_disease", "")
+            or extra_data.get("target_pest", "")
+            or data.get("target_pest_disease")
+            or ""
+        )
+
+        # Fields without model columns - always from extra_data
+        data["active_ingredient"] = extra_data.get("active_ingredient", "") or data.get("active_ingredient") or ""
+        data["application_details"] = extra_data.get("application_details", "") or data.get("application_details") or ""
 
         return data
 
@@ -724,24 +786,33 @@ class ChemicalEventSerializer(EventSerializer):
 
         # Parse volume - may be combined string like "400 kg/ha"
         volume_raw = instance.volume
-        volume_numeric, parsed_volume_unit = self._parse_value_with_unit(
-            volume_raw, default_volume_unit
-        )
+        volume_numeric, parsed_volume_unit = self._parse_value_with_unit(volume_raw, default_volume_unit)
         data["volume_applied"] = volume_numeric
         # Use parsed unit if it was extracted from the string, otherwise use default
         data["volume_unit"] = parsed_volume_unit if parsed_volume_unit else default_volume_unit
 
         # Parse area - may be combined string like "10 ha"
         area_raw = instance.area
-        area_numeric, parsed_area_unit = self._parse_value_with_unit(
-            area_raw, default_area_unit
-        )
+        area_numeric, parsed_area_unit = self._parse_value_with_unit(area_raw, default_area_unit)
         data["area_treated"] = area_numeric
         # Use parsed unit if it was extracted from the string, otherwise use default
         data["area_unit"] = parsed_area_unit if parsed_area_unit else default_area_unit
 
         # Map application method
         data["application_method"] = instance.way_of_application or ""
+
+        # weather_conditions, application_timing, target_pest_disease are model columns.
+        # Use extra_data as fallback only for legacy events that stored them there.
+        if not data.get("weather_conditions"):
+            data["weather_conditions"] = extra_data.get("weather_conditions", "")
+        if not data.get("application_timing"):
+            data["application_timing"] = extra_data.get("application_timing", "")
+        if not data.get("target_pest_disease"):
+            data["target_pest_disease"] = extra_data.get("target_pest_disease", "") or extra_data.get("target_pest", "")
+
+        # active_ingredient and application_details have NO model columns - always from extra_data
+        data["active_ingredient"] = extra_data.get("active_ingredient", "")
+        data["application_details"] = extra_data.get("application_details", "")
 
         # Remove old backend field names to avoid confusion in frontend
         # Frontend should only see: volume_applied, area_treated, application_method
@@ -792,6 +863,12 @@ class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
         custom_fields = self.handle_custom_fields_input(data)
 
         extra_data = {}
+
+        # Preserve custom event name if provided by the frontend
+        event_name = data.pop("name", None)
+        if event_name:
+            extra_data["event_name"] = event_name
+
         if event_type == WeatherEvent.FROST:
             extra_data["lower_temperature"] = data.pop("lower_temperature", None)
             extra_data["way_of_protection"] = data.pop("way_of_protection", None)
@@ -906,6 +983,11 @@ class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
             data["humidity_level"] = extra_data.get("humidity_level", 0)
             data["duration"] = extra_data.get("duration", 0)
             data["crop_impact"] = extra_data.get("crop_impact", "")
+
+        # Extract event_name from extra_data if present (custom name set by seed/user)
+        event_name = extra_data.get("event_name")
+        if event_name:
+            data["name"] = event_name
 
         data.pop("extra_data", None)  # Use pop with default to avoid KeyError if key doesn't exist
 
@@ -1181,18 +1263,80 @@ class WeatherEventSerializer(EventSerializer):
     def get_event_type(self, weather_event):
         return WEATHER_EVENT_TYPE
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Extract event_name from extra_data so frontend can access it as event.name
+        extra_data = instance.extra_data or {} if hasattr(instance, "extra_data") else {}
+        if extra_data.get("event_name"):
+            data["name"] = extra_data["event_name"]
+        return data
+
 
 class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerializer):
     class Meta:
         model = ProductionEvent
         fields = "__all__"
 
+    # Fields captured from Quick Add forms that are stored in extra_data
+    # (not model fields on ProductionEvent, but valuable for consumer display)
+    EXTRA_DATA_FIELDS = [
+        "harvest_method",
+        "brix_levels",
+        "native_species_planted",
+        "habitat_area_hectares",
+        "equipment_type",
+        "equipment_operation_type",
+    ]
+
     def to_internal_value(self, data):
-        """Handle custom fields for production events."""
+        """Handle custom fields and extra_data fields for production events."""
         data = data.copy()
+
+        # Map EM-specific operation_efficiency → production_efficiency (model field)
+        if "operation_efficiency" in data and "production_efficiency" not in data:
+            data["production_efficiency"] = data.pop("operation_efficiency")
+
+        # Extract frontend's extra_data BEFORE super() call
+        # Frontend sends summary mode fields (is_summary, date_start, event_count, etc.)
+        # inside extra_data
+        frontend_extra_data = data.pop("extra_data", {}) or {}
 
         # Handle custom fields (user-defined additional information)
         custom_fields = self.handle_custom_fields_input(data)
+
+        # Extract fields that should go into extra_data (not model fields)
+        extra_fields = {}
+        for field_name in self.EXTRA_DATA_FIELDS:
+            value = data.pop(field_name, None)
+            if value is not None and value != "":
+                extra_fields[field_name] = value
+
+        # Extract summary-only fields (NOT model fields) sent at top level
+        summary_only_fields = [
+            "is_summary",
+            "date_start",
+            "date_end",
+            "event_count",
+            "water_volume_total",
+            "water_volume_unit",
+        ]
+        for field_name in summary_only_fields:
+            if field_name in data:
+                value = data.pop(field_name)
+                if value is not None and value != "":
+                    frontend_extra_data[field_name] = value
+
+        # Move model fields that frontend packed into extra_data back to data
+        # so ModelSerializer processes them into model columns
+        model_irrigation_fields = [
+            "water_source",
+            "irrigation_method",
+            "irrigation_depth",
+            "irrigation_depth_unit",
+        ]
+        for field_name in model_irrigation_fields:
+            if field_name in frontend_extra_data and field_name not in data:
+                data[field_name] = frontend_extra_data.pop(field_name)
 
         internal_value = super().to_internal_value(data)
 
@@ -1200,8 +1344,20 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
         instance = getattr(self, "instance", None)
         existing_extra_data = instance.extra_data if instance and instance.extra_data else {}
 
-        # Merge custom fields into extra_data
-        internal_value["extra_data"] = self.merge_custom_fields(existing_extra_data, custom_fields, instance)
+        # Merge: existing + frontend extra_data + Quick Add extra fields
+        merged_extra_data = {**existing_extra_data, **frontend_extra_data}
+
+        # Merge Quick Add extra fields into extra_data
+        if extra_fields:
+            merged_extra_data.update(extra_fields)
+
+        # Handle custom_fields
+        if custom_fields:
+            merged_extra_data["custom_fields"] = custom_fields
+        elif instance and instance.extra_data and "custom_fields" in instance.extra_data:
+            merged_extra_data["custom_fields"] = instance.extra_data["custom_fields"]
+
+        internal_value["extra_data"] = merged_extra_data
 
         return internal_value
 
@@ -1218,7 +1374,10 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
         yield_unit = data.get("yield_unit", "kg")
 
         # Enhanced area_covered validation
-        if area_covered is not None and area_covered <= 0:
+        # Equipment Maintenance (EM) events can legitimately have area_covered=0
+        production_type = data.get("type", "")
+        area_zero_allowed_types = ["EM"]
+        if area_covered is not None and area_covered <= 0 and production_type not in area_zero_allowed_types:
             raise serializers.ValidationError(
                 {
                     "area_covered": [
@@ -1320,7 +1479,7 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
         return data
 
     def to_representation(self, instance):
-        """Override to serialize album with images instead of just ID"""
+        """Override to serialize album with images and extract extra_data fields"""
         data = super().to_representation(instance)
 
         # Serialize album with images instead of just returning ID
@@ -1330,6 +1489,13 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
 
         # Include custom fields in response for frontend display
         data = self.add_custom_fields_to_representation(data, instance)
+
+        # Extract EXTRA_DATA_FIELDS from extra_data back to top level
+        # so the frontend form can populate them when editing
+        extra_data = getattr(instance, "extra_data", None) or {}
+        for field_name in self.EXTRA_DATA_FIELDS:
+            if field_name in extra_data and field_name not in data:
+                data[field_name] = extra_data[field_name]
 
         return data
 
@@ -1354,7 +1520,17 @@ class ProductionEventSerializer(CustomFieldsMixin, EventSerializer):
 
     def get_production_type(self, production_event):
         """Return the actual production type code (PL, HA, TR, etc.) for frontend conditionals"""
-        return production_event.type or ''
+        return production_event.type or ""
+
+    # Same EXTRA_DATA_FIELDS as UpdateProductionEventSerializer for consistent extraction
+    EXTRA_DATA_FIELDS = [
+        "harvest_method",
+        "brix_levels",
+        "native_species_planted",
+        "habitat_area_hectares",
+        "equipment_type",
+        "equipment_operation_type",
+    ]
 
     def to_representation(self, instance):
         """Override to include custom fields and serialize album with images"""
@@ -1368,6 +1544,12 @@ class ProductionEventSerializer(CustomFieldsMixin, EventSerializer):
         # CRITICAL FIX: Include custom fields in response for frontend display (ProductDetail needs this)
         data = self.add_custom_fields_to_representation(data, instance)
 
+        # Extract EXTRA_DATA_FIELDS from extra_data back to top level
+        extra_data = getattr(instance, "extra_data", None) or {}
+        for field_name in self.EXTRA_DATA_FIELDS:
+            if field_name in extra_data and field_name not in data:
+                data[field_name] = extra_data[field_name]
+
         return data
 
 
@@ -1377,20 +1559,40 @@ class UpdateGeneralEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
         fields = "__all__"
 
     def to_internal_value(self, data):
-        """Handle custom fields for general events."""
+        """Handle custom fields and field name remapping for general events."""
         data = data.copy()
 
         # Handle custom fields (user-defined additional information)
         custom_fields = self.handle_custom_fields_input(data)
 
+        # Extract frontend's extra_data BEFORE super() call
+        frontend_extra_data = data.pop("extra_data", {}) or {}
+
+        # Remap frontend field names to model field names (safety net for any
+        # frontend that hasn't been updated yet - primary remapping is in NewEvent.jsx)
+        field_remapping = {
+            "duration_hours": "duration",
+            "participants": "people_involved",
+            "type": "activity_type",
+        }
+        for form_name, model_name in field_remapping.items():
+            if form_name in data and model_name not in data:
+                data[model_name] = data.pop(form_name)
+
         internal_value = super().to_internal_value(data)
 
-        # Get existing extra_data from instance (for updates)
+        # Merge: existing extra_data + frontend extra_data (frontend wins on conflicts)
         instance = getattr(self, "instance", None)
         existing_extra_data = instance.extra_data if instance and instance.extra_data else {}
+        merged_extra_data = {**existing_extra_data, **frontend_extra_data}
 
-        # Merge custom fields into extra_data
-        internal_value["extra_data"] = self.merge_custom_fields(existing_extra_data, custom_fields, instance)
+        # Handle custom_fields inline
+        if custom_fields:
+            merged_extra_data["custom_fields"] = custom_fields
+        elif instance and instance.extra_data and "custom_fields" in instance.extra_data:
+            merged_extra_data["custom_fields"] = instance.extra_data["custom_fields"]
+
+        internal_value["extra_data"] = merged_extra_data
 
         return internal_value
 
@@ -1893,7 +2095,7 @@ class ListHistoryClassSerializer(serializers.ModelSerializer):
 class PublicProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
-        fields = ["name"]
+        fields = ["id", "name"]
 
 
 class PublicEstablishmentSerializer(serializers.ModelSerializer):
@@ -1901,7 +2103,7 @@ class PublicEstablishmentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Establishment
-        fields = ["name", "description", "location"]
+        fields = ["id", "name", "description", "location"]
 
     def get_location(self, establishment):
         return establishment.get_location()
@@ -1912,7 +2114,7 @@ class PublicParcelSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Parcel
-        fields = ["name", "polygon", "map_metadata", "establishment", "agricultural_details"]
+        fields = ["id", "name", "polygon", "map_metadata", "establishment", "agricultural_details"]
 
 
 class PublicHistoryListSerializer(serializers.ModelSerializer):
@@ -1933,39 +2135,61 @@ class PublicHistoryListSerializer(serializers.ModelSerializer):
 
 class PublicHistorySerializer(serializers.ModelSerializer):
     events = serializers.SerializerMethodField()
-    certificate_percentage = serializers.SerializerMethodField()
-    company = serializers.SerializerMethodField()
-    parcel = PublicParcelSerializer()
-    product = PublicProductSerializer()
-    history_scan = serializers.SerializerMethodField()
-    similar_histories = serializers.SerializerMethodField()
     images = serializers.SerializerMethodField()
+    product = PublicProductSerializer(read_only=True)
+    parcel = PublicParcelSerializer(read_only=True)
     qr_code = serializers.SerializerMethodField()
+    operator = BasicUserSerializer(read_only=True)
 
     class Meta:
         model = History
         fields = [
             "id",
+            "public_id",
+            "name",
             "start_date",
             "finish_date",
-            "name",
-            "events",
-            "certificate_percentage",
+            "published",
             "product",
-            "reputation",
-            "company",
             "parcel",
-            "history_scan",
             "qr_code",
+            "reputation",
+            "is_outdoor",
+            "events",
             "images",
-            "similar_histories",
-            # Harvest details for consumer transparency
+            "operator",
             "lot_id",
             "production_amount",
             "production_unit",
-            "quality_grade",
-            "harvest_method",
+            "description",
+            "type",
+            "transparency_score",
         ]
+
+    def _sanitize_extra_data_for_public(self, event):
+        """Remove business-sensitive fields from extra_data for public API."""
+        raw = getattr(event, "extra_data", None)
+        if not raw or not isinstance(raw, dict):
+            return None
+
+        BLOCKED_KEYS = {
+            "cost_usd",
+            "maintenance_cost",
+            "cost",
+            "revenue",
+            "supplier",
+            "gypsum_source",
+            "carbon_calculation",
+            "carbon_notes",
+        }
+
+        sanitized = {k: v for k, v in raw.items() if k not in BLOCKED_KEYS}
+
+        # Filter custom_fields to consumer visibility only
+        if "custom_fields" in sanitized:
+            sanitized["custom_fields"] = extract_custom_fields_for_display(raw, visibility_filter="consumer")
+
+        return sanitized if sanitized else None
 
     def _get_chemical_type_with_fallback(self, event):
         """
@@ -2015,16 +2239,14 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         # Final fallback: return None (will show as generic "chemical application")
         return None
 
-    def _get_verification_level_for_event(
-        self, event, event_type, subtype=None, has_photos=False, blockchain_verified=False
-    ):
+    def _get_verification_level_for_event(self, event, has_photos=False, blockchain_verified=False):
         """
         Determine verification level for an event in public history view.
-        MVP Tiered Verification System:
+        Evidence-based tiered system:
         - self_reported: No photo evidence (50% trust)
         - photo_documented: Has photos without GPS validation (65% trust)
         - photo_verified: Has photos with GPS + timestamp (80% trust)
-        - data_verified: External data verification for weather, soil tests (85% trust)
+        - data_verified: Reserved for future use when actual external data cross-referencing is implemented
         - certified: Third-party or blockchain verified (100% trust)
         """
         # Check for GPS data in photos
@@ -2039,27 +2261,12 @@ class PublicHistorySerializer(serializers.ModelSerializer):
 
         has_timestamp = event.date is not None
 
-        # Event types that use data verification instead of photos
-        data_verified_types = {
-            "weather": True,  # All weather events
-            "equipment": ["FC"],  # Equipment fuel consumption
-            "soil_management": ["ST"],  # Soil test
-            "business": ["CE", "CO"],  # Business certification/compliance
-        }
-
-        is_data_verified_type = False
-        if event_type in data_verified_types:
-            type_config = data_verified_types[event_type]
-            if type_config is True:
-                is_data_verified_type = True
-            elif subtype and subtype in type_config:
-                is_data_verified_type = True
-
         # Tiered verification logic
+        # Blockchain verification at production level means the record is on-chain,
+        # but individual events are not certified by a third party.
+        # The "certified" tier is reserved for actual third-party certification bodies.
+        # Blockchain verification is shown via the separate BLOCKCHAIN SECURED badge.
         if blockchain_verified:
-            return "certified"
-
-        if is_data_verified_type:
             return "data_verified"
 
         if has_photos:
@@ -2089,9 +2296,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                     "id": img.id,
                     "image": img.image_url if img.image_url else (img.image.url if img.image else ""),
                     "caption": getattr(img, "caption", "") or "",
-                    "created_at": (
-                        img.created_at.isoformat() if hasattr(img, "created_at") and img.created_at else ""
-                    ),
+                    "created_at": (img.created_at.isoformat() if hasattr(img, "created_at") and img.created_at else ""),
                 }
                 for img in images
             ]
@@ -2133,71 +2338,125 @@ class PublicHistorySerializer(serializers.ModelSerializer):
             business_events = history.history_businessevent_events.all()
 
             # Create lightweight event data without carbon calculations
-            for event in chemical_events:
+            for i, event in enumerate(chemical_events):
                 # Get serialized images from prefetched data (no additional queries)
                 image_list = self._serialize_prefetched_images(event.album if hasattr(event, "album") else None)
                 photo_count = len(image_list)
                 album_data = None
                 if hasattr(event, "album") and event.album and image_list:
                     album_data = {
-                        "id": event.album.id,
                         "images": image_list,
                     }
 
                 events_data.append(
                     {
-                        "id": event.id,
+                        "id": f"chemical_{i}",
                         "date": event.date.isoformat() if event.date else None,
                         "description": event.description or "Chemical Application",
                         "observation": getattr(event, "observation", ""),
+                        "performed_by": getattr(event, "performed_by", None),
                         "type": "chemical",
                         "chemical_type": self._get_chemical_type_with_fallback(
                             event
                         ),  # Expose raw chemical type (FE, PE, FU, HE) for frontend processing
-                        "certified": getattr(event, "certified", True),
+                        "certified": getattr(event, "certified", False),
                         "index": getattr(event, "index", 0),
                         "volume": event.volume,
+                        "volume_unit": (
+                            event.extra_data.get("volume_unit", "L")
+                            if isinstance(getattr(event, "extra_data", None), dict)
+                            else "L"
+                        ),
                         "concentration": event.concentration,
                         "area": getattr(event, "area", None),
+                        "area_unit": (
+                            event.extra_data.get("area_unit", "ha")
+                            if isinstance(getattr(event, "extra_data", None), dict)
+                            else "ha"
+                        ),
                         "equipment": event.commercial_name,
                         "photo_count": photo_count,
                         "commercial_name": event.commercial_name,
                         "album": album_data,
                         # Additional transparency fields
+                        "name": getattr(event, "name", None),
                         "way_of_application": getattr(event, "way_of_application", None),
                         "weather_conditions": getattr(event, "weather_conditions", None),
                         "application_timing": getattr(event, "application_timing", None),
                         "target_pest_disease": getattr(event, "target_pest_disease", None),
-                        "extra_data": getattr(event, "extra_data", None),
+                        "chemical_subtype": getattr(event, "chemical_subtype", None),
+                        # Application fuel fields for carbon transparency
+                        "application_fuel_type": getattr(event, "application_fuel_type", None),
+                        "application_fuel_consumed": (
+                            str(event.application_fuel_consumed)
+                            if getattr(event, "application_fuel_consumed", None) is not None
+                            else None
+                        ),
+                        "application_fuel_unit": getattr(event, "application_fuel_unit", None),
+                        # NPK nutrient percentages
+                        "nitrogen_percentage": (
+                            str(event.nitrogen_percentage)
+                            if getattr(event, "nitrogen_percentage", None) is not None
+                            else None
+                        ),
+                        "phosphorus_percentage": (
+                            str(event.phosphorus_percentage)
+                            if getattr(event, "phosphorus_percentage", None) is not None
+                            else None
+                        ),
+                        "potassium_percentage": (
+                            str(event.potassium_percentage)
+                            if getattr(event, "potassium_percentage", None) is not None
+                            else None
+                        ),
+                        # EPA compliance fields
+                        "applicator_name": getattr(event, "applicator_name", None),
+                        "epa_registration_number": getattr(event, "epa_registration_number", None),
+                        "restricted_use_pesticide": getattr(event, "restricted_use_pesticide", False),
+                        "rei_hours": (str(event.rei_hours) if getattr(event, "rei_hours", None) is not None else None),
+                        "phi_days": (str(event.phi_days) if getattr(event, "phi_days", None) is not None else None),
+                        "organic_approved": (
+                            getattr(event, "organic_approved", None)
+                            or (
+                                (
+                                    event.extra_data.get("organic_certification")
+                                    or event.extra_data.get("organic_approved")
+                                )
+                                if isinstance(getattr(event, "extra_data", None), dict)
+                                else None
+                            )
+                        ),
+                        "extra_data": self._sanitize_extra_data_for_public(event),
                         # Blockchain verification fields from production
                         "blockchain_verified": blockchain_verified,
                         "blockchain_transaction": blockchain_transaction,
-                        # MVP Photo Verification: Tiered verification level
                         "verification_level": self._get_verification_level_for_event(
-                            event, "chemical", event.type, photo_count > 0, blockchain_verified
+                            event, photo_count > 0, blockchain_verified
                         ),
                     }
                 )
 
-            for event in production_events:
+            for i, event in enumerate(production_events):
                 # Get serialized images from prefetched data (no additional queries)
                 image_list = self._serialize_prefetched_images(event.album if hasattr(event, "album") else None)
                 photo_count = len(image_list)
                 album_data = None
                 if hasattr(event, "album") and event.album and image_list:
                     album_data = {
-                        "id": event.album.id,
                         "images": image_list,
                     }
 
                 events_data.append(
                     {
-                        "id": event.id,
+                        "id": f"production_{i}",
                         "date": event.date.isoformat() if event.date else None,
                         "description": event.description or "Production Activity",
                         "observation": event.observation or "",
+                        "performed_by": getattr(event, "performed_by", None),
                         "type": getattr(event, "type", "production"),
-                        "certified": getattr(event, "certified", True),
+                        "event_type": PRODUCTION_EVENT_TYPE,
+                        "production_type": getattr(event, "type", ""),
+                        "certified": getattr(event, "certified", False),
                         "index": getattr(event, "index", 0),
                         "volume": None,
                         "concentration": None,
@@ -2214,24 +2473,108 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "yield_unit": getattr(event, "yield_unit", "kg"),
                         "fuel_consumed": float(getattr(event, "fuel_consumed", None) or 0) or None,
                         "fuel_unit": getattr(event, "fuel_unit", "L"),
+                        "fuel_type": getattr(event, "fuel_type", None),
                         "equipment_hours": float(getattr(event, "equipment_hours", None) or 0) or None,
                         "transportation_distance": float(getattr(event, "transportation_distance", None) or 0) or None,
                         "transportation_unit": getattr(event, "transportation_unit", "km"),
                         "production_efficiency": getattr(event, "production_efficiency", "normal"),
+                        "operation_efficiency": getattr(event, "production_efficiency", "normal"),
                         "seeds_source": getattr(event, "seeds_source", None),
+                        # Irrigation fields (model field with extra_data fallback)
+                        "irrigation_method": (
+                            getattr(event, "irrigation_method", None)
+                            or (
+                                event.extra_data.get("irrigation_method")
+                                if isinstance(getattr(event, "extra_data", None), dict)
+                                else None
+                            )
+                        ),
+                        "irrigation_depth": float(getattr(event, "irrigation_depth", None) or 0) or None,
+                        "irrigation_depth_unit": getattr(event, "irrigation_depth_unit", None),
+                        "water_source": (
+                            getattr(event, "water_source", None)
+                            or (
+                                event.extra_data.get("water_source")
+                                if isinstance(getattr(event, "extra_data", None), dict)
+                                else None
+                            )
+                        ),
+                        # Harvest fields (model field + extra_data for consumer trust)
+                        "harvest_quality_grade": getattr(event, "harvest_quality_grade", None),
+                        "grain_moisture": float(getattr(event, "grain_moisture", None) or 0) or None,
+                        "harvest_method": (
+                            getattr(event, "harvest_method", None)
+                            or (
+                                event.extra_data.get("harvest_method")
+                                if isinstance(getattr(event, "extra_data", None), dict)
+                                else None
+                            )
+                        ),
+                        "brix_levels": (
+                            (event.extra_data.get("brix_levels") or event.extra_data.get("brix_level"))
+                            if isinstance(getattr(event, "extra_data", None), dict)
+                            else None
+                        ),
+                        # Equipment maintenance fields (extra_data)
+                        "equipment_type": (
+                            getattr(event, "equipment_type", None)
+                            or (
+                                event.extra_data.get("equipment_type")
+                                if isinstance(getattr(event, "extra_data", None), dict)
+                                else None
+                            )
+                        ),
+                        "equipment_operation_type": (
+                            getattr(event, "equipment_operation_type", None)
+                            or (
+                                event.extra_data.get("equipment_operation_type")
+                                if isinstance(getattr(event, "extra_data", None), dict)
+                                else None
+                            )
+                        ),
                         # Custom fields stored in extra_data (e.g., custom_fields, carbon_calculation)
-                        "extra_data": getattr(event, "extra_data", None),
+                        "extra_data": self._sanitize_extra_data_for_public(event),
+                        # Aggregate event fields (Sprint 4) - extracted from extra_data for normalizer
+                        "is_summary": (
+                            event.extra_data.get("is_summary", False)
+                            if isinstance(getattr(event, "extra_data", None), dict)
+                            else False
+                        ),
+                        "date_start": (
+                            event.extra_data.get("date_start")
+                            if isinstance(getattr(event, "extra_data", None), dict)
+                            else None
+                        ),
+                        "date_end": (
+                            event.extra_data.get("date_end")
+                            if isinstance(getattr(event, "extra_data", None), dict)
+                            else None
+                        ),
+                        "event_count": (
+                            event.extra_data.get("event_count")
+                            if isinstance(getattr(event, "extra_data", None), dict)
+                            else None
+                        ),
+                        "water_volume_total": (
+                            event.extra_data.get("water_volume_total")
+                            if isinstance(getattr(event, "extra_data", None), dict)
+                            else None
+                        ),
+                        "water_volume_unit": (
+                            event.extra_data.get("water_volume_unit")
+                            if isinstance(getattr(event, "extra_data", None), dict)
+                            else None
+                        ),
                         # Blockchain verification fields from production
                         "blockchain_verified": blockchain_verified,
                         "blockchain_transaction": blockchain_transaction,
-                        # MVP Photo Verification: Tiered verification level
                         "verification_level": self._get_verification_level_for_event(
-                            event, "production", getattr(event, "type", None), photo_count > 0, blockchain_verified
+                            event, photo_count > 0, blockchain_verified
                         ),
                     }
                 )
 
-            for event in weather_events:
+            for i, event in enumerate(weather_events):
                 # Count photos from event album
                 photo_count = 0
                 album_data = None
@@ -2246,22 +2589,21 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                 if hasattr(event, "album") and event.album and image_list:
 
                     album_data = {
-
-                        "id": event.album.id,
-
                         "images": image_list,
                     }
 
                 events_data.append(
                     {
-                        "id": event.id,
+                        "id": f"weather_{i}",
                         "date": event.date.isoformat() if event.date else None,
                         "description": event.description or "Weather Event",
                         "observation": event.observation or "",
+                        "performed_by": getattr(event, "performed_by", None),
                         "type": getattr(
                             event, "type", "weather"
                         ),  # 🌦️ PRESERVE WEATHER TYPE: Use actual weather type (FR, DR, etc.) instead of generic "weather"
-                        "certified": getattr(event, "certified", True),
+                        "event_type": WEATHER_EVENT_TYPE,
+                        "certified": getattr(event, "certified", False),
                         "index": getattr(event, "index", 0),
                         "volume": None,
                         "concentration": None,
@@ -2271,18 +2613,17 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "commercial_name": None,
                         "album": album_data,
                         # 🌦️ WEATHER FIELDS: Add missing extra_data for weather-specific fields unification
-                        "extra_data": getattr(event, "extra_data", None),
+                        "extra_data": self._sanitize_extra_data_for_public(event),
                         # Blockchain verification fields from production
                         "blockchain_verified": blockchain_verified,
                         "blockchain_transaction": blockchain_transaction,
-                        # MVP Photo Verification: Weather events use data_verified by default
                         "verification_level": self._get_verification_level_for_event(
-                            event, "weather", getattr(event, "type", None), photo_count > 0, blockchain_verified
+                            event, photo_count > 0, blockchain_verified
                         ),
                     }
                 )
 
-            for event in equipment_events:
+            for i, event in enumerate(equipment_events):
                 # Count photos from event album
                 photo_count = 0
                 album_data = None
@@ -2297,20 +2638,18 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                 if hasattr(event, "album") and event.album and image_list:
 
                     album_data = {
-
-                        "id": event.album.id,
-
                         "images": image_list,
                     }
 
                 events_data.append(
                     {
-                        "id": event.id,
+                        "id": f"equipment_{i}",
                         "date": event.date.isoformat() if event.date else None,
                         "description": event.description or "Equipment Use",
                         "observation": getattr(event, "observation", ""),
+                        "performed_by": getattr(event, "performed_by", None),
                         "type": "equipment",  # FIXED: Always return "equipment" as main type for Equipment events
-                        "certified": getattr(event, "certified", True),
+                        "certified": getattr(event, "certified", False),
                         "index": getattr(event, "index", 0),
                         "volume": None,
                         "concentration": None,
@@ -2343,14 +2682,13 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         # Blockchain verification fields from production
                         "blockchain_verified": blockchain_verified,
                         "blockchain_transaction": blockchain_transaction,
-                        # MVP Photo Verification: Equipment FC (fuel) uses data_verified
                         "verification_level": self._get_verification_level_for_event(
-                            event, "equipment", getattr(event, "type", None), photo_count > 0, blockchain_verified
+                            event, photo_count > 0, blockchain_verified
                         ),
                     }
                 )
 
-            for event in soil_events:
+            for i, event in enumerate(soil_events):
                 # Count photos from event album
                 photo_count = 0
                 album_data = None
@@ -2365,20 +2703,19 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                 if hasattr(event, "album") and event.album and image_list:
 
                     album_data = {
-
-                        "id": event.album.id,
-
                         "images": image_list,
                     }
 
                 events_data.append(
                     {
-                        "id": event.id,
+                        "id": f"soil_{i}",
                         "date": event.date.isoformat() if event.date else None,
                         "description": event.description or "Soil Management",
-                        "observation": "",  # Soil management events don't have observation field
+                        "observation": getattr(event, "observation", ""),
+                        "performed_by": getattr(event, "performed_by", None),
                         "type": "soil_management",
-                        "certified": getattr(event, "certified", True),
+                        "event_type": SOIL_MANAGEMENT_EVENT_TYPE,
+                        "certified": getattr(event, "certified", False),
                         "index": getattr(event, "index", 0),
                         "volume": None,
                         "concentration": None,
@@ -2405,6 +2742,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "area_unit": getattr(event, "area_unit", None),  # ha, acres, m2, km2 (raw)
                         "fuel_consumed": getattr(event, "fuel_consumed", None),  # Fuel amount
                         "fuel_unit": getattr(event, "fuel_unit", None),  # L, gal, kg (raw)
+                        "fuel_type": getattr(event, "fuel_type", None),  # diesel, gasoline, electric
                         "equipment_hours": getattr(event, "equipment_hours", None),  # Operating hours
                         "working_depth": getattr(event, "working_depth", None),  # Working depth for operations
                         "depth_unit": getattr(event, "depth_unit", None),  # cm, m, inches (raw)
@@ -2422,18 +2760,17 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "weather_conditions": getattr(event, "weather_conditions", None),  # Weather during operation
                         "temperature_range": getattr(event, "temperature_range", None),  # Temperature range
                         "equipment_used": getattr(event, "equipment_used", None),  # Equipment type used
-                        "extra_data": getattr(event, "extra_data", None),  # Additional soil management data
+                        "extra_data": self._sanitize_extra_data_for_public(event),  # Additional soil management data
                         # Blockchain verification fields from production
                         "blockchain_verified": blockchain_verified,
                         "blockchain_transaction": blockchain_transaction,
-                        # MVP Photo Verification: Soil test (ST) uses data_verified
                         "verification_level": self._get_verification_level_for_event(
-                            event, "soil_management", getattr(event, "type", None), photo_count > 0, blockchain_verified
+                            event, photo_count > 0, blockchain_verified
                         ),
                     }
                 )
 
-            for event in pest_events:
+            for i, event in enumerate(pest_events):
                 # Count photos from event album
                 photo_count = 0
                 album_data = None
@@ -2448,20 +2785,19 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                 if hasattr(event, "album") and event.album and image_list:
 
                     album_data = {
-
-                        "id": event.album.id,
-
                         "images": image_list,
                     }
 
                 events_data.append(
                     {
-                        "id": event.id,
+                        "id": f"pest_{i}",
                         "date": event.date.isoformat() if event.date else None,
                         "description": event.description or "Pest Management",
                         "observation": getattr(event, "observation", ""),
+                        "performed_by": getattr(event, "performed_by", None),
                         "type": "pest_management",
-                        "certified": getattr(event, "certified", True),
+                        "event_type": PEST_MANAGEMENT_EVENT_TYPE,
+                        "certified": getattr(event, "certified", False),
                         "index": getattr(event, "index", 0),
                         "volume": None,
                         "concentration": None,
@@ -2470,17 +2806,60 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "photo_count": photo_count,
                         "commercial_name": None,
                         "album": album_data,
+                        # Pest management specific fields for consumer display
+                        "name": getattr(event, "name", None),
+                        "pest_management_type": getattr(event, "type", None),
+                        "pest_species": getattr(event, "pest_species", None),
+                        "pest_pressure_level": getattr(event, "pest_pressure_level", None),
+                        "beneficial_species": getattr(event, "beneficial_species", None),
+                        "release_quantity": getattr(event, "release_quantity", None),
+                        "trap_count": getattr(event, "trap_count", None),
+                        "damage_percentage": float(getattr(event, "damage_percentage", None) or 0) or None,
+                        "action_threshold_met": getattr(event, "action_threshold_met", False),
+                        "ipm_strategy": getattr(event, "ipm_strategy", None),
+                        # Consumer trust fields
+                        "beneficial_insects_used": getattr(event, "beneficial_insects_used", None),
+                        "chemical_free_period_days": getattr(event, "chemical_free_period_days", None),
+                        # Fuel/Equipment fields
+                        "area_covered": float(getattr(event, "area_covered", None) or 0) or None,
+                        "area_unit": getattr(event, "area_unit", "ha"),
+                        "fuel_consumed": float(getattr(event, "fuel_consumed", None) or 0) or None,
+                        "fuel_unit": getattr(event, "fuel_unit", "L"),
+                        "fuel_type": getattr(event, "fuel_type", None),
+                        "equipment_hours": float(getattr(event, "equipment_hours", None) or 0) or None,
+                        "production_efficiency": getattr(event, "production_efficiency", "normal"),
+                        "extra_data": self._sanitize_extra_data_for_public(event),
+                        # Aggregate event fields (Sprint 5) - extracted from extra_data for normalizer
+                        "is_summary": (
+                            event.extra_data.get("is_summary", False)
+                            if isinstance(getattr(event, "extra_data", None), dict)
+                            else False
+                        ),
+                        "date_start": (
+                            event.extra_data.get("date_start")
+                            if isinstance(getattr(event, "extra_data", None), dict)
+                            else None
+                        ),
+                        "date_end": (
+                            event.extra_data.get("date_end")
+                            if isinstance(getattr(event, "extra_data", None), dict)
+                            else None
+                        ),
+                        "event_count": (
+                            event.extra_data.get("event_count")
+                            if isinstance(getattr(event, "extra_data", None), dict)
+                            else None
+                        ),
                         # Blockchain verification fields from production
                         "blockchain_verified": blockchain_verified,
                         "blockchain_transaction": blockchain_transaction,
-                        # MVP Photo Verification: Pest management uses photo verification
                         "verification_level": self._get_verification_level_for_event(
-                            event, "pest_management", getattr(event, "type", None), photo_count > 0, blockchain_verified
+                            event, photo_count > 0, blockchain_verified
                         ),
                     }
                 )
 
-            for event in general_events:
+            for i, event in enumerate(general_events):
                 # Count photos from event album
                 photo_count = 0
                 album_data = None
@@ -2495,20 +2874,19 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                 if hasattr(event, "album") and event.album and image_list:
 
                     album_data = {
-
-                        "id": event.album.id,
-
                         "images": image_list,
                     }
 
                 events_data.append(
                     {
-                        "id": event.id,
+                        "id": f"general_{i}",
                         "date": event.date.isoformat() if event.date else None,
                         "description": event.name or event.description or "General Event",
                         "observation": event.observation or "",
+                        "performed_by": getattr(event, "performed_by", None),
                         "type": "general",
-                        "certified": getattr(event, "certified", True),
+                        "event_type": GENERAL_EVENT_TYPE,
+                        "certified": getattr(event, "certified", False),
                         "index": getattr(event, "index", 0),
                         "volume": None,
                         "concentration": None,
@@ -2517,6 +2895,8 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "photo_count": photo_count,
                         "commercial_name": None,
                         "album": album_data,
+                        # General event name for title generation
+                        "name": getattr(event, "name", None),
                         # NEW ACTIVITY FIELDS for complete transparency
                         "activity_type": getattr(event, "activity_type", None),
                         "activity_name": getattr(event, "activity_name", None),
@@ -2525,18 +2905,15 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         # Blockchain verification fields from production
                         "blockchain_verified": blockchain_verified,
                         "blockchain_transaction": blockchain_transaction,
-                        # MVP Photo Verification: General events use photo verification
                         "verification_level": self._get_verification_level_for_event(
                             event,
-                            "general",
-                            getattr(event, "activity_type", None),
                             photo_count > 0,
                             blockchain_verified,
                         ),
                     }
                 )
 
-            for event in business_events:
+            for i, event in enumerate(business_events):
                 business_display = (
                     event.get_business_type_display()
                     if hasattr(event, "get_business_type_display")
@@ -2562,20 +2939,19 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                 if hasattr(event, "album") and event.album and image_list:
 
                     album_data = {
-
-                        "id": event.album.id,
-
                         "images": image_list,
                     }
 
                 events_data.append(
                     {
-                        "id": event.id,
+                        "id": f"business_{i}",
                         "date": event.date.isoformat() if event.date else None,
                         "description": event.name or event.description or f"Business Event - {business_display}",
                         "observation": event.observation or "",
+                        "performed_by": getattr(event, "performed_by", None),
                         "type": "business",
-                        "certified": getattr(event, "certified", True),
+                        "event_type": BUSINESS_EVENT_TYPE,
+                        "certified": getattr(event, "certified", False),
                         "index": getattr(event, "index", 0),
                         "volume": None,
                         "concentration": None,
@@ -2584,14 +2960,24 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "photo_count": photo_count,
                         "commercial_name": None,
                         "album": album_data,
+                        # Business specific fields for consumer display
+                        "name": getattr(event, "name", None),
+                        "business_type": getattr(event, "business_type", None),
+                        "business_event_type": getattr(event, "type", None),
+                        "certification_type": getattr(event, "certification_type", None),
+                        "certification_type_display": certification_display,
+                        "certificate_number": getattr(event, "certificate_number", None),
+                        "verification_status": getattr(event, "verification_status", None),
+                        "sustainability_practice": getattr(event, "sustainability_practice", None),
+                        "carbon_credits_earned": float(getattr(event, "carbon_credits_earned", None) or 0) or None,
+                        "carbon_credits_unit": getattr(event, "carbon_credits_unit", None),
+                        "verified_certifier_name": getattr(event, "verified_certifier_name", None),
+                        "extra_data": self._sanitize_extra_data_for_public(event),
                         # Blockchain verification fields from production
                         "blockchain_verified": blockchain_verified,
                         "blockchain_transaction": blockchain_transaction,
-                        # MVP Photo Verification: Business CE/CO use data_verified (cert documents)
                         "verification_level": self._get_verification_level_for_event(
                             event,
-                            "business",
-                            getattr(event, "business_type", None),
                             photo_count > 0,
                             blockchain_verified,
                         ),
@@ -2608,23 +2994,6 @@ class PublicHistorySerializer(serializers.ModelSerializer):
             # Return empty list if there's an error
             return []
 
-    def get_certificate_percentage(self, history):
-        return history.certificate_percentage
-
-    def get_similar_histories(self, history):
-        return PublicHistoryListSerializer(
-            self.context.get("similar_histories", []), many=True, context={"request": self.context.get("request")}
-        ).data
-
-    def get_company(self, history):
-        return history.parcel.establishment.company.name if history.parcel else None
-
-    def get_parcel(self, history):
-        return history.parcel.name if history.parcel else None
-
-    def get_history_scan(self, history):
-        return self.context.get("history_scan", None)
-
     def get_qr_code(self, history):
         if history.qr_code:
             request = self.context.get("request")
@@ -2632,7 +3001,6 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         return None
 
     def get_images(self, history):
-        print(f"DEBUG: PublicHistorySerializer.get_images called for history {history.id}")
         try:
             request = self.context.get("request")
             images = []
@@ -3001,6 +3369,16 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
         # Handle custom fields (user-defined additional information)
         custom_fields = self.handle_custom_fields_input(data)
 
+        # Extract frontend's extra_data BEFORE super() call
+        frontend_extra_data = data.pop("extra_data", {}) or {}
+
+        # Extract fields that don't have model columns into extra_data
+        extra_data_only_fields = ["amendment_unit"]
+        for field_name in extra_data_only_fields:
+            if field_name in data:
+                value = data.pop(field_name)
+                frontend_extra_data[field_name] = value if value is not None else ""
+
         # Process the data through parent first
         internal_value = super().to_internal_value(data)
 
@@ -3023,7 +3401,7 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
                     )
 
         # Handle extra_data field specifically - ensure all nested Decimal objects are converted
-        if "extra_data" in internal_value and internal_value["extra_data"]:
+        if frontend_extra_data:
 
             def convert_decimals_in_dict(obj):
                 """Recursively convert Decimal objects to strings in nested dictionaries"""
@@ -3036,13 +3414,20 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
                 else:
                     return obj
 
-            internal_value["extra_data"] = convert_decimals_in_dict(internal_value["extra_data"])
-            print(f"[UpdateSoilManagementEventSerializer] Processed extra_data: {internal_value['extra_data']}")
+            frontend_extra_data = convert_decimals_in_dict(frontend_extra_data)
 
-        # Merge custom fields into extra_data
+        # Merge: existing extra_data + frontend extra_data (frontend wins on conflicts)
         instance = getattr(self, "instance", None)
-        existing_extra_data = internal_value.get("extra_data") or {}
-        internal_value["extra_data"] = self.merge_custom_fields(existing_extra_data, custom_fields, instance)
+        existing_extra_data = instance.extra_data if instance and instance.extra_data else {}
+        merged_extra_data = {**existing_extra_data, **frontend_extra_data}
+
+        # Handle custom_fields inline
+        if custom_fields:
+            merged_extra_data["custom_fields"] = custom_fields
+        elif instance and instance.extra_data and "custom_fields" in instance.extra_data:
+            merged_extra_data["custom_fields"] = instance.extra_data["custom_fields"]
+
+        internal_value["extra_data"] = merged_extra_data
 
         print(f"[UpdateSoilManagementEventSerializer.to_internal_value] Final internal_value: {internal_value}")
         return internal_value
@@ -3088,12 +3473,53 @@ class UpdatePestManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
 
     def to_internal_value(self, data):
         """
-        Handle custom fields (user-defined additional information) for pest management events.
+        Handle custom fields and frontend extra_data for pest management events.
+        Frontend sends summary mode fields (is_summary, pest_species_observed,
+        average_pest_pressure, event_count, area_covered_total, etc.) inside extra_data.
+        These must be extracted BEFORE super() and merged with existing extra_data.
         """
         print(f"[UpdatePestManagementEventSerializer.to_internal_value] Input data: {data}")
 
         # Create a copy to avoid modifying the original
         data = data.copy()
+
+        # Convert empty strings to appropriate values for integer/boolean fields
+        nullable_int_fields = [
+            "trap_count",
+            "chemical_free_period_days",
+            "release_quantity_number",
+        ]
+        for field in nullable_int_fields:
+            if field in data and data[field] == "":
+                data[field] = None
+
+        if "action_threshold_met" in data and data["action_threshold_met"] == "":
+            data["action_threshold_met"] = False
+
+        if "damage_percentage" in data and data["damage_percentage"] == "":
+            data["damage_percentage"] = None
+
+        # Ensure description is not blank - use observations_summary or event_name as fallback
+        if not data.get("description"):
+            fallback = data.get("observations_summary") or data.get("event_name") or "Pest management activity"
+            data["description"] = fallback
+
+        # Extract frontend's extra_data BEFORE super() call
+        # Frontend sends summary fields (is_summary, pest_species_observed, etc.) inside extra_data
+        frontend_extra_data = data.pop("extra_data", {}) or {}
+
+        # Extract fields that don't have model columns into extra_data
+        extra_data_only_fields = [
+            "name",
+            "observations_summary",
+            "crop_growth_stage",
+            "economic_threshold_met",
+            "action_recommended",
+        ]
+        for field_name in extra_data_only_fields:
+            if field_name in data:
+                value = data.pop(field_name)
+                frontend_extra_data[field_name] = value if value is not None else ""
 
         # Handle custom fields (user-defined additional information)
         custom_fields = self.handle_custom_fields_input(data)
@@ -3105,8 +3531,16 @@ class UpdatePestManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
         instance = getattr(self, "instance", None)
         existing_extra_data = instance.extra_data if instance and instance.extra_data else {}
 
-        # Merge custom fields into extra_data
-        internal_value["extra_data"] = self.merge_custom_fields(existing_extra_data, custom_fields, instance)
+        # Merge: existing extra_data + frontend extra_data (frontend wins on conflicts)
+        merged_extra_data = {**existing_extra_data, **frontend_extra_data}
+
+        # Handle custom_fields inline to avoid merge_custom_fields overwriting merged data
+        if custom_fields:
+            merged_extra_data["custom_fields"] = custom_fields
+        elif instance and instance.extra_data and "custom_fields" in instance.extra_data:
+            merged_extra_data["custom_fields"] = instance.extra_data["custom_fields"]
+
+        internal_value["extra_data"] = merged_extra_data
 
         return internal_value
 
@@ -3121,6 +3555,11 @@ class UpdatePestManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
 
         # Include custom fields in response for frontend display
         data = self.add_custom_fields_to_representation(data, instance)
+
+        # Extract name from extra_data if present (no model column for name)
+        extra_data = instance.extra_data or {} if hasattr(instance, "extra_data") else {}
+        if extra_data.get("name"):
+            data["name"] = extra_data["name"]
 
         return data
 
@@ -3142,6 +3581,14 @@ class PestManagementEventSerializer(EventSerializer):
     def get_event_type(self, pest_event):
         return PEST_MANAGEMENT_EVENT_TYPE
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Extract name from extra_data so frontend can access it as event.name
+        extra_data = instance.extra_data or {} if hasattr(instance, "extra_data") else {}
+        if extra_data.get("name"):
+            data["name"] = extra_data["name"]
+        return data
+
 
 # Business Event Serializers
 class UpdateBusinessEventSerializer(CustomFieldsMixin, serializers.ModelSerializer):
@@ -3151,7 +3598,9 @@ class UpdateBusinessEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
 
     def to_internal_value(self, data):
         """
-        Handle custom fields (user-defined additional information) for business events.
+        Handle custom fields and non-model fields for business events.
+        trust_impact and transparency_benefit have no model columns and must be
+        stored in extra_data.
         """
         print(f"[UpdateBusinessEventSerializer.to_internal_value] Input data: {data}")
 
@@ -3161,15 +3610,31 @@ class UpdateBusinessEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
         # Handle custom fields (user-defined additional information)
         custom_fields = self.handle_custom_fields_input(data)
 
+        # Extract frontend's extra_data BEFORE super() call
+        frontend_extra_data = data.pop("extra_data", {}) or {}
+
+        # Extract fields that don't have model columns into extra_data
+        extra_data_only_fields = ["trust_impact", "transparency_benefit"]
+        for field_name in extra_data_only_fields:
+            if field_name in data:
+                value = data.pop(field_name)
+                frontend_extra_data[field_name] = value if value is not None else ""
+
         # Call the parent method to handle the rest
         internal_value = super().to_internal_value(data)
 
-        # Get existing extra_data from instance (for updates)
+        # Merge: existing extra_data + frontend extra_data (frontend wins on conflicts)
         instance = getattr(self, "instance", None)
         existing_extra_data = instance.extra_data if instance and instance.extra_data else {}
+        merged_extra_data = {**existing_extra_data, **frontend_extra_data}
 
-        # Merge custom fields into extra_data
-        internal_value["extra_data"] = self.merge_custom_fields(existing_extra_data, custom_fields, instance)
+        # Handle custom_fields inline
+        if custom_fields:
+            merged_extra_data["custom_fields"] = custom_fields
+        elif instance and instance.extra_data and "custom_fields" in instance.extra_data:
+            merged_extra_data["custom_fields"] = instance.extra_data["custom_fields"]
+
+        internal_value["extra_data"] = merged_extra_data
 
         return internal_value
 

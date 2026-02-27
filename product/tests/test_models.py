@@ -461,9 +461,9 @@ class ParcelViewSetTestCase(APITestCase):
         self.establishment = Establishment.objects.create(name="API Test Field", company=self.company)
 
         # Set up user roles
-        WorksIn.objects.create(user=self.manager, company=self.company, role=WorksIn.DOMAIN_SUPERVISOR)
+        WorksIn.objects.create(user=self.manager, company=self.company, role=WorksIn.FARM_MANAGER)
 
-        WorksIn.objects.create(user=self.worker, company=self.company, role=WorksIn.DOMAIN_WORKER)
+        WorksIn.objects.create(user=self.worker, company=self.company, role=WorksIn.VIEWER)
 
         # Create test parcel
         self.parcel = Parcel.objects.create(

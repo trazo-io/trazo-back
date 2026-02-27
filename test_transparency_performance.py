@@ -8,17 +8,20 @@ Measures query count before and after optimization to verify:
 """
 import os
 import sys
-import django
-from django.test.utils import CaptureQueriesContext
-from django.db import connection
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings.dev')
-sys.path.insert(0, '/Users/oscarmunoz/dev/trazo/trazo-back')
+import django
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
+
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.settings.dev")
+sys.path.insert(0, "/Users/oscarmunoz/dev/trazo/trazo-back")
 django.setup()
 
 from django.test import RequestFactory
-from history.transparency_views import production_transparency_detail
+
 from history.models import History
+from history.transparency_views import production_transparency_detail
+
 
 def test_transparency_performance():
     """Test the transparency API performance."""
@@ -37,7 +40,7 @@ def test_transparency_performance():
 
         # Create a test request
         factory = RequestFactory()
-        request = factory.get(f'/api/transparency/{production_id}/')
+        request = factory.get(f"/api/transparency/{production_id}/")
 
         # Capture queries
         with CaptureQueriesContext(connection) as context:
@@ -48,10 +51,10 @@ def test_transparency_performance():
         # Analyze query types
         query_breakdown = {}
         for query in context.captured_queries:
-            sql = query['sql']
+            sql = query["sql"]
             # Extract table name
-            if 'FROM' in sql:
-                table = sql.split('FROM')[1].split()[1].strip('`"')
+            if "FROM" in sql:
+                table = sql.split("FROM")[1].split()[1].strip('`"')
                 query_breakdown[table] = query_breakdown.get(table, 0) + 1
 
         # Display results
@@ -116,7 +119,9 @@ def test_transparency_performance():
     except Exception as e:
         print(f"❌ Error during test: {str(e)}")
         import traceback
+
         traceback.print_exc()
+
 
 if __name__ == "__main__":
     test_transparency_performance()

@@ -19,7 +19,6 @@ from product.models import Establishment, Parcel
 from ..models import (
     BusinessEvent,
     ChemicalEvent,
-    EquipmentEvent,
     GeneralEvent,
     History,
     PestManagementEvent,
@@ -56,12 +55,44 @@ class TransparencyCalculator:
         "production": [ProductionEvent],
         "chemical": [ChemicalEvent],
         "soil": [SoilManagementEvent],
-        "equipment": [EquipmentEvent],
         "pest": [PestManagementEvent],
         "weather": [WeatherEvent],
         "business": [BusinessEvent],
         "general": [GeneralEvent],
     }
+
+    # 3-Tier photo system — subtype-level photo requirements
+    # Tier 1 ESSENTIAL: Full 50% penalty without photos
+    #   High consumer interest, prevents gaming, irreplaceable verification
+    PHOTO_TIER_ESSENTIAL = {
+        "PL",
+        "HA",  # Planting, Harvesting
+        "FE",
+        "PE",
+        "FU",
+        "HE",  # All chemical subtypes
+        "CC",  # Cover Crop
+        "BR",
+        "PI",  # Beneficial Release, Pest Identification
+    }
+
+    # Tier 2 RECOMMENDED: Lighter 25% penalty without photos
+    #   Photos add value but absence is understandable
+    PHOTO_TIER_RECOMMENDED = {
+        "PR",
+        "TR",
+        "CU",  # Pruning, Transplanting, Cultivation
+        "ST",
+        "OM",
+        "CO",  # Soil Test, Organic Matter, Composting
+        "SC",
+        "TM",
+        "IP",  # Scouting, Trap Monitoring, IPM
+    }
+
+    # Tier 3 (implicit — everything else): No photo penalty
+    #   IR, EM, TH = Production; PA, TI = Soil; TA = Pest
+    #   All weather, business, general events
 
     def calculate_transparency_score(self, history: History) -> Dict:
         """
@@ -86,25 +117,29 @@ class TransparencyCalculator:
             # Get category breakdown for detailed feedback
             category_breakdown = self._analyze_category_completeness(history, expected_count)
 
-            # Generate consumer-friendly message
-            message = self._generate_transparency_message(transparency_percentage, category_breakdown)
-
-            # Calculate completeness score (separate from carbon calculations)
+            # Calculate completeness score (weighted by category, includes photo penalty)
             completeness_score = self._calculate_completeness_score(category_breakdown)
 
+            # The main transparency_percentage should reflect the weighted completeness
+            # score (which includes photo penalties), not just raw event count ratio.
+            # Raw ratio is kept as event_coverage_percentage for reference.
+            effective_score = round(completeness_score, 1)
+
+            # Generate consumer-friendly message using the effective score
+            message = self._generate_transparency_message(effective_score, category_breakdown)
+
             return {
-                "transparency_percentage": round(transparency_percentage, 1),
+                "transparency_percentage": effective_score,
                 "message": message,
                 "completeness_score": completeness_score,
+                "event_coverage_percentage": round(transparency_percentage, 1),
                 "category_breakdown": category_breakdown,
                 "consumer_friendly_categories": self._get_consumer_friendly_categories(category_breakdown),
                 "actual_event_count": actual_count,
                 "expected_event_count": expected_count,
                 "farming_approach": self._get_farming_approach(history),
                 "calculation_timestamp": timezone.now().isoformat(),
-                "consumer_summary": self._generate_consumer_summary(
-                    transparency_percentage, actual_count, expected_count
-                ),
+                "consumer_summary": self._generate_consumer_summary(effective_score, actual_count, expected_count),
             }
 
         except Exception as e:
@@ -120,40 +155,26 @@ class TransparencyCalculator:
 
         # Try to get crop type from parcel or other sources
         crop_category = "other"  # Default fallback
-        farming_approach = "conventional"  # Default fallback
 
         if hasattr(history, "parcel") and history.parcel:
             # Try to infer from parcel data or linked crop info
             if hasattr(history.parcel, "crop_type"):
                 crop_category = history.parcel.crop_type.category
 
-        # Look for farming approach indicators in events or extra_data
-        if history.extra_data and isinstance(history.extra_data, dict):
-            approach = history.extra_data.get("farming_approach", "conventional")
-            if approach in ["organic", "biodynamic"]:
-                farming_approach = approach
-
-        # Check for organic indicators in chemical events
-        chemical_events = ChemicalEvent.objects.filter(history=history)
-        if chemical_events.exists():
-            # If no synthetic chemicals found, likely organic
-            synthetic_chemicals = chemical_events.filter(
-                Q(description__icontains="synthetic")
-                | Q(description__icontains="pesticide")
-                | Q(description__icontains="herbicide")
-            )
-            if not synthetic_chemicals.exists() and chemical_events.count() > 2:
-                farming_approach = "organic"
+        # Use single source of truth for farming approach detection
+        farming_approach = self._get_farming_approach(history)
 
         expected_count = self.EXPECTED_EVENTS.get(crop_category, {}).get(farming_approach, 10)
 
-        # Adjust based on production duration
+        # Adjust based on production duration (only if dates are valid)
         if history.start_date and history.finish_date:
-            duration_months = (history.finish_date - history.start_date).days / 30
-            if duration_months > 12:
-                expected_count = int(expected_count * 1.2)  # Longer productions need more events
-            elif duration_months < 6:
-                expected_count = int(expected_count * 0.8)  # Shorter productions need fewer events
+            duration_days = (history.finish_date - history.start_date).days
+            if duration_days > 0:  # Guard against invalid dates (finish before start)
+                duration_months = duration_days / 30
+                if duration_months > 12:
+                    expected_count = int(expected_count * 1.2)  # Longer productions need more events
+                elif duration_months < 6:
+                    expected_count = int(expected_count * 0.8)  # Shorter productions need fewer events
 
         return max(expected_count, 5)  # Minimum 5 events expected
 
@@ -170,40 +191,70 @@ class TransparencyCalculator:
         return total_events
 
     def _analyze_category_completeness(self, history: History, expected_total: int) -> Dict:
-        """Analyze completeness by event category with photo verification requirements (anti-gaming)"""
+        """Analyze completeness by event category with 3-tier photo verification (anti-gaming)"""
 
         category_breakdown = {}
         events_per_category = expected_total / len(self.EVENT_CATEGORIES)  # Distribute evenly
 
-        # Define which categories require photo verification to prevent gaming
-        photo_required_categories = {"production", "chemical", "soil", "equipment", "pest"}
+        # Categories that contain tier 1/2 subtypes and thus can incur photo penalties
+        photo_required_categories = {"production", "chemical", "soil", "pest"}
 
         for category_name, event_models in self.EVENT_CATEGORIES.items():
             actual_count = 0
             photo_verified_count = 0
+
+            # Per-tier counters
+            tier1_total = 0
+            tier1_verified = 0
+            tier2_total = 0
+            tier2_verified = 0
 
             # Count actual events and photo-verified events for this category
             for event_model in event_models:
                 category_events = event_model.objects.filter(history=history)
                 actual_count += category_events.count()
 
-                # Count events with photo verification (anti-gaming measure)
                 for event in category_events:
-                    if self._has_photo_verification(event):
+                    event_type = getattr(event, "type", "")
+                    is_verified = self._has_photo_verification(event)
+
+                    if is_verified:
                         photo_verified_count += 1
 
-            expected_for_category = max(int(events_per_category), 1)
+                    # Classify into tier
+                    if event_type in self.PHOTO_TIER_ESSENTIAL:
+                        tier1_total += 1
+                        if is_verified:
+                            tier1_verified += 1
+                    elif event_type in self.PHOTO_TIER_RECOMMENDED:
+                        tier2_total += 1
+                        if is_verified:
+                            tier2_verified += 1
+                    # Tier 3 (implicit): no tracking needed
 
-            # Apply photo verification penalty for critical categories (prevents gaming)
-            if category_name in photo_required_categories and actual_count > 0:
+            expected_for_category = max(int(events_per_category), 1)
+            base_completeness = min((actual_count / expected_for_category) * 100, 100)
+
+            # Calculate blended photo multiplier using tier system
+            if actual_count > 0 and (tier1_total > 0 or tier2_total > 0):
+                # Tier 1: 50% penalty range (multiplier 0.5–1.0)
+                tier1_rate = tier1_verified / tier1_total if tier1_total > 0 else 1.0
+                tier1_mult = 0.5 + 0.5 * tier1_rate
+
+                # Tier 2: 25% penalty range (multiplier 0.75–1.0)
+                tier2_rate = tier2_verified / tier2_total if tier2_total > 0 else 1.0
+                tier2_mult = 0.75 + 0.25 * tier2_rate
+
+                # Blend by event count
+                total_tiered = tier1_total + tier2_total
+                blended_mult = (tier1_mult * tier1_total + tier2_mult * tier2_total) / total_tiered
+
+                completeness = base_completeness * blended_mult
                 photo_verification_rate = photo_verified_count / actual_count
-                base_completeness = min((actual_count / expected_for_category) * 100, 100)
-                # Reduce transparency score by up to 50% if insufficient photo verification
-                completeness = base_completeness * (0.5 + 0.5 * photo_verification_rate)
             else:
-                # Non-critical categories don't require photos
-                completeness = min((actual_count / expected_for_category) * 100, 100)
-                photo_verification_rate = 1.0  # No penalty for non-critical categories
+                # No tier 1/2 events in category — no photo penalty
+                completeness = base_completeness
+                photo_verification_rate = 1.0
 
             category_breakdown[category_name] = {
                 "actual_count": actual_count,
@@ -213,7 +264,11 @@ class TransparencyCalculator:
                 "completeness_percentage": round(completeness, 1),
                 "status": self._get_category_status(completeness),
                 "requires_photos": category_name in photo_required_categories,
-                "anti_gaming_applied": category_name in photo_required_categories and photo_verification_rate < 1.0,
+                "anti_gaming_applied": (tier1_total + tier2_total) > 0 and photo_verification_rate < 1.0,
+                "photo_tier_summary": {
+                    "essential": {"total": tier1_total, "verified": tier1_verified},
+                    "recommended": {"total": tier2_total, "verified": tier2_verified},
+                },
             }
 
         return category_breakdown
@@ -241,11 +296,9 @@ class TransparencyCalculator:
             # Additional anti-gaming checks
             image_count = event.album.images.count()
 
-            # Require at least 1 image for basic events, 2+ for chemical/production events
+            # Require 2+ images only for chemical subtypes (label + application evidence)
             min_images_required = (
-                2
-                if hasattr(event, "type") and getattr(event, "type", "") in ["FE", "PE", "FU", "HE", "PL", "HA"]
-                else 1
+                2 if hasattr(event, "type") and getattr(event, "type", "") in ["FE", "PE", "FU", "HE"] else 1
             )
 
             if image_count < min_images_required:
@@ -283,6 +336,15 @@ class TransparencyCalculator:
                     except (OSError, AttributeError, Exception):
                         # File access error or any verification failure, skip this image
                         continue
+
+                elif getattr(image, "s3_key", None) or getattr(image, "image_url", None):
+                    # URL-based images (S3 uploads or external URLs)
+                    # S3 images are validated during the presigned upload process.
+                    # External URLs are used for trusted sources (e.g., demo data).
+                    # Basic validation: URL/key must be non-empty string.
+                    url_or_key = image.s3_key or image.image_url or ""
+                    if len(url_or_key.strip()) > 10:
+                        verified_images += 1
 
             # Must have at least the minimum required verified images
             return verified_images >= min_images_required
@@ -462,13 +524,12 @@ class TransparencyCalculator:
 
         # Weight categories by importance for consumer trust
         category_weights = {
-            "production": 0.25,  # Core farming activities
+            "production": 0.30,  # Core farming activities (was 0.25, absorbed 5% from equipment)
             "chemical": 0.20,  # Chemical transparency crucial
-            "soil": 0.15,  # Sustainability practices
-            "equipment": 0.15,  # Resource efficiency
-            "pest": 0.10,  # IPM practices
+            "soil": 0.18,  # Sustainability practices (was 0.15, gained 3%)
+            "pest": 0.12,  # IPM practices (was 0.10, gained 2%)
             "weather": 0.05,  # Environmental context
-            "business": 0.05,  # Certifications
+            "business": 0.10,  # Certifications (was 0.05, valuable for trust)
             "general": 0.05,  # Miscellaneous
         }
 
@@ -541,11 +602,6 @@ class TransparencyCalculator:
                 "name": "Soil Care",
                 "description": "How the soil was cared for to grow healthy food",
                 "examples": "Soil testing, composting, cover crops, soil health",
-            },
-            "equipment": {
-                "name": "Farm Equipment",
-                "description": "Tools and machines used to grow this food",
-                "examples": "Tractors, irrigation systems, harvesting equipment",
             },
             "pest": {
                 "name": "Pest Management",
@@ -715,7 +771,6 @@ class TransparencyCalculator:
             "production": "Document planting, harvesting, irrigation, and pruning activities",
             "chemical": "Record all fertilizer, pesticide, and organic amendment applications",
             "soil": "Add soil tests, pH adjustments, and organic matter additions",
-            "equipment": "Track equipment maintenance, repairs, and fuel usage",
             "pest": "Document pest scouting, beneficial insect releases, and IPM practices",
             "weather": "Note significant weather events affecting your crop",
             "business": "Include certifications, inspections, and compliance activities",
@@ -817,7 +872,6 @@ class TransparencyCalculator:
                 "fertilization": {"events": 0, "verified": 0, "photos": 0},
                 "irrigation": {"events": 0, "verified": 0, "photos": 0},
                 "harvest": {"events": 0, "verified": 0, "photos": 0},
-                "equipment": {"events": 0, "verified": 0, "photos": 0},
             },
             "data_richness": {
                 "parcels_with_data": 0,
@@ -850,7 +904,6 @@ class TransparencyCalculator:
         parcels = establishment.parcels.prefetch_related(
             "histories__history_productionevent_events",
             "histories__history_chemicalevent_events",
-            "histories__history_equipmentevent_events",
             "histories__history_businessevent_events",
             "histories__album__images",  # Correct album relationship
         ).all()
@@ -920,7 +973,6 @@ class TransparencyCalculator:
             "fertilization": ChemicalEvent.objects.filter(history=history, type__in=["FE"]),  # Fertilizer events
             "irrigation": ProductionEvent.objects.filter(history=history, type__in=["IR"]),  # Irrigation events
             "harvest": ProductionEvent.objects.filter(history=history, type__in=["HA"]),  # Harvesting events
-            "equipment": EquipmentEvent.objects.filter(history=history),
         }
 
         for category, events in category_mapping.items():

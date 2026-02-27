@@ -19,7 +19,6 @@ import re
 import uuid
 from typing import Any, Dict, List, Optional
 
-
 # Constants
 MAX_CUSTOM_FIELDS = 10
 MAX_LABEL_LENGTH = 100
@@ -115,8 +114,7 @@ def validate_custom_field(field: Dict[str, Any], index: int) -> Dict[str, Any]:
 
     if len(label) > MAX_LABEL_LENGTH:
         raise ValueError(
-            f"Custom field {index}: Label cannot exceed {MAX_LABEL_LENGTH} characters "
-            f"(current: {len(label)})"
+            f"Custom field {index}: Label cannot exceed {MAX_LABEL_LENGTH} characters " f"(current: {len(label)})"
         )
 
     # Sanitize label
@@ -130,8 +128,7 @@ def validate_custom_field(field: Dict[str, Any], index: int) -> Dict[str, Any]:
 
     if len(value) > MAX_VALUE_LENGTH:
         raise ValueError(
-            f"Custom field {index}: Value cannot exceed {MAX_VALUE_LENGTH} characters "
-            f"(current: {len(value)})"
+            f"Custom field {index}: Value cannot exceed {MAX_VALUE_LENGTH} characters " f"(current: {len(value)})"
         )
 
     # Sanitize value
@@ -224,8 +221,7 @@ def validate_custom_fields(custom_fields: Optional[List[Dict[str, Any]]]) -> Opt
 
     if len(custom_fields) > MAX_CUSTOM_FIELDS:
         raise ValueError(
-            f"Maximum {MAX_CUSTOM_FIELDS} custom fields allowed per event "
-            f"(provided: {len(custom_fields)})"
+            f"Maximum {MAX_CUSTOM_FIELDS} custom fields allowed per event " f"(provided: {len(custom_fields)})"
         )
 
     validated_fields = []
@@ -271,10 +267,7 @@ def filter_empty_custom_fields(custom_fields: Optional[List[Dict[str, Any]]]) ->
     if not custom_fields:
         return []
 
-    return [
-        field for field in custom_fields
-        if field.get("value") and str(field.get("value")).strip()
-    ]
+    return [field for field in custom_fields if field.get("value") and str(field.get("value")).strip()]
 
 
 def merge_custom_fields_into_extra_data(
@@ -307,8 +300,19 @@ def merge_custom_fields_into_extra_data(
         >>> len(result["custom_fields"])
         2
     """
-    # Start with existing extra_data or empty dict
-    result = (existing_extra_data or extra_data or {}).copy()
+    # TILLAGE FIX (2025-12-25): Properly merge new extra_data with existing data
+    # Previous bug: Used existing_extra_data as base and never merged new values
+    # Fix: Start with existing, then MERGE new extra_data on top to update values
+
+    # Start with existing extra_data from instance (preserves any data not in request)
+    result = (existing_extra_data or {}).copy()
+
+    # Merge the new extra_data from request on top (this updates tillage fields, etc.)
+    if extra_data:
+        for key, value in extra_data.items():
+            # Skip custom_fields here - handled separately below
+            if key != "custom_fields":
+                result[key] = value
 
     if custom_fields:
         # If custom fields provided, use them (replace existing)
@@ -403,8 +407,7 @@ def get_custom_fields_for_blockchain_hash(custom_fields: Optional[List[Dict[str,
 
     # Filter for consumer-visible, non-empty fields
     filtered_fields = [
-        f for f in custom_fields
-        if f.get("visibility") == "consumer" and f.get("value") and str(f.get("value")).strip()
+        f for f in custom_fields if f.get("visibility") == "consumer" and f.get("value") and str(f.get("value")).strip()
     ]
 
     # Sort by ID for deterministic ordering
@@ -441,7 +444,12 @@ def get_event_type_custom_field_recommendations(event_type: int) -> Dict[str, Li
             "field_types": ["text", "number"],
         },
         2: {  # Chemical
-            "suggested_fields": ["Applicator License", "Pre-Harvest Interval", "Re-Entry Interval", "Weather Conditions"],
+            "suggested_fields": [
+                "Applicator License",
+                "Pre-Harvest Interval",
+                "Re-Entry Interval",
+                "Weather Conditions",
+            ],
             "field_types": ["text", "number", "link"],
         },
         3: {  # General

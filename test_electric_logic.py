@@ -19,7 +19,7 @@ class Phase1LogicValidator:
 
     def validate_file(self, filepath):
         """Read and validate the verified_emission_factors.py file"""
-        with open(filepath, 'r') as f:
+        with open(filepath, "r") as f:
             content = f.read()
             return content
 
@@ -38,7 +38,7 @@ class Phase1LogicValidator:
 
         for method in methods:
             # Find method definition (handle multi-line signatures)
-            pattern = rf'def {method}\([\s\S]+?\*\*kwargs'
+            pattern = rf"def {method}\([\s\S]+?\*\*kwargs"
             if re.search(pattern, content):
                 print(f"✓ {method} has **kwargs parameter")
                 self.passed += 1
@@ -92,14 +92,14 @@ class Phase1LogicValidator:
                     self.errors.append(f"{method} missing renewable handling")
 
                 # Check for correct emission factors
-                if '0.39' in method_body and 'electricity_factor.value' in method_body:
+                if "0.39" in method_body and "electricity_factor.value" in method_body:
                     print(f"✓ {method} uses 0.39 kg CO₂/kWh factor")
                     self.passed += 1
                 else:
                     print(f"⚠ {method} may not use correct electricity factor")
                     self.warnings.append(f"{method} electricity factor check")
 
-                if '10.21' in method_body or 'diesel_factor.value' in method_body:
+                if "10.21" in method_body or "diesel_factor.value" in method_body:
                     print(f"✓ {method} uses diesel factor correctly")
                     self.passed += 1
                 else:
@@ -132,7 +132,7 @@ class Phase1LogicValidator:
 
         for method, keyword in method_calls:
             # Check if method is called with **kwargs
-            pattern = rf'{method}\([^)]+\*\*kwargs\)'
+            pattern = rf"{method}\([^)]+\*\*kwargs\)"
             if re.search(pattern, dispatcher_body):
                 print(f"✓ Dispatcher passes **kwargs to {method}")
                 self.passed += 1
@@ -152,7 +152,7 @@ class Phase1LogicValidator:
             self.errors.append("Migration file missing")
             return
 
-        with open(migration_path, 'r') as f:
+        with open(migration_path, "r") as f:
             content = f.read()
 
         # Check for kWh choice
@@ -165,7 +165,7 @@ class Phase1LogicValidator:
             self.errors.append("Migration missing kWh")
 
         # Check migration syntax
-        if 'class Migration(migrations.Migration):' in content:
+        if "class Migration(migrations.Migration):" in content:
             print("✓ Migration has correct class structure")
             self.passed += 1
         else:
@@ -199,7 +199,7 @@ class Phase1LogicValidator:
         print("\n=== Calculation Logic Check ===")
 
         # Check electric calculation
-        electric_calc = 'co2e_kg = fuel_consumed * electricity_factor.value  # 0.39 kg CO₂/kWh'
+        electric_calc = "co2e_kg = fuel_consumed * electricity_factor.value  # 0.39 kg CO₂/kWh"
         if electric_calc in content:
             print("✓ Electric calculation uses correct formula (kWh × 0.39)")
             self.passed += 1
@@ -208,7 +208,7 @@ class Phase1LogicValidator:
             self.warnings.append("Electric calculation formula")
 
         # Check diesel calculation
-        diesel_calc = 'co2e_kg = fuel_consumed * diesel_factor.value'
+        diesel_calc = "co2e_kg = fuel_consumed * diesel_factor.value"
         if content.count(diesel_calc) >= 6:
             print("✓ Diesel calculation uses correct formula (gal × factor)")
             self.passed += 1
@@ -217,7 +217,7 @@ class Phase1LogicValidator:
             self.warnings.append("Diesel calculation formula")
 
         # Check renewable zero emissions
-        zero_emissions = 'co2e_kg = 0'
+        zero_emissions = "co2e_kg = 0"
         if content.count(zero_emissions) >= 6:
             print("✓ Renewable energy sources correctly set zero emissions")
             self.passed += 1
@@ -247,9 +247,9 @@ class Phase1LogicValidator:
 
     def run_all_checks(self):
         """Run all validation checks"""
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print("PHASE 1 ELECTRIC EQUIPMENT LOGIC VALIDATION")
-        print("="*70)
+        print("=" * 70)
 
         # Read the main file
         filepath = "carbon/services/verified_emission_factors.py"
@@ -264,9 +264,9 @@ class Phase1LogicValidator:
         self.check_breakdown_completeness(content)
 
         # Print summary
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print("VALIDATION SUMMARY")
-        print("="*70)
+        print("=" * 70)
 
         print(f"\nPASSED: {self.passed}")
         print(f"FAILED: {self.failed}")
@@ -274,34 +274,35 @@ class Phase1LogicValidator:
         print(f"TOTAL CHECKS: {self.passed + self.failed + len(self.warnings)}")
 
         if self.errors:
-            print("\n" + "="*70)
+            print("\n" + "=" * 70)
             print("CRITICAL ERRORS")
-            print("="*70)
+            print("=" * 70)
             for error in self.errors:
                 print(f"  ✗ {error}")
 
         if self.warnings:
-            print("\n" + "="*70)
+            print("\n" + "=" * 70)
             print("WARNINGS (Non-Critical)")
-            print("="*70)
+            print("=" * 70)
             for warning in self.warnings:
                 print(f"  ⚠ {warning}")
 
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         if self.failed == 0:
             print("✓✓✓ LOGIC VALIDATION PASSED ✓✓✓")
             print("Backend implementation follows correct pattern")
-            print("="*70 + "\n")
+            print("=" * 70 + "\n")
             return True
         else:
             print(f"✗✗✗ VALIDATION FAILED ({self.failed} errors) ✗✗✗")
             print("Review required before deployment")
-            print("="*70 + "\n")
+            print("=" * 70 + "\n")
             return False
 
 
 if __name__ == "__main__":
     import sys
+
     validator = Phase1LogicValidator()
     success = validator.run_all_checks()
     sys.exit(0 if success else 1)

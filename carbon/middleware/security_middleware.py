@@ -35,6 +35,8 @@ class CarbonSecurityMiddleware(MiddlewareMixin):
         "/api/carbon/secure-offset/",
         "/api/carbon/purchases/",
         "/api/carbon/certificates/",
+        "/events/",
+        "/histories/",
     ]
 
     # Security headers that must be present for critical operations
@@ -90,9 +92,9 @@ class CarbonSecurityMiddleware(MiddlewareMixin):
         return response
 
     def _is_carbon_endpoint(self, path: str) -> bool:
-        """Check if the endpoint is carbon-related"""
-        carbon_paths = ["/api/carbon/", "/carbon/"]
-        return any(carbon_path in path for carbon_path in carbon_paths)
+        """Check if the endpoint is carbon or event-related"""
+        protected_paths = ["/api/carbon/", "/carbon/", "/events/", "/histories/"]
+        return any(p in path for p in protected_paths)
 
     def _is_critical_endpoint(self, path: str) -> bool:
         """Check if the endpoint is critical and requires enhanced security"""
@@ -371,8 +373,8 @@ class CarbonAuditMiddleware(MiddlewareMixin):
 
     def _should_audit(self, request) -> bool:
         """Determine if request should be audited"""
-        carbon_paths = ["/api/carbon/", "/carbon/"]
-        return any(path in request.path for path in carbon_paths)
+        audited_paths = ["/api/carbon/", "/carbon/", "/events/", "/histories/"]
+        return any(path in request.path for path in audited_paths)
 
     def _is_critical_operation(self, request, response) -> bool:
         """Check if operation is critical and needs detailed auditing"""
@@ -381,6 +383,8 @@ class CarbonAuditMiddleware(MiddlewareMixin):
             "/api/carbon/offsets/",
             "/api/carbon/secure-offset/",
             "/api/carbon/purchases/",
+            "/events/",
+            "/histories/",
         ]
 
         return any(path in request.path for path in critical_paths) and request.method in [

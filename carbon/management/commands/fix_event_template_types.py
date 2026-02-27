@@ -39,7 +39,9 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         dry_run = options["dry_run"]
 
-        self.stdout.write(self.style.NOTICE("Scanning EventTemplate records for incorrect backend_event_type values..."))
+        self.stdout.write(
+            self.style.NOTICE("Scanning EventTemplate records for incorrect backend_event_type values...")
+        )
         self.stdout.write("")
 
         # Find templates that need fixing
@@ -82,7 +84,9 @@ class Command(BaseCommand):
                 )
 
         if not templates_to_fix:
-            self.stdout.write(self.style.SUCCESS("No templates need fixing. All backend_event_type values are correct."))
+            self.stdout.write(
+                self.style.SUCCESS("No templates need fixing. All backend_event_type values are correct.")
+            )
             return
 
         self.stdout.write(f"Found {len(templates_to_fix)} templates that need fixing:")

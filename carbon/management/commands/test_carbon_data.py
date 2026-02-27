@@ -142,7 +142,7 @@ class Command(BaseCommand):
                 "description": "Diesel fuel consumption",
                 "unit": "liters",
                 "category": "Fuel",
-                "default_emission_factor": 2.68,
+                "default_emission_factor": 2.70,
                 "usda_verified": True,
             },
         )

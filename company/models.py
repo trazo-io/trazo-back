@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 from django.urls import reverse
 from django.utils import timezone
@@ -7,9 +9,9 @@ from django.utils.translation import gettext_lazy as _
 class Company(models.Model):
     name = models.CharField(max_length=150, help_text="Company name")
     tradename = models.CharField(max_length=150, blank=True, null=True, help_text="Trade name or DBA")
-    address = models.CharField(max_length=200, help_text="Street address")
-    city = models.CharField(max_length=100, help_text="City name")
-    state = models.CharField(max_length=100, help_text="State or province")
+    address = models.CharField(max_length=200, blank=True, default="", help_text="Street address")
+    city = models.CharField(max_length=100, blank=True, default="", help_text="City name")
+    state = models.CharField(max_length=100, blank=True, default="", help_text="State or province")
     country = models.CharField(max_length=100, blank=True, null=True, help_text="Country name")
     fiscal_id = models.CharField(max_length=50, help_text="Tax ID, RUT, or EIN", blank=True, null=True)
     logo = models.ImageField(upload_to="company_logos", blank=True)
@@ -84,7 +86,7 @@ class Company(models.Model):
             if hasattr(self, "subscription") and self.subscription.status in ["active", "trialing"]:
                 return self.subscription.plan
             return None
-        except:
+        except Exception:
             return None
 
     def get_feature_limit(self, feature_name, default=0):
@@ -105,65 +107,71 @@ class Company(models.Model):
 
     def can_create_establishment(self):
         """Check if company can create more establishments"""
-        current_count = self.establishment_set.count()
         max_allowed = self.get_feature_limit("max_establishments", 0)
+        if max_allowed == -1:
+            return True
+        current_count = self.establishment_set.count()
+
+        # Add purchased add-ons
+        if hasattr(self, "subscription"):
+            extra_establishments = sum(
+                addon.quantity for addon in self.subscription.addons.filter(addon__slug="extra-establishment")
+            )
+            max_allowed += extra_establishments
+
         return current_count < max_allowed
 
     def can_create_parcel(self, establishment=None):
-        """Check if company can create more parcels"""
+        """Check if company can create more parcels within their plan limit."""
         plan = self.subscription_plan
         if not plan:
-            print(f"Company {self.id} has no subscription plan")
             return False
 
         features = plan.features
-        print(f"Company {self.id} subscription features: {features}")
+        max_per_establishment = features.get("max_parcels_per_establishment", 0)
 
-        # For Corporate plan with parcels per establishment limit
-        if features.get("max_parcels_per_establishment", 0) > 0 and establishment:
+        # Unlimited parcels (-1)
+        if max_per_establishment == -1:
+            return True
+
+        if max_per_establishment > 0 and establishment:
             current_count = establishment.parcel_set.count()
-            max_allowed = features.get("max_parcels_per_establishment", 0)
-            print(f"Checking parcels per establishment: current={current_count}, max={max_allowed}")
-            return current_count < max_allowed
+            max_allowed = max_per_establishment
 
-        # For Basic/Standard plans with total parcel limit
-        if features.get("max_parcels", 0) > 0:
-            total_parcels = sum(est.parcel_set.count() for est in self.establishment_set.all())
-            max_allowed = features.get("max_parcels", 0)
             # Add purchased add-ons
             if hasattr(self, "subscription"):
                 extra_parcels = sum(
                     addon.quantity for addon in self.subscription.addons.filter(addon__slug="extra-parcel")
                 )
                 max_allowed += extra_parcels
-            print(f"Checking total parcels: current={total_parcels}, max={max_allowed}")
-            return total_parcels < max_allowed
 
-        print(f"No parcel limit found in features")
+            return current_count < max_allowed
+
         return False
 
     def can_create_production(self):
-        """Check if company can create more productions this year"""
+        """Check if company can create more productions this year."""
+        from history.models import History
+
         if not self.subscription_plan:
             return False
 
-        # Calculate current year's productions
-        start_of_year = timezone.now().replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-        productions_this_year = 0
-
-        # Count productions created this year across all establishments and parcels
-        for establishment in self.establishment_set.all():
-            for parcel in establishment.parcel_set.all():
-                # Adjust this query based on your actual production model
-                productions_this_year += parcel.production_set.filter(created_at__gte=start_of_year).count()
-
-        # Get base limit from plan
+        # Unlimited productions (-1)
         max_productions = self.get_feature_limit("max_productions_per_year", 0)
+        if max_productions == -1:
+            return True
+
+        # Single efficient query instead of N+1 nested loops
+        start_of_year = timezone.now().replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        productions_this_year = History.objects.filter(
+            parcel__establishment__company=self,
+            start_date__gte=start_of_year,
+        ).count()
 
         # Add purchased add-ons
         if hasattr(self, "subscription"):
             extra_productions = sum(
-                addon.quantity for addon in self.subscription.addons.filter(addon__slug="extra-production")
+                addon.quantity * 10 for addon in self.subscription.addons.filter(addon__slug="extra-production")
             )
             max_productions += extra_productions
 
@@ -175,6 +183,8 @@ class Company(models.Model):
             return 0
 
         base_quota = self.get_feature_limit("monthly_scan_limit", 5000)
+        if base_quota == -1:
+            return -1  # Unlimited
 
         # Get current month's usage
         if hasattr(self, "subscription"):
@@ -189,6 +199,8 @@ class Company(models.Model):
             return 0
 
         base_limit = self.get_feature_limit("storage_limit_gb", 10)
+        if base_limit == -1:
+            return -1  # Unlimited
 
         # Add purchased storage add-ons
         if hasattr(self, "subscription"):
@@ -201,11 +213,12 @@ class Company(models.Model):
 
 
 class Establishment(models.Model):
+    public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, db_index=True)
     name = models.CharField(max_length=150, help_text="Establishment name")
-    address = models.CharField(max_length=200, help_text="Street address")
+    address = models.CharField(max_length=200, blank=True, default="", help_text="Street address")
     city = models.CharField(max_length=100, blank=True, null=True, help_text="City name")
     zone = models.CharField(max_length=100, blank=True, null=True, help_text="Zone or region")
-    state = models.CharField(max_length=100, help_text="State or province")
+    state = models.CharField(max_length=100, blank=True, default="", help_text="State or province")
     company = models.ForeignKey(Company, on_delete=models.CASCADE)
     album = models.ForeignKey("common.Gallery", on_delete=models.CASCADE, blank=True, null=True)
     description = models.TextField(blank=True, null=True)

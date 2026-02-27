@@ -194,9 +194,9 @@ class RealUSDAAPIClient:
             "nitrogen": 11.0,  # kg CO2e per kg N (USDA-ARS 2025, corrected from 5.86)
             "phosphorus": 1.25,  # kg CO2e per kg P2O5 (corrected from 0.20)
             "potassium": 0.60,  # kg CO2e per kg K2O (corrected from 0.15)
-            "diesel": 2.68,  # kg CO2e per liter
-            "gasoline": 2.31,  # kg CO2e per liter
-            "natural_gas": 2.03,  # kg CO2e per m³
+            "diesel": 2.70,  # kg CO2e per liter (EPA 40 CFR Part 98: 10.21 kg/gal)
+            "gasoline": 2.32,  # kg CO2e per liter (EPA 40 CFR Part 98: 8.78 kg/gal)
+            "natural_gas": 1.92,  # kg CO2e per m³ (EPA 40 CFR Part 98: 0.0544 kg/scf)
         }
 
         # Regional yield benchmarks from NASS data
@@ -555,9 +555,9 @@ class EPAEmissionFactorService:
                 "potassium": 0.15,  # kg CO2e per kg K2O
             },
             "fuel": {
-                "diesel": 2.68,  # kg CO2e per liter
-                "gasoline": 2.31,  # kg CO2e per liter
-                "natural_gas": 2.03,  # kg CO2e per m³
+                "diesel": 2.70,  # kg CO2e per liter (EPA 40 CFR Part 98)
+                "gasoline": 2.32,  # kg CO2e per liter (EPA 40 CFR Part 98)
+                "natural_gas": 1.92,  # kg CO2e per m³ (EPA 40 CFR Part 98)
             },
         }
 

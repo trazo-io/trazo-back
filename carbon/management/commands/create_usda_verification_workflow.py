@@ -58,7 +58,7 @@ class Command(BaseCommand):
                 "name": "USDA SOE Verified Equipment",
                 "category": "equipment",
                 "description": "Equipment operations verified under USDA Strengthening Organic Enforcement",
-                "default_emission_factor": 2.68,
+                "default_emission_factor": 2.70,
                 "unit": "kg CO2e/L diesel",
                 "usda_verified": True,
                 "usda_factors_based": True,

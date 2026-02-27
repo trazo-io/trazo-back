@@ -61,7 +61,7 @@ def verify_qr_code(request):
                 try:
                     production = History.objects.get(id=production_id, published=True)
                     response_data["production"] = {
-                        "id": production.id,
+                        "id": str(production.public_id),
                         "name": production.name,
                         "verified": True,
                         "reputation": production.reputation,

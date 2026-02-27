@@ -48,7 +48,15 @@ class Subscription(models.Model):
     ]
 
     company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name="subscription")
-    plan = models.ForeignKey(Plan, on_delete=models.PROTECT)
+    plan = models.ForeignKey(Plan, on_delete=models.PROTECT, related_name="subscriptions")
+    pending_plan = models.ForeignKey(
+        Plan,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="pending_subscriptions",
+        help_text="Plan scheduled for downgrade at end of billing period",
+    )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="active")
     stripe_subscription_id = models.CharField(max_length=100, blank=True, null=True)
     stripe_customer_id = models.CharField(max_length=100, blank=True, null=True)
@@ -63,6 +71,14 @@ class Subscription(models.Model):
 
     # Trial information
     trial_end = models.DateTimeField(blank=True, null=True)
+
+    # Tracks which trial lifecycle emails have been sent to avoid duplicates.
+    # Keys: "day_11", "day_14", "day_17". Values: ISO-8601 timestamp of send.
+    email_notifications_sent = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Tracks sent trial lifecycle emails. Keys: day_11, day_14, day_17.",
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

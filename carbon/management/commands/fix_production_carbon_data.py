@@ -59,12 +59,12 @@ class Command(BaseCommand):
             ("Potassium Fertilizer", "fertilizer", "kg", 0.6, "Potash fertilizer application"),
             ("Organic Fertilizer", "fertilizer", "kg", 0.45, "Organic compost and manure application"),
             # Fuel category
-            ("Diesel Fuel", "fuel", "liters", 2.68, "Agricultural machinery diesel consumption"),
-            ("Gasoline", "fuel", "liters", 2.31, "Small equipment gasoline consumption"),
+            ("Diesel Fuel", "fuel", "liters", 2.70, "Agricultural machinery diesel consumption"),
+            ("Gasoline", "fuel", "liters", 2.32, "Small equipment gasoline consumption"),
             ("Propane", "fuel", "liters", 1.51, "Heating and equipment propane use"),
             # Energy category
             ("Grid Electricity", "electricity", "kWh", 0.35, "Grid electricity consumption"),
-            ("Natural Gas", "electricity", "m³", 2.03, "Natural gas for heating and processing"),
+            ("Natural Gas", "electricity", "m³", 1.92, "Natural gas for heating and processing"),
             # Equipment category
             ("Tractor Operations", "equipment", "hours", 8.5, "Tractor field operations"),
             ("Harvesting Equipment", "equipment", "hours", 12.3, "Harvesting machinery operations"),

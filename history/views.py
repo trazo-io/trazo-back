@@ -1,12 +1,16 @@
+import json
+import logging
 from datetime import datetime, timedelta
 
 from django.core.cache import cache
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
 from dateutil import parser as date_parser
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -15,6 +19,7 @@ from backend.permissions import CompanyNestedViewSet
 from notifications.services import notification_service
 from product.models import Parcel, Product
 from reviews.models import Review
+from subscriptions.permissions import HasProductionCreationPermission
 
 from .constants import (
     ALLOWED_PERIODS,
@@ -52,6 +57,7 @@ from .serializers import (
     ProductionEventSerializer,
     PublicHistorySerializer,
     SoilManagementEventSerializer,
+    UpdateBusinessEventSerializer,
     UpdateChemicalEventSerializer,
     UpdateEquipmentEventSerializer,
     UpdateGeneralEventSerializer,
@@ -62,6 +68,8 @@ from .serializers import (
     WeatherEventSerializer,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 20
@@ -69,9 +77,31 @@ class StandardResultsSetPagination(PageNumberPagination):
     max_page_size = 100
 
 
-class HistoryViewSet(viewsets.ModelViewSet):
+class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     serializer_class = HistorySerializer
     filter_backends = [filters.OrderingFilter]
+
+    def get_permissions(self):
+        if self.action in ["create", "start_production"]:
+            return [IsAuthenticated(), HasProductionCreationPermission()]
+        return super().get_permissions()
+
+    def check_write_permission(self, request, history_obj):
+        """Check that the user has write access (CA or FM role) for this history's company."""
+        from users.models import WorksIn
+
+        if request.user.is_superuser:
+            return
+        company = history_obj.parcel.establishment.company if history_obj.parcel else None
+        if company is None:
+            raise PermissionDenied("Cannot determine company for this production.")
+        has_write = WorksIn.objects.filter(
+            user=request.user,
+            company=company,
+            role__in=[WorksIn.COMPANY_ADMIN, WorksIn.FARM_MANAGER],
+        ).exists()
+        if not has_write:
+            raise PermissionDenied("You do not have permission to perform this action.")
 
     def get_serializer_class(self):
         if self.action == "create" or self.action == "update" or self.action == "partial_update":
@@ -92,7 +122,12 @@ class HistoryViewSet(viewsets.ModelViewSet):
         Optimized queryset with proper database optimizations to prevent N+1 queries.
         """
         if self.action == "public_history":
-            return History.objects.filter(published=True)
+            return History.objects.filter(published=True).select_related(
+                "product",
+                "parcel__establishment",
+                "operator",
+                "album",
+            )
         elif self.action == "my_scans":
             return (
                 History.objects.filter(history_scans__user=self.request.user)
@@ -175,7 +210,7 @@ class HistoryViewSet(viewsets.ModelViewSet):
         # Add performance logging
         query_time = time.time() - start_time
         if query_time > 1.0:  # Log slow queries
-            print(f"Slow history query detected: {query_time:.2f}s for parcel {self.kwargs.get('parcel_pk')}")
+            logger.warning("Slow history query detected: %.2fs for parcel %s", query_time, self.kwargs.get("parcel_pk"))
 
         page = self.paginate_queryset(queryset)
         if page is not None:
@@ -187,9 +222,11 @@ class HistoryViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         """Override update to invalidate cache and enforce visibility rules."""
+        instance = self.get_object()
+        self.check_write_permission(request, instance)
+
         # BUSINESS RULE: Active (in-progress) productions cannot be made visible to consumers
         # Only completed productions (those with finish_date) can be published
-        instance = self.get_object()
         requested_published = request.data.get("published")
 
         if requested_published is True and instance.finish_date is None:
@@ -211,8 +248,17 @@ class HistoryViewSet(viewsets.ModelViewSet):
 
         return response
 
+    def partial_update(self, request, *args, **kwargs):
+        """Override partial_update to enforce role-based permissions."""
+        instance = self.get_object()
+        self.check_write_permission(request, instance)
+        return super().partial_update(request, *args, **kwargs)
+
     def destroy(self, request, *args, **kwargs):
-        """Override destroy to invalidate cache."""
+        """Override destroy to invalidate cache and enforce role-based permissions."""
+        instance = self.get_object()
+        self.check_write_permission(request, instance)
+
         # Get parcel_id before deletion
         parcel_id = self.kwargs.get("parcel_pk")
 
@@ -253,13 +299,20 @@ class HistoryViewSet(viewsets.ModelViewSet):
         serializer = HistorySerializer(history)
         return Response(serializer.data)
 
-    @action(detail=False, methods=["post"], url_path="start-production", permission_classes=[IsAuthenticated])
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="start-production",
+        permission_classes=[IsAuthenticated, HasProductionCreationPermission],
+    )
+    @transaction.atomic
     def start_production(self, request):
         """
         Enhanced production creation endpoint with crop selection and blockchain integration.
-        Supports Step 7 implementation from TRAZO_FOCUSED_IMPLEMENTATION_PLAN_FINAL.md
         """
         try:
+            from users.models import WorksIn
+
             data = request.data
 
             # Validate required fields
@@ -268,13 +321,21 @@ class HistoryViewSet(viewsets.ModelViewSet):
                 if field not in data:
                     return Response({"error": f"Missing required field: {field}"}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Get parcel and validate ownership
+            # Get parcel with row-level lock to prevent race conditions
             try:
-                parcel = Parcel.objects.get(id=data["parcel_id"])
-                # Add permission check here if needed
-                # if not user has access to this parcel...
+                parcel = Parcel.objects.select_for_update().get(id=data["parcel_id"])
             except Parcel.DoesNotExist:
                 return Response({"error": "Parcel not found"}, status=status.HTTP_404_NOT_FOUND)
+
+            # Role-based permission check: only CA/FM can create productions
+            if not request.user.is_superuser:
+                company = parcel.establishment.company
+                if not WorksIn.objects.filter(
+                    user=request.user,
+                    company=company,
+                    role__in=[WorksIn.COMPANY_ADMIN, WorksIn.FARM_MANAGER],
+                ).exists():
+                    raise PermissionDenied("You do not have permission to perform this action.")
 
             # Get crop type from database
             crop_type_id = data["crop_type"]
@@ -340,11 +401,7 @@ class HistoryViewSet(viewsets.ModelViewSet):
 
             # Process template events if provided
             if data.get("template_events"):
-                self._create_template_events(
-                    history,
-                    data["template_events"],
-                    template_id=data.get("template_id")
-                )
+                self._create_template_events(history, data["template_events"], template_id=data.get("template_id"))
 
             # Create initial blockchain record for this production
             try:
@@ -370,7 +427,7 @@ class HistoryViewSet(viewsets.ModelViewSet):
                 history.save()
 
             except Exception as e:
-                print(f"Error creating initial blockchain record: {e}")
+                logger.error("Error creating initial blockchain record: %s", e)
                 # Continue without blockchain - not critical for production creation
 
             # Serialize and return the created production
@@ -398,10 +455,7 @@ class HistoryViewSet(viewsets.ModelViewSet):
         except ValueError as e:
             return Response({"error": f"Invalid date format: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            print(f"Error creating production: {e}")
-            import traceback
-
-            traceback.print_exc()
+            logger.exception("Error creating production: %s", e)
             return Response({"error": "Failed to create production"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def _categorize_crop(self, crop_name: str) -> str:
@@ -462,17 +516,16 @@ class HistoryViewSet(viewsets.ModelViewSet):
         # Get current event count once
         current_event_count = 0
 
-        # Debug: log how many events we're processing
-        print(f"[DEBUG] Processing {len(template_events)} template events")
+        logger.debug("Processing %d template events", len(template_events))
 
         for event_data in template_events:
             event_name = event_data.get("name", "Unknown")
 
             if not event_data.get("enabled", True):
-                print(f"[DEBUG] Skipping disabled event: {event_name}")
+                logger.debug("Skipping disabled event: %s", event_name)
                 continue
 
-            print(f"[DEBUG] Processing event: {event_name}")
+            logger.debug("Processing event: %s", event_name)
 
             try:
                 # Parse the scheduled date
@@ -499,7 +552,12 @@ class HistoryViewSet(viewsets.ModelViewSet):
 
                 # Comprehensive event type detection (matches frontend logic)
                 event_type_info = self._determine_template_event_type(event_name)
-                print(f"[DEBUG] Event '{event_data.get('name')}' detected as category='{event_type_info['category']}', sub_type='{event_type_info['sub_type']}'")
+                logger.debug(
+                    "Event '%s' detected as category='%s', sub_type='%s'",
+                    event_data.get("name"),
+                    event_type_info["category"],
+                    event_type_info["sub_type"],
+                )
 
                 # Build description from template data
                 base_description = event_data.get("name", "Event")
@@ -557,7 +615,8 @@ class HistoryViewSet(viewsets.ModelViewSet):
                         description=description,
                         date=scheduled_date,
                         type=backend_fields.get("type") or event_type_info["sub_type"],
-                        equipment_name=backend_fields.get("equipment_name") or event_data.get("name", "General Equipment"),
+                        equipment_name=backend_fields.get("equipment_name")
+                        or event_data.get("name", "General Equipment"),
                         fuel_type=backend_fields.get("fuel_type", "diesel"),
                         fuel_amount=backend_fields.get("fuel_consumed", 10.0),
                         # Use hours_used (correct field name, not equipment_hours)
@@ -594,7 +653,8 @@ class HistoryViewSet(viewsets.ModelViewSet):
                         soil_moisture=backend_fields.get("soil_moisture"),
                         soil_ph=backend_fields.get("soil_ph", 7.0),
                         # Correct field name: organic_matter_percentage (not organic_matter)
-                        organic_matter_percentage=backend_fields.get("organic_matter_percentage") or backend_fields.get("organic_matter", 3.5),
+                        organic_matter_percentage=backend_fields.get("organic_matter_percentage")
+                        or backend_fields.get("organic_matter", 3.5),
                         fuel_consumed=backend_fields.get("fuel_consumed"),
                         fuel_unit=backend_fields.get("fuel_unit", "L"),
                         fuel_type=backend_fields.get("fuel_type", "diesel"),
@@ -616,8 +676,10 @@ class HistoryViewSet(viewsets.ModelViewSet):
                         date=scheduled_date,
                         type=backend_fields.get("type") or event_type_info["sub_type"],
                         # Correct model fields for PestManagementEvent
-                        pest_species=backend_fields.get("pest_species") or backend_fields.get("pest_type", "general pest"),
-                        pest_pressure_level=backend_fields.get("pest_pressure_level") or backend_fields.get("severity_level", "low"),
+                        pest_species=backend_fields.get("pest_species")
+                        or backend_fields.get("pest_type", "general pest"),
+                        pest_pressure_level=backend_fields.get("pest_pressure_level")
+                        or backend_fields.get("severity_level", "low"),
                         beneficial_species=backend_fields.get("beneficial_species", ""),
                         release_quantity=backend_fields.get("release_quantity", ""),
                         ipm_strategy=backend_fields.get("ipm_strategy", "monitoring"),
@@ -676,10 +738,7 @@ class HistoryViewSet(viewsets.ModelViewSet):
                     )
 
             except Exception as e:
-                print(f"Error creating template event {event_data.get('name', 'Unknown')}: {e}")
-                import traceback
-
-                traceback.print_exc()
+                logger.exception("Error creating template event %s", event_data.get("name", "Unknown"))
                 # Continue with other events even if one fails
                 continue
 
@@ -774,8 +833,15 @@ class HistoryViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get"], permission_classes=[AllowAny])
     def public_history(self, request, pk=None):
+        import uuid as uuid_module
+
         queryset = self.get_queryset()
-        history = get_object_or_404(queryset, pk=pk)
+        # Support both UUID (public_id) and integer (legacy) lookups
+        try:
+            public_uuid = uuid_module.UUID(str(pk))
+            history = get_object_or_404(queryset, public_id=public_uuid)
+        except (ValueError, AttributeError):
+            history = get_object_or_404(queryset, pk=pk)
         x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
         if x_forwarded_for:
             ip_address = x_forwarded_for.split(",")[0]
@@ -798,7 +864,7 @@ class HistoryViewSet(viewsets.ModelViewSet):
                     country = data.get("country_name")
             except Exception as e:
                 # If geolocation fails, continue without it
-                print(f"IP geolocation failed: {e}")
+                logger.debug("IP geolocation failed: %s", e)
 
         history_scan = HistoryScan.objects.create(
             history=history,
@@ -846,7 +912,7 @@ class HistoryViewSet(viewsets.ModelViewSet):
                     )
         except Exception as e:
             # Log error but don't break the scan functionality
-            print(f"Error creating scan notification: {e}")
+            logger.error("Error creating scan notification: %s", e)
         similar_histories = (
             History.objects.filter(
                 parcel__establishment__company=history.parcel.establishment.company,
@@ -1076,46 +1142,54 @@ class HistoryViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated])
     def download_qr_code(self, request, pk=None):
         """
-        Generate secure presigned URL for QR code download.
-        Enterprise-grade solution following 2025 best practices.
+        Generate download URL for QR code.
+        Supports both local file storage (dev) and S3 (production).
         """
         from django.conf import settings
 
-        from common.aws_utils import SecureAWSClient
-
         try:
-            # Get the history object
             history = self.get_object()
 
-            # Check if QR code exists
             if not history.qr_code or not history.qr_code.name:
-                return Response({"error": "QR code not found for this production"}, status=status.HTTP_404_NOT_FOUND)
+                return Response(
+                    {"error": "QR code not found for this production"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
 
-            # Generate presigned URL (expires in 1 hour)
-            s3_client = SecureAWSClient.get_s3_client()
-            presigned_url = s3_client.generate_presigned_url(
-                "get_object",
-                Params={"Bucket": settings.AWS_STORAGE_BUCKET_NAME, "Key": history.qr_code.name},
-                ExpiresIn=3600,  # 1 hour expiration
-            )
-
-            # Generate friendly filename
             filename = f"{history.name.replace(' ', '_')}_QR.png"
+
+            # Check if using S3 storage (production) or local storage (dev)
+            if getattr(settings, "AWS_STORAGE_BUCKET_NAME", None):
+                from common.aws_utils import SecureAWSClient
+
+                s3_client = SecureAWSClient.get_s3_client()
+                download_url = s3_client.generate_presigned_url(
+                    "get_object",
+                    Params={
+                        "Bucket": settings.AWS_STORAGE_BUCKET_NAME,
+                        "Key": history.qr_code.name,
+                    },
+                    ExpiresIn=3600,
+                )
+            else:
+                # Local storage: build absolute URI from the file URL
+                download_url = request.build_absolute_uri(history.qr_code.url)
 
             return Response(
                 {
-                    "download_url": presigned_url,
+                    "download_url": download_url,
                     "filename": filename,
                     "expires_in": 3600,
                     "expires_at": (timezone.now() + timedelta(seconds=3600)).isoformat(),
                     "production_name": history.name,
-                    "message": "Secure download URL generated successfully",
+                    "message": "Download URL generated successfully",
                 }
             )
 
         except Exception as e:
             return Response(
-                {"error": f"Error generating download URL: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": f"Error generating download URL: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
 
@@ -1598,7 +1672,6 @@ class HistoryScanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
 
 class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
-    permission_classes = (IsAuthenticated,)
     filter_backends = [filters.OrderingFilter]
 
     def dispatch(self, request, *args, **kwargs):
@@ -1644,7 +1717,7 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         elif event_type == PEST_MANAGEMENT_EVENT_TYPE:
             return UpdatePestManagementEventSerializer if is_mutation else PestManagementEventSerializer
         elif event_type == BUSINESS_EVENT_TYPE:
-            return BusinessEventSerializer  # Same serializer for read/write operations
+            return UpdateBusinessEventSerializer if is_mutation else BusinessEventSerializer
         else:  # GENERAL_EVENT_TYPE
             return UpdateGeneralEventSerializer if is_mutation else GeneralEventSerializer
 
@@ -1789,6 +1862,7 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         parcels_post = self.request.POST.getlist("parcels", None)
         parcels_data = self.request.data.get("parcels", [])
         event_type = self.request.data.get("event_type", None)
+        explicit_history_id = self.request.data.get("history", None)
 
         # Use data.get instead of POST.getlist for JSON requests
         parcels = parcels_data if parcels_data else parcels_post
@@ -1805,7 +1879,22 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         for parcel in parcels:
             if parcel.current_history is not None:
-                history = parcel.current_history
+                # Use explicitly provided history ID if available (from Quick Add on specific production)
+                # Otherwise fall back to parcel.current_history
+                if explicit_history_id:
+                    try:
+                        history = History.objects.get(id=int(explicit_history_id), parcel=parcel)
+                    except History.DoesNotExist:
+                        history = parcel.current_history
+                else:
+                    history = parcel.current_history
+
+                # Immutability guard: prevent adding events to completed productions
+                if history.finish_date is not None or history.published:
+                    raise PermissionDenied(
+                        "Cannot add events to a completed production. "
+                        "This ensures the integrity of blockchain-verified transparency data."
+                    )
 
                 index = (
                     history.history_weatherevent_events.count()
@@ -1848,17 +1937,18 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                         # MVP Photo Verification: Run Vision API validation on event photos
                         extra_data = {}
                         try:
-                            from carbon.services.photo_evidence_service import PhotoEvidenceService
-                            import requests
                             from django.conf import settings
+
+                            import requests
+
+                            from carbon.services.photo_evidence_service import PhotoEvidenceService
 
                             # Download image from URL for Vision API analysis
                             response = requests.get(image_url, timeout=10)
                             if response.status_code == 200:
                                 photo_service = PhotoEvidenceService()
                                 validation_result = photo_service.validate_and_analyze_photo(
-                                    file_data=response.content,
-                                    filename=s3_key or "photo.jpg"
+                                    file_data=response.content, filename=s3_key or "photo.jpg"
                                 )
                                 # Store Vision API validation results in extra_data
                                 extra_data = {
@@ -1874,9 +1964,7 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                             extra_data = {"content_validation": "uncertain", "content_confidence": 0}
 
                         gallery_image = gallery.images.create(
-                            image_url=image_url,
-                            s3_key=s3_key,
-                            extra_data=extra_data if extra_data else None
+                            image_url=image_url, s3_key=s3_key, extra_data=extra_data if extra_data else None
                         )
 
                     # Associate album with event
@@ -1887,9 +1975,44 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         """
         Override update to prevent changing event types after creation
+        and to enforce immutability on completed productions.
         """
         # Get the current instance first to determine its type
         instance = self.get_object()
+
+        # Immutability guard: prevent modification of events on completed productions
+        history = instance.history
+        if history.finish_date is not None or history.published:
+            return Response(
+                {
+                    "error": "Event is locked",
+                    "detail": "Events cannot be modified after a production has been completed. "
+                    "This ensures the integrity of blockchain-verified transparency data.",
+                    "production_id": history.id,
+                    "production_finished": history.finish_date is not None,
+                    "production_published": history.published,
+                },
+                status=status.HTTP_423_LOCKED,
+            )
+
+        # Audit log for event modification on active production
+        try:
+            from carbon.models import CarbonAuditLog
+
+            CarbonAuditLog.objects.create(
+                user=request.user,
+                action="update",
+                details=json.dumps(
+                    {
+                        "event_id": instance.id,
+                        "event_type": instance.__class__.__name__,
+                        "production_id": history.id,
+                    }
+                ),
+                ip_address=request.META.get("REMOTE_ADDR"),
+            )
+        except Exception as e:
+            logger.warning("Event audit log failed: %s", e)
 
         # Determine the current event type based on the model
         current_event_type = None
@@ -1920,46 +2043,21 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        # 🚨 DEBUG: Log all image-related data from request
-        delete_ids_raw = request.data.get("delete_image_ids", [])
-        album_images_raw = request.data.get("album_images", [])
-        print(f"[EventViewSet.update] 📸 Image data received:")
-        print(f"  - delete_image_ids RAW: {delete_ids_raw} (type: {type(delete_ids_raw)})")
-        print(f"  - album_images RAW: {album_images_raw} (type: {type(album_images_raw)})")
-        print(f"  - instance.album: {instance.album}")
-        if hasattr(instance, "album") and instance.album:
-            current_images = list(instance.album.images.values_list("id", "image_url", "image"))
-            print(f"  - current images in album: {current_images}")
-
         # Handle deletion of existing images BEFORE the update
         delete_image_ids = request.data.get("delete_image_ids", [])
         if delete_image_ids and hasattr(instance, "album") and instance.album:
-            print(
-                f"[EventViewSet.update] 🗑️ Attempting to delete {len(delete_image_ids)} images: {delete_image_ids}"
-            )
-            # Check what images exist before deletion
-            existing_ids = list(instance.album.images.values_list("id", flat=True))
-            print(f"[EventViewSet.update] 🗑️ Images that exist in album: {existing_ids}")
-            matching_ids = [img_id for img_id in delete_image_ids if int(img_id) in existing_ids]
-            print(f"[EventViewSet.update] 🗑️ Matching IDs to delete: {matching_ids}")
             deleted_count = instance.album.images.filter(id__in=delete_image_ids).delete()
-            print(f"[EventViewSet.update] 🗑️ Deleted {deleted_count[0]} images")
-            remaining = list(instance.album.images.values_list("id", flat=True))
-            print(f"[EventViewSet.update] 🗑️ Remaining images after delete: {remaining}")
-        else:
-            print(f"[EventViewSet.update] ⚠️ No deletion: delete_image_ids={delete_image_ids}, has_album={hasattr(instance, 'album') and instance.album}")
+            logger.debug("Deleted %d images from album", deleted_count[0])
 
         # Handle adding NEW images (S3 URLs) - handled here for ALL event types
         album_images = request.data.get("album_images", [])
         if album_images:
-            print(f"[EventViewSet.update] ➕ Adding {len(album_images)} new images")
             from .models import Gallery
 
             # Create album if doesn't exist
             if not hasattr(instance, "album") or not instance.album:
                 instance.album = Gallery.objects.create()
                 instance.save(update_fields=["album"])
-                print(f"[EventViewSet.update] ➕ Created new album: {instance.album.id}")
 
             # Add new images to album
             for image_url in album_images:
@@ -1968,17 +2066,18 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 # MVP Photo Verification: Run Vision API validation on event photos
                 extra_data = {}
                 try:
-                    from carbon.services.photo_evidence_service import PhotoEvidenceService
-                    import requests
                     from django.conf import settings
+
+                    import requests
+
+                    from carbon.services.photo_evidence_service import PhotoEvidenceService
 
                     # Download image from URL for Vision API analysis
                     response = requests.get(image_url, timeout=10)
                     if response.status_code == 200:
                         photo_service = PhotoEvidenceService()
                         validation_result = photo_service.validate_and_analyze_photo(
-                            file_data=response.content,
-                            filename=s3_key or "photo.jpg"
+                            file_data=response.content, filename=s3_key or "photo.jpg"
                         )
                         # Store Vision API validation results in extra_data
                         extra_data = {
@@ -1988,24 +2087,52 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                             "content_bypassed": validation_result.get("content_bypassed", False),
                         }
                 except Exception as e:
-                    print(f"[EventViewSet.update] ⚠️ Vision API validation failed for {image_url}: {e}")
+                    logger.debug("Vision API validation failed for %s: %s", image_url, e)
                     # Default to uncertain if validation fails
                     extra_data = {"content_validation": "uncertain", "content_confidence": 0}
 
-                gallery_image = instance.album.images.create(
-                    image_url=image_url,
-                    s3_key=s3_key,
-                    extra_data=extra_data if extra_data else None
+                instance.album.images.create(
+                    image_url=image_url, s3_key=s3_key, extra_data=extra_data if extra_data else None
                 )
-                print(f"[EventViewSet.update] ➕ Created image {gallery_image.id} with Vision API: {extra_data.get('content_validation', 'skipped')}")
-
-            final_images = list(instance.album.images.values_list("id", "image_url"))
-            print(f"[EventViewSet.update] ➕ Final images in album: {final_images}")
-        else:
-            print(f"[EventViewSet.update] ⚠️ No new images to add")
 
         # If event types match, proceed with normal update
         return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        """Prevent deletion of events on completed productions."""
+        instance = self.get_object()
+        history = instance.history
+        if history.finish_date is not None or history.published:
+            return Response(
+                {
+                    "error": "Event is locked",
+                    "detail": "Events cannot be deleted after a production has been completed. "
+                    "This ensures the integrity of blockchain-verified transparency data.",
+                    "production_id": history.id,
+                },
+                status=status.HTTP_423_LOCKED,
+            )
+
+        # Audit log for event deletion on active production
+        try:
+            from carbon.models import CarbonAuditLog
+
+            CarbonAuditLog.objects.create(
+                user=request.user,
+                action="delete",
+                details=json.dumps(
+                    {
+                        "event_id": instance.id,
+                        "event_type": instance.__class__.__name__,
+                        "production_id": history.id,
+                    }
+                ),
+                ip_address=request.META.get("REMOTE_ADDR"),
+            )
+        except Exception as e:
+            logger.warning("Event audit log failed: %s", e)
+
+        return super().destroy(request, *args, **kwargs)
 
     def _validate_structured_fields(self, event_type, validated_data):
         """
@@ -2048,8 +2175,10 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         elif event_type == PRODUCTION_EVENT_TYPE:
             # Validate area covered is positive
+            # Equipment Maintenance (EM) can have area_covered=0
+            production_type = validated_data.get("type", "")
             area_covered = validated_data.get("area_covered")
-            if area_covered is not None and area_covered <= 0:
+            if area_covered is not None and area_covered <= 0 and production_type != "EM":
                 raise ValidationError("Area covered must be greater than 0")
 
             # Validate yield amount is positive

@@ -22,9 +22,7 @@ class Command(BaseCommand):
         self.stdout.write("Fixing Avocados template backend_event_fields...")
 
         # Find Avocados templates
-        avocado_templates = ProductionTemplate.objects.filter(
-            name__icontains="avocado"
-        )
+        avocado_templates = ProductionTemplate.objects.filter(name__icontains="avocado")
 
         if not avocado_templates.exists():
             self.stdout.write(self.style.ERROR("No Avocados templates found!"))
@@ -248,9 +246,7 @@ class Command(BaseCommand):
                 elif event.backend_event_fields:
                     self.stdout.write(f"  Skipped: {event.name} (already has fields)")
                 else:
-                    self.stdout.write(
-                        self.style.WARNING(f"  No mapping for: {event.name} ({event.event_type})")
-                    )
+                    self.stdout.write(self.style.WARNING(f"  No mapping for: {event.name} ({event.event_type})"))
 
         self.stdout.write(
             self.style.SUCCESS(f"\nDone! Updated {updated_count} event templates with backend_event_fields")

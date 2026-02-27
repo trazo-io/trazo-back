@@ -45,7 +45,7 @@ def get_fertilizer_factor(fertilizer_type):
 
 def get_fuel_factor(fuel_type):
     """Mock fuel factor function"""
-    return {"value": 2.68, "unit": "kg CO2e per liter", "usda_verified": True}
+    return {"value": 2.70, "unit": "kg CO2e per liter", "usda_verified": True}
 
 
 def get_electricity_factor(region):
@@ -92,10 +92,10 @@ class EmissionFactorsTestCase(TestCase):
     def get_fuel_factor(self, fuel_type):
         """Mock fuel factor function"""
         factors = {
-            "diesel": {"value": 2.68, "unit": "kg CO2e per liter", "usda_verified": True},
-            "gasoline": {"value": 2.31, "unit": "kg CO2e per liter", "usda_verified": True},
+            "diesel": {"value": 2.70, "unit": "kg CO2e per liter", "usda_verified": True},
+            "gasoline": {"value": 2.32, "unit": "kg CO2e per liter", "usda_verified": True},
         }
-        return factors.get(fuel_type, {"value": 2.68, "unit": "kg CO2e per liter", "usda_verified": True})
+        return factors.get(fuel_type, {"value": 2.70, "unit": "kg CO2e per liter", "usda_verified": True})
 
     def get_electricity_factor(self, region):
         """Mock electricity factor function"""
@@ -137,14 +137,14 @@ class EmissionFactorsTestCase(TestCase):
     def test_get_fuel_factor_diesel(self):
         """Test diesel fuel emission factor"""
         diesel_factor = self.get_fuel_factor("diesel")
-        self.assertEqual(diesel_factor["value"], 2.68)
+        self.assertEqual(diesel_factor["value"], 2.70)
         self.assertEqual(diesel_factor["unit"], "kg CO2e per liter")
         self.assertTrue(diesel_factor["usda_verified"])
 
     def test_get_fuel_factor_gasoline(self):
         """Test gasoline fuel emission factor"""
         gasoline_factor = self.get_fuel_factor("gasoline")
-        self.assertEqual(gasoline_factor["value"], 2.31)
+        self.assertEqual(gasoline_factor["value"], 2.32)
         self.assertEqual(gasoline_factor["unit"], "kg CO2e per liter")
         self.assertTrue(gasoline_factor["usda_verified"])
 
@@ -279,11 +279,11 @@ class CarbonCalculatorTestCase(TestCase):
             fuel_type="diesel", quantity_liters=50.0, operation_type="tillage", equipment_efficiency=0.8
         )
 
-        # Expected: 50L × 2.68 kg CO2e/L = 134 kg CO2e
-        expected_co2e = 50.0 * 2.68
+        # Expected: 50L × 2.70 kg CO2e/L = 135 kg CO2e
+        expected_co2e = 50.0 * 2.70
 
         self.assertAlmostEqual(fuel_carbon["co2e_kg"], expected_co2e, places=1)
-        self.assertEqual(fuel_carbon["emission_factor"], 2.68)
+        self.assertEqual(fuel_carbon["emission_factor"], 2.70)
 
     def test_irrigation_carbon_calculation(self):
         """Test irrigation carbon calculations."""

@@ -21,7 +21,7 @@ class CoolFarmService:
             "fuel": {
                 "diesel": emission_factors.get_fuel_factor("diesel")["value"],  # EPA-verified
                 "gasoline": emission_factors.get_fuel_factor("gasoline")["value"],  # EPA-verified
-                "lpg": 1.7,  # kg CO2e per liter (EPA 2024)
+                "propane": 1.51,  # kg CO2e per liter (EPA 40 CFR Part 98: 5.72 kg/gal ÷ 3.785)
             },
             "electricity": {
                 "grid": 0.4,  # kg CO2e per kWh (US average, EPA 2024)
