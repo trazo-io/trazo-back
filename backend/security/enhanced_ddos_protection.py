@@ -281,7 +281,7 @@ class EnhancedRateLimitMiddleware(MiddlewareMixin):
     """
 
     def __init__(self, get_response):
-        self.get_response = get_response
+        super().__init__(get_response)
         self.ddos_protection = AdvancedDDoSProtection()
         self.rate_limits = self.get_rate_limits()
 
@@ -495,7 +495,7 @@ class CircuitBreakerMiddleware(MiddlewareMixin):
     """
 
     def __init__(self, get_response):
-        self.get_response = get_response
+        super().__init__(get_response)
         self.circuit_breaker_cache = "circuit_breaker_status"
         self.failure_threshold = 50  # Trip after 50 failures
         self.timeout = 60  # 1 minute timeout
