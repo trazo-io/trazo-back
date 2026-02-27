@@ -56,7 +56,8 @@ class BlockchainCarbonService:
         force_blockchain = getattr(settings, "FORCE_BLOCKCHAIN_VERIFICATION", False)
 
         self.production_mode = environment == "production" and debug_mode == False
-        self.blockchain_required = self.production_mode or force_blockchain
+        blockchain_enabled = getattr(settings, "BLOCKCHAIN_ENABLED", False)
+        self.blockchain_required = (self.production_mode and blockchain_enabled) or force_blockchain
 
         # Debug logging
         import logging
