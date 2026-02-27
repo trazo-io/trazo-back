@@ -798,8 +798,8 @@ class OptimizedCarbonCalculator:
             from .services.real_usda_integration import RealUSDAAPIClient
 
             return RealUSDAAPIClient()
-        except ImportError:
-            # Fallback if service not available
+        except Exception:
+            # Fallback if service not available or keys missing
             return None
 
     def get_emission_factors(self, crop_type: str, region: str = "US") -> Dict[str, float]:

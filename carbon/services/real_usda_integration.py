@@ -178,11 +178,10 @@ class RealUSDAAPIClient:
 
         except Exception as e:
             logger.error(f"Failed to load USDA API keys securely: {e}")
-            # Fallback to settings for development only
-            if not getattr(settings, "DEBUG", True):
-                raise Exception(f"USDA API key loading failed in production: {e}")
-
+            # Fallback to settings-based API key
             self.nass_api_key = getattr(settings, "USDA_NASS_API_KEY", None)
+            if not self.nass_api_key:
+                logger.warning("No USDA API key available - USDA integration will be limited")
 
         self.timeout = 30
 
