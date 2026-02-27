@@ -29,13 +29,13 @@ if not SECRET_KEY or len(SECRET_KEY) < 50:
 # Database Configuration - Use individual environment variables for staging/production
 # Use os.environ directly to avoid python-decouple file precedence issues
 database_url = os.environ.get("DATABASE_URL") or config("DATABASE_URL", default=None)
-print(f"=== DB DEBUG: DATABASE_URL from env: {'SET (len={})'.format(len(database_url)) if database_url else 'NOT SET'}")
 if database_url:
     # Use DATABASE_URL if available (DigitalOcean/Railway/Heroku style)
     _parsed_db = dj_database_url.parse(database_url)
-    print(f"=== DB DEBUG: Parsed NAME={_parsed_db.get('NAME')}, ENGINE={_parsed_db.get('ENGINE')}, HOST={_parsed_db.get('HOST', '')[:20]}")
+    # DigitalOcean may inject DATABASE_URL without database name — default to 'defaultdb'
+    if not _parsed_db.get("NAME"):
+        _parsed_db["NAME"] = os.environ.get("DATABASE_NAME", "defaultdb")
     DATABASES = {"default": _parsed_db}
-    print(f"=== DB DEBUG: DATABASES set successfully")
 else:
     # Use individual database variables (AWS Secrets Manager style)
     database_host = config("DATABASE_HOST")
