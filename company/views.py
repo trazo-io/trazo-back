@@ -1326,18 +1326,19 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     if is_blockchain_verified:
                         blockchain_verified_count += 1
 
-                # Track unique verified productions (ANY verification type)
-                if is_usda_verified or is_blockchain_verified:
+                # Track blockchain-verified productions (actual on-chain verification)
+                if is_blockchain_verified:
                     verified_production_ids.add(history.id)
 
-        # Populate verification status for frontend
+        # Populate trust indicators for frontend
+        # Note: usda_verified means "uses EPA/USDA emission factors" (automatic),
+        # NOT independent third-party verification by USDA
         metrics["verification_status"] = {
-            "usda_verified": usda_verified_count,
-            "blockchain_verified": blockchain_verified_count,
-            "photo_verified": metrics["total_photos"],  # Photos count serves as photo verification
-            # IMPORTANT: Total unique verified productions (not sum of verification types)
-            # A production with BOTH blockchain AND USDA counts as 1, not 2
-            "total_verified_productions": len(verified_production_ids),
+            "epa_usda_sourced": usda_verified_count,  # Productions using EPA/USDA factors
+            "blockchain_verified": blockchain_verified_count,  # Actual on-chain records
+            "photo_documented": metrics["total_photos"],  # Photos serve as evidence
+            # Total blockchain-verified productions (real verification)
+            "total_blockchain_verified": len(verified_production_ids),
         }
 
         return metrics

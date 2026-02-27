@@ -283,8 +283,8 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
             certifications = []
             if product.parcel and product.parcel.certified:
                 certifications.append("USDA Organic")
-            if carbon_entry and carbon_entry.usda_verified:
-                certifications.append("USDA Verified")
+            if carbon_entry and carbon_entry.usda_factors_based:
+                certifications.append("EPA/USDA-Sourced Data")
 
             comparison_results.append(
                 {
@@ -330,8 +330,8 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
                 "comparison_summary": {
                     "best_carbon_score": min(valid_scores) if valid_scores else "Not Available",
                     "total_products": len(comparison_results),
-                    "verified_products": len(
-                        [r for r in comparison_results if "USDA Verified" in r.get("certifications", [])]
+                    "epa_usda_sourced_products": len(
+                        [r for r in comparison_results if "EPA/USDA-Sourced Data" in r.get("certifications", [])]
                     ),
                 },
             }

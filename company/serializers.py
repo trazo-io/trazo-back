@@ -817,7 +817,10 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
             engagement_base = consumer_reach * 10  # Each unique consumer = 10 points
             scan_multiplier = min(monthly_scans / 10, 5)  # Up to 5x multiplier for scan frequency
             transparency_bonus = transparency_score * 2  # Transparency documentation adds value
-            verification_bonus = (usda_verified_count + blockchain_verified_count) * 15  # Verification adds credibility
+            # Blockchain is actual on-chain verification; USDA factors are methodology, not verification
+            blockchain_bonus = blockchain_verified_count * 15  # Blockchain adds trust (immutable records)
+            methodology_bonus = usda_verified_count * 5  # EPA/USDA factors are standard methodology
+            verification_bonus = blockchain_bonus + methodology_bonus
 
             # Calculate transparency engagement score
             transparency_engagement = engagement_base * scan_multiplier + transparency_bonus + verification_bonus

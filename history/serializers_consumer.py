@@ -414,11 +414,11 @@ class EnhancedHistoryScanSerializer(serializers.ModelSerializer):
         if obj.history.parcel and obj.history.parcel.certified:
             practices.append("Certified sustainable")
 
-        # Check for carbon verification from carbon entries
+        # Check for carbon calculation using EPA/USDA emission factors
         carbon_entry = CarbonEntry.objects.filter(production=obj.history).order_by("-created_at").first()
 
-        if carbon_entry and carbon_entry.usda_verified:
-            practices.append("Carbon verified")
+        if carbon_entry and carbon_entry.usda_factors_based:
+            practices.append("EPA/USDA emission factors")
 
         # Check if establishment has sustainability certifications
         if obj.history.parcel and obj.history.parcel.establishment:

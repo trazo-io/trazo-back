@@ -251,7 +251,7 @@ class EventSerializer(serializers.ModelSerializer):
                         "co2e": float(carbon_entry.co2e_amount or carbon_entry.amount),
                         "efficiency_score": 90.0 if carbon_entry.usda_factors_based else 75.0,
                         "usda_factors_based": carbon_entry.usda_factors_based,
-                        "verification_status": "verified" if carbon_entry.usda_verified else "calculated",
+                        "verification_status": "epa_usda_sourced" if carbon_entry.usda_factors_based else "calculated",
                         "calculation_method": carbon_entry.data_source or "USDA Agricultural Emission Factors",
                         "data_source": carbon_entry.data_source or "CarbonEntry",
                         "recommendations": [],

@@ -3050,7 +3050,7 @@ class CarbonEstablishmentSummaryViewSet(viewsets.ViewSet):
                     "verification_status": (
                         entry.verification_status
                         if hasattr(entry, "verification_status")
-                        else ("verified" if entry.usda_verified else "pending")
+                        else ("epa_usda_sourced" if entry.usda_factors_based else "calculated")
                     ),
                     "created_at": entry.created_at.isoformat() if entry.created_at else entry.timestamp.isoformat(),
                     "timestamp": entry.timestamp.isoformat() if entry.timestamp else entry.created_at.isoformat(),
