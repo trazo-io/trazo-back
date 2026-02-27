@@ -78,11 +78,11 @@ for host in additional_hosts:
     if host and host not in ALLOWED_HOSTS:
         ALLOWED_HOSTS.append(host)
 
-# Add wildcard hosts for PaaS platforms
-if "*.railway.app" not in ALLOWED_HOSTS:
-    ALLOWED_HOSTS.append("*.railway.app")
-if "*.ondigitalocean.app" not in ALLOWED_HOSTS:
-    ALLOWED_HOSTS.append("*.ondigitalocean.app")
+# Add wildcard hosts for PaaS platforms (Django uses leading dot for subdomain wildcards)
+if ".railway.app" not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(".railway.app")
+if ".ondigitalocean.app" not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(".ondigitalocean.app")
 
 CSRF_TRUSTED_ORIGINS = [
     "https://*.trazo.io",
