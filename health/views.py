@@ -46,18 +46,22 @@ def health_check(request):
         health_status["checks"]["database"] = {"status": "unhealthy", "error": str(e)}
         is_healthy = False
 
-    # Cache connectivity check (if Redis is configured)
-    try:
-        cache.set("health_check", "ok", 10)
-        cache_result = cache.get("health_check")
-        if cache_result == "ok":
-            health_status["checks"]["cache"] = {"status": "healthy"}
-        else:
-            raise Exception("Cache set/get mismatch")
-    except Exception as e:
-        logger.warning(f"Cache health check failed: {str(e)}")
-        health_status["checks"]["cache"] = {"status": "unhealthy", "error": str(e)}
-        # Cache failures are warnings, not critical
+    # Cache connectivity check (skip if using DummyCache / no Redis configured)
+    cache_backend = settings.CACHES.get("default", {}).get("BACKEND", "")
+    if "DummyCache" in cache_backend:
+        health_status["checks"]["cache"] = {"status": "skipped", "backend": "DummyCache"}
+    else:
+        try:
+            cache.set("health_check", "ok", 10)
+            cache_result = cache.get("health_check")
+            if cache_result == "ok":
+                health_status["checks"]["cache"] = {"status": "healthy"}
+            else:
+                raise Exception("Cache set/get mismatch")
+        except Exception as e:
+            logger.warning(f"Cache health check failed: {str(e)}")
+            health_status["checks"]["cache"] = {"status": "unhealthy", "error": str(e)}
+            # Cache failures are warnings, not critical
 
     # Response time check
     response_time = (time.time() - start_time) * 1000  # Convert to ms
