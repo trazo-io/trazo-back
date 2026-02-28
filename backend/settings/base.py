@@ -90,11 +90,11 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     # SECURITY: Enhanced security middleware stack (order matters!)
     "django.middleware.security.SecurityMiddleware",
+    "corsheaders.middleware.CorsMiddleware",  # CORS must be before any middleware that returns responses
     "backend.security.middleware.SecurityHeadersMiddleware",  # Add security headers early
     "backend.security.middleware.RequestSecurityMiddleware",  # Validate requests
     "backend.security.enhanced_ddos_protection.CircuitBreakerMiddleware",  # Circuit breaker protection
     "backend.security.enhanced_ddos_protection.EnhancedRateLimitMiddleware",  # Enhanced DDoS protection
-    "corsheaders.middleware.CorsMiddleware",
     "backend.security.rate_limiting.SecurityMiddleware",  # Fallback rate limiting
     "backend.security_middleware.SecurityLoggingMiddleware",
     "backend.security_middleware.CSRFSecurityMiddleware",
