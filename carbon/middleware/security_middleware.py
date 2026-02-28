@@ -39,6 +39,13 @@ class CarbonSecurityMiddleware(MiddlewareMixin):
         "/histories/",
     ]
 
+    # Public endpoints excluded from critical security checks (no auth required)
+    PUBLIC_ENDPOINTS = [
+        "/public_scans/",
+        "/public_history/",
+        "/transparency/",
+    ]
+
     # Security headers that must be present for critical operations
     REQUIRED_SECURITY_HEADERS = ["X-CSRFToken", "X-Requested-With"]
 
@@ -98,6 +105,9 @@ class CarbonSecurityMiddleware(MiddlewareMixin):
 
     def _is_critical_endpoint(self, path: str) -> bool:
         """Check if the endpoint is critical and requires enhanced security"""
+        # Exclude public-facing endpoints from critical checks
+        if any(public_path in path for public_path in self.PUBLIC_ENDPOINTS):
+            return False
         return any(critical_path in path for critical_path in self.CRITICAL_ENDPOINTS)
 
     def _validate_critical_request(self, request) -> JsonResponse:
