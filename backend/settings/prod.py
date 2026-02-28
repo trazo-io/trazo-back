@@ -134,7 +134,11 @@ SESSION_COOKIE_HTTPONLY = True
 X_FRAME_OPTIONS = "DENY"
 SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 
-EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+SENDGRID_API_KEY = config("SENDGRID_API_KEY", default=None)
+
+# Use SendGrid Web API (HTTPS) instead of SMTP
+# SMTP ports 465/587 are blocked on most PaaS platforms
+EMAIL_BACKEND = "backend.email_backend.SendGridAPIBackend"
 SERVER_EMAIL = os.environ.get("FROM_EMAIL_ADDRESS", "noreply@trazo.io")
 DEFAULT_FROM_EMAIL = config("FROM_EMAIL_ADDRESS", default="noreply@trazo.io")
 
@@ -143,12 +147,6 @@ FRONTEND_URL = config("FRONTEND_URL", default="https://app.trazo.io")
 
 # Support email shown in email body copy (distinct from envelope sender)
 SUPPORT_EMAIL = config("SUPPORT_EMAIL", default="hello@trazo.io")
-
-SENDGRID_API_KEY = config("SENDGRID_API_KEY", default=None)
-
-# Use SendGrid Web API (HTTPS) instead of SMTP
-# SMTP ports 465/587 are blocked on most PaaS platforms
-EMAIL_BACKEND = "backend.email_backend.SendGridAPIBackend"
 
 # Use S3 in production
 DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
