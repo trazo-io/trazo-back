@@ -426,15 +426,18 @@ class SecureKeyManager:
                 return secret
 
             # Fallback to AWS direct access
-            aws_secret = self.get_secret("trazo/blockchain/private_key")
-            if aws_secret:
-                if isinstance(aws_secret, dict):
-                    return aws_secret.get("private_key", "")
-                return aws_secret
+            aws_services_enabled = getattr(settings, "AWS_SERVICES_ENABLED", True)
+            if aws_services_enabled:
+                aws_secret = self.get_secret("trazo/blockchain/private_key")
+                if aws_secret:
+                    if isinstance(aws_secret, dict):
+                        return aws_secret.get("private_key", "")
+                    return aws_secret
 
-            # Fallback to settings for development
-            if not self.is_production and hasattr(settings, "BLOCKCHAIN_PRIVATE_KEY"):
-                logger.warning("Using private key from settings - NOT SECURE FOR PRODUCTION")
+            # Fallback to settings env var (MVP: DigitalOcean uses encrypted env vars)
+            if hasattr(settings, "BLOCKCHAIN_PRIVATE_KEY") and settings.BLOCKCHAIN_PRIVATE_KEY:
+                if self.is_production:
+                    logger.warning("Using private key from env var - migrate to AWS KMS for enhanced security")
                 return settings.BLOCKCHAIN_PRIVATE_KEY
 
             raise AWSSecurityError("Blockchain private key not found in secure storage")

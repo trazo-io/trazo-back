@@ -699,9 +699,9 @@ CARBON_CONTRACT_ADDRESS = config("CARBON_CONTRACT_ADDRESS", default="")
 CARBON_CREDIT_CONTRACT_ADDRESS = config("CARBON_CREDIT_CONTRACT_ADDRESS", default="")  # NEW
 BLOCKCHAIN_PRIVATE_KEY = config("BLOCKCHAIN_PRIVATE_KEY", default="")
 
-# Production Blockchain Settings (NEW)
-BLOCKCHAIN_NETWORK_NAME = config("BLOCKCHAIN_NETWORK_NAME", default="polygon_amoy")
-POLYGON_EXPLORER_URL = config("POLYGON_EXPLORER_URL", default="https://amoy.polygonscan.com")
+# Allow env var overrides for network name and explorer URL (defaults set above by ENVIRONMENT)
+BLOCKCHAIN_NETWORK_NAME = config("BLOCKCHAIN_NETWORK_NAME", default=BLOCKCHAIN_NETWORK_NAME)
+POLYGON_EXPLORER_URL = config("POLYGON_EXPLORER_URL", default=POLYGON_EXPLORER_URL)
 
 # Gas Optimization Settings (NEW)
 BLOCKCHAIN_MAX_GAS_PRICE = config("BLOCKCHAIN_MAX_GAS_PRICE", default=100000000000, cast=int)  # 100 gwei max
