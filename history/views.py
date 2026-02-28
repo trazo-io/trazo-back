@@ -1274,9 +1274,9 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_428_PRECONDITION_REQUIRED,
                 )
 
-            # Session deduplication check
+            # Session deduplication check (use history.id, not the UUID production_id)
             is_duplicate, original_scan, dedup_method = self.deduplication_service.check_comprehensive_duplicate(
-                privacy_data["session_hash"], privacy_data["ip_hash"], production_id
+                privacy_data["session_hash"], privacy_data["ip_hash"], history.id
             )
 
             # Calculate bot score and engagement
