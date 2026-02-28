@@ -162,7 +162,12 @@ def send_password_reset_email(user, reset_token, reset_link):
         return result
 
     except Exception as e:
-        logger.error(f"Error sending password reset email to {user.email}: {str(e)}")
+        logger.error(
+            f"Error sending password reset email to {user.email}: {type(e).__name__}: {str(e)} "
+            f"| HOST={settings.EMAIL_HOST} PORT={settings.EMAIL_PORT} "
+            f"TLS={settings.EMAIL_USE_TLS} SSL={getattr(settings, 'EMAIL_USE_SSL', False)} "
+            f"FROM={settings.DEFAULT_FROM_EMAIL}"
+        )
         return False
 
 
