@@ -135,7 +135,7 @@ class Company(models.Model):
             return True
 
         if max_per_establishment > 0 and establishment:
-            current_count = establishment.parcel_set.count()
+            current_count = establishment.parcels.count()
             max_allowed = max_per_establishment
 
             # Add purchased add-ons
