@@ -1,9 +1,9 @@
 {
-  "address": "0xb546CbC8B4080C246Db923f0354532b31b250880",
-  "network": "polygon-amoy",
-  "deployedAt": "2026-02-24T14:26:57.946Z",
+  "address": "0x58d90920Fbaf0DdF6F72A9ebB9fa2F2D17a8324f",
+  "network": "polygon-mainnet",
+  "deployedAt": "2026-02-28T20:31:52.157Z",
   "deployer": "0xAA03419dA4A695E728131506504Cb1bfB50A1256",
-  "transactionHash": "0xfe73d2df7e4ad1bde9bede4741470ce84281d7e80aed12e114359148d2bfd527",
+  "transactionHash": "0x21ad926d16a3e91413e548ffaacf23aa5301ffa4e1af4215f705c137c4d3d70b",
   "abi": [
     {
       "inputs": [],

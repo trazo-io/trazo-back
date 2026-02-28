@@ -31,7 +31,7 @@ module.exports = {
         ? [process.env.BLOCKCHAIN_PRIVATE_KEY]
         : [],
       chainId: 137,
-      gasPrice: 50000000000, // 50 gwei
+      // Use "auto" to let the network determine gas price dynamically
     },
     // Local development
     hardhat: {

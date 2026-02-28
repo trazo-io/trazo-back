@@ -308,8 +308,8 @@ class BlockchainCarbonService:
             producer_id = carbon_data.get("producer_id", production_id)
             crop_type = carbon_data.get("crop_type", "general")
 
-            # Gas price for Polygon Amoy (minimum 25 gwei)
-            gas_price = self.web3.to_wei("30", "gwei")
+            # Dynamic gas price with 20% buffer for faster confirmation
+            gas_price = int(self.web3.eth.gas_price * 1.2)
 
             # Check if producer is registered, if not register them first
             try:
@@ -539,8 +539,8 @@ class BlockchainCarbonService:
             # Convert data hash to bytes32
             hash_bytes = bytes.fromhex(data_hash)
 
-            # Gas price for Polygon Amoy (minimum 25 gwei)
-            gas_price = self.web3.to_wei("30", "gwei")
+            # Dynamic gas price with 20% buffer for faster confirmation
+            gas_price = int(self.web3.eth.gas_price * 1.2)
 
             self.logger.info(
                 f"Submitting monthly summary: producer={producer_id}, production={production_id}, co2e={total_co2e_grams}g"
