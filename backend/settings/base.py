@@ -222,23 +222,10 @@ CELERY_TASK_QUEUES = {
 # Celery Beat Schedule is defined in backend/celery.py to keep all periodic
 # tasks in one authoritative location.  Do not add CELERY_BEAT_SCHEDULE here.
 
-# Redis Cache Configuration
+# Cache Configuration - default to DummyCache, overridden in prod.py when REDIS_URL is set
 CACHES = {
     "default": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": "redis://localhost:6379/1",
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            "PARSER_CLASS": "redis.connection.HiredisParser",
-            "CONNECTION_POOL_CLASS": "redis.BlockingConnectionPool",
-            "CONNECTION_POOL_CLASS_KWARGS": {
-                "max_connections": 50,
-                "timeout": 20,
-            },
-            "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
-            "IGNORE_EXCEPTIONS": True,
-        },
-        "KEY_PREFIX": "trazo",
+        "BACKEND": "django.core.cache.backends.dummy.DummyCache",
     }
 }
 
