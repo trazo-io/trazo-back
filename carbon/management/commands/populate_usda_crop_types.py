@@ -114,6 +114,9 @@ class Command(BaseCommand):
         # Final summary
         self._print_summary(stats, dry_run)
 
+    # Fields in seed data that don't exist on the CropType model
+    IGNORED_FIELDS = {"benchmark_verified", "emissions_calculation_method", "usda_benchmark_source"}
+
     def _seed_crop_types(self, stats, dry_run, verbosity):
         """Seed all 19 USDA-verified crop types."""
         crop_data = self._get_crop_type_data()
@@ -123,7 +126,10 @@ class Command(BaseCommand):
                 self.stdout.write(f"  Would create/update: {data['name']}")
                 continue
 
-            crop_type, created = CropType.objects.get_or_create(slug=data["slug"], defaults=data)
+            # Strip fields that don't exist on the CropType model
+            clean_data = {k: v for k, v in data.items() if k not in self.IGNORED_FIELDS}
+
+            crop_type, created = CropType.objects.get_or_create(slug=clean_data["slug"], defaults=clean_data)
 
             if created:
                 stats["crops_created"] += 1
@@ -131,7 +137,7 @@ class Command(BaseCommand):
                     self.stdout.write(self.style.SUCCESS(f"  ✅ Created: {crop_type.name}"))
             else:
                 # Update existing with new data
-                for key, value in data.items():
+                for key, value in clean_data.items():
                     setattr(crop_type, key, value)
                 crop_type.save()
                 stats["crops_updated"] += 1
