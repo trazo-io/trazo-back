@@ -1,5 +1,6 @@
 import json
 import logging
+import uuid
 from datetime import datetime, timedelta
 
 from django.core.cache import cache
@@ -1202,6 +1203,7 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
     queryset = HistoryScan.objects.select_related(
         "history", "history__product", "history__parcel", "history__parcel__establishment", "user"
     ).all()
+    authentication_classes = []  # Public endpoint - no auth required
     permission_classes = [AllowAny]
 
     def __init__(self, *args, **kwargs):
@@ -1228,11 +1230,17 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
 
             production_id = request.data.get("production_id")
 
-            # Get the production/history with validation
+            # Get the production/history with validation (supports integer ID or UUID public_id)
             try:
-                history = History.objects.select_related("parcel__establishment__company", "product").get(
-                    id=production_id
-                )
+                try:
+                    pid = int(production_id)
+                    history = History.objects.select_related("parcel__establishment__company", "product").get(
+                        id=pid
+                    )
+                except (ValueError, TypeError):
+                    history = History.objects.select_related("parcel__establishment__company", "product").get(
+                        public_id=production_id
+                    )
 
                 # Check if production is publicly accessible
                 if not history.published:
@@ -1345,11 +1353,15 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
         if not production_id:
             return Response({"error": "production_id is required"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Validate production_id format
+        # Validate production_id format (accepts integer ID or UUID public_id)
         try:
             int(production_id)
         except (ValueError, TypeError):
-            return Response({"error": "Invalid production_id format"}, status=status.HTTP_400_BAD_REQUEST)
+            # Not an integer - check if it's a valid UUID
+            try:
+                uuid.UUID(str(production_id))
+            except ValueError:
+                return Response({"error": "Invalid production_id format"}, status=status.HTTP_400_BAD_REQUEST)
 
         # Validate comment length
         comment = request.data.get("comment", "")
