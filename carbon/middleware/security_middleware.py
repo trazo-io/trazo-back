@@ -231,16 +231,19 @@ class CarbonSecurityMiddleware(MiddlewareMixin):
         now = timezone.now()
 
         # Check for rapid-fire requests from same user
-        rapid_requests_key = f"rapid_requests:{user_id}"
-        rapid_count = cache.get(rapid_requests_key, 0)
+        try:
+            rapid_requests_key = f"rapid_requests:{user_id}"
+            rapid_count = cache.get(rapid_requests_key, 0)
 
-        # More than 10 requests in 60 seconds is suspicious
-        if rapid_count > 10:
-            logger.warning(f"Rapid requests detected from user {user_id}")
-            return True
+            # More than 10 requests in 60 seconds is suspicious
+            if rapid_count > 10:
+                logger.warning(f"Rapid requests detected from user {user_id}")
+                return True
 
-        # Increment rapid request counter
-        cache.set(rapid_requests_key, rapid_count + 1, 60)
+            # Increment rapid request counter
+            cache.set(rapid_requests_key, rapid_count + 1, 60)
+        except Exception:
+            pass  # Cache unavailable, skip rapid-fire detection
 
         # Check for suspicious user agents
         user_agent = request.META.get("HTTP_USER_AGENT", "")
@@ -295,16 +298,19 @@ class CarbonSecurityMiddleware(MiddlewareMixin):
         else:
             logger.warning(f"Critical carbon operation failed: {json.dumps(operation_data)}")
 
-        # Store in cache for monitoring
-        operations_key = f"critical_operations:{user_id}:{timezone.now().date()}"
-        daily_operations = cache.get(operations_key, [])
-        daily_operations.append(operation_data)
+        # Store in cache for monitoring (skip if cache unavailable)
+        try:
+            operations_key = f"critical_operations:{user_id}:{timezone.now().date()}"
+            daily_operations = cache.get(operations_key, [])
+            daily_operations.append(operation_data)
 
-        # Keep only last 100 operations per day
-        if len(daily_operations) > 100:
-            daily_operations = daily_operations[-100:]
+            # Keep only last 100 operations per day
+            if len(daily_operations) > 100:
+                daily_operations = daily_operations[-100:]
 
-        cache.set(operations_key, daily_operations, 86400)  # 24 hours
+            cache.set(operations_key, daily_operations, 86400)  # 24 hours
+        except Exception:
+            pass  # Cache unavailable, skip monitoring storage
 
     def _get_client_ip(self, request):
         """Get client IP address from request"""
@@ -415,8 +421,11 @@ class CarbonAuditMiddleware(MiddlewareMixin):
             logger.error(f"Failed to store detailed audit: {str(e)}")
 
         # Store in cache for real-time monitoring
-        detailed_key = f"detailed_audit:{audit_data.get('user_id', 'anonymous')}:{int(time.time())}"
-        cache.set(detailed_key, audit_data, 3600)  # 1 hour
+        try:
+            detailed_key = f"detailed_audit:{audit_data.get('user_id', 'anonymous')}:{int(time.time())}"
+            cache.set(detailed_key, audit_data, 3600)  # 1 hour
+        except Exception:
+            pass  # Cache unavailable, skip real-time monitoring
 
     def _get_client_ip(self, request):
         """Get client IP address from request"""
