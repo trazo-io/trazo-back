@@ -153,6 +153,9 @@ EMAIL_USE_TLS = False if os.environ.get("EMAIL_DISABLE_TLS") == "True" else True
 
 # Use S3 in production
 DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
+AWS_QUERYSTRING_AUTH = True  # Generate signed URLs (bucket is private)
+AWS_DEFAULT_ACL = None  # Use bucket default ACL
+AWS_S3_FILE_OVERWRITE = False  # Don't overwrite files with same name
 
 # Redis Configuration - Use os.environ directly to avoid python-decouple file precedence issues
 REDIS_URL = os.environ.get("REDIS_URL")
