@@ -148,8 +148,10 @@ SENDGRID_API_KEY = config("SENDGRID_API_KEY", default=None)
 
 EMAIL_HOST = config("EMAIL_HOST", default="smtp.sendgrid.net")
 EMAIL_HOST_PASSWORD = SENDGRID_API_KEY
-EMAIL_PORT = os.environ.get("EMAIL_PORT", 587)
-EMAIL_USE_TLS = False if os.environ.get("EMAIL_DISABLE_TLS") == "True" else True
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", 587))
+# Port 465 uses SSL, port 587 uses TLS
+EMAIL_USE_SSL = EMAIL_PORT == 465
+EMAIL_USE_TLS = not EMAIL_USE_SSL
 
 # Use S3 in production
 DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
