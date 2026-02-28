@@ -328,9 +328,11 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             except Parcel.DoesNotExist:
                 return Response({"error": "Parcel not found"}, status=status.HTTP_404_NOT_FOUND)
 
+            # Get company for permission and blockchain checks
+            company = parcel.establishment.company
+
             # Role-based permission check: only CA/FM can create productions
             if not request.user.is_superuser:
-                company = parcel.establishment.company
                 if not WorksIn.objects.filter(
                     user=request.user,
                     company=company,
@@ -370,7 +372,7 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 "estimated_yield": data.get("estimated_yield"),
                 "irrigation_method": data.get("irrigation_method"),
                 "created_via": "production_start_form",
-                "blockchain_enabled": True,  # Enable blockchain for new productions
+                "blockchain_enabled": bool(company.blockchain_subscription_status),
             }
 
             # Add optional fields to extra_data
@@ -404,33 +406,6 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             if data.get("template_events"):
                 self._create_template_events(history, data["template_events"], template_id=data.get("template_id"))
 
-            # Create initial blockchain record for this production
-            try:
-                from carbon.services.blockchain import blockchain_service
-
-                initial_carbon_data = {
-                    "production_id": history.id,
-                    "total_emissions": 0.0,
-                    "total_offsets": 0.0,
-                    "crop_type": crop_type.name,
-                    "calculation_method": "initial_production_setup",
-                    "usda_factors_used": False,
-                    "timestamp": int(start_date.timestamp()),
-                    "carbon_score": 50,  # Initial neutral score
-                    "industry_percentile": 50,
-                }
-
-                blockchain_result = blockchain_service.create_carbon_record(history.id, initial_carbon_data)
-
-                # Store blockchain reference in extra_data
-                history.extra_data["blockchain_transaction"] = blockchain_result.get("transaction_hash")
-                history.extra_data["blockchain_verified"] = blockchain_result.get("blockchain_verified", False)
-                history.save()
-
-            except Exception as e:
-                logger.error("Error creating initial blockchain record: %s", e)
-                # Continue without blockchain - not critical for production creation
-
             # Serialize and return the created production
             serializer = HistorySerializer(history)
             response_data = serializer.data
@@ -440,7 +415,6 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 {
                     "crop_category": extra_data.get("crop_category"),
                     "blockchain_enabled": extra_data.get("blockchain_enabled", False),
-                    "blockchain_transaction": extra_data.get("blockchain_transaction"),
                     "qr_code_url": history.qr_code.url if history.qr_code else None,
                     "establishment": {
                         "id": parcel.establishment.id,
@@ -1234,9 +1208,7 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
             try:
                 try:
                     pid = int(production_id)
-                    history = History.objects.select_related("parcel__establishment__company", "product").get(
-                        id=pid
-                    )
+                    history = History.objects.select_related("parcel__establishment__company", "product").get(id=pid)
                 except (ValueError, TypeError):
                     history = History.objects.select_related("parcel__establishment__company", "product").get(
                         public_id=production_id
