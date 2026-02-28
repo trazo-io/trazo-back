@@ -1,4 +1,6 @@
 import logging
+import random
+import string
 from smtplib import SMTPException
 from urllib.parse import quote
 
@@ -12,9 +14,6 @@ from .utils import send_verification_email, send_welcome_email
 
 logger = logging.getLogger(__name__)
 
-import random
-import string
-
 
 def generate_verification_code(length=6):
     letters_and_digits = string.ascii_letters + string.digits
@@ -24,25 +23,29 @@ def generate_verification_code(length=6):
 @receiver(post_save, sender=User)
 def create_verification_code(sender, instance, created, **kwargs):
     if created:
-        # Check if user was created via invitation (already verified)
-        if instance.is_verified:
-            # For invited users: skip email sending here since the invitation flow
-            # handles sending the specialized welcome email with company context
-            logger.info(f"User created via invitation: {instance.email} - email handled by invitation flow")
-        elif instance.company_verified:
-            # 🚀 2025 Best Practice: Company code users get combined email from serializer
-            # Skip sending separate emails here to avoid duplication
+        if instance.company_verified:
+            # Company code users get combined email from serializer — skip here
             logger.info(
                 f"User created via company code: {instance.email} - combined email handled by company join flow"
             )
-        else:
-            # For regular signups: send both welcome and verification emails
+            return
+
+        # Always send welcome email for new users (regular, social auth, invited)
+        try:
+            send_welcome_email(instance)
+            logger.info(f"Welcome email sent to new user: {instance.email}")
+        except SMTPException as e:
+            logger.error(f"Could not send welcome email to: {instance.email}, Error: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error sending welcome email to: {instance.email}, Error: {e}")
+
+        # Only send verification email if user is NOT already verified
+        # (social auth and invited users are already verified)
+        if not instance.is_verified:
             code = generate_verification_code()
             VerificationCode.objects.create(user=instance, code=code)
 
-            # Properly encode the email for URLs
             encoded_email = quote(instance.email)
-
             verification_link = ""
             user_type = int(instance.user_type)
             if user_type == PRODUCER:
@@ -50,14 +53,10 @@ def create_verification_code(sender, instance, created, **kwargs):
             elif user_type == CONSUMER:
                 verification_link = f"{settings.BASE_CONSUMER_URL}auth/verifyemail?email={encoded_email}&code={code}"
 
-            # Send both welcome and verification emails for regular users
             try:
-                # Send welcome email
-                send_welcome_email(instance)
-
-                # Send verification email with new template
                 send_verification_email(user=instance, verification_code=code, verification_link=verification_link)
-
-                logger.info(f"Welcome and verification emails sent to new user: {instance.email}")
+                logger.info(f"Verification email sent to: {instance.email}")
             except SMTPException as e:
-                logger.error(f"Could not send emails to user: {instance.email}, Error: {e}")
+                logger.error(f"Could not send verification email to: {instance.email}, Error: {e}")
+            except Exception as e:
+                logger.error(f"Unexpected error sending verification email to: {instance.email}, Error: {e}")
