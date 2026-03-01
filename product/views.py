@@ -184,20 +184,43 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     @transaction.atomic
     def finish_history(self, request, pk=None, parcel_pk=None, company_pk=None, establishment_pk=None):
+        import time
+
+        _t0 = time.monotonic()
+
         parcel = self.get_object()
+        _t1 = time.monotonic()
+
         history_data = request.data
         images = request.FILES.getlist("album[images]")
         history = parcel.finish_current_history(history_data, images)
+        _t2 = time.monotonic()
+
         if history is not None:
             # Compute finalization hash of all events for blockchain integrity
             self._store_finalization_hash(history)
+            _t3 = time.monotonic()
 
             # Trigger immediate blockchain submission if company has the add-on.
             # Uses on_commit to ensure finalization hash is persisted before
             # the Celery task reads it.
             self._trigger_blockchain_submission(history)
+            _t4 = time.monotonic()
 
-            return Response(HistorySerializer(history).data)
+            response_data = HistorySerializer(history).data
+            _t5 = time.monotonic()
+
+            logger.info(
+                "TIMING finish_history: TOTAL %.3fs (get_object=%.3f, finish=%.3f, hash=%.3f, blockchain=%.3f, serialize=%.3f)",
+                _t5 - _t0,
+                _t1 - _t0,
+                _t2 - _t1,
+                _t3 - _t2,
+                _t4 - _t3,
+                _t5 - _t4,
+            )
+
+            return Response(response_data)
         return Response(
             {"error": "No active production found for this parcel."},
             status=400,

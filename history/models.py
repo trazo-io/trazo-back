@@ -437,7 +437,7 @@ class History(models.Model):
         if is_new:
             super().save(*args, **kwargs)
 
-        if not skip_qr:
+        if not skip_qr and is_new:
             self.generate_qr_code(is_new=is_new, save_args=args, save_kwargs=kwargs)
         elif not is_new:
             super().save(*args, **kwargs)
