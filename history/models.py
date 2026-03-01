@@ -146,6 +146,20 @@ class History(models.Model):
         help_text="Crop type for this production",
     )
 
+    # Background event creation status
+    EVENTS_STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("ready", "Ready"),
+        ("failed", "Failed"),
+        ("no_events", "No Events"),
+    ]
+    events_status = models.CharField(
+        max_length=20,
+        choices=EVENTS_STATUS_CHOICES,
+        default="no_events",
+        help_text="Status of background template event creation",
+    )
+
     def __str__(self) -> str:
         return (
             "[ "

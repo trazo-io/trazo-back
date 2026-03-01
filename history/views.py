@@ -1,10 +1,11 @@
 import json
 import logging
+import threading
 import uuid
 from datetime import datetime, timedelta
 
 from django.core.cache import cache
-from django.db import transaction
+from django.db import connections, transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
@@ -76,6 +77,28 @@ class StandardResultsSetPagination(PageNumberPagination):
     page_size = 20
     page_size_query_param = "page_size"
     max_page_size = 100
+
+
+def _background_create_events(viewset_instance, history_id, template_events, template_id):
+    """
+    Create template events in a background thread.
+
+    Called via transaction.on_commit() after the History is committed to the DB.
+    Each thread gets its own DB connection which is cleaned up in finally.
+
+    TODO(celery): When Celery is available, convert to @shared_task and call
+    via .delay(). Remove connections.close_all() and transaction.on_commit wrapper.
+    """
+    try:
+        history = History.objects.get(id=history_id)
+        viewset_instance._create_template_events(history, template_events, template_id=template_id)
+        History.objects.filter(id=history_id).update(events_status="ready")
+        logger.info("Background event creation completed for history %s", history_id)
+    except Exception as e:
+        logger.exception("Background event creation failed for history %s: %s", history_id, e)
+        History.objects.filter(id=history_id).update(events_status="failed")
+    finally:
+        connections.close_all()
 
 
 class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
@@ -306,10 +329,12 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         url_path="start-production",
         permission_classes=[IsAuthenticated, HasProductionCreationPermission],
     )
-    @transaction.atomic
     def start_production(self, request):
         """
         Enhanced production creation endpoint with crop selection and blockchain integration.
+
+        Returns the production immediately (<1s). Template events are created in a
+        background thread — the frontend polls for progressive event loading.
         """
         try:
             from users.models import WorksIn
@@ -322,9 +347,9 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 if field not in data:
                     return Response({"error": f"Missing required field: {field}"}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Get parcel with row-level lock to prevent race conditions
+            # Get parcel
             try:
-                parcel = Parcel.objects.select_for_update().get(id=data["parcel_id"])
+                parcel = Parcel.objects.select_related("establishment__company").get(id=data["parcel_id"])
             except Parcel.DoesNotExist:
                 return Response({"error": "Parcel not found"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -381,32 +406,47 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 if data.get(field):
                     extra_data[field] = data[field]
 
-            history = History.objects.create(
-                name=data["name"],
-                start_date=start_date,
-                finish_date=expected_harvest,
-                parcel=parcel,
-                product=product,
-                crop_type=crop_type,  # Assign the CropType instance
-                extra_data=extra_data,
-                type=data.get("type", "OR"),  # Default to Orchard
-                description=data.get("description", ""),
-                operator=request.user if request.user.is_authenticated else None,
-            )
+            # Determine if we'll create template events in background
+            template_events = data.get("template_events")
+            has_templates = bool(template_events)
 
-            # Update parcel's current history
-            parcel.current_history = history
-            parcel.save()
+            # Create History + update parcel atomically, then spawn background thread
+            with transaction.atomic():
+                history = History.objects.create(
+                    name=data["name"],
+                    start_date=start_date,
+                    finish_date=expected_harvest,
+                    parcel=parcel,
+                    product=product,
+                    crop_type=crop_type,
+                    extra_data=extra_data,
+                    type=data.get("type", "OR"),
+                    description=data.get("description", ""),
+                    operator=request.user if request.user.is_authenticated else None,
+                    events_status="pending" if has_templates else "no_events",
+                )
+
+                # Update parcel's current history
+                parcel.current_history = history
+                parcel.save(update_fields=["current_history"])
+
+                # Spawn background thread for template event creation AFTER commit
+                # TODO(celery): Replace with create_template_events_task.delay(history.id, ...)
+                if has_templates:
+                    template_id = data.get("template_id")
+                    transaction.on_commit(
+                        lambda: threading.Thread(
+                            target=_background_create_events,
+                            args=(self, history.id, template_events, template_id),
+                            daemon=True,
+                        ).start()
+                    )
 
             # Invalidate cache for this parcel's history list
             cache_key = f"history_list_parcel_{parcel.id}_v3"
             cache.delete(cache_key)
 
-            # Process template events if provided
-            if data.get("template_events"):
-                self._create_template_events(history, data["template_events"], template_id=data.get("template_id"))
-
-            # Serialize and return the created production
+            # Serialize and return the created production immediately
             serializer = HistorySerializer(history)
             response_data = serializer.data
 

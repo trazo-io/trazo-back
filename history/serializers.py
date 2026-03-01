@@ -1800,8 +1800,9 @@ class HistorySerializer(serializers.ModelSerializer):
             "quality_grade",
             "harvest_method",
             "description",
+            "events_status",
         ]
-        read_only_fields = ["id", "created_at", "updated_at", "certificate_percentage"]
+        read_only_fields = ["id", "created_at", "updated_at", "certificate_percentage", "events_status"]
 
     def get_product(self, history):
         return history.product.name if history.product else None
