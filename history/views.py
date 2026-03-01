@@ -81,7 +81,7 @@ class StandardResultsSetPagination(PageNumberPagination):
 
 def _background_create_events(viewset_instance, history_id, template_events, template_id):
     """
-    Create template events in a background thread.
+    Create template events and QR code in a background thread.
 
     Called via transaction.on_commit() after the History is committed to the DB.
     Each thread gets its own DB connection which is cleaned up in finally.
@@ -91,12 +91,29 @@ def _background_create_events(viewset_instance, history_id, template_events, tem
     """
     try:
         history = History.objects.get(id=history_id)
+
+        # Generate QR code (deferred from save() for fast response)
+        history.generate_qr_code(is_new=True)
+        logger.info("Background QR code generated for history %s", history_id)
+
         viewset_instance._create_template_events(history, template_events, template_id=template_id)
         History.objects.filter(id=history_id).update(events_status="ready")
         logger.info("Background event creation completed for history %s", history_id)
     except Exception as e:
         logger.exception("Background event creation failed for history %s: %s", history_id, e)
         History.objects.filter(id=history_id).update(events_status="failed")
+    finally:
+        connections.close_all()
+
+
+def _background_generate_qr(history_id):
+    """Generate QR code in background when no template events are needed."""
+    try:
+        history = History.objects.get(id=history_id)
+        history.generate_qr_code(is_new=True)
+        logger.info("Background QR code generated for history %s", history_id)
+    except Exception as e:
+        logger.exception("Background QR generation failed for history %s: %s", history_id, e)
     finally:
         connections.close_all()
 
@@ -420,8 +437,10 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             logger.info("start_production TIMING: pre-create done in %.3fs (total %.3fs)", _t3 - _t2, _t3 - _t0)
 
             # Create History + update parcel atomically, then spawn background thread
+            # skip_qr=True: QR code generation + S3 upload takes ~30-40s on managed
+            # infra. Defer to background thread so the response returns in <1s.
             with transaction.atomic():
-                history = History.objects.create(
+                history = History(
                     name=data["name"],
                     start_date=start_date,
                     finish_date=expected_harvest,
@@ -434,12 +453,14 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     operator=request.user if request.user.is_authenticated else None,
                     events_status="pending" if has_templates else "no_events",
                 )
+                history.save(skip_qr=True)
 
                 # Update parcel's current history
                 parcel.current_history = history
                 parcel.save(update_fields=["current_history"])
 
-                # Spawn background thread for template event creation AFTER commit
+                # Spawn background thread for QR generation + template event creation
+                # QR code is deferred here because it takes ~30-40s (image gen + S3 upload)
                 # TODO(celery): Replace with create_template_events_task.delay(history.id, ...)
                 if has_templates:
                     template_id = data.get("template_id")
@@ -447,6 +468,15 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                         lambda: threading.Thread(
                             target=_background_create_events,
                             args=(self, history.id, template_events, template_id),
+                            daemon=True,
+                        ).start()
+                    )
+                else:
+                    # No template events, but still need QR code generated in background
+                    transaction.on_commit(
+                        lambda: threading.Thread(
+                            target=_background_generate_qr,
+                            args=(history.id,),
                             daemon=True,
                         ).start()
                     )

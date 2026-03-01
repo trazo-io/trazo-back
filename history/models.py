@@ -429,10 +429,21 @@ class History(models.Model):
         if not self.public_id:
             self.public_id = uuid.uuid4()
 
+        # Allow callers to skip QR generation for speed (e.g., start_production
+        # defers it to a background thread).
+        skip_qr = kwargs.pop("skip_qr", False)
+
         # Save first to get ID if this is a new object
         if is_new:
             super().save(*args, **kwargs)
 
+        if not skip_qr:
+            self.generate_qr_code(is_new=is_new, save_args=args, save_kwargs=kwargs)
+        elif not is_new:
+            super().save(*args, **kwargs)
+
+    def generate_qr_code(self, is_new=False, save_args=None, save_kwargs=None):
+        """Generate branded QR code and save it. Can be called separately for deferred generation."""
         # Clean consumer URL - UUID public_id is unguessable, no HMAC needed
         consumer_url = f"{settings.BASE_CONSUMER_URL}production/{self.public_id}"
 
@@ -453,7 +464,7 @@ class History(models.Model):
         if is_new:
             super().save(update_fields=["qr_code"])
         else:
-            super().save(*args, **kwargs)
+            super().save(*(save_args or ()), **(save_kwargs or {}))
 
     @staticmethod
     def _generate_branded_qr(data_url):
