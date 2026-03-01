@@ -510,6 +510,7 @@ def build_soil_event_fields(
     amendment_type=None,
     amendment_amount=None,
     equipment_used="tractor_cultivator",
+    extra_data=None,
 ):
     """
     Build complete backend_event_fields for SoilManagementEvent (backend_event_type=5)
@@ -540,6 +541,8 @@ def build_soil_event_fields(
         fields["amendment_type"] = amendment_type
     if amendment_amount:
         fields["amendment_amount"] = amendment_amount
+    if extra_data:
+        fields["extra_data"] = extra_data
 
     return fields
 
@@ -565,6 +568,7 @@ def build_production_event_fields(
     transportation_unit="km",
     equipment_type=None,
     equipment_operation_type=None,
+    extra_data=None,
 ):
     """
     Build complete backend_event_fields for ProductionEvent (backend_event_type=1)
@@ -604,6 +608,9 @@ def build_production_event_fields(
         fields["equipment_type"] = equipment_type or "tractor"
         fields["equipment_operation_type"] = equipment_operation_type or "MN"
 
+    if extra_data:
+        fields["extra_data"] = extra_data
+
     return fields
 
 
@@ -632,6 +639,7 @@ def build_chemical_event_fields(
     applicator_name=None,
     rei_hours=None,
     phi_days=None,
+    extra_data=None,
 ):
     """
     Build complete backend_event_fields for ChemicalEvent (backend_event_type=2)
@@ -673,6 +681,9 @@ def build_chemical_event_fields(
         fields["rei_hours"] = rei_hours
         fields["phi_days"] = phi_days
 
+    if extra_data:
+        fields["extra_data"] = extra_data
+
     return fields
 
 
@@ -696,6 +707,7 @@ def build_pest_event_fields(
     equipment_hours=None,
     observation="Pest management activity",
     crop_growth_stage="vegetative",
+    extra_data=None,
 ):
     """
     Build complete backend_event_fields for PestManagementEvent (backend_event_type=6)
@@ -727,9 +739,10 @@ def build_pest_event_fields(
     if equipment_hours is not None:
         fields["equipment_hours"] = equipment_hours
 
-    fields["extra_data"] = {
-        "crop_growth_stage": crop_growth_stage,
-    }
+    base_extra = {"crop_growth_stage": crop_growth_stage}
+    if extra_data:
+        base_extra.update(extra_data)
+    fields["extra_data"] = base_extra
 
     return fields
 
@@ -746,6 +759,7 @@ def build_business_event_fields(
     verified_certifier_name=None,
     certificate_number=None,
     observation="Business activity",
+    extra_data=None,
 ):
     """
     Build complete backend_event_fields for BusinessEvent (backend_event_type=7)
@@ -767,6 +781,8 @@ def build_business_event_fields(
 
     if certificate_number:
         fields["certificate_number"] = certificate_number
+    if extra_data:
+        fields["extra_data"] = extra_data
 
     return fields
 
@@ -780,6 +796,7 @@ def build_weather_event_fields(
     duration_hours=None,
     duration_days=None,
     damage_description=None,
+    additional_extra_data=None,
 ):
     """
     Build complete backend_event_fields for WeatherEvent (backend_event_type=0)
@@ -803,6 +820,8 @@ def build_weather_event_fields(
         extra_data["duration_days"] = duration_days
     if damage_description:
         extra_data["damage"] = damage_description
+    if additional_extra_data:
+        extra_data.update(additional_extra_data)
 
     return {
         "type": subtype,
@@ -818,6 +837,7 @@ def build_general_event_fields(
     duration="2",
     people_involved=1,
     observation="General farm activity",
+    extra_data=None,
 ):
     """
     Build complete backend_event_fields for GeneralEvent (backend_event_type=3)
@@ -825,7 +845,7 @@ def build_general_event_fields(
     Activity types: quality_control, maintenance, training, precision_ag,
                     emergency, planning, documentation, inspection, meeting, other
     """
-    return {
+    fields = {
         "activity_type": activity_type,
         "name": name,
         "activity_name": activity_name,
@@ -833,6 +853,9 @@ def build_general_event_fields(
         "people_involved": people_involved,
         "observation": observation,
     }
+    if extra_data:
+        fields["extra_data"] = extra_data
+    return fields
 
 
 def build_equipment_event_fields(
@@ -865,6 +888,193 @@ def build_equipment_event_fields(
         "equipment_hours": equipment_hours,
         "observation": observation,
     }
+
+
+# =============================================================================
+# SECTION 2B: TYPICAL AMOUNTS & CARBON SOURCES HELPERS
+# =============================================================================
+
+
+def get_typical_amounts(backend_event_type, subtype, area, crop_data):
+    """Return realistic quantity ranges per event type for the typical_amounts JSONField."""
+    if backend_event_type == 5:  # Soil
+        base = {
+            "area_ha": area,
+            "working_depth_cm": "15-30",
+        }
+        if subtype == "CC":
+            base["seed_rate_kg_ha"] = "20-40"
+            base["expected_biomass_tons_ha"] = "3-6"
+        elif subtype == "ST":
+            base["samples_per_field"] = "20-30"
+        elif subtype == "TI":
+            base["fuel_L_ha"] = "8-15"
+        return base
+
+    if backend_event_type == 1:  # Production
+        if subtype == "IR":
+            return {
+                "water_volume_gal_per_cycle": "50000-200000",
+                "kWh_per_cycle": "85-250",
+                "cycles_per_season": "10-24",
+                "total_kWh_season": "1500-5000",
+            }
+        if subtype == "HA":
+            yld = crop_data.get("yield_per_ha", 10)
+            return {
+                "yield_per_ha": f"{yld * 0.8:.1f}-{yld * 1.2:.1f}",
+                "yield_unit": crop_data.get("yield_unit", "tons"),
+                "total_yield": f"{yld * area * 0.8:.0f}-{yld * area * 1.2:.0f}",
+            }
+        if subtype == "PL":
+            return {
+                "fuel_L_ha": "1.5-3.0",
+                "equipment_hours_ha": "2-5",
+            }
+        if subtype == "PR":
+            return {
+                "fuel_gal_ha": "0.5-1.5",
+                "labor_hours_ha": "3-8",
+            }
+        if subtype == "EM":
+            return {
+                "service_interval_hours": "200-300",
+                "typical_cost_usd": "200-600",
+            }
+        return {"area_ha": area}
+
+    if backend_event_type == 2:  # Chemical
+        if subtype == "FE":
+            return {
+                "rate_kg_ha": "100-250",
+                "total_volume_kg": f"{area * 100:.0f}-{area * 250:.0f}",
+                "application_fuel_L": "5-15",
+            }
+        if subtype == "FU":
+            return {
+                "rate_L_ha": "1-5",
+                "water_volume_L_ha": "400-800",
+                "applications_per_season": "2-4",
+            }
+        if subtype == "HE":
+            return {
+                "rate_L_ha": "2-6",
+                "water_volume_L_ha": "150-300",
+            }
+        if subtype == "PE":
+            return {
+                "rate_L_ha": "0.5-3",
+                "water_volume_L_ha": "400-1000",
+            }
+        return {"area_ha": area}
+
+    if backend_event_type == 6:  # Pest
+        if subtype == "SC":
+            return {
+                "area_ha": area,
+                "visits_per_season": "12-24",
+                "hours_per_visit": "2-3",
+            }
+        if subtype == "TM":
+            return {
+                "traps_per_ha": "3-5",
+                "total_traps": f"{int(area * 3)}-{int(area * 5)}",
+                "check_interval_days": "7-14",
+            }
+        if subtype == "BR":
+            return {
+                "release_rate_per_ha": "500-2000",
+                "releases_per_season": "2-4",
+            }
+        return {"area_ha": area}
+
+    if backend_event_type == 7:  # Business
+        return {
+            "audit_duration_days": "1-2",
+            "preparation_hours": "8-16",
+        }
+
+    if backend_event_type == 3:  # General
+        return {
+            "duration_hours": "2-6",
+            "participants": "2-10",
+        }
+
+    if backend_event_type == 0:  # Weather
+        return {
+            "monitoring_frequency": "continuous",
+        }
+
+    return {}
+
+
+def get_carbon_sources(backend_event_type, subtype):
+    """Return list of emission source strings with EPA/USDA factors."""
+    if backend_event_type == 5:  # Soil
+        sources = ["Diesel combustion (EPA: 10.21 kg CO2/gal)"]
+        if subtype == "CC":
+            sources.append("Carbon sequestration from cover crop biomass (negative)")
+        return sources
+
+    if backend_event_type == 1:  # Production
+        if subtype == "IR":
+            return [
+                "Electricity for pumping (EPA eGRID: 0.39 kg CO2/kWh)",
+                "Pump operation energy consumption",
+            ]
+        if subtype == "HA":
+            return [
+                "Equipment diesel (EPA: 10.21 kg CO2/gal)",
+                "Transportation fuel if applicable",
+            ]
+        if subtype == "PL":
+            return ["Equipment diesel (EPA: 10.21 kg CO2/gal)"]
+        if subtype == "PR":
+            return [
+                "Chainsaw/equipment fuel (EPA: 10.21 kg CO2/gal diesel)",
+            ]
+        if subtype == "EM":
+            return ["Equipment operation fuel (EPA: 10.21 kg CO2/gal)"]
+        return ["Direct fuel combustion (EPA: 10.21 kg CO2/gal)"]
+
+    if backend_event_type == 2:  # Chemical
+        if subtype == "FE":
+            return [
+                "Nitrogen manufacturing (10.5 kg CO2/kg N)",
+                "Phosphorus manufacturing (1.19 kg CO2/kg P2O5)",
+                "Potassium manufacturing (0.65 kg CO2/kg K2O)",
+                "Application fuel (EPA: 10.21 kg CO2/gal diesel)",
+            ]
+        if subtype == "FU":
+            return [
+                "Fungicide manufacturing (4.5 kg CO2/kg AI synthetic)",
+                "Application fuel (EPA: 10.21 kg CO2/gal diesel)",
+            ]
+        if subtype == "HE":
+            return [
+                "Herbicide manufacturing (5.5 kg CO2/kg AI)",
+                "Application fuel (EPA: 10.21 kg CO2/gal diesel)",
+            ]
+        if subtype == "PE":
+            return [
+                "Pesticide manufacturing (8.8 kg CO2/kg AI)",
+                "Application fuel (EPA: 10.21 kg CO2/gal diesel)",
+            ]
+        return ["Chemical manufacturing + application fuel"]
+
+    if backend_event_type == 6:  # Pest
+        return ["Zero direct emissions (observation/monitoring activity)"]
+
+    if backend_event_type == 7:  # Business
+        return ["Zero direct emissions (administrative activity)"]
+
+    if backend_event_type == 3:  # General
+        return ["Zero direct emissions (documentation/training)"]
+
+    if backend_event_type == 0:  # Weather
+        return ["No emissions (natural event recording)"]
+
+    return []
 
 
 # =============================================================================
@@ -934,9 +1144,16 @@ def get_tree_crop_events(crop_slug, crop_data):
                 area=area,
                 fuel_consumed=8.0,
                 fuel_unit="gal",
-                equipment_hours=4.0,
+                equipment_hours=6.0,
                 amendment_type="Crimson Clover + White Mustard seed mix",
                 observation=f"Cover crop planting for {crop_slug} orchard soil health",
+                extra_data={
+                    "seed_mix": {
+                        "crimson_clover_pct": 60,
+                        "white_mustard_pct": 40,
+                    },
+                    "expected_biomass_tons_ha": 4.5,
+                },
             ),
         },
         # === CHEMICAL EVENTS (backend_event_type=2) ===
@@ -971,8 +1188,14 @@ def get_tree_crop_events(crop_slug, crop_data):
                 phosphorus_pct=crop_data["phosphorus_pct"],
                 potassium_pct=crop_data["potassium_pct"],
                 application_method="banded",
+                fuel_consumed=round(area * 0.88, 1),
+                fuel_unit="L",
                 application_timing="fall",
                 observation=f"Base fertilization for {crop_slug}",
+                extra_data={
+                    "rate_kg_ha": 150,
+                    "volume_unit": "kg",
+                },
             ),
         },
         # 4. Secondary Fertigation
@@ -1045,6 +1268,10 @@ def get_tree_crop_events(crop_slug, crop_data):
                 fuel_unit="L",
                 application_method="trunk_drench",
                 observation=f"Fungicide prevention for {crop_slug}",
+                extra_data={
+                    "dilution_rate": "2.5 pt/acre",
+                    "water_volume_L": int(area * 500),
+                },
             ),
         },
         # 6. Organic/Copper Fungicide Spray
@@ -1114,6 +1341,11 @@ def get_tree_crop_events(crop_slug, crop_data):
                 fuel_unit="gal",
                 application_method="shielded_boom",
                 observation=f"Herbicide application for {crop_slug} orchard",
+                extra_data={
+                    "rate_L_ha": 4.7,
+                    "spray_equipment": "shielded boom sprayer",
+                    "water_volume_L_ha": 200,
+                },
             ),
         },
         # 8. Pesticide Treatment
@@ -1174,13 +1406,21 @@ def get_tree_crop_events(crop_slug, crop_data):
             "backend_event_fields": build_production_event_fields(
                 subtype="IR",
                 area=area,
-                fuel_consumed=85.0,
+                fuel_consumed=3060.0,
                 fuel_unit="kWh",
                 fuel_type="electric",
                 irrigation_method=crop_data["irrigation_method"],
                 water_source=crop_data.get("water_source", "well_groundwater"),
                 irrigation_depth=2.5,
                 observation=f"Season irrigation for {crop_slug} orchard",
+                extra_data={
+                    "is_summary": True,
+                    "date_start": "",
+                    "date_end": "",
+                    "event_count": 18,
+                    "water_volume_total": 3600000,
+                    "water_volume_unit": "gallons",
+                },
             ),
         },
         # 10. Annual Pruning
@@ -1241,6 +1481,11 @@ def get_tree_crop_events(crop_slug, crop_data):
                 fuel_type="none",
                 equipment_hours=0.0,
                 observation=f"Manual {crop_slug} harvest for premium quality",
+                extra_data={
+                    "crew_size": 12,
+                    "bins_filled": int(crop_data["yield_per_ha"] * area / 18),
+                    "kg_per_bin": 18,
+                },
             ),
         },
         # 12. Planting / Replanting
@@ -1272,6 +1517,12 @@ def get_tree_crop_events(crop_slug, crop_data):
                 equipment_hours=10.0,
                 seeds_source="certified_organic",
                 observation=f"Replanting {crop_slug} in declining blocks",
+                extra_data={
+                    "trees_planted": 625,
+                    "rootstock": "Dusa clonal",
+                    "nursery": "Brokaw Nursery",
+                    "spacing_m": "6x4",
+                },
             ),
         },
         # 13. Cultivation / Weed Management
@@ -1362,6 +1613,12 @@ def get_tree_crop_events(crop_slug, crop_data):
                 equipment_type="tractor",
                 equipment_operation_type="MN",
                 observation="Annual tractor service - oil change, filter, hydraulic check",
+                extra_data={
+                    "equipment_name": "John Deere 5075E",
+                    "maintenance_cost": 450,
+                    "odometer_hours": 1200,
+                    "next_service_hours": 1450,
+                },
             ),
         },
         # 16. Sprayer Calibration
@@ -1394,6 +1651,11 @@ def get_tree_crop_events(crop_slug, crop_data):
                 equipment_type="sprayer",
                 equipment_operation_type="CA",
                 observation="Airblast sprayer nozzle calibration and coverage verification",
+                extra_data={
+                    "equipment_name": "Rears Pul-Blast 500",
+                    "nozzles_tested": 24,
+                    "nozzles_replaced": 4,
+                },
             ),
         },
         # === PEST MANAGEMENT (backend_event_type=6) ===
@@ -1425,6 +1687,17 @@ def get_tree_crop_events(crop_slug, crop_data):
                 action_threshold_met=False,
                 area_covered=area,
                 observation=f"Bi-weekly pest scouting for {crop_slug}",
+                extra_data={
+                    "is_summary": True,
+                    "date_start": "",
+                    "date_end": "",
+                    "event_count": 12,
+                    "pest_species_observed": crop_data.get("primary_pest_species", crop_data["common_pests"]),
+                    "average_pest_pressure": "low",
+                    "area_covered_total": area,
+                    "area_unit": "ha",
+                    "carbon_impact": "zero",
+                },
             ),
         },
         # 18. Trap Monitoring
@@ -1455,6 +1728,12 @@ def get_tree_crop_events(crop_slug, crop_data):
                 trap_count=int(area * 4),
                 area_covered=area,
                 observation=f"Sticky trap monitoring for {crop_slug}",
+                extra_data={
+                    "traps_per_ha": 4,
+                    "avg_pests_per_trap": 2.5,
+                    "trap_type": "yellow sticky + pheromone",
+                    "treatment_threshold": 10,
+                },
             ),
         },
         # 19. Beneficial Insect Release
@@ -1546,6 +1825,15 @@ def get_tree_crop_events(crop_slug, crop_data):
                 verification_status="verified",
                 verified_certifier_name=crop_data.get("certification_body", "Third-party auditor"),
                 observation=f"Annual certification audit for {crop_slug} operation",
+                extra_data={
+                    "audit_date": "",
+                    "auditor": crop_data.get("certification_body", "Third-party auditor"),
+                    "standard": crop_data.get("certification_standard", "Food Safety"),
+                    "control_points": 218,
+                    "major_nc": 0,
+                    "minor_nc": 3,
+                    "valid_until": "",
+                },
             ),
         },
         # === GENERAL (backend_event_type=3) ===
@@ -1988,7 +2276,9 @@ def get_grain_events(crop_slug, crop_data):
             "backend_event_fields": build_production_event_fields(
                 subtype="IR",
                 area=crop_data["typical_area"],
-                fuel_consumed=20.0,
+                fuel_consumed=45.0,
+                fuel_unit="kWh",
+                fuel_type="electric",
                 irrigation_method=crop_data["irrigation_method"],
                 irrigation_depth=2.5,
                 observation=f"Field irrigation for {crop_slug}",
@@ -2575,7 +2865,9 @@ def get_fiber_events(crop_slug, crop_data):
             "backend_event_fields": build_production_event_fields(
                 subtype="IR",
                 area=crop_data["typical_area"],
-                fuel_consumed=25.0,
+                fuel_consumed=30.0,
+                fuel_unit="kWh",
+                fuel_type="electric",
                 irrigation_method="furrow",
                 irrigation_depth=3.0,
                 observation=f"Furrow irrigation for {crop_slug}",
@@ -2767,6 +3059,14 @@ class Command(BaseCommand):
                     subtype = event_data["backend_event_fields"].get(
                         "type", event_data["backend_event_fields"].get("activity_type", "N/A")
                     )
+
+                    # Auto-populate typical_amounts and carbon_sources
+                    if not event_data.get("typical_amounts"):
+                        event_data["typical_amounts"] = get_typical_amounts(
+                            evt_type, subtype, crop_data["typical_area"], crop_data
+                        )
+                    if not event_data.get("carbon_sources"):
+                        event_data["carbon_sources"] = get_carbon_sources(evt_type, subtype)
 
                     if dry_run:
                         self.stdout.write(
