@@ -698,93 +698,27 @@ def _get_blockchain_verification_data(history):
 def _compute_finalization_hash(history):
     """Re-compute the finalization hash from the current state of events.
 
-    Uses the SAME lightweight .values() algorithm as product/views.py
-    _store_finalization_hash() so the result can be compared against the
-    stored hash to detect tampering.
+    Delegates to History.compute_finalization_hash() — single source of truth.
     """
-    import hashlib
-    import json
-
-    event_models = [
-        WeatherEvent,
-        ChemicalEvent,
-        ProductionEvent,
-        GeneralEvent,
-        EquipmentEvent,
-        SoilManagementEvent,
-        PestManagementEvent,
-        BusinessEvent,
-    ]
-
-    all_events = []
-    for model in event_models:
-        qs = model.objects.filter(history=history).values("id", "index", "date", "description")
-        for row in qs:
-            row["event_type"] = model.__name__
-            all_events.append(row)
-
-    all_events.sort(key=lambda e: e["index"])
-
-    event_data = json.dumps(all_events, sort_keys=True, default=str, separators=(",", ":"))
-
-    try:
-        from web3 import Web3
-
-        raw_hex = Web3.keccak(text=event_data).hex()
-        return raw_hex.removeprefix("0x"), len(all_events)
-    except ImportError:
-        return hashlib.sha256(event_data.encode()).hexdigest(), len(all_events)
+    return history.compute_finalization_hash()
 
 
 def _recompute_production_data_hash(history, finalization_hash):
-    """Rebuild the raw_data dict exactly as the submission task (carbon/tasks.py) did,
-    and hash it with keccak256.  The result should match the on-chain dataHash
-    if no data has been modified since blockchain submission.
+    """Re-compute the blockchain data hash from current DB state.
 
-    IMPORTANT: The field names, order, and serialisation must stay in sync with
-    carbon/tasks.py _submit_single_production_to_blockchain().  If the task changes
-    its raw_data schema, this function MUST be updated to match.
+    Delegates to carbon.tasks.build_blockchain_raw_data() — single source of truth.
+    The finalization_hash parameter is unused since build_blockchain_raw_data reads
+    it directly from history.extra_data, but kept for API compatibility.
     """
-    import hashlib
-    import json
-
-    from django.db.models import Sum
-
     try:
-        from carbon.models import CarbonEntry
+        from carbon.tasks import build_blockchain_raw_data
 
-        carbon_entries = CarbonEntry.objects.filter(production=history)
-        total_co2e = float(carbon_entries.aggregate(total=Sum("co2e_amount"))["total"] or 0)
-        carbon_entry_count = carbon_entries.count()
-
-        extra = history.extra_data if isinstance(history.extra_data, dict) else {}
         company_id = None
         if history.parcel and history.parcel.establishment:
             company_id = history.parcel.establishment.company_id
 
-        finalization_event_count = extra.get("finalization_event_count", 0)
-
-        # Must match carbon/tasks.py _submit_single_production_to_blockchain() raw_data exactly
-        raw_data = {
-            "production_id": history.id,
-            "company_id": company_id,
-            "start_date": (history.start_date.isoformat() if history.start_date else None),
-            "finish_date": (history.finish_date.isoformat() if history.finish_date else None),
-            "finalization_hash": finalization_hash,
-            "finalization_event_count": finalization_event_count,
-            "total_co2e": total_co2e,
-            "carbon_entry_count": carbon_entry_count,
-        }
-
-        sorted_raw = json.dumps(raw_data, sort_keys=True, default=str)
-
-        try:
-            from web3 import Web3
-
-            raw_hex = Web3.keccak(text=sorted_raw).hex()
-            return raw_hex.removeprefix("0x")
-        except ImportError:
-            return hashlib.sha256(sorted_raw.encode()).hexdigest()
+        _raw_data, data_hash, *_ = build_blockchain_raw_data(history, company_id)
+        return data_hash
 
     except Exception as e:
         logger.error("Failed to recompute production data hash for %s: %s", history.id, e)

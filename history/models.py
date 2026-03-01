@@ -549,6 +549,47 @@ class History(models.Model):
 
         self.save()
 
+    def compute_finalization_hash(self):
+        """Compute keccak256 hash of all event data for integrity verification.
+
+        Single source of truth for finalization hashing. Used by:
+        - product/views.py _store_finalization_hash() — at finish time
+        - history/transparency_views.py — at verification time
+
+        Returns (hash_hex, event_count) tuple.
+        """
+        import hashlib
+        import json
+
+        event_models = [
+            WeatherEvent,
+            ChemicalEvent,
+            ProductionEvent,
+            GeneralEvent,
+            EquipmentEvent,
+            SoilManagementEvent,
+            PestManagementEvent,
+            BusinessEvent,
+        ]
+
+        all_events = []
+        for model in event_models:
+            qs = model.objects.filter(history=self).values("id", "index", "date", "description")
+            for row in qs:
+                row["event_type"] = model.__name__
+                all_events.append(row)
+
+        all_events.sort(key=lambda e: e["index"])
+        event_data = json.dumps(all_events, sort_keys=True, default=str, separators=(",", ":"))
+
+        try:
+            from web3 import Web3
+
+            raw_hex = Web3.keccak(text=event_data).hex()
+            return raw_hex.removeprefix("0x"), len(all_events)
+        except ImportError:
+            return hashlib.sha256(event_data.encode()).hexdigest(), len(all_events)
+
     def get_events(self):
         from .serializers import (
             BusinessEventSerializer,

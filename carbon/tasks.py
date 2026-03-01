@@ -273,6 +273,49 @@ def batch_submit_monthly_summaries(self):
         raise self.retry(countdown=60, max_retries=3)
 
 
+def build_blockchain_raw_data(production, company_id):
+    """Build the raw_data dict for blockchain hashing.
+
+    Single source of truth for the data structure that gets hashed and submitted
+    on-chain. Used by:
+    - _submit_single_production_to_blockchain() — at submission time
+    - history/transparency_views.py _recompute_production_data_hash() — at verification time
+
+    Returns (raw_data, data_hash) tuple.
+    """
+    extra = production.extra_data if isinstance(production.extra_data, dict) else {}
+    finalization_hash = extra.get("finalization_hash")
+    finalization_event_count = extra.get("finalization_event_count", 0)
+
+    # Carbon data is supplementary — include if available, default to 0
+    carbon_entries = CarbonEntry.objects.filter(production=production)
+    summary_data = carbon_entries.aggregate(total_co2e=Sum("co2e_amount"), entry_count=Count("id"))
+    total_co2e = float(summary_data["total_co2e"] or 0)
+    carbon_entry_count = summary_data["entry_count"] or 0
+
+    raw_data = {
+        "production_id": production.id,
+        "company_id": company_id,
+        "start_date": (production.start_date.isoformat() if production.start_date else None),
+        "finish_date": (production.finish_date.isoformat() if production.finish_date else None),
+        "finalization_hash": finalization_hash,
+        "finalization_event_count": finalization_event_count,
+        "total_co2e": total_co2e,
+        "carbon_entry_count": carbon_entry_count,
+    }
+
+    sorted_raw = json.dumps(raw_data, sort_keys=True, default=str)
+    try:
+        from web3 import Web3
+
+        raw_hex = Web3.keccak(text=sorted_raw).hex()
+        data_hash = raw_hex.removeprefix("0x")
+    except ImportError:
+        data_hash = hashlib.sha256(sorted_raw.encode()).hexdigest()
+
+    return raw_data, data_hash, total_co2e, carbon_entry_count, finalization_event_count
+
+
 def _submit_single_production_to_blockchain(production, company, blockchain_service):
     """
     Submit a single finalized production to blockchain.
@@ -297,49 +340,17 @@ def _submit_single_production_to_blockchain(production, company, blockchain_serv
         return True
 
     # Extract finalization hash — the primary integrity anchor.
-    # This is a keccak256 of all production events (type, date, description, index),
-    # computed at finish_history time by _store_finalization_hash().
-    finalization_hash = None
-    finalization_event_count = 0
-    if production.extra_data and isinstance(production.extra_data, dict):
-        finalization_hash = production.extra_data.get("finalization_hash")
-        finalization_event_count = production.extra_data.get("finalization_event_count", 0)
-
-    if not finalization_hash:
+    extra = production.extra_data if isinstance(production.extra_data, dict) else {}
+    if not extra.get("finalization_hash"):
         logger.warning(
             "Production %s has no finalization hash — cannot submit to blockchain", production.id
         )
         return False
 
-    # Carbon data is supplementary — include if available, default to 0
-    carbon_entries = CarbonEntry.objects.filter(production=production)
-    summary_data = carbon_entries.aggregate(total_co2e=Sum("co2e_amount"), entry_count=Count("id"))
-    total_co2e = float(summary_data["total_co2e"] or 0)
-    carbon_entry_count = summary_data["entry_count"] or 0
-
-    # Build the complete production record for on-chain hash.
-    # Primary: production metadata + finalization hash (events integrity)
-    # Supplementary: carbon data (when available)
-    raw_data = {
-        "production_id": production.id,
-        "company_id": company.id,
-        "start_date": (production.start_date.isoformat() if production.start_date else None),
-        "finish_date": (production.finish_date.isoformat() if production.finish_date else None),
-        "finalization_hash": finalization_hash,
-        "finalization_event_count": finalization_event_count,
-        "total_co2e": total_co2e,
-        "carbon_entry_count": carbon_entry_count,
-    }
-
-    # Use keccak256 to match Solidity contract, fallback to SHA-256
-    sorted_raw = json.dumps(raw_data, sort_keys=True, default=str)
-    try:
-        from web3 import Web3
-
-        raw_hex = Web3.keccak(text=sorted_raw).hex()
-        data_hash = raw_hex.removeprefix("0x")
-    except ImportError:
-        data_hash = hashlib.sha256(sorted_raw.encode()).hexdigest()
+    # Build raw_data and hash using the shared function (single source of truth)
+    raw_data, data_hash, total_co2e, carbon_entry_count, finalization_event_count = (
+        build_blockchain_raw_data(production, company.id)
+    )
 
     # Submit to blockchain
     logger.info(

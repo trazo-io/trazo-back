@@ -283,62 +283,16 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     def _store_finalization_hash(self, history):
         """Compute and store a keccak256 hash of all event data at completion time.
 
-        Uses lightweight DB queries instead of full serialization to avoid
-        triggering carbon calculations, image processing, or other expensive
-        serializer operations. The hash captures the immutable farming event
-        data: type, date, description, index, and type-specific fields.
+        Delegates to History.compute_finalization_hash() — single source of truth.
         """
         try:
-            from history.models import (
-                BusinessEvent,
-                ChemicalEvent,
-                EquipmentEvent,
-                GeneralEvent,
-                PestManagementEvent,
-                ProductionEvent,
-                SoilManagementEvent,
-                WeatherEvent,
-            )
-
-            # Collect lightweight event records — values() hits DB directly,
-            # bypasses serializers entirely.
-            event_models = [
-                WeatherEvent,
-                ChemicalEvent,
-                ProductionEvent,
-                GeneralEvent,
-                EquipmentEvent,
-                SoilManagementEvent,
-                PestManagementEvent,
-                BusinessEvent,
-            ]
-
-            all_events = []
-            for model in event_models:
-                qs = model.objects.filter(history=history).values("id", "index", "date", "description")
-                for row in qs:
-                    row["event_type"] = model.__name__
-                    all_events.append(row)
-
-            all_events.sort(key=lambda e: e["index"])
-
-            event_data = json.dumps(all_events, sort_keys=True, default=str, separators=(",", ":"))
-
-            try:
-                from web3 import Web3
-
-                raw_hex = Web3.keccak(text=event_data).hex()
-                finalization_hash = raw_hex.removeprefix("0x")
-            except ImportError:
-                import hashlib
-
-                finalization_hash = hashlib.sha256(event_data.encode()).hexdigest()
+            finalization_hash, event_count = history.compute_finalization_hash()
 
             if history.extra_data is None:
                 history.extra_data = {}
             history.extra_data["finalization_hash"] = finalization_hash
             history.extra_data["finalization_timestamp"] = timezone.now().isoformat()
-            history.extra_data["finalization_event_count"] = len(all_events)
+            history.extra_data["finalization_event_count"] = event_count
             history.save(update_fields=["extra_data"])
         except Exception as e:
             logger.error("Failed to store finalization hash for history %s: %s", history.id, e)
