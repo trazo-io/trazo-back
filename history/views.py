@@ -92,13 +92,14 @@ def _background_create_events(viewset_instance, history_id, template_events, tem
     try:
         history = History.objects.get(id=history_id)
 
-        # Generate QR code (deferred from save() for fast response)
-        history.generate_qr_code(is_new=True)
-        logger.info("Background QR code generated for history %s", history_id)
-
+        # Create events FIRST so they appear in polling immediately (~1s)
         viewset_instance._create_template_events(history, template_events, template_id=template_id)
         History.objects.filter(id=history_id).update(events_status="ready")
         logger.info("Background event creation completed for history %s", history_id)
+
+        # Generate QR code AFTER events (takes ~40s for Pillow + S3 upload)
+        history.generate_qr_code(is_new=True)
+        logger.info("Background QR code generated for history %s", history_id)
     except Exception as e:
         logger.exception("Background event creation failed for history %s: %s", history_id, e)
         History.objects.filter(id=history_id).update(events_status="failed")
