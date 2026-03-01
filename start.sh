@@ -16,4 +16,4 @@ echo "=== Migration Complete, Collecting Static ==="
 python manage.py collectstatic --noinput --settings=$SETTINGS_MODULE
 
 echo "=== Static Complete, Starting Gunicorn ==="
-exec gunicorn backend.wsgi:application --bind 0.0.0.0:$PORT --workers 1 --log-level debug
+exec gunicorn backend.wsgi:application --bind 0.0.0.0:$PORT --workers 1 --timeout 120 --log-level debug
