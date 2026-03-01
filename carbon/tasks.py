@@ -234,12 +234,14 @@ def batch_submit_monthly_summaries(self):
             logger.info(f"Processing company: {company.name} (ID: {company.id})")
 
             # Find finalized productions not yet submitted to blockchain.
-            # A production is "finalized" when finish_date is set.
+            # A production is "finalized" when finish_date is set and
+            # finalization_hash exists (events have been hashed).
             # A production is "not yet on blockchain" when extra_data has no
             # blockchain_tx_hash, or extra_data is null.
             productions = History.objects.filter(
                 parcel__establishment__company=company,
                 finish_date__isnull=False,
+                extra_data__finalization_hash__isnull=False,
             ).exclude(
                 extra_data__blockchain_tx_hash__isnull=False,
             )
@@ -275,7 +277,11 @@ def _submit_single_production_to_blockchain(production, company, blockchain_serv
     """
     Submit a single finalized production to blockchain.
 
-    Extracted from batch_submit_monthly_summaries so it can be called from:
+    Transparency-first: The primary data anchored on-chain is the finalization
+    hash (keccak256 of all production events). Carbon data is supplementary —
+    included when available but NOT required for blockchain submission.
+
+    Called from:
     1. The immediate submission task (at finalization time)
     2. The monthly batch reconciliation (safety net for failures)
 
@@ -287,41 +293,42 @@ def _submit_single_production_to_blockchain(production, company, blockchain_serv
         and isinstance(production.extra_data, dict)
         and production.extra_data.get("blockchain_tx_hash")
     ):
-        logger.info(f"Production {production.id} already on blockchain, skipping")
+        logger.info("Production %s already on blockchain, skipping", production.id)
         return True
 
-    # Get ALL carbon entries for this production (entire lifecycle)
-    carbon_entries = CarbonEntry.objects.filter(production=production)
-
-    if not carbon_entries.exists():
-        logger.info(f"No carbon entries for production {production.id}, skipping")
-        return False
-
-    # Calculate total production summary
-    summary_data = carbon_entries.aggregate(total_co2e=Sum("co2e_amount"), entry_count=Count("id"))
-    total_co2e = summary_data["total_co2e"] or 0
-    entry_count = summary_data["entry_count"] or 0
-
-    # Include finalization hash — connects event integrity to
-    # the on-chain record:
-    # events -> finalization_hash -> production_hash -> blockchain
+    # Extract finalization hash — the primary integrity anchor.
+    # This is a keccak256 of all production events (type, date, description, index),
+    # computed at finish_history time by _store_finalization_hash().
     finalization_hash = None
     finalization_event_count = 0
     if production.extra_data and isinstance(production.extra_data, dict):
         finalization_hash = production.extra_data.get("finalization_hash")
         finalization_event_count = production.extra_data.get("finalization_event_count", 0)
 
-    # Build the complete production record for hashing
+    if not finalization_hash:
+        logger.warning(
+            "Production %s has no finalization hash — cannot submit to blockchain", production.id
+        )
+        return False
+
+    # Carbon data is supplementary — include if available, default to 0
+    carbon_entries = CarbonEntry.objects.filter(production=production)
+    summary_data = carbon_entries.aggregate(total_co2e=Sum("co2e_amount"), entry_count=Count("id"))
+    total_co2e = float(summary_data["total_co2e"] or 0)
+    carbon_entry_count = summary_data["entry_count"] or 0
+
+    # Build the complete production record for on-chain hash.
+    # Primary: production metadata + finalization hash (events integrity)
+    # Supplementary: carbon data (when available)
     raw_data = {
         "production_id": production.id,
         "company_id": company.id,
         "start_date": (production.start_date.isoformat() if production.start_date else None),
         "finish_date": (production.finish_date.isoformat() if production.finish_date else None),
-        "total_co2e": float(total_co2e),
-        "entry_count": entry_count,
-        "entries": list(carbon_entries.values("id", "co2e_amount", "type", "timestamp")),
         "finalization_hash": finalization_hash,
         "finalization_event_count": finalization_event_count,
+        "total_co2e": total_co2e,
+        "carbon_entry_count": carbon_entry_count,
     }
 
     # Use keccak256 to match Solidity contract, fallback to SHA-256
@@ -336,7 +343,11 @@ def _submit_single_production_to_blockchain(production, company, blockchain_serv
 
     # Submit to blockchain
     logger.info(
-        f"Submitting production {production.id} to blockchain " f"({entry_count} entries, {total_co2e} kg CO2e)"
+        "Submitting production %s to blockchain (%d events documented, %d carbon entries, %.1f kg CO2e)",
+        production.id,
+        finalization_event_count,
+        carbon_entry_count,
+        total_co2e,
     )
 
     blockchain_result = blockchain_service.submit_monthly_summary(
@@ -348,8 +359,8 @@ def _submit_single_production_to_blockchain(production, company, blockchain_serv
     )
 
     if blockchain_result and blockchain_result.get("success"):
-        logger.info(f"Successfully submitted production {production.id}")
-        logger.info(f"Transaction hash: {blockchain_result.get('transaction_hash')}")
+        logger.info("Successfully submitted production %s", production.id)
+        logger.info("Transaction hash: %s", blockchain_result.get("transaction_hash"))
 
         # Store blockchain result on this History record
         if production.extra_data is None:
@@ -363,7 +374,7 @@ def _submit_single_production_to_blockchain(production, company, blockchain_serv
         production.save(update_fields=["extra_data"])
         return True
     else:
-        logger.error(f"Failed to submit production {production.id}: {blockchain_result}")
+        logger.error("Failed to submit production %s: %s", production.id, blockchain_result)
         return False
 
 
