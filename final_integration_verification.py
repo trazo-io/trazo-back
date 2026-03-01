@@ -217,7 +217,6 @@ class FinalIntegrationVerification:
 
             # Test circuit breaker
             from carbon.services.circuit_breaker_enhanced import CircuitBreakerManager
-            from carbon.services.real_usda_integration import RealUSDAAPIClient
 
             self._log_success("critical", "SERVICES", "Critical services initialize successfully")
 

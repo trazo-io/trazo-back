@@ -343,38 +343,8 @@ class APIKeyRotationService:
 
     def _test_key_in_context(self, service_name: str, api_key: str) -> bool:
         """Test API key in actual production context"""
-        try:
-            if service_name.startswith("usda_"):
-                # Test with actual USDA integration
-                from carbon.services.real_usda_integration import USDAIntegrationService
-
-                # Temporarily override the key for testing
-                original_keys = None
-                try:
-                    usda_service = USDAIntegrationService()
-
-                    # Test a simple operation
-                    if service_name == "usda_fooddata":
-                        result = usda_service._test_fooddata_connection(api_key)
-                    elif service_name == "usda_nass":
-                        result = usda_service._test_nass_connection(api_key)
-                    elif service_name == "usda_ers":
-                        result = usda_service._test_ers_connection(api_key)
-                    else:
-                        return True
-
-                    return result
-
-                except Exception as e:
-                    logger.error(f"Production context test failed: {e}")
-                    return False
-
-            # For other services, basic validation is sufficient
-            return True
-
-        except Exception as e:
-            logger.error(f"Context test failed for {service_name}: {e}")
-            return False
+        # USDA API integration removed for MVP — all carbon calculations use hardcoded factors.
+        return True
 
     def _audit_log_rotation(self, service_name: str, success: bool, error: str = None):
         """Log API key rotation for audit purposes"""

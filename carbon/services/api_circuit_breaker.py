@@ -356,20 +356,6 @@ class USDAAPICircuitBreakers:
     def _nass_fallback(self, *args, **kwargs) -> Dict[str, Any]:
         """Fallback for NASS API failures"""
         logger.info("Using NASS fallback data")
-
-        # Return cached data or default structure
-        from .usda_cache_service import specialized_cache
-
-        if len(args) >= 2:  # crop_type, state expected
-            crop_type, state = args[0], args[1]
-            cached_data, _ = specialized_cache.get_cached_nass_yield(crop_type, state)
-
-            if cached_data:
-                cached_data["data_source"] = "cache_fallback"
-                cached_data["warning"] = "Using cached data due to API unavailability"
-                return cached_data
-
-        # Last resort: return default structure
         return {"data": [], "data_source": "fallback", "warning": "NASS API unavailable, using default data"}
 
     def _fooddata_fallback(self, *args, **kwargs) -> Dict[str, Any]:

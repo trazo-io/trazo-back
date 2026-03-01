@@ -51,7 +51,6 @@ from carbon.services.api_circuit_breaker import APICircuitBreaker
 from carbon.services.circuit_breaker_enhanced import EnhancedCircuitBreaker
 from carbon.services.enhanced_error_handling import EnhancedErrorHandler
 from carbon.services.multisig_blockchain_enhanced import MultiSigBlockchainService
-from carbon.services.real_usda_integration import RealUSDAAPIClient
 from carbon.services.secure_key_management import SecureKeyManager
 from common.services.enhanced_logging import EnhancedLogger
 from common.services.external_api_manager import ExternalAPIManager
@@ -126,16 +125,8 @@ class ProductionEdgeCaseTests:
             except Exception as e:
                 print(f"    ⚠️ Blockchain failure not properly handled: {e}")
 
-        # Test USDA API unavailable during init
-        with patch("requests.get") as mock_get:
-            mock_get.side_effect = ConnectTimeout("USDA API unreachable")
-            try:
-                usda_service = RealUSDAAPIClient()
-                # Should initialize with cached data
-                assert hasattr(usda_service, "cache_fallback")
-                print("    ✓ USDA API failure handled with cache fallback")
-            except Exception as e:
-                print(f"    ⚠️ USDA API failure not properly handled: {e}")
+        # USDA API integration removed for MVP — using hardcoded factors
+        print("    ✓ USDA API removed for MVP (hardcoded factors)")
 
     def test_database_connection_issues(self):
         """Test system behavior under database connectivity issues"""
@@ -228,9 +219,8 @@ class ProductionEdgeCaseTests:
                 connection.ensure_connection()
 
             elif var_name == "USDA_API_KEY":
-                # Should use cached emission factors
-                usda_service = RealUSDAAPIClient()
-                assert hasattr(usda_service, "use_cached_factors")
+                # USDA API removed for MVP — hardcoded factors used
+                pass
 
             elif var_name == "BLOCKCHAIN_PRIVATE_KEY":
                 # Should operate in read-only mode

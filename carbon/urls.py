@@ -72,8 +72,6 @@ urlpatterns = [
     path("deepgram-token/", views.deepgram_token, name="deepgram-token"),
     # AI-powered smart event suggestions
     path("ai-event-suggestions/", views.get_ai_event_suggestions, name="ai-event-suggestions"),
-    # USDA Government Data Integration
-    path("usda/emission-factors/", views.get_real_usda_factors, name="get-usda-emission-factors"),
     path("webhooks/john-deere/", views.john_deere_webhook, name="john_deere_webhook"),
     path("webhooks/weather-station/", views.weather_station_webhook, name="weather_station_webhook"),
     # IoT Device Management

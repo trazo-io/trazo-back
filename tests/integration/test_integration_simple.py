@@ -111,8 +111,6 @@ class SimpleIntegrationTest:
             # Test carbon services
             from carbon.services import calculator
             from carbon.services.circuit_breaker_enhanced import CircuitBreakerManager
-            from carbon.services.real_usda_integration import USDAIntegrationService
-
             self._log_success("SERVICES", "Carbon services imported successfully")
 
             # Test other services

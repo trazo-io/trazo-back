@@ -792,14 +792,8 @@ class OptimizedCarbonCalculator:
             self.initialized = True
 
     def _get_cached_usda_client(self):
-        """Get USDA client instance (don't cache complex objects)"""
-        try:
-            from .services.real_usda_integration import RealUSDAAPIClient
-
-            return RealUSDAAPIClient()
-        except Exception:
-            # Fallback if service not available or keys missing
-            return None
+        """USDA API client removed for MVP — using hardcoded factors."""
+        return None
 
     def get_emission_factors(self, crop_type: str, region: str = "US") -> Dict[str, float]:
         """
@@ -4826,7 +4820,9 @@ class PublicProductionViewSet(viewsets.ViewSet):
             return None
 
         # First try exact match
-        benchmark = CarbonBenchmark.objects.filter(crop_type=crop_name, year=year, usda_factors_used=usda_factors_used).first()
+        benchmark = CarbonBenchmark.objects.filter(
+            crop_type=crop_name, year=year, usda_factors_used=usda_factors_used
+        ).first()
 
         if benchmark:
             return benchmark
@@ -9870,185 +9866,6 @@ def deploy_carbon_credit_contract(request):
         logger.error(f"Contract deployment failed: {e}")
         return Response(
             {"error": "Contract deployment failed", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-
-
-# Add this new endpoint at the end of the file before the last closing
-
-
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def get_real_usda_factors(request):
-    """NEW ENDPOINT: Get real-time USDA emission factors using actual government APIs"""
-    try:
-        crop_type = request.query_params.get("crop_type", "corn")
-        state = request.query_params.get("state", "IA")
-
-        # Add aggressive caching to prevent repeated USDA API calls
-        cache_key = f"usda_factors_{crop_type}_{state}_v2"
-        cached_result = cache.get(cache_key)
-
-        if cached_result:
-            logger.info(f"✅ Returning cached USDA factors for {crop_type} in {state}")
-            cached_result["cache_hit"] = True
-            cached_result["timestamp"] = timezone.now().isoformat()
-            return Response(cached_result)
-
-        logger.info(f"🔄 Fetching fresh USDA factors for {crop_type} in {state}")
-
-        # Import real USDA integration
-        from .services.enhanced_usda_factors import EnhancedUSDAFactors
-        from .services.real_usda_integration import RealUSDAAPIClient, get_real_usda_carbon_data
-
-        # Get real-time factors using enhanced service
-        enhanced_usda = EnhancedUSDAFactors()
-        real_factors = enhanced_usda.get_real_time_emission_factors(crop_type, state)
-
-        # Get real USDA client for additional data
-        usda_client = RealUSDAAPIClient()
-
-        # Get real benchmark data
-        benchmark_yield = usda_client.get_benchmark_yield(crop_type, state)
-
-        # Test farm practices for demonstration
-        demo_practices = {
-            "inputs": {"nitrogen_kg": 150, "phosphorus_kg": 50, "diesel_liters": 80},
-            "area_hectares": 100,
-            "yield_per_hectare": 9000,
-        }
-
-        # Get complete carbon calculation with real data
-        carbon_calculation = get_real_usda_carbon_data(crop_type, state, demo_practices)
-
-        # Get credibility data
-        try:
-            credibility_data = enhanced_usda.get_usda_credibility_data(None)
-        except Exception as e:
-            logger.warning(f"Could not get credibility data: {e}")
-            credibility_data = {"usda_based": True, "confidence_level": "high", "credibility_score": 85}
-
-        result = {
-            "success": True,
-            "crop_type": crop_type,
-            "state": state,
-            "api_status": {
-                "nass_configured": bool(usda_client.nass_api_key),
-                "ers_configured": bool(usda_client.ers_api_key),
-                "data_source": "Real USDA APIs",
-            },
-            "emission_factors": real_factors,
-            "benchmark_data": {
-                "regional_yield": benchmark_yield,
-                "unit": "bushels/acre" if benchmark_yield else None,
-                "kg_per_hectare": round(benchmark_yield * 62.8) if benchmark_yield else None,
-            },
-            "carbon_calculation": carbon_calculation,
-            "usda_credibility": credibility_data,
-            "api_attribution": getattr(settings, "USDA_API_ATTRIBUTION", ""),
-            "timestamp": timezone.now().isoformat(),
-            "real_data": True,
-            "cache_hit": False,
-        }
-
-        # Cache for 30 minutes to prevent repeated API calls
-        cache.set(cache_key, result, 1800)
-        logger.info(f"✅ Cached USDA factors for {crop_type} in {state} for 30 minutes")
-
-        return Response(result)
-
-    except Exception as e:
-        logger.error(f"Error getting real USDA factors: {e}")
-        return Response(
-            {
-                "success": False,
-                "error": f"Failed to get USDA factors: {str(e)}",
-                "timestamp": timezone.now().isoformat(),
-                "cache_hit": False,
-            },
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
-
-
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def test_usda_apis(request):
-    """NEW ENDPOINT: Test all USDA API connections and return status"""
-    try:
-        from .services.real_usda_integration import RealUSDAAPIClient
-
-        usda_client = RealUSDAAPIClient()
-
-        # Test NASS API
-        nass_test = None
-        nass_error = None
-        try:
-            nass_data = usda_client.get_nass_crop_data("corn", "IA", 2023)
-            nass_test = {
-                "status": "success" if nass_data else "no_data",
-                "records_found": len(nass_data.get("data", [])) if nass_data else 0,
-                "sample_data": nass_data.get("data", [{}])[0] if nass_data and nass_data.get("data") else None,
-            }
-        except Exception as e:
-            nass_error = str(e)
-            nass_test = {"status": "error", "error": nass_error}
-
-        # Test benchmark calculation
-        benchmark_test = None
-        try:
-            benchmark = usda_client.get_benchmark_yield("corn", "IA")
-            benchmark_test = {
-                "status": "success" if benchmark else "no_data",
-                "value": benchmark,
-                "unit": "bushels/acre",
-            }
-        except Exception as e:
-            benchmark_test = {"status": "error", "error": str(e)}
-
-        # Test carbon calculation
-        carbon_test = None
-        try:
-            farm_practices = {
-                "inputs": {"nitrogen_kg": 150, "diesel_liters": 80},
-                "area_hectares": 100,
-                "yield_per_hectare": 9000,
-            }
-            carbon_result = usda_client.calculate_carbon_intensity("corn", "IA", farm_practices)
-            carbon_test = {
-                "status": "success" if not carbon_result.get("error") else "error",
-                "carbon_intensity": carbon_result.get("carbon_intensity", 0),
-                "confidence_level": carbon_result.get("confidence_level", "unknown"),
-            }
-        except Exception as e:
-            carbon_test = {"status": "error", "error": str(e)}
-
-        return Response(
-            {
-                "api_keys_configured": {"nass": bool(usda_client.nass_api_key), "ers": bool(usda_client.ers_api_key)},
-                "tests": {
-                    "nass_data_fetch": nass_test,
-                    "benchmark_calculation": benchmark_test,
-                    "carbon_calculation": carbon_test,
-                },
-                "overall_status": (
-                    "operational"
-                    if all(
-                        [
-                            nass_test and nass_test.get("status") == "success",
-                            benchmark_test and benchmark_test.get("status") == "success",
-                            carbon_test and carbon_test.get("status") == "success",
-                        ]
-                    )
-                    else "partial"
-                ),
-                "timestamp": timezone.now().isoformat(),
-            }
-        )
-
-    except Exception as e:
-        logger.error(f"Error testing USDA APIs: {e}")
-        return Response(
-            {"error": f"API test failed: {str(e)}", "timestamp": timezone.now().isoformat()},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
 

@@ -259,19 +259,8 @@ class IntegrationTestRunner:
     def _test_third_party_integrations(self):
         """Test USDA API, Stripe, and blockchain services"""
         try:
-            # Test USDA API integration (if configured)
-            if hasattr(settings, "USDA_API_KEY") and settings.USDA_API_KEY:
-                from carbon.services.real_usda_integration import USDAIntegrationService
-
-                usda_service = USDAIntegrationService()
-
-                # Test a simple USDA API call
-                try:
-                    # This should not fail even if API is down (circuit breaker)
-                    result = usda_service.get_crop_emission_factor("corn", "conventional")
-                    self._log_success("USDA", "USDA service integration working")
-                except Exception as e:
-                    self._log_warning("USDA", f"USDA service issue (expected if no API key): {str(e)}")
+            # USDA API integration removed for MVP — using hardcoded factors
+            self._log_success("USDA", "USDA API removed for MVP (hardcoded EPA/USDA factors)")
             else:
                 self._log_warning("USDA", "USDA API key not configured - skipping test")
 
