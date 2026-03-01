@@ -336,10 +336,15 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         Returns the production immediately (<1s). Template events are created in a
         background thread — the frontend polls for progressive event loading.
         """
+        import time as _time
+
+        _t0 = _time.monotonic()
         try:
             from users.models import WorksIn
 
             data = request.data
+            _t1 = _time.monotonic()
+            logger.info("start_production TIMING: request.data parsed in %.3fs", _t1 - _t0)
 
             # Validate required fields
             required_fields = ["name", "parcel_id", "crop_type", "start_date"]
@@ -355,6 +360,8 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
             # Get company for permission and blockchain checks
             company = parcel.establishment.company
+            _t2 = _time.monotonic()
+            logger.info("start_production TIMING: parcel+company fetched in %.3fs (total %.3fs)", _t2 - _t1, _t2 - _t0)
 
             # Role-based permission check: only CA/FM can create productions
             if not request.user.is_superuser:
@@ -409,6 +416,8 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             # Determine if we'll create template events in background
             template_events = data.get("template_events")
             has_templates = bool(template_events)
+            _t3 = _time.monotonic()
+            logger.info("start_production TIMING: pre-create done in %.3fs (total %.3fs)", _t3 - _t2, _t3 - _t0)
 
             # Create History + update parcel atomically, then spawn background thread
             with transaction.atomic():
@@ -442,6 +451,9 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                         ).start()
                     )
 
+            _t4 = _time.monotonic()
+            logger.info("start_production TIMING: atomic block (create+save) in %.3fs (total %.3fs)", _t4 - _t3, _t4 - _t0)
+
             # Invalidate cache for this parcel's history list
             cache_key = f"history_list_parcel_{parcel.id}_v3"
             cache.delete(cache_key)
@@ -473,6 +485,9 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 "parcel": {"id": parcel.id, "name": parcel.name},
             }
 
+            _t5 = _time.monotonic()
+            logger.info("start_production TIMING: TOTAL %.3fs (data=%.3f, queries=%.3f, pre=%.3f, atomic=%.3f, response=%.3f)",
+                        _t5 - _t0, _t1 - _t0, _t2 - _t1, _t3 - _t2, _t4 - _t3, _t5 - _t4)
             return Response(response_data, status=status.HTTP_201_CREATED)
 
         except ValueError as e:
