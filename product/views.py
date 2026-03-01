@@ -223,14 +223,47 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     def _store_finalization_hash(self, history):
         """Compute and store a keccak256 hash of all event data at completion time.
 
-        The finalization hash cryptographically commits the final state of all events.
-        The next monthly Celery batch task will include this hash in its blockchain submission.
+        Uses lightweight DB queries instead of full serialization to avoid
+        triggering carbon calculations, image processing, or other expensive
+        serializer operations. The hash captures the immutable farming event
+        data: type, date, description, index, and type-specific fields.
         """
         try:
-            events = history.get_events()  # Already sorted by index
-            event_data = json.dumps(events, sort_keys=True, default=str, separators=(",", ":"))
+            from history.models import (
+                BusinessEvent,
+                ChemicalEvent,
+                EquipmentEvent,
+                GeneralEvent,
+                PestManagementEvent,
+                ProductionEvent,
+                SoilManagementEvent,
+                WeatherEvent,
+            )
 
-            finalization_hash = None
+            # Collect lightweight event records — values() hits DB directly,
+            # bypasses serializers entirely.
+            event_models = [
+                WeatherEvent,
+                ChemicalEvent,
+                ProductionEvent,
+                GeneralEvent,
+                EquipmentEvent,
+                SoilManagementEvent,
+                PestManagementEvent,
+                BusinessEvent,
+            ]
+
+            all_events = []
+            for model in event_models:
+                qs = model.objects.filter(history=history).values("id", "index", "date", "description")
+                for row in qs:
+                    row["event_type"] = model.__name__
+                    all_events.append(row)
+
+            all_events.sort(key=lambda e: e["index"])
+
+            event_data = json.dumps(all_events, sort_keys=True, default=str, separators=(",", ":"))
+
             try:
                 from web3 import Web3
 
@@ -245,7 +278,7 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 history.extra_data = {}
             history.extra_data["finalization_hash"] = finalization_hash
             history.extra_data["finalization_timestamp"] = timezone.now().isoformat()
-            history.extra_data["finalization_event_count"] = len(events)
+            history.extra_data["finalization_event_count"] = len(all_events)
             history.save(update_fields=["extra_data"])
         except Exception as e:
             logger.error("Failed to store finalization hash for history %s: %s", history.id, e)

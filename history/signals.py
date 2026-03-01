@@ -13,6 +13,17 @@ from .models import (
     WeatherEvent,
 )
 
+# Module-level singleton — EventCarbonCalculator is stateless, no need to
+# re-instantiate (and re-load all USDA factors) on every signal fire.
+_calculator = None
+
+
+def _get_calculator():
+    global _calculator
+    if _calculator is None:
+        _calculator = EventCarbonCalculator()
+    return _calculator
+
 
 @receiver(post_save, sender=ChemicalEvent)
 def calculate_chemical_event_carbon(sender, instance, created, **kwargs):
@@ -29,7 +40,7 @@ def calculate_chemical_event_carbon(sender, instance, created, **kwargs):
     try:
         from carbon.models import CarbonEntry
 
-        calculator = EventCarbonCalculator()
+        calculator = _get_calculator()
 
         # For updates, delete the existing CarbonEntry first to avoid duplicates
         if not created:
@@ -86,7 +97,7 @@ def calculate_production_event_carbon(sender, instance, created, **kwargs):
     try:
         from carbon.models import CarbonEntry
 
-        calculator = EventCarbonCalculator()
+        calculator = _get_calculator()
 
         # For updates, delete the existing CarbonEntry first to avoid duplicates
         if not created:
@@ -161,9 +172,7 @@ def calculate_general_event_carbon(sender, instance, created, **kwargs):
     """
     if created:  # Only for new general events
         try:
-            from carbon.services.event_carbon_calculator import EventCarbonCalculator
-
-            calculator = EventCarbonCalculator()
+            calculator = _get_calculator()
 
             # General events have minimal standard carbon impact
             calculation_result = {
@@ -208,6 +217,9 @@ def calculate_general_event_carbon(sender, instance, created, **kwargs):
 @receiver(post_delete, sender=ProductionEvent)
 @receiver(post_delete, sender=WeatherEvent)
 @receiver(post_delete, sender=GeneralEvent)
+@receiver(post_delete, sender=EquipmentEvent)
+@receiver(post_delete, sender=SoilManagementEvent)
+@receiver(post_delete, sender=PestManagementEvent)
 def cleanup_carbon_entries_on_event_delete(sender, instance, **kwargs):
     """
     Clean up associated carbon entries when events are deleted
@@ -249,9 +261,8 @@ def calculate_equipment_event_carbon(sender, instance, created, **kwargs):
     # Always calculate carbon for both create AND update operations
     try:
         from carbon.models import CarbonEntry
-        from carbon.services.event_carbon_calculator import EventCarbonCalculator
 
-        calculator = EventCarbonCalculator()
+        calculator = _get_calculator()
 
         # For updates, delete the existing CarbonEntry first to avoid duplicates
         if not created:
@@ -302,9 +313,8 @@ def calculate_soil_management_event_carbon(sender, instance, created, **kwargs):
     # Always calculate carbon for both create AND update operations
     try:
         from carbon.models import CarbonEntry
-        from carbon.services.event_carbon_calculator import EventCarbonCalculator
 
-        calculator = EventCarbonCalculator()
+        calculator = _get_calculator()
 
         # For updates, delete the existing CarbonEntry first to avoid duplicates
         if not created:
@@ -361,9 +371,8 @@ def calculate_pest_management_event_carbon(sender, instance, created, **kwargs):
     # Always calculate carbon for both create AND update operations
     try:
         from carbon.models import CarbonEntry
-        from carbon.services.event_carbon_calculator import EventCarbonCalculator
 
-        calculator = EventCarbonCalculator()
+        calculator = _get_calculator()
 
         # For updates, delete the existing CarbonEntry first to avoid duplicates
         if not created:

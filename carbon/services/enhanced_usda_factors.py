@@ -7,7 +7,6 @@ Enhanced with real-time USDA API integration and compliance validation.
 
 import hashlib
 import logging
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from django.conf import settings
@@ -17,7 +16,6 @@ from django.utils import timezone
 import requests
 
 from .emission_factors import emission_factors
-from .real_usda_integration import RealUSDAAPIClient
 
 logger = logging.getLogger(__name__)
 
@@ -119,9 +117,6 @@ class EnhancedUSDAFactors:
     """Enhanced USDA factor integration with regional specificity and real-time data"""
 
     def __init__(self):
-        # Initialize API client and cache
-        self.usda_api_client = USDAAPIClient()
-        self.regional_cache = RegionalDataCache()
 
         # Get standardized USDA emission factors from centralized registry
         self.base_usda_factors = {
@@ -184,139 +179,12 @@ class EnhancedUSDAFactors:
         }
 
     def get_real_time_emission_factors(self, crop_type: str, state: str) -> Dict[str, float]:
-        """NEW METHOD: Real-time USDA data fetching with caching - NOW WITH REAL APIs"""
-        try:
-            # NASS is US-only; return base factors for other countries
-            country = getattr(settings, "TRAZO_OPERATING_COUNTRY", "US")
-            if country != "US":
-                base = self.base_usda_factors.copy()
-                base["data_source"] = "EPA verified factors"
-                base["real_time"] = False
-                return base
-
-            # Use REAL USDA API integration
-            real_client = RealUSDAAPIClient()
-
-            # Get real benchmark data
-            benchmark_yield = real_client.get_benchmark_yield(crop_type, state)
-
-            if benchmark_yield:
-                logger.info(f"✅ Using REAL USDA benchmark: {benchmark_yield:.2f} for {crop_type} in {state}")
-
-                # Apply real data adjustments to base factors
-                adjusted_factors = self.base_usda_factors.copy()
-
-                # Adjust factors based on real regional performance
-                # Higher yields often indicate more efficient practices
-                efficiency_factor = min(benchmark_yield / 150, 1.2) if benchmark_yield > 0 else 1.0
-
-                for factor_name in adjusted_factors:
-                    adjusted_factors[factor_name] = adjusted_factors[factor_name] / efficiency_factor
-
-                adjusted_factors["data_source"] = "REAL USDA NASS + EPA"
-                adjusted_factors["real_time"] = True
-                adjusted_factors["benchmark_yield"] = benchmark_yield
-
-                return adjusted_factors
-
-            # Fallback to cached data
-            cached_data = self.regional_cache.get(crop_type, state)
-            if cached_data and self._is_cache_valid(cached_data):
-                logger.info(f"Using cached USDA data for {crop_type} in {state}")
-                return cached_data.get("emission_factors", self.base_usda_factors.copy())
-
-            # Final fallback to regional adjustments
-            return self.get_regional_factors(crop_type, state)
-
-        except Exception as e:
-            logger.error(f"Error getting real-time emission factors: {e}")
-            return self.get_regional_factors(crop_type, state)
+        """Get emission factors using hardcoded EPA/USDA regional factors."""
+        return self.get_regional_factors(crop_type, state)
 
     def validate_against_usda_standards(self, calculation: Dict) -> USDAValidationResult:
-        """NEW METHOD: USDA compliance validation using REAL USDA APIs"""
-        try:
-            # Extract key calculation parameters
-            crop_type = calculation.get("crop_type", "unknown")
-            state = calculation.get("state", "unknown")
-            co2e_amount = calculation.get("co2e", 0)
-            calculation_method = calculation.get("method", "unknown")
-
-            # Use REAL USDA API integration instead of fake compliance endpoint
-            from .real_usda_integration import RealUSDAAPIClient
-
-            real_usda_client = RealUSDAAPIClient()
-
-            # Get real USDA benchmark data for validation
-            try:
-                benchmark_yield = real_usda_client.get_benchmark_yield(crop_type, state)
-                real_data_available = benchmark_yield is not None and benchmark_yield > 0
-
-                if real_data_available:
-                    logger.info(
-                        f"✅ Using REAL USDA benchmark for validation: {benchmark_yield:.2f} for {crop_type} in {state}"
-                    )
-
-                    # Calculate carbon intensity
-                    area_hectares = calculation.get("area_hectares", 1)
-                    carbon_intensity = co2e_amount / area_hectares if area_hectares > 0 else co2e_amount
-
-                    # Get real USDA regional average for comparison
-                    normalized_crop = self._normalize_crop_type(crop_type)
-                    regional_avg = None
-                    if state in self.regional_averages and normalized_crop in self.regional_averages[state]:
-                        regional_avg = self.regional_averages[state][normalized_crop]
-
-                    # Determine compliance based on real USDA data
-                    is_compliant = True
-                    confidence_score = 0.95  # High confidence with real USDA data
-                    recommendations = []
-
-                    validation_details = {
-                        "data_source": "REAL USDA NASS API",
-                        "benchmark_yield": benchmark_yield,
-                        "carbon_intensity": carbon_intensity,
-                        "regional_average": regional_avg,
-                        "usda_api_used": True,
-                        "api_keys_configured": {
-                            "nass": bool(real_usda_client.nass_api_key),
-                            "ers": bool(real_usda_client.ers_api_key),
-                            "fooddata": bool(real_usda_client.fooddata_api_key),
-                        },
-                    }
-
-                    # Performance validation against real USDA benchmarks
-                    if regional_avg and carbon_intensity > regional_avg * 1.5:
-                        is_compliant = False
-                        recommendations.append(
-                            f"Carbon intensity ({carbon_intensity:.3f}) is 50% above USDA regional average ({regional_avg:.3f})"
-                        )
-
-                    # Validate calculation method
-                    if not calculation.get("usda_factors_based", False):
-                        recommendations.append("Consider using USDA-verified emission factors for higher credibility")
-                        confidence_score = min(confidence_score, 0.8)
-
-                    return USDAValidationResult(
-                        is_compliant=is_compliant,
-                        confidence_score=confidence_score,
-                        validation_details=validation_details,
-                        recommendations=recommendations,
-                    )
-
-            except Exception as api_error:
-                logger.warning(f"Real USDA API validation failed: {api_error}, falling back to local validation")
-
-            # Fallback to local validation if real API fails
-            return self._validate_locally(calculation)
-
-        except Exception as e:
-            logger.error(f"USDA validation error: {e}")
-            return USDAValidationResult(
-                is_compliant=False,
-                confidence_score=0.0,
-                validation_details={"error": str(e), "validation_method": "error_fallback"},
-                recommendations=["Manual review required due to validation error"],
-            )
+        """USDA compliance validation using hardcoded regional factors."""
+        return self._validate_locally(calculation)
 
     def _validate_locally(self, calculation: Dict) -> USDAValidationResult:
         """Enhanced local fallback validation logic with better USDA compliance checking"""
@@ -399,14 +267,6 @@ class EnhancedUSDAFactors:
             validation_details=validation_details,
             recommendations=recommendations,
         )
-
-    def _is_cache_valid(self, cached_data: Dict) -> bool:
-        """Check if cached data is still valid"""
-        try:
-            cached_at = datetime.fromisoformat(cached_data.get("cached_at", ""))
-            return (timezone.now() - cached_at).total_seconds() < self.regional_cache.cache_timeout
-        except:
-            return False
 
     def get_regional_factors(self, crop_type: str, state: str, county: Optional[str] = None) -> Dict[str, float]:
         """Get region-specific USDA emission factors"""
@@ -570,8 +430,8 @@ class EnhancedUSDAFactors:
             "factors_verified": True,
             "regional_optimization": state in self.regional_adjustments
             and crop_type.lower() in self.regional_adjustments[state],
-            "api_enabled": bool(self.usda_api_client.api_key),
-            "real_time_data": bool(self.usda_api_client.api_key),
+            "api_enabled": False,
+            "real_time_data": False,
         }
 
     def get_usda_credibility_data(self, establishment) -> Dict[str, Any]:

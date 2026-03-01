@@ -2704,12 +2704,11 @@ class Command(BaseCommand):
 
                 # Create template
                 template_data = {
-                    "name": f"{crop_type.name} - Conventional Production V3",
+                    "name": f"{crop_type.name} - Conventional Production",
                     "farming_approach": "conventional",
                     "description": (
                         f"Comprehensive production template for {crop_type.name.lower()} "
-                        f"covering all 7 event types with real-world field defaults. "
-                        f"Aligned with demo data source of truth."
+                        f"covering all 7 event types with real-world field defaults."
                     ),
                     "complexity_level": "intermediate",
                     "estimated_setup_time": 8,

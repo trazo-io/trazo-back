@@ -188,20 +188,8 @@ class EventCarbonCalculator:
         return "Unknown"
 
     def _get_real_time_usda_factors(self, crop_type: str, state: str) -> Dict[str, float]:
-        """NEW METHOD: Get real-time USDA emission factors"""
-        try:
-            # Try to get real-time factors first
-            real_time_factors = self.enhanced_usda.get_real_time_emission_factors(crop_type, state)
-            if real_time_factors:
-                logger.info(f"Using real-time USDA factors for {crop_type} in {state}")
-                return real_time_factors
-
-            # Fallback to regional factors
-            return self.enhanced_usda.get_regional_factors(crop_type, state)
-
-        except Exception as e:
-            logger.error(f"Error getting real-time USDA factors: {e}")
-            return self._get_usda_emission_factors()
+        """Get USDA emission factors using hardcoded EPA/USDA regional factors."""
+        return self.enhanced_usda.get_regional_factors(crop_type, state)
 
     def _calculate_confidence_score(self, event, calculation_data: Dict) -> float:
         """NEW METHOD: Calculate confidence score for carbon calculation"""

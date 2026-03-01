@@ -178,73 +178,61 @@ class EventSerializer(serializers.ModelSerializer):
 
     def get_carbon_data(self, event):
         """
-        Get carbon calculation data for the event.
+        Read-only carbon data lookup from CarbonEntry records.
 
-        PHASE 3 CONSOLIDATION (2025-12-12): CarbonEntry is now the single source of truth.
-        Priority order:
-        1. CarbonEntry table (authoritative, normalized data)
-        2. extra_data (backward compatibility during transition)
-        3. On-demand calculation (fallback for missing data)
+        Carbon calculations happen ONCE at event creation/update time via Django
+        signals (history/signals.py). This serializer method only READS the stored
+        results — it never recalculates.
 
-        OPTIMIZATION: Skip expensive calculations for list views.
+        Lookup order:
+        1. CarbonEntry table (authoritative, created by signals)
+        2. extra_data['carbon_calculation'] (backward compat for pre-CarbonEntry events)
+        3. None (no data available — signals will create it on next event save)
         """
         try:
             from carbon.models import CarbonEntry
-            from carbon.services.event_carbon_calculator import EventCarbonCalculator
 
-            # First, try to get from CarbonEntry - NOW PRIMARY SOURCE OF TRUTH
-            # FIX: Events have 'history' field (FK to History), not 'production'
-            # CarbonEntry.production is FK to History model
             if hasattr(event, "history") and event.history:
-                # OPTIMIZATION: Use prefetched carbon entries if available
-                # This avoids N+1 queries when the view has prefetched carbonentry_set
                 event_class_name = event.__class__.__name__
+                event_id_pattern = f"{event_class_name}(ID={event.id})"
                 carbon_entry = None
 
-                # FIX: Include event ID in search to match correct CarbonEntry
-                # Previously, searching by class name only caused ALL events of the same type
-                # to get the carbon value from the most recently created CarbonEntry
-                event_id_pattern = f"{event_class_name}(ID={event.id})"
-
-                # Try prefetched data first (Django caches prefetched results)
+                # Use prefetched carbon entries when available (avoids N+1)
                 if (
                     hasattr(event.history, "_prefetched_objects_cache")
                     and "carbonentry_set" in event.history._prefetched_objects_cache
                 ):
-                    # Use prefetched data - filter in Python (fast, no DB query)
                     for entry in event.history.carbonentry_set.all():
                         if entry.description and event_id_pattern in entry.description:
                             carbon_entry = entry
                             break
-                    # Fallback: try matching by class name only for legacy CarbonEntries
+                    # Legacy fallback: entries without event ID in description
                     if not carbon_entry:
                         for entry in event.history.carbonentry_set.all():
                             if (
                                 entry.description
                                 and event_class_name in entry.description
-                                and f"(ID=" not in entry.description
+                                and "(ID=" not in entry.description
                             ):
                                 carbon_entry = entry
                                 break
                 else:
-                    # Fallback to DB query if not prefetched
-                    # First try exact event ID match
-                    carbon_entries = CarbonEntry.objects.filter(
-                        production=event.history, description__icontains=event_id_pattern
-                    ).order_by("-created_at")
-                    if carbon_entries.exists():
-                        carbon_entry = carbon_entries.first()
-                    else:
-                        # Fallback for legacy CarbonEntries without event ID in description
-                        carbon_entries = (
+                    # DB query when not prefetched
+                    carbon_entry = (
+                        CarbonEntry.objects.filter(production=event.history, description__icontains=event_id_pattern)
+                        .order_by("-created_at")
+                        .first()
+                    )
+
+                    if not carbon_entry:
+                        carbon_entry = (
                             CarbonEntry.objects.filter(
                                 production=event.history, description__icontains=event_class_name
                             )
                             .exclude(description__contains="(ID=")
                             .order_by("-created_at")
+                            .first()
                         )
-                        if carbon_entries.exists():
-                            carbon_entry = carbon_entries.first()
 
                 if carbon_entry:
                     return {
@@ -252,103 +240,23 @@ class EventSerializer(serializers.ModelSerializer):
                         "efficiency_score": 90.0 if carbon_entry.usda_factors_based else 75.0,
                         "usda_factors_based": carbon_entry.usda_factors_based,
                         "verification_status": "epa_usda_sourced" if carbon_entry.usda_factors_based else "calculated",
-                        "calculation_method": carbon_entry.data_source or "USDA Agricultural Emission Factors",
+                        "calculation_method": carbon_entry.data_source or "EPA/USDA Emission Factors",
                         "data_source": carbon_entry.data_source or "CarbonEntry",
                         "recommendations": [],
                         "event_type": event_class_name.lower().replace("event", ""),
                         "timestamp": carbon_entry.created_at.isoformat() if carbon_entry.created_at else None,
                     }
 
-            # Second, fall back to extra_data for backward compatibility with old events
+            # Backward compat: older events may have carbon in extra_data
             if hasattr(event, "extra_data") and event.extra_data and "carbon_calculation" in event.extra_data:
                 return event.extra_data["carbon_calculation"]
 
-            # OPTIMIZATION: Check if this is being called from a list view context
-            # If so, return minimal data to avoid expensive USDA API calls
-            request = self.context.get("request")
-            if request and hasattr(request, "resolver_match"):
-                view_name = getattr(request.resolver_match, "url_name", "")
-                if "list" in view_name or request.method == "GET" and "/history/" in request.path:
-                    # Return minimal carbon data for list views
-                    return {
-                        "co2e": 0.0,
-                        "efficiency_score": 50.0,
-                        "usda_factors_based": False,
-                        "verification_status": "not_calculated",
-                        "calculation_method": "list_view_minimal",
-                        "data_source": "Cached",
-                        "recommendations": [],
-                        "event_type": event.__class__.__name__.lower().replace("event", ""),
-                        "timestamp": event.date.isoformat() if event.date else None,
-                        "note": "Full calculation available in detail view",
-                    }
+            # No stored carbon data — this is normal for weather/general events
+            # or events whose signal hasn't fired yet. Never recalculate here.
+            return None
 
-            # Third, calculate on-demand for events without stored calculations
-            # OPTIMIZATION: Reuse calculator instance for this request to avoid repeated USDA API key lookups
-            # Each EventCarbonCalculator init triggers get_usda_api_keys() which is expensive
-            request = self.context.get("request")
-            if request and not hasattr(request, "_carbon_calculator"):
-                request._carbon_calculator = EventCarbonCalculator()
-            calculator = request._carbon_calculator if request else EventCarbonCalculator()
-
-            # Determine event type and calculate accordingly
-            if isinstance(event, ChemicalEvent):
-                result = calculator.calculate_chemical_event_impact(event)
-            elif isinstance(event, ProductionEvent):
-                result = calculator.calculate_production_event_impact(event)
-            elif isinstance(event, WeatherEvent):
-                result = calculator.calculate_weather_event_impact(event)
-            elif isinstance(event, EquipmentEvent):
-                result = calculator.calculate_equipment_event_impact(event)
-            elif isinstance(event, SoilManagementEvent):
-                result = calculator.calculate_soil_management_event_impact(event)
-            elif isinstance(event, PestManagementEvent):
-                result = calculator.calculate_pest_management_event_impact(event)
-            elif isinstance(event, BusinessEvent):
-                result = calculator.calculate_business_event_impact(event)
-            elif isinstance(event, GeneralEvent):
-                # For general events, use standard minimal calculation
-                result = {
-                    "co2e": 0.1,
-                    "efficiency_score": 50.0,
-                    "usda_factors_based": False,
-                    "verification_status": "estimated",
-                    "calculation_method": "general_event_standard",
-                    "data_source": "Industry Standards",
-                    "recommendations": [],
-                    "event_type": "general",
-                    "timestamp": event.date.isoformat() if event.date else None,
-                }
-            else:
-                # Fallback for unknown event types
-                result = {
-                    "co2e": 0.0,
-                    "efficiency_score": 50.0,
-                    "usda_factors_based": False,
-                    "verification_status": "unknown",
-                    "calculation_method": "unknown_event_type",
-                    "data_source": "Unknown",
-                    "recommendations": [],
-                    "event_type": "unknown",
-                    "timestamp": event.date.isoformat() if event.date else None,
-                }
-
-            return result
-
-        except Exception as e:
-            # Return fallback data if calculation fails
-            return {
-                "co2e": 0.0,
-                "efficiency_score": 50.0,
-                "usda_factors_based": False,
-                "verification_status": "calculation_error",
-                "calculation_method": "calculation_error",
-                "data_source": "Error",
-                "recommendations": [],
-                "event_type": "error",
-                "timestamp": event.date.isoformat() if event.date else None,
-                "error": str(e),
-            }
+        except Exception:
+            return None
 
     def _check_valid_agricultural_content(self, event) -> bool:
         """
