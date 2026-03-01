@@ -446,24 +446,32 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             cache_key = f"history_list_parcel_{parcel.id}_v3"
             cache.delete(cache_key)
 
-            # Serialize and return the created production immediately
-            serializer = HistorySerializer(history)
-            response_data = serializer.data
-
-            # Add additional metadata for the frontend
-            response_data.update(
-                {
-                    "crop_category": extra_data.get("crop_category"),
-                    "blockchain_enabled": extra_data.get("blockchain_enabled", False),
-                    "qr_code_url": history.qr_code.url if history.qr_code else None,
-                    "establishment": {
-                        "id": parcel.establishment.id,
-                        "name": parcel.establishment.name,
-                        "location": parcel.establishment.get_location(),
-                    },
-                    "parcel": {"id": parcel.id, "name": parcel.name, "area": parcel.area},
-                }
-            )
+            # Return lightweight response immediately — the frontend navigates to
+            # the parcel dashboard which fetches full data via getCurrentHistory.
+            # Avoids 24+ DB queries from HistorySerializer on a fresh history.
+            response_data = {
+                "id": history.id,
+                "name": history.name,
+                "start_date": history.start_date.isoformat() if history.start_date else None,
+                "finish_date": history.finish_date.isoformat() if history.finish_date else None,
+                "product": product.name if product else None,
+                "events_status": history.events_status,
+                "crop_type": (
+                    {
+                        "id": crop_type.id,
+                        "name": crop_type.name,
+                    }
+                    if crop_type
+                    else None
+                ),
+                "crop_category": extra_data.get("crop_category"),
+                "blockchain_enabled": extra_data.get("blockchain_enabled", False),
+                "establishment": {
+                    "id": parcel.establishment.id,
+                    "name": parcel.establishment.name,
+                },
+                "parcel": {"id": parcel.id, "name": parcel.name},
+            }
 
             return Response(response_data, status=status.HTTP_201_CREATED)
 
