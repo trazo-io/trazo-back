@@ -168,6 +168,7 @@ else:
     # Disable Celery if no Redis
     CELERY_TASK_ALWAYS_EAGER = True
     CELERY_TASK_STORE_EAGER_RESULT = True
+    CELERY_RESULT_BACKEND = "cache+memory://"
 
 # Override Redis Cache settings for production - No SSL for Railway internal Redis
 if REDIS_URL:
