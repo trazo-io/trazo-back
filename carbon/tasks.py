@@ -378,26 +378,38 @@ def submit_production_to_blockchain(self, production_id):
 
     The monthly batch task acts as a safety net for any failures here.
     """
+    logger.info("BLOCKCHAIN TASK: Starting for production %s", production_id)
     try:
         from history.models import History
 
         production = History.objects.select_related("parcel__establishment__company").get(id=production_id)
+        logger.info("BLOCKCHAIN TASK: Found production %s (finish_date=%s)", production_id, production.finish_date)
 
         company = (
             production.parcel.establishment.company if production.parcel and production.parcel.establishment else None
         )
         if not company:
-            logger.error(f"No company found for production {production_id}")
+            logger.error("BLOCKCHAIN TASK: No company found for production %s", production_id)
             return {"status": "error", "error": "No company found"}
 
         if not company.blockchain_subscription_status:
-            logger.info(f"Company {company.id} has no blockchain subscription, skipping production {production_id}")
+            logger.info("BLOCKCHAIN TASK: Company %s has no blockchain subscription, skipping", company.id)
             return {"status": "skipped", "reason": "no_blockchain_subscription"}
 
+        logger.info("BLOCKCHAIN TASK: Initializing BlockchainCarbonService...")
         from .services.blockchain import BlockchainCarbonService
 
         blockchain_service = BlockchainCarbonService()
+        logger.info(
+            "BLOCKCHAIN TASK: Service initialized (blockchain_ready=%s, production_mode=%s, blockchain_required=%s)",
+            blockchain_service._is_blockchain_ready(),
+            blockchain_service.production_mode,
+            blockchain_service.blockchain_required,
+        )
+
+        logger.info("BLOCKCHAIN TASK: Calling _submit_single_production_to_blockchain...")
         success = _submit_single_production_to_blockchain(production, company, blockchain_service)
+        logger.info("BLOCKCHAIN TASK: Submission result for production %s: success=%s", production_id, success)
 
         if success:
             return {
@@ -409,10 +421,10 @@ def submit_production_to_blockchain(self, production_id):
             raise Exception(f"Blockchain submission failed for production {production_id}")
 
     except History.DoesNotExist:
-        logger.error(f"Production {production_id} not found")
+        logger.error("BLOCKCHAIN TASK: Production %s not found", production_id)
         return {"status": "error", "error": "Production not found"}
     except Exception as e:
-        logger.error(f"Error submitting production {production_id} to blockchain: {e}")
+        logger.error("BLOCKCHAIN TASK: Error for production %s: %s", production_id, e, exc_info=True)
         raise self.retry(countdown=30, exc=e)
 
 

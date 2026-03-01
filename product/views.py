@@ -235,18 +235,32 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         """
         try:
             company = history.parcel.establishment.company if history.parcel and history.parcel.establishment else None
+            logger.info(
+                "BLOCKCHAIN: company=%s, blockchain_status=%s, history=%s",
+                company.id if company else None,
+                company.blockchain_subscription_status if company else None,
+                history.id,
+            )
             if company and company.blockchain_subscription_status:
                 import threading
 
                 def _submit_in_background(production_id):
+                    from django.db import connections
+
                     try:
+                        logger.info("BLOCKCHAIN: Background thread started for production %s", production_id)
                         from carbon.tasks import submit_production_to_blockchain
 
-                        submit_production_to_blockchain.delay(production_id)
+                        logger.info("BLOCKCHAIN: Calling submit_production_to_blockchain.delay(%s)", production_id)
+                        result = submit_production_to_blockchain.delay(production_id)
+                        logger.info("BLOCKCHAIN: Task completed for production %s, result=%s", production_id, result)
                     except Exception as exc:
                         logger.error(
-                            "Background blockchain submission failed for production %s: %s", production_id, exc
+                            "BLOCKCHAIN: Background submission failed for production %s: %s", production_id, exc,
+                            exc_info=True,
                         )
+                    finally:
+                        connections.close_all()
 
                 transaction.on_commit(
                     lambda: threading.Thread(
@@ -256,13 +270,15 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     ).start()
                 )
                 logger.info(
-                    "Queued blockchain submission for production %s (company %s)",
+                    "BLOCKCHAIN: Queued on_commit thread for production %s (company %s)",
                     history.id,
                     company.id,
                 )
+            else:
+                logger.info("BLOCKCHAIN: Skipped — no blockchain subscription for company %s", company.id if company else None)
         except Exception as e:
             # Never let blockchain submission failure block production finalization
-            logger.error("Failed to queue blockchain submission for production %s: %s", history.id, e)
+            logger.error("BLOCKCHAIN: Failed to queue submission for production %s: %s", history.id, e, exc_info=True)
 
     def _store_finalization_hash(self, history):
         """Compute and store a keccak256 hash of all event data at completion time.
