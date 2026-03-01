@@ -1,1 +1,1 @@
-web: python manage.py migrate --verbosity=2 && python manage.py collectstatic --noinput && gunicorn backend.wsgi --bind 0.0.0.0:${PORT:-8000} --workers 1 --log-level debug
+web: python manage.py migrate --verbosity=2 && python manage.py collectstatic --noinput && gunicorn backend.wsgi --bind 0.0.0.0:${PORT:-8000} --workers 1 --timeout 120 --log-level debug

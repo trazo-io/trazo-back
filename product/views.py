@@ -204,15 +204,36 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         )
 
     def _trigger_blockchain_submission(self, history):
-        """Dispatch immediate blockchain submission if the company has an active subscription."""
+        """Dispatch immediate blockchain submission if the company has an active subscription.
+
+        With CELERY_TASK_ALWAYS_EAGER=True (no Redis), .delay() runs synchronously
+        which would block the HTTP response for 10-20s during blockchain TX.
+        We use a background thread so the response returns immediately.
+        """
         try:
             company = history.parcel.establishment.company if history.parcel and history.parcel.establishment else None
             if company and company.blockchain_subscription_status:
-                from carbon.tasks import submit_production_to_blockchain
+                import threading
 
-                transaction.on_commit(lambda: submit_production_to_blockchain.delay(history.id))
+                def _submit_in_background(production_id):
+                    try:
+                        from carbon.tasks import submit_production_to_blockchain
+
+                        submit_production_to_blockchain.delay(production_id)
+                    except Exception as exc:
+                        logger.error(
+                            "Background blockchain submission failed for production %s: %s", production_id, exc
+                        )
+
+                transaction.on_commit(
+                    lambda: threading.Thread(
+                        target=_submit_in_background,
+                        args=(history.id,),
+                        daemon=True,
+                    ).start()
+                )
                 logger.info(
-                    "Queued immediate blockchain submission for production %s (company %s)",
+                    "Queued blockchain submission for production %s (company %s)",
                     history.id,
                     company.id,
                 )
