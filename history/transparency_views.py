@@ -724,10 +724,6 @@ def _recompute_production_data_hash(history, finalization_hash):
     IMPORTANT: The field names, order, and serialisation must stay in sync with
     carbon/tasks.py _submit_single_production_to_blockchain().  If the task changes
     its raw_data schema, this function MUST be updated to match.
-
-    Tries the current transparency-first schema first. If it doesn't match the
-    on-chain hash, falls back to the legacy carbon-first schema for productions
-    submitted before the transparency pivot.
     """
     import hashlib
     import json
@@ -748,7 +744,7 @@ def _recompute_production_data_hash(history, finalization_hash):
 
         finalization_event_count = extra.get("finalization_event_count", 0)
 
-        # Current schema (transparency-first) — must match carbon/tasks.py raw_data
+        # Must match carbon/tasks.py _submit_single_production_to_blockchain() raw_data exactly
         raw_data = {
             "production_id": history.id,
             "company_id": company_id,
@@ -760,44 +756,19 @@ def _recompute_production_data_hash(history, finalization_hash):
             "carbon_entry_count": carbon_entry_count,
         }
 
-        current_hash = _hash_raw_data(raw_data)
+        sorted_raw = json.dumps(raw_data, sort_keys=True, default=str)
 
-        # Also try legacy schema for productions submitted before the transparency pivot
-        legacy_raw_data = {
-            "production_id": history.id,
-            "company_id": company_id,
-            "start_date": (history.start_date.isoformat() if history.start_date else None),
-            "finish_date": (history.finish_date.isoformat() if history.finish_date else None),
-            "total_co2e": total_co2e,
-            "entry_count": carbon_entry_count,
-            "entries": list(carbon_entries.values("id", "co2e_amount", "type", "timestamp")),
-            "finalization_hash": finalization_hash,
-            "finalization_event_count": finalization_event_count,
-        }
+        try:
+            from web3 import Web3
 
-        legacy_hash = _hash_raw_data(legacy_raw_data)
-
-        # Return both so the caller can check either against on-chain
-        return current_hash, legacy_hash
+            raw_hex = Web3.keccak(text=sorted_raw).hex()
+            return raw_hex.removeprefix("0x")
+        except ImportError:
+            return hashlib.sha256(sorted_raw.encode()).hexdigest()
 
     except Exception as e:
         logger.error("Failed to recompute production data hash for %s: %s", history.id, e)
-        return None, None
-
-
-def _hash_raw_data(raw_data):
-    """Hash a raw_data dict with keccak256 (or SHA-256 fallback)."""
-    import hashlib
-    import json
-
-    sorted_raw = json.dumps(raw_data, sort_keys=True, default=str)
-    try:
-        from web3 import Web3
-
-        raw_hex = Web3.keccak(text=sorted_raw).hex()
-        return raw_hex.removeprefix("0x")
-    except ImportError:
-        return hashlib.sha256(sorted_raw.encode()).hexdigest()
+        return None
 
 
 def _calculate_data_freshness(history):
@@ -981,14 +952,11 @@ def verify_blockchain(request, production_public_id=None, production_id=None):
                     stored_matches_chain = stored_data_hash is not None and stored_data_hash == on_chain_hash
 
                     # Check 2: recomputed hash vs on-chain (catches data modification)
-                    # Returns (current_schema_hash, legacy_schema_hash) to handle
-                    # productions submitted before the transparency-first pivot.
-                    current_hash, legacy_hash = _recompute_production_data_hash(
+                    recomputed_data_hash = _recompute_production_data_hash(
                         history, current_finalization_hash or stored_finalization_hash
                     )
                     recomputed_matches_chain = (
-                        (current_hash is not None and current_hash == on_chain_hash)
-                        or (legacy_hash is not None and legacy_hash == on_chain_hash)
+                        recomputed_data_hash is not None and recomputed_data_hash == on_chain_hash
                     )
 
                     if recomputed_matches_chain:
@@ -1022,12 +990,11 @@ def verify_blockchain(request, production_public_id=None, production_id=None):
                         )
                         logger.warning(
                             "Layer-2 tamper detected for production %s: "
-                            "on_chain=%s, stored=%s, current=%s, legacy=%s",
+                            "on_chain=%s, stored=%s, recomputed=%s",
                             history.id,
                             on_chain_hash,
                             stored_data_hash,
-                            current_hash,
-                            legacy_hash,
+                            recomputed_data_hash,
                         )
                 else:
                     layer2_status = "no_record"
