@@ -728,10 +728,11 @@ class TransparencyCalculator:
 
         return "conventional"  # Default
 
-    def get_transparency_insights(self, history: History) -> Dict:
+    def get_transparency_insights(self, history: History, transparency_data: Dict = None) -> Dict:
         """Get actionable insights for farmers to improve transparency"""
 
-        transparency_data = self.calculate_transparency_score(history)
+        if transparency_data is None:
+            transparency_data = self.calculate_transparency_score(history)
         category_breakdown = transparency_data.get("category_breakdown", {})
 
         insights = {
@@ -779,13 +780,14 @@ class TransparencyCalculator:
 
         return suggestions.get(category, "Add relevant events for this category")
 
-    def compare_with_benchmarks(self, history: History) -> Dict:
+    def compare_with_benchmarks(self, history: History, transparency_data: Dict = None) -> Dict:
         """
         Compare transparency with industry benchmarks (NOT competitive ranking)
         Uses absolute standards, not relative farm comparisons
         """
 
-        transparency_data = self.calculate_transparency_score(history)
+        if transparency_data is None:
+            transparency_data = self.calculate_transparency_score(history)
         transparency_percentage = transparency_data["transparency_percentage"]
 
         # Industry transparency benchmarks (absolute standards)

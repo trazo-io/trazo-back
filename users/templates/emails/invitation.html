@@ -5,13 +5,13 @@
 {% block header_title %}You're Invited!{% endblock %}
 
 {% block header_subtitle %}
-    Join {{ company.name }} on Trazo's carbon transparency platform
+    Join {{ company.name }} on Trazo's agricultural transparency platform
 {% endblock %}
 
 {% block greeting %}Hi {{ invitee_name|default:"there" }},{% endblock %}
 
 {% block message %}
-    <p><strong>{{ inviter.first_name }} {{ inviter.last_name }}</strong> has invited you to join <strong>{{ company.name }}</strong> on Trazo, the leading platform for agricultural carbon transparency.</p>
+    <p><strong>{{ inviter.first_name }} {{ inviter.last_name }}</strong> has invited you to join <strong>{{ company.name }}</strong> on Trazo, the transparency platform for specialty crop farms.</p>
     
     <p>You've been assigned the role of <strong>{{ role_display }}</strong>, which will give you access to the tools and features needed for your responsibilities.</p>
     
@@ -31,15 +31,15 @@
     {% if role == 'CA' %}
         <ul style="margin: 16px 0; padding-left: 20px; color: #4b5563;">
             <li>Manage all company operations and team members</li>
-            <li>Access complete carbon tracking and reporting</li>
-            <li>Generate and manage carbon certificates</li>
+            <li>Access complete transparency tracking and reporting</li>
+            <li>Generate QR codes for consumer trust</li>
             <li>Configure company settings and integrations</li>
             <li>View comprehensive analytics and insights</li>
         </ul>
     {% elif role == 'DS' %}
         <ul style="margin: 16px 0; padding-left: 20px; color: #4b5563;">
             <li>Supervise specific agricultural domains</li>
-            <li>Track carbon footprint for assigned areas</li>
+            <li>Track transparency scores for assigned areas</li>
             <li>Generate reports for your domains</li>
             <li>Manage domain workers and activities</li>
             <li>Monitor sustainability metrics</li>
@@ -48,7 +48,7 @@
         <ul style="margin: 16px 0; padding-left: 20px; color: #4b5563;">
             <li>Record agricultural activities and events</li>
             <li>Track inputs and outputs for assigned areas</li>
-            <li>Contribute to carbon footprint calculations</li>
+            <li>Document farming practices for transparency scores</li>
             <li>Generate QR codes for products</li>
             <li>View domain-specific reports</li>
         </ul>

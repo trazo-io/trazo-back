@@ -2,7 +2,7 @@ YOU'RE INVITED TO JOIN {{ company.name|upper }} ON TRAZO!
 
 Hi {{ invitee_name|default:"there" }},
 
-{{ inviter.first_name }} {{ inviter.last_name }} has invited you to join {{ company.name }} on Trazo, the leading platform for agricultural carbon transparency.
+{{ inviter.first_name }} {{ inviter.last_name }} has invited you to join {{ company.name }} on Trazo, the transparency platform for specialty crop farms.
 
 COMPANY DETAILS:
 • Company: {{ company.name }}
@@ -16,20 +16,20 @@ As a member of {{ company.name }}, you'll be able to:
 
 {% if role == 'CA' %}
 • Manage all company operations and team members
-• Access complete carbon tracking and reporting
-• Generate and manage carbon certificates
+• Access complete transparency tracking and reporting
+• Generate QR codes for consumer trust
 • Configure company settings and integrations
 • View comprehensive analytics and insights
 {% elif role == 'DS' %}
 • Supervise specific agricultural domains
-• Track carbon footprint for assigned areas
+• Track transparency scores for assigned areas
 • Generate reports for your domains
 • Manage domain workers and activities
 • Monitor sustainability metrics
 {% elif role == 'DW' %}
 • Record agricultural activities and events
 • Track inputs and outputs for assigned areas
-• Contribute to carbon footprint calculations
+• Document farming practices for transparency scores
 • Generate QR codes for products
 • View domain-specific reports
 {% elif role == 'DE' %}
@@ -52,8 +52,8 @@ If you believe you received this invitation in error, you can safely ignore this
 The Trazo Team
 
 ---
-Trazo - Carbon Intelligence for Agriculture
-Making sustainable farming transparent and verifiable
+Trazo - Agricultural Transparency Platform
+Your buyers want proof. Give it to them.
 
 Visit us: https://trazo.io
 Support: support@trazo.io

@@ -33,28 +33,11 @@ urlpatterns = [
         name="production-transparency-summary",
     ),
     path("transparency/quick/<uuid:production_public_id>/", production_instant_trust, name="production-instant-trust"),
-    # Backward compatibility: integer-based endpoints redirect to UUID
-    path(
-        "transparency/<int:production_id>/",
-        production_transparency_detail,
-        name="production-transparency-detail-legacy",
-    ),
-    path(
-        "transparency/<int:production_id>/summary/",
-        production_transparency_summary,
-        name="production-transparency-summary-legacy",
-    ),
-    path("transparency/quick/<int:production_id>/", production_instant_trust, name="production-instant-trust-legacy"),
     path("transparency/explanation/", transparency_explanation, name="transparency-explanation"),
-    # Public blockchain verification endpoints
+    # Public blockchain verification endpoint (UUID only)
     path(
         "transparency/<uuid:production_public_id>/verify-blockchain/",
         verify_blockchain,
         name="verify-blockchain",
-    ),
-    path(
-        "transparency/<int:production_id>/verify-blockchain/",
-        verify_blockchain,
-        name="verify-blockchain-legacy",
     ),
 ]

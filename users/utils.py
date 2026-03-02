@@ -26,7 +26,7 @@ def send_welcome_email(user):
 
         msg_plain = render_to_string("emails/welcome.txt", context)
         msg_html = render_to_string("emails/welcome.html", context)
-        subject = f"Welcome to Trazo - Your Carbon Intelligence Platform"
+        subject = "Welcome to Trazo - Agricultural Transparency Platform"
 
         return send_mail(
             subject,
@@ -201,7 +201,7 @@ def send_company_join_welcome_email(user, company, role):
         return send_mail(
             subject,
             msg_plain,
-            "info@trazo.io",
+            settings.DEFAULT_FROM_EMAIL,
             [user.email],
             html_message=msg_html,
         )
@@ -301,27 +301,13 @@ def send_invitation_email(
             template_name = "emails/invitation.html"
             subject = f"You're Invited to Join {company.name} on Trazo"
 
-        msg_plain = render_to_string("emails/invitation.txt", context)  # Keep same plain text template
-        msg_html = render_to_string(template_name, context)  # Use appropriate HTML template
-        print(f"Email settings debug for invitation to {invitee_email}:")
-        print(f"  DEFAULT_FROM_EMAIL: {settings.DEFAULT_FROM_EMAIL}")
-        print(f"  SERVER_EMAIL: {settings.SERVER_EMAIL}")
-        print(f"  EMAIL_HOST: {settings.EMAIL_HOST}")
-        print(f"  EMAIL_BACKEND: {settings.EMAIL_BACKEND}")
-        print(f"  FROM_EMAIL_ADDRESS env var: {settings.DEFAULT_FROM_EMAIL}")
-
-        # Debug logging for email configuration
-        logger.info(f"Email settings debug for invitation to {invitee_email}:")
-        logger.info(f"  DEFAULT_FROM_EMAIL: {settings.DEFAULT_FROM_EMAIL}")
-        logger.info(f"  SERVER_EMAIL: {settings.SERVER_EMAIL}")
-        logger.info(f"  EMAIL_HOST: {settings.EMAIL_HOST}")
-        logger.info(f"  EMAIL_BACKEND: {settings.EMAIL_BACKEND}")
-        logger.info(f"  FROM_EMAIL_ADDRESS env var: {settings.DEFAULT_FROM_EMAIL}")
+        msg_plain = render_to_string("emails/invitation.txt", context)
+        msg_html = render_to_string(template_name, context)
 
         return send_mail(
             subject,
             msg_plain,
-            "info@trazo.io",
+            settings.DEFAULT_FROM_EMAIL,
             [invitee_email],
             html_message=msg_html,
         )
@@ -343,7 +329,7 @@ def send_invitation_to_user(email, link, username, email_address, user_type):
 
     msg_plain = render_to_string("email_verification_code/message.txt", params)
     msg_html = render_to_string("email_verification_code/message.html", params)
-    subject = "Welcome to trazo, just verify your account."
+    subject = "Welcome to Trazo, just verify your account."
 
     return send_mail(
         subject,

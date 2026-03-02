@@ -380,7 +380,6 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
         AND new field names (volume_applied, area_treated, application_method).
         This ensures backward compatibility while supporting modern frontend conventions.
         """
-        print("🔴🔴🔴 SPRINT 6 - UpdateChemicalEventSerializer.to_internal_value CALLED! 🔴🔴🔴")
         data = data.copy()
 
         # 🚨 FIELD NAME NORMALIZATION: Map frontend names → backend model names
@@ -411,11 +410,6 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
         # Frontend sends fields like active_ingredient, application_details, weather_conditions, etc.
         # These need to be preserved and merged with existing extra_data
 
-        # SPRINT 6 DEBUG: Log incoming request data (using print for visibility)
-        print(f"🔴 SPRINT 6 DEBUG - Incoming data keys: {list(data.keys())}")
-        print(f"🔴 SPRINT 6 DEBUG - Incoming extra_data: {data.get('extra_data', 'NOT PRESENT')}")
-        print(f"🔴 SPRINT 6 DEBUG - Incoming active_ingredient: {data.get('active_ingredient', 'NOT PRESENT')}")
-
         frontend_extra_data = data.pop("extra_data", {}) or {}
 
         # Extract fields that DON'T have model columns into extra_data.
@@ -444,11 +438,6 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
         # This preserves fields like carbon_calculation while adding new fields
         merged_extra_data = {**existing_extra_data, **frontend_extra_data}
 
-        # SPRINT 6 DEBUG: Log what we're saving (using print for visibility)
-        print(f"🔴 SPRINT 6 DEBUG - frontend_extra_data: {frontend_extra_data}")
-        print(f"🔴 SPRINT 6 DEBUG - existing_extra_data: {existing_extra_data}")
-        print(f"🔴 SPRINT 6 DEBUG - merged_extra_data: {merged_extra_data}")
-
         # SPRINT 6 FIX: Handle custom_fields directly to avoid merge_custom_fields overwriting our merged_extra_data
         # The merge_custom_fields function prioritizes existing_extra_data which would overwrite our merged data
         # So we handle custom_fields inline here
@@ -460,7 +449,6 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
             merged_extra_data["custom_fields"] = instance.extra_data["custom_fields"]
 
         internal_value["extra_data"] = merged_extra_data
-        print(f"🔴 SPRINT 6 DEBUG - FINAL internal_value['extra_data']: {internal_value['extra_data']}")
 
         # Store volume_unit and area_unit in extra_data for frontend form compatibility
         if volume_unit is not None:
@@ -746,7 +734,6 @@ class ChemicalEventSerializer(EventSerializer):
 
 class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerializer):
     def __init__(self, *args, **kwargs):
-        print(f"🔥🔥 [UpdateWeatherEventSerializer.__init__] Serializer initialized! 🔥🔥")
         super().__init__(*args, **kwargs)
 
     class Meta:
@@ -754,14 +741,6 @@ class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
         fields = "__all__"
 
     def to_internal_value(self, data):
-        # DEBUG: Log incoming data
-        print(f"[UpdateWeatherEventSerializer.to_internal_value] Incoming data keys: {data.keys()}")
-        print(f"[UpdateWeatherEventSerializer.to_internal_value] weather type: {data.get('type')}")
-        if "water_deficit" in data:
-            print(
-                f"[UpdateWeatherEventSerializer.to_internal_value] water_deficit in data: {data.get('water_deficit')} (python type: {type(data.get('water_deficit')).__name__})"
-            )
-
         event_type = data.get("type", None)
         if event_type is None:
             raise serializers.ValidationError({"type": ["This field is required."]}, code="required")
@@ -782,9 +761,6 @@ class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
             extra_data["way_of_protection"] = data.pop("way_of_protection", None)
         elif event_type == WeatherEvent.DROUGHT:
             water_deficit_value = data.pop("water_deficit", None)
-            print(
-                f"[UpdateWeatherEventSerializer.to_internal_value] DROUGHT - water_deficit popped: {water_deficit_value} (python type: {type(water_deficit_value).__name__})"
-            )
             extra_data["water_deficit"] = water_deficit_value
         elif event_type == WeatherEvent.HAILSTORM:
             # Sprint 2 Epic 2.1.3: Removed weight and diameter fields (excessive detail)
@@ -812,30 +788,19 @@ class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
             extra_data["humidity_level"] = data.pop("humidity_level", None)
             extra_data["duration"] = data.pop("duration", None)
             extra_data["crop_impact"] = data.pop("crop_impact", None)
-        print(f"[UpdateWeatherEventSerializer.to_internal_value] extra_data before merge: {extra_data}")
 
         internal_value = super().to_internal_value(data)
 
         # Merge with existing extra_data to preserve carbon_calculation and other fields
         if hasattr(self, "instance") and self.instance and self.instance.extra_data:
-            # Updating existing event - merge with current extra_data
-            print(
-                f"[UpdateWeatherEventSerializer.to_internal_value] Existing instance.extra_data: {self.instance.extra_data}"
-            )
             merged_extra_data = {**self.instance.extra_data, **extra_data}
-            print(f"[UpdateWeatherEventSerializer.to_internal_value] Merged extra_data: {merged_extra_data}")
         else:
-            # Creating new event - use new extra_data
-            print(f"[UpdateWeatherEventSerializer.to_internal_value] No existing instance - using new extra_data")
             merged_extra_data = extra_data
 
         # Merge custom fields into extra_data (preserves existing custom_fields if not provided)
         instance = getattr(self, "instance", None)
         internal_value["extra_data"] = self.merge_custom_fields(merged_extra_data, custom_fields, instance)
 
-        print(
-            f"[UpdateWeatherEventSerializer.to_internal_value] Final internal_value['extra_data']: {internal_value['extra_data']}"
-        )
         return internal_value
 
     def to_representation(self, instance):
@@ -1021,20 +986,12 @@ class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
         return data
 
     def update(self, instance, validated_data):
-        # DEBUG: Log what we're about to save
-        print(f"[UpdateWeatherEventSerializer.update] Instance ID: {instance.id}")
-        print(f"[UpdateWeatherEventSerializer.update] validated_data type: {type(validated_data)}")
-        print(f"[UpdateWeatherEventSerializer.update] validated_data keys: {validated_data.keys()}")
-        if "extra_data" in validated_data:
-            print(f"[UpdateWeatherEventSerializer.update] validated_data['extra_data']: {validated_data['extra_data']}")
-
         # CRITICAL FIX: Set history and created_by from request (same as ViewSet logic)
         request = self.context.get("request")
         if request and not instance.history:
             from product.models import Parcel
 
             parcels = request.POST.getlist("parcels", None) or request.data.get("parcels", [])
-            print(f"[UpdateWeatherEventSerializer.update] parcels from request: {parcels}")
 
             if parcels:
                 parcel_id = parcels[0] if isinstance(parcels, list) else parcels
@@ -1043,8 +1000,6 @@ class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
                     if parcel.current_history:
                         validated_data["history"] = parcel.current_history
                         validated_data["created_by"] = request.user
-                        print(f"[UpdateWeatherEventSerializer.update] Set history to: {parcel.current_history.id}")
-                        print(f"[UpdateWeatherEventSerializer.update] Set created_by to: {request.user}")
 
                         # Calculate index matching ViewSet logic (only if not already set)
                         if not instance.index:
@@ -1060,7 +1015,6 @@ class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
                                 + history.history_businessevent_events.count()
                             ) + 1
                             validated_data["index"] = index
-                            print(f"[UpdateWeatherEventSerializer.update] Set index to: {index}")
                 except Exception as e:
                     print(f"[UpdateWeatherEventSerializer.update] Error setting history: {e}")
 
@@ -1070,20 +1024,14 @@ class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
         # Call parent update
         updated_instance = super().update(instance, validated_data)
 
-        # DEBUG: Log what was saved
-        print(f"[UpdateWeatherEventSerializer.update] After save, extra_data: {updated_instance.extra_data}")
-
         return updated_instance
 
     def create(self, validated_data):
-        print(f"🚨🚨 [UpdateWeatherEventSerializer.create] SERIALIZER CREATE METHOD CALLED 🚨🚨")
-        print(f"[UpdateWeatherEventSerializer.create] Starting custom create method")
         # Handle album images from S3 URLs (modern approach)
         request = self.context.get("request")
         album_images = request.data.get("album_images", []) if request else []
 
         if album_images:
-            print(f"[UpdateWeatherEventSerializer.create] Processing {len(album_images)} album images from S3 URLs")
             gallery = Gallery.objects.create()
 
             # Create GalleryImage records from S3 URLs
@@ -1091,9 +1039,6 @@ class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
                 # Extract S3 key from URL if possible
                 s3_key = image_url.split("/")[-1] if "/" in image_url else None
                 gallery_image = gallery.images.create(image_url=image_url, s3_key=s3_key)
-                print(
-                    f"[UpdateWeatherEventSerializer.create] Created gallery image {gallery_image.id} with URL: {image_url}"
-                )
 
             validated_data["album"] = gallery
 
@@ -1112,7 +1057,6 @@ class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
             from product.models import Parcel
 
             parcels = request.POST.getlist("parcels", None) or request.data.get("parcels", [])
-            print(f"[UpdateWeatherEventSerializer.create] parcels from request: {parcels}")
 
             if parcels:
                 # Get the first parcel's current_history (matching ViewSet logic)
@@ -1120,9 +1064,6 @@ class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
                 try:
                     parcel = Parcel.objects.select_related("current_history").get(id=int(parcel_id))
                     if parcel.current_history:
-                        print(
-                            f"[UpdateWeatherEventSerializer.create] Setting history to {parcel.current_history.id} and created_by to {request.user.id}"
-                        )
                         validated_data["history"] = parcel.current_history
                         validated_data["created_by"] = request.user
 
@@ -1139,11 +1080,6 @@ class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
                             + history.history_businessevent_events.count()
                         ) + 1
                         validated_data["index"] = index
-                        print(f"[UpdateWeatherEventSerializer.create] Set index to {index}")
-                    else:
-                        print(
-                            f"[UpdateWeatherEventSerializer.create] WARNING: Parcel {parcel_id} has no current_history"
-                        )
                 except (Parcel.DoesNotExist, ValueError) as e:
                     print(f"[UpdateWeatherEventSerializer.create] ERROR: Could not find parcel {parcel_id}: {e}")
 
@@ -1774,6 +1710,7 @@ class HistorySerializer(serializers.ModelSerializer):
         model = History
         fields = [
             "id",
+            "public_id",
             "start_date",
             "finish_date",
             "name",
@@ -1802,7 +1739,7 @@ class HistorySerializer(serializers.ModelSerializer):
             "description",
             "events_status",
         ]
-        read_only_fields = ["id", "created_at", "updated_at", "certificate_percentage", "events_status"]
+        read_only_fields = ["id", "public_id", "created_at", "updated_at", "certificate_percentage", "events_status"]
 
     def get_product(self, history):
         return history.product.name if history.product else None
@@ -2036,6 +1973,7 @@ class PublicHistoryListSerializer(serializers.ModelSerializer):
 
 class PublicHistorySerializer(serializers.ModelSerializer):
     events = serializers.SerializerMethodField()
+    events_count = serializers.SerializerMethodField()
     images = serializers.SerializerMethodField()
     product = PublicProductSerializer(read_only=True)
     parcel = PublicParcelSerializer(read_only=True)
@@ -2045,7 +1983,6 @@ class PublicHistorySerializer(serializers.ModelSerializer):
     class Meta:
         model = History
         fields = [
-            "id",
             "public_id",
             "name",
             "start_date",
@@ -2057,6 +1994,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
             "reputation",
             "is_outdoor",
             "events",
+            "events_count",
             "images",
             "operator",
             "lot_id",
@@ -2066,6 +2004,28 @@ class PublicHistorySerializer(serializers.ModelSerializer):
             "type",
             "transparency_score",
         ]
+
+    def get_events_count(self, obj):
+        """Total count of documented farming events for this production."""
+        count = 0
+        for attr in [
+            "history_weatherevent_events",
+            "history_chemicalevent_events",
+            "history_productionevent_events",
+            "history_generalevent_events",
+            "history_equipmentevent_events",
+            "history_soilmanagementevent_events",
+            "history_pestmanagementevent_events",
+            "history_businessevent_events",
+        ]:
+            manager = getattr(obj, attr, None)
+            if manager is not None:
+                try:
+                    # Use prefetched cache if available, else query
+                    count += len(manager.all())
+                except Exception:
+                    pass
+        return count
 
     def _sanitize_extra_data_for_public(self, event):
         """Remove business-sensitive fields from extra_data for public API."""
@@ -3003,7 +2963,6 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                 if img not in unique_images:
                     unique_images.append(img)
 
-            print(f"PublicHistorySerializer.get_images for history {history.id}: Found {len(unique_images)} images")
             return unique_images
 
         except Exception as e:
@@ -3033,8 +2992,6 @@ class UpdateEquipmentEventSerializer(CustomFieldsMixin, serializers.ModelSeriali
         Map frontend field names to backend database field names.
         Handles field name mapping and value mapping for equipment events.
         """
-        print(f"[UpdateEquipmentEventSerializer.to_internal_value] Input data: {data}")
-
         # Create a copy to avoid modifying the original
         data = data.copy()
 
@@ -3063,15 +3020,6 @@ class UpdateEquipmentEventSerializer(CustomFieldsMixin, serializers.ModelSeriali
             # Map the equipment type, fallback to original value if not in mapping
             mapped_equipment_type = equipment_type_mapping.get(equipment_type, equipment_type)
             data["equipment_type_structured"] = mapped_equipment_type
-
-            if mapped_equipment_type != equipment_type:
-                print(
-                    f"[UpdateEquipmentEventSerializer] Mapped equipment_type '{equipment_type}' → '{mapped_equipment_type}' → equipment_type_structured"
-                )
-            else:
-                print(
-                    f"[UpdateEquipmentEventSerializer] Mapped equipment_type '{equipment_type}' → equipment_type_structured (no value mapping needed)"
-                )
 
         # Call the parent method to handle the rest
         internal_value = super().to_internal_value(data)
@@ -3262,8 +3210,6 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
         import decimal
         from decimal import Decimal
 
-        print(f"[UpdateSoilManagementEventSerializer.to_internal_value] Input data: {data}")
-
         # Create a copy to avoid modifying the original
         data = data.copy()
 
@@ -3297,9 +3243,6 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
                 if isinstance(internal_value[field_name], Decimal):
                     # Convert Decimal to string to ensure JSON serialization works
                     internal_value[field_name] = str(internal_value[field_name])
-                    print(
-                        f"[UpdateSoilManagementEventSerializer] Converted {field_name} from Decimal to string: {internal_value[field_name]}"
-                    )
 
         # Handle extra_data field specifically - ensure all nested Decimal objects are converted
         if frontend_extra_data:
@@ -3330,7 +3273,6 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
 
         internal_value["extra_data"] = merged_extra_data
 
-        print(f"[UpdateSoilManagementEventSerializer.to_internal_value] Final internal_value: {internal_value}")
         return internal_value
 
     def to_representation(self, instance):
@@ -3379,8 +3321,6 @@ class UpdatePestManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
         average_pest_pressure, event_count, area_covered_total, etc.) inside extra_data.
         These must be extracted BEFORE super() and merged with existing extra_data.
         """
-        print(f"[UpdatePestManagementEventSerializer.to_internal_value] Input data: {data}")
-
         # Create a copy to avoid modifying the original
         data = data.copy()
 
@@ -3503,8 +3443,6 @@ class UpdateBusinessEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
         trust_impact and transparency_benefit have no model columns and must be
         stored in extra_data.
         """
-        print(f"[UpdateBusinessEventSerializer.to_internal_value] Input data: {data}")
-
         # Create a copy to avoid modifying the original
         data = data.copy()
 

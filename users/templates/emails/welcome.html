@@ -6,7 +6,7 @@
 
 {% block header_subtitle %}
     {% if user_type == 'producer' %}
-        Your carbon intelligence platform for sustainable agriculture
+        Document how your food is grown. Build consumer trust.
     {% else %}
         Discover the story behind your food
     {% endif %}
@@ -16,25 +16,25 @@
 
 {% block message %}
     {% if user_type == 'producer' %}
-        <p>Welcome to Trazo, the leading platform for agricultural carbon transparency and verification.</p>
-        <p>As a producer, you now have access to enterprise-grade tools for tracking, calculating, and verifying your carbon footprint. Our platform integrates with USDA data and blockchain technology to provide credible, transparent carbon intelligence.</p>
+        <p>Welcome to Trazo, the transparency platform built for specialty crop farms.</p>
+        <p>Document every step of how your food is grown, earn transparency scores, and give your buyers the proof they need. More documentation means more trust and premium market positioning.</p>
         <p><strong>What you can do with Trazo:</strong></p>
         <ul style="margin: 16px 0; padding-left: 20px; color: #4b5563;">
-            <li>Track carbon footprint across your entire operation</li>
-            <li>Generate verifiable carbon certificates</li>
-            <li>Access real-time USDA emission factors</li>
-            <li>Create transparent QR codes for consumers</li>
+            <li>Document agricultural practices with transparency scores</li>
+            <li>Generate QR codes so consumers see how food was grown</li>
+            <li>Track 7 event types across 20 pre-configured US crops</li>
+            <li>Build consumer trust with blockchain-recorded data</li>
             <li>Manage your team with role-based access</li>
         </ul>
     {% else %}
         <p>Welcome to Trazo, where transparency meets sustainability.</p>
-        <p>You can now scan QR codes on agricultural products to discover their complete carbon story. See the real environmental impact of your food choices and support farmers who are making a difference.</p>
+        <p>Scan QR codes on agricultural products to discover exactly how your food was grown. See transparency scores, verified farming practices, and the complete production journey.</p>
         <p><strong>What you can discover:</strong></p>
         <ul style="margin: 16px 0; padding-left: 20px; color: #4b5563;">
-            <li>Complete carbon footprint of products</li>
-            <li>Verified sustainability practices</li>
-            <li>Farm-to-table traceability</li>
-            <li>Impact of your purchasing decisions</li>
+            <li>Transparency scores showing how food was grown</li>
+            <li>Documented farming practices and events</li>
+            <li>Farm-to-table production journey</li>
+            <li>Photo evidence and blockchain-recorded data</li>
         </ul>
     {% endif %}
 {% endblock %}
@@ -44,7 +44,7 @@
         <a href="{% if user_type == 'producer' %}https://producer.trazo.io{% else %}https://consumer.trazo.io{% endif %}" 
            class="btn {% if user_type == 'consumer' %}consumer{% endif %}">
             {% if user_type == 'producer' %}
-                Start Tracking Carbon
+                Go to My Dashboard
             {% else %}
                 Start Discovering
             {% endif %}

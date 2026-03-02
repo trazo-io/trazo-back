@@ -158,7 +158,7 @@ def test_template_rendering_by_type():
         consumer_welcome = render_to_string("emails/welcome.html", consumer_context)
 
         # Check for producer-specific content
-        if "enterprise-grade tools" in producer_welcome and "carbon intelligence" in producer_welcome:
+        if "specialty crop farms" in producer_welcome and "transparency" in producer_welcome:
             print("   ✅ Producer welcome contains producer-specific content")
         else:
             print("   ❌ Producer welcome missing producer content")

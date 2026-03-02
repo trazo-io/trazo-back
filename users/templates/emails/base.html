@@ -261,7 +261,7 @@
         <div class="email-header {% if user_type == 'consumer' %}consumer{% endif %}">
                 <img src="{{ BASE_URL }}static/img/trazo2-white.png" alt="Trazo Logo" height="60" style="margin: 0 auto; padding-bottom: 10px;" />
             <h1 class="header-title">{% block header_title %}Welcome to Trazo{% endblock %}</h1>
-            <p class="header-subtitle">{% block header_subtitle %}Carbon transparency for sustainable agriculture{% endblock %}</p>
+            <p class="header-subtitle">{% block header_subtitle %}Agricultural transparency you can trust{% endblock %}</p>
         </div>
         
         <!-- Content -->
@@ -272,7 +272,7 @@
             
             <div class="message">
                 {% block message %}
-                <p>Welcome to Trazo, the leading platform for agricultural carbon transparency.</p>
+                <p>Welcome to Trazo, the transparency platform for specialty crop farms.</p>
                 {% endblock %}
             </div>
             
@@ -282,8 +282,8 @@
         <!-- Footer -->
         <div class="email-footer">
             <div class="footer-content">
-                <p><strong>Trazo</strong> - Carbon Intelligence for Agriculture</p>
-                <p>Making sustainable farming transparent and verifiable</p>
+                <p><strong>Trazo</strong> - Agricultural Transparency Platform</p>
+                <p>Your buyers want proof. Give it to them.</p>
                 <div class="footer-links">
                     <a href="https://trazo.io" {% if user_type == 'consumer' %}class="consumer"{% endif %}>Visit Website</a>
                     <a href="mailto:support@trazo.io" {% if user_type == 'consumer' %}class="consumer"{% endif %}>Contact Support</a>

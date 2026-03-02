@@ -9,29 +9,29 @@ Congratulations! You've successfully joined {{ company.name }} as a {{ role_disp
 Your role as {{ role_display }}:
 {% if role == 'CA' %}
 • Full access to all company establishments and data
-• Manage team members and send invitations  
+• Manage team members and send invitations
 • Configure company settings and preferences
-• Access all carbon tracking and verification tools
+• Access all transparency tracking and reporting tools
 {% elif role == 'FM' %}
 • Manage assigned farm establishments
-• Track carbon footprint for your operations
+• Document farming practices for transparency scores
 • Create and manage production records
-• Generate QR codes for transparency
+• Generate QR codes for consumer trust
 {% else %}
-• Contribute to your team's carbon tracking efforts
+• Contribute to your team's transparency documentation
 • Record agricultural events and activities
 • Support sustainable farming practices
 • Access training and educational resources
 {% endif %}
 
 What you can do with Trazo:
-• Track carbon footprint across agricultural operations
-• Generate verifiable carbon certificates
-• Access real-time USDA emission factors
-• Create transparent QR codes for consumers
+• Document agricultural practices with transparency scores
+• Generate QR codes so consumers see how food was grown
+• Access EPA/USDA-sourced environmental data
+• Build consumer trust with blockchain-recorded data
 • Collaborate with your team on sustainability goals
 
-Your account is ready and you're automatically logged in. Start exploring your dashboard and see how {{ company.name }} is leading the way in agricultural sustainability.
+Your account is ready and you're automatically logged in. Start exploring your dashboard and see how {{ company.name }} is leading the way in agricultural transparency.
 
 Access your dashboard: {{ BASE_APP_URL|default:'https://app.trazo.io' }}
 

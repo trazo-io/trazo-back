@@ -4737,7 +4737,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
 
                 similar_products.append(
                     {
-                        "id": history.id,
+                        "id": str(history.public_id),
                         "product": {"name": history.product.name if history.product else "Product"},
                         "reputation": float(history.reputation) if history.reputation else 4.5,
                         "image": image_url,

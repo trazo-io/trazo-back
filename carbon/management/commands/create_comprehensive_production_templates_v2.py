@@ -793,9 +793,15 @@ def build_weather_event_fields(
     event_name=None,
     temperature=None,
     wind_speed=None,
-    duration_hours=None,
-    duration_days=None,
+    duration=None,
     damage_description=None,
+    water_deficit=None,
+    humidity_level=None,
+    crop_impact=None,
+    protection_measures=None,
+    precipitation_amount=None,
+    start_date=None,
+    end_date=None,
     additional_extra_data=None,
 ):
     """
@@ -803,23 +809,59 @@ def build_weather_event_fields(
 
     Subtypes: FR (Frost), DR (Drought), HL (Hail), HT (Heat),
               TS (Storm), HW (High Wind), HH (High Humidity), LH (Low Humidity)
+
+    Frontend key names (fieldDisplayUtils.ts getWeatherEventFields):
+      FR: lower_temperature, way_of_protection, duration (hours)
+      HT: highest_temperature, start_date, end_date, protection_measures
+      DR: water_deficit (mm), crop_impact
+      HL: duration (minutes!), way_of_protection, damage_assessment
+      TS/HW: wind_speed (km/h), precipitation_amount (mm), duration (hours),
+             damage_assessment, protection_measures
+      HH/LH: humidity_level (%), duration (hours), crop_impact
     """
     extra_data = {}
     if event_name:
         extra_data["event_name"] = event_name
+
+    # Temperature — key depends on subtype
     if temperature is not None:
         if subtype == "FR":
             extra_data["lower_temperature"] = str(temperature)
         else:
             extra_data["highest_temperature"] = str(temperature)
+
+    # Duration — frontend reads "duration" (hours for most, minutes for HL)
+    if duration is not None:
+        extra_data["duration"] = duration
+
+    # Wind & precipitation (TS/HW)
     if wind_speed is not None:
         extra_data["wind_speed"] = str(wind_speed)
-    if duration_hours is not None:
-        extra_data["duration_hours"] = duration_hours
-    if duration_days is not None:
-        extra_data["duration_days"] = duration_days
+    if precipitation_amount is not None:
+        extra_data["precipitation_amount"] = str(precipitation_amount)
+
+    # Drought fields (DR)
+    if water_deficit is not None:
+        extra_data["water_deficit"] = str(water_deficit)
+
+    # Humidity fields (HH/LH)
+    if humidity_level is not None:
+        extra_data["humidity_level"] = str(humidity_level)
+
+    # Shared fields
+    if crop_impact:
+        extra_data["crop_impact"] = crop_impact
+    if protection_measures:
+        extra_data["protection_measures"] = protection_measures
     if damage_description:
-        extra_data["damage"] = damage_description
+        extra_data["damage_assessment"] = damage_description
+
+    # Date range (HT)
+    if start_date:
+        extra_data["start_date"] = start_date
+    if end_date:
+        extra_data["end_date"] = end_date
+
     if additional_extra_data:
         extra_data.update(additional_extra_data)
 
@@ -1792,7 +1834,10 @@ def get_tree_crop_events(crop_slug, crop_data):
                 subtype="HT",
                 event_name=f"Heat stress event in {crop_slug} orchard",
                 temperature=42,
-                duration_days=3,
+                duration=72,
+                start_date="",
+                end_date="",
+                protection_measures="Increased irrigation frequency, overhead mist activation",
                 observation=f"High temperature event affecting {crop_slug} orchard — monitoring tree stress and irrigation needs",
             ),
         },
@@ -1898,7 +1943,9 @@ def _build_shared_weather_event(crop_slug, crop_category, order):
                 subtype="DR",
                 event_name=f"Drought conditions affecting {crop_slug}",
                 temperature=38,
-                duration_days=7,
+                water_deficit=45,
+                duration=168,
+                crop_impact=f"Soil moisture stress on {crop_slug} — leaf curling and reduced growth observed",
                 observation=f"Drought stress monitoring for {crop_slug} — tracking soil moisture and crop wilting indicators",
             ),
         }
@@ -1927,7 +1974,8 @@ def _build_shared_weather_event(crop_slug, crop_category, order):
                 subtype="FR",
                 event_name=f"Frost event affecting {crop_slug}",
                 temperature=-2,
-                duration_hours=6,
+                duration=6,
+                protection_measures="Row covers deployed, irrigation frost protection activated",
                 observation=f"Frost event documentation for {crop_slug} — assessing crop damage and protection measures taken",
             ),
         }
@@ -1955,9 +2003,10 @@ def _build_shared_weather_event(crop_slug, crop_category, order):
             "backend_event_fields": build_weather_event_fields(
                 subtype="HH",
                 event_name=f"High humidity event affecting {crop_slug}",
-                duration_days=4,
+                humidity_level=92,
+                duration=96,
+                crop_impact=f"Increased botrytis and mildew pressure on {crop_slug} — preventive fungicide applied",
                 observation=f"High humidity documentation for {crop_slug} — monitoring disease pressure and fruit quality",
-                additional_extra_data={"relative_humidity_pct": "90+"},
             ),
         }
     else:
@@ -1985,6 +2034,8 @@ def _build_shared_weather_event(crop_slug, crop_category, order):
                 subtype="HT",
                 event_name=f"Weather event affecting {crop_slug}",
                 temperature=40,
+                duration=48,
+                protection_measures="Increased irrigation, shade cloth deployed",
                 observation=f"Weather event documentation for {crop_slug} production",
             ),
         }

@@ -6,7 +6,7 @@
 
 {% block header_subtitle %}
     {% if user_type == 'producer' %}
-        Complete your setup to start tracking carbon
+        Complete your setup to start documenting
     {% else %}
         Complete your setup to start discovering
     {% endif %}
@@ -52,18 +52,18 @@
         
         {% if user_type == 'producer' %}
             <ul style="margin: 16px 0; padding-left: 20px; color: #4b5563;">
-                <li>Carbon footprint tracking and calculation</li>
-                <li>USDA-verified emission factors</li>
-                <li>Blockchain-verified carbon certificates</li>
+                <li>Transparency score tracking and calculation</li>
+                <li>EPA/USDA-sourced environmental data</li>
+                <li>Blockchain-recorded production data</li>
                 <li>QR code generation for products</li>
                 <li>Team management and role assignments</li>
             </ul>
         {% else %}
             <ul style="margin: 16px 0; padding-left: 20px; color: #4b5563;">
                 <li>QR code scanning for product transparency</li>
-                <li>Carbon footprint information</li>
-                <li>Farm-to-table traceability</li>
-                <li>Sustainability impact tracking</li>
+                <li>See how your food was grown</li>
+                <li>Farm-to-table production journey</li>
+                <li>Transparency scores and farming practices</li>
             </ul>
         {% endif %}
         

@@ -41,24 +41,20 @@ logger = logging.getLogger(__name__)
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
-def production_transparency_detail(request, production_public_id=None, production_id=None):
+def production_transparency_detail(request, production_public_id=None):
     """
     Consumer-facing transparency endpoint for QR scanning
 
     Returns transparency percentage and carbon data WITHOUT competitive rankings
     This solves the farmer gaming incentive problem by rewarding honesty over competition
 
-    Accepts either UUID (production_public_id) or legacy integer (production_id).
+    Accepts UUID (production_public_id) only.
     """
     try:
-        # Build lookup filter: UUID (preferred) or legacy integer
-        lookup_kwargs = {}
-        if production_public_id is not None:
-            lookup_kwargs["public_id"] = production_public_id
-        elif production_id is not None:
-            lookup_kwargs["id"] = production_id
-        else:
+        # Build lookup filter: UUID only
+        if production_public_id is None:
             return Response({"error": "Production identifier required"}, status=status.HTTP_400_BAD_REQUEST)
+        lookup_kwargs = {"public_id": production_public_id}
 
         # Get production with related data (optimized query with prefetch for all event types and carbon data)
         # This eliminates N+1 queries by prefetching all 8 event types with their albums and images
@@ -141,7 +137,10 @@ def production_transparency_detail(request, production_public_id=None, productio
             carbon_breakdown = {}
 
         # Get benchmark comparison (ABSOLUTE standards, not competitive rankings)
-        transparency_benchmarks = transparency_calculator.compare_with_benchmarks(history)
+        # Pass pre-calculated transparency_data to avoid redundant recalculation
+        transparency_benchmarks = transparency_calculator.compare_with_benchmarks(
+            history, transparency_data=transparency_data
+        )
 
         # Build farm information
         establishment = history.parcel.establishment if history.parcel else None
@@ -162,19 +161,9 @@ def production_transparency_detail(request, production_public_id=None, productio
             "end_date": history.finish_date.isoformat() if history.finish_date else None,
         }
 
-        # Track scan for analytics (but don't return scan data to user)
-        try:
-            # Simple scan tracking without heavy privacy processing
-            HistoryScan.objects.create(
-                history=history,
-                user=request.user if request.user.is_authenticated else None,
-                date=timezone.now(),
-                scan_type="transparency_api",
-                ip_address=request.META.get("REMOTE_ADDR", ""),
-            )
-        except Exception as e:
-            # Don't fail the whole request if scan tracking fails
-            logger.warning(f"Scan tracking failed: {str(e)}")
+        # NOTE: Scan tracking is handled by the public_history action in HistoryViewSet
+        # which includes geolocation and notifications. Removed duplicate tracking here
+        # to prevent inflated scan counts when both endpoints are called.
 
         # Use standardized transparency response formatter
         formatter = TransparencyResponseFormatter()
@@ -184,7 +173,7 @@ def production_transparency_detail(request, production_public_id=None, productio
             "total_co2_kg_per_kg": carbon_score,
             "total_emissions": carbon_breakdown.get("total_emissions", 0),
             "total_offsets": carbon_breakdown.get("total_offsets", 0),
-            "net_footprint": carbon_score,  # This should be calculated properly
+            "net_footprint": carbon_breakdown.get("total_emissions", 0) - carbon_breakdown.get("total_offsets", 0),
             "usda_factors_used": True,  # Based on your carbon calculation method
             "calculation_method": "USDA_EPA_factors",
         }
@@ -208,12 +197,21 @@ def production_transparency_detail(request, production_public_id=None, productio
                 }
             )
 
+        # Check actual blockchain verification status from production extra_data
+        production_extra_data = history.extra_data or {}
+        is_blockchain_verified = production_extra_data.get("blockchain_verified", False)
+        blockchain_tx = production_extra_data.get("blockchain_transaction", "")
+        blockchain_verification_data = {
+            "verified": bool(is_blockchain_verified),
+            "transaction_hash": blockchain_tx if is_blockchain_verified else "",
+        }
+
         # Get standardized response
         response_data = formatter.format_qr_response(
             production=history,
             carbon_data=carbon_data_formatted,
             transparency_data=transparency_data_formatted,
-            blockchain_verification={"verified": True},  # You can implement proper blockchain checking
+            blockchain_verification=blockchain_verification_data,
             achievements=achievements,
         )
 
@@ -242,10 +240,9 @@ def production_transparency_detail(request, production_public_id=None, productio
         # This uses the fixed USDAComplianceRecord.is_usda_verified property which checks:
         # - validation_method in ["enhanced_api", "local_validation"] (not error)
         # - crop_type is identified (validation ran properly)
-        total_carbon_entries = CarbonEntry.objects.filter(production=history).count()
-        usda_factors_based_entries = CarbonEntry.objects.filter(
-            production=history, usda_factors_based=True
-        ).count()
+        all_carbon_entries = list(history.carbonentry_set.all())
+        total_carbon_entries = len(all_carbon_entries)
+        usda_factors_based_entries = sum(1 for e in all_carbon_entries if e.usda_factors_based)
 
         # USDA verified if ALL carbon entries used USDA factors
         is_usda_verified = total_carbon_entries > 0 and usda_factors_based_entries == total_carbon_entries
@@ -273,10 +270,12 @@ def production_transparency_detail(request, production_public_id=None, productio
                 },
                 # DETAILED LOAD (30+ seconds) - Deep insights
                 "detailed_view": {
-                    "transparency_insights": transparency_calculator.get_transparency_insights(history),
+                    "transparency_insights": transparency_calculator.get_transparency_insights(
+                        history, transparency_data=transparency_data
+                    ),
                     "benchmark_comparison": transparency_benchmarks,
                     "improvement_suggestions": transparency_benchmarks.get("next_target", {}),
-                    "verification_status": _get_verification_status(history),
+                    "verification_status": _get_verification_status(history, transparency_data=transparency_data),
                     "data_quality_indicators": {
                         "last_updated": transparency_data.get("calculation_timestamp"),
                         "data_freshness": _calculate_data_freshness(history),
@@ -377,7 +376,10 @@ def production_transparency_detail(request, production_public_id=None, productio
                                 else 0
                             ),
                             "total_parcels": (
-                                sum(e.parcels.count() for e in establishment.company.establishment_set.all())
+                                establishment.company.establishment_set.aggregate(
+                                    total=Count("parcels")
+                                )["total"]
+                                or 0
                                 if establishment and establishment.company
                                 else 0
                             ),
@@ -416,7 +418,7 @@ def production_transparency_detail(request, production_public_id=None, productio
         return Response(error_response, status=status.HTTP_404_NOT_FOUND)
 
     except Exception as e:
-        lookup_ref = production_public_id or production_id
+        lookup_ref = production_public_id or "unknown"
         logger.error(f"Transparency detail error for production {lookup_ref}: {str(e)}")
         formatter = TransparencyResponseFormatter()
         error_response = formatter.format_error_response(
@@ -427,22 +429,18 @@ def production_transparency_detail(request, production_public_id=None, productio
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
-def production_transparency_summary(request, production_public_id=None, production_id=None):
+def production_transparency_summary(request, production_public_id=None):
     """
     Lightweight transparency summary for mobile QR scanning
     Optimized for < 1 second response time
 
-    Accepts either UUID (production_public_id) or legacy integer (production_id).
+    Accepts UUID (production_public_id) only.
     """
     try:
-        # Build lookup filter: UUID (preferred) or legacy integer
-        lookup_kwargs = {"published": True}
-        if production_public_id is not None:
-            lookup_kwargs["public_id"] = production_public_id
-        elif production_id is not None:
-            lookup_kwargs["id"] = production_id
-        else:
+        # Build lookup filter: UUID only
+        if production_public_id is None:
             return Response({"error": "Production identifier required"}, status=status.HTTP_400_BAD_REQUEST)
+        lookup_kwargs = {"published": True, "public_id": production_public_id}
 
         # Get production with optimized queries (prefetch all event types with albums)
         history = get_object_or_404(
@@ -493,7 +491,7 @@ def production_transparency_summary(request, production_public_id=None, producti
             carbon_service = CarbonCalculatorService()
             carbon_result = carbon_service.calculate_production_carbon(history.id)
             carbon_score = carbon_result.get("total_co2_kg_per_kg", 0)
-        except:
+        except Exception:
             carbon_score = 0
 
         # Use standardized transparency formatter for mobile
@@ -528,26 +526,22 @@ def production_transparency_summary(request, production_public_id=None, producti
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
-def production_instant_trust(request, production_public_id=None, production_id=None):
+def production_instant_trust(request, production_public_id=None):
     """
     Ultra-fast instant trust endpoint for QR scanning
     Optimized for <750ms response time with essential trust indicators only
     Returns: transparency score, consumer message, basic farm info
 
-    Accepts either UUID (production_public_id) or legacy integer (production_id).
+    Accepts UUID (production_public_id) only.
     """
     try:
-        # Build lookup filter: UUID (preferred) or legacy integer
-        lookup_kwargs = {"published": True}
-        if production_public_id is not None:
-            lookup_kwargs["public_id"] = production_public_id
-        elif production_id is not None:
-            lookup_kwargs["id"] = production_id
-        else:
+        # Build lookup filter: UUID only
+        if production_public_id is None:
             return Response(
                 {"success": False, "error": "missing_id", "message": "Production identifier required"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        lookup_kwargs = {"published": True, "public_id": production_public_id}
 
         # Ultra-lightweight query - only get essential fields
         history = (
@@ -592,7 +586,7 @@ def production_instant_trust(request, production_public_id=None, production_id=N
         )
 
     except Exception as e:
-        lookup_ref = production_public_id or production_id
+        lookup_ref = production_public_id or "unknown"
         logger.error(f"Instant trust error for production {lookup_ref}: {str(e)}")
         return Response(
             {"success": False, "error": "service_error", "message": "Unable to load trust indicators at this time"},
@@ -631,7 +625,7 @@ def _get_instant_trust_message(transparency_data):
         return f"Building transparency - {practices} practices currently documented"
 
 
-def _get_verification_status(history):
+def _get_verification_status(history, transparency_data=None):
     """Get verification status for the production"""
 
     # Check for various verification indicators
@@ -660,9 +654,10 @@ def _get_verification_status(history):
     if business_events.filter(Q(description__icontains="audit") | Q(description__icontains="inspection")).exists():
         verifications["third_party_audited"] = True
 
-    # Transparency verification based on completeness
-    transparency_calculator = TransparencyCalculator()
-    transparency_data = transparency_calculator.calculate_transparency_score(history)
+    # Transparency verification based on completeness (reuse pre-calculated data if available)
+    if transparency_data is None:
+        transparency_calculator = TransparencyCalculator()
+        transparency_data = transparency_calculator.calculate_transparency_score(history)
     verifications["transparency_verified"] = transparency_data["transparency_percentage"] >= 85
 
     return verifications
@@ -802,7 +797,7 @@ def transparency_explanation(request):
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
-def verify_blockchain(request, production_public_id=None, production_id=None):
+def verify_blockchain(request, production_public_id=None):
     """
     Public endpoint for consumer blockchain verification.
 
@@ -818,16 +813,12 @@ def verify_blockchain(request, production_public_id=None, production_id=None):
               anyone can independently inspect the on-chain record.
     """
     try:
-        lookup_kwargs = {"published": True}
-        if production_public_id is not None:
-            lookup_kwargs["public_id"] = production_public_id
-        elif production_id is not None:
-            lookup_kwargs["id"] = production_id
-        else:
+        if production_public_id is None:
             return Response(
                 {"error": "Production identifier required"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        lookup_kwargs = {"published": True, "public_id": production_public_id}
 
         history = get_object_or_404(History, **lookup_kwargs)
         verification_data = _get_blockchain_verification_data(history)

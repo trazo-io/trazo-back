@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 
 from django.core.cache import cache
 from django.db import connections, transaction
+from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
@@ -164,16 +165,80 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         Optimized queryset with proper database optimizations to prevent N+1 queries.
         """
         if self.action == "public_history":
-            return History.objects.filter(published=True).select_related(
-                "product",
-                "parcel__establishment",
-                "operator",
-                "album",
+            return (
+                History.objects.filter(published=True)
+                .select_related(
+                    "product",
+                    "parcel__establishment__company",
+                    "parcel__establishment",
+                    "operator",
+                    "album",
+                )
+                .prefetch_related(
+                    Prefetch(
+                        "history_weatherevent_events",
+                        queryset=WeatherEvent.objects.select_related("album").prefetch_related(
+                            "album__images"
+                        ),
+                    ),
+                    Prefetch(
+                        "history_chemicalevent_events",
+                        queryset=ChemicalEvent.objects.select_related("album").prefetch_related(
+                            "album__images"
+                        ),
+                    ),
+                    Prefetch(
+                        "history_productionevent_events",
+                        queryset=ProductionEvent.objects.select_related("album").prefetch_related(
+                            "album__images"
+                        ),
+                    ),
+                    Prefetch(
+                        "history_generalevent_events",
+                        queryset=GeneralEvent.objects.select_related("album").prefetch_related(
+                            "album__images"
+                        ),
+                    ),
+                    Prefetch(
+                        "history_equipmentevent_events",
+                        queryset=EquipmentEvent.objects.select_related("album").prefetch_related(
+                            "album__images"
+                        ),
+                    ),
+                    Prefetch(
+                        "history_soilmanagementevent_events",
+                        queryset=SoilManagementEvent.objects.select_related("album").prefetch_related(
+                            "album__images"
+                        ),
+                    ),
+                    Prefetch(
+                        "history_pestmanagementevent_events",
+                        queryset=PestManagementEvent.objects.select_related("album").prefetch_related(
+                            "album__images"
+                        ),
+                    ),
+                    Prefetch(
+                        "history_businessevent_events",
+                        queryset=BusinessEvent.objects.select_related("album").prefetch_related(
+                            "album__images"
+                        ),
+                    ),
+                )
             )
         elif self.action == "my_scans":
             return (
                 History.objects.filter(history_scans__user=self.request.user)
                 .select_related("product", "parcel__establishment")
+                .prefetch_related(
+                    "history_weatherevent_events",
+                    "history_chemicalevent_events",
+                    "history_productionevent_events",
+                    "history_generalevent_events",
+                    "history_equipmentevent_events",
+                    "history_soilmanagementevent_events",
+                    "history_pestmanagementevent_events",
+                    "history_businessevent_events",
+                )
                 .order_by("id", "-history_scans__date")
                 .distinct("id")
             )
@@ -984,12 +1049,15 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         import uuid as uuid_module
 
         queryset = self.get_queryset()
-        # Support both UUID (public_id) and integer (legacy) lookups
+        # UUID-only lookup (integer IDs no longer supported)
         try:
             public_uuid = uuid_module.UUID(str(pk))
             history = get_object_or_404(queryset, public_id=public_uuid)
         except (ValueError, AttributeError):
-            history = get_object_or_404(queryset, pk=pk)
+            return Response(
+                {"error": "Invalid production identifier. UUID required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
         if x_forwarded_for:
             ip_address = x_forwarded_for.split(",")[0]
@@ -1061,18 +1129,9 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         except Exception as e:
             # Log error but don't break the scan functionality
             logger.error("Error creating scan notification: %s", e)
-        similar_histories = (
-            History.objects.filter(
-                parcel__establishment__company=history.parcel.establishment.company,
-                published=True,
-            )
-            .exclude(id=history.id)
-            .select_related("product", "parcel__establishment")
-            .order_by("-id")[:5]
-        )
         serializer = PublicHistorySerializer(
             history,
-            context={"history_scan": history_scan.id, "similar_histories": similar_histories, "request": request},
+            context={"history_scan": history_scan.id, "request": request},
         )
         return Response(serializer.data)
 

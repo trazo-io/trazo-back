@@ -100,13 +100,13 @@ class UserFavoriteSerializer(serializers.ModelSerializer):
     location = serializers.SerializerMethodField()
     carbon_score = serializers.SerializerMethodField()
     carbon_footprint = serializers.SerializerMethodField()
-    production_id = serializers.IntegerField(source="production.id", read_only=True)
+    production_public_id = serializers.UUIDField(source="production.public_id", read_only=True)
 
     class Meta:
         model = UserFavorite
         fields = [
             "id",
-            "production_id",
+            "production_public_id",
             "product_name",
             "farm_name",
             "location",
@@ -274,8 +274,8 @@ class UserImpactSummarySerializer(serializers.ModelSerializer):
 class EnhancedHistoryScanSerializer(serializers.ModelSerializer):
     """Enhanced serializer for shopping history with rich data - transparency-first approach"""
 
-    # Production ID for navigation links (History.id, not HistoryScan.id)
-    production_id = serializers.IntegerField(source="history.id", read_only=True)
+    # Production UUID for navigation links (History.public_id for consumer URLs)
+    production_public_id = serializers.UUIDField(source="history.public_id", read_only=True)
     product_name = serializers.CharField(source="history.product", read_only=True)
     farm_name = serializers.CharField(source="history.parcel.establishment.name", read_only=True)
     location = serializers.SerializerMethodField()
@@ -294,7 +294,7 @@ class EnhancedHistoryScanSerializer(serializers.ModelSerializer):
         model = HistoryScan
         fields = [
             "id",
-            "production_id",  # History.id for navigation links
+            "production_public_id",  # History.public_id for consumer URLs
             "product_name",
             "farm_name",
             "location",
@@ -312,6 +312,40 @@ class EnhancedHistoryScanSerializer(serializers.ModelSerializer):
             "comment",
         ]
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._carbon_entry_cache = {}
+
+    def _get_carbon_entry(self, history):
+        """Cached CarbonEntry lookup to avoid redundant queries across methods."""
+        history_id = history.id
+        if history_id not in self._carbon_entry_cache:
+            self._carbon_entry_cache[history_id] = (
+                CarbonEntry.objects.filter(production=history).order_by("-created_at").first()
+            )
+        return self._carbon_entry_cache[history_id]
+
+    def _count_events_prefetched(self, history):
+        """Count events using prefetched managers when available, falling back to queries."""
+        count = 0
+        for attr in [
+            "history_weatherevent_events",
+            "history_chemicalevent_events",
+            "history_productionevent_events",
+            "history_generalevent_events",
+            "history_equipmentevent_events",
+            "history_soilmanagementevent_events",
+            "history_pestmanagementevent_events",
+            "history_businessevent_events",
+        ]:
+            manager = getattr(history, attr, None)
+            if manager is not None:
+                try:
+                    count += len(manager.all())
+                except Exception:
+                    pass
+        return count
+
     def get_location(self, obj):
         if obj.history.parcel and obj.history.parcel.establishment:
             establishment = obj.history.parcel.establishment
@@ -328,8 +362,8 @@ class EnhancedHistoryScanSerializer(serializers.ModelSerializer):
         Transparency-first philosophy: More documented events = higher transparency score.
         This REWARDS farmers for logging more events, not fewer.
         """
-        # Count documented events using the helper function
-        events_count = count_events_for_history(obj.history)
+        # Count documented events using prefetched data when available
+        events_count = self._count_events_prefetched(obj.history)
 
         # Calculate transparency score (0-100)
         # Base: 10 events = 100% transparency (fully documented production cycle)
@@ -354,12 +388,11 @@ class EnhancedHistoryScanSerializer(serializers.ModelSerializer):
         Count farming events documented for this production.
         This is the PRIMARY transparency metric.
         """
-        # Count documented events using the helper function
-        return count_events_for_history(obj.history)
+        return self._count_events_prefetched(obj.history)
 
     def get_carbon_score(self, obj):
         """Calculate carbon score grade"""
-        carbon_entry = CarbonEntry.objects.filter(production=obj.history).order_by("-created_at").first()
+        carbon_entry = self._get_carbon_entry(obj.history)
 
         if carbon_entry:
             # Use co2e_amount if available and non-zero, otherwise fall back to amount
@@ -375,7 +408,7 @@ class EnhancedHistoryScanSerializer(serializers.ModelSerializer):
 
     def get_carbon_footprint(self, obj):
         """Get formatted carbon footprint"""
-        carbon_entry = CarbonEntry.objects.filter(production=obj.history).order_by("-created_at").first()
+        carbon_entry = self._get_carbon_entry(obj.history)
 
         if carbon_entry:
             # Use co2e_amount if available and non-zero, otherwise fall back to amount
@@ -391,7 +424,7 @@ class EnhancedHistoryScanSerializer(serializers.ModelSerializer):
 
     def get_carbon_saved(self, obj):
         """Show carbon footprint tracking instead of fake savings"""
-        carbon_entry = CarbonEntry.objects.filter(production=obj.history).order_by("-created_at").first()
+        carbon_entry = self._get_carbon_entry(obj.history)
 
         if carbon_entry:
             # Use co2e_amount if available and non-zero, otherwise fall back to amount
@@ -415,7 +448,7 @@ class EnhancedHistoryScanSerializer(serializers.ModelSerializer):
             practices.append("Certified sustainable")
 
         # Check for carbon calculation using EPA/USDA emission factors
-        carbon_entry = CarbonEntry.objects.filter(production=obj.history).order_by("-created_at").first()
+        carbon_entry = self._get_carbon_entry(obj.history)
 
         if carbon_entry and carbon_entry.usda_factors_based:
             practices.append("EPA/USDA emission factors")
@@ -445,11 +478,11 @@ class EnhancedHistoryScanSerializer(serializers.ModelSerializer):
 class ProductComparisonSerializer(serializers.Serializer):
     """Serializer for product comparison data"""
 
-    products = serializers.ListField(child=serializers.IntegerField(), max_length=5, min_length=2)
+    products = serializers.ListField(child=serializers.UUIDField(), max_length=5, min_length=2)
 
     def validate_products(self, value):
         """Validate that all products exist"""
-        existing_products = History.objects.filter(id__in=value).count()
+        existing_products = History.objects.filter(public_id__in=value).count()
         if existing_products != len(value):
             raise serializers.ValidationError("One or more products not found")
         return value
@@ -458,7 +491,7 @@ class ProductComparisonSerializer(serializers.Serializer):
 class ProductComparisonResultSerializer(serializers.Serializer):
     """Serializer for comparison results"""
 
-    id = serializers.IntegerField()
+    public_id = serializers.UUIDField()
     name = serializers.CharField()
     farm = serializers.CharField()
     location = serializers.CharField()

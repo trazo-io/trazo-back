@@ -20,16 +20,16 @@ Click this link to verify your email address and activate your account:
 Once your account is verified, you'll have full access to all Trazo features:
 
 {% if user_type == 'producer' %}
-• Carbon footprint tracking and calculation
-• USDA-verified emission factors
-• Blockchain-verified carbon certificates
+• Transparency score tracking and calculation
+• EPA/USDA-sourced environmental data
+• Blockchain-recorded production data
 • QR code generation for products
 • Team management and role assignments
 {% else %}
 • QR code scanning for product transparency
-• Carbon footprint information
-• Farm-to-table traceability
-• Sustainability impact tracking
+• See how your food was grown
+• Farm-to-table production journey
+• Transparency scores and farming practices
 {% endif %}
 
 This verification link will expire in 24 hours. If you didn't create an account with Trazo, you can safely ignore this email.
@@ -37,8 +37,8 @@ This verification link will expire in 24 hours. If you didn't create an account 
 The Trazo Team
 
 ---
-Trazo - Carbon Intelligence for Agriculture
-Making sustainable farming transparent and verifiable
+Trazo - Agricultural Transparency Platform
+Your buyers want proof. Give it to them.
 
 Visit us: https://trazo.io
 Support: support@trazo.io
