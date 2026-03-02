@@ -1768,12 +1768,12 @@ def get_tree_crop_events(crop_slug, crop_data):
             ),
         },
         # === WEATHER (backend_event_type=0) ===
-        # 20. Weather Event
+        # 20. Weather Event - Tree crops: heat stress and frost are primary concerns
         {
-            "name": "Weather Event",
+            "name": f"Heat Stress Alert - {crop_slug.replace('_', ' ').title()}",
             "event_type": "weather_protection",
-            "description": "Document significant weather events affecting the orchard",
-            "timing": "Year-round",
+            "description": f"High temperature event documentation for {crop_slug} orchard health monitoring",
+            "timing": "June - September",
             "frequency": "natural",
             "carbon_category": "neutral",
             "cost_estimate": 0.0,
@@ -1790,10 +1790,10 @@ def get_tree_crop_events(crop_slug, crop_data):
             "order_sequence": 20,
             "backend_event_fields": build_weather_event_fields(
                 subtype="HT",
-                event_name="Heat Wave",
+                event_name=f"Heat stress event in {crop_slug} orchard",
                 temperature=42,
                 duration_days=3,
-                observation="Significant weather event affecting orchard",
+                observation=f"High temperature event affecting {crop_slug} orchard — monitoring tree stress and irrigation needs",
             ),
         },
         # === BUSINESS (backend_event_type=7) ===
@@ -1869,10 +1869,133 @@ def get_tree_crop_events(crop_slug, crop_data):
     ]
 
 
-def get_shared_extra_events(crop_slug, crop_data, start_order=7):
+def _build_shared_weather_event(crop_slug, crop_category, order):
+    """Build a crop-category-appropriate weather event template."""
+    crop_label = crop_slug.replace("_", " ").title()
+
+    if crop_category == "grain":
+        # Grains: drought and hailstorms are primary threats
+        return {
+            "name": f"Drought Monitoring - {crop_label}",
+            "event_type": "weather_protection",
+            "description": f"Drought conditions monitoring and documentation for {crop_slug} production",
+            "timing": "June - August",
+            "frequency": "natural",
+            "carbon_category": "neutral",
+            "cost_estimate": 0.0,
+            "carbon_impact": 0.0,
+            "labor_hours": 0.5,
+            "typical_duration": "Variable",
+            "efficiency_tips": "Early documentation helps insurance claims and irrigation planning",
+            "sustainability_score": 5,
+            "qr_visibility": "medium",
+            "consumer_message": "Weather transparency for informed consumers",
+            "backend_event_type": 0,
+            "is_default_enabled": True,
+            "is_required": False,
+            "order_sequence": order,
+            "backend_event_fields": build_weather_event_fields(
+                subtype="DR",
+                event_name=f"Drought conditions affecting {crop_slug}",
+                temperature=38,
+                duration_days=7,
+                observation=f"Drought stress monitoring for {crop_slug} — tracking soil moisture and crop wilting indicators",
+            ),
+        }
+    elif crop_category == "vegetable":
+        # Vegetables: frost damage is a primary concern
+        return {
+            "name": f"Frost Alert - {crop_label}",
+            "event_type": "weather_protection",
+            "description": f"Frost event documentation for {crop_slug} crop protection",
+            "timing": "October - March",
+            "frequency": "natural",
+            "carbon_category": "neutral",
+            "cost_estimate": 0.0,
+            "carbon_impact": 0.0,
+            "labor_hours": 0.5,
+            "typical_duration": "Variable",
+            "efficiency_tips": "Frost protection covers and irrigation can prevent significant crop loss",
+            "sustainability_score": 5,
+            "qr_visibility": "medium",
+            "consumer_message": "Weather transparency for informed consumers",
+            "backend_event_type": 0,
+            "is_default_enabled": True,
+            "is_required": False,
+            "order_sequence": order,
+            "backend_event_fields": build_weather_event_fields(
+                subtype="FR",
+                event_name=f"Frost event affecting {crop_slug}",
+                temperature=-2,
+                duration_hours=6,
+                observation=f"Frost event documentation for {crop_slug} — assessing crop damage and protection measures taken",
+            ),
+        }
+    elif crop_category == "berry":
+        # Berries: high humidity / rain during fruiting is the biggest threat
+        return {
+            "name": f"High Humidity Alert - {crop_label}",
+            "event_type": "weather_protection",
+            "description": f"High humidity and rain event documentation for {crop_slug} disease prevention",
+            "timing": "May - August",
+            "frequency": "natural",
+            "carbon_category": "neutral",
+            "cost_estimate": 0.0,
+            "carbon_impact": 0.0,
+            "labor_hours": 0.5,
+            "typical_duration": "Variable",
+            "efficiency_tips": "Monitor botrytis and mildew risk during prolonged humidity",
+            "sustainability_score": 5,
+            "qr_visibility": "medium",
+            "consumer_message": "Weather transparency for informed consumers",
+            "backend_event_type": 0,
+            "is_default_enabled": True,
+            "is_required": False,
+            "order_sequence": order,
+            "backend_event_fields": build_weather_event_fields(
+                subtype="HH",
+                event_name=f"High humidity event affecting {crop_slug}",
+                duration_days=4,
+                observation=f"High humidity documentation for {crop_slug} — monitoring disease pressure and fruit quality",
+                additional_extra_data={"relative_humidity_pct": "90+"},
+            ),
+        }
+    else:
+        # Fallback: generic extreme weather
+        return {
+            "name": f"Weather Event - {crop_label}",
+            "event_type": "weather_protection",
+            "description": f"Weather event documentation for {crop_slug} production monitoring",
+            "timing": "Year-round",
+            "frequency": "natural",
+            "carbon_category": "neutral",
+            "cost_estimate": 0.0,
+            "carbon_impact": 0.0,
+            "labor_hours": 0.5,
+            "typical_duration": "Variable",
+            "efficiency_tips": "Early documentation helps insurance claims",
+            "sustainability_score": 5,
+            "qr_visibility": "medium",
+            "consumer_message": "Weather transparency for informed consumers",
+            "backend_event_type": 0,
+            "is_default_enabled": True,
+            "is_required": False,
+            "order_sequence": order,
+            "backend_event_fields": build_weather_event_fields(
+                subtype="HT",
+                event_name=f"Weather event affecting {crop_slug}",
+                temperature=40,
+                observation=f"Weather event documentation for {crop_slug} production",
+            ),
+        }
+
+
+def get_shared_extra_events(crop_slug, crop_data, start_order=7, crop_category="grain"):
     """
     Generate shared event templates for Weather, Business, General, Equipment Maintenance,
     Soil Test, Fungicide, Herbicide, and Pest Scouting that apply to all crop categories.
+
+    crop_category: one of "grain", "vegetable", "berry" — controls weather event subtype.
     """
     area = crop_data["typical_area"]
     return [
@@ -2048,32 +2171,8 @@ def get_shared_extra_events(crop_slug, crop_data, start_order=7):
                 },
             ),
         },
-        # Weather Event
-        {
-            "name": "Weather Event",
-            "event_type": "weather_protection",
-            "description": "Document significant weather events affecting the crop",
-            "timing": "Year-round",
-            "frequency": "natural",
-            "carbon_category": "neutral",
-            "cost_estimate": 0.0,
-            "carbon_impact": 0.0,
-            "labor_hours": 0.5,
-            "typical_duration": "Variable",
-            "efficiency_tips": "Early documentation helps insurance claims",
-            "sustainability_score": 5,
-            "qr_visibility": "medium",
-            "consumer_message": "Weather transparency for informed consumers",
-            "backend_event_type": 0,
-            "is_default_enabled": True,
-            "is_required": False,
-            "order_sequence": start_order + 5,
-            "backend_event_fields": build_weather_event_fields(
-                subtype="HT",
-                event_name="Extreme Weather",
-                observation="Significant weather event affecting crop",
-            ),
-        },
+        # Weather Event — subtype varies by crop category
+        _build_shared_weather_event(crop_slug, crop_category, start_order + 5),
         # Certification Audit
         {
             "name": "Certification Audit",
@@ -2346,7 +2445,7 @@ def get_grain_events(crop_slug, crop_data):
             ),
         },
     ]
-    events.extend(get_shared_extra_events(crop_slug, crop_data, start_order=7))
+    events.extend(get_shared_extra_events(crop_slug, crop_data, start_order=7, crop_category="grain"))
     return events
 
 
@@ -2553,7 +2652,7 @@ def get_vegetable_events(crop_slug, crop_data):
             ),
         },
     ]
-    events.extend(get_shared_extra_events(crop_slug, crop_data, start_order=7))
+    events.extend(get_shared_extra_events(crop_slug, crop_data, start_order=7, crop_category="vegetable"))
     return events
 
 
@@ -2760,7 +2859,7 @@ def get_berry_events(crop_slug, crop_data):
             ),
         },
     ]
-    events.extend(get_shared_extra_events(crop_slug, crop_data, start_order=7))
+    events.extend(get_shared_extra_events(crop_slug, crop_data, start_order=7, crop_category="berry"))
     return events
 
 
@@ -2974,7 +3073,7 @@ def get_fiber_events(crop_slug, crop_data):
             ),
         },
     ]
-    events.extend(get_shared_extra_events(crop_slug, crop_data, start_order=7))
+    events.extend(get_shared_extra_events(crop_slug, crop_data, start_order=7, crop_category="grain"))
     return events
 
 
