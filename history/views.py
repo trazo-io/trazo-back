@@ -177,51 +177,35 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 .prefetch_related(
                     Prefetch(
                         "history_weatherevent_events",
-                        queryset=WeatherEvent.objects.select_related("album").prefetch_related(
-                            "album__images"
-                        ),
+                        queryset=WeatherEvent.objects.select_related("album").prefetch_related("album__images"),
                     ),
                     Prefetch(
                         "history_chemicalevent_events",
-                        queryset=ChemicalEvent.objects.select_related("album").prefetch_related(
-                            "album__images"
-                        ),
+                        queryset=ChemicalEvent.objects.select_related("album").prefetch_related("album__images"),
                     ),
                     Prefetch(
                         "history_productionevent_events",
-                        queryset=ProductionEvent.objects.select_related("album").prefetch_related(
-                            "album__images"
-                        ),
+                        queryset=ProductionEvent.objects.select_related("album").prefetch_related("album__images"),
                     ),
                     Prefetch(
                         "history_generalevent_events",
-                        queryset=GeneralEvent.objects.select_related("album").prefetch_related(
-                            "album__images"
-                        ),
+                        queryset=GeneralEvent.objects.select_related("album").prefetch_related("album__images"),
                     ),
                     Prefetch(
                         "history_equipmentevent_events",
-                        queryset=EquipmentEvent.objects.select_related("album").prefetch_related(
-                            "album__images"
-                        ),
+                        queryset=EquipmentEvent.objects.select_related("album").prefetch_related("album__images"),
                     ),
                     Prefetch(
                         "history_soilmanagementevent_events",
-                        queryset=SoilManagementEvent.objects.select_related("album").prefetch_related(
-                            "album__images"
-                        ),
+                        queryset=SoilManagementEvent.objects.select_related("album").prefetch_related("album__images"),
                     ),
                     Prefetch(
                         "history_pestmanagementevent_events",
-                        queryset=PestManagementEvent.objects.select_related("album").prefetch_related(
-                            "album__images"
-                        ),
+                        queryset=PestManagementEvent.objects.select_related("album").prefetch_related("album__images"),
                     ),
                     Prefetch(
                         "history_businessevent_events",
-                        queryset=BusinessEvent.objects.select_related("album").prefetch_related(
-                            "album__images"
-                        ),
+                        queryset=BusinessEvent.objects.select_related("album").prefetch_related("album__images"),
                     ),
                 )
             )
@@ -548,7 +532,9 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     )
 
             _t4 = _time.monotonic()
-            logger.info("start_production TIMING: atomic block (create+save) in %.3fs (total %.3fs)", _t4 - _t3, _t4 - _t0)
+            logger.info(
+                "start_production TIMING: atomic block (create+save) in %.3fs (total %.3fs)", _t4 - _t3, _t4 - _t0
+            )
 
             # Invalidate cache for this parcel's history list
             cache_key = f"history_list_parcel_{parcel.id}_v3"
@@ -582,8 +568,15 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             }
 
             _t5 = _time.monotonic()
-            logger.info("start_production TIMING: TOTAL %.3fs (data=%.3f, queries=%.3f, pre=%.3f, atomic=%.3f, response=%.3f)",
-                        _t5 - _t0, _t1 - _t0, _t2 - _t1, _t3 - _t2, _t4 - _t3, _t5 - _t4)
+            logger.info(
+                "start_production TIMING: TOTAL %.3fs (data=%.3f, queries=%.3f, pre=%.3f, atomic=%.3f, response=%.3f)",
+                _t5 - _t0,
+                _t1 - _t0,
+                _t2 - _t1,
+                _t3 - _t2,
+                _t4 - _t3,
+                _t5 - _t4,
+            )
             return Response(response_data, status=status.HTTP_201_CREATED)
 
         except ValueError as e:
@@ -716,15 +709,11 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     backend_event_type,
                     event_data.get("name"),
                 )
-                event_type_info = self._determine_template_event_type(
-                    event_data.get("name", "").lower()
-                )
+                event_type_info = self._determine_template_event_type(event_data.get("name", "").lower())
                 category = event_type_info["category"]
         else:
             # Fallback for legacy templates without backend_event_type
-            event_type_info = self._determine_template_event_type(
-                event_data.get("name", "").lower()
-            )
+            event_type_info = self._determine_template_event_type(event_data.get("name", "").lower())
             category = event_type_info["category"]
             logger.debug(
                 "No backend_event_type for '%s', name-detected category='%s'",
@@ -1049,7 +1038,7 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         import uuid as uuid_module
 
         queryset = self.get_queryset()
-        # UUID-only lookup (integer IDs no longer supported)
+        # UUID-only lookup for public endpoint (prevents integer enumeration)
         try:
             public_uuid = uuid_module.UUID(str(pk))
             history = get_object_or_404(queryset, public_id=public_uuid)
@@ -1140,15 +1129,9 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         queryset = self.get_queryset()
         scans_data = []
         for history in queryset:
-            latest_scan = (
-                history.history_scans.filter(user=request.user)
-                .order_by("-date")
-                .first()
-            )
+            latest_scan = history.history_scans.filter(user=request.user).order_by("-date").first()
             if latest_scan:
-                data = PublicHistorySerializer(
-                    history, context={"history_scan": latest_scan.id}
-                ).data
+                data = PublicHistorySerializer(history, context={"history_scan": latest_scan.id}).data
                 data["scanned_at"] = latest_scan.date.isoformat() if latest_scan.date else None
                 scans_data.append(data)
         return Response(scans_data)

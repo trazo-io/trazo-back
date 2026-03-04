@@ -51,7 +51,7 @@ def production_transparency_detail(request, production_public_id=None):
     Accepts UUID (production_public_id) only.
     """
     try:
-        # Build lookup filter: UUID only
+        # Build lookup filter: UUID only (prevents integer enumeration)
         if production_public_id is None:
             return Response({"error": "Production identifier required"}, status=status.HTTP_400_BAD_REQUEST)
         lookup_kwargs = {"public_id": production_public_id}
@@ -377,10 +377,7 @@ def production_transparency_detail(request, production_public_id=None):
                                 else 0
                             ),
                             "total_parcels": (
-                                establishment.company.establishment_set.aggregate(
-                                    total=Count("parcels")
-                                )["total"]
-                                or 0
+                                establishment.company.establishment_set.aggregate(total=Count("parcels"))["total"] or 0
                                 if establishment and establishment.company
                                 else 0
                             ),
@@ -438,7 +435,7 @@ def production_transparency_summary(request, production_public_id=None):
     Accepts UUID (production_public_id) only.
     """
     try:
-        # Build lookup filter: UUID only
+        # Build lookup filter: UUID only (prevents integer enumeration)
         if production_public_id is None:
             return Response({"error": "Production identifier required"}, status=status.HTTP_400_BAD_REQUEST)
         lookup_kwargs = {"published": True, "public_id": production_public_id}
@@ -536,7 +533,7 @@ def production_instant_trust(request, production_public_id=None):
     Accepts UUID (production_public_id) only.
     """
     try:
-        # Build lookup filter: UUID only
+        # Build lookup filter: UUID only (prevents integer enumeration)
         if production_public_id is None:
             return Response(
                 {"success": False, "error": "missing_id", "message": "Production identifier required"},
@@ -935,8 +932,7 @@ def verify_blockchain(request, production_public_id=None):
                             "Data was modified after blockchain submission."
                         )
                         logger.warning(
-                            "Layer-2 tamper detected for production %s: "
-                            "on_chain=%s, stored=%s, recomputed=%s",
+                            "Layer-2 tamper detected for production %s: " "on_chain=%s, stored=%s, recomputed=%s",
                             history.id,
                             on_chain_hash,
                             stored_data_hash,
