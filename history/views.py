@@ -1140,9 +1140,17 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         queryset = self.get_queryset()
         scans_data = []
         for history in queryset:
-            latest_scan = history.history_scans.filter(user=request.user).order_by("-date").first()
+            latest_scan = (
+                history.history_scans.filter(user=request.user)
+                .order_by("-date")
+                .first()
+            )
             if latest_scan:
-                scans_data.append(PublicHistorySerializer(history, context={"history_scan": latest_scan.id}).data)
+                data = PublicHistorySerializer(
+                    history, context={"history_scan": latest_scan.id}
+                ).data
+                data["scanned_at"] = latest_scan.date.isoformat() if latest_scan.date else None
+                scans_data.append(data)
         return Response(scans_data)
 
     @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated])

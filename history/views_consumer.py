@@ -79,12 +79,22 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
         else:
             timings["update_impact_summary"] = "skipped (cached)"
 
-        # Get recent scans for timeline
+        # Get recent scans for timeline (deduplicated by production)
         t0 = time.time()
         recent_scans = (
             HistoryScan.objects.filter(user=user)
             .select_related("history", "history__parcel__establishment")
-            .order_by("-date")[:3]
+            .order_by("history_id", "-date")
+            .distinct("history_id")
+        )
+        # Re-sort by date descending and limit to 3
+        recent_scan_ids = list(
+            recent_scans.values_list("id", flat=True)[:3]
+        )
+        recent_scans = (
+            HistoryScan.objects.filter(id__in=recent_scan_ids)
+            .select_related("history", "history__parcel__establishment")
+            .order_by("-date")
         )
         timings["query_recent_scans"] = time.time() - t0
 

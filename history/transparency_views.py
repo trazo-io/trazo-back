@@ -133,6 +133,7 @@ def production_transparency_detail(request, production_public_id=None):
         except Exception as e:
             logger.warning(f"Carbon calculation failed for history {history.id}: {str(e)}")
             # Don't let carbon calculation errors block transparency data
+            carbon_data = {}
             carbon_score = 0
             carbon_breakdown = {}
 
@@ -171,10 +172,10 @@ def production_transparency_detail(request, production_public_id=None):
         # Prepare data for formatter
         carbon_data_formatted = {
             "total_co2_kg_per_kg": carbon_score,
-            "total_emissions": carbon_breakdown.get("total_emissions", 0),
-            "total_offsets": carbon_breakdown.get("total_offsets", 0),
-            "net_footprint": carbon_breakdown.get("total_emissions", 0) - carbon_breakdown.get("total_offsets", 0),
-            "usda_factors_used": True,  # Based on your carbon calculation method
+            "total_emissions": carbon_data.get("total_emissions", 0),
+            "total_offsets": carbon_data.get("total_offsets", 0),
+            "net_footprint": carbon_data.get("net_emissions", 0),
+            "usda_factors_used": True,
             "calculation_method": "USDA_EPA_factors",
         }
 

@@ -213,14 +213,16 @@ class RegisterSerializer(BasicUserSerializer):
         # No more dangerous account access for existing users
         with transaction.atomic():
             try:
+                # Set company_verified BEFORE create_user so post_save signal
+                # skips generic welcome/verification emails (combined email sent below)
+                if company_code:
+                    validated_data["company_verified"] = True
+
                 user = User.objects.create_user(**validated_data)
 
                 # Handle company code joining after user creation
                 if company_code:
                     self._join_company_with_code(user, company_code)
-                    # 🚀 2025 Best Practice: Mark for company verification, but still require email verification
-                    user.company_verified = True
-                    user.save()
                     logger.info(
                         f"User {user.email} joined company via code {company_code}, awaiting email verification"
                     )
