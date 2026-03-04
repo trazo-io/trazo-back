@@ -146,6 +146,7 @@ class PrivacyService:
             "colombia": "CO",
             "peru": "PE",
             "chile": "CL",
+            "uruguay": "UY",
         }
 
         if country:
@@ -169,44 +170,58 @@ class PrivacyService:
         # Get real IP address
         raw_ip = PrivacyService.get_client_ip(request)
 
-        # Determine consent status with detailed logging
+        # Determine consent status from multiple sources (priority order)
         consent_given = False
 
-        print(f"🔍 Privacy service processing consent:")
-        print(f"  - Explicit consent parameter: {explicit_consent}")
-        print(f"  - Request cookies: {request.COOKIES}")
-        print(f"  - trazo-analytics-consent cookie: {request.COOKIES.get('trazo-analytics-consent')}")
-
-        # Check for explicit consent in request data (fallback for cookie domain issues)
+        # 1. Explicit parameter passed to method
+        # 2. explicit_consent in request body (fallback for cookie domain issues)
+        # 3. X-Analytics-Consent header (cross-origin fallback)
+        # 4. Cookie (standard browser consent)
         request_explicit_consent = None
         if hasattr(request, "data") and request.data:
             request_explicit_consent = request.data.get("explicit_consent")
-            print(f"  - explicit_consent in request data: {request_explicit_consent}")
 
-        # Check for consent header (additional fallback for cross-origin issues)
         header_consent = request.META.get("HTTP_X_ANALYTICS_CONSENT")
-        print(f"  - X-Analytics-Consent header: {header_consent}")
 
         if explicit_consent is not None:
             consent_given = explicit_consent
-            print(f"  - Using explicit consent parameter: {consent_given}")
         elif request_explicit_consent is not None:
             consent_given = bool(request_explicit_consent)
-            print(f"  - Using explicit_consent from request data: {consent_given}")
         elif header_consent == "true":
             consent_given = True
-            print(f"  - Using consent from X-Analytics-Consent header: {consent_given}")
         else:
-            # Check for implicit consent via cookies/session
             cookie_consent = request.COOKIES.get("trazo-analytics-consent")
             consent_given = cookie_consent == "true"
-            print(f"  - Cookie consent value: '{cookie_consent}' -> {consent_given}")
 
-        print(f"  - Final consent_given: {consent_given}")
-
-        # Process location data (from request data, not IP geolocation for privacy)
+        # Process location data (from request data first, fallback to IP geolocation)
         country = request.data.get("country", "") if hasattr(request, "data") else ""
         city = request.data.get("city", "") if hasattr(request, "data") else ""
+
+        # If frontend didn't send location, try IP geolocation as fallback
+        if not city and not country and raw_ip:
+            try:
+                import logging as _logging
+
+                import requests as _requests
+
+                _logger = _logging.getLogger(__name__)
+                geo_response = _requests.get(
+                    f"https://ipapi.co/{raw_ip}/json/", timeout=2
+                )
+                if geo_response.status_code == 200:
+                    geo_data = geo_response.json()
+                    # ipapi.co returns country_code field for reserved IPs
+                    # Skip if the API indicates a reserved/bogon IP
+                    if not geo_data.get("reserved"):
+                        city = geo_data.get("city", "")
+                        country = geo_data.get("country_name", "")
+                        _logger.debug(
+                            "IP geolocation resolved: city=%s, country=%s",
+                            city,
+                            country,
+                        )
+            except Exception:
+                pass  # Geolocation is best-effort, don't block scan creation
 
         country_code, region = PrivacyService.extract_region_from_location(city, country)
 

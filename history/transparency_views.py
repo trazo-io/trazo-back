@@ -400,6 +400,8 @@ def production_transparency_detail(request, production_public_id=None):
                 "parcel": {
                     "name": history.parcel.name if history.parcel else None,
                     "area": history.parcel.area if history.parcel else None,
+                    "polygon": history.parcel.polygon if history.parcel else None,
+                    "map_metadata": history.parcel.map_metadata if history.parcel else None,
                 },
                 "images": public_history_data.get("images", []),  # Photo gallery for ProductDetail
             }

@@ -4283,38 +4283,41 @@ class PublicProductionViewSet(viewsets.ViewSet):
             # === SIMILAR PRODUCTS ===
             similar_products = self._get_similar_products(production)
 
-            # === SCAN TRACKING (create scan record like history API does) ===
-            x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-            if x_forwarded_for:
-                ip_address = x_forwarded_for.split(",")[0]
-            else:
-                ip_address = request.META.get("HTTP_X_REAL_IP")
+            # === SCAN TRACKING ===
+            # Skip scan for authenticated producers viewing their own production
+            is_owner = False
+            if request.user.is_authenticated and production.parcel and production.parcel.establishment:
+                is_owner = request.user.companies.filter(
+                    id=production.parcel.establishment.company_id
+                ).exists()
 
-            city = None
-            country = None
+            if not is_owner:
+                x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+                ip_address = x_forwarded_for.split(",")[0] if x_forwarded_for else request.META.get("REMOTE_ADDR")
 
-            # Get city and country from IP using free API (no GDAL required)
-            if ip_address:
-                try:
-                    import requests
+                city = None
+                country = None
 
-                    # Using ipapi.co - free tier allows 1000 requests/day
-                    response = requests.get(f"https://ipapi.co/{ip_address}/json/", timeout=2)
-                    if response.status_code == 200:
-                        data = response.json()
-                        city = data.get("city")
-                        country = data.get("country_name")
-                except Exception as e:
-                    # If geolocation fails, continue without it
-                    logger.debug(f"IP geolocation failed: {e}")
+                if ip_address:
+                    try:
+                        import requests
 
-            history_scan = HistoryScan.objects.create(
-                history=production,
-                user=request.user if request.user.is_authenticated else None,
-                ip_address=ip_address,
-                city=city,
-                country=country,
-            )
+                        geo_resp = requests.get(f"https://ipapi.co/{ip_address}/json/", timeout=2)
+                        if geo_resp.status_code == 200:
+                            geo_data = geo_resp.json()
+                            if not geo_data.get("reserved"):
+                                city = geo_data.get("city")
+                                country = geo_data.get("country_name")
+                    except Exception as e:
+                        logger.debug(f"IP geolocation failed: {e}")
+
+                HistoryScan.objects.create(
+                    history=production,
+                    user=request.user if request.user.is_authenticated else None,
+                    ip_address=ip_address,
+                    city=city,
+                    country=country,
+                )
 
             # === BLOCKCHAIN VERIFICATION ===
             carbon_data = {

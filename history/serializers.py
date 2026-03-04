@@ -1919,13 +1919,8 @@ class ListHistoryClassSerializer(serializers.ModelSerializer):
         return history_scan.history.product.name if history_scan.history.product else None
 
     def get_location(self, history_scan):
-        if history_scan.city is None and history_scan.country is None:
-            return "-"
-        elif history_scan.city is not None:
-            return f"{history_scan.city}"
-        elif history_scan.country is not None:
-            return f"{history_scan.country}"
-        return f"{history_scan.city if history_scan.city is not None else '-'}, {history_scan.country if history_scan.country is not None else '-'}"
+        location = history_scan.get_location_display()
+        return location or "-"
 
     def get_parcel(self, history_scan):
         return history_scan.history.parcel.name if history_scan.history.parcel else None
@@ -1939,10 +1934,11 @@ class PublicProductSerializer(serializers.ModelSerializer):
 
 class PublicEstablishmentSerializer(serializers.ModelSerializer):
     location = serializers.SerializerMethodField()
+    company_name = serializers.CharField(source="company.name", read_only=True)
 
     class Meta:
         model = Establishment
-        fields = ["id", "name", "description", "location"]
+        fields = ["id", "name", "description", "location", "company_name"]
 
     def get_location(self, establishment):
         return establishment.get_location()

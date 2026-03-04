@@ -120,7 +120,7 @@ def get_upload_urls(request):
                 {
                     "uploadUrl": presigned_url,
                     "s3Key": key,
-                    "publicUrl": f"https://{settings.AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com/{key}",
+                    "publicUrl": f"https://{settings.AWS_STORAGE_BUCKET_NAME}.s3.{settings.AWS_S3_REGION_NAME}.amazonaws.com/{key}",
                 }
             )
 

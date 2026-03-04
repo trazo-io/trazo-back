@@ -1047,80 +1047,75 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 {"error": "Invalid production identifier. UUID required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            ip_address = x_forwarded_for.split(",")[0]
-        else:
-            ip_address = request.META.get("HTTP_X_REAL_IP")
+        # Skip scan tracking for authenticated producers viewing their own production
+        is_owner = False
+        if request.user.is_authenticated and history.parcel and history.parcel.establishment:
+            is_owner = request.user.companies.filter(
+                id=history.parcel.establishment.company_id
+            ).exists()
 
-        city = None
-        country = None
+        history_scan = None
+        if not is_owner:
+            x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+            if x_forwarded_for:
+                ip_address = x_forwarded_for.split(",")[0]
+            else:
+                ip_address = request.META.get("REMOTE_ADDR")
 
-        # Get city and country from IP using free API (no GDAL required)
-        if ip_address:
-            try:
-                import requests
+            city = None
+            country = None
 
-                # Using ipapi.co - free tier allows 1000 requests/day
-                response = requests.get(f"https://ipapi.co/{ip_address}/json/", timeout=2)
-                if response.status_code == 200:
-                    data = response.json()
-                    city = data.get("city")
-                    country = data.get("country_name")
-            except Exception as e:
-                # If geolocation fails, continue without it
-                logger.debug("IP geolocation failed: %s", e)
+            # Get city and country from IP using free API (no GDAL required)
+            if ip_address:
+                try:
+                    import requests
 
-        history_scan = HistoryScan.objects.create(
-            history=history,
-            user=request.user if request.user.is_authenticated else None,
-            ip_address=ip_address,
-            city=city,
-            country=country,
-        )
+                    response = requests.get(f"https://ipapi.co/{ip_address}/json/", timeout=2)
+                    if response.status_code == 200:
+                        data = response.json()
+                        if not data.get("reserved"):
+                            city = data.get("city")
+                            country = data.get("country_name")
+                except Exception as e:
+                    logger.debug("IP geolocation failed: %s", e)
 
-        # Send notification to product owner about the scan
-        try:
-            # Get the company and find company admins via WorksIn relationship
-            company = history.parcel.establishment.company
-            scanner = request.user if request.user.is_authenticated else None
-
-            # Get company admins (users with 'CA' role)
-            from users.models import WorksIn
-
-            company_admins = WorksIn.objects.filter(company=company, role="CA").select_related(  # Company Admin role
-                "user"
+            history_scan = HistoryScan.objects.create(
+                history=history,
+                user=request.user if request.user.is_authenticated else None,
+                ip_address=ip_address,
+                city=city,
+                country=country,
             )
 
-            # Send notification to all company admins who are not the scanner
-            for admin_relation in company_admins:
-                product_owner = admin_relation.user
+            # Send notification to product owner about the scan
+            try:
+                company = history.parcel.establishment.company
+                scanner = request.user if request.user.is_authenticated else None
 
-                # Only send notification if scanner is different from product owner
-                if scanner != product_owner:
-                    # Get product name
-                    product_name = history.product.name if history.product else f"Production {history.id}"
+                from users.models import WorksIn
 
-                    # Get scan location
-                    scan_location = None
-                    if city and country:
-                        scan_location = f"{city}, {country}"
-                    elif country:
-                        scan_location = country
+                company_admins = WorksIn.objects.filter(
+                    company=company, role="CA"
+                ).select_related("user")
 
-                    # Create notification
-                    notification_service.create_product_scan_notification(
-                        product_owner=product_owner,
-                        scanner=scanner,
-                        product_name=product_name,
-                        scan_location=scan_location,
-                    )
-        except Exception as e:
-            # Log error but don't break the scan functionality
-            logger.error("Error creating scan notification: %s", e)
+                for admin_relation in company_admins:
+                    product_owner = admin_relation.user
+
+                    if scanner != product_owner:
+                        product_name = history.product.name if history.product else f"Production {history.id}"
+                        scan_location = history_scan.get_location_display()
+
+                        notification_service.create_product_scan_notification(
+                            product_owner=product_owner,
+                            scanner=scanner,
+                            product_name=product_name,
+                            scan_location=scan_location,
+                        )
+            except Exception as e:
+                logger.error("Error creating scan notification: %s", e)
         serializer = PublicHistorySerializer(
             history,
-            context={"history_scan": history_scan.id, "request": request},
+            context={"history_scan": history_scan.id if history_scan else None, "request": request},
         )
         return Response(serializer.data)
 
@@ -1217,11 +1212,7 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     "date": scan.date.strftime("%Y-%m-%d %H:%M:%S") if scan.date else None,
                     "product": scan.history.product.name if scan.history.product else None,
                     "product_id": scan.history.product.id if scan.history.product else None,
-                    "location": (
-                        f"{scan.city}, {scan.country}"
-                        if scan.city and scan.country
-                        else scan.country or scan.city or "Unknown"
-                    ),
+                    "location": scan.get_location_display() or "-",
                     "parcel": scan.history.parcel.name if scan.history.parcel else None,
                     "parcel_id": scan.history.parcel.id if scan.history.parcel else None,
                     "comment": getattr(scan, "comment", ""),

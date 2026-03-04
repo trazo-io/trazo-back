@@ -8,6 +8,7 @@ import logging
 from django.conf import settings
 
 import boto3
+from botocore.config import Config
 from botocore.exceptions import ClientError, NoCredentialsError
 
 logger = logging.getLogger(__name__)
@@ -31,10 +32,21 @@ class SecureAWSClient:
             NoCredentialsError: If no valid credentials are available
         """
         try:
+            region = settings.AWS_S3_REGION_NAME
+            # Force regional endpoint so presigned URLs use s3.<region>.amazonaws.com
+            # Required for SigV4 when bucket is NOT in us-east-1
+            endpoint_url = f"https://s3.{region}.amazonaws.com"
+            s3_config = Config(s3={"addressing_style": "virtual"}, signature_version="s3v4")
+
             # First, try to use IAM role (preferred for ECS/EC2)
             if SecureAWSClient._is_running_on_aws():
                 logger.info("Using IAM role for S3 access")
-                return boto3.client("s3", region_name=settings.AWS_S3_REGION_NAME)
+                return boto3.client(
+                    "s3",
+                    region_name=region,
+                    endpoint_url=endpoint_url,
+                    config=s3_config,
+                )
 
             # For local development, use credentials from settings
             # These should NEVER be hardcoded - only from environment variables
@@ -43,14 +55,21 @@ class SecureAWSClient:
                     logger.info("Using explicit credentials for S3 access")
                     return boto3.client(
                         "s3",
-                        region_name=settings.AWS_S3_REGION_NAME,
+                        region_name=region,
+                        endpoint_url=endpoint_url,
+                        config=s3_config,
                         aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
                         aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
                     )
 
             # Try default credential chain (AWS CLI, instance metadata, etc.)
             logger.info("Using default credential chain for S3 access")
-            return boto3.client("s3", region_name=settings.AWS_S3_REGION_NAME)
+            return boto3.client(
+                "s3",
+                region_name=region,
+                endpoint_url=endpoint_url,
+                config=s3_config,
+            )
 
         except NoCredentialsError:
             logger.error("No AWS credentials found. Please configure IAM role or set environment variables.")

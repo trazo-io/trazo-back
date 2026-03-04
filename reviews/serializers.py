@@ -33,15 +33,13 @@ class ListReviewSerializer(serializers.ModelSerializer):
 
 class ReviewSerializer(serializers.ModelSerializer):
     production_public_id = serializers.UUIDField(write_only=True, required=False)
+    production = serializers.PrimaryKeyRelatedField(
+        queryset=History.objects.all(), required=False
+    )
 
     class Meta:
         model = Review
         fields = "__all__"
-
-    def get_fields(self):
-        fields = super().get_fields()
-        fields["production_public_id"] = serializers.UUIDField(write_only=True, required=False)
-        return fields
 
     def validate(self, data):
         """Support both integer production ID and UUID production_public_id."""
@@ -52,9 +50,13 @@ class ReviewSerializer(serializers.ModelSerializer):
                 production = History.objects.get(public_id=production_public_id)
                 data["production"] = production
             except History.DoesNotExist:
-                raise serializers.ValidationError({"production_public_id": "Production not found."})
+                raise serializers.ValidationError(
+                    {"production_public_id": "Production not found."}
+                )
 
         if not data.get("production"):
-            raise serializers.ValidationError({"production": "Production is required."})
+            raise serializers.ValidationError(
+                {"production": "Production is required."}
+            )
 
         return data

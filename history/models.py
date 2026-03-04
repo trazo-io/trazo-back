@@ -1391,16 +1391,20 @@ class HistoryScan(models.Model):
 
     def get_location_display(self):
         """Get privacy-safe location display"""
-        if self.country_code and self.region:
+        # Skip placeholder/default values
+        has_country = self.country_code and self.country_code != "XX"
+        has_region = self.region and self.region != "Unknown"
+
+        if has_country and has_region:
             return f"{self.region}, {self.country_code.upper()}"
-        elif self.country_code:
+        elif has_country:
             return self.country_code.upper()
         # Fallback to legacy data if new data not available
         elif self.city and self.country:
             return f"{self.city}, {self.country}"
         elif self.country:
             return self.country
-        return "Unknown"
+        return None
 
 
 class EquipmentEvent(CommonEvent):
