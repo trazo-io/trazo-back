@@ -1481,6 +1481,7 @@ class OptimizedHistoryListSerializer(serializers.ModelSerializer):
         model = History
         fields = [
             "id",
+            "public_id",
             "start_date",
             "finish_date",
             "name",
@@ -1499,7 +1500,7 @@ class OptimizedHistoryListSerializer(serializers.ModelSerializer):
             "transparency_score",  # Include for transparency calculations
             "extra_data",  # Include for carbon data
         ]
-        read_only_fields = ["id"]
+        read_only_fields = ["id", "public_id"]
 
     def get_product(self, history):
         return history.product.name if history.product else None
