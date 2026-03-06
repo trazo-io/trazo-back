@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     "django.contrib.sites",
     "rest_framework",
     "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
     "whitenoise.runserver_nostatic",
     "corsheaders",
     "users",
@@ -455,12 +456,7 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024  # 5MB
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 100
 FILE_UPLOAD_PERMISSIONS = 0o644
 
-# SECURITY: Session Security
-SESSION_COOKIE_SECURE = not DEBUG
-SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SAMESITE = "Strict" if not DEBUG else "Lax"
-SESSION_COOKIE_AGE = 3600  # 1 hour
-SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+# SECURITY: Session Security (canonical values are below in the JWT section)
 
 # SECURITY: Logging Configuration for Security Events
 LOGGING = {
@@ -621,7 +617,7 @@ JWT_EXPIRATION_DELTA = timedelta(minutes=15)
 SESSION_COOKIE_SECURE = not DEBUG  # Only secure in production (HTTPS only)
 CSRF_COOKIE_SECURE = not DEBUG  # Only secure in production (HTTPS only)
 CSRF_COOKIE_HTTPONLY = False  # Must be False for JavaScript access to CSRF token
-CSRF_COOKIE_SAMESITE = "Strict" if not DEBUG else "Lax"  # Strict in production, Lax in dev
+CSRF_COOKIE_SAMESITE = "Lax"  # Must match AUTH_COOKIE_SAMESITE for cross-subdomain auth
 CSRF_COOKIE_DOMAIN = None  # No domain restriction (suitable for subdomains)
 CSRF_TRUSTED_ORIGINS = config("CSRF_TRUSTED_ORIGINS", default="http://localhost:3000,http://app.localhost:3000").split(
     ","
@@ -639,11 +635,12 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 1024 * 1024 * 10  # Set to desired size in bytes (
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "REMEMBER_ME_REFRESH_TOKEN_LIFETIME": timedelta(days=30),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
-    "UPDATE_LAST_LOGIN": False,
-    "ALGORITHM": "HS256",  # Keep HS256 for simplicity in MVP, RS256 requires key pair management
+    "UPDATE_LAST_LOGIN": True,
+    "ALGORITHM": "HS256",
     "SIGNING_KEY": SECRET_KEY,
     "VERIFYING_KEY": None,
     "AUDIENCE": None,
@@ -659,13 +656,13 @@ SIMPLE_JWT = {
     "SLIDING_TOKEN_REFRESH_EXP_CLAIM": "refresh_exp",
     "SLIDING_TOKEN_LIFETIME": timedelta(minutes=5),
     "SLIDING_TOKEN_REFRESH_LIFETIME": timedelta(days=1),
-    # custom
-    "AUTH_COOKIE": "access",  # Cookie name. Enables cookies if value is set.
-    "AUTH_COOKIE_DOMAIN": None,  # A string like "example.com", or None for standard domain cookie.
-    "AUTH_COOKIE_SECURE": not DEBUG,  # Whether the auth cookies should be secure (https:// only).
-    "AUTH_COOKIE_HTTP_ONLY": True,  # Http only cookie flag.It's not fetch by javascript.
-    "AUTH_COOKIE_PATH": "/",  # The path of the auth cookie.
-    "AUTH_COOKIE_SAMESITE": "Lax",  # Restrict cookie leaks on cross-site requests for CSRF protection.
+    # Cookie configuration
+    "AUTH_COOKIE": "access",
+    "AUTH_COOKIE_DOMAIN": None,
+    "AUTH_COOKIE_SECURE": not DEBUG,
+    "AUTH_COOKIE_HTTP_ONLY": True,
+    "AUTH_COOKIE_PATH": "/",
+    "AUTH_COOKIE_SAMESITE": "Lax",
 }
 
 # Trial configuration

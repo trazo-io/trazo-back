@@ -58,8 +58,8 @@ class Subscription(models.Model):
         help_text="Plan scheduled for downgrade at end of billing period",
     )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="active")
-    stripe_subscription_id = models.CharField(max_length=100, blank=True, null=True)
-    stripe_customer_id = models.CharField(max_length=100, blank=True, null=True)
+    stripe_subscription_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
+    stripe_customer_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
     current_period_start = models.DateTimeField(blank=True, null=True)
     current_period_end = models.DateTimeField(blank=True, null=True)
     cancel_at_period_end = models.BooleanField(default=False)
@@ -138,6 +138,7 @@ class Invoice(models.Model):
     """Invoice model for tracking payments"""
 
     STATUS_CHOICES = [
+        ("draft", "Draft"),
         ("paid", "Paid"),
         ("open", "Open"),
         ("uncollectible", "Uncollectible"),
@@ -146,7 +147,7 @@ class Invoice(models.Model):
 
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="invoices")
     subscription = models.ForeignKey(Subscription, on_delete=models.SET_NULL, null=True)
-    stripe_invoice_id = models.CharField(max_length=100, blank=True, null=True)
+    stripe_invoice_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="open")
     invoice_date = models.DateTimeField()
@@ -166,7 +167,7 @@ class PaymentMethod(models.Model):
     """Payment method model"""
 
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="payment_methods")
-    stripe_payment_method_id = models.CharField(max_length=100)
+    stripe_payment_method_id = models.CharField(max_length=100, unique=True, db_index=True)
     card_brand = models.CharField(max_length=20)  # visa, mastercard, etc.
     last_4 = models.CharField(max_length=4)  # Last 4 digits of card
     exp_month = models.IntegerField()
@@ -180,3 +181,20 @@ class PaymentMethod(models.Model):
 
     def __str__(self):
         return f"{self.card_brand} **** **** **** {self.last_4}"
+
+
+class ProcessedWebhookEvent(models.Model):
+    """Tracks processed Stripe webhook events for idempotency."""
+
+    stripe_event_id = models.CharField(max_length=255, unique=True, db_index=True)
+    event_type = models.CharField(max_length=100)
+    processed_at = models.DateTimeField(auto_now_add=True)
+    success = models.BooleanField(default=True)
+    error_message = models.TextField(blank=True, default="")
+
+    class Meta:
+        verbose_name = _("Processed Webhook Event")
+        verbose_name_plural = _("Processed Webhook Events")
+
+    def __str__(self):
+        return f"{self.event_type} ({self.stripe_event_id})"

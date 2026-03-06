@@ -23,6 +23,40 @@ logger = logging.getLogger(__name__)
 class SocialAuthView(APIView):
     permission_classes = [AllowAny]
 
+    def _set_auth_cookies(self, response, access_token, refresh_token):
+        """Set httpOnly auth cookies on social auth response."""
+        cookie_options = {
+            "secure": settings.SIMPLE_JWT["AUTH_COOKIE_SECURE"],
+            "httponly": settings.SIMPLE_JWT["AUTH_COOKIE_HTTP_ONLY"],
+            "samesite": settings.SIMPLE_JWT["AUTH_COOKIE_SAMESITE"],
+        }
+        cookie_domain = settings.SIMPLE_JWT.get("AUTH_COOKIE_DOMAIN")
+        if cookie_domain:
+            cookie_options["domain"] = cookie_domain
+
+        # Social auth defaults to persistent session (7-day refresh)
+        refresh_max = int(settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds())
+
+        response.set_cookie(
+            key="access",
+            value=access_token,
+            max_age=settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"].total_seconds(),
+            **cookie_options,
+        )
+        response.set_cookie(
+            key="refresh",
+            value=refresh_token,
+            max_age=refresh_max,
+            **cookie_options,
+        )
+        response.set_cookie(
+            key="logged_in",
+            value="true",
+            max_age=refresh_max,
+            **{**cookie_options, "httponly": False},
+        )
+        return response
+
     def post(self, request):
         """
         Handle social authentication for Google, Facebook, and Apple
@@ -186,15 +220,15 @@ class SocialAuthView(APIView):
 
             response_data = {
                 "user": BasicUserSerializer(user).data,
-                "access": str(refresh.access_token),
-                "refresh": str(refresh),
                 "user_type": user.user_type,
             }
 
             if invitation_result:
                 response_data.update(invitation_result)
 
-            return Response(response_data, status=status.HTTP_200_OK)
+            response = Response(response_data, status=status.HTTP_200_OK)
+            self._set_auth_cookies(response, str(refresh.access_token), str(refresh))
+            return response
 
         except Exception as e:
             logger.error(f"Google auth error: {str(e)}")
@@ -264,15 +298,15 @@ class SocialAuthView(APIView):
 
             response_data = {
                 "user": BasicUserSerializer(user).data,
-                "access": str(refresh.access_token),
-                "refresh": str(refresh),
                 "user_type": user.user_type,
             }
 
             if invitation_result:
                 response_data.update(invitation_result)
 
-            return Response(response_data, status=status.HTTP_200_OK)
+            response = Response(response_data, status=status.HTTP_200_OK)
+            self._set_auth_cookies(response, str(refresh.access_token), str(refresh))
+            return response
 
         except Exception as e:
             logger.error(f"Facebook auth error: {str(e)}")
@@ -355,15 +389,15 @@ class SocialAuthView(APIView):
 
             response_data = {
                 "user": BasicUserSerializer(user).data,
-                "access": str(refresh.access_token),
-                "refresh": str(refresh),
                 "user_type": user.user_type,
             }
 
             if invitation_result:
                 response_data.update(invitation_result)
 
-            return Response(response_data, status=status.HTTP_200_OK)
+            response = Response(response_data, status=status.HTTP_200_OK)
+            self._set_auth_cookies(response, str(refresh.access_token), str(refresh))
+            return response
 
         except jwt.exceptions.InvalidTokenError as e:
             logger.error(f"Apple auth token error: {str(e)}")

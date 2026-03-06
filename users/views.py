@@ -90,7 +90,7 @@ class UserViewSet(viewsets.ModelViewSet):
         code = request.data.get("code")
 
         # Add logging for debugging
-        logger.info(f"Verifying email: {email} with code: {code}")
+        logger.info(f"Verifying email: {email}")
 
         if not email:
             return Response(
@@ -137,11 +137,10 @@ class UserViewSet(viewsets.ModelViewSet):
             refresh = RefreshToken.for_user(user)
             access_token = refresh.access_token
 
+            # Tokens are set as httpOnly cookies — don't expose in response body
             response = Response(
                 {
                     "message": "Email verified successfully",
-                    "access": str(access_token),
-                    "refresh": str(refresh),
                     "user": {
                         "id": user.id,
                         "email": user.email,
@@ -154,17 +153,17 @@ class UserViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_200_OK,
             )
 
-            # Set secure HTTP-only cookies for automatic authentication (same as login)
+            # Set secure HTTP-only cookies for automatic authentication
             cookie_options = {
                 "secure": settings.SIMPLE_JWT["AUTH_COOKIE_SECURE"],
                 "httponly": settings.SIMPLE_JWT["AUTH_COOKIE_HTTP_ONLY"],
                 "samesite": settings.SIMPLE_JWT["AUTH_COOKIE_SAMESITE"],
             }
+            cookie_domain = settings.SIMPLE_JWT.get("AUTH_COOKIE_DOMAIN")
+            if cookie_domain:
+                cookie_options["domain"] = cookie_domain
 
-            if settings.DEBUG and "AUTH_COOKIE_DOMAIN" in settings.SIMPLE_JWT:
-                cookie_options["domain"] = settings.SIMPLE_JWT["AUTH_COOKIE_DOMAIN"]
-
-            # Set cookies with improved security
+            refresh_max = int(settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds())
             response.set_cookie(
                 key="access",
                 value=str(access_token),
@@ -174,8 +173,14 @@ class UserViewSet(viewsets.ModelViewSet):
             response.set_cookie(
                 key="refresh",
                 value=str(refresh),
-                max_age=settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds(),
+                max_age=refresh_max,
                 **cookie_options,
+            )
+            response.set_cookie(
+                key="logged_in",
+                value="true",
+                max_age=refresh_max,
+                **{**cookie_options, "httponly": False},
             )
 
             return response
@@ -534,7 +539,11 @@ class LoginViewSet(viewsets.ModelViewSet, TokenObtainPairView):
         else:
             return Response({"error": "Invalid domain"}, status=status.HTTP_403_FORBIDDEN)
 
-        response = Response(serializer.validated_data, status=status.HTTP_200_OK)
+        remember_me = request.data.get("remember_me", False)
+
+        # Strip tokens from response body — they are set as httpOnly cookies only
+        response_data = {k: v for k, v in serializer.validated_data.items() if k not in ("access", "refresh")}
+        response = Response(response_data, status=status.HTTP_200_OK)
 
         # Set secure cookie options
         cookie_options = {
@@ -543,22 +552,42 @@ class LoginViewSet(viewsets.ModelViewSet, TokenObtainPairView):
             "samesite": settings.SIMPLE_JWT["AUTH_COOKIE_SAMESITE"],
         }
 
-        if settings.DEBUG and "AUTH_COOKIE_DOMAIN" in settings.SIMPLE_JWT:
-            cookie_options["domain"] = settings.SIMPLE_JWT["AUTH_COOKIE_DOMAIN"]
+        cookie_domain = settings.SIMPLE_JWT.get("AUTH_COOKIE_DOMAIN")
+        if cookie_domain:
+            cookie_options["domain"] = cookie_domain
 
-        # Set cookies with improved security
+        # Remember Me: persistent cookie (30 days) vs session cookie (cleared on browser close)
+        if remember_me:
+            refresh_lifetime = settings.SIMPLE_JWT["REMEMBER_ME_REFRESH_TOKEN_LIFETIME"]
+        else:
+            refresh_lifetime = settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"]
+
+        # Access token: always short-lived persistent cookie (15 min)
         response.set_cookie(
             key="access",
             value=serializer.validated_data["access"],
             max_age=settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"].total_seconds(),
             **cookie_options,
         )
+
+        # Refresh token: persistent if remember_me, session cookie otherwise
+        refresh_cookie_opts = {**cookie_options}
+        if remember_me:
+            refresh_cookie_opts["max_age"] = int(refresh_lifetime.total_seconds())
+        # When remember_me is False, omitting max_age creates a session cookie
+        # that is deleted when the browser closes — this is the standard behavior
+
         response.set_cookie(
             key="refresh",
             value=serializer.validated_data["refresh"],
-            max_age=settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds(),
-            **cookie_options,
+            **refresh_cookie_opts,
         )
+
+        # Non-httpOnly flag so frontend can detect login status
+        logged_in_opts = {**cookie_options, "httponly": False}
+        if remember_me:
+            logged_in_opts["max_age"] = int(refresh_lifetime.total_seconds())
+        response.set_cookie(key="logged_in", value="true", **logged_in_opts)
 
         csrf.get_token(request)
         return response
@@ -575,66 +604,126 @@ class RegistrationViewSet(viewsets.ModelViewSet, TokenObtainPairView):
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
         refresh = RefreshToken.for_user(user)
-        res = {
-            "refresh": str(refresh),
-            "access": str(refresh.access_token),
-        }
+        access_token = str(refresh.access_token)
+        refresh_token = str(refresh)
 
-        return Response(
-            {
-                "user": serializer.data,
-                "refresh": res["refresh"],
-                "token": res["access"],
-            },
+        # Tokens are set as httpOnly cookies — don't expose in response body
+        response = Response(
+            {"user": serializer.data},
             status=status.HTTP_201_CREATED,
         )
 
-
-class CustomTokenRefreshView(TokenRefreshView):
-    def get(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.COOKIES)
-        try:
-            if not serializer.is_valid():
-                return Response({"error": "Token is invalid or expired"}, status=400)
-            refresh_token = RefreshToken(serializer.validated_data["refresh"])
-        except Exception as e:
-            return Response({"error": str(e)}, status=400)
-
-        response = Response(serializer.validated_data, status=status.HTTP_200_OK)
-
-        # Set secure cookie options (same as login)
+        # Set httpOnly auth cookies (default session-only for new registrations)
         cookie_options = {
             "secure": settings.SIMPLE_JWT["AUTH_COOKIE_SECURE"],
             "httponly": settings.SIMPLE_JWT["AUTH_COOKIE_HTTP_ONLY"],
             "samesite": settings.SIMPLE_JWT["AUTH_COOKIE_SAMESITE"],
         }
-
-        if settings.DEBUG and "AUTH_COOKIE_DOMAIN" in settings.SIMPLE_JWT:
-            cookie_options["domain"] = settings.SIMPLE_JWT["AUTH_COOKIE_DOMAIN"]
+        cookie_domain = settings.SIMPLE_JWT.get("AUTH_COOKIE_DOMAIN")
+        if cookie_domain:
+            cookie_options["domain"] = cookie_domain
 
         response.set_cookie(
             key="access",
-            value=serializer.validated_data["access"],
+            value=access_token,
             max_age=settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"].total_seconds(),
             **cookie_options,
         )
+        refresh_max = int(settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds())
         response.set_cookie(
             key="refresh",
-            value=serializer.validated_data["refresh"],
-            max_age=settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds(),
+            value=refresh_token,
+            max_age=refresh_max,
             **cookie_options,
         )
-        # Special cookie options for logged_in (not httponly)
-        logged_in_options = cookie_options.copy()
-        logged_in_options["httponly"] = False
-
         response.set_cookie(
             key="logged_in",
-            value=True,
-            max_age=settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"].total_seconds(),
-            **logged_in_options,
+            value="true",
+            max_age=refresh_max,
+            **{**cookie_options, "httponly": False},
         )
         csrf.get_token(request)
+
+        return response
+
+
+class CustomTokenRefreshView(TokenRefreshView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def _get_cookie_options(self):
+        opts = {
+            "secure": settings.SIMPLE_JWT["AUTH_COOKIE_SECURE"],
+            "httponly": settings.SIMPLE_JWT["AUTH_COOKIE_HTTP_ONLY"],
+            "samesite": settings.SIMPLE_JWT["AUTH_COOKIE_SAMESITE"],
+        }
+        cookie_domain = settings.SIMPLE_JWT.get("AUTH_COOKIE_DOMAIN")
+        if cookie_domain:
+            opts["domain"] = cookie_domain
+        return opts
+
+    def _set_auth_cookies(self, response, access_token, refresh_token, request):
+        cookie_options = self._get_cookie_options()
+
+        # Preserve remember_me preference: if existing refresh cookie had max_age,
+        # the browser kept it across sessions. We mirror that by checking the
+        # logged_in cookie (only set with max_age when remember_me was True).
+        has_persistent_session = request.COOKIES.get("logged_in") is not None
+
+        response.set_cookie(
+            key="access",
+            value=access_token,
+            max_age=settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"].total_seconds(),
+            **cookie_options,
+        )
+
+        refresh_opts = {**cookie_options}
+        logged_in_opts = {**cookie_options, "httponly": False}
+
+        if has_persistent_session:
+            refresh_max = int(settings.SIMPLE_JWT["REMEMBER_ME_REFRESH_TOKEN_LIFETIME"].total_seconds())
+            refresh_opts["max_age"] = refresh_max
+            logged_in_opts["max_age"] = refresh_max
+
+        response.set_cookie(key="refresh", value=refresh_token, **refresh_opts)
+        response.set_cookie(key="logged_in", value="true", **logged_in_opts)
+        csrf.get_token(request)
+
+    def post(self, request, *args, **kwargs):
+        """
+        Cookie-based refresh with body fallback.
+        Reads refresh token from httpOnly cookie first, falls back to request body.
+        """
+        # Enforce CSRF since DRF exempts APIView from Django's CsrfViewMiddleware
+        from .auth import enforce_csrf
+
+        enforce_csrf(request)
+
+        # Prefer cookie-based refresh (httpOnly cookie set by login)
+        refresh_from_cookie = request.COOKIES.get("refresh")
+        if refresh_from_cookie:
+            data = {"refresh": refresh_from_cookie}
+        else:
+            data = request.data
+
+        serializer = self.get_serializer(data=data)
+        try:
+            if not serializer.is_valid():
+                return Response({"error": "Token is invalid or expired"}, status=400)
+        except Exception as e:
+            return Response({"error": str(e)}, status=400)
+
+        access_token = serializer.validated_data["access"]
+        refresh_token = serializer.validated_data["refresh"]
+
+        # Strip tokens from response body — they are set as httpOnly cookies only
+        response_data = {
+            k: v
+            for k, v in serializer.validated_data.items()
+            if k not in ("access", "refresh")
+        }
+        response = Response(response_data, status=status.HTTP_200_OK)
+        self._set_auth_cookies(response, access_token, refresh_token, request)
         return response
 
 
@@ -648,23 +737,26 @@ class APILogoutView(APIView):
     http_method_names = ["post"]
 
     def post(self, request, *args, **kwargs):
+        # Blacklist the refresh token to prevent reuse
+        refresh_token = request.COOKIES.get("refresh")
+        if refresh_token:
+            try:
+                token = RefreshToken(refresh_token)
+                token.blacklist()
+            except Exception:
+                pass  # Token may already be blacklisted or invalid
+
         response = Response({"data": {"user": "ok"}}, status=status.HTTP_200_OK)
-        response.delete_cookie(
-            "access",
-            domain=settings.SIMPLE_JWT["AUTH_COOKIE_DOMAIN"],
-            path="/",
-            samesite="None",
-        )
-        response.delete_cookie(
-            "refresh",
-            domain=settings.SIMPLE_JWT["AUTH_COOKIE_DOMAIN"],
-            path="/",
-            samesite="None",
-        )
-        response.delete_cookie(
-            "logged_in",
-            domain=settings.SIMPLE_JWT["AUTH_COOKIE_DOMAIN"],
-            path="/",
-            samesite="None",
-        )
+
+        cookie_domain = settings.SIMPLE_JWT.get("AUTH_COOKIE_DOMAIN")
+        samesite = settings.SIMPLE_JWT.get("AUTH_COOKIE_SAMESITE", "Lax")
+
+        for cookie_name in ("access", "refresh", "logged_in"):
+            response.delete_cookie(
+                cookie_name,
+                domain=cookie_domain,
+                path="/",
+                samesite=samesite,
+            )
+
         return response

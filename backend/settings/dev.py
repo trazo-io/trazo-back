@@ -139,11 +139,11 @@ else:
     # Development CSRF configuration
     CSRF_TRUSTED_ORIGINS = [
         "https://*.localhost",
-        "http://app.localhost:3000",
-        "http://localhost:3000",  # Add direct localhost support
-        "https://7172-167-60-250-132.ngrok-free.app",
+        "http://*.localhost:3000",
+        "http://*.localhost:4173",
+        "http://localhost:3000",
         "http://localhost:4173",
-        "http://app.localhost:4173",
+        "https://7172-167-60-250-132.ngrok-free.app",
     ]
 
 CORS_ORIGIN_ALLOW_ALL = True
@@ -189,7 +189,7 @@ CORS_ALLOW_HEADERS = [
 ]
 
 # Fix for development - allow cross-subdomain cookies and HTTP
-CSRF_COOKIE_DOMAIN = None  # Allow cookies to work across app.localhost and localhost
+CSRF_COOKIE_DOMAIN = None  # Same-origin via Vite proxy — no cross-domain needed
 CSRF_COOKIE_SECURE = False  # Allow HTTP in development
 CSRF_COOKIE_SAMESITE = "Lax"  # Allow cross-subdomain requests in development (Lax works with HTTP)
 
@@ -251,9 +251,9 @@ RATELIMIT_ENABLE = False
 # Enable cross-subdomain cookies for localhost development
 SIMPLE_JWT = {
     **SIMPLE_JWT,  # Inherit base settings
-    "AUTH_COOKIE_DOMAIN": ".localhost",  # Allow cookies across *.localhost
+    "AUTH_COOKIE_DOMAIN": None,  # Same-origin via Vite proxy — no cross-domain needed
     "AUTH_COOKIE_SECURE": False,  # Allow HTTP in development
-    "AUTH_COOKIE_SAMESITE": "Lax",  # Compatible with HTTP and cross-subdomain requests
+    "AUTH_COOKIE_SAMESITE": "Lax",  # Compatible with HTTP
 }
 
 # Email configuration for development

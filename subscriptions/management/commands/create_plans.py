@@ -59,7 +59,7 @@ class Command(BaseCommand):
         # Base feature sets for each tier (shared between monthly and yearly)
         basic_features = {
             "max_establishments": 1,
-            "max_parcels_per_establishment": 1,
+            "max_parcels_per_establishment": 2,
             "max_productions_per_year": 3,
             "establishment_full_description": True,
             "monthly_scan_limit": 5000,

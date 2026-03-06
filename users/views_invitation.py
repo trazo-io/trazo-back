@@ -487,11 +487,10 @@ def signup_with_invitation(request):
                 has_subscription = False
                 subscription_data = None
 
+            # Tokens set as httpOnly cookies — don't expose in response body
             response = Response(
                 {
                     "message": "Account created and invitation accepted successfully",
-                    "access": str(access_token),
-                    "refresh": str(refresh),
                     "user": {
                         "id": user.id,
                         "email": user.email,
@@ -512,18 +511,17 @@ def signup_with_invitation(request):
                 status=status.HTTP_201_CREATED,
             )
 
-            # Set secure HTTP-only cookies for automatic authentication
+            # Set secure HTTP-only cookies (consistent with all other auth endpoints)
             cookie_options = {
                 "secure": settings.SIMPLE_JWT["AUTH_COOKIE_SECURE"],
                 "httponly": settings.SIMPLE_JWT["AUTH_COOKIE_HTTP_ONLY"],
                 "samesite": settings.SIMPLE_JWT["AUTH_COOKIE_SAMESITE"],
             }
+            cookie_domain = settings.SIMPLE_JWT.get("AUTH_COOKIE_DOMAIN")
+            if cookie_domain:
+                cookie_options["domain"] = cookie_domain
 
-            # Only set domain in production, not in development (localhost)
-            if not settings.DEBUG and hasattr(settings, "CSRF_COOKIE_DOMAIN") and settings.CSRF_COOKIE_DOMAIN:
-                cookie_options["domain"] = settings.CSRF_COOKIE_DOMAIN
-
-            # Set cookies with improved security
+            refresh_max = int(settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds())
             response.set_cookie(
                 key="access",
                 value=str(access_token),
@@ -533,8 +531,14 @@ def signup_with_invitation(request):
             response.set_cookie(
                 key="refresh",
                 value=str(refresh),
-                max_age=settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds(),
+                max_age=refresh_max,
                 **cookie_options,
+            )
+            response.set_cookie(
+                key="logged_in",
+                value="true",
+                max_age=refresh_max,
+                **{**cookie_options, "httponly": False},
             )
 
             return response

@@ -1,4 +1,6 @@
 import logging
+from datetime import datetime as dt
+from datetime import timezone as dt_timezone
 
 from django.conf import settings
 from django.core.cache import cache
@@ -14,13 +16,22 @@ from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework.viewsets import ViewSet
 
 from company.models import Company
 from company.serializers import RetrieveCompanySerializer
 
-from .models import AddOn, Invoice, PaymentMethod, Plan, Subscription, SubscriptionAddOn
+from .models import (
+    AddOn,
+    Invoice,
+    PaymentMethod,
+    Plan,
+    ProcessedWebhookEvent,
+    Subscription,
+    SubscriptionAddOn,
+)
 from .permissions import IsCompanyAdminForSubscription
 from .serializers import (
     AddOnSerializer,
@@ -32,6 +43,11 @@ from .serializers import (
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 logger = logging.getLogger(__name__)
+
+
+def stripe_ts(ts):
+    """Convert a Stripe unix timestamp to a timezone-aware datetime."""
+    return dt.fromtimestamp(ts, tz=dt_timezone.utc) if ts else None
 
 
 class PlanViewSet(viewsets.ReadOnlyModelViewSet):
@@ -126,9 +142,10 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
 
             return Response(response_data)
         except Exception as e:
-            logger.error(f"Error in dashboard endpoint: {str(e)}")
+            logger.error("Error in dashboard endpoint: %s", e, exc_info=True)
             return Response(
-                {"error": f"Error fetching dashboard data: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": "Error fetching dashboard data. Please try again."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
     @action(detail=False, methods=["post"], url_path="start-trial")
@@ -210,7 +227,11 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
                 }
             )
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.error("Error canceling subscription: %s", e, exc_info=True)
+            return Response(
+                {"error": "Failed to cancel subscription. Please try again."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
     @action(detail=True, methods=["post"])
     def reactivate(self, request, pk=None):
@@ -228,7 +249,11 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
 
             return Response({"status": "subscription reactivated"})
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.error("Error reactivating subscription: %s", e, exc_info=True)
+            return Response(
+                {"error": "Failed to reactivate subscription. Please try again."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
     def _is_downgrade(self, current_plan, new_plan):
         """
@@ -315,7 +340,11 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         except Plan.DoesNotExist:
             return Response({"error": "Plan not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.error("Error changing plan: %s", e, exc_info=True)
+            return Response(
+                {"error": "Failed to change plan. Please try again."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
     @action(detail=True, methods=["post"])
     def add_addon(self, request, pk=None):
@@ -387,11 +416,14 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
             return Response({"url": checkout_session.url, "session_id": checkout_session.id})
 
         except AddOn.DoesNotExist:
-            logger.error(f"Addon not found: {addon_id}")
+            logger.error("Addon not found: %s", addon_id)
             return Response({"error": "Add-on not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            logger.error(f"Error creating checkout session for add-on: {str(e)}")
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.error("Error creating checkout session for add-on: %s", e, exc_info=True)
+            return Response(
+                {"error": "Failed to create add-on checkout. Please try again."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
 
 class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
@@ -479,12 +511,13 @@ class PaymentMethodViewSet(viewsets.ModelViewSet):
         payment_method = self.get_object()
         company = payment_method.company
 
-        # Set all other payment methods as non-default
-        company.payment_methods.update(is_default=False)
+        with transaction.atomic():
+            # Set all other payment methods as non-default
+            company.payment_methods.update(is_default=False)
 
-        # Set this payment method as default
-        payment_method.is_default = True
-        payment_method.save()
+            # Set this payment method as default
+            payment_method.is_default = True
+            payment_method.save()
 
         # Update default payment method in Stripe if customer exists
         try:
@@ -500,9 +533,16 @@ class PaymentMethodViewSet(viewsets.ModelViewSet):
         return Response({"status": "default payment method set"})
 
 
+class PaymentThrottle(ScopedRateThrottle):
+    """Throttle for payment-related endpoints."""
+
+    scope = "api_sensitive"
+
+
 # Create a dedicated ViewSet for checkout operations
 class CheckoutViewSet(ViewSet):
     permission_classes = [IsAuthenticated]
+    throttle_classes = [PaymentThrottle]
 
     @action(detail=False, methods=["post"])
     def create_session(self, request):
@@ -540,6 +580,20 @@ class CheckoutViewSet(ViewSet):
                     email=request.user.email, name=company.name, metadata={"company_id": company.id}
                 )
                 customer_id = customer["id"]
+
+                # Persist customer_id immediately to prevent orphaned Stripe customers
+                if hasattr(company, "subscription"):
+                    company.subscription.stripe_customer_id = customer_id
+                    company.subscription.save(update_fields=["stripe_customer_id"])
+                else:
+                    starter_plan = Plan.objects.filter(slug="starter", is_active=True).first()
+                    if starter_plan:
+                        Subscription.objects.create(
+                            company=company,
+                            plan=starter_plan,
+                            stripe_customer_id=customer_id,
+                            status="incomplete",
+                        )
 
             # Special mode for setting up a payment method without a charge
             if mode == "setup":
@@ -672,7 +726,11 @@ class CheckoutViewSet(ViewSet):
         except Company.DoesNotExist:
             return Response({"error": "Company not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.error("Error creating checkout session: %s", e, exc_info=True)
+            return Response(
+                {"error": "Failed to create checkout session. Please try again."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
     @action(detail=False, methods=["post"])
     def create_customer_portal_session(self, request):
@@ -713,19 +771,20 @@ class CheckoutViewSet(ViewSet):
         except Company.DoesNotExist:
             return Response({"error": "Company not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            logger.error(f"Error creating customer portal session: {str(e)}")
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.error("Error creating customer portal session: %s", e, exc_info=True)
+            return Response(
+                {"error": "Failed to open billing portal. Please try again."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
     @action(detail=False, methods=["post"])
     def complete_checkout(self, request):
         """Complete the checkout after a successful payment"""
         session_id = request.data.get("session_id")
-        company_id = request.data.get("company_id")
 
-        # Log the request data for debugging
-        logger.info(f"Complete checkout called with: session_id={session_id}, company_id={company_id}")
+        logger.info("Complete checkout called with session_id=%s", session_id)
 
-        if not session_id or not company_id:
+        if not session_id:
             return Response(
                 {"success": False, "error": "Missing required parameters"}, status=status.HTTP_400_BAD_REQUEST
             )
@@ -734,39 +793,62 @@ class CheckoutViewSet(ViewSet):
             # Retrieve checkout session from Stripe
             try:
                 session = stripe.checkout.Session.retrieve(session_id)
-                logger.info(f"Retrieved Stripe session: {session_id}")
+                logger.info("Retrieved Stripe session: %s", session_id)
             except stripe.error.StripeError as e:
-                logger.error(f"Stripe error retrieving session: {str(e)}")
+                logger.error("Stripe error retrieving session: %s", e)
                 return Response(
-                    {"success": False, "error": f"Stripe error: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST
+                    {"success": False, "error": "Payment processing error. Please try again."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Read company_id from Stripe session metadata (NOT from client)
+            session_metadata = session.get("metadata", {})
+            company_id = session_metadata.get("company_id")
+
+            if not company_id:
+                logger.error("No company_id in session metadata for session %s", session_id)
+                return Response(
+                    {"success": False, "error": "Invalid checkout session"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Verify the requesting user has access to this company
+            if not request.user.is_staff and not request.user.companies.filter(id=company_id).exists():
+                logger.warning(
+                    "User %s attempted complete_checkout for company %s without access",
+                    request.user.id,
+                    company_id,
+                )
+                return Response(
+                    {"success": False, "error": "You do not have permission to manage this company"},
+                    status=status.HTTP_403_FORBIDDEN,
                 )
 
             # Verify this is a valid checkout session
-            if session.get("payment_status") != "paid":
+            # "paid" = normal payment, "no_payment_required" = trial or $0 checkout
+            if session.get("payment_status") not in ("paid", "no_payment_required"):
                 logger.warning(
-                    f"Payment not completed for session {session_id}, status: {session.get('payment_status')}"
+                    "Payment not completed for session %s, status: %s",
+                    session_id,
+                    session.get("payment_status"),
                 )
                 return Response(
-                    {"success": False, "error": f"Payment not completed, status: {session.get('payment_status')}"},
+                    {"success": False, "error": "Payment not completed"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
             # Check if this is an add-on purchase (one-time payment, not subscription)
-            session_metadata = session.get("metadata", {})
             is_addon_purchase = session_metadata.get("is_addon_purchase") == "true"
 
             if is_addon_purchase:
-                # Add-on purchases use mode="payment" and don't have a subscription field
-                # The actual add-on processing is handled by the Stripe webhook
-                # Here we just verify payment success and return the company data
-                logger.info(f"Add-on purchase detected for session {session_id}")
+                logger.info("Add-on purchase detected for session %s", session_id)
 
                 try:
                     company = Company.objects.get(id=company_id)
                 except Company.DoesNotExist:
-                    logger.error(f"Company with ID {company_id} not found for add-on purchase")
+                    logger.error("Company with ID %s not found for add-on purchase", company_id)
                     return Response(
-                        {"success": False, "error": f"Company with ID {company_id} not found"},
+                        {"success": False, "error": "Company not found"},
                         status=status.HTTP_404_NOT_FOUND,
                     )
 
@@ -803,21 +885,21 @@ class CheckoutViewSet(ViewSet):
             # Get subscription details
             try:
                 stripe_sub = stripe.Subscription.retrieve(subscription_id)
-                logger.info(f"Retrieved Stripe subscription: {subscription_id}")
+                logger.info("Retrieved Stripe subscription: %s", subscription_id)
             except stripe.error.StripeError as e:
-                logger.error(f"Stripe error retrieving subscription: {str(e)}")
+                logger.error("Stripe error retrieving subscription: %s", e)
                 return Response(
-                    {"success": False, "error": f"Error retrieving subscription: {str(e)}"},
+                    {"success": False, "error": "Payment processing error. Please try again."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            # Get company
+            # Get company (company_id already validated from session metadata above)
             try:
                 company = Company.objects.get(id=company_id)
             except Company.DoesNotExist:
-                logger.error(f"Company with ID {company_id} not found")
+                logger.error("Company with ID %s not found", company_id)
                 return Response(
-                    {"success": False, "error": f"Company with ID {company_id} not found"},
+                    {"success": False, "error": "Company not found"},
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
@@ -826,9 +908,9 @@ class CheckoutViewSet(ViewSet):
             try:
                 plan = Plan.objects.get(stripe_price_id=price_id)
             except Plan.DoesNotExist:
-                logger.error(f"Plan with stripe_price_id {price_id} not found")
+                logger.error("Plan with stripe_price_id %s not found", price_id)
                 return Response(
-                    {"success": False, "error": f"Plan with price ID {price_id} not found"},
+                    {"success": False, "error": "Selected plan is not available. Please contact support."},
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
@@ -840,14 +922,10 @@ class CheckoutViewSet(ViewSet):
                     "stripe_subscription_id": subscription_id,
                     "stripe_customer_id": session.get("customer"),
                     "status": stripe_sub["status"],
-                    "current_period_start": timezone.datetime.fromtimestamp(stripe_sub["current_period_start"]),
-                    "current_period_end": timezone.datetime.fromtimestamp(stripe_sub["current_period_end"]),
+                    "current_period_start": stripe_ts(stripe_sub["current_period_start"]),
+                    "current_period_end": stripe_ts(stripe_sub["current_period_end"]),
                     "cancel_at_period_end": stripe_sub["cancel_at_period_end"],
-                    "trial_end": (
-                        timezone.datetime.fromtimestamp(stripe_sub["trial_end"])
-                        if stripe_sub.get("trial_end")
-                        else None
-                    ),
+                    "trial_end": (stripe_ts(stripe_sub["trial_end"]) if stripe_sub.get("trial_end") else None),
                 },
             )
 
@@ -886,8 +964,11 @@ class CheckoutViewSet(ViewSet):
             )
 
         except Exception as e:
-            logger.error(f"Unexpected error completing checkout: {str(e)}", exc_info=True)
-            return Response({"success": False, "error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.error("Unexpected error completing checkout: %s", e, exc_info=True)
+            return Response(
+                {"success": False, "error": "An unexpected error occurred. Please try again."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 # Stripe webhook handler
@@ -909,16 +990,24 @@ def stripe_webhook(request):
 
     # Handle the event in a transaction
     event_type = event["type"]
+    event_id = event["id"]
     data = event["data"]["object"]
 
-    logger.info(f"Processing webhook event: {event_type}")
+    logger.info("Processing webhook event: %s (id: %s)", event_type, event_id)
+
+    # Idempotency check: skip already-processed events
+    if ProcessedWebhookEvent.objects.filter(stripe_event_id=event_id).exists():
+        logger.info("Skipping already-processed event: %s", event_id)
+        return HttpResponse(status=200)
 
     # Debug: Log metadata for checkout sessions
     if event_type == "checkout.session.completed":
         metadata = data.get("metadata", {})
-        logger.info(f"DEBUG checkout.session.completed - mode: {data.get('mode')}, metadata: {metadata}")
-        logger.info(
-            f"DEBUG is_addon_purchase: {metadata.get('is_addon_purchase')}, addon_id: {metadata.get('addon_id')}"
+        logger.debug("checkout.session.completed - mode: %s, metadata: %s", data.get("mode"), metadata)
+        logger.debug(
+            "is_addon_purchase: %s, addon_id: %s",
+            metadata.get("is_addon_purchase"),
+            metadata.get("addon_id"),
         )
 
     try:
@@ -962,13 +1051,31 @@ def stripe_webhook(request):
             elif event_type == "payment_method.attached":
                 handle_payment_method_attached(data)
             else:
-                logger.warning(f"Unhandled webhook event type: {event_type}")
+                logger.warning("Unhandled webhook event type: %s", event_type)
 
-        logger.info(f"Successfully processed webhook event: {event_type}")
+        # Record successful processing for idempotency
+        ProcessedWebhookEvent.objects.create(
+            stripe_event_id=event_id,
+            event_type=event_type,
+            success=True,
+        )
+
+        logger.info("Successfully processed webhook event: %s", event_type)
         return HttpResponse(status=200)
 
+    except (Company.DoesNotExist, Plan.DoesNotExist, AddOn.DoesNotExist) as e:
+        # Permanent failure — data doesn't exist, retrying won't help
+        logger.error("Permanent webhook failure for %s: %s", event_type, e, exc_info=True)
+        ProcessedWebhookEvent.objects.create(
+            stripe_event_id=event_id,
+            event_type=event_type,
+            success=False,
+            error_message=str(e),
+        )
+        return HttpResponse(status=200)
     except Exception as e:
-        logger.error(f"Error processing webhook event {event_type}: {str(e)}", exc_info=True)
+        # Transient failure — Stripe will retry
+        logger.error("Transient webhook failure for %s: %s", event_type, e, exc_info=True)
         return HttpResponse(status=500)
 
 
@@ -999,14 +1106,10 @@ def handle_checkout_session_completed(session):
                     "stripe_subscription_id": subscription_id,
                     "stripe_customer_id": customer_id,
                     "status": stripe_sub["status"],
-                    "current_period_start": timezone.datetime.fromtimestamp(stripe_sub["current_period_start"]),
-                    "current_period_end": timezone.datetime.fromtimestamp(stripe_sub["current_period_end"]),
+                    "current_period_start": stripe_ts(stripe_sub["current_period_start"]),
+                    "current_period_end": stripe_ts(stripe_sub["current_period_end"]),
                     "cancel_at_period_end": stripe_sub["cancel_at_period_end"],
-                    "trial_end": (
-                        timezone.datetime.fromtimestamp(stripe_sub["trial_end"])
-                        if stripe_sub.get("trial_end")
-                        else None
-                    ),
+                    "trial_end": (stripe_ts(stripe_sub["trial_end"]) if stripe_sub.get("trial_end") else None),
                 },
             )
     except Exception as e:
@@ -1080,8 +1183,8 @@ def handle_invoice_payment_succeeded(invoice):
                 "subscription": subscription,
                 "amount": invoice["amount_paid"] / 100,  # Convert from cents
                 "status": "paid",
-                "invoice_date": timezone.datetime.fromtimestamp(invoice["created"]),
-                "due_date": timezone.datetime.fromtimestamp(invoice["due_date"]) if invoice.get("due_date") else None,
+                "invoice_date": stripe_ts(invoice["created"]),
+                "due_date": stripe_ts(invoice["due_date"]) if invoice.get("due_date") else None,
                 "invoice_pdf": invoice.get("invoice_pdf"),
             },
         )
@@ -1116,8 +1219,8 @@ def handle_invoice_payment_failed(invoice):
                 "subscription": subscription,
                 "amount": invoice["amount_due"] / 100,  # Convert from cents
                 "status": "uncollectible" if invoice.get("uncollectible") else "open",
-                "invoice_date": timezone.datetime.fromtimestamp(invoice["created"]),
-                "due_date": timezone.datetime.fromtimestamp(invoice["due_date"]) if invoice.get("due_date") else None,
+                "invoice_date": stripe_ts(invoice["created"]),
+                "due_date": stripe_ts(invoice["due_date"]) if invoice.get("due_date") else None,
                 "invoice_pdf": invoice.get("invoice_pdf"),
             },
         )
@@ -1160,12 +1263,8 @@ def handle_invoice_created(invoice_data):
                 "subscription": subscription,
                 "amount": invoice_data["total"] / 100,  # Convert from cents
                 "status": "draft",
-                "invoice_date": timezone.make_aware(timezone.datetime.fromtimestamp(invoice_data["created"])),
-                "due_date": (
-                    timezone.make_aware(timezone.datetime.fromtimestamp(invoice_data["due_date"]))
-                    if invoice_data.get("due_date")
-                    else None
-                ),
+                "invoice_date": stripe_ts(invoice_data["created"]),
+                "due_date": (stripe_ts(invoice_data["due_date"]) if invoice_data.get("due_date") else None),
             },
         )
         logger.info(f"Invoice created: {invoice_data['id']} for subscription {subscription_id}")
@@ -1218,7 +1317,7 @@ def handle_subscription_updated(subscription_data):
             return
 
         # Detect billing period change (new period_start means renewal happened)
-        new_period_start = timezone.datetime.fromtimestamp(subscription_data["current_period_start"])
+        new_period_start = stripe_ts(subscription_data["current_period_start"])
         period_changed = (
             subscription.current_period_start is None or new_period_start > subscription.current_period_start
         )
@@ -1226,11 +1325,11 @@ def handle_subscription_updated(subscription_data):
         # Update subscription details
         subscription.status = subscription_data["status"]
         subscription.current_period_start = new_period_start
-        subscription.current_period_end = timezone.datetime.fromtimestamp(subscription_data["current_period_end"])
+        subscription.current_period_end = stripe_ts(subscription_data["current_period_end"])
         subscription.cancel_at_period_end = subscription_data["cancel_at_period_end"]
 
         if subscription_data.get("trial_end"):
-            subscription.trial_end = timezone.datetime.fromtimestamp(subscription_data["trial_end"])
+            subscription.trial_end = stripe_ts(subscription_data["trial_end"])
 
         # Apply pending downgrade when billing period renews
         if period_changed and subscription.pending_plan:
@@ -1253,6 +1352,20 @@ def handle_subscription_updated(subscription_data):
 def handle_customer_subscription_deleted(subscription_data):
     """Process subscription cancellation"""
     try:
+        # Check if this is a blockchain verification subscription
+        metadata = subscription_data.get("metadata", {})
+        if metadata.get("subscription_type") == "blockchain_verification":
+            company_id = metadata.get("company_id")
+            if company_id:
+                try:
+                    company = Company.objects.get(id=company_id)
+                    company.blockchain_subscription_status = False
+                    company.save()
+                    logger.info("Blockchain subscription cancelled for company %s", company_id)
+                except Company.DoesNotExist:
+                    logger.error("Company %s not found for blockchain cancellation", company_id)
+            return
+
         subscription = Subscription.objects.filter(stripe_subscription_id=subscription_data["id"]).first()
 
         if not subscription:
@@ -1298,22 +1411,30 @@ def handle_payment_method_attached(payment_method_data):
         if not card:
             return
 
-        # Create payment method record
-        is_first = company.payment_methods.count() == 0
+        # Create payment method record atomically to prevent duplicates
+        with transaction.atomic():
+            payment_method, created = PaymentMethod.objects.get_or_create(
+                stripe_payment_method_id=payment_method_data["id"],
+                defaults={
+                    "company": company,
+                    "card_brand": card.get("brand", "").lower(),
+                    "last_4": card.get("last4", ""),
+                    "exp_month": card.get("exp_month", 0),
+                    "exp_year": card.get("exp_year", 0),
+                    "is_default": False,
+                },
+            )
 
-        payment_method = PaymentMethod.objects.create(
-            company=company,
-            stripe_payment_method_id=payment_method_data["id"],
-            card_brand=card.get("brand", "").lower(),
-            last_4=card.get("last4", ""),
-            exp_month=card.get("exp_month", 0),
-            exp_year=card.get("exp_year", 0),
-            is_default=is_first,  # Set as default if it's the first payment method
-        )
-
-        # If this is the first payment method, set it as default in Stripe
-        if is_first:
-            stripe.Customer.modify(customer_id, invoice_settings={"default_payment_method": payment_method_data["id"]})
+            if created:
+                # Set as default if it's the first payment method
+                is_first = company.payment_methods.count() == 1
+                if is_first:
+                    payment_method.is_default = True
+                    payment_method.save(update_fields=["is_default"])
+                    stripe.Customer.modify(
+                        customer_id,
+                        invoice_settings={"default_payment_method": payment_method_data["id"]},
+                    )
 
     except Exception as e:
         logger.exception("Error in handle_payment_method_attached: %s", e)
@@ -1352,13 +1473,11 @@ def handle_subscription_created(subscription_data):
                 "stripe_subscription_id": subscription_data["id"],
                 "stripe_customer_id": subscription_data["customer"],
                 "status": subscription_data["status"],
-                "current_period_start": timezone.datetime.fromtimestamp(subscription_data["current_period_start"]),
-                "current_period_end": timezone.datetime.fromtimestamp(subscription_data["current_period_end"]),
+                "current_period_start": stripe_ts(subscription_data["current_period_start"]),
+                "current_period_end": stripe_ts(subscription_data["current_period_end"]),
                 "cancel_at_period_end": subscription_data["cancel_at_period_end"],
                 "trial_end": (
-                    timezone.datetime.fromtimestamp(subscription_data["trial_end"])
-                    if subscription_data.get("trial_end")
-                    else None
+                    stripe_ts(subscription_data["trial_end"]) if subscription_data.get("trial_end") else None
                 ),
             },
         )
@@ -1412,168 +1531,18 @@ def handle_addon_purchase_completed(session):
 
         with transaction.atomic():
             # Create subscription add-on record
+            # Limits are computed dynamically by Company.can_create_* from
+            # base plan features + SubscriptionAddOn quantities.
             subscription_addon, created = SubscriptionAddOn.objects.get_or_create(
                 subscription=subscription, addon=addon, defaults={"quantity": quantity}
             )
 
             if not created:
-                # If the add-on already exists, increment the quantity
                 subscription_addon.quantity += quantity
                 subscription_addon.save()
-                logger.info(f"Updated existing addon quantity to {subscription_addon.quantity}")
+                logger.info("Updated existing addon quantity to %d", subscription_addon.quantity)
             else:
-                logger.info(f"Created new addon with quantity {quantity}")
-
-            # Update usage limits based on add-on type
-            addon_slug = addon_type.replace("-", "") if addon_type else addon.slug.replace("-", "")
-
-            if addon_slug == "extraProduction" or addon_slug == "extraproduction":
-                # Increase allowed productions
-                productions_per_addon = 10  # Each add-on gives 10 more productions
-                additional_productions = quantity * productions_per_addon
-
-                # Update the plan features for this subscription
-                custom_features = subscription.plan.features.copy()
-                if "max_productions_per_year" in custom_features:
-                    custom_features["max_productions_per_year"] += additional_productions
-                    logger.info(f"Adding {additional_productions} productions to subscription")
-
-                    # Create or update custom plan
-                    custom_plan_name = f"{subscription.plan.name} (Custom)"
-                    custom_plan_slug = f"{subscription.plan.slug}-custom-{subscription.id}"
-
-                    custom_plan, created = Plan.objects.get_or_create(
-                        slug=custom_plan_slug,
-                        defaults={
-                            "name": custom_plan_name,
-                            "description": f"Custom plan with additional productions",
-                            "price": subscription.plan.price,
-                            "interval": subscription.plan.interval,
-                            "features": custom_features,
-                            "is_active": False,  # Not available for new subscriptions
-                            "stripe_price_id": subscription.plan.stripe_price_id,
-                        },
-                    )
-
-                    if not created:
-                        # Update the existing custom plan
-                        custom_plan.features = custom_features
-                        custom_plan.save()
-
-                    # Update the subscription to use the custom plan
-                    subscription.plan = custom_plan
-                    subscription.save()
-
-            elif addon_slug == "extraParcel" or addon_slug == "extraparcel":
-                # Increase allowed parcels per establishment
-                parcels_per_addon = 1  # Each add-on gives 1 more parcel per establishment
-                additional_parcels = quantity * parcels_per_addon
-
-                # Update the plan features for this subscription
-                custom_features = subscription.plan.features.copy()
-                if "max_parcels_per_establishment" in custom_features:
-                    custom_features["max_parcels_per_establishment"] += additional_parcels
-                    logger.info(f"Adding {additional_parcels} parcels per establishment to subscription")
-
-                    # Create or update custom plan
-                    custom_plan_name = f"{subscription.plan.name} (Custom)"
-                    custom_plan_slug = f"{subscription.plan.slug}-custom-{subscription.id}"
-
-                    custom_plan, created = Plan.objects.get_or_create(
-                        slug=custom_plan_slug,
-                        defaults={
-                            "name": custom_plan_name,
-                            "description": "Custom plan with additional parcels per establishment",
-                            "price": subscription.plan.price,
-                            "interval": subscription.plan.interval,
-                            "features": custom_features,
-                            "is_active": False,
-                            "stripe_price_id": subscription.plan.stripe_price_id,
-                        },
-                    )
-
-                    if not created:
-                        # Update the existing custom plan
-                        custom_plan.features = custom_features
-                        custom_plan.save()
-
-                    # Update the subscription to use the custom plan
-                    subscription.plan = custom_plan
-                    subscription.save()
-
-            elif addon_slug == "extraEstablishment" or addon_slug == "extraestablishment":
-                # Increase allowed establishments
-                establishments_per_addon = 1  # Each add-on gives 1 more establishment
-                additional_establishments = quantity * establishments_per_addon
-
-                # Update the plan features for this subscription
-                custom_features = subscription.plan.features.copy()
-                if "max_establishments" in custom_features:
-                    custom_features["max_establishments"] += additional_establishments
-                    logger.info(f"Adding {additional_establishments} establishments to subscription")
-
-                    # Create or update custom plan
-                    custom_plan_name = f"{subscription.plan.name} (Custom)"
-                    custom_plan_slug = f"{subscription.plan.slug}-custom-{subscription.id}"
-
-                    custom_plan, created = Plan.objects.get_or_create(
-                        slug=custom_plan_slug,
-                        defaults={
-                            "name": custom_plan_name,
-                            "description": f"Custom plan with additional establishments",
-                            "price": subscription.plan.price,
-                            "interval": subscription.plan.interval,
-                            "features": custom_features,
-                            "is_active": False,
-                            "stripe_price_id": subscription.plan.stripe_price_id,
-                        },
-                    )
-
-                    if not created:
-                        # Update the existing custom plan
-                        custom_plan.features = custom_features
-                        custom_plan.save()
-
-                    # Update the subscription to use the custom plan
-                    subscription.plan = custom_plan
-                    subscription.save()
-
-            elif addon_slug == "extraStorage" or addon_slug == "extrastorage":
-                # Increase storage limit
-                storage_per_addon = 10  # Each add-on gives 10 more GB
-                additional_storage = quantity * storage_per_addon
-
-                # Update the plan features for this subscription
-                custom_features = subscription.plan.features.copy()
-                if "storage_limit_gb" in custom_features:
-                    custom_features["storage_limit_gb"] += additional_storage
-                    logger.info(f"Adding {additional_storage} GB storage to subscription")
-
-                    # Create or update custom plan
-                    custom_plan_name = f"{subscription.plan.name} (Custom)"
-                    custom_plan_slug = f"{subscription.plan.slug}-custom-{subscription.id}"
-
-                    custom_plan, created = Plan.objects.get_or_create(
-                        slug=custom_plan_slug,
-                        defaults={
-                            "name": custom_plan_name,
-                            "description": f"Custom plan with additional storage",
-                            "price": subscription.plan.price,
-                            "interval": subscription.plan.interval,
-                            "features": custom_features,
-                            "is_active": False,
-                            "stripe_price_id": subscription.plan.stripe_price_id,
-                        },
-                    )
-
-                    if not created:
-                        # Update the existing custom plan
-                        custom_plan.features = custom_features
-                        custom_plan.save()
-
-                    # Update the subscription to use the custom plan
-                    subscription.plan = custom_plan
-                    subscription.save()
+                logger.info("Created new addon %s with quantity %d", addon.name, quantity)
 
             # Create an invoice record for the add-on purchase if there's a payment_intent
             payment_intent = session.get("payment_intent")
@@ -1654,6 +1623,7 @@ class BlockchainSubscriptionView(APIView):
     """API endpoints for blockchain subscription management"""
 
     permission_classes = [IsAuthenticated]
+    throttle_classes = [PaymentThrottle]
 
     def post(self, request):
         """
@@ -1689,23 +1659,21 @@ class BlockchainSubscriptionView(APIView):
                     company.subscription.stripe_customer_id = customer_id
                     company.subscription.save()
 
-            # Create checkout session for blockchain verification ($5/month)
+            # Look up the blockchain addon to use its Stripe price
+            blockchain_addon = AddOn.objects.filter(slug="blockchain-verification", is_active=True).first()
+            if not blockchain_addon or not blockchain_addon.stripe_price_id:
+                return Response(
+                    {"error": "Blockchain verification add-on is not configured"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Create checkout session for blockchain verification
             checkout_session = stripe.checkout.Session.create(
                 customer=customer_id,
                 payment_method_types=["card"],
                 line_items=[
                     {
-                        "price_data": {
-                            "currency": "usd",
-                            "product_data": {
-                                "name": "Blockchain Verification Add-On",
-                                "description": "Immutable carbon records, USDA compliance verification, and carbon credit marketplace access",
-                            },
-                            "unit_amount": 500,  # $5.00 in cents
-                            "recurring": {
-                                "interval": "month",
-                            },
-                        },
+                        "price": blockchain_addon.stripe_price_id,
                         "quantity": 1,
                     }
                 ],
@@ -1832,22 +1800,21 @@ class BlockchainSubscriptionStatusView(APIView):
         try:
             # List all subscriptions for this customer
             subscriptions = stripe.Subscription.list(customer=stripe_customer_id, status="active")
-            blockchain_price_id = getattr(settings, "STRIPE_BLOCKCHAIN_PRICE_ID", None)
+            # Look up blockchain addon price from DB
+            blockchain_addon = AddOn.objects.filter(slug="blockchain-verification", is_active=True).first()
+            blockchain_price_id = blockchain_addon.stripe_price_id if blockchain_addon else None
 
             for subscription in subscriptions.data:
                 # Check subscription metadata first
                 if subscription.metadata.get("subscription_type") == "blockchain_verification":
                     return True
 
-                # Check line items
-                line_items = stripe.Subscription.list_line_items(subscription.id)
-                for item in line_items.data:
-                    # Check by price ID (preferred) or fall back to amount
-                    is_blockchain = (
-                        blockchain_price_id and item.price.id == blockchain_price_id
-                    ) or item.price.unit_amount == 500
-                    if is_blockchain:
-                        return True
+                # Check line items by price ID
+                if blockchain_price_id:
+                    line_items = stripe.Subscription.list_line_items(subscription.id)
+                    for item in line_items.data:
+                        if item.price.id == blockchain_price_id:
+                            return True
 
             return False
         except stripe.error.StripeError as e:
@@ -1907,280 +1874,3 @@ class BlockchainSubscriptionStatusView(APIView):
         except stripe.error.StripeError as e:
             logger.error(f"Stripe API error validating session {session_id}: {str(e)}")
             return False
-
-
-@method_decorator(csrf_exempt, name="dispatch")
-class StripeWebhookView(APIView):
-    """
-    Stripe webhook handler for subscription events
-    POST /api/billing/webhook/
-    """
-
-    permission_classes = []  # No authentication required for webhooks
-
-    def post(self, request):
-        payload = request.body
-        sig_header = request.META.get("HTTP_STRIPE_SIGNATURE")
-        endpoint_secret = settings.STRIPE_WEBHOOK_SECRET
-
-        try:
-            event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
-        except ValueError:
-            logger.error("Invalid payload in webhook")
-            return HttpResponse(status=400)
-        except stripe.error.SignatureVerificationError:
-            logger.error("Invalid signature in webhook")
-            return HttpResponse(status=400)
-
-        # Handle the event
-        if event["type"] == "checkout.session.completed":
-            session = event["data"]["object"]
-            self.handle_checkout_session_completed(session)
-
-        elif event["type"] == "customer.subscription.created":
-            subscription = event["data"]["object"]
-            self.handle_subscription_created(subscription)
-
-        elif event["type"] == "customer.subscription.updated":
-            subscription = event["data"]["object"]
-            self.handle_subscription_updated(subscription)
-
-        elif event["type"] == "customer.subscription.deleted":
-            subscription = event["data"]["object"]
-            self.handle_subscription_deleted(subscription)
-
-        elif event["type"] == "invoice.payment_succeeded":
-            invoice = event["data"]["object"]
-            self.handle_payment_succeeded(invoice)
-
-        elif event["type"] == "invoice.payment_failed":
-            invoice = event["data"]["object"]
-            self.handle_payment_failed(invoice)
-
-        return HttpResponse(status=200)
-
-    def handle_checkout_session_completed(self, session):
-        """Handle successful checkout completion"""
-        try:
-            metadata = session.get("metadata", {})
-            company_id = metadata.get("company_id")
-            subscription_type = metadata.get("subscription_type")
-
-            if company_id and subscription_type == "blockchain_verification":
-                company = Company.objects.get(id=company_id)
-                company.blockchain_subscription_status = True
-                company.save()
-
-                logger.info(f"Blockchain subscription activated for company {company_id}")
-        except Exception as e:
-            logger.error(f"Error handling checkout session completed: {str(e)}")
-
-    def handle_subscription_created(self, subscription):
-        """Handle subscription creation"""
-        try:
-            customer_id = subscription["customer"]
-            metadata = subscription.get("metadata", {})
-
-            # PRIORITY 1: Check metadata for blockchain verification (most reliable)
-            subscription_type = metadata.get("subscription_type")
-            company_id = metadata.get("company_id")
-
-            if subscription_type == "blockchain_verification" and company_id:
-                try:
-                    company = Company.objects.get(id=company_id)
-                    company.blockchain_subscription_status = True
-                    company.save()
-                    logger.info(f"Blockchain subscription created via metadata for company {company_id}")
-                    return
-                except Company.DoesNotExist:
-                    logger.error(f"Company {company_id} not found from subscription metadata")
-
-            # PRIORITY 2: Find company by Stripe customer ID (fallback for existing subscriptions)
-            company_subscription = Subscription.objects.filter(stripe_customer_id=customer_id).first()
-
-            if company_subscription:
-                # Check if this is a blockchain verification subscription by price ID
-                line_items = stripe.Subscription.list_line_items(subscription["id"])
-                blockchain_price_id = getattr(settings, "STRIPE_BLOCKCHAIN_PRICE_ID", None)
-
-                for item in line_items.data:
-                    # Check by price ID (preferred) or fall back to amount (500 = $5.00)
-                    is_blockchain = (
-                        blockchain_price_id and item.price.id == blockchain_price_id
-                    ) or item.price.unit_amount == 500
-                    if is_blockchain:
-                        company_subscription.company.blockchain_subscription_status = True
-                        company_subscription.company.save()
-                        logger.info(
-                            f"Blockchain subscription created for company {company_subscription.company.id} "
-                            f"(price_id: {item.price.id})"
-                        )
-                        break
-            else:
-                logger.warning(
-                    f"No company subscription found for Stripe customer {customer_id}. "
-                    f"This may be a blockchain-only subscription without metadata."
-                )
-        except Exception as e:
-            logger.error(f"Error handling subscription created: {str(e)}", exc_info=True)
-
-    def handle_subscription_updated(self, subscription):
-        """Handle subscription updates"""
-        try:
-            customer_id = subscription["customer"]
-            metadata = subscription.get("metadata", {})
-
-            # PRIORITY 1: Check metadata for blockchain verification
-            subscription_type = metadata.get("subscription_type")
-            company_id = metadata.get("company_id")
-
-            if subscription_type == "blockchain_verification" and company_id:
-                try:
-                    company = Company.objects.get(id=company_id)
-                    # For updates, check if subscription is still active
-                    is_active = subscription.get("status") in ["active", "trialing"]
-                    if company.blockchain_subscription_status != is_active:
-                        company.blockchain_subscription_status = is_active
-                        company.save()
-                        action = "activated" if is_active else "deactivated"
-                        logger.info(f"Blockchain subscription {action} via metadata for company {company_id}")
-                    return
-                except Company.DoesNotExist:
-                    logger.error(f"Company {company_id} not found from subscription metadata")
-
-            # PRIORITY 2: Find company by Stripe customer ID (fallback)
-            company_subscription = Subscription.objects.filter(stripe_customer_id=customer_id).first()
-
-            if company_subscription:
-                # Check current subscription items
-                line_items = stripe.Subscription.list_line_items(subscription["id"])
-                blockchain_price_id = getattr(settings, "STRIPE_BLOCKCHAIN_PRICE_ID", None)
-
-                has_blockchain = False
-                for item in line_items.data:
-                    # Check by price ID (preferred) or fall back to amount (500 = $5.00)
-                    is_blockchain = (
-                        blockchain_price_id and item.price.id == blockchain_price_id
-                    ) or item.price.unit_amount == 500
-                    if is_blockchain:
-                        has_blockchain = True
-                        break
-
-                # Update blockchain status
-                if company_subscription.company.blockchain_subscription_status != has_blockchain:
-                    company_subscription.company.blockchain_subscription_status = has_blockchain
-                    company_subscription.company.save()
-
-                    action = "activated" if has_blockchain else "deactivated"
-                    logger.info(f"Blockchain subscription {action} for company {company_subscription.company.id}")
-            else:
-                logger.warning(f"No company subscription found for Stripe customer {customer_id} during update")
-        except Exception as e:
-            logger.error(f"Error handling subscription updated: {str(e)}", exc_info=True)
-
-    def handle_subscription_deleted(self, subscription):
-        """Handle subscription cancellation"""
-        try:
-            customer_id = subscription["customer"]
-            metadata = subscription.get("metadata", {})
-
-            # PRIORITY 1: Check metadata for blockchain verification
-            subscription_type = metadata.get("subscription_type")
-            company_id = metadata.get("company_id")
-
-            if subscription_type == "blockchain_verification" and company_id:
-                try:
-                    company = Company.objects.get(id=company_id)
-                    company.blockchain_subscription_status = False
-                    company.save()
-                    logger.info(f"Blockchain subscription cancelled via metadata for company {company_id}")
-                    return
-                except Company.DoesNotExist:
-                    logger.error(f"Company {company_id} not found from subscription metadata")
-
-            # PRIORITY 2: Find company by Stripe customer ID (fallback)
-            company_subscription = Subscription.objects.filter(stripe_customer_id=customer_id).first()
-
-            if company_subscription:
-                # Check if this was a blockchain subscription
-                line_items = stripe.Subscription.list_line_items(subscription["id"])
-                blockchain_price_id = getattr(settings, "STRIPE_BLOCKCHAIN_PRICE_ID", None)
-
-                for item in line_items.data:
-                    is_blockchain = (
-                        blockchain_price_id and item.price.id == blockchain_price_id
-                    ) or item.price.unit_amount == 500
-                    if is_blockchain:
-                        company_subscription.company.blockchain_subscription_status = False
-                        company_subscription.company.save()
-                        logger.info(
-                            f"Blockchain subscription deactivated for company {company_subscription.company.id}"
-                        )
-                        break
-            else:
-                logger.warning(f"No company subscription found for Stripe customer {customer_id} during deletion")
-        except Exception as e:
-            logger.error(f"Error handling subscription deleted: {str(e)}", exc_info=True)
-
-    def handle_payment_succeeded(self, invoice):
-        """Handle successful payment"""
-        try:
-            customer_id = invoice["customer"]
-            metadata = invoice.get("subscription_details", {}).get("metadata", {})
-
-            # PRIORITY 1: Check metadata for blockchain verification
-            subscription_type = metadata.get("subscription_type")
-            company_id = metadata.get("company_id")
-
-            if subscription_type == "blockchain_verification" and company_id:
-                try:
-                    company = Company.objects.get(id=company_id)
-                    company.blockchain_subscription_status = True
-                    company.save()
-                    logger.info(f"Blockchain payment succeeded via metadata for company {company_id}")
-                    return
-                except Company.DoesNotExist:
-                    logger.error(f"Company {company_id} not found from invoice metadata")
-
-            # PRIORITY 2: Find company by Stripe customer ID (fallback)
-            company_subscription = Subscription.objects.filter(stripe_customer_id=customer_id).first()
-
-            if company_subscription:
-                # Check if this payment includes blockchain verification
-                blockchain_price_id = getattr(settings, "STRIPE_BLOCKCHAIN_PRICE_ID", None)
-
-                for line in invoice["lines"]["data"]:
-                    price_id = line.get("price", {}).get("id")
-                    amount = line.get("amount")
-
-                    # Check by price ID (preferred) or fall back to amount (500 = $5.00)
-                    is_blockchain = (blockchain_price_id and price_id == blockchain_price_id) or amount == 500
-                    if is_blockchain:
-                        company_subscription.company.blockchain_subscription_status = True
-                        company_subscription.company.save()
-                        logger.info(
-                            f"Blockchain subscription payment succeeded for company "
-                            f"{company_subscription.company.id} (price_id: {price_id})"
-                        )
-                        break
-            else:
-                logger.warning(f"No company subscription found for Stripe customer {customer_id} during payment")
-        except Exception as e:
-            logger.error(f"Error handling payment succeeded: {str(e)}", exc_info=True)
-
-    def handle_payment_failed(self, invoice):
-        """Handle failed payment"""
-        try:
-            customer_id = invoice["customer"]
-
-            # Optionally deactivate blockchain subscription on payment failure
-            # This depends on your business logic
-            company_subscription = Subscription.objects.filter(stripe_customer_id=customer_id).first()
-
-            if company_subscription:
-                logger.warning(
-                    f"Payment failed for company {company_subscription.company.id} - blockchain subscription may be at risk"
-                )
-                # You might want to send notifications or grace period logic here
-        except Exception as e:
-            logger.error(f"Error handling payment failed: {str(e)}")

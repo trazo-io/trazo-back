@@ -87,10 +87,6 @@ if ".ondigitalocean.app" not in ALLOWED_HOSTS:
 CSRF_TRUSTED_ORIGINS = [
     "https://*.trazo.io",
     "https://trazo.io",
-    "https://api.trazo.io",
-    "https://api-staging.trazo.io",
-    # Add ALB domain for staging - using HTTP since ALB doesn't have SSL cert
-    "http://staging-alb-1273700937.us-east-2.elb.amazonaws.com",
 ]
 
 CORS_ORIGIN_ALLOW_ALL = False
@@ -114,7 +110,15 @@ CORS_ALLOWED_ORIGINS = [
     "https://staging.trazo.io",
 ]
 
-CSRF_COOKIE_DOMAIN = "trazo.io"
+CSRF_COOKIE_DOMAIN = ".trazo.io"
+
+# JWT cookie domain - must match CSRF for cross-subdomain auth (api.trazo.io -> app.trazo.io)
+SIMPLE_JWT = {
+    **SIMPLE_JWT,
+    "AUTH_COOKIE_DOMAIN": ".trazo.io",
+    "AUTH_COOKIE_SECURE": True,
+    "AUTH_COOKIE_SAMESITE": "Lax",
+}
 
 # When DEBUG is True, disable CSRF cookie security for non-SSL environments
 CSRF_COOKIE_SECURE = config("CSRF_COOKIE_SECURE", default=not DEBUG, cast=bool)
