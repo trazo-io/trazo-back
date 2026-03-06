@@ -191,7 +191,11 @@ class ReviewsViewSet(viewsets.ModelViewSet):
                 review_data = {
                     "id": review.id,
                     "user": review.user.get_full_name() if review.user else "Anonymous",
-                    "user_avatar": None,  # Add avatar logic if needed
+                    "user_avatar": (
+                        request.build_absolute_uri(review.user.image.url)
+                        if review.user and review.user.image
+                        else None
+                    ),
                     "date": review.date.strftime("%Y-%m-%d") if review.date else None,
                     "rating": review.rating,
                     "headline": review.headline or "",

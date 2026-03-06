@@ -6541,7 +6541,7 @@ class ProductionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = History
-        fields = ["id", "name", "start_date", "finish_date", "published", "transparency_score", "carbon_footprint"]
+        fields = ["id", "public_id", "name", "start_date", "finish_date", "published", "transparency_score", "carbon_footprint"]
 
     def get_transparency_score(self, obj):
         """Calculate transparency score using the same system as consumer pages"""

@@ -482,7 +482,7 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             "-date"
         )[:3]
         return Response(
-            ListReviewSerializer(reviews, many=True).data,
+            ListReviewSerializer(reviews, many=True, context={"request": request}).data,
             status=status.HTTP_200_OK,
         )
 

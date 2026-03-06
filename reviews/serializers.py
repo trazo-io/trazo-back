@@ -9,6 +9,7 @@ from .models import Review
 
 class ListReviewSerializer(serializers.ModelSerializer):
     user = serializers.SerializerMethodField()
+    user_avatar = serializers.SerializerMethodField()
     production = serializers.SerializerMethodField()
     date = serializers.DateTimeField(format="%d/%m/%Y", required=False)
 
@@ -20,6 +21,14 @@ class ListReviewSerializer(serializers.ModelSerializer):
         if review.user:
             return review.user.get_full_name()
         return "Anonymous"
+
+    def get_user_avatar(self, review):
+        if review.user and review.user.image:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(review.user.image.url)
+            return review.user.image.url
+        return None
 
     def get_production(self, review):
         return (
