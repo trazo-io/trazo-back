@@ -179,27 +179,13 @@ class Command(BaseCommand):
             role=WorksIn.COMPANY_ADMIN,
         )
 
-        # 4. Subscription
-        plan, _ = Plan.objects.get_or_create(
-            slug="standard",
-            defaults={
-                "name": "Standard",
-                "description": "Standard plan for mid-sized farms",
-                "price": Decimal("49.00"),
-                "interval": "monthly",
-                "features": {
-                    "max_establishments": 3,
-                    "max_parcels": 10,
-                    "max_productions_per_year": 20,
-                    "monthly_scan_limit": 10000,
-                    "storage_limit_gb": 50,
-                    "blockchain_verification": True,
-                    "carbon_calculations": True,
-                    "export_reports": True,
-                },
-                "is_active": True,
-            },
-        )
+        # 4. Subscription — use the plan from create_plans (single source of truth)
+        try:
+            plan = Plan.objects.get(slug="standard")
+        except Plan.DoesNotExist:
+            raise CommandError(
+                "Standard plan not found. Run 'python manage.py create_plans' first."
+            )
         now = timezone.now()
         Subscription.objects.create(
             company=company,
