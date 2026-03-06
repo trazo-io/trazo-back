@@ -1476,6 +1476,7 @@ class OptimizedHistoryListSerializer(serializers.ModelSerializer):
     parcel = serializers.SerializerMethodField()
     members = serializers.SerializerMethodField()
     crop_type = serializers.SerializerMethodField()
+    events_count = serializers.IntegerField(source="total_events_count", read_only=True, default=0)
 
     class Meta:
         model = History
@@ -1498,6 +1499,7 @@ class OptimizedHistoryListSerializer(serializers.ModelSerializer):
             "soil_ph",
             "crop_type",
             "transparency_score",  # Include for transparency calculations
+            "events_count",  # Annotated count of all events
             "extra_data",  # Include for carbon data
         ]
         read_only_fields = ["id", "public_id"]

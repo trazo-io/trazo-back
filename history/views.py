@@ -253,11 +253,14 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         # Ultra-minimal queryset - no events, no complex relationships
         # Note: We don't cache querysets directly as they can't be serialized
+        from django.db.models import Count
+
         queryset = (
             History.objects.select_related("product", "parcel", "crop_type")
             .only(
                 # Only fetch absolutely essential fields for the dashboard
                 "id",
+                "public_id",
                 "name",
                 "start_date",
                 "finish_date",
@@ -270,6 +273,7 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 "number_of_plants",
                 "soil_ph",
                 "extra_data",
+                "transparency_score",
                 "product__id",
                 "product__name",
                 "parcel__id",
@@ -278,6 +282,18 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 "crop_type__name",
                 "crop_type__category",
                 "crop_type__slug",
+            )
+            .annotate(
+                total_events_count=(
+                    Count("history_productionevent_events", distinct=True)
+                    + Count("history_chemicalevent_events", distinct=True)
+                    + Count("history_generalevent_events", distinct=True)
+                    + Count("history_equipmentevent_events", distinct=True)
+                    + Count("history_soilmanagementevent_events", distinct=True)
+                    + Count("history_pestmanagementevent_events", distinct=True)
+                    + Count("history_businessevent_events", distinct=True)
+                    + Count("history_weatherevent_events", distinct=True)
+                )
             )
             .order_by("-start_date")
         )

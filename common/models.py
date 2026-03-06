@@ -1,3 +1,5 @@
+from urllib.parse import urlparse
+
 from django.conf import settings
 from django.db import models
 
@@ -23,9 +25,26 @@ class GalleryImage(models.Model):
 
     @property
     def url(self):
+        """Return a permanent public URL for the image."""
+        region = getattr(settings, "AWS_S3_REGION_NAME", "us-east-2")
+        bucket = getattr(settings, "AWS_STORAGE_BUCKET_NAME", "trazo-media")
+        base = f"https://{bucket}.s3.{region}.amazonaws.com"
+
         if self.s3_key:
-            return f"https://{settings.AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com/{self.s3_key}"
+            return f"{base}/{self.s3_key}"
         elif self.image_url:
+            # Clean expired presigned params from legacy stored URLs
+            if "X-Amz-Signature" in self.image_url:
+                clean_url = self.image_url.split("?")[0]
+                # Fix legacy URLs missing region in hostname
+                if ".s3.amazonaws.com" in clean_url and f".s3.{region}." not in clean_url:
+                    try:
+                        parsed = urlparse(clean_url)
+                        key = parsed.path.lstrip("/")
+                        return f"{base}/{key}"
+                    except Exception:
+                        pass
+                return clean_url
             return self.image_url
         elif self.image:
             return self.image.url

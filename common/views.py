@@ -179,18 +179,15 @@ def get_presigned_url(request):
                 ExpiresIn=3600,  # URL expires after 1 hour
             )
 
-            # Generate a presigned URL for reading the file after upload
-            read_url = s3_client.generate_presigned_url(
-                "get_object",
-                Params={"Bucket": settings.AWS_STORAGE_BUCKET_NAME, "Key": key},
-                ExpiresIn=3600,  # URL expires after 1 hour
-            )
+            # Return the permanent S3 URL (not presigned) for storage in the database.
+            # Presigned read URLs are generated on-demand when viewing images.
+            permanent_url = f"https://{settings.AWS_STORAGE_BUCKET_NAME}.s3.{settings.AWS_S3_REGION_NAME}.amazonaws.com/{key}"
 
             return Response(
                 {
                     "presigned_url": presigned_url,
                     "s3_key": key,
-                    "file_url": read_url,  # Use presigned read URL instead of direct S3 URL
+                    "file_url": permanent_url,
                 }
             )
         except ClientError as e:
