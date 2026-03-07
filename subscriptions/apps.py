@@ -16,10 +16,10 @@ class SubscriptionsConfig(AppConfig):
         if not settings.DEBUG:
             key = getattr(settings, "STRIPE_SECRET_KEY", "")
             if key.startswith("sk_test_"):
-                from django.core.exceptions import ImproperlyConfigured
-
-                raise ImproperlyConfigured(
-                    "STRIPE_SECRET_KEY is a test key but DEBUG=False. " "Use a live key in production."
+                logger.warning(
+                    "STRIPE_SECRET_KEY is a test key but DEBUG=False. "
+                    "Payment features will use Stripe test mode. "
+                    "Set a live key before accepting real payments."
                 )
             if not key:
                 logger.warning("STRIPE_SECRET_KEY is empty. Payment features will not work.")
