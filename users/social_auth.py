@@ -221,6 +221,7 @@ class SocialAuthView(APIView):
             response_data = {
                 "user": BasicUserSerializer(user).data,
                 "user_type": user.user_type,
+                "is_new_user": created,
             }
 
             if invitation_result:
@@ -299,6 +300,7 @@ class SocialAuthView(APIView):
             response_data = {
                 "user": BasicUserSerializer(user).data,
                 "user_type": user.user_type,
+                "is_new_user": created,
             }
 
             if invitation_result:
@@ -390,6 +392,7 @@ class SocialAuthView(APIView):
             response_data = {
                 "user": BasicUserSerializer(user).data,
                 "user_type": user.user_type,
+                "is_new_user": created,
             }
 
             if invitation_result:

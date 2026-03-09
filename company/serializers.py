@@ -320,7 +320,50 @@ class RetrieveEstablishmentSerializer(ModelSerializer):
 
     class Meta:
         model = Establishment
-        fields = "__all__"
+        fields = [
+            "id",
+            "public_id",
+            "name",
+            "address",
+            "city",
+            "zone",
+            "state",
+            "company",
+            "album",
+            "description",
+            "country",
+            "type",
+            "latitude",
+            "longitude",
+            "contact_person",
+            "contact_phone",
+            "contact_email",
+            "certifications",
+            "about",
+            "main_activities",
+            "location_highlights",
+            "custom_message",
+            "email",
+            "phone",
+            "zip_code",
+            "is_active",
+            "crops_grown",
+            "sustainability_practices",
+            "employee_count",
+            "total_acreage",
+            "year_established",
+            "establishment_type",
+            "farming_method",
+            "water_sources",
+            "climate_zone",
+            "soil_types",
+            "conservation_practices",
+            "irrigation_methods",
+            # SerializerMethodFields
+            "parcels",
+            "images",
+        ]
+        read_only_fields = ["id", "public_id"]
 
     def get_images(self, establishment):
         try:
@@ -565,305 +608,153 @@ class CreateCompanySerializer(ModelSerializer):
 
 class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
     """
-    Transparency-first dashboard metrics for SmartUsageCard based on documentation completeness
+    Transparency-first dashboard metrics for SmartUsageCard.
+    Optimized: uses bulk queries instead of per-production loops.
     """
-
-    # Consumer engagement metrics
-    consumer_reach = serializers.IntegerField(help_text="Unique consumers reached this month")
-    monthly_scans = serializers.IntegerField(help_text="Total QR scans this month")
-    scan_growth_percentage = serializers.FloatField(help_text="Month-over-month scan growth")
-
-    # Transparency metrics (PRIMARY)
-    transparency_score = serializers.FloatField(help_text="Average transparency percentage (0-100%)")
-    documentation_completeness = serializers.FloatField(help_text="Documentation completeness percentage")
-    verification_level = serializers.CharField(help_text="Current verification level")
-
-    # Verification metrics
-    verified_productions = serializers.IntegerField(help_text="Productions with carbon verification")
-    total_productions = serializers.IntegerField(help_text="Total productions in establishment")
-    usda_factors_used_count = serializers.IntegerField(help_text="Productions using USDA factors")
-    blockchain_verified_count = serializers.IntegerField(help_text="Blockchain verified productions")
-
-    # Carbon context (SUPPORTING)
-    carbon_footprint_avg = serializers.FloatField(help_text="Average carbon footprint per kg")
-    carbon_negative_count = serializers.IntegerField(help_text="Carbon negative productions")
-    industry_percentile = serializers.IntegerField(
-        help_text="Industry percentile ranking (5-95, where 95=top performers) based on USDA benchmarks"
-    )
-
-    # Business impact metrics
-    transparency_engagement = serializers.FloatField(help_text="Transparency engagement score")
-
-    # Subscription context
-    subscription_usage_percentage = serializers.FloatField(help_text="Subscription limits usage %")
-    is_premium = serializers.BooleanField(help_text="Premium subscription status")
 
     def get_metrics_for_establishment(self, establishment):
         """
-        Calculate accurate metrics from backend data
+        Calculate dashboard metrics using bulk DB queries (no N+1).
+        Returns transparency-first metrics aligned with Trazo's mission.
         """
+        from django.db.models import Count, Sum
         from django.utils import timezone
 
+        from carbon.models import CarbonEntry
         from history.models import History, HistoryScan
+        from history.services.transparency_calculator import TransparencyCalculator
 
-        # Get current month date range
         now = timezone.now()
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         last_month_start = (month_start - timedelta(days=1)).replace(day=1)
 
-        # 1. CONSUMER REACH - Unique session hashes this month
-        # For producer dashboard: show ALL scans for business intelligence
+        # --- 1. CONSUMER ENGAGEMENT (2 queries) ---
         current_month_scans = HistoryScan.objects.filter(
             history__parcel__establishment=establishment,
             date__gte=month_start,
-            # Note: Removed consent filter for producer dashboard analytics
         )
-
         monthly_scans = current_month_scans.count()
 
-        # Calculate consumer reach with fallback methods
-        # Method 1: Try session_hash if available
-        session_based_reach = current_month_scans.exclude(session_hash="").values("session_hash").distinct().count()
-
-        if session_based_reach > 0:
-            consumer_reach = session_based_reach
+        # Consumer reach: unique sessions > unique IPs > estimate
+        session_reach = current_month_scans.exclude(session_hash="").values("session_hash").distinct().count()
+        if session_reach > 0:
+            consumer_reach = session_reach
         else:
-            # Method 2: Fallback to IP hash when session_hash is empty
-            ip_based_reach = current_month_scans.exclude(ip_hash="").values("ip_hash").distinct().count()
-            if ip_based_reach > 0:
-                consumer_reach = ip_based_reach
-            else:
-                # Method 3: Estimate based on scan patterns (conservative estimate)
-                # Assume 1 unique consumer per 20-50 scans for development data
-                consumer_reach = max(1, monthly_scans // 30) if monthly_scans > 0 else 0
+            ip_reach = current_month_scans.exclude(ip_hash="").values("ip_hash").distinct().count()
+            consumer_reach = ip_reach if ip_reach > 0 else (max(1, monthly_scans // 30) if monthly_scans > 0 else 0)
 
-        # 2. SCAN GROWTH - Month over month comparison
-        last_month_scans = HistoryScan.objects.filter(
+        # --- 2. SCAN GROWTH (1 query) ---
+        last_month_count = HistoryScan.objects.filter(
             history__parcel__establishment=establishment,
             date__gte=last_month_start,
             date__lt=month_start,
-            # Note: Removed consent filter for producer dashboard analytics
         ).count()
 
-        scan_growth_percentage = 0
-        if last_month_scans > 0:
-            scan_growth_percentage = ((monthly_scans - last_month_scans) / last_month_scans) * 100
-        elif monthly_scans > 0:
-            scan_growth_percentage = 100  # First month with scans
+        if last_month_count > 0:
+            scan_growth_percentage = ((monthly_scans - last_month_count) / last_month_count) * 100
+        else:
+            # First month: show 0 instead of misleading 100%
+            scan_growth_percentage = 0
 
-        # 3. TRANSPARENCY METRICS - Primary focus on documentation completeness
+        # --- 3. PRODUCTIONS + EVENT COUNTS (bulk, no N+1) ---
         establishment_histories = History.objects.filter(parcel__establishment=establishment)
         total_productions = establishment_histories.count()
 
-        # Calculate transparency scores using TransparencyCalculator
-        from django.db.models import Sum
+        # Count total documented events across all event types in bulk
+        from history.models import (
+            BusinessEvent,
+            ChemicalEvent,
+            EquipmentEvent,
+            GeneralEvent,
+            PestManagementEvent,
+            ProductionEvent,
+            SoilManagementEvent,
+            WeatherEvent,
+        )
 
-        from history.services.transparency_calculator import TransparencyCalculator
+        history_ids = list(establishment_histories.values_list("id", flat=True))
 
+        total_documented_events = 0
+        if history_ids:
+            event_models = [
+                ProductionEvent,
+                ChemicalEvent,
+                SoilManagementEvent,
+                PestManagementEvent,
+                WeatherEvent,
+                BusinessEvent,
+                GeneralEvent,
+                EquipmentEvent,
+            ]
+            for model in event_models:
+                total_documented_events += model.objects.filter(history_id__in=history_ids).count()
+
+        # --- 4. TRANSPARENCY SCORES (per-production, required by calculator) ---
         transparency_calc = TransparencyCalculator()
-
         transparency_scores = []
-        completeness_scores = []
-        verification_levels = []
-        industry_percentiles = []
-        usda_factors_used_count = 0
-        blockchain_verified_count = 0
-        carbon_negative_count = 0
-        carbon_footprints = []
 
-        for history in establishment_histories:
-            # Get transparency data for each production
-            transparency_data = transparency_calc.calculate_transparency_score(history)
-            transparency_scores.append(transparency_data.get("transparency_percentage", 0))
-            completeness_scores.append(transparency_data.get("completeness_score", 0))
+        for history in establishment_histories.select_related("crop_type").prefetch_related(
+            "history_productionevent_events__album__images",
+            "history_chemicalevent_events__album__images",
+            "history_soilmanagementevent_events__album__images",
+            "history_pestmanagementevent_events__album__images",
+            "history_weatherevent_events",
+            "history_businessevent_events",
+            "history_generalevent_events",
+            "history_equipmentevent_events__album__images",
+        ):
+            t_data = transparency_calc.calculate_transparency_score(history)
+            transparency_scores.append(t_data.get("transparency_percentage", 0))
 
-            # Get verification level
-            from carbon.services.carbon_transparency_service import transparency_service
-
-            verification_level = transparency_service.calculate_verification_level(history)
-            verification_levels.append(verification_level)
-
-            # Count USDA and blockchain verifications
-            from carbon.models import CarbonEntry
-
-            if CarbonEntry.objects.filter(production=history, usda_factors_based=True).exists():
-                usda_factors_used_count += 1
-
-            # Check for blockchain verification in History.extra_data (not CarbonEntry)
-            # Matches the logic used in EstablishmentViewSet.dashboard_comprehensive()
-            if hasattr(history, "extra_data") and history.extra_data and isinstance(history.extra_data, dict):
-                # Check root level first (current format)
-                is_blockchain_verified = history.extra_data.get("blockchain_verified", False)
-                # Fallback to nested format (legacy)
-                if not is_blockchain_verified:
-                    blockchain_data = history.extra_data.get("blockchain", {})
-                    if isinstance(blockchain_data, dict):
-                        is_blockchain_verified = blockchain_data.get("verified", False)
-                if is_blockchain_verified:
-                    blockchain_verified_count += 1
-
-            # Check for carbon negative productions
-            carbon_entries = CarbonEntry.objects.filter(production=history)
-            if carbon_entries.exists():
-                total_emissions = (
-                    carbon_entries.filter(type="emission").aggregate(Sum("co2e_amount"))["co2e_amount__sum"] or 0
-                )
-                total_offsets = (
-                    carbon_entries.filter(type="offset").aggregate(Sum("effective_amount"))["effective_amount__sum"]
-                    or 0
-                )
-                net_footprint = total_emissions - total_offsets
-
-                if net_footprint < 0:
-                    carbon_negative_count += 1
-
-                # Calculate per-kg footprint
-                production_amount = getattr(history, "production_amount", None)
-                if production_amount and production_amount > 0:
-                    carbon_footprints.append(net_footprint / production_amount)
-
-                # Calculate industry percentile for this production (USDA benchmark based)
-                # Uses the same logic as carbon/views.py ProductDetailView
-                try:
-                    from carbon.models import CarbonBenchmark
-
-                    crop_type = getattr(history, "crop_type", "unknown") or "unknown"
-                    crop_name = getattr(history, "crop_name", "") or ""
-                    current_year = history.start_date.year if history.start_date else timezone.now().year
-                    production_amount = getattr(history, "production_amount", None) or 1000
-                    net_footprint_per_kg = net_footprint / production_amount if production_amount > 0 else net_footprint
-
-                    # Try exact crop match first
-                    crop_benchmark = CarbonBenchmark.objects.filter(
-                        crop_type=crop_type, year=current_year, usda_factors_used=True
-                    ).first()
-
-                    if not crop_benchmark and crop_type != "unknown":
-                        # Try partial crop name matches
-                        crop_keywords = crop_name.lower().split()
-                        for keyword in crop_keywords:
-                            crop_benchmark = CarbonBenchmark.objects.filter(
-                                crop_type__icontains=keyword, year=current_year, usda_factors_used=True
-                            ).first()
-                            if crop_benchmark:
-                                break
-
-                    # Calculate percentile based on benchmark
-                    industry_percentile = 50  # Default
-                    if crop_benchmark:
-                        if net_footprint_per_kg <= 0:
-                            industry_percentile = 95  # Very good if carbon neutral/negative
-                        elif net_footprint_per_kg <= crop_benchmark.min_emissions:
-                            industry_percentile = 95  # Top performers
-                        elif net_footprint_per_kg >= crop_benchmark.max_emissions:
-                            industry_percentile = 5  # Bottom performers
-                        else:
-                            # Linear interpolation between min and max
-                            position = (net_footprint_per_kg - crop_benchmark.min_emissions) / (
-                                crop_benchmark.max_emissions - crop_benchmark.min_emissions
-                            )
-                            industry_percentile = max(5, min(95, int(95 - (position * 90))))
-                    else:
-                        # No benchmark available - estimate based on carbon score and offsets
-                        if total_offsets > 0:
-                            offset_percentage = (
-                                min(100, (total_offsets / total_emissions) * 100) if total_emissions > 0 else 100
-                            )
-                            if offset_percentage >= 100:
-                                industry_percentile = int(85 + min(15, ((offset_percentage - 100) / 50) * 15))
-                            else:
-                                industry_percentile = int(offset_percentage * 0.85)
-                        else:
-                            industry_percentile = 50
-
-                    industry_percentiles.append(industry_percentile)
-                except Exception:
-                    # Default to 50 if calculation fails
-                    industry_percentiles.append(50)
-            else:
-                # No carbon entries - default percentile
-                industry_percentiles.append(50)
-
-        # Calculate averages
         transparency_score = sum(transparency_scores) / len(transparency_scores) if transparency_scores else 0
-        documentation_completeness = sum(completeness_scores) / len(completeness_scores) if completeness_scores else 0
-        carbon_footprint_avg = sum(carbon_footprints) / len(carbon_footprints) if carbon_footprints else 0
-        industry_percentile_avg = (
-            int(sum(industry_percentiles) / len(industry_percentiles)) if industry_percentiles else 50
-        )
 
-        # Determine overall verification level
-        verification_level_counts = {}
-        for level in verification_levels:
-            verification_level_counts[level] = verification_level_counts.get(level, 0) + 1
-        verification_level = (
-            max(verification_level_counts.items(), key=lambda x: x[1])[0] if verification_level_counts else "Limited"
-        )
+        # --- 5. BLOCKCHAIN COUNT (bulk, from extra_data JSON) ---
+        blockchain_verified_count = 0
+        for h in establishment_histories.only("extra_data"):
+            if h.extra_data and isinstance(h.extra_data, dict):
+                if h.extra_data.get("blockchain_verified", False):
+                    blockchain_verified_count += 1
+                elif isinstance(h.extra_data.get("blockchain"), dict):
+                    if h.extra_data["blockchain"].get("verified", False):
+                        blockchain_verified_count += 1
 
-        # 4. VERIFIED PRODUCTIONS - Count with carbon data
-        verified_productions = (
-            establishment_histories.filter(
-                Q(carbonentry__isnull=False) | Q(carbonreport__isnull=False) | Q(carbon_intelligence__isnull=False)
-            )
-            .distinct()
-            .count()
-        )
-
-        # 5. TRANSPARENCY ENGAGEMENT - Trazo's Value Proposition
-        transparency_engagement = 0
-        if consumer_reach > 0 and monthly_scans > 0:
-            # TRANSPARENCY ENGAGEMENT SCORE: Combination of reach, documentation, and verification
-            # This represents the value Trazo provides: consumer engagement with farm transparency
-            engagement_base = consumer_reach * 10  # Each unique consumer = 10 points
-            scan_multiplier = min(monthly_scans / 10, 5)  # Up to 5x multiplier for scan frequency
-            transparency_bonus = transparency_score * 2  # Transparency documentation adds value
-            # Blockchain is actual on-chain verification; USDA factors are methodology, not verification
-            blockchain_bonus = blockchain_verified_count * 15  # Blockchain adds trust (immutable records)
-            methodology_bonus = usda_factors_used_count * 5  # EPA/USDA factors are standard methodology
-            verification_bonus = blockchain_bonus + methodology_bonus
-
-            # Calculate transparency engagement score
-            transparency_engagement = engagement_base * scan_multiplier + transparency_bonus + verification_bonus
-
-            # Cap at reasonable display value
-            transparency_engagement = min(transparency_engagement, 1000)
+        # --- 6. TRANSPARENCY PERCENTILE (based on transparency score, NOT carbon) ---
+        # Rank this farm's transparency against platform average
+        # This aligns with transparency-first: more documentation = better ranking
+        if transparency_score >= 90:
+            transparency_percentile = 95
+        elif transparency_score >= 80:
+            transparency_percentile = 85
+        elif transparency_score >= 70:
+            transparency_percentile = 75
+        elif transparency_score >= 60:
+            transparency_percentile = 60
+        elif transparency_score >= 40:
+            transparency_percentile = 40
         else:
-            # Fallback for new farms - based on documentation quality
-            transparency_engagement = transparency_score * 5 + verified_productions * 25
+            transparency_percentile = max(5, int(transparency_score))
 
-        # 8. SUBSCRIPTION CONTEXT - From company subscription
+        # --- 7. SUBSCRIPTION CONTEXT ---
         subscription = establishment.company.subscription if hasattr(establishment.company, "subscription") else None
         subscription_usage_percentage = 0
-        is_premium = False
-
         if subscription:
             max_productions = subscription.plan.features.get("max_productions_per_year", 100)
             if max_productions > 0:
                 subscription_usage_percentage = (subscription.used_productions / max_productions) * 100
 
-            is_premium = subscription.plan.name.lower() in ["premium", "enterprise"]
-
         return {
-            # Consumer engagement metrics
+            # Consumer engagement
             "consumer_reach": consumer_reach,
             "monthly_scans": monthly_scans,
             "scan_growth_percentage": round(scan_growth_percentage, 1),
-            # Transparency metrics (PRIMARY)
+            # Transparency (PRIMARY)
             "transparency_score": round(transparency_score, 1),
-            "documentation_completeness": round(documentation_completeness, 1),
-            "verification_level": verification_level,
-            # Verification metrics
-            "verified_productions": verified_productions,
+            "total_documented_events": total_documented_events,
+            # Production counts
             "total_productions": total_productions,
-            "usda_factors_used_count": usda_factors_used_count,
             "blockchain_verified_count": blockchain_verified_count,
-            # Carbon context (SUPPORTING)
-            "carbon_footprint_avg": round(carbon_footprint_avg, 3),
-            "carbon_negative_count": carbon_negative_count,
-            "industry_percentile": industry_percentile_avg,
-            # Business impact metrics
-            "transparency_engagement": round(transparency_engagement, 2),
-            # Subscription context
+            # Transparency-based ranking
+            "transparency_percentile": transparency_percentile,
+            # Subscription
             "subscription_usage_percentage": round(subscription_usage_percentage, 1),
-            "is_premium": is_premium,
         }

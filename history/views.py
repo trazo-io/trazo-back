@@ -1066,9 +1066,7 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # Skip scan tracking for authenticated producers viewing their own production
         is_owner = False
         if request.user.is_authenticated and history.parcel and history.parcel.establishment:
-            is_owner = request.user.companies.filter(
-                id=history.parcel.establishment.company_id
-            ).exists()
+            is_owner = request.user.companies.filter(id=history.parcel.establishment.company_id).exists()
 
         history_scan = None
         if not is_owner:
@@ -1110,9 +1108,7 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
                 from users.models import WorksIn
 
-                company_admins = WorksIn.objects.filter(
-                    company=company, role="CA"
-                ).select_related("user")
+                company_admins = WorksIn.objects.filter(company=company, role="CA").select_related("user")
 
                 for admin_relation in company_admins:
                     product_owner = admin_relation.user
@@ -1756,6 +1752,14 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
             if comment is None:
                 return Response({"error": "Comment is required"}, status=status.HTTP_400_BAD_REQUEST)
 
+            # SECURITY: Prevent overwriting existing comments (IDOR protection)
+            # Anonymous consumers can only set a comment once per scan
+            if history_scan.comment and history_scan.comment.strip():
+                return Response(
+                    {"error": "Comment already exists for this scan"},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
             # Validate comment
             if len(comment) > 1000:
                 return Response({"error": "Comment too long (max 1000 characters)"}, status=status.HTTP_400_BAD_REQUEST)
@@ -2145,6 +2149,26 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
                     # Create GalleryImage records from S3 URLs with Vision API validation
                     for idx, image_url in enumerate(album_images, 1):
+                        # SECURITY: Validate image URL against allowed S3 domains to prevent SSRF
+                        from urllib.parse import urlparse
+
+                        parsed_url = urlparse(image_url)
+                        allowed_hosts = set()
+                        if hasattr(settings, "AWS_STORAGE_BUCKET_NAME") and settings.AWS_STORAGE_BUCKET_NAME:
+                            bucket = settings.AWS_STORAGE_BUCKET_NAME
+                            region = getattr(settings, "AWS_S3_REGION_NAME", "us-east-1")
+                            allowed_hosts.update(
+                                {
+                                    f"{bucket}.s3.amazonaws.com",
+                                    f"{bucket}.s3.{region}.amazonaws.com",
+                                    f"s3.amazonaws.com",
+                                    f"s3.{region}.amazonaws.com",
+                                }
+                            )
+                        if parsed_url.scheme != "https" or (allowed_hosts and parsed_url.hostname not in allowed_hosts):
+                            logger.warning("Rejected image URL (SSRF protection): %s", image_url)
+                            continue
+
                         # Extract S3 key from URL if possible
                         s3_key = image_url.split("/")[-1] if "/" in image_url else None
 
@@ -2266,6 +2290,8 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # Handle adding NEW images (S3 URLs) - handled here for ALL event types
         album_images = request.data.get("album_images", [])
         if album_images:
+            from urllib.parse import urlparse
+
             from .models import Gallery
 
             # Create album if doesn't exist
@@ -2275,6 +2301,24 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
             # Add new images to album
             for image_url in album_images:
+                # SECURITY: Validate image URL against allowed S3 domains to prevent SSRF
+                parsed_url = urlparse(image_url)
+                allowed_hosts = set()
+                if hasattr(settings, "AWS_STORAGE_BUCKET_NAME") and settings.AWS_STORAGE_BUCKET_NAME:
+                    bucket = settings.AWS_STORAGE_BUCKET_NAME
+                    region = getattr(settings, "AWS_S3_REGION_NAME", "us-east-1")
+                    allowed_hosts.update(
+                        {
+                            f"{bucket}.s3.amazonaws.com",
+                            f"{bucket}.s3.{region}.amazonaws.com",
+                            f"s3.amazonaws.com",
+                            f"s3.{region}.amazonaws.com",
+                        }
+                    )
+                if parsed_url.scheme != "https" or (allowed_hosts and parsed_url.hostname not in allowed_hosts):
+                    logger.warning("Rejected image URL (SSRF protection): %s", image_url)
+                    continue
+
                 s3_key = image_url.split("/")[-1] if "/" in image_url else None
 
                 # MVP Photo Verification: Run Vision API validation on event photos

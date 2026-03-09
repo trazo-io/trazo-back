@@ -30,8 +30,13 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         # Create user-specific group
         self.user_group_name = f"user_{self.user.id}"
 
-        # Accept connection
-        await self.accept()
+        # SECURITY: Accept with 'access_token' subprotocol if requested
+        # This matches the frontend sending token via Sec-WebSocket-Protocol
+        subprotocols = self.scope.get("subprotocols", [])
+        if "access_token" in subprotocols:
+            await self.accept(subprotocol="access_token")
+        else:
+            await self.accept()
 
         # Join user group
         await self.channel_layer.group_add(self.user_group_name, self.channel_name)

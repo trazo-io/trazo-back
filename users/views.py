@@ -58,10 +58,16 @@ class UserViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         if self.request.user.is_superuser:
             return User.objects.all()
+        # SECURITY: Non-superusers can only access their own profile
+        return User.objects.filter(id=self.request.user.id)
 
     def get_object(self):
+        # SECURITY: Always use get_queryset() to enforce access control
+        queryset = self.get_queryset()
         lookup_field_value = self.kwargs[self.lookup_field]
-        obj = User.objects.get(id=lookup_field_value)
+        from django.shortcuts import get_object_or_404
+
+        obj = get_object_or_404(queryset, id=lookup_field_value)
         self.check_object_permissions(self.request, obj)
 
         return obj
@@ -717,11 +723,7 @@ class CustomTokenRefreshView(TokenRefreshView):
         refresh_token = serializer.validated_data["refresh"]
 
         # Strip tokens from response body — they are set as httpOnly cookies only
-        response_data = {
-            k: v
-            for k, v in serializer.validated_data.items()
-            if k not in ("access", "refresh")
-        }
+        response_data = {k: v for k, v in serializer.validated_data.items() if k not in ("access", "refresh")}
         response = Response(response_data, status=status.HTTP_200_OK)
         self._set_auth_cookies(response, access_token, refresh_token, request)
         return response

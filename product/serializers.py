@@ -207,7 +207,51 @@ class CreateParcelSerializer(ModelSerializer):
 
     class Meta:
         model = Parcel
-        fields = "__all__"
+        fields = [
+            # Model fields
+            "id",
+            "name",
+            "description",
+            "album",
+            "establishment",
+            "product",
+            "area",
+            "certified",
+            "current_history",
+            "polygon",
+            "map_metadata",
+            "soil_type",
+            "unique_code",
+            "certification_type",
+            "contact_person",
+            "contact_phone",
+            "contact_email",
+            "address",
+            "agricultural_details",
+            "carbon_calculation_enabled",
+            "usda_compliance_eligible",
+            # Extra write-only fields declared above
+            "uploaded_image_urls",
+            "s3_keys",
+            "soil_ph",
+            "soil_organic_matter",
+            "soil_nitrogen",
+            "soil_phosphorus",
+            "soil_potassium",
+            "cover_crop_management",
+            "irrigation_efficiency",
+            "organic_certification_status",
+            "nrcs_practices",
+            "carbon_sequestration_practices",
+            "transparency_description",
+            "sustainability_practices",
+            "consumer_story",
+            "crop_focus",
+            "transparency_ready",
+            # SerializerMethodField
+            "image",
+        ]
+        read_only_fields = ["id"]
 
     def get_product(self, parcel):
         return None

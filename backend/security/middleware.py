@@ -36,9 +36,10 @@ class SecurityHeadersMiddleware(MiddlewareMixin):
         response["Referrer-Policy"] = "strict-origin-when-cross-origin"
 
         # Permissions-Policy: Control browser features
+        # SECURITY: microphone=(self) required for voice recording feature (Deepgram)
         response["Permissions-Policy"] = (
             "geolocation=(), "
-            "microphone=(), "
+            "microphone=(self), "
             "camera=(), "
             "magnetometer=(), "
             "gyroscope=(), "
@@ -89,7 +90,7 @@ class SecurityHeadersMiddleware(MiddlewareMixin):
             ],
             "connect-src": [
                 "'self'",
-                "https://api.trazo.com" if not settings.DEBUG else "http://localhost:8000",
+                "https://api.trazo.io" if not settings.DEBUG else "http://localhost:8000",
                 "https://api.pwnedpasswords.com",  # For password breach checking
                 "https://accounts.google.com",
                 "https://graph.facebook.com",

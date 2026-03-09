@@ -21,8 +21,17 @@ class StandardResultsSetPagination(PageNumberPagination):
 class ReviewsViewSet(viewsets.ModelViewSet):
     queryset = Review.objects.all()
     serializer_class = ReviewSerializer
-    permission_classes = [permissions.AllowAny]
     filter_backends = [filters.OrderingFilter]
+
+    def get_permissions(self):
+        # SECURITY: Only allow read operations for unauthenticated users
+        if self.action in ["list", "retrieve"]:
+            return [permissions.AllowAny()]
+        # Create allowed for anyone (consumer reviews from QR page)
+        if self.action == "create":
+            return [permissions.AllowAny()]
+        # Update/delete requires authentication
+        return [permissions.IsAuthenticated()]
 
     def get_serializer_class(self):
         if self.action == "list":
@@ -192,9 +201,7 @@ class ReviewsViewSet(viewsets.ModelViewSet):
                     "id": review.id,
                     "user": review.user.get_full_name() if review.user else "Anonymous",
                     "user_avatar": (
-                        request.build_absolute_uri(review.user.image.url)
-                        if review.user and review.user.image
-                        else None
+                        request.build_absolute_uri(review.user.image.url) if review.user and review.user.image else None
                     ),
                     "date": review.date.strftime("%Y-%m-%d") if review.date else None,
                     "rating": review.rating,

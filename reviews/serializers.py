@@ -15,7 +15,17 @@ class ListReviewSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Review
-        fields = "__all__"
+        fields = [
+            "id",
+            "headline",
+            "written_review",
+            "date",
+            "rating",
+            "user",
+            "user_avatar",
+            "production",
+            "images",
+        ]
 
     def get_user(self, review):
         if review.user:
@@ -42,13 +52,23 @@ class ListReviewSerializer(serializers.ModelSerializer):
 
 class ReviewSerializer(serializers.ModelSerializer):
     production_public_id = serializers.UUIDField(write_only=True, required=False)
-    production = serializers.PrimaryKeyRelatedField(
-        queryset=History.objects.all(), required=False
-    )
+    production = serializers.PrimaryKeyRelatedField(queryset=History.objects.all(), required=False)
 
     class Meta:
         model = Review
-        fields = "__all__"
+        fields = [
+            "id",
+            "headline",
+            "written_review",
+            "date",
+            "rating",
+            "user",
+            "production",
+            "production_public_id",
+            "scan",
+            "images",
+        ]
+        read_only_fields = ["id", "date"]
 
     def validate(self, data):
         """Support both integer production ID and UUID production_public_id."""
@@ -59,13 +79,9 @@ class ReviewSerializer(serializers.ModelSerializer):
                 production = History.objects.get(public_id=production_public_id)
                 data["production"] = production
             except History.DoesNotExist:
-                raise serializers.ValidationError(
-                    {"production_public_id": "Production not found."}
-                )
+                raise serializers.ValidationError({"production_public_id": "Production not found."})
 
         if not data.get("production"):
-            raise serializers.ValidationError(
-                {"production": "Production is required."}
-            )
+            raise serializers.ValidationError({"production": "Production is required."})
 
         return data

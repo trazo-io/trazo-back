@@ -7,7 +7,17 @@ from .models import Gallery, GalleryImage
 class GalleryImageSerializer(serializers.ModelSerializer):
     class Meta:
         model = GalleryImage
-        fields = "__all__"
+        fields = [
+            "id",
+            "gallery",
+            "image",
+            "s3_key",
+            "image_url",
+            "extra_data",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
 
 
 class GallerySerializer(serializers.ModelSerializer):
@@ -15,7 +25,13 @@ class GallerySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Gallery
-        fields = "__all__"
+        fields = [
+            "id",
+            "images",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
 
     # def create(self, validated_data):
     #     images_data = self.context.get("request").FILES

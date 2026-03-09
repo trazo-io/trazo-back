@@ -129,7 +129,20 @@ class EventSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CommonEvent
-        fields = "__all__"
+        fields = [
+            "id",
+            "description",
+            "date",
+            "album",
+            "history",
+            "index",
+            "created_by",
+            "performed_by",
+            "image",
+            "carbon_data",
+            "verification_level",
+        ]
+        read_only_fields = ["id", "index", "created_by"]
 
     def get_image(self, event):
         if event.album is not None and event.album.images.exists():
@@ -365,7 +378,48 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
 
     class Meta:
         model = ChemicalEvent
-        fields = "__all__"
+        fields = [
+            "id",
+            "description",
+            "date",
+            "album",
+            "history",
+            "performed_by",
+            "type",
+            "chemical_subtype",
+            "commercial_name",
+            "volume",
+            "concentration",
+            "area",
+            "way_of_application",
+            "time_period",
+            "observation",
+            "extra_data",
+            "name",
+            "nitrogen_percentage",
+            "phosphorus_percentage",
+            "potassium_percentage",
+            "application_method_structured",
+            "application_fuel_type",
+            "application_fuel_consumed",
+            "application_fuel_unit",
+            "weather_conditions",
+            "application_timing",
+            "target_pest_disease",
+            "organic_approved",
+            "buffer_zone_meters",
+            "applicator_name",
+            "epa_registration_number",
+            "restricted_use_pesticide",
+            "applicator_certification",
+            "rei_hours",
+            "phi_days",
+            # Aliased frontend field names (mapped via source above)
+            "volume_applied",
+            "area_treated",
+            "application_method",
+        ]
+        read_only_fields = ["id"]
         # Allow both old and new field names by making old fields optional
         extra_kwargs = {
             "volume": {"required": False, "allow_blank": True, "allow_null": True},
@@ -614,7 +668,51 @@ class ChemicalEventSerializer(EventSerializer):
 
     class Meta:
         model = ChemicalEvent
-        fields = "__all__"
+        fields = [
+            "id",
+            "description",
+            "date",
+            "album",
+            "history",
+            "index",
+            "created_by",
+            "performed_by",
+            "type",
+            "chemical_type",
+            "event_type",
+            "chemical_subtype",
+            "commercial_name",
+            "volume",
+            "concentration",
+            "area",
+            "way_of_application",
+            "time_period",
+            "observation",
+            "extra_data",
+            "name",
+            "nitrogen_percentage",
+            "phosphorus_percentage",
+            "potassium_percentage",
+            "application_method_structured",
+            "application_fuel_type",
+            "application_fuel_consumed",
+            "application_fuel_unit",
+            "weather_conditions",
+            "application_timing",
+            "target_pest_disease",
+            "organic_approved",
+            "buffer_zone_meters",
+            "applicator_name",
+            "epa_registration_number",
+            "restricted_use_pesticide",
+            "applicator_certification",
+            "rei_hours",
+            "phi_days",
+            "image",
+            "carbon_data",
+            "verification_level",
+        ]
+        read_only_fields = ["id", "index", "created_by"]
 
     @staticmethod
     def _parse_value_with_unit(raw_value, default_unit=""):
@@ -738,7 +836,18 @@ class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
 
     class Meta:
         model = WeatherEvent
-        fields = "__all__"
+        fields = [
+            "id",
+            "description",
+            "date",
+            "album",
+            "history",
+            "performed_by",
+            "type",
+            "observation",
+            "extra_data",
+        ]
+        read_only_fields = ["id"]
 
     def to_internal_value(self, data):
         event_type = data.get("type", None)
@@ -1092,7 +1201,24 @@ class WeatherEventSerializer(EventSerializer):
 
     class Meta:
         model = WeatherEvent
-        fields = "__all__"
+        fields = [
+            "id",
+            "description",
+            "date",
+            "album",
+            "history",
+            "index",
+            "created_by",
+            "performed_by",
+            "type",
+            "event_type",
+            "observation",
+            "extra_data",
+            "image",
+            "carbon_data",
+            "verification_level",
+        ]
+        read_only_fields = ["id", "index", "created_by"]
 
     def get_type(self, weather_event):
         type_display = weather_event.get_type_display()
@@ -1115,7 +1241,39 @@ class WeatherEventSerializer(EventSerializer):
 class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerializer):
     class Meta:
         model = ProductionEvent
-        fields = "__all__"
+        fields = [
+            "id",
+            "description",
+            "date",
+            "album",
+            "history",
+            "performed_by",
+            "type",
+            "observation",
+            "extra_data",
+            "name",
+            "area_covered",
+            "area_unit",
+            "yield_quantity",
+            "yield_unit",
+            "fuel_consumed",
+            "fuel_unit",
+            "fuel_type",
+            "equipment_hours",
+            "transportation_distance",
+            "transportation_unit",
+            "production_efficiency",
+            "seeds_source",
+            "water_source",
+            "irrigation_method",
+            "irrigation_depth",
+            "irrigation_depth_unit",
+            "equipment_type",
+            "equipment_operation_type",
+            "harvest_quality_grade",
+            "grain_moisture",
+        ]
+        read_only_fields = ["id"]
 
     # Fields captured from Quick Add forms that are stored in extra_data
     # (not model fields on ProductionEvent, but valuable for consumer display)
@@ -1347,7 +1505,46 @@ class ProductionEventSerializer(CustomFieldsMixin, EventSerializer):
 
     class Meta:
         model = ProductionEvent
-        fields = "__all__"
+        fields = [
+            "id",
+            "description",
+            "date",
+            "album",
+            "history",
+            "index",
+            "created_by",
+            "performed_by",
+            "type",
+            "event_type",
+            "production_type",
+            "observation",
+            "extra_data",
+            "name",
+            "area_covered",
+            "area_unit",
+            "yield_quantity",
+            "yield_unit",
+            "fuel_consumed",
+            "fuel_unit",
+            "fuel_type",
+            "equipment_hours",
+            "transportation_distance",
+            "transportation_unit",
+            "production_efficiency",
+            "seeds_source",
+            "water_source",
+            "irrigation_method",
+            "irrigation_depth",
+            "irrigation_depth_unit",
+            "equipment_type",
+            "equipment_operation_type",
+            "harvest_quality_grade",
+            "grain_moisture",
+            "image",
+            "carbon_data",
+            "verification_level",
+        ]
+        read_only_fields = ["id", "index", "created_by"]
 
     def get_type(self, production_event):
         type_display = production_event.get_type_display()
@@ -1396,7 +1593,22 @@ class ProductionEventSerializer(CustomFieldsMixin, EventSerializer):
 class UpdateGeneralEventSerializer(CustomFieldsMixin, serializers.ModelSerializer):
     class Meta:
         model = GeneralEvent
-        fields = "__all__"
+        fields = [
+            "id",
+            "description",
+            "date",
+            "album",
+            "history",
+            "performed_by",
+            "name",
+            "observation",
+            "activity_type",
+            "activity_name",
+            "duration",
+            "people_involved",
+            "extra_data",
+        ]
+        read_only_fields = ["id"]
 
     def to_internal_value(self, data):
         """Handle custom fields and field name remapping for general events."""
@@ -1457,7 +1669,29 @@ class GeneralEventSerializer(EventSerializer):
 
     class Meta:
         model = GeneralEvent
-        fields = "__all__"
+        fields = [
+            "id",
+            "description",
+            "date",
+            "album",
+            "history",
+            "index",
+            "created_by",
+            "performed_by",
+            "type",
+            "event_type",
+            "name",
+            "observation",
+            "activity_type",
+            "activity_name",
+            "duration",
+            "people_involved",
+            "extra_data",
+            "image",
+            "carbon_data",
+            "verification_level",
+        ]
+        read_only_fields = ["id", "index", "created_by"]
 
     def get_type(self, general_event):
         return f"event.general.{general_event.name.lower().replace(' ', '_')}"
@@ -2984,7 +3218,32 @@ class HistoryListOptionsSerializer(serializers.ModelSerializer):
 class UpdateEquipmentEventSerializer(CustomFieldsMixin, serializers.ModelSerializer):
     class Meta:
         model = EquipmentEvent
-        fields = "__all__"
+        fields = [
+            "id",
+            "description",
+            "date",
+            "album",
+            "history",
+            "performed_by",
+            "type",
+            "equipment_name",
+            "fuel_amount",
+            "fuel_type",
+            "maintenance_cost",
+            "hours_used",
+            "area_covered",
+            "extra_data",
+            "name",
+            "equipment_type_structured",
+            "fuel_consumed",
+            "fuel_unit",
+            "hours_operated",
+            "area_worked",
+            "area_unit",
+            "operation_efficiency",
+            "observation",
+        ]
+        read_only_fields = ["id"]
 
     def to_internal_value(self, data):
         """
@@ -3182,7 +3441,38 @@ class EquipmentEventSerializer(EventSerializer):
 
     class Meta:
         model = EquipmentEvent
-        fields = "__all__"
+        fields = [
+            "id",
+            "description",
+            "date",
+            "album",
+            "history",
+            "index",
+            "created_by",
+            "performed_by",
+            "type",
+            "event_type",
+            "equipment_name",
+            "fuel_amount",
+            "fuel_type",
+            "maintenance_cost",
+            "hours_used",
+            "area_covered",
+            "extra_data",
+            "name",
+            "equipment_type_structured",
+            "fuel_consumed",
+            "fuel_unit",
+            "hours_operated",
+            "area_worked",
+            "area_unit",
+            "operation_efficiency",
+            "observation",
+            "image",
+            "carbon_data",
+            "verification_level",
+        ]
+        read_only_fields = ["id", "index", "created_by"]
 
     def get_type(self, equipment_event):
         type_display = equipment_event.get_type_display()
@@ -3198,7 +3488,40 @@ class EquipmentEventSerializer(EventSerializer):
 class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSerializer):
     class Meta:
         model = SoilManagementEvent
-        fields = "__all__"
+        fields = [
+            "id",
+            "description",
+            "date",
+            "album",
+            "history",
+            "performed_by",
+            "type",
+            "soil_ph",
+            "organic_matter_percentage",
+            "amendment_type",
+            "amendment_amount",
+            "test_results",
+            "carbon_sequestration_potential",
+            "extra_data",
+            "name",
+            "area_covered",
+            "area_unit",
+            "fuel_consumed",
+            "fuel_unit",
+            "fuel_type",
+            "equipment_hours",
+            "transportation_distance",
+            "transportation_unit",
+            "production_efficiency",
+            "working_depth",
+            "depth_unit",
+            "soil_texture",
+            "soil_moisture",
+            "weather_conditions",
+            "temperature_range",
+            "equipment_used",
+        ]
+        read_only_fields = ["id"]
 
     def to_internal_value(self, data):
         """
@@ -3295,7 +3618,46 @@ class SoilManagementEventSerializer(EventSerializer):
 
     class Meta:
         model = SoilManagementEvent
-        fields = "__all__"
+        fields = [
+            "id",
+            "description",
+            "date",
+            "album",
+            "history",
+            "index",
+            "created_by",
+            "performed_by",
+            "type",
+            "event_type",
+            "soil_ph",
+            "organic_matter_percentage",
+            "amendment_type",
+            "amendment_amount",
+            "test_results",
+            "carbon_sequestration_potential",
+            "extra_data",
+            "name",
+            "area_covered",
+            "area_unit",
+            "fuel_consumed",
+            "fuel_unit",
+            "fuel_type",
+            "equipment_hours",
+            "transportation_distance",
+            "transportation_unit",
+            "production_efficiency",
+            "working_depth",
+            "depth_unit",
+            "soil_texture",
+            "soil_moisture",
+            "weather_conditions",
+            "temperature_range",
+            "equipment_used",
+            "image",
+            "carbon_data",
+            "verification_level",
+        ]
+        read_only_fields = ["id", "index", "created_by"]
 
     def get_type(self, soil_event):
         type_display = soil_event.get_type_display()
@@ -3311,7 +3673,34 @@ class SoilManagementEventSerializer(EventSerializer):
 class UpdatePestManagementEventSerializer(CustomFieldsMixin, serializers.ModelSerializer):
     class Meta:
         model = PestManagementEvent
-        fields = "__all__"
+        fields = [
+            "id",
+            "description",
+            "date",
+            "album",
+            "history",
+            "performed_by",
+            "type",
+            "pest_species",
+            "pest_pressure_level",
+            "beneficial_species",
+            "release_quantity",
+            "trap_count",
+            "damage_percentage",
+            "action_threshold_met",
+            "ipm_strategy",
+            "extra_data",
+            "beneficial_insects_used",
+            "chemical_free_period_days",
+            "area_covered",
+            "area_unit",
+            "fuel_consumed",
+            "fuel_unit",
+            "fuel_type",
+            "equipment_hours",
+            "production_efficiency",
+        ]
+        read_only_fields = ["id"]
 
     def to_internal_value(self, data):
         """
@@ -3410,7 +3799,40 @@ class PestManagementEventSerializer(EventSerializer):
 
     class Meta:
         model = PestManagementEvent
-        fields = "__all__"
+        fields = [
+            "id",
+            "description",
+            "date",
+            "album",
+            "history",
+            "index",
+            "created_by",
+            "performed_by",
+            "type",
+            "event_type",
+            "pest_species",
+            "pest_pressure_level",
+            "beneficial_species",
+            "release_quantity",
+            "trap_count",
+            "damage_percentage",
+            "action_threshold_met",
+            "ipm_strategy",
+            "extra_data",
+            "beneficial_insects_used",
+            "chemical_free_period_days",
+            "area_covered",
+            "area_unit",
+            "fuel_consumed",
+            "fuel_unit",
+            "fuel_type",
+            "equipment_hours",
+            "production_efficiency",
+            "image",
+            "carbon_data",
+            "verification_level",
+        ]
+        read_only_fields = ["id", "index", "created_by"]
 
     def get_type(self, pest_event):
         type_display = pest_event.get_type_display()
@@ -3434,7 +3856,27 @@ class PestManagementEventSerializer(EventSerializer):
 class UpdateBusinessEventSerializer(CustomFieldsMixin, serializers.ModelSerializer):
     class Meta:
         model = BusinessEvent
-        fields = "__all__"
+        fields = [
+            "id",
+            "description",
+            "date",
+            "album",
+            "history",
+            "performed_by",
+            "type",
+            "name",
+            "business_type",
+            "certification_type",
+            "carbon_credits_earned",
+            "carbon_credits_unit",
+            "verification_status",
+            "sustainability_practice",
+            "verified_certifier_name",
+            "certificate_number",
+            "observation",
+            "extra_data",
+        ]
+        read_only_fields = ["id"]
 
     def to_internal_value(self, data):
         """
@@ -3584,7 +4026,37 @@ class BusinessEventSerializer(EventSerializer):
 
     class Meta:
         model = BusinessEvent
-        fields = "__all__"
+        fields = [
+            "id",
+            "description",
+            "date",
+            "album",
+            "history",
+            "index",
+            "created_by",
+            "performed_by",
+            "type",
+            "event_type",
+            "name",
+            "business_type",
+            "business_type_display",
+            "certification_type",
+            "certification_type_display",
+            "carbon_credits_earned",
+            "carbon_credits_unit",
+            "verification_status",
+            "verification_status_display",
+            "sustainability_practice",
+            "sustainability_practice_display",
+            "verified_certifier_name",
+            "certificate_number",
+            "observation",
+            "extra_data",
+            "image",
+            "carbon_data",
+            "verification_level",
+        ]
+        read_only_fields = ["id", "index", "created_by"]
 
     def get_type(self, business_event):
         type_display = business_event.get_type_display()

@@ -93,9 +93,7 @@ class CompanyViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             )
 
         # Re-serialize with RetrieveCompanySerializer to include subscription data
-        retrieve_serializer = RetrieveCompanySerializer(
-            company, context=self.get_serializer_context()
-        )
+        retrieve_serializer = RetrieveCompanySerializer(company, context=self.get_serializer_context())
         return Response(retrieve_serializer.data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["get"])
@@ -516,15 +514,13 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     @action(detail=True, methods=["get"])
     def dashboard_metrics(self, request, pk=None, company_pk=None) -> Response:
         """
-        Get accurate dashboard metrics for SmartUsageCard
-        Based on real backend data: consumer reach, trust scores, carbon data
+        Transparency-first dashboard metrics for SmartUsageCard.
+        Scoped to the user's company to prevent unauthorized access.
         """
-        establishment = get_object_or_404(Establishment, pk=pk)
+        # Security: scope query to the user's company (set by CompanyNestedViewSet.initial)
+        establishment = get_object_or_404(self.company.establishment_set.all(), pk=pk)
 
-        # Initialize metrics serializer
         metrics_serializer = EstablishmentDashboardMetricsSerializer()
-
-        # Calculate metrics using the serializer method
         metrics_data = metrics_serializer.get_metrics_for_establishment(establishment)
 
         return Response(
@@ -975,9 +971,7 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     usda_factors_based_entries = carbon_entries.filter(usda_factors_based=True).count()
 
                     # Production is USDA verified if majority of entries are USDA factors-based
-                    production_usda_verified = usda_factors_based_entries >= (
-                        total_entries * 0.5
-                    )
+                    production_usda_verified = usda_factors_based_entries >= (total_entries * 0.5)
 
                     if production_usda_verified:
                         verified_count = 1  # Count this production as verified
@@ -1155,9 +1149,7 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
             production_usda_verified = False
             if total_carbon_entries > 0:
-                production_usda_verified = usda_factors_based_entries >= (
-                    total_carbon_entries * 0.5
-                )
+                production_usda_verified = usda_factors_based_entries >= (total_carbon_entries * 0.5)
 
             # Check blockchain verification for this production
             # Check BOTH field locations for backwards compatibility

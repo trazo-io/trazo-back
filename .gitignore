@@ -121,3 +121,10 @@ contracts/node_modules/
 contracts/cache/
 contracts/artifacts/
 contracts/package-lock.json
+contracts/.env
+
+# Debug scripts with credentials
+debug_*.py
+
+# Log files with sensitive data
+finishproduction

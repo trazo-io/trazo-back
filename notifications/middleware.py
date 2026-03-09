@@ -43,14 +43,28 @@ class JWTAuthMiddleware(BaseMiddleware):
         # Close old database connections to prevent usage of timed out connections
         close_old_connections()
 
-        # Get the token from query parameters
-        query_string = scope.get("query_string", b"").decode()
-        query_params = parse_qs(query_string)
-        token = query_params.get("token", [None])[0]
+        headers = dict(scope.get("headers", []))
 
-        # If no token in query params, try to get from headers (for future compatibility)
+        # SECURITY: Extract token from Sec-WebSocket-Protocol subprotocol header
+        # Frontend sends: new WebSocket(url, ['access_token', '<jwt>'])
+        # Browser sends: Sec-WebSocket-Protocol: access_token, <jwt>
+        token = None
+        subprotocols = scope.get("subprotocols", [])
+        if "access_token" in subprotocols:
+            token_index = subprotocols.index("access_token") + 1
+            if token_index < len(subprotocols):
+                token = subprotocols[token_index]
+
+        # Fallback: try query params (deprecated, for backwards compatibility)
         if not token:
-            headers = dict(scope.get("headers", []))
+            query_string = scope.get("query_string", b"").decode()
+            query_params = parse_qs(query_string)
+            token = query_params.get("token", [None])[0]
+            if token:
+                logger.warning("WebSocket auth via query param is deprecated; use subprotocol")
+
+        # Fallback: try Authorization header
+        if not token:
             auth_header = headers.get(b"authorization", b"").decode()
             if auth_header.startswith("Bearer "):
                 token = auth_header[7:]

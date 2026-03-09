@@ -363,7 +363,18 @@ class CarbonSourceSerializer(serializers.ModelSerializer):
 class CarbonOffsetActionSerializer(serializers.ModelSerializer):
     class Meta:
         model = CarbonOffsetAction
-        fields = "__all__"
+        fields = [
+            "id",
+            "name",
+            "description",
+            "unit",
+            "verification_required",
+            "verification_process",
+            "usda_factors_used",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
 
 
 class CarbonEntrySerializer(serializers.ModelSerializer):
@@ -514,45 +525,141 @@ class CarbonEntrySerializer(serializers.ModelSerializer):
 class CarbonCertificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = CarbonCertification
-        fields = "__all__"
+        fields = [
+            "id",
+            "establishment",
+            "production",
+            "certifier",
+            "certificate_id",
+            "issue_date",
+            "expiry_date",
+            "document",
+            "is_usda_soe_verified",
+            "verification_date",
+            "verification_details",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
 
 
 class CarbonBenchmarkSerializer(serializers.ModelSerializer):
     class Meta:
         model = CarbonBenchmark
-        fields = "__all__"
+        fields = [
+            "id",
+            "industry",
+            "year",
+            "average_emissions",
+            "min_emissions",
+            "max_emissions",
+            "company_count",
+            "unit",
+            "source",
+            "last_updated",
+            "usda_factors_used",
+            "crop_type",
+            "region",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "last_updated", "created_at", "updated_at"]
 
 
 class CarbonReportSerializer(serializers.ModelSerializer):
     class Meta:
         model = CarbonReport
-        fields = "__all__"
-        read_only_fields = ("generated_at",)
+        fields = [
+            "id",
+            "establishment",
+            "production",
+            "period_start",
+            "period_end",
+            "total_emissions",
+            "total_offsets",
+            "net_footprint",
+            "carbon_score",
+            "generated_at",
+            "usda_factors_used",
+            "document",
+            "detailed_breakdown",
+            "trend_analysis",
+            "improvement_tracking",
+            "stakeholder_insights",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "generated_at", "created_at", "updated_at"]
 
 
 class CarbonAuditLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = CarbonAuditLog
-        fields = "__all__"
-        read_only_fields = ("timestamp",)
+        fields = [
+            "id",
+            "carbon_entry",
+            "certification",
+            "report",
+            "user",
+            "action",
+            "timestamp",
+            "details",
+            "ip_address",
+            "created_at",
+        ]
+        read_only_fields = ["id", "timestamp", "created_at"]
 
 
 class SustainabilityBadgeSerializer(serializers.ModelSerializer):
     class Meta:
         model = SustainabilityBadge
-        fields = "__all__"
+        fields = [
+            "id",
+            "name",
+            "description",
+            "criteria",
+            "icon",
+            "minimum_score",
+            "is_automatic",
+            "establishments",
+            "productions",
+            "usda_factors_used",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
 
 
 class MicroOffsetSerializer(serializers.ModelSerializer):
     class Meta:
         model = MicroOffset
-        fields = "__all__"
+        fields = [
+            "id",
+            "user",
+            "production",
+            "amount",
+            "provider",
+            "status",
+            "transaction_id",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
 
 
 class GreenPointsSerializer(serializers.ModelSerializer):
     class Meta:
         model = GreenPoints
-        fields = "__all__"
+        fields = [
+            "id",
+            "user",
+            "points",
+            "last_scan",
+            "achievements",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
 
 
 class CarbonFootprintSummarySerializer(serializers.Serializer):
