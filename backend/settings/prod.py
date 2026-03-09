@@ -189,18 +189,20 @@ if REDIS_URL:
         }
     }
 else:
-    # SECURITY: Use in-memory cache as fallback for rate limiting when Redis is unavailable.
-    # LocMemCache is per-process (not shared across workers), but still provides
-    # brute-force protection on single-worker deployments like DigitalOcean App Platform.
+    # No Redis: use dummy cache and disable django_ratelimit to prevent
+    # SystemCheckError E003 ("not a shared cache").
+    # Rate limiting will be re-enabled automatically when REDIS_URL is set.
     CACHES = {
         "default": {
-            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-            "LOCATION": "trazo-rate-limit-cache",
+            "BACKEND": "django.core.cache.backends.dummy.DummyCache",
         }
     }
 
-    # Keep rate limiting enabled with in-memory cache
-    RATELIMIT_ENABLE = True
+    RATELIMIT_ENABLE = False
+
+    # Remove django_ratelimit from INSTALLED_APPS to prevent system check errors
+    if "django_ratelimit" in INSTALLED_APPS:
+        INSTALLED_APPS.remove("django_ratelimit")
 
 # USDA API Configuration - Use environment variables for security
 USDA_NASS_API_KEY = os.environ.get("USDA_NASS_API_KEY", None)
