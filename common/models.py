@@ -14,11 +14,23 @@ class GalleryImage(models.Model):
     image = models.ImageField(upload_to="gallery_images/", blank=True, null=True)
     s3_key = models.CharField(max_length=255, blank=True, null=True)
     image_url = models.URLField(max_length=1000, blank=True, null=True)
+    file_size = models.PositiveIntegerField(
+        null=True, blank=True, help_text="File size in bytes, populated on upload for accurate storage tracking"
+    )
     extra_data = models.JSONField(
         blank=True, null=True, help_text="Stores Vision API validation results, GPS data, and other image metadata"
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        # Auto-populate file_size from local image if not already set
+        if not self.file_size and self.image:
+            try:
+                self.file_size = self.image.size
+            except Exception:
+                pass
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"Image {self.id} for Gallery {self.gallery.id}"

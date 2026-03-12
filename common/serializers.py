@@ -13,6 +13,7 @@ class GalleryImageSerializer(serializers.ModelSerializer):
             "image",
             "s3_key",
             "image_url",
+            "file_size",
             "extra_data",
             "created_at",
             "updated_at",

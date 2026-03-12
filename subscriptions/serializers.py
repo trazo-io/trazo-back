@@ -39,6 +39,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
     used_storage_gb = serializers.SerializerMethodField()
     scan_count = serializers.SerializerMethodField()
     usage_warnings = serializers.SerializerMethodField()
+    effective_limits = serializers.SerializerMethodField()
 
     class Meta:
         model = Subscription
@@ -56,6 +57,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             "trial_end",
             "addons",
             "usage_warnings",
+            "effective_limits",
         ]
 
     def _get_cached_usage(self, obj):
@@ -103,9 +105,9 @@ class SubscriptionSerializer(serializers.ModelSerializer):
         Compute total storage used across all galleries for a company's
         establishments, parcels, histories, and events.
 
-        Uses a single aggregated query for S3/URL-backed images (estimated at
-        2 MB each) combined with prefetch_related to batch-load local image
-        objects and avoid N+1 queries.
+        Prefers the file_size field (populated on upload) for accuracy.
+        Falls back to 3 MB estimate for S3/URL images without file_size,
+        or reads .size from local storage backend.
         """
         try:
             from history.models import History
@@ -114,36 +116,22 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             if not company:
                 return Decimal("0.00")
 
-            ESTIMATED_IMAGE_SIZE = 2 * 1024 * 1024  # 2 MB per S3/URL image
+            ESTIMATED_IMAGE_SIZE = 3 * 1024 * 1024  # 3 MB fallback for images without file_size
 
-            # --- Step 1: count S3/URL images via a single aggregated query ---
-            # All galleries reachable from this company share the same Gallery
-            # model, so we collect gallery IDs across each object tier and run
-            # one COUNT query per tier.  This avoids the deeply nested loop
-            # while keeping the two-path logic (local file.size vs estimate).
-
-            # Gather all gallery IDs in one pass per tier using values_list
-            # (no Python-side loops over individual rows).
-
-            # Establishment albums
+            # --- Step 1: collect gallery IDs across all tiers ---
             est_gallery_ids = list(
                 company.establishment_set.exclude(album__isnull=True).values_list("album_id", flat=True)
             )
 
-            # Parcel albums
             parcel_gallery_ids = list(
                 company.establishment_set.prefetch_related("parcels")
                 .exclude(parcels__album__isnull=True)
                 .values_list("parcels__album_id", flat=True)
             )
 
-            # History albums
             history_qs = History.objects.filter(parcel__establishment__company=company).exclude(album__isnull=True)
             history_gallery_ids = list(history_qs.values_list("album_id", flat=True))
 
-            # Event albums — the event tables all have an album FK and a
-            # history FK, so we can traverse history -> events in one query
-            # per event type.
             event_related_names = [
                 "history_productionevent_events",
                 "history_chemicalevent_events",
@@ -162,7 +150,6 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             event_gallery_ids = []
             if history_ids:
                 for related_name in event_related_names:
-                    # Derive the model class from the manager on History
                     try:
                         manager = getattr(History, related_name, None)
                         if manager is None:
@@ -183,28 +170,25 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             if not all_gallery_ids:
                 return Decimal("0.00")
 
-            # --- Step 2: single batch query for all GalleryImage rows ---
-            # Split into S3/URL images (estimated size) vs local images
-            # (need to read actual .size from storage).
+            # --- Step 2: compute total bytes ---
+            from django.db.models import Q, Sum
 
-            # Count images that have s3_key or image_url (estimated size)
-            from django.db.models import Q
+            all_images_qs = GalleryImage.objects.filter(gallery_id__in=all_gallery_ids)
 
-            remote_image_count = (
-                GalleryImage.objects.filter(
-                    gallery_id__in=all_gallery_ids,
-                )
+            # Sum known file sizes (populated on upload)
+            known_size_result = all_images_qs.filter(file_size__isnull=False).aggregate(total=Sum("file_size"))
+            known_bytes = known_size_result["total"] or 0
+
+            # Count remote images WITHOUT file_size (need estimate)
+            remote_unknown_count = (
+                all_images_qs.filter(file_size__isnull=True)
                 .filter(Q(s3_key__isnull=False) | Q(image_url__isnull=False))
                 .count()
             )
 
-            # For local images (no s3_key and no image_url) we must iterate
-            # to call .size on the storage backend — kept minimal via
-            # prefetch on only those rows.
+            # Local images WITHOUT file_size — read actual .size
             local_images = list(
-                GalleryImage.objects.filter(
-                    gallery_id__in=all_gallery_ids,
-                )
+                all_images_qs.filter(file_size__isnull=True)
                 .exclude(Q(s3_key__isnull=False) | Q(image_url__isnull=False))
                 .exclude(image="")
                 .only("id", "image")
@@ -217,7 +201,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
                 except Exception:
                     local_bytes += ESTIMATED_IMAGE_SIZE
 
-            total_bytes = (remote_image_count * ESTIMATED_IMAGE_SIZE) + local_bytes
+            total_bytes = known_bytes + (remote_unknown_count * ESTIMATED_IMAGE_SIZE) + local_bytes
 
             gb = Decimal(total_bytes) / Decimal(1024 * 1024 * 1024)
             return round(gb, 2)
@@ -254,16 +238,74 @@ class SubscriptionSerializer(serializers.ModelSerializer):
     def get_scan_count(self, obj):
         return self._get_cached_usage(obj)["scans"]
 
+    def _get_effective_limits(self, obj):
+        """
+        Compute effective limits = base plan limits + purchased add-ons.
+        This ensures the dashboard displays the true limits the user has paid for.
+        """
+        cache_attr = f"_effective_limits_cache_{obj.pk}"
+        if hasattr(self, cache_attr):
+            return getattr(self, cache_attr)
+
+        features = obj.plan.features if obj.plan else {}
+
+        def base(key, default=0):
+            return features.get(key, default)
+
+        def addon_qty(slug):
+            try:
+                # Use .all() + Python filter to leverage prefetch_related cache
+                # (.filter() would bypass the prefetch and hit the DB)
+                return sum(a.quantity for a in obj.addons.all() if a.addon and a.addon.slug == slug)
+            except Exception:
+                return 0
+
+        def add_if_not_unlimited(base_val, extra):
+            if base_val == -1:
+                return -1
+            return max(0, base_val) + extra
+
+        result = {
+            "max_establishments": add_if_not_unlimited(
+                base("max_establishments", 0),
+                addon_qty("extra-establishment"),
+            ),
+            "max_parcels_per_establishment": add_if_not_unlimited(
+                base("max_parcels_per_establishment", 0),
+                addon_qty("extra-parcel"),
+            ),
+            "max_productions_per_year": add_if_not_unlimited(
+                base("max_productions_per_year", 0),
+                addon_qty("extra-production") * 10,
+            ),
+            "monthly_scan_limit": base("monthly_scan_limit", 0),
+            "storage_limit_gb": add_if_not_unlimited(
+                base("storage_limit_gb", 0),
+                addon_qty("extra-storage"),
+            ),
+            "support_response_time": base("support_response_time", 48),
+            "priority_support": base("priority_support", False),
+            "voice_recording": base("voice_recording", False),
+            "ai_event_templates": base("ai_event_templates", True),
+        }
+        setattr(self, cache_attr, result)
+        return result
+
+    def get_effective_limits(self, obj):
+        if not obj.plan:
+            return {}
+        return self._get_effective_limits(obj)
+
     def get_usage_warnings(self, obj):
         """
         Return warnings for resources approaching plan limits.
-        Uses cached usage values to avoid duplicate queries.
+        Uses effective limits (base + add-ons) and cached usage values.
         """
         warnings = []
         if not obj.plan or not obj.plan.features:
             return warnings
 
-        features = obj.plan.features
+        limits = self._get_effective_limits(obj)
         usage = self._get_cached_usage(obj)
 
         def check_limit(metric_name, used, limit, label):
@@ -298,25 +340,25 @@ class SubscriptionSerializer(serializers.ModelSerializer):
         check_limit(
             "productions",
             usage["productions"],
-            features.get("max_productions_per_year", 0),
+            limits.get("max_productions_per_year", 0),
             "Productions this year",
         )
         check_limit(
             "scans",
             usage["scans"],
-            features.get("monthly_scan_limit", 0),
+            limits.get("monthly_scan_limit", 0),
             "QR scans this month",
         )
         check_limit(
             "storage",
             float(usage["storage"]),
-            features.get("storage_limit_gb", 0),
+            limits.get("storage_limit_gb", 0),
             "Storage (GB)",
         )
         check_limit(
             "establishments",
             usage["establishments"],
-            features.get("max_establishments", 0),
+            limits.get("max_establishments", 0),
             "Establishments",
         )
 

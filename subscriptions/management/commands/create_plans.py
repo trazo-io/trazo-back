@@ -288,7 +288,7 @@ class Command(BaseCommand):
             {
                 "name": "Extra Production",
                 "slug": "extra-production",
-                "description": "Add an additional production beyond your plan limit with full transparency tracking and QR codes",
+                "description": "Add 10 extra productions per year beyond your plan limit with full transparency tracking and QR codes",
                 "price": 20.00,
                 "interval": "month",
             },

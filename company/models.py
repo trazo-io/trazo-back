@@ -178,7 +178,7 @@ class Company(models.Model):
         return productions_this_year < max_productions
 
     def get_remaining_scan_quota(self):
-        """Get remaining scan quota for the current month"""
+        """Get remaining scan quota for the current billing period"""
         if not self.subscription_plan:
             return 0
 
@@ -186,9 +186,20 @@ class Company(models.Model):
         if base_quota == -1:
             return -1  # Unlimited
 
-        # Get current month's usage
+        # Count actual scans from HistoryScan aligned to billing cycle
         if hasattr(self, "subscription"):
-            current_usage = self.subscription.scan_count
+            from django.utils import timezone
+
+            from history.models import HistoryScan
+
+            period_start = self.subscription.current_period_start
+            if not period_start:
+                period_start = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+            current_usage = HistoryScan.objects.filter(
+                history__parcel__establishment__company=self,
+                date__gte=period_start,
+            ).count()
             return max(0, base_quota - current_usage)
 
         return base_quota
