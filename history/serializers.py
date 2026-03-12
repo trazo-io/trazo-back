@@ -138,6 +138,9 @@ class EventSerializer(serializers.ModelSerializer):
             "index",
             "created_by",
             "performed_by",
+            "variety",
+            "block_id",
+            "growth_stage",
             "image",
             "carbon_data",
             "verification_level",
@@ -385,6 +388,9 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
             "album",
             "history",
             "performed_by",
+            "variety",
+            "block_id",
+            "growth_stage",
             "type",
             "chemical_subtype",
             "commercial_name",
@@ -414,6 +420,11 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
             "applicator_certification",
             "rei_hours",
             "phi_days",
+            "volume_numeric",
+            "volume_unit",
+            "area_numeric",
+            "area_unit",
+            "is_fertigation",
             # Aliased frontend field names (mapped via source above)
             "volume_applied",
             "area_treated",
@@ -455,10 +466,12 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
         elif "application_method" in data and "way_of_application" in data:
             data["way_of_application"] = data.pop("application_method")
 
-        # Extract volume_unit and area_unit before they get removed
-        # These will be stored in extra_data for the serializer to read back
-        volume_unit = data.pop("volume_unit", None)
-        area_unit = data.pop("area_unit", None)
+        # volume_unit and area_unit are now proper model fields on ChemicalEvent
+        # (volume_numeric, volume_unit, area_numeric, area_unit).
+        # We no longer pop them — they flow through super() directly as model fields.
+        # Keep backward-compat: if only legacy extra_data style was sent, store there too.
+        volume_unit = data.get("volume_unit", None)
+        area_unit = data.get("area_unit", None)
 
         # SPRINT 6 FIX (2025-12-24): Extract frontend's extra_data BEFORE super() call
         # Frontend sends fields like active_ingredient, application_details, weather_conditions, etc.
@@ -504,11 +517,18 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
 
         internal_value["extra_data"] = merged_extra_data
 
-        # Store volume_unit and area_unit in extra_data for frontend form compatibility
+        # Also mirror volume_unit/area_unit into extra_data for legacy frontend compatibility.
+        # The canonical values are now model columns (volume_unit, area_unit on ChemicalEvent)
+        # but older frontend code may still read from extra_data.
         if volume_unit is not None:
             internal_value["extra_data"]["volume_unit"] = volume_unit
         if area_unit is not None:
             internal_value["extra_data"]["area_unit"] = area_unit
+
+        # Auto-detect fertigation from application method text
+        way_of_app = internal_value.get("way_of_application", "") or ""
+        if "fertigation" in way_of_app.lower() and not internal_value.get("is_fertigation"):
+            internal_value["is_fertigation"] = True
 
         return internal_value
 
@@ -677,6 +697,9 @@ class ChemicalEventSerializer(EventSerializer):
             "index",
             "created_by",
             "performed_by",
+            "variety",
+            "block_id",
+            "growth_stage",
             "type",
             "chemical_type",
             "event_type",
@@ -708,6 +731,11 @@ class ChemicalEventSerializer(EventSerializer):
             "applicator_certification",
             "rei_hours",
             "phi_days",
+            "volume_numeric",
+            "volume_unit",
+            "area_numeric",
+            "area_unit",
+            "is_fertigation",
             "image",
             "carbon_data",
             "verification_level",
@@ -843,6 +871,9 @@ class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
             "album",
             "history",
             "performed_by",
+            "variety",
+            "block_id",
+            "growth_stage",
             "type",
             "observation",
             "extra_data",
@@ -1210,6 +1241,9 @@ class WeatherEventSerializer(EventSerializer):
             "index",
             "created_by",
             "performed_by",
+            "variety",
+            "block_id",
+            "growth_stage",
             "type",
             "event_type",
             "observation",
@@ -1248,6 +1282,9 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
             "album",
             "history",
             "performed_by",
+            "variety",
+            "block_id",
+            "growth_stage",
             "type",
             "observation",
             "extra_data",
@@ -1268,10 +1305,13 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
             "irrigation_method",
             "irrigation_depth",
             "irrigation_depth_unit",
+            "brix_level",
             "equipment_type",
             "equipment_operation_type",
             "harvest_quality_grade",
             "grain_moisture",
+            "pump_depth_ft",
+            "electricity_source",
         ]
         read_only_fields = ["id"]
 
@@ -1317,6 +1357,9 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
             "event_count",
             "water_volume_total",
             "water_volume_unit",
+            # Harvest summary fields
+            "yield_total",
+            "yield_total_unit",
         ]
         for field_name in summary_only_fields:
             if field_name in data:
@@ -1372,9 +1415,9 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
         yield_unit = data.get("yield_unit", "kg")
 
         # Enhanced area_covered validation
-        # Equipment Maintenance (EM) events can legitimately have area_covered=0
+        # Equipment Maintenance (EM) and Pollination (PO) events can legitimately have area_covered=0
         production_type = data.get("type", "")
-        area_zero_allowed_types = ["EM"]
+        area_zero_allowed_types = ["EM", "PO"]
         if area_covered is not None and area_covered <= 0 and production_type not in area_zero_allowed_types:
             raise serializers.ValidationError(
                 {
@@ -1474,6 +1517,13 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
                     }
                 )
 
+        # Brix level validation
+        brix_level = data.get("brix_level")
+        if brix_level is not None and brix_level < 0:
+            raise serializers.ValidationError({"brix_level": "Brix level cannot be negative."})
+        if brix_level is not None and brix_level > 45:
+            raise serializers.ValidationError({"brix_level": "Brix level cannot exceed 45."})
+
         return data
 
     def to_representation(self, instance):
@@ -1514,6 +1564,9 @@ class ProductionEventSerializer(CustomFieldsMixin, EventSerializer):
             "index",
             "created_by",
             "performed_by",
+            "variety",
+            "block_id",
+            "growth_stage",
             "type",
             "event_type",
             "production_type",
@@ -1536,10 +1589,13 @@ class ProductionEventSerializer(CustomFieldsMixin, EventSerializer):
             "irrigation_method",
             "irrigation_depth",
             "irrigation_depth_unit",
+            "brix_level",
             "equipment_type",
             "equipment_operation_type",
             "harvest_quality_grade",
             "grain_moisture",
+            "pump_depth_ft",
+            "electricity_source",
             "image",
             "carbon_data",
             "verification_level",
@@ -1600,6 +1656,9 @@ class UpdateGeneralEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
             "album",
             "history",
             "performed_by",
+            "variety",
+            "block_id",
+            "growth_stage",
             "name",
             "observation",
             "activity_type",
@@ -1678,6 +1737,9 @@ class GeneralEventSerializer(EventSerializer):
             "index",
             "created_by",
             "performed_by",
+            "variety",
+            "block_id",
+            "growth_stage",
             "type",
             "event_type",
             "name",
@@ -2474,6 +2536,9 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "album": album_data,
                         # Additional transparency fields
                         "name": getattr(event, "name", None),
+                        "variety": getattr(event, "variety", None),
+                        "block_id": getattr(event, "block_id", None),
+                        "growth_stage": getattr(event, "growth_stage", None),
                         "way_of_application": getattr(event, "way_of_application", None),
                         "weather_conditions": getattr(event, "weather_conditions", None),
                         "application_timing": getattr(event, "application_timing", None),
@@ -2561,6 +2626,9 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "album": album_data,
                         # Production-specific fields for detailed display
                         "name": getattr(event, "name", None),
+                        "variety": getattr(event, "variety", None),
+                        "block_id": getattr(event, "block_id", None),
+                        "growth_stage": getattr(event, "growth_stage", None),
                         "area_covered": float(getattr(event, "area_covered", None) or 0) or None,
                         "area_unit": getattr(event, "area_unit", "ha"),
                         "yield_quantity": float(getattr(event, "yield_quantity", None) or 0) or None,
@@ -2659,6 +2727,16 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                             if isinstance(getattr(event, "extra_data", None), dict)
                             else None
                         ),
+                        "yield_total": (
+                            event.extra_data.get("yield_total")
+                            if isinstance(getattr(event, "extra_data", None), dict)
+                            else None
+                        ),
+                        "yield_total_unit": (
+                            event.extra_data.get("yield_total_unit")
+                            if isinstance(getattr(event, "extra_data", None), dict)
+                            else None
+                        ),
                         # Blockchain verification fields from production
                         "blockchain_verified": blockchain_verified,
                         "blockchain_transaction": blockchain_transaction,
@@ -2706,6 +2784,10 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "photo_count": photo_count,
                         "commercial_name": None,
                         "album": album_data,
+                        "name": (event.extra_data or {}).get("event_name") or (event.extra_data or {}).get("name"),
+                        "variety": getattr(event, "variety", None),
+                        "block_id": getattr(event, "block_id", None),
+                        "growth_stage": getattr(event, "growth_stage", None),
                         # 🌦️ WEATHER FIELDS: Add missing extra_data for weather-specific fields unification
                         "extra_data": self._sanitize_extra_data_for_public(event),
                         # Blockchain verification fields from production
@@ -2753,6 +2835,9 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "operation_type": getattr(event, "type", None),  # Equipment subtype (MN, RE, CA, FC, BD, EI)
                         "name": getattr(event, "name", None),  # Operation name for title display
                         "operation_name": getattr(event, "name", None),  # Frontend compatibility alias
+                        "variety": getattr(event, "variety", None),
+                        "block_id": getattr(event, "block_id", None),
+                        "growth_stage": getattr(event, "growth_stage", None),
                         # COMPLETE EQUIPMENT FIELDS - Handle both legacy and new field names
                         "equipment_type": getattr(event, "equipment_type_structured", None)
                         or getattr(event, "equipment_name", None),  # tractor, harvester, etc.
@@ -2821,6 +2906,9 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         # 🌱 SOIL MANAGEMENT SPECIFIC FIELDS - Raw data for frontend processing
                         "name": getattr(event, "name", None),  # Event name for display titles
                         "soil_management_name": getattr(event, "name", None),  # Compatibility with TimelineService
+                        "variety": getattr(event, "variety", None),
+                        "block_id": getattr(event, "block_id", None),
+                        "growth_stage": getattr(event, "growth_stage", None),
                         "soil_management_type": getattr(
                             event, "type", None
                         ),  # Raw type (ST, PA, OM, etc.) - frontend handles mapping
@@ -2854,6 +2942,18 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "weather_conditions": getattr(event, "weather_conditions", None),  # Weather during operation
                         "temperature_range": getattr(event, "temperature_range", None),  # Temperature range
                         "equipment_used": getattr(event, "equipment_used", None),  # Equipment type used
+                        # 🐄 GRAZING FIELDS
+                        "animal_type": getattr(event, "animal_type", None),
+                        "animal_count": getattr(event, "animal_count", None),
+                        "grazing_duration_days": getattr(event, "grazing_duration_days", None),
+                        "grazing_purpose": getattr(event, "grazing_purpose", None),
+                        # 📏 AMENDMENT NUMERIC FIELDS
+                        "amendment_amount_numeric": (
+                            str(event.amendment_amount_numeric)
+                            if getattr(event, "amendment_amount_numeric", None) is not None
+                            else None
+                        ),
+                        "amendment_amount_unit": getattr(event, "amendment_amount_unit", None),
                         "extra_data": self._sanitize_extra_data_for_public(event),  # Additional soil management data
                         # Blockchain verification fields from production
                         "blockchain_verified": blockchain_verified,
@@ -2901,7 +3001,10 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "commercial_name": None,
                         "album": album_data,
                         # Pest management specific fields for consumer display
-                        "name": getattr(event, "name", None),
+                        "name": getattr(event, "name", None) or (event.extra_data or {}).get("name"),
+                        "variety": getattr(event, "variety", None),
+                        "block_id": getattr(event, "block_id", None),
+                        "growth_stage": getattr(event, "growth_stage", None),
                         "pest_management_type": getattr(event, "type", None),
                         "pest_species": getattr(event, "pest_species", None),
                         "pest_pressure_level": getattr(event, "pest_pressure_level", None),
@@ -2991,6 +3094,9 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "album": album_data,
                         # General event name for title generation
                         "name": getattr(event, "name", None),
+                        "variety": getattr(event, "variety", None),
+                        "block_id": getattr(event, "block_id", None),
+                        "growth_stage": getattr(event, "growth_stage", None),
                         # NEW ACTIVITY FIELDS for complete transparency
                         "activity_type": getattr(event, "activity_type", None),
                         "activity_name": getattr(event, "activity_name", None),
@@ -3056,6 +3162,9 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "album": album_data,
                         # Business specific fields for consumer display
                         "name": getattr(event, "name", None),
+                        "variety": getattr(event, "variety", None),
+                        "block_id": getattr(event, "block_id", None),
+                        "growth_stage": getattr(event, "growth_stage", None),
                         "business_type": getattr(event, "business_type", None),
                         "business_event_type": getattr(event, "type", None),
                         "certification_type": getattr(event, "certification_type", None),
@@ -3225,6 +3334,9 @@ class UpdateEquipmentEventSerializer(CustomFieldsMixin, serializers.ModelSeriali
             "album",
             "history",
             "performed_by",
+            "variety",
+            "block_id",
+            "growth_stage",
             "type",
             "equipment_name",
             "fuel_amount",
@@ -3450,6 +3562,9 @@ class EquipmentEventSerializer(EventSerializer):
             "index",
             "created_by",
             "performed_by",
+            "variety",
+            "block_id",
+            "growth_stage",
             "type",
             "event_type",
             "equipment_name",
@@ -3495,6 +3610,9 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "album",
             "history",
             "performed_by",
+            "variety",
+            "block_id",
+            "growth_stage",
             "type",
             "soil_ph",
             "organic_matter_percentage",
@@ -3520,6 +3638,12 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "weather_conditions",
             "temperature_range",
             "equipment_used",
+            "animal_type",
+            "animal_count",
+            "grazing_duration_days",
+            "grazing_purpose",
+            "amendment_amount_numeric",
+            "amendment_amount_unit",
         ]
         read_only_fields = ["id"]
 
@@ -3558,6 +3682,7 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "area_covered",
             "fuel_consumed",
             "carbon_sequestration_potential",
+            "amendment_amount_numeric",
         ]
 
         for field_name in decimal_fields:
@@ -3627,6 +3752,9 @@ class SoilManagementEventSerializer(EventSerializer):
             "index",
             "created_by",
             "performed_by",
+            "variety",
+            "block_id",
+            "growth_stage",
             "type",
             "event_type",
             "soil_ph",
@@ -3653,6 +3781,12 @@ class SoilManagementEventSerializer(EventSerializer):
             "weather_conditions",
             "temperature_range",
             "equipment_used",
+            "animal_type",
+            "animal_count",
+            "grazing_duration_days",
+            "grazing_purpose",
+            "amendment_amount_numeric",
+            "amendment_amount_unit",
             "image",
             "carbon_data",
             "verification_level",
@@ -3680,6 +3814,9 @@ class UpdatePestManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "album",
             "history",
             "performed_by",
+            "variety",
+            "block_id",
+            "growth_stage",
             "type",
             "pest_species",
             "pest_pressure_level",
@@ -3808,6 +3945,9 @@ class PestManagementEventSerializer(EventSerializer):
             "index",
             "created_by",
             "performed_by",
+            "variety",
+            "block_id",
+            "growth_stage",
             "type",
             "event_type",
             "pest_species",
@@ -3863,6 +4003,9 @@ class UpdateBusinessEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
             "album",
             "history",
             "performed_by",
+            "variety",
+            "block_id",
+            "growth_stage",
             "type",
             "name",
             "business_type",
@@ -4035,6 +4178,9 @@ class BusinessEventSerializer(EventSerializer):
             "index",
             "created_by",
             "performed_by",
+            "variety",
+            "block_id",
+            "growth_stage",
             "type",
             "event_type",
             "name",

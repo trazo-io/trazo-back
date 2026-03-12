@@ -44,7 +44,7 @@ def test_production_calculations():
 
     # Manual calculation using EPA factors
     EPA_DIESEL_FACTOR = 10.21  # kg CO2 per gallon
-    EPA_ELECTRICITY_FACTOR = 0.821  # kg CO2 per kWh
+    EPA_ELECTRICITY_FACTOR = 0.39  # kg CO2 per kWh (EPA eGRID 2023)
     USDA_HARVESTING_FACTOR = 3.5  # gallons per hectare
     USDA_PLANTING_FACTOR = 1.8  # gallons per hectare
     IRRIGATION_PUMP_FACTOR = 0.85  # kWh per 1000 gallons

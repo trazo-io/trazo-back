@@ -36,7 +36,7 @@ def test_production_field_mapping():
             "name": "Irrigation - Equipment Hours",
             "form_data": {"type": "IR", "area_covered": "3.0", "area_unit": "acres", "equipment_hours": "5.0"},
             "expected_calculation": "epa_irrigation_pumping",
-            "expected_co2e": 10.42,  # 3000 gal * 0.85/1000 kWh * 0.821 EPA
+            "expected_co2e": 4.95,  # 3000 gal * 0.85/1000 kWh * 0.39 EPA eGRID 2023
         },
         {
             "name": "Cultivation - High Fuel Use",
@@ -71,7 +71,7 @@ def test_production_field_mapping():
 
     # EPA Constants for validation
     EPA_DIESEL = 10.21  # kg CO2 per gallon
-    EPA_ELECTRICITY = 0.821  # kg CO2 per kWh
+    EPA_ELECTRICITY = 0.39  # kg CO2 per kWh (EPA eGRID 2023)
     PUMP_EFFICIENCY = 0.85  # kWh per 1000 gallons
     LITER_TO_GALLON = 3.78541
 

@@ -62,10 +62,20 @@ class CarbonCalculatorService:
                 elif entry.type == "offset":
                     breakdown[category] -= float(entry.effective_amount or 0)
 
-            # TODO: Convert to kg CO2 per kg of product
-            # For now, we'll use net emissions as the total
-            # This should be divided by the production yield when available
-            total_co2_kg_per_kg = net_emissions
+            # Calculate per-kg value by dividing by production yield
+            # CarbonEntry.production is FK to History which has production_amount
+            total_co2_kg_per_kg = 0.0
+            try:
+                first_entry = carbon_entries.select_related("production").first()
+                if first_entry and first_entry.production:
+                    production_amount = first_entry.production.production_amount or 0
+                    if production_amount > 0:
+                        total_co2_kg_per_kg = net_emissions / production_amount
+                    else:
+                        # No production amount recorded — cannot compute per-kg
+                        total_co2_kg_per_kg = 0.0
+            except Exception:
+                total_co2_kg_per_kg = 0.0
 
             return {
                 "total_co2_kg_per_kg": total_co2_kg_per_kg,

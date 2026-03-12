@@ -66,6 +66,7 @@ from carbon.services.timeline_service import TimelineService
 from carbon.validation import APIResponseValidator, QRParameterValidator
 from company.models import Establishment
 from history.models import (
+    BusinessEvent,
     ChemicalEvent,
     EquipmentEvent,
     GeneralEvent,
@@ -755,7 +756,6 @@ from typing import Any, Dict
 
 from django.core.cache import cache
 from django.utils.decorators import method_decorator
-from django.views.decorators.cache import cache_page
 
 from django_ratelimit.decorators import ratelimit
 
@@ -893,12 +893,14 @@ class OptimizedCarbonCalculator:
         import logging
 
         from carbon.services.verified_emission_factors import VerifiedEmissionFactors
+        from carbon.utils.unit_converter import UnitConverter
 
         logger = logging.getLogger(__name__)
 
         # Extract processed data (now with proper unit conversions)
         chemical_type = processed_event.get("chemical_type", "FE")
         volume_liters = processed_event.get("volume") or 0
+        chemical_mass_kg = processed_event.get("chemical_mass_kg")
         area_hectares = processed_event.get("area") or 0.0
         application_method = processed_event.get("application_method") or "broadcast"
 
@@ -1040,10 +1042,10 @@ class OptimizedCarbonCalculator:
                         # Liquid fuels: convert to gallons, then use per-gallon factor
                         if app_fuel_unit in ["gal", "gallons"]:
                             fuel_gallons = fuel_for_calc
-                            fuel_liters = fuel_for_calc * 3.78541
+                            fuel_liters, _ = UnitConverter.convert_volume(fuel_for_calc, "gallons", "liters")
                         else:
                             fuel_liters = fuel_for_calc
-                            fuel_gallons = fuel_for_calc / 3.78541
+                            fuel_gallons, _ = UnitConverter.convert_volume(fuel_for_calc, "liters", "gallons")
                         application_emissions = fuel_gallons * app_factor.value
 
                 total_co2e = manufacturing_emissions + application_emissions
@@ -1134,6 +1136,10 @@ class OptimizedCarbonCalculator:
                 # SPRINT 6 FIX (2025-12-24): Pass organic_approved for accurate organic emission factors
                 "organic_approved": organic_approved,
             }
+
+            # Pass direct mass when volume was in mass units (kg, lbs, oz)
+            if chemical_mass_kg is not None:
+                calc_kwargs["chemical_mass_kg"] = chemical_mass_kg
 
             # SPRINT 6 FIX: Pass concentration for pesticides/herbicides/fungicides
             if concentration_percentage is not None:
@@ -1689,38 +1695,37 @@ class OptimizedEventProcessor:
 
         logger.debug(f"Parsed volume: {volume_value} {volume_unit} (raw: {volume_raw})")
         logger.debug(f"Parsed area: {area_value} {area_unit} (raw: {area_raw})")
-        volume_liters = volume_value  # Default assumption: already in liters
+        # Convert volume to the correct canonical form using UnitConverter
+        # Mass units (kg, lbs, oz, g) → chemical_mass_kg (skip density conversion)
+        # Volume units (L, gal, mL) → volume_liters
+        from carbon.utils.unit_converter import UnitConverter
 
-        # Normalize unit to check - handle composite units like "kg/ha", "kg/hectare"
-        volume_unit_lower = volume_unit.lower()
-        volume_is_kg = volume_unit_lower.startswith("kg") or "kilogram" in volume_unit_lower
+        volume_unit_normalized = UnitConverter.normalize_unit_name(volume_unit)
+        chemical_mass_kg = None
+        volume_liters = 0.0
 
-        if volume_is_kg:
-            # Need to convert kg to liters using fertilizer density
-            logger.info(f"   🚨 VOLUME CONVERSION NEEDED: {volume_value} kg → ? L")
-
-            # Parse NPK content to determine density
-            # FIX (2025-12-24): Handle None concentration when parsing NPK
-            if concentration and "-" in str(concentration):
-                parts = str(concentration).split("-")
-                npk_content = {
-                    "N": float(parts[0]) if len(parts) > 0 else 0,
-                    "P": float(parts[1]) if len(parts) > 1 else 0,
-                    "K": float(parts[2]) if len(parts) > 2 else 0,
-                }
-            else:
-                npk_content = {"N": 0, "P": 0, "K": 0}
-
-            # Get accurate fertilizer density
-            density_kg_per_l = VerifiedEmissionFactors._get_fertilizer_density(npk_content, application_method)
-            volume_liters = volume_value / density_kg_per_l  # Convert kg to L
-
-            # Calculate density for kg to L conversion
-            # Convert kg to liters using density
-            pass
+        if UnitConverter.is_mass_unit(volume_unit):
+            # Mass input: convert to kg directly, skip volume→density→mass round-trip
+            try:
+                chemical_mass_kg, _ = UnitConverter.convert_mass(
+                    volume_value, volume_unit_normalized, to_unit="kilograms"
+                )
+            except Exception:
+                chemical_mass_kg = volume_value  # Fallback: assume kg
+            logger.info(f"   Mass unit detected: {volume_value} {volume_unit} → {chemical_mass_kg} kg")
+        elif UnitConverter.is_volume_unit(volume_unit):
+            # Volume input: convert to liters
+            try:
+                volume_liters, _ = UnitConverter.convert_volume(
+                    volume_value, volume_unit_normalized, to_unit="liters"
+                )
+            except Exception:
+                volume_liters = volume_value  # Fallback: assume liters
+            logger.info(f"   Volume unit detected: {volume_value} {volume_unit} → {volume_liters} L")
         else:
-            # Volume already in correct unit
-            pass
+            # Unknown unit: assume liters (existing fallback behavior)
+            volume_liters = volume_value
+            logger.warning(f"   Unknown volume unit '{volume_unit}', assuming liters: {volume_liters} L")
 
         # CRITICAL FIX: Convert area from acres to hectares
         # (area_value is already a float from _parse_value_with_unit)
@@ -1752,7 +1757,8 @@ class OptimizedEventProcessor:
 
         processed_data = {
             "chemical_type": event_data.get("type", "FE"),
-            "volume": volume_liters,  # NOW PROPERLY CONVERTED TO LITERS
+            "volume": volume_liters,  # Converted to liters (0 if mass unit)
+            "chemical_mass_kg": chemical_mass_kg,  # Direct mass in kg (None if volume unit)
             "area": area_hectares,  # NOW IN HECTARES
             "area_unit": "hectares",  # Track converted unit
             "concentration": concentration,
@@ -2161,7 +2167,6 @@ class OptimizedEventProcessor:
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 @ratelimit(key="user", rate="20/m", method="POST", block=True)  # Increased rate limit
-@cache_page(300)  # 5-minute cache for identical requests
 def calculate_event_carbon_impact_enhanced(request):
     """
     OPTIMIZED carbon calculation endpoint.
@@ -2183,8 +2188,8 @@ def calculate_event_carbon_impact_enhanced(request):
 
         event_data = request.data.get("event_data", {})
 
-        # Generate cache key for identical requests
-        cache_key = f"carbon_calc:{hash(str(sorted(request.data.items())))}"
+        # Generate cache key for identical requests (deterministic across processes)
+        cache_key = f"carbon_calc:{hashlib.md5(json.dumps(dict(request.data), sort_keys=True, default=str).encode()).hexdigest()}"
 
         # Check cache first
         cached_result = cache.get(cache_key)
@@ -8994,6 +8999,8 @@ def calculate_event_impact(request):
             event = get_object_or_404(PestManagementEvent, id=event_id)
         elif event_type == "general":
             event = get_object_or_404(GeneralEvent, id=event_id)
+        elif event_type == "business":
+            event = get_object_or_404(BusinessEvent, id=event_id)
         else:
             return Response({"error": f"Unsupported event type: {event_type}"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -9013,6 +9020,8 @@ def calculate_event_impact(request):
         elif isinstance(event, PestManagementEvent):
             result = calculator.calculate_pest_management_event_impact(event)
         elif isinstance(event, GeneralEvent):
+            result = calculator.calculate_general_event_impact(event)
+        elif isinstance(event, BusinessEvent):
             result = calculator.calculate_business_event_impact(event)
         else:
             return Response({"error": f"Unsupported event instance: {type(event)}"}, status=status.HTTP_400_BAD_REQUEST)
@@ -9029,6 +9038,7 @@ def calculate_event_impact(request):
         return Response(result, status=status.HTTP_200_OK)
 
     except (
+        BusinessEvent.DoesNotExist,
         ChemicalEvent.DoesNotExist,
         ProductionEvent.DoesNotExist,
         WeatherEvent.DoesNotExist,

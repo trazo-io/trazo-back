@@ -8,6 +8,8 @@ from typing import Any, Dict, List, Optional
 
 from django.utils import timezone
 
+from backend.constants import calculate_miles_equivalent, calculate_trees_equivalent
+
 
 class TransparencyResponseFormatter:
     """
@@ -47,13 +49,19 @@ class TransparencyResponseFormatter:
         }
 
         # SECONDARY: Raw carbon impact (factual, not comparative)
+        net_footprint = self._safe_round(carbon_data.get("net_footprint", 0), 2)
+        kg_per_kg = self._safe_round(carbon_data.get("total_co2_kg_per_kg", 0), 3)
         carbon_impact = {
-            "kg_per_kg": self._safe_round(carbon_data.get("total_co2_kg_per_kg", 0), 3),
+            "kg_per_kg": kg_per_kg,
             "total_emissions": self._safe_round(carbon_data.get("total_emissions", 0), 2),
             "total_offsets": self._safe_round(carbon_data.get("total_offsets", 0), 2),
-            "net_impact": self._safe_round(carbon_data.get("net_footprint", 0), 2),
+            "net_impact": net_footprint,
             "unit": "kg CO₂ per kg product",
             "calculation_method": carbon_data.get("calculation_method", "USDA_based"),
+            # Consumer-friendly: per-unit comparison + impact level
+            "consumer_context": self._get_consumer_context(kg_per_kg),
+            # Detailed comparisons for total production (expandable section)
+            "comparisons": self._calculate_comparisons(abs(net_footprint)),
         }
 
         # TERTIARY: Contextual information (no competitive ranking)
@@ -222,6 +230,60 @@ class TransparencyResponseFormatter:
             sources.append("Farm Records")
 
         return sources
+
+    def _get_consumer_context(self, kg_per_kg: float) -> Dict[str, Any]:
+        """
+        Generate consumer-friendly carbon context using per-unit data.
+        INFORMATIONAL ONLY — no color-coded judgment or competitive ranking.
+
+        Trazo's transparency-first philosophy: the transparency score is the
+        only evaluative metric. Carbon data is factual context for consumers
+        who want to learn more, not a judgment of the farm.
+
+        Uses kg_per_kg (CO2e per kg of product) for meaningful comparisons.
+        EPA factor: 0.35548 kg CO2/mile → miles_per_kg = kg_per_kg / 0.35548
+        """
+        if kg_per_kg <= 0:
+            return {
+                "kg_per_kg": 0.0,
+                "per_kg_miles": 0.0,
+                "per_kg_phone_charges": 0,
+                "has_per_kg_data": False,
+            }
+
+        miles_per_kg = self._safe_round(kg_per_kg / 0.35548, 1)
+        # Average phone charge = ~0.008 kWh × 0.39 kg CO2/kWh = 0.003 kg CO2
+        phone_charges = int(kg_per_kg / 0.003) if kg_per_kg > 0 else 0
+
+        return {
+            "kg_per_kg": self._safe_round(kg_per_kg, 3),
+            "per_kg_miles": miles_per_kg,
+            "per_kg_phone_charges": phone_charges,
+            "has_per_kg_data": True,
+        }
+
+    def _calculate_comparisons(self, co2e_kg: float) -> Dict[str, Any]:
+        """
+        Calculate real-life comparisons using EPA/USDA conversion factors.
+        Single source of truth — frontend should display these, not recalculate.
+
+        Factors:
+        - Miles: EPA 0.35548 kg CO2/mile (8.887 kg CO2/gal ÷ 25 mpg)
+        - Trees: EPA ~21.8 kg CO2/tree/year
+        - Electricity: EPA eGRID 2023 0.39 kg CO2/kWh
+        """
+        if co2e_kg <= 0:
+            return {"driving_miles": 0, "trees_per_year": 0, "kwh_electricity": 0}
+
+        miles = self._safe_round(calculate_miles_equivalent(co2e_kg), 1)
+        trees = int(calculate_trees_equivalent(co2e_kg)) + 1  # ceil
+        kwh = self._safe_round(co2e_kg / 0.39, 0)  # EPA eGRID 2023: 0.39 kg CO2/kWh
+
+        return {
+            "driving_miles": miles,
+            "trees_per_year": trees,
+            "kwh_electricity": int(kwh),
+        }
 
     def _safe_round(self, value: float, decimals: int) -> float:
         """Safely round numeric values"""

@@ -718,56 +718,99 @@ class VerifiedEmissionFactors:
             "limitations": equipment_consumption.notes,
         }
 
+    # Item #13: Electricity emission factors by source (kg CO2/kWh)
+    # Used when electricity_source is set on a ProductionEvent irrigation event.
+    ELECTRICITY_SOURCE_FACTORS = {
+        "grid": 0.39,  # EPA eGRID 2023 US average (corrected 2025-12-03)
+        "solar": 0.02,  # Life-cycle average for utility-scale solar PV
+        "wind": 0.01,  # Life-cycle average for wind turbines
+        "diesel_generator": 0.65,  # Diesel generator (less efficient than grid diesel)
+        "mixed": 0.20,  # Blended renewable + grid assumption
+    }
+
     @classmethod
     def calculate_drought_irrigation_emissions(
-        cls, water_volume_gallons: float, water_source: str = None
+        cls,
+        water_volume_gallons: float,
+        water_source: str = None,
+        pump_depth_ft: float = None,
+        electricity_source: str = None,
     ) -> Dict[str, Any]:
         """Calculate irrigation emissions using verified factors.
 
-        Pump energy factor varies by water_source (USDA NRCS guidelines):
-        - well_groundwater: 3.5 kWh/1000 gal (deep well, 200-300 ft)
-        - municipal: 0.20 kWh/1000 gal (pre-pressurized)
-        - rainwater_harvesting: 0.15 kWh/1000 gal (gravity-fed)
-        - irrigation_canal: 0.50 kWh/1000 gal (low-lift surface pump)
-        - river_stream: 0.85 kWh/1000 gal (moderate-lift)
-        - pond_reservoir: 0.40 kWh/1000 gal (low-lift on-farm)
-        - recycled_water: 0.30 kWh/1000 gal (pre-treated)
-        - other/None: 2.0 kWh/1000 gal (US agricultural average)
+        Pump energy factor resolution order (Item #13):
+        1. pump_depth_ft — if provided, calculate from standard pump curve:
+               kWh/1000gal = depth_ft * 0.0175  (USDA NRCS standard pump efficiency)
+        2. water_source lookup (USDA NRCS guidelines):
+           - well_groundwater: 3.5 kWh/1000 gal (deep well, 200-300 ft)
+           - municipal: 0.20 kWh/1000 gal (pre-pressurized)
+           - rainwater_harvesting: 0.15 kWh/1000 gal (gravity-fed)
+           - irrigation_canal: 0.50 kWh/1000 gal (low-lift surface pump)
+           - river_stream: 0.85 kWh/1000 gal (moderate-lift)
+           - pond_reservoir: 0.40 kWh/1000 gal (low-lift on-farm)
+           - recycled_water: 0.30 kWh/1000 gal (pre-treated)
+           - other/None: 2.0 kWh/1000 gal (US agricultural average)
+
+        Electricity emission factor resolution order (Item #13):
+        1. electricity_source — specific emission factor by source type
+        2. Default: EPA eGRID 2023 grid factor (0.39 kg CO2/kWh)
         """
 
         electricity_factor = cls.get_country_electricity_factor()
 
-        # Select pump factor based on water source
-        if water_source and water_source in cls.IRRIGATION_PUMP_FACTORS:
+        # Item #13: Override electricity emission factor if electricity_source is specified
+        if electricity_source and electricity_source in cls.ELECTRICITY_SOURCE_FACTORS:
+            effective_electricity_factor_value = cls.ELECTRICITY_SOURCE_FACTORS[electricity_source]
+            electricity_source_label = electricity_source.replace("_", " ").title()
+        else:
+            effective_electricity_factor_value = electricity_factor.value
+            electricity_source_label = "Grid (EPA eGRID 2023)"
+
+        # Item #13: Override pump factor if pump_depth_ft is provided.
+        # Standard pump curve: kWh/1000gal = depth_ft * 0.0175 (USDA NRCS)
+        if pump_depth_ft is not None and pump_depth_ft > 0:
+            pump_kwh_per_1000gal = pump_depth_ft * 0.0175
+            pump_source = f"USDA NRCS standard pump curve ({pump_depth_ft} ft depth)"
+            pump_confidence = 0.85
+            pump_notes = f"Pump energy calculated from depth ({pump_depth_ft} ft) using USDA NRCS pump curve"
+        elif water_source and water_source in cls.IRRIGATION_PUMP_FACTORS:
             pump_consumption = cls.IRRIGATION_PUMP_FACTORS[water_source]
+            pump_kwh_per_1000gal = pump_consumption.value
+            pump_source = pump_consumption.source
+            pump_confidence = pump_consumption.confidence_level
+            pump_notes = pump_consumption.notes
         else:
             pump_consumption = cls.IRRIGATION_PUMP_DEFAULT
+            pump_kwh_per_1000gal = pump_consumption.value
+            pump_source = pump_consumption.source
+            pump_confidence = pump_consumption.confidence_level
+            pump_notes = pump_consumption.notes
 
         water_source_label = cls.WATER_SOURCE_LABELS.get(water_source or "other", "Unknown")
 
         # Calculate electricity consumption for pumping
-        kwh_consumed = (water_volume_gallons / 1000) * pump_consumption.value
-        co2e_kg = kwh_consumed * electricity_factor.value
+        kwh_consumed = (water_volume_gallons / 1000) * pump_kwh_per_1000gal
+        co2e_kg = kwh_consumed * effective_electricity_factor_value
 
         breakdown = {
             "water_volume_gallons": water_volume_gallons,
             "kwh_consumed": kwh_consumed,
-            "electricity_emission_factor_kg_per_kwh": electricity_factor.value,
-            "pump_efficiency_kwh_per_1000_gallons": pump_consumption.value,
+            "electricity_emission_factor_kg_per_kwh": effective_electricity_factor_value,
+            "electricity_source": electricity_source or "grid",
+            "electricity_source_label": electricity_source_label,
+            "pump_efficiency_kwh_per_1000_gallons": pump_kwh_per_1000gal,
+            "pump_depth_ft": pump_depth_ft,
             "water_source": water_source or "unknown",
             "water_source_label": water_source_label,
-            "confidence_level": min(
-                electricity_factor.confidence_level,
-                pump_consumption.confidence_level,
-            ),
+            "confidence_level": min(electricity_factor.confidence_level, pump_confidence),
         }
 
         return {
             "co2e_kg": round(co2e_kg, 3),
             "calculation_method": "verified_epa_usda_factors",
             "breakdown": breakdown,
-            "data_sources": [electricity_factor.source, pump_consumption.source],
-            "limitations": pump_consumption.notes,
+            "data_sources": [electricity_factor.source, pump_source],
+            "limitations": pump_notes,
         }
 
     @classmethod
@@ -1338,6 +1381,16 @@ class VerifiedEmissionFactors:
         # Use production_type_code for activity label if available
         production_type_code = kwargs.get("production_type_code", "")
         activity_labels = {
+            "PL": "planting",
+            "HA": "harvesting",
+            "IR": "irrigation",
+            "PR": "pruning",
+            "TR": "transplanting",
+            "CU": "cultivation",
+            "TH": "thinning",
+            "PO": "pollination",
+            "PH": "post_harvest_processing",
+            "CM": "canopy_management",
             "EM": "equipment_maintenance",
         }
         activity_label = activity_labels.get(production_type_code, "general_crop_production")
@@ -1740,6 +1793,8 @@ class VerifiedEmissionFactors:
         application_fuel_unit: str = "L",
         concentration: float = None,
         organic_approved: str = "",
+        is_fertigation: bool = False,
+        chemical_mass_kg: float = None,
     ) -> Dict[str, Any]:
         """
         Calculate chemical application emissions using EPA/USDA verified emission factors.
@@ -1782,7 +1837,8 @@ class VerifiedEmissionFactors:
                           Used to calculate actual active ingredient mass for pesticides/herbicides/fungicides.
         """
 
-        if volume_liters <= 0 or area_hectares <= 0:
+        has_volume = volume_liters > 0 or (chemical_mass_kg is not None and chemical_mass_kg > 0)
+        if not has_volume or area_hectares <= 0:
             return {
                 "co2e_kg": 0.0,
                 "calculation_method": "verified_epa_usda_factors",
@@ -1802,9 +1858,16 @@ class VerifiedEmissionFactors:
         p_percentage = npk_content.get("P", 0) / 100.0
         k_percentage = npk_content.get("K", 0) / 100.0
 
-        # Get accurate fertilizer density based on NPK content and type
-        fertilizer_density = cls._get_fertilizer_density(npk_content, application_method)
-        total_fertilizer_kg = volume_liters * fertilizer_density
+        # Determine total product mass in kg
+        # When chemical_mass_kg is provided (input was in mass units like kg/lbs),
+        # use it directly — no density conversion needed.
+        # When only volume_liters is available, convert using density.
+        if chemical_mass_kg is not None and chemical_mass_kg > 0:
+            total_fertilizer_kg = chemical_mass_kg
+            fertilizer_density = 1.0  # Not used, but set for breakdown reporting
+        else:
+            fertilizer_density = cls._get_fertilizer_density(npk_content, application_method)
+            total_fertilizer_kg = volume_liters * fertilizer_density
 
         # Determine specific chemical subtype using priority order:
         # 1. Explicit chemical_subtype parameter (highest priority - from UI dropdown)
@@ -1960,8 +2023,18 @@ class VerifiedEmissionFactors:
         # UPDATED 2025-12-11: Support for actual fuel tracking (diesel, electric, etc.)
         # Falls back to estimated fuel consumption if actual consumption not provided
 
+        # Item #14: Fertigation — fertilizer injected through irrigation system.
+        # Application fuel is already counted in the irrigation event, so skip it here
+        # to avoid double-counting. Only manufacturing emissions (NPK factors) are calculated.
+        if is_fertigation:
+            application_emissions = 0.0
+            total_fuel_liters = 0.0
+            total_fuel_gallons = 0.0
+            calculation_basis = "fertigation_no_application_fuel"
+            calculation_method_note = "Fertigation — application fuel skipped (counted in irrigation event)"
+
         # Check if actual fuel consumption is provided
-        if application_fuel_consumed is not None and application_fuel_consumed > 0 and application_fuel_type:
+        elif application_fuel_consumed is not None and application_fuel_consumed > 0 and application_fuel_type:
             # Use actual application fuel data
             application_fuel_consumed = float(application_fuel_consumed)  # Convert Decimal to float for calculation
             calculation_basis = "actual_application_fuel"

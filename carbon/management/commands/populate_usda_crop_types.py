@@ -5,7 +5,7 @@ TRAZO MVP - UNIFIED CROP DATA SEEDING COMMAND
 
 This is the SINGLE source of truth for all crop-related seed data in Trazo.
 Run this command to populate:
-  1. CropType records (19 USDA-verified crops)
+  1. CropType records (21 USDA-verified crops)
   2. ProductionTemplate records (conventional farming approach per crop)
   3. EventTemplate records (typical farming events per template)
 
@@ -27,7 +27,7 @@ MVP DEPLOYMENT CHECKLIST:
 -------------------------
 1. Run migrations: poetry run python manage.py migrate
 2. Run this command: poetry run python manage.py populate_usda_crop_types
-3. Verify: 19 crop types, 19 templates, ~120 events
+3. Verify: 21 crop types, 21 templates, ~140 events
 
 DATA SOURCES:
 -------------
@@ -50,7 +50,7 @@ class Command(BaseCommand):
     help = """
     Unified USDA crop data seeding command for Trazo MVP.
 
-    Seeds 19 crop types with production templates and event templates.
+    Seeds 21 crop types with production templates and event templates.
     Safe to run multiple times (idempotent - uses get_or_create).
 
     Examples:
@@ -118,7 +118,7 @@ class Command(BaseCommand):
     IGNORED_FIELDS = {"benchmark_verified", "emissions_calculation_method", "usda_benchmark_source"}
 
     def _seed_crop_types(self, stats, dry_run, verbosity):
-        """Seed all 19 USDA-verified crop types."""
+        """Seed all 22 USDA-verified crop types."""
         crop_data = self._get_crop_type_data()
 
         for data in crop_data:
@@ -287,10 +287,10 @@ class Command(BaseCommand):
         )
 
     # =========================================================================
-    # CROP TYPE DATA - 19 USDA-VERIFIED CROPS
+    # CROP TYPE DATA - 21 USDA-VERIFIED CROPS
     # =========================================================================
     def _get_crop_type_data(self):
-        """Returns all 19 USDA-verified crop types with complete data."""
+        """Returns all 21 USDA-verified crop types with complete data."""
         return [
             # === GRAINS (4) ===
             {
@@ -488,10 +488,10 @@ class Command(BaseCommand):
             },
             # === TREE FRUITS (4) ===
             {
-                "name": "Citrus (Oranges)",
+                "name": "Citrus",
                 "slug": "citrus_oranges",
                 "category": "tree_fruit",
-                "description": "Premium California citrus including oranges, lemons, and limes. Year-round production with high water requirements.",
+                "description": "Premium California citrus including oranges, lemons, limes, grapefruit, and tangerines. Year-round production with high water requirements.",
                 "typical_farm_size": "20-100 hectares",
                 "growing_season": "12 months (evergreen)",
                 "harvest_season": "November - April",
@@ -615,7 +615,40 @@ class Command(BaseCommand):
                 "usda_factors_used": True,
                 "data_source": "USDA Agricultural Research Service - Avocado Production",
             },
-            # === TREE NUTS (1) ===
+            # === TREE NUTS (2) ===
+            {
+                "name": "Walnuts",
+                "slug": "walnuts",
+                "category": "tree_nut",
+                "description": "California English walnut production — the US produces ~99% of the domestic crop. "
+                "Deciduous orchards with codling moth/husk fly as key pest pressures.",
+                "typical_farm_size": "10-80 hectares",
+                "growing_season": "12 months (deciduous)",
+                "harvest_season": "September - November",
+                "usda_benchmark_source": "walnut_lca_2024",
+                "benchmark_verified": True,
+                "emissions_calculation_method": "usda_lca_methodology",
+                "emissions_per_hectare": 3800.0,
+                "industry_average": 3800.0,
+                "best_practice": 2600.0,
+                "carbon_credit_potential": 580.0,
+                "typical_cost_per_hectare": 1550.0,
+                "fertilizer_cost_per_hectare": 320.0,
+                "fuel_cost_per_hectare": 380.0,
+                "irrigation_cost_per_hectare": 400.0,
+                "labor_cost_per_hectare": 450.0,
+                "organic_premium": "25-45%",
+                "sustainable_premium": "15-25%",
+                "local_premium": "10-20%",
+                "sustainability_opportunities": [
+                    "Implement drip irrigation to reduce water use by 25-30%",
+                    "Use cover crops to reduce nitrogen inputs and improve soil health",
+                    "Deploy pheromone traps for codling moth IPM (reduce insecticide use)",
+                    "Convert hull and shell waste to biomass energy or compost",
+                ],
+                "usda_factors_used": True,
+                "data_source": "USDA Agricultural Research Service - California Walnut Board, UC Davis",
+            },
             {
                 "name": "Almonds",
                 "slug": "almonds",
@@ -907,13 +940,79 @@ class Command(BaseCommand):
                 "usda_factors_used": True,
                 "data_source": "USDA Agricultural Research Service - Forage Production Systems",
             },
+            # === STONE FRUITS (1) ===
+            {
+                "name": "Stone Fruit",
+                "slug": "stone_fruit",
+                "category": "tree_fruits",
+                "description": "Tree fruit crops including peaches, nectarines, plums, apricots, and cherries. Require chill hours, careful thinning, and multi-pick harvesting.",
+                "typical_farm_size": "5-50 hectares",
+                "growing_season": "12 months (perennial)",
+                "harvest_season": "May - September (multiple picks)",
+                "usda_benchmark_source": "stone_fruit_lca_2024",
+                "benchmark_verified": True,
+                "emissions_calculation_method": "usda_lca_methodology",
+                "emissions_per_hectare": 2200.0,
+                "industry_average": 2200.0,
+                "best_practice": 1500.0,
+                "carbon_credit_potential": 350.0,
+                "typical_cost_per_hectare": 3500.0,
+                "fertilizer_cost_per_hectare": 600.0,
+                "fuel_cost_per_hectare": 300.0,
+                "irrigation_cost_per_hectare": 500.0,
+                "labor_cost_per_hectare": 2100.0,
+                "organic_premium": "30-50%",
+                "sustainable_premium": "15-25%",
+                "local_premium": "20-40%",
+                "sustainability_opportunities": [
+                    "Implement integrated pest management for brown rot and codling moth",
+                    "Use precision thinning to optimize fruit size and reduce waste",
+                    "Install efficient micro-sprinkler irrigation systems",
+                    "Document harvest quality grades for premium market positioning",
+                ],
+                "usda_factors_used": True,
+                "data_source": "USDA Agricultural Research Service - Stone Fruit Production",
+            },
+            # === MIXED VEGETABLES (1) ===
+            {
+                "name": "Mixed Vegetables",
+                "slug": "mixed_vegetables",
+                "category": "vegetables",
+                "description": "Diversified vegetable production including greens, brassicas, squash, peppers, herbs, and other market garden crops. Common in CSA and farmers market operations.",
+                "typical_farm_size": "2-20 hectares",
+                "growing_season": "Year-round with succession planting",
+                "harvest_season": "Year-round (weekly harvests)",
+                "usda_benchmark_source": "vegetables_mixed_lca_2024",
+                "benchmark_verified": True,
+                "emissions_calculation_method": "usda_lca_methodology",
+                "emissions_per_hectare": 1800.0,
+                "industry_average": 1800.0,
+                "best_practice": 1200.0,
+                "carbon_credit_potential": 300.0,
+                "typical_cost_per_hectare": 5000.0,
+                "fertilizer_cost_per_hectare": 800.0,
+                "fuel_cost_per_hectare": 250.0,
+                "irrigation_cost_per_hectare": 600.0,
+                "labor_cost_per_hectare": 3350.0,
+                "organic_premium": "30-60%",
+                "sustainable_premium": "15-30%",
+                "local_premium": "25-50%",
+                "sustainability_opportunities": [
+                    "Implement succession planting for continuous harvest documentation",
+                    "Use cover crops between rotations to build soil health",
+                    "Practice companion planting for natural pest management",
+                    "Document crop diversity for consumer transparency storytelling",
+                ],
+                "usda_factors_used": True,
+                "data_source": "USDA Agricultural Research Service - Vegetable Production Systems",
+            },
         ]
 
     # =========================================================================
-    # TEMPLATE DATA - ALL 19 CROPS WITH EVENTS
+    # TEMPLATE DATA - ALL 21 CROPS WITH EVENTS
     # =========================================================================
     def _get_template_data(self):
-        """Returns production templates with events for all 19 crops."""
+        """Returns production templates with events for all 21 crops."""
         return {
             # === GRAINS ===
             "corn_field": self._get_corn_template(),
@@ -929,6 +1028,7 @@ class Command(BaseCommand):
             "grapes": self._get_grapes_template(),
             "avocados": self._get_avocados_template(),
             # === TREE NUTS ===
+            "walnuts": self._get_walnut_template(),
             "almonds": self._get_almonds_template(),
             # === VEGETABLES ===
             "tomatoes": self._get_tomatoes_template(),
@@ -941,6 +1041,10 @@ class Command(BaseCommand):
             # === LEGUMES ===
             "peanuts": self._get_peanuts_template(),
             "hay_alfalfa": self._get_hay_alfalfa_template(),
+            # === STONE FRUITS ===
+            "stone_fruit": self._get_stone_fruit_template(),
+            # === MIXED VEGETABLES ===
+            "mixed_vegetables": self._get_mixed_vegetables_template(),
         }
 
     # =========================================================================
@@ -1897,6 +2001,240 @@ class Command(BaseCommand):
             ],
         }
 
+    def _get_walnut_template(self):
+        return {
+            "description": "Template for conventional English walnut production. "
+            "California deciduous tree nut with codling moth and husk fly as primary pest pressures.",
+            "complexity": "intermediate",
+            "setup_time": 8,
+            "premium": "15-25%",
+            "market_demand": "high",
+            "is_recommended": False,
+            "events": [
+                {
+                    "name": "Dormant Spray",
+                    "event_type": "pest_control",
+                    "description": "Apply dormant oil or copper-based spray to smother overwintering mites "
+                    "and reduce early-season fungal pressure (walnut blight).",
+                    "timing": "January - February (before budbreak)",
+                    "frequency": "annual",
+                    "order": 1,
+                    "carbon_impact": 30.0,
+                    "carbon_category": "low",
+                    "backend_event_type": 1,
+                    "backend_event_fields": {
+                        "type": "FU",
+                        "chemical_subtype": "copper_fungicide",
+                    },
+                    "display_priority": 3,
+                    "template_category": "seasonal",
+                    "qr_visibility": "medium",
+                    "consumer_message": "Dormant spray protects walnut trees from overwintering pests naturally",
+                    "sustainability_score": 7,
+                    "labor_hours": 3.0,
+                    "cost_estimate": 180.0,
+                },
+                {
+                    "name": "Winter Pruning",
+                    "event_type": "pruning",
+                    "description": "Structural pruning to improve canopy light penetration, "
+                    "remove diseased wood, and promote productive lateral growth.",
+                    "timing": "December - February",
+                    "frequency": "annual",
+                    "order": 2,
+                    "carbon_impact": 18.0,
+                    "carbon_category": "low",
+                    "backend_event_type": 2,
+                    "backend_event_fields": {
+                        "type": "PR",
+                        "area_unit": "acres",
+                    },
+                    "display_priority": 3,
+                    "template_category": "seasonal",
+                    "sustainability_score": 8,
+                    "labor_hours": 8.0,
+                    "cost_estimate": 320.0,
+                },
+                {
+                    "name": "Spring Fertilization",
+                    "event_type": "fertilization",
+                    "description": "Apply nitrogen fertilizer at budbreak to support canopy "
+                    "development and nut sizing. Typical rate: 80-120 lbs N/acre.",
+                    "timing": "March - April",
+                    "frequency": "annual",
+                    "order": 3,
+                    "carbon_impact": 90.0,
+                    "carbon_category": "medium",
+                    "backend_event_type": 1,
+                    "backend_event_fields": {
+                        "type": "FE",
+                        "chemical_subtype": "synthetic_fertilizer",
+                        "area_unit": "acres",
+                    },
+                    "display_priority": 2,
+                    "template_category": "core",
+                    "sustainability_score": 5,
+                    "labor_hours": 2.0,
+                    "cost_estimate": 280.0,
+                },
+                {
+                    "name": "Irrigation - Season Start",
+                    "event_type": "irrigation",
+                    "description": "Begin drip or micro-sprinkler irrigation as temperatures rise "
+                    "after last frost. Walnuts require 36-48 inches water/season.",
+                    "timing": "April - October",
+                    "frequency": "weekly",
+                    "order": 4,
+                    "carbon_impact": 45.0,
+                    "carbon_category": "medium",
+                    "backend_event_type": 2,
+                    "backend_event_fields": {
+                        "type": "IR",
+                        "irrigation_method": "drip",
+                        "area_unit": "acres",
+                    },
+                    "display_priority": 2,
+                    "template_category": "core",
+                    "sustainability_score": 6,
+                    "labor_hours": 1.0,
+                    "cost_estimate": 80.0,
+                },
+                {
+                    "name": "Codling Moth / Husk Fly Scouting",
+                    "event_type": "pest_scouting",
+                    "description": "Monitor pheromone traps for codling moth and husk fly populations. "
+                    "These are the two primary pest threats to walnut yield and quality.",
+                    "timing": "May - September (weekly during season)",
+                    "frequency": "weekly",
+                    "order": 5,
+                    "carbon_impact": 5.0,
+                    "carbon_category": "low",
+                    "backend_event_type": 6,
+                    "backend_event_fields": {
+                        "type": "SC",
+                    },
+                    "display_priority": 2,
+                    "template_category": "core",
+                    "qr_visibility": "high",
+                    "consumer_message": "Weekly pest monitoring reduces insecticide use through targeted IPM",
+                    "sustainability_score": 9,
+                    "labor_hours": 1.5,
+                    "cost_estimate": 60.0,
+                },
+                {
+                    "name": "Codling Moth Treatment",
+                    "event_type": "pest_control",
+                    "description": "Apply insecticide (Intrepid, Altacor, or Bt-based organic) "
+                    "at pheromone trap threshold. Timing with egg hatch is critical.",
+                    "timing": "June - August (threshold-based)",
+                    "frequency": "as_needed",
+                    "order": 6,
+                    "carbon_impact": 55.0,
+                    "carbon_category": "medium",
+                    "backend_event_type": 1,
+                    "backend_event_fields": {
+                        "type": "PE",
+                        "chemical_subtype": "synthetic_pesticide",
+                    },
+                    "display_priority": 2,
+                    "template_category": "core",
+                    "qr_visibility": "high",
+                    "consumer_message": "Pest treatments applied only when monitoring shows it is needed",
+                    "sustainability_score": 5,
+                    "labor_hours": 3.0,
+                    "cost_estimate": 200.0,
+                },
+                {
+                    "name": "Soil Testing",
+                    "event_type": "soil_management",
+                    "description": "Annual soil and leaf tissue testing to guide fertilizer and "
+                    "micronutrient applications. Critical for boron management in walnuts.",
+                    "timing": "June - July",
+                    "frequency": "annual",
+                    "order": 7,
+                    "carbon_impact": 3.0,
+                    "carbon_category": "low",
+                    "backend_event_type": 5,
+                    "backend_event_fields": {
+                        "type": "ST",
+                        "area_unit": "acres",
+                    },
+                    "display_priority": 3,
+                    "template_category": "seasonal",
+                    "sustainability_score": 9,
+                    "labor_hours": 2.0,
+                    "cost_estimate": 180.0,
+                },
+                {
+                    "name": "Mechanical Harvest (Shaking)",
+                    "event_type": "harvest",
+                    "description": "Use trunk shaker to dislodge nuts, followed by sweeper to windrow "
+                    "for pickup. Timing is critical — nuts must be at hull-split stage.",
+                    "timing": "September - October (hull-split stage)",
+                    "frequency": "annual",
+                    "order": 8,
+                    "carbon_impact": 70.0,
+                    "carbon_category": "medium",
+                    "backend_event_type": 2,
+                    "backend_event_fields": {
+                        "type": "HA",
+                        "area_unit": "acres",
+                    },
+                    "display_priority": 1,
+                    "template_category": "core",
+                    "qr_visibility": "high",
+                    "consumer_message": "Mechanically harvested California walnuts at peak ripeness",
+                    "sustainability_score": 6,
+                    "labor_hours": 8.0,
+                    "cost_estimate": 400.0,
+                },
+                {
+                    "name": "Hulling",
+                    "event_type": "post_harvest",
+                    "description": "Remove green hull from in-shell walnuts within 24 hours of harvest "
+                    "to prevent staining and mold. Hulls are composted or spread as organic matter.",
+                    "timing": "September - October (immediately after harvest)",
+                    "frequency": "annual",
+                    "order": 9,
+                    "carbon_impact": 25.0,
+                    "carbon_category": "low",
+                    "backend_event_type": 2,
+                    "backend_event_fields": {
+                        "type": "PH",
+                    },
+                    "display_priority": 2,
+                    "template_category": "core",
+                    "qr_visibility": "high",
+                    "consumer_message": "Hulled within 24 hours of harvest to preserve freshness",
+                    "sustainability_score": 7,
+                    "labor_hours": 4.0,
+                    "cost_estimate": 180.0,
+                },
+                {
+                    "name": "Drying",
+                    "event_type": "post_harvest",
+                    "description": "Dry in-shell walnuts to 8% moisture in forced-air dryers. "
+                    "Target moisture prevents mold and aflatoxin development in storage.",
+                    "timing": "September - November",
+                    "frequency": "annual",
+                    "order": 10,
+                    "carbon_impact": 40.0,
+                    "carbon_category": "medium",
+                    "backend_event_type": 2,
+                    "backend_event_fields": {
+                        "type": "PH",
+                    },
+                    "display_priority": 2,
+                    "template_category": "core",
+                    "qr_visibility": "medium",
+                    "consumer_message": "Dried to 8% moisture for long-term freshness and safety",
+                    "sustainability_score": 6,
+                    "labor_hours": 2.0,
+                    "cost_estimate": 220.0,
+                },
+            ],
+        }
+
     def _get_almonds_template(self):
         return {
             "description": "Template for conventional almond production. "
@@ -2760,6 +3098,464 @@ class Command(BaseCommand):
                     "template_category": "core",
                     "qr_visibility": "high",
                     "consumer_message": "Quality hay for livestock",
+                },
+            ],
+        }
+
+    def _get_stone_fruit_template(self):
+        return {
+            "description": "Comprehensive template for stone fruit production (peaches, nectarines, plums, "
+            "apricots, cherries). Covers dormant care through multi-pick harvest.",
+            "complexity": "advanced",
+            "setup_time": 10,
+            "premium": "20-40%",
+            "market_demand": "high",
+            "is_recommended": True,
+            "events": [
+                {
+                    "name": "Dormant Pruning",
+                    "event_type": "pruning",
+                    "description": "Structural pruning during dormancy to shape tree and manage fruiting wood.",
+                    "timing": "December - February",
+                    "frequency": "annual",
+                    "order": 1,
+                    "carbon_impact": 18.0,
+                    "carbon_category": "low",
+                    "backend_event_type": 1,
+                    "backend_event_fields": {
+                        "type": "PR",
+                        "area_covered": 5.0,
+                        "area_unit": "acres",
+                        "fuel_consumed": 3.0,
+                        "fuel_unit": "gal",
+                        "fuel_type": "diesel",
+                        "equipment_hours": 6.0,
+                    },
+                    "consumer_message": "Trees carefully pruned during winter dormancy for optimal fruit production.",
+                    "qr_visibility": "medium",
+                    "sustainability_score": 7,
+                    "labor_hours": 8.0,
+                    "cost_estimate": 400.0,
+                },
+                {
+                    "name": "Dormant Spray",
+                    "event_type": "chemical_application",
+                    "description": "Fungicide/insecticide application during dormancy for disease prevention.",
+                    "timing": "January - February",
+                    "frequency": "annual",
+                    "order": 2,
+                    "carbon_impact": 35.0,
+                    "carbon_category": "medium",
+                    "backend_event_type": 2,
+                    "backend_event_fields": {
+                        "type": "FU",
+                        "chemical_subtype": "copper_fungicide",
+                        "way_of_application": "ground_spray",
+                    },
+                    "consumer_message": "Preventive dormant season treatment to protect trees from disease.",
+                    "qr_visibility": "high",
+                    "sustainability_score": 5,
+                    "labor_hours": 4.0,
+                    "cost_estimate": 300.0,
+                },
+                {
+                    "name": "Bloom Thinning",
+                    "event_type": "thinning",
+                    "description": "Reducing bloom density to improve fruit size and quality.",
+                    "timing": "February - March",
+                    "frequency": "annual",
+                    "order": 3,
+                    "carbon_impact": 10.0,
+                    "carbon_category": "low",
+                    "backend_event_type": 1,
+                    "backend_event_fields": {
+                        "type": "TH",
+                        "area_covered": 5.0,
+                        "area_unit": "acres",
+                        "equipment_hours": 4.0,
+                    },
+                    "consumer_message": "Blossoms carefully thinned to ensure larger, higher-quality fruit.",
+                    "qr_visibility": "high",
+                    "sustainability_score": 8,
+                    "labor_hours": 6.0,
+                    "cost_estimate": 250.0,
+                },
+                {
+                    "name": "Fertilizer Application",
+                    "event_type": "fertilization",
+                    "description": "Balanced NPK application for fruit development.",
+                    "timing": "March - April",
+                    "frequency": "seasonal",
+                    "order": 4,
+                    "carbon_impact": 85.0,
+                    "carbon_category": "medium",
+                    "backend_event_type": 2,
+                    "backend_event_fields": {
+                        "type": "FE",
+                        "chemical_subtype": "synthetic_fertilizer",
+                        "way_of_application": "broadcast",
+                    },
+                    "consumer_message": "Balanced nutrition applied to support healthy fruit development.",
+                    "qr_visibility": "medium",
+                    "sustainability_score": 5,
+                    "labor_hours": 3.0,
+                    "cost_estimate": 350.0,
+                },
+                {
+                    "name": "Hand Thinning",
+                    "event_type": "thinning",
+                    "description": "Manual fruit thinning to optimize size, quality, and tree health.",
+                    "timing": "April - May",
+                    "frequency": "annual",
+                    "order": 5,
+                    "carbon_impact": 5.0,
+                    "carbon_category": "low",
+                    "backend_event_type": 1,
+                    "backend_event_fields": {
+                        "type": "TH",
+                        "area_covered": 5.0,
+                        "area_unit": "acres",
+                        "equipment_hours": 0.0,
+                    },
+                    "consumer_message": "Each fruit cluster hand-thinned to ensure premium size and flavor.",
+                    "qr_visibility": "high",
+                    "sustainability_score": 9,
+                    "labor_hours": 40.0,
+                    "cost_estimate": 1200.0,
+                },
+                {
+                    "name": "Irrigation Management",
+                    "event_type": "irrigation",
+                    "description": "Micro-sprinkler or drip irrigation management throughout growing season.",
+                    "timing": "April - September",
+                    "frequency": "weekly",
+                    "order": 6,
+                    "carbon_impact": 25.0,
+                    "carbon_category": "medium",
+                    "backend_event_type": 1,
+                    "backend_event_fields": {
+                        "type": "IR",
+                        "irrigation_method": "micro_sprinkler",
+                        "water_source": "well_groundwater",
+                    },
+                    "consumer_message": "Efficient irrigation system providing precise water for healthy fruit growth.",
+                    "qr_visibility": "medium",
+                    "sustainability_score": 7,
+                    "labor_hours": 2.0,
+                    "cost_estimate": 200.0,
+                },
+                {
+                    "name": "Brown Rot Prevention",
+                    "event_type": "chemical_application",
+                    "description": "Fungicide application to prevent brown rot during fruit development.",
+                    "timing": "May - July",
+                    "frequency": "as_needed",
+                    "order": 7,
+                    "carbon_impact": 30.0,
+                    "carbon_category": "medium",
+                    "backend_event_type": 2,
+                    "backend_event_fields": {
+                        "type": "FU",
+                        "chemical_subtype": "synthetic_fungicide",
+                        "way_of_application": "ground_spray",
+                    },
+                    "consumer_message": "Targeted disease prevention to protect fruit quality.",
+                    "qr_visibility": "high",
+                    "sustainability_score": 5,
+                    "labor_hours": 3.0,
+                    "cost_estimate": 250.0,
+                },
+                {
+                    "name": "Pest Scouting",
+                    "event_type": "pest_management",
+                    "description": "Regular monitoring for oriental fruit moth, codling moth, and other pests.",
+                    "timing": "April - August",
+                    "frequency": "weekly",
+                    "order": 8,
+                    "carbon_impact": 2.0,
+                    "carbon_category": "low",
+                    "backend_event_type": 6,
+                    "backend_event_fields": {
+                        "type": "SC",
+                    },
+                    "consumer_message": "Weekly pest monitoring ensures minimal pesticide use.",
+                    "qr_visibility": "high",
+                    "sustainability_score": 9,
+                    "labor_hours": 2.0,
+                    "cost_estimate": 50.0,
+                },
+                {
+                    "name": "Harvest - First Pick",
+                    "event_type": "harvesting",
+                    "description": "First selective harvest of ripe fruit. Multiple picks over 2-4 weeks.",
+                    "timing": "June - August",
+                    "frequency": "seasonal",
+                    "order": 9,
+                    "carbon_impact": 15.0,
+                    "carbon_category": "low",
+                    "backend_event_type": 1,
+                    "backend_event_fields": {
+                        "type": "HA",
+                        "area_covered": 5.0,
+                        "area_unit": "acres",
+                        "fuel_consumed": 2.0,
+                        "fuel_unit": "gal",
+                        "fuel_type": "diesel",
+                    },
+                    "consumer_message": "Fruit hand-picked at peak ripeness for the best flavor.",
+                    "qr_visibility": "high",
+                    "sustainability_score": 8,
+                    "labor_hours": 16.0,
+                    "cost_estimate": 800.0,
+                },
+                {
+                    "name": "Soil Testing",
+                    "event_type": "soil_management",
+                    "description": "Annual soil analysis for nutrient management planning.",
+                    "timing": "October - November",
+                    "frequency": "annual",
+                    "order": 10,
+                    "carbon_impact": 2.0,
+                    "carbon_category": "low",
+                    "backend_event_type": 5,
+                    "backend_event_fields": {
+                        "type": "ST",
+                        "area_covered": 5.0,
+                        "area_unit": "acres",
+                    },
+                    "consumer_message": "Annual soil health testing guides sustainable nutrient management.",
+                    "qr_visibility": "medium",
+                    "sustainability_score": 9,
+                    "labor_hours": 2.0,
+                    "cost_estimate": 150.0,
+                },
+            ],
+        }
+
+    def _get_mixed_vegetables_template(self):
+        return {
+            "description": "Comprehensive template for diversified vegetable production. "
+            "Designed for CSA farms, market gardens, and multi-crop operations.",
+            "complexity": "advanced",
+            "setup_time": 12,
+            "premium": "25-50%",
+            "market_demand": "high",
+            "is_recommended": True,
+            "events": [
+                {
+                    "name": "Bed Preparation",
+                    "event_type": "soil_management",
+                    "description": "Forming raised beds, installing drip tape, and preparing soil for planting.",
+                    "timing": "Year-round (succession)",
+                    "frequency": "seasonal",
+                    "order": 1,
+                    "carbon_impact": 30.0,
+                    "carbon_category": "medium",
+                    "backend_event_type": 5,
+                    "backend_event_fields": {
+                        "type": "TI",
+                        "area_covered": 2.0,
+                        "area_unit": "acres",
+                        "fuel_consumed": 3.0,
+                        "fuel_unit": "gal",
+                        "fuel_type": "diesel",
+                    },
+                    "consumer_message": "Garden beds carefully prepared with healthy soil for your vegetables.",
+                    "qr_visibility": "medium",
+                    "sustainability_score": 7,
+                    "labor_hours": 6.0,
+                    "cost_estimate": 300.0,
+                },
+                {
+                    "name": "Succession Planting",
+                    "event_type": "planting",
+                    "description": "Regular plantings every 1-2 weeks for continuous harvest availability.",
+                    "timing": "Year-round",
+                    "frequency": "weekly",
+                    "order": 2,
+                    "carbon_impact": 15.0,
+                    "carbon_category": "low",
+                    "backend_event_type": 1,
+                    "backend_event_fields": {
+                        "type": "PL",
+                        "area_covered": 0.5,
+                        "area_unit": "acres",
+                        "seeds_source": "certified_organic",
+                    },
+                    "consumer_message": "Fresh plantings every week ensure the freshest vegetables in your box.",
+                    "qr_visibility": "high",
+                    "sustainability_score": 8,
+                    "labor_hours": 4.0,
+                    "cost_estimate": 150.0,
+                },
+                {
+                    "name": "Transplanting",
+                    "event_type": "transplanting",
+                    "description": "Moving greenhouse-started seedlings to field beds.",
+                    "timing": "Year-round",
+                    "frequency": "weekly",
+                    "order": 3,
+                    "carbon_impact": 10.0,
+                    "carbon_category": "low",
+                    "backend_event_type": 1,
+                    "backend_event_fields": {
+                        "type": "TR",
+                        "area_covered": 0.5,
+                        "area_unit": "acres",
+                    },
+                    "consumer_message": "Seedlings carefully transplanted from greenhouse to field for optimal growth.",
+                    "qr_visibility": "medium",
+                    "sustainability_score": 8,
+                    "labor_hours": 6.0,
+                    "cost_estimate": 200.0,
+                },
+                {
+                    "name": "Drip Irrigation",
+                    "event_type": "irrigation",
+                    "description": "Efficient drip irrigation management for water conservation.",
+                    "timing": "Year-round",
+                    "frequency": "daily",
+                    "order": 4,
+                    "carbon_impact": 15.0,
+                    "carbon_category": "low",
+                    "backend_event_type": 1,
+                    "backend_event_fields": {
+                        "type": "IR",
+                        "irrigation_method": "drip",
+                        "water_source": "well_groundwater",
+                    },
+                    "consumer_message": "Water-efficient drip irrigation delivers precise watering to each plant.",
+                    "qr_visibility": "medium",
+                    "sustainability_score": 8,
+                    "labor_hours": 1.0,
+                    "cost_estimate": 50.0,
+                },
+                {
+                    "name": "Fertigation",
+                    "event_type": "fertilization",
+                    "description": "Nutrient delivery through drip irrigation system.",
+                    "timing": "Growing season",
+                    "frequency": "weekly",
+                    "order": 5,
+                    "carbon_impact": 40.0,
+                    "carbon_category": "medium",
+                    "backend_event_type": 2,
+                    "backend_event_fields": {
+                        "type": "FE",
+                        "chemical_subtype": "organic_fertilizer",
+                        "way_of_application": "fertigation",
+                    },
+                    "consumer_message": "Organic nutrients delivered efficiently through the irrigation system.",
+                    "qr_visibility": "medium",
+                    "sustainability_score": 7,
+                    "labor_hours": 1.0,
+                    "cost_estimate": 100.0,
+                },
+                {
+                    "name": "Cultivation / Weeding",
+                    "event_type": "cultivation",
+                    "description": "Mechanical and hand weeding between crop rows.",
+                    "timing": "Year-round",
+                    "frequency": "weekly",
+                    "order": 6,
+                    "carbon_impact": 12.0,
+                    "carbon_category": "low",
+                    "backend_event_type": 1,
+                    "backend_event_fields": {
+                        "type": "CU",
+                        "area_covered": 2.0,
+                        "area_unit": "acres",
+                        "fuel_consumed": 1.0,
+                        "fuel_unit": "gal",
+                        "fuel_type": "diesel",
+                    },
+                    "consumer_message": "Weeds managed through careful cultivation, keeping crops healthy naturally.",
+                    "qr_visibility": "medium",
+                    "sustainability_score": 8,
+                    "labor_hours": 8.0,
+                    "cost_estimate": 200.0,
+                },
+                {
+                    "name": "Pest Scouting",
+                    "event_type": "pest_management",
+                    "description": "Regular monitoring of diverse crops for pest and disease pressure.",
+                    "timing": "Year-round",
+                    "frequency": "weekly",
+                    "order": 7,
+                    "carbon_impact": 2.0,
+                    "carbon_category": "low",
+                    "backend_event_type": 6,
+                    "backend_event_fields": {
+                        "type": "SC",
+                    },
+                    "consumer_message": "Weekly pest monitoring across all crops ensures healthy produce.",
+                    "qr_visibility": "high",
+                    "sustainability_score": 9,
+                    "labor_hours": 3.0,
+                    "cost_estimate": 75.0,
+                },
+                {
+                    "name": "Harvest",
+                    "event_type": "harvesting",
+                    "description": "Regular harvest of market-ready vegetables for CSA boxes and markets.",
+                    "timing": "Year-round",
+                    "frequency": "weekly",
+                    "order": 8,
+                    "carbon_impact": 8.0,
+                    "carbon_category": "low",
+                    "backend_event_type": 1,
+                    "backend_event_fields": {
+                        "type": "HA",
+                        "area_covered": 2.0,
+                        "area_unit": "acres",
+                    },
+                    "consumer_message": "Vegetables hand-harvested fresh for your weekly box.",
+                    "qr_visibility": "high",
+                    "sustainability_score": 9,
+                    "labor_hours": 12.0,
+                    "cost_estimate": 400.0,
+                },
+                {
+                    "name": "Cover Crop Planting",
+                    "event_type": "soil_management",
+                    "description": "Planting cover crops in rotation to build soil health and prevent erosion.",
+                    "timing": "Fall - Winter",
+                    "frequency": "seasonal",
+                    "order": 9,
+                    "carbon_impact": -15.0,
+                    "carbon_category": "negative",
+                    "backend_event_type": 5,
+                    "backend_event_fields": {
+                        "type": "CC",
+                        "area_covered": 2.0,
+                        "area_unit": "acres",
+                    },
+                    "consumer_message": "Cover crops planted between seasons to nourish and protect the soil.",
+                    "qr_visibility": "high",
+                    "sustainability_score": 10,
+                    "labor_hours": 3.0,
+                    "cost_estimate": 150.0,
+                },
+                {
+                    "name": "Soil Testing",
+                    "event_type": "soil_management",
+                    "description": "Regular soil analysis for nutrient and pH management across diverse beds.",
+                    "timing": "Spring and Fall",
+                    "frequency": "seasonal",
+                    "order": 10,
+                    "carbon_impact": 2.0,
+                    "carbon_category": "low",
+                    "backend_event_type": 5,
+                    "backend_event_fields": {
+                        "type": "ST",
+                        "area_covered": 2.0,
+                        "area_unit": "acres",
+                    },
+                    "consumer_message": "Regular soil health testing ensures nutrient-rich, healthy produce.",
+                    "qr_visibility": "medium",
+                    "sustainability_score": 9,
+                    "labor_hours": 2.0,
+                    "cost_estimate": 200.0,
                 },
             ],
         }

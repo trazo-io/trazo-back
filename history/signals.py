@@ -4,6 +4,7 @@ from django.dispatch import receiver
 from carbon.services.event_carbon_calculator import EventCarbonCalculator
 
 from .models import (
+    BusinessEvent,
     ChemicalEvent,
     EquipmentEvent,
     GeneralEvent,
@@ -139,80 +140,142 @@ def calculate_production_event_carbon(sender, instance, created, **kwargs):
 @receiver(post_save, sender=WeatherEvent)
 def calculate_weather_event_carbon(sender, instance, created, **kwargs):
     """
-    Weather events are TRANSPARENCY DOCUMENTATION ONLY - they don't generate emissions.
+    Calculate carbon impact for weather events.
 
-    Weather events document environmental conditions (frost, drought, hailstorm) for
-    agricultural transparency. They are NOT farmer responses that generate emissions.
+    Some weather events generate real emissions (frost protection with heaters,
+    drought irrigation, hailstorm cleanup, high-temp cooling). Others are purely
+    transparency documentation (storms, winds, humidity).
 
-    Per Trazo's transparency-first transformation: weather events provide transparency
-    value without carbon emissions.
-
-    PHASE 2 CONSOLIDATION (2025-12-12): CarbonEntry is now the single source of truth.
-    Removed dual-write to extra_data['carbon_calculation'] - using only CarbonEntry.
+    FIX (2026-03-10): Previously skipped CarbonEntry creation for ALL weather
+    events, losing real emissions from frost/drought/hail/heat responses.
     """
-    if created or kwargs.get("update_fields"):
-        try:
-            # Weather events don't create carbon entries (no emissions)
-            # But we log for transparency tracking
+    try:
+        from carbon.models import CarbonEntry
+
+        calculator = _get_calculator()
+
+        # For updates, delete the existing CarbonEntry first to avoid duplicates
+        if not created:
+            event_id_pattern = f"WeatherEvent(ID={instance.id})"
+            existing_entries = CarbonEntry.objects.filter(
+                production=instance.history,
+                description__icontains=event_id_pattern,
+            )
+            deleted_count = existing_entries.count()
+
+            if deleted_count == 0:
+                existing_entries = CarbonEntry.objects.filter(
+                    production=instance.history,
+                    registry_verification_id=f"REG-WeatherEvent-{instance.id}",
+                )
+                deleted_count = existing_entries.count()
+
+            if deleted_count > 0:
+                existing_entries.delete()
+                print(f"🔄 Deleted {deleted_count} existing carbon entries for WeatherEvent {instance.id} (update)")
+
+        calculation_result = calculator.calculate_weather_event_impact(instance)
+        co2e_value = calculation_result.get("co2e", 0)
+
+        if abs(co2e_value) > 0:
+            calculator.create_carbon_entry_from_event(instance, calculation_result)
+
+        action = "created" if created else "updated"
+        if abs(co2e_value) > 0:
+            print(f"✅ Carbon calculation {action} for Weather Event {instance.id}: {co2e_value} kg CO2e")
+        else:
             print(
-                f"✅ Transparency documentation recorded for Weather Event {instance.id}: 0.0 kg CO2e (transparency value only)"
+                f"✅ Transparency documentation {action} for Weather Event {instance.id}:"
+                " 0.0 kg CO2e (transparency value only)"
             )
 
-        except Exception as e:
-            print(f"❌ Error recording transparency for Weather Event {instance.id}: {e}")
+    except Exception as e:
+        print(f"❌ Error calculating carbon for Weather Event {instance.id}: {e}")
 
 
 @receiver(post_save, sender=GeneralEvent)
 def calculate_general_event_carbon(sender, instance, created, **kwargs):
     """
-    Automatically calculate minimal carbon impact for general events
+    Automatically calculate minimal carbon impact for general events.
 
     PHASE 2 CONSOLIDATION (2025-12-12): CarbonEntry is now the single source of truth.
-    Removed dual-write to extra_data['carbon_calculation'] - using only CarbonEntry.
+
+    FIX (2026-03-10): Now triggers on BOTH create AND update to ensure carbon values
+    are recalculated when event fields are modified (was create-only).
     """
-    if created:  # Only for new general events
-        try:
-            calculator = _get_calculator()
+    try:
+        from carbon.models import CarbonEntry
 
-            # General events have minimal standard carbon impact
-            calculation_result = {
-                "co2e": 0.1,  # Minimal impact
-                "efficiency_score": 50.0,
-                "usda_factors_based": False,
-                "verification_status": "estimated",
-                "calculation_method": "general_event_standard",
-                "data_source": "Industry Standards",
-                "recommendations": [],
-                "event_type": "general",
-                "timestamp": instance.date.isoformat() if instance.date else None,
-            }
+        calculator = _get_calculator()
 
-            # Only create carbon entry if the event might have actual impact
-            impact_keywords = ["fuel", "energy", "transport", "machinery", "equipment"]
+        # For updates, delete the existing CarbonEntry first to avoid duplicates
+        if not created:
+            event_id_pattern = f"GeneralEvent(ID={instance.id})"
+            existing_entries = CarbonEntry.objects.filter(
+                production=instance.history,
+                description__icontains=event_id_pattern,
+            )
+            deleted_count = existing_entries.count()
 
-            # Safe string concatenation - handle None values
-            name_text = instance.name or ""
-            observation_text = instance.observation or ""
-            combined_text = (name_text + " " + observation_text).lower()
-
-            if any(keyword in combined_text for keyword in impact_keywords):
-                carbon_entry = calculator.create_carbon_entry_from_event(instance, calculation_result)
-
-                print(
-                    f"✅ Carbon calculation completed for General Event {instance.id}: {calculation_result['co2e']} kg CO2e"
+            if deleted_count == 0:
+                existing_entries = CarbonEntry.objects.filter(
+                    production=instance.history,
+                    registry_verification_id=f"REG-GeneralEvent-{instance.id}",
                 )
-            else:
-                print(
-                    f"✅ General Event {instance.id} processed with minimal carbon impact: {calculation_result['co2e']} kg CO2e"
-                )
+                deleted_count = existing_entries.count()
 
-        except Exception as e:
-            print(f"❌ Error calculating carbon for General Event {instance.id}: {e}")
-            import traceback
+            if deleted_count > 0:
+                existing_entries.delete()
+                print(f"🔄 Deleted {deleted_count} existing carbon entries for GeneralEvent {instance.id} (update)")
 
-            traceback.print_exc()
+        # General events have minimal standard carbon impact
+        calculation_result = {
+            "co2e": 0.1,  # Minimal impact
+            "efficiency_score": 50.0,
+            "usda_factors_based": False,
+            "verification_status": "estimated",
+            "calculation_method": "general_event_standard",
+            "data_source": "Industry Standards",
+            "recommendations": [],
+            "event_type": "general",
+            "timestamp": instance.date.isoformat() if instance.date else None,
+        }
+
+        # Only create carbon entry if the event might have actual impact
+        impact_keywords = ["fuel", "energy", "transport", "machinery", "equipment"]
+
+        # Safe string concatenation - handle None values
+        name_text = instance.name or ""
+        observation_text = instance.observation or ""
+        combined_text = (name_text + " " + observation_text).lower()
+
+        if any(keyword in combined_text for keyword in impact_keywords):
+            calculator.create_carbon_entry_from_event(instance, calculation_result)
+
+            action = "created" if created else "updated"
+            print(
+                f"✅ Carbon calculation {action} for General Event {instance.id}: {calculation_result['co2e']} kg CO2e"
+            )
+        else:
+            print(
+                f"✅ General Event {instance.id} processed with minimal carbon impact: {calculation_result['co2e']} kg CO2e"
+            )
+
+    except Exception as e:
+        print(f"❌ Error calculating carbon for General Event {instance.id}: {e}")
 
 
+@receiver(post_save, sender=BusinessEvent)
+def calculate_business_event_carbon(sender, instance, created, **kwargs):
+    """
+    Business events (certifications, audits, compliance) have no direct operational
+    emissions. Log for transparency tracking only — no CarbonEntry created.
+    """
+    action = "created" if created else "updated"
+    print(f"✅ Transparency documentation {action} for Business Event {instance.id}: 0.0 kg CO2e (no direct emissions)")
+
+
+@receiver(post_delete, sender=BusinessEvent)
 @receiver(post_delete, sender=ChemicalEvent)
 @receiver(post_delete, sender=ProductionEvent)
 @receiver(post_delete, sender=WeatherEvent)

@@ -16,7 +16,6 @@ from qrcode.image.styledpil import StyledPilImage
 from qrcode.image.styles.colormasks import SolidFillColorMask
 from qrcode.image.styles.moduledrawers import RoundedModuleDrawer
 
-
 from carbon.choices import FUEL_TYPES
 from common.models import Gallery
 from product.models import Parcel
@@ -636,6 +635,36 @@ class CommonEvent(models.Model):
         help_text="Name of person who performed this agricultural activity (USDA GAP traceability)",
     )
 
+    # Phase 2: Agronomy context fields shared across all event types
+    variety = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Crop variety (e.g., Nonpareil almonds, Hass avocados)",
+    )
+    block_id = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="Farm block or section identifier",
+    )
+    growth_stage = models.CharField(
+        max_length=30,
+        choices=[
+            ("dormant", "Dormant"),
+            ("budbreak", "Bud Break"),
+            ("bloom", "Bloom/Flowering"),
+            ("fruit_set", "Fruit Set"),
+            ("vegetative", "Vegetative Growth"),
+            ("maturation", "Maturation"),
+            ("harvest_ready", "Harvest Ready"),
+            ("post_harvest", "Post-Harvest"),
+        ],
+        blank=True,
+        null=True,
+        help_text="Crop growth stage at time of event",
+    )
+
     class Meta:
         abstract = True
 
@@ -807,7 +836,7 @@ class ChemicalEvent(CommonEvent):
             ("kg", "Kilograms"),
             ("kWh", "Kilowatt-hours"),
         ],
-        default="L",
+        default="gal",
         blank=True,
         help_text="Fuel unit for application equipment",
     )
@@ -881,6 +910,57 @@ class ChemicalEvent(CommonEvent):
         blank=True,
         null=True,
         help_text="Pre-Harvest Interval in days (consumer safety)",
+    )
+
+    # Item #8: Numeric volume and area fields for accurate carbon calculations
+    # The legacy string fields (volume, area) are kept for backward compatibility with existing data.
+    # New events should populate these numeric fields instead.
+    volume_numeric = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        help_text="Volume applied (numeric value)",
+    )
+    volume_unit = models.CharField(
+        max_length=20,
+        choices=[
+            ("L", "Liters"),
+            ("gal", "Gallons"),
+            ("mL", "Milliliters"),
+            ("oz", "Ounces"),
+            ("kg", "Kilograms"),
+            ("lbs", "Pounds"),
+        ],
+        default="gal",
+        blank=True,
+        help_text="Volume unit",
+    )
+    area_numeric = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        help_text="Area treated (numeric value)",
+    )
+    area_unit = models.CharField(
+        max_length=10,
+        choices=[
+            ("ha", "Hectares"),
+            ("acres", "Acres"),
+            ("m2", "Square Meters"),
+        ],
+        default="acres",
+        blank=True,
+        help_text="Area unit",
+    )
+
+    # Item #14: Fertigation flag — fertilizer injected through irrigation system.
+    # When True, application fuel is skipped to avoid double-counting with the irrigation event.
+    is_fertigation = models.BooleanField(
+        default=False,
+        help_text="Fertigation — fertilizer injected through irrigation system. "
+        "Skips application fuel to avoid double-counting with irrigation events.",
     )
 
     def clean(self):
@@ -965,6 +1045,11 @@ class ProductionEvent(CommonEvent):
     CULTIVATION = "CU"  # Mechanical weed removal, row cultivation
     THINNING = "TH"  # Plant density reduction
 
+    # Phase 2 additions
+    POLLINATION = "PO"  # Bee placement, pollinator management (almonds, tree fruit)
+    POST_HARVEST_PROCESSING = "PH"  # Hulling, shelling, washing, sorting, packing
+    CANOPY_MANAGEMENT = "CM"  # Leaf pulling, hedging, shoot positioning (distinct from Pruning)
+
     PRODUCTION_EVENTS = (
         (PLANTING, "Planting"),
         (HARVESTING, "Harvesting"),
@@ -975,6 +1060,10 @@ class ProductionEvent(CommonEvent):
         (EQUIPMENT_MAINTENANCE, "Equipment Maintenance"),  # Merged from Equipment events
         (CULTIVATION, "Cultivation/Weed Control"),  # USDA aligned
         (THINNING, "Thinning"),  # USDA aligned
+        # Phase 2 additions
+        (POLLINATION, "Pollination"),  # Bee placement / pollinator management
+        (POST_HARVEST_PROCESSING, "Post-Harvest Processing"),  # Hulling, shelling, washing, sorting, packing
+        (CANOPY_MANAGEMENT, "Canopy Management"),  # Leaf pulling, hedging, shoot positioning
     )
 
     type = models.CharField(max_length=2, choices=PRODUCTION_EVENTS)
@@ -994,7 +1083,7 @@ class ProductionEvent(CommonEvent):
             ("m2", "Square Meters"),
             ("km2", "Square Kilometers"),
         ],
-        default="ha",
+        default="acres",
         blank=True,
         help_text="Area unit",
     )
@@ -1011,7 +1100,7 @@ class ProductionEvent(CommonEvent):
             ("plants", "Plants"),
             ("seeds", "Seeds"),
         ],
-        default="kg",
+        default="lbs",
         blank=True,
         help_text="Yield unit",
     )
@@ -1026,7 +1115,7 @@ class ProductionEvent(CommonEvent):
             ("kg", "Kilograms"),
             ("kWh", "Kilowatt-hours"),
         ],
-        default="L",
+        default="gal",
         blank=True,
         help_text="Fuel unit",
     )
@@ -1047,7 +1136,7 @@ class ProductionEvent(CommonEvent):
             ("miles", "Miles"),
             ("m", "Meters"),
         ],
-        default="km",
+        default="miles",
         blank=True,
         help_text="Transportation unit",
     )
@@ -1136,6 +1225,16 @@ class ProductionEvent(CommonEvent):
         help_text="Unit for irrigation depth measurement",
     )
 
+    # Phase 2: Quality metric for harvest and post-harvest events
+    brix_level = models.DecimalField(
+        max_digits=5,
+        decimal_places=1,
+        blank=True,
+        null=True,
+        validators=[MinValueValidator(0), MaxValueValidator(45)],
+        help_text="Brix level (sugar content) - key quality metric for fruit crops",
+    )
+
     # Sprint 2 Epic 2.1: Equipment Maintenance fields (merged from EquipmentEvent)
     # These fields are used when production_type = 'EM' (Equipment Maintenance)
     fuel_type = models.CharField(
@@ -1199,13 +1298,36 @@ class ProductionEvent(CommonEvent):
         help_text="Grain moisture percentage at harvest (Midwest corn/soy operations)",
     )
 
+    # Item #13: Pump depth and electricity source for irrigation (IR) events.
+    # These fields enable accurate energy calculation per USDA NRCS pump curve methodology.
+    pump_depth_ft = models.DecimalField(
+        max_digits=6,
+        decimal_places=1,
+        blank=True,
+        null=True,
+        help_text="Well pump depth in feet — affects irrigation energy calculation (USDA NRCS)",
+    )
+    electricity_source = models.CharField(
+        max_length=20,
+        choices=[
+            ("grid", "Grid Electricity"),
+            ("solar", "Solar"),
+            ("wind", "Wind"),
+            ("diesel_generator", "Diesel Generator"),
+            ("mixed", "Mixed Sources"),
+        ],
+        blank=True,
+        null=True,
+        help_text="Electricity source for pump — affects CO2 emission factor",
+    )
+
     def clean(self):
         """Model-level validation for production event values and business logic"""
         errors = {}
 
         # Validate area_covered - must be positive for most operations
-        # Equipment Maintenance (EM) can have area_covered=0
-        if self.area_covered is not None and self.area_covered <= 0 and self.type != "EM":
+        # Equipment Maintenance (EM) and Pollination (PO) can have area_covered=0
+        if self.area_covered is not None and self.area_covered <= 0 and self.type not in ("EM", "PO"):
             errors["area_covered"] = "Area covered must be greater than 0"
 
         # Validate transportation_distance - cannot be negative
@@ -1475,7 +1597,7 @@ class EquipmentEvent(CommonEvent):
             ("kg", "Kilograms"),
             ("kWh", "Kilowatt-hours"),
         ],
-        default="L",
+        default="gal",
         blank=True,
         help_text="Fuel unit",
     )
@@ -1496,7 +1618,7 @@ class EquipmentEvent(CommonEvent):
             ("acres", "Acres"),
             ("m2", "Square Meters"),
         ],
-        default="ha",
+        default="acres",
         blank=True,
         help_text="Area unit",
     )
@@ -1580,6 +1702,7 @@ class SoilManagementEvent(CommonEvent):
     COVER_CROP = "CC"
     TILLAGE = "TI"
     COMPOSTING = "CO"
+    GRAZING = "GR"
 
     SOIL_TYPE_CHOICES = [
         (SOIL_TEST, "Soil Test"),
@@ -1588,6 +1711,7 @@ class SoilManagementEvent(CommonEvent):
         (COVER_CROP, "Cover Crop"),
         (TILLAGE, "Tillage"),
         (COMPOSTING, "Composting"),
+        (GRAZING, "Grazing Management"),
     ]
 
     type = models.CharField(max_length=2, choices=SOIL_TYPE_CHOICES, default=SOIL_TEST)
@@ -1598,6 +1722,57 @@ class SoilManagementEvent(CommonEvent):
     test_results = models.JSONField(null=True, blank=True)  # Store complex test data
     carbon_sequestration_potential = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
     extra_data = models.JSONField(blank=True, null=True)
+
+    # Grazing management fields (for GR subtype)
+    animal_type = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="Type of grazing animal (e.g., sheep, goats, cattle)",
+    )
+    animal_count = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Number of animals used for grazing",
+    )
+    grazing_duration_days = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Duration of grazing period in days",
+    )
+    grazing_purpose = models.CharField(
+        max_length=50,
+        choices=[
+            ("weed_control", "Weed Control"),
+            ("cover_crop", "Cover Crop Termination"),
+            ("soil_health", "Soil Health"),
+            ("vegetation_management", "Vegetation Management"),
+        ],
+        blank=True,
+        null=True,
+        help_text="Primary purpose of the grazing activity",
+    )
+
+    # Numeric amendment field to replace legacy string field
+    amendment_amount_numeric = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Amendment amount in numeric format (replaces legacy string field)",
+    )
+    amendment_amount_unit = models.CharField(
+        max_length=10,
+        choices=[
+            ("kg", "Kilograms"),
+            ("lbs", "Pounds"),
+            ("tons", "Tons"),
+            ("gal", "Gallons"),
+        ],
+        default="kg",
+        blank=True,
+        help_text="Unit for amendment_amount_numeric",
+    )
 
     # Standardized fields for carbon calculations (matching ProductionEvent pattern)
     name = models.CharField(max_length=150, blank=True, null=True, help_text="Event name")
@@ -1612,7 +1787,7 @@ class SoilManagementEvent(CommonEvent):
             ("m2", "Square Meters"),
             ("km2", "Square Kilometers"),
         ],
-        default="ha",
+        default="acres",
         blank=True,
         help_text="Area unit",
     )
@@ -1631,7 +1806,7 @@ class SoilManagementEvent(CommonEvent):
             ("kg", "Kilograms"),
             ("kWh", "Kilowatt-hours"),
         ],
-        default="L",
+        default="gal",
         blank=True,
         help_text="Fuel unit",
     )
@@ -1659,7 +1834,7 @@ class SoilManagementEvent(CommonEvent):
             ("miles", "Miles"),
             ("m", "Meters"),
         ],
-        default="km",
+        default="miles",
         blank=True,
         help_text="Transportation unit",
     )
@@ -1774,6 +1949,17 @@ class SoilManagementEvent(CommonEvent):
                     f"Fuel consumption ({fuel_per_hour:.1f}L/hr) seems unreasonably low. Check values."
                 )
 
+        # Grazing event validation
+        if self.type == self.GRAZING:
+            if self.animal_type and not self.animal_count:
+                errors["animal_count"] = "Number of animals is required when animal type is specified"
+            if self.animal_count and self.animal_count > 10000:
+                errors["animal_count"] = f"Animal count ({self.animal_count}) seems unusually high. Please verify."
+            if self.grazing_duration_days and self.grazing_duration_days > 365:
+                errors["grazing_duration_days"] = (
+                    f"Grazing duration ({self.grazing_duration_days} days) exceeds one year. Please verify."
+                )
+
         # Transportation efficiency check
         if self.transportation_distance and self.transportation_distance > 500:
             errors["transportation_distance"] = (
@@ -1850,7 +2036,7 @@ class PestManagementEvent(CommonEvent):
             ("acres", "Acres"),
             ("m2", "Square Meters"),
         ],
-        default="ha",
+        default="acres",
         blank=True,
         help_text="Area unit",
     )
@@ -1869,7 +2055,7 @@ class PestManagementEvent(CommonEvent):
             ("kg", "Kilograms"),
             ("kWh", "Kilowatt-hours"),
         ],
-        default="L",
+        default="gal",
         blank=True,
         help_text="Fuel unit",
     )

@@ -298,8 +298,28 @@ class UnitConverter:
             return "tonnes"
         elif unit in ["pound", "pounds", "lb", "lbs"]:
             return "pounds"
+        elif unit in ["ounce", "ounces", "oz"]:
+            return "ounces"
+        elif unit in ["gram", "grams", "g"]:
+            return "grams"
+
+        # Volume units (additional)
+        elif unit in ["milliliter", "milliliters", "ml"]:
+            return "ml"
 
         return unit
+
+    @classmethod
+    def is_mass_unit(cls, unit: str) -> bool:
+        """Check if a unit string represents a mass measurement."""
+        normalized = cls.normalize_unit_name(unit.lower().strip()) if unit else ""
+        return normalized in cls.MASS_CONVERSIONS
+
+    @classmethod
+    def is_volume_unit(cls, unit: str) -> bool:
+        """Check if a unit string represents a volume measurement."""
+        normalized = cls.normalize_unit_name(unit.lower().strip()) if unit else ""
+        return normalized in cls.VOLUME_CONVERSIONS
 
     @classmethod
     def validate_unit_combination(cls, value: float, unit: str, measurement_type: str) -> bool:

@@ -6,7 +6,7 @@ from company.models import Establishment
 
 
 class Product(models.Model):
-    name = models.CharField(max_length=30)
+    name = models.CharField(max_length=100)
     description = models.TextField(blank=True, null=True)
     image = models.ImageField(upload_to="product_images", blank=True)
 
@@ -15,7 +15,7 @@ class Product(models.Model):
 
 
 class Parcel(models.Model):
-    name = models.CharField(max_length=30)
+    name = models.CharField(max_length=100)
     description = models.TextField(blank=True, null=True)
     album = models.ForeignKey("common.Gallery", on_delete=models.CASCADE, blank=True, null=True)
     establishment = models.ForeignKey(Establishment, on_delete=models.CASCADE, related_name="parcels")

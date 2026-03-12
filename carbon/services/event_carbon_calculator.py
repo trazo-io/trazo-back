@@ -958,6 +958,16 @@ class EventCarbonCalculator:
             # Enables tracking of actual fuel consumed by application equipment (electric, diesel, etc.)
             # ENHANCED 2025-12-24: Pass concentration for accurate active ingredient calculation.
             # Ensures preview and dashboard show consistent manufacturing emissions.
+            # Item #14: Pass fertigation flag to skip double-counting application fuel
+            is_fertigation = bool(getattr(event, "is_fertigation", False))
+            # Auto-detect fertigation if application method indicates it
+            if not is_fertigation and chemical_type == "FE":
+                app_method = getattr(event, "way_of_application", "") or ""
+                if "fertigation" in app_method.lower():
+                    is_fertigation = True
+
+            chemical_mass_kg = chemical_data.get("chemical_mass_kg")
+
             calculation_result = VerifiedEmissionFactors.calculate_chemical_application_emissions(
                 chemical_type=chemical_type,
                 volume_liters=volume_liters,
@@ -970,6 +980,8 @@ class EventCarbonCalculator:
                 application_fuel_consumed=application_fuel_consumed,
                 application_fuel_unit=application_fuel_unit,
                 concentration=concentration,
+                is_fertigation=is_fertigation,
+                chemical_mass_kg=chemical_mass_kg,
             )
 
             base_emissions = calculation_result["co2e_kg"]
@@ -1028,42 +1040,102 @@ class EventCarbonCalculator:
             elif chemical_type == "":
                 chemical_type = "FE"  # Default to fertilizer for empty strings
 
-            # Extract volume (convert to liters)
-            # Handle both old format (volume="3320 Kilograms") and new format (volume_applied="3320", volume_unit="kg")
-            volume_str = getattr(event, "volume", None)
-            if not volume_str:
-                # New frontend format: separate volume_applied and volume_unit fields
-                volume_applied = getattr(event, "volume_applied", "50")
-                volume_unit = getattr(event, "volume_unit", "L")
+            # Extract volume and determine if mass or volume unit
+            # Priority: (1) volume_numeric + volume_unit model fields
+            #           (2) legacy string field volume="3320" + extra_data.volume_unit
+            #           (3) separate volume_applied + volume_unit fields from frontend
+            from carbon.utils.unit_converter import UnitConverter
 
-                # Map common unit variations
-                unit_map = {
-                    "kg": "Kilograms",
-                    "kilograms": "Kilograms",
-                    "l": "Liters",
-                    "liters": "Liters",
-                    "gal": "Gallons",
-                    "gallons": "Gallons",
-                }
+            volume_numeric = getattr(event, "volume_numeric", None)
+            chemical_mass_kg = None
+            volume_liters = 0.0
 
-                normalized_unit = unit_map.get(volume_unit.lower(), volume_unit)
-                volume_str = f"{volume_applied} {normalized_unit}"
+            if volume_numeric is not None:
+                raw_volume_unit = getattr(event, "volume_unit", "gal") or "gal"
+                volume_value = float(volume_numeric)
+            else:
+                volume_str_raw = getattr(event, "volume", None)
+                if volume_str_raw:
+                    try:
+                        volume_value = float(str(volume_str_raw).strip())
+                    except (ValueError, TypeError):
+                        # Legacy format with embedded unit like "3320 Kilograms"
+                        volume_liters = self._convert_volume_to_liters(
+                            str(volume_str_raw), event, crop_name
+                        )
+                        volume_value = None
+                        raw_volume_unit = None
+                    else:
+                        # Numeric-only volume: check extra_data for unit
+                        extra = getattr(event, "extra_data", None) or {}
+                        raw_volume_unit = extra.get("volume_unit", "L")
+                else:
+                    volume_applied = getattr(event, "volume_applied", "50")
+                    raw_volume_unit = getattr(event, "volume_unit", "L") or "L"
+                    try:
+                        volume_value = float(volume_applied)
+                    except (ValueError, TypeError):
+                        volume_value = 50.0
 
-            volume_liters = self._convert_volume_to_liters(volume_str, event, crop_name)
+            # Route mass vs volume units through UnitConverter
+            if volume_value is not None and raw_volume_unit is not None:
+                unit_normalized = UnitConverter.normalize_unit_name(raw_volume_unit)
+                if UnitConverter.is_mass_unit(raw_volume_unit):
+                    try:
+                        chemical_mass_kg, _ = UnitConverter.convert_mass(
+                            volume_value, unit_normalized, to_unit="kilograms"
+                        )
+                    except Exception:
+                        chemical_mass_kg = volume_value  # Fallback: assume kg
+                    volume_liters = 0.0
+                elif UnitConverter.is_volume_unit(raw_volume_unit):
+                    try:
+                        volume_liters, _ = UnitConverter.convert_volume(
+                            volume_value, unit_normalized, to_unit="liters"
+                        )
+                    except Exception:
+                        volume_liters = volume_value  # Fallback: assume liters
+                else:
+                    volume_liters = volume_value  # Unknown unit: assume liters
 
             # Extract area (convert to hectares)
-            # Handle both old format (area="16.2 Hectares") and new format (area_treated="16.2", area_unit="ha")
-            area_str = getattr(event, "area", None)
-            if not area_str:
-                # New frontend format: separate area_treated and area_unit fields
-                area_treated = getattr(event, "area_treated", "1.0")
-                area_unit = getattr(event, "area_unit", "ha")
+            # Priority: (1) area_numeric + area_unit model fields (Item #8 clean numeric fields)
+            #           (2) legacy string field area="16.2 Hectares"
+            #           (3) separate area_treated + area_unit fields from frontend
+            area_numeric = getattr(event, "area_numeric", None)
+            if area_numeric is not None:
+                # Item #8: Use clean numeric field
+                raw_area_unit = getattr(event, "area_unit", "acres") or "acres"
+                area_unit_map = {
+                    "ha": "Hectares",
+                    "acres": "Acres",
+                    "m2": "Square Meters",
+                }
+                normalized_area_unit = area_unit_map.get(raw_area_unit, raw_area_unit)
+                area_str = f"{area_numeric} {normalized_area_unit}"
+            else:
+                area_str = getattr(event, "area", None)
+                if not area_str:
+                    # New frontend format: separate area_treated and area_unit fields
+                    area_treated = getattr(event, "area_treated", "1.0")
+                    area_unit = getattr(event, "area_unit", "ha") or "ha"
 
-                # Map common unit variations
-                area_unit_map = {"ha": "Hectares", "hectares": "Hectares", "acres": "Acres", "ac": "Acres"}
+                    # Map common unit variations
+                    area_unit_map = {"ha": "Hectares", "hectares": "Hectares", "acres": "Acres", "ac": "Acres"}
 
-                normalized_area_unit = area_unit_map.get(area_unit.lower(), area_unit)
-                area_str = f"{area_treated} {normalized_area_unit}"
+                    normalized_area_unit = area_unit_map.get(area_unit.lower(), area_unit)
+                    area_str = f"{area_treated} {normalized_area_unit}"
+                else:
+                    # Plain numeric area (e.g. "25") - append area_unit from model
+                    try:
+                        float(str(area_str).strip())
+                        model_area_unit = getattr(event, "area_unit", None)
+                        if model_area_unit:
+                            area_unit_map = {"ha": "Hectares", "hectares": "Hectares", "acres": "Acres", "ac": "Acres", "m2": "m2"}
+                            normalized = area_unit_map.get(model_area_unit.lower(), model_area_unit)
+                            area_str = f"{area_str} {normalized}"
+                    except (ValueError, TypeError):
+                        pass  # area_str already has unit suffix (e.g. "16.2 Hectares")
 
             area_hectares = self._convert_area_to_hectares(area_str, event, crop_name)
 
@@ -1104,10 +1176,21 @@ class EventCarbonCalculator:
                 except (ValueError, TypeError):
                     concentration = None
 
+            # Warn when concentration is missing for non-fertilizer chemicals.
+            # Calculator assumes 100% active ingredient, which can overestimate by ~10x.
+            if concentration is None and chemical_type in ["PE", "FU", "HE"]:
+                logger.warning(
+                    "Chemical event %s: Missing concentration for %s. "
+                    "Assuming 100%% active ingredient — carbon estimate may be ~10x too high.",
+                    getattr(event, "id", "unknown"),
+                    chemical_type,
+                )
+
             return {
                 "chemical_type": chemical_type,
                 "crop_name": crop_name,
                 "volume_liters": volume_liters,
+                "chemical_mass_kg": chemical_mass_kg,
                 "area_hectares": area_hectares,
                 "npk_content": npk_content,
                 "application_method": application_method,
@@ -1259,11 +1342,59 @@ class EventCarbonCalculator:
                 # Extract water_source for pump factor selection
                 water_source = getattr(event, "water_source", None) or extra_data.get("water_source")
 
+                # Item #13: pump_depth_ft overrides water_source-based pump factor.
+                # Standard pump curve: kWh/1000gal = depth_ft * 0.0175  (USDA NRCS pump efficiency)
+                # Check model field first, then extra_data (well_depth_ft or pump_depth_ft)
+                pump_depth_ft = getattr(event, "pump_depth_ft", None) or extra_data.get(
+                    "pump_depth_ft"
+                ) or extra_data.get("well_depth_ft")
+
+                # Item #13: electricity_source overrides the default 0.39 kg CO2/kWh grid factor.
+                electricity_source = getattr(event, "electricity_source", None) or extra_data.get("electricity_source")
+
                 calculation_result = VerifiedEmissionFactors.calculate_drought_irrigation_emissions(
                     water_volume_gallons=water_volume_gallons,
                     water_source=water_source,
+                    pump_depth_ft=float(pump_depth_ft) if pump_depth_ft is not None else None,
+                    electricity_source=electricity_source,
                 )
 
+                base_emissions = calculation_result["co2e_kg"]
+                data_sources = calculation_result["data_sources"]
+                calculation_method = calculation_result["calculation_method"]
+                breakdown = calculation_result["breakdown"]
+                limitations = calculation_result.get("limitations", "")
+
+            elif event.type == "PO":  # Pollination - biological service, zero direct emissions
+                base_emissions = 0.0
+                data_sources = ["Trazo Methodology - Biological pollination services produce zero direct emissions"]
+                calculation_method = "zero_emission_biological_service"
+                breakdown = {
+                    "production_type": "PO",
+                    "carbon_impact": "zero",
+                    "carbon_notes": (
+                        "Pollination is a biological service performed by bees or other pollinators. "
+                        "No direct fuel combustion or chemical inputs are involved."
+                    ),
+                    "confidence_level": 1.0,
+                }
+                limitations = "Excludes indirect transportation emissions for hive delivery/pickup"
+
+            elif event.type == "PH":  # Post-Harvest Processing
+                result = self._calculate_postharvest_emissions(event, production_data)
+                return self._add_enhanced_usda_metadata(result, event, production_data.get("crop_name", "unknown"))
+
+            elif event.type == "CM":  # Canopy Management - same fuel-based calc as other production events
+                fuel_type = getattr(event, "fuel_type", "diesel")
+                energy_source = getattr(event, "energy_source", "grid")
+                calculation_result = VerifiedEmissionFactors.calculate_production_event_emissions(
+                    production_type="pruning",  # Same fuel pattern as pruning
+                    area_covered=area_covered,
+                    fuel_consumed=fuel_consumed,
+                    equipment_hours=equipment_hours,
+                    fuel_type=fuel_type,
+                    energy_source=energy_source,
+                )
                 base_emissions = calculation_result["co2e_kg"]
                 data_sources = calculation_result["data_sources"]
                 calculation_method = calculation_result["calculation_method"]
@@ -1279,6 +1410,19 @@ class EventCarbonCalculator:
                 "EM",
             ]:  # Harvesting, Planting, General, Pruning, Irrigation, Equipment Maintenance
                 # Use EPA/USDA production emission factors
+                # Sprint 5: Check for aggregate harvest data
+                if event.type == "HA":
+                    extra_data = getattr(event, "extra_data", None) or {}
+                    is_summary = extra_data.get("is_summary", False)
+                    if is_summary:
+                        # For harvest summaries, carbon comes from total fuel consumed
+                        # which is already in the main fuel_consumed field.
+                        # The yield_total is for transparency, not carbon calculation.
+                        logger.info(
+                            f"Harvest summary event: {extra_data.get('event_count', 'N/A')} harvests, "
+                            f"yield: {extra_data.get('yield_total', 'N/A')} {extra_data.get('yield_total_unit', '')}"
+                        )
+
                 # Extract fuel_type and energy_source from event object for electric equipment support
                 fuel_type = getattr(event, "fuel_type", "diesel")  # Default to diesel if not specified
                 energy_source = getattr(event, "energy_source", "grid")  # Default to grid if not specified
@@ -1344,6 +1488,79 @@ class EventCarbonCalculator:
 
         except Exception as e:
             logger.error(f"Production event calculation error: {e}")
+            return {
+                "co2e": 0.0,
+                "efficiency_score": 75.0,
+                "calculation_method": "calculation_error",
+                "verification_status": "error",
+                "error": str(e),
+                "data_sources": [],
+                "breakdown": {},
+                "limitations": "Calculation failed, using fallback values",
+                "recommendations": [],
+            }
+
+    def _calculate_postharvest_emissions(self, event, production_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Calculate carbon emissions for Post-Harvest Processing events (PH subtype).
+
+        Post-harvest operations (hulling, shelling, washing, sorting, packing) generate
+        emissions primarily from:
+        - Equipment fuel combustion (hullers, shellers, washers, sorters, packers)
+        - Electricity for processing facility operations
+
+        Uses the same EPA fuel factor pattern as other production events.
+        """
+        try:
+            from .verified_emission_factors import VerifiedEmissionFactors
+
+            area_covered = production_data.get("area_covered", 0.0)
+            fuel_consumed = production_data.get("fuel_consumed")
+            equipment_hours = production_data.get("equipment_hours")
+            fuel_type = getattr(event, "fuel_type", "diesel")
+            energy_source = getattr(event, "energy_source", "grid")
+
+            calculation_result = VerifiedEmissionFactors.calculate_production_event_emissions(
+                production_type="general production",
+                area_covered=area_covered,
+                fuel_consumed=fuel_consumed,
+                equipment_hours=equipment_hours,
+                fuel_type=fuel_type,
+                energy_source=energy_source,
+            )
+
+            base_emissions = calculation_result["co2e_kg"]
+            breakdown = calculation_result["breakdown"]
+            breakdown["production_type"] = "PH"
+            breakdown["processing_notes"] = (
+                "Post-harvest processing emissions: fuel for hullers, shellers, sorters, and packing equipment. "
+                "Calculated using EPA 40 CFR Part 98 fuel combustion factors."
+            )
+            data_sources = calculation_result["data_sources"]
+            calculation_method = calculation_result["calculation_method"]
+            base_limitations = calculation_result.get("limitations", "")
+            if isinstance(base_limitations, list):
+                base_limitations = "; ".join(base_limitations)
+            limitations = (
+                "Excludes refrigeration/cold-storage electricity not captured in equipment_hours. " + base_limitations
+            )
+
+            recommendations = self._generate_epa_production_recommendations(event, base_emissions, calculation_method)
+
+            return {
+                "co2e": round(base_emissions, 3),
+                "efficiency_score": self._calculate_production_efficiency_score(breakdown, calculation_method),
+                "calculation_method": calculation_method,
+                "verification_status": "epa_usda_sourced",
+                "data_sources": data_sources,
+                "breakdown": breakdown,
+                "limitations": limitations,
+                "recommendations": recommendations,
+                "confidence_level": breakdown.get("confidence_level", 0.80),
+            }
+
+        except Exception as e:
+            logger.error(f"Post-harvest processing calculation error: {e}")
             return {
                 "co2e": 0.0,
                 "efficiency_score": 75.0,
@@ -1845,6 +2062,7 @@ class EventCarbonCalculator:
                 "TI": "tillage",  # Tillage
                 "ST": "soil_test",  # Soil Test
                 "PA": "ph_adjustment",  # pH Adjustment
+                "GR": "grazing",  # Grazing Management
             }
 
             # Get the appropriate emission factor for area-based calculation
@@ -1878,8 +2096,17 @@ class EventCarbonCalculator:
                 lime_type_used = self._detect_lime_type(event)
 
                 if lime_type_used is not None:
-                    # Parse amendment_amount to extract lime quantity
-                    lime_kg_applied = self._parse_lime_amount(event.amendment_amount)
+                    # Prefer structured numeric field over legacy string parsing
+                    amendment_numeric = getattr(event, "amendment_amount_numeric", None)
+                    amendment_unit = getattr(event, "amendment_amount_unit", "kg")
+                    if amendment_numeric is not None:
+                        lime_kg_applied = float(amendment_numeric)
+                        if amendment_unit == "tons":
+                            lime_kg_applied *= 1000.0
+                        elif amendment_unit == "lbs":
+                            lime_kg_applied *= 0.453592
+                    else:
+                        lime_kg_applied = self._parse_lime_amount(event.amendment_amount)
 
                     if lime_kg_applied > 0:
                         # Get IPCC-verified lime dissolution factor
@@ -2566,7 +2793,9 @@ class EventCarbonCalculator:
                     "data_source": "structured_fields",
                 }
 
-            # Fallback to legacy fields
+            # Fallback to legacy EquipmentEvent fields (fuel_amount, hours_used, area_covered as string).
+            # EquipmentEvent (type 4) is LEGACY — merged into Production for users but model still exists.
+            # These fields are kept for backward compatibility with existing data.
             return {
                 "fuel_amount": float(getattr(event, "fuel_amount", 0) or 0),
                 "fuel_type": event.fuel_type or "diesel",
@@ -2705,8 +2934,14 @@ class EventCarbonCalculator:
             equipment_hours = structured_data["equipment_hours"]
 
             # Convert fuel to gallons if needed
-            if fuel_consumed and structured_data["fuel_unit"] == "L":
+            fuel_unit = structured_data["fuel_unit"]
+            if fuel_consumed and fuel_unit == "L":
                 fuel_consumed = fuel_consumed / 3.78541  # Convert liters to gallons
+            elif fuel_consumed and fuel_unit == "kg":
+                # Convert kg to gallons via fuel density (diesel default: 0.832 kg/L)
+                fuel_type = structured_data.get("fuel_type", "diesel")
+                density = 0.832 if fuel_type == "diesel" else 0.745  # gasoline fallback
+                fuel_consumed = (fuel_consumed / density) / 3.78541
 
             # Estimate water volume for irrigation
             water_volume_gallons = None
@@ -2757,14 +2992,38 @@ class EventCarbonCalculator:
         return type_mapping.get(event_type, f"general production {crop_name}")
 
     def _convert_volume_to_gallons(self, volume_str: str, event, crop_name: str) -> float:
-        """Convert volume string to gallons for EPA calculations"""
+        """Convert volume string to gallons for EPA irrigation calculations.
+
+        Uses UnitConverter as single source of truth for conversion factors.
+        """
+        from carbon.utils.unit_converter import UnitConverter
+
         try:
-            volume_value = self._extract_numeric_value(volume_str, default=0)
+            volume_str_lower = str(volume_str).lower() if volume_str else ""
+            volume_value = self._extract_numeric_value(volume_str_lower, default=0)
             if volume_value == 0:
                 return 1000  # Default fallback
 
-            # Assume liters if no unit specified, convert to gallons
-            return volume_value / 3.78541
+            # Detect unit from string
+            if "gal" in volume_str_lower:
+                return volume_value  # Already in gallons
+            elif "m3" in volume_str_lower or "m³" in volume_str_lower or "cubic" in volume_str_lower:
+                gallons, _ = UnitConverter.convert_volume(volume_value, "m3", "gallons")
+                return gallons
+            elif "ml" in volume_str_lower:
+                gallons, _ = UnitConverter.convert_volume(volume_value, "ml", "gallons")
+                return gallons
+            elif "l" in volume_str_lower or "liter" in volume_str_lower:
+                gallons, _ = UnitConverter.convert_volume(volume_value, "liters", "gallons")
+                return gallons
+            else:
+                # No unit detected — check extra_data for water_volume_unit
+                extra = getattr(event, "extra_data", None) or {}
+                water_unit = extra.get("water_volume_unit", "").lower()
+                if "gal" in water_unit:
+                    return volume_value
+                # Default: assume gallons (most common for US irrigation)
+                return volume_value
 
         except Exception as e:
             logger.warning(f"Error converting volume to gallons: {e}")
@@ -3075,8 +3334,14 @@ class EventCarbonCalculator:
             from decimal import Decimal
 
             if isinstance(area_str, (int, float, Decimal)):
-                # Direct numeric value - assume hectares (check area_unit if needed)
-                return float(area_str) if area_str else 1.0
+                # Direct numeric value — check area_unit on the event
+                area_value = float(area_str) if area_str else 1.0
+                area_unit = getattr(event, "area_unit", "ha") if event else "ha"
+                if area_unit and area_unit.lower() in ["acre", "acres", "ac"]:
+                    return area_value * 0.404686  # acres to hectares
+                elif area_unit and area_unit.lower() in ["m²", "m2", "sqm", "square_meters"]:
+                    return area_value / 10000  # m² to hectares
+                return area_value  # Default: assume hectares
 
             # Check if area is missing or "Unknown"
             if not area_str or str(area_str).lower() in ["unknown", "n/a", "na", "none", "null"]:

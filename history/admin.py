@@ -1,6 +1,14 @@
 from django.contrib import admin
 
-from .models import ChemicalEvent, GeneralEvent, History, HistoryScan, ProductionEvent, WeatherEvent
+from .models import (
+    ChemicalEvent,
+    GeneralEvent,
+    History,
+    HistoryScan,
+    ProductionEvent,
+    SoilManagementEvent,
+    WeatherEvent,
+)
 
 
 class FinishedProductionReadOnlyInlineMixin:
@@ -42,6 +50,12 @@ class GeneralEventInline(FinishedProductionReadOnlyInlineMixin, admin.TabularInl
 
 class ProductionEventInline(FinishedProductionReadOnlyInlineMixin, admin.TabularInline):
     model = ProductionEvent
+    extra = 1
+    ordering = ("index",)
+
+
+class SoilManagementEventInline(FinishedProductionReadOnlyInlineMixin, admin.TabularInline):
+    model = SoilManagementEvent
     extra = 1
     ordering = ("index",)
 
@@ -92,6 +106,7 @@ class HistoryAdmin(admin.ModelAdmin):
         WeatherEventInline,
         GeneralEventInline,
         ProductionEventInline,
+        SoilManagementEventInline,
     ]
 
     # Trust metrics and analytics in readonly fields

@@ -544,6 +544,18 @@ class EmissionFactorsRegistry:
                 "impact_type": "direct_emissions",
             },
         },
+        "grazing": {
+            "value": 0.2,  # kg CO2e per hectare (low direct impact)
+            "unit": "kg CO2e per hectare",
+            "source": "USDA-ARS Grazing Lands Research Laboratory",
+            "reference": "Managed grazing on cropland — minimal direct emissions from soil compaction",
+            "confidence": "medium",
+            "last_verified": "2026-03-10",
+            "notes": "Base factor for managed grazing on specialty crop land. "
+            "Covers soil compaction and disturbance emissions only. "
+            "Enteric methane from livestock is excluded (beyond farmer control per Trazo methodology).",
+            "impact_type": "low_emissions",
+        },
         "general": {
             "value": 1.0,  # kg CO2e per hectare (moderate impact)
             "unit": "kg CO2e per hectare",

@@ -27,7 +27,7 @@ from django.db import transaction
 from carbon.models import CropType, EventTemplate, ProductionTemplate
 
 # =============================================================================
-# SECTION 1: CROP-SPECIFIC CUSTOMIZATIONS (16 Crops - California Focus)
+# SECTION 1: CROP-SPECIFIC CUSTOMIZATIONS (22 Crops - California Focus)
 # =============================================================================
 
 CROP_CUSTOMIZATIONS = {
@@ -480,6 +480,69 @@ CROP_CUSTOMIZATIONS = {
         "yield_per_ha": 2.0,
         "yield_unit": "bales",
     },
+    # TREE NUTS
+    "walnuts": {
+        "npk": "14-14-14",
+        "nitrogen_pct": 14.0,
+        "phosphorus_pct": 14.0,
+        "potassium_pct": 14.0,
+        "commercial_name": "Walnut Orchard NPK 14-14-14",
+        "common_pests": "Codling moth, Walnut husk fly, Aphids, Spider mites, Walnut blight",
+        "beneficial_insects": "Trichogramma wasps, Lacewings, Predatory mites",
+        "irrigation_method": "micro_sprinkler",
+        "typical_area": 20.0,
+        "region": "Central Valley, California",
+        "timing_soil": "November - December",
+        "timing_plant": "January - February",
+        "timing_fertilize": "March - May",
+        "timing_irrigate": "April - October",
+        "timing_pest": "April - September",
+        "timing_harvest": "September - November",
+        "yield_per_ha": 4.5,
+        "yield_unit": "tons",
+    },
+    # STONE FRUIT
+    "stone_fruit": {
+        "npk": "12-6-12",
+        "nitrogen_pct": 12.0,
+        "phosphorus_pct": 6.0,
+        "potassium_pct": 12.0,
+        "commercial_name": "Stone Fruit Special NPK 12-6-12",
+        "common_pests": "Oriental fruit moth, Peach twig borer, Brown rot, Aphids, Scale insects",
+        "beneficial_insects": "Parasitic wasps, Predatory mites, Lacewings",
+        "irrigation_method": "drip",
+        "typical_area": 15.0,
+        "region": "San Joaquin Valley, California",
+        "timing_soil": "November - December",
+        "timing_plant": "January - February",
+        "timing_fertilize": "February - April",
+        "timing_irrigate": "April - September",
+        "timing_pest": "March - August",
+        "timing_harvest": "May - September",
+        "yield_per_ha": 20.0,
+        "yield_unit": "tons",
+    },
+    # MIXED VEGETABLES
+    "mixed_vegetables": {
+        "npk": "10-10-10",
+        "nitrogen_pct": 10.0,
+        "phosphorus_pct": 10.0,
+        "potassium_pct": 10.0,
+        "commercial_name": "Vegetable Garden NPK 10-10-10",
+        "common_pests": "Aphids, Whiteflies, Flea beetles, Hornworms, Cutworms",
+        "beneficial_insects": "Lady beetles, Parasitic wasps, Ground beetles, Lacewings",
+        "irrigation_method": "drip",
+        "typical_area": 5.0,
+        "region": "California",
+        "timing_soil": "February - March",
+        "timing_plant": "March - May",
+        "timing_fertilize": "At planting + monthly",
+        "timing_irrigate": "Year-round",
+        "timing_pest": "April - October",
+        "timing_harvest": "May - November",
+        "yield_per_ha": 30.0,
+        "yield_unit": "tons",
+    },
 }
 
 # Alias: DB has both "avocado" (singular) and "avocados" (plural) slugs
@@ -577,7 +640,8 @@ def build_production_event_fields(
     WEATHER=0, PRODUCTION=1, CHEMICAL=2, GENERAL=3, EQUIPMENT=4, SOIL=5, PEST=6, BUSINESS=7
 
     Subtypes: PL (Planting), HA (Harvest), IR (Irrigation), PR (Pruning),
-              TR (Transplanting), CU (Cultivation), TH (Thinning), EM (Equipment/Maintenance)
+              TR (Transplanting), CU (Cultivation), TH (Thinning), EM (Equipment/Maintenance),
+              PO (Pollination), PH (Post-Harvest Processing), CM (Canopy Management)
     """
     fields = {
         "type": subtype,
@@ -1911,6 +1975,154 @@ def get_tree_crop_events(crop_slug, crop_data):
                 observation=f"Quality control and training for {crop_slug} operation",
             ),
         },
+        # === PHASE 2: NEW PRODUCTION SUBTYPES ===
+        # 23. Pollination Management (PO) — relevant for almonds, stone fruit, apples
+        {
+            "name": "Pollination Management",
+            "event_type": "production",
+            "description": (
+                f"Managed pollination for {crop_slug} — bee hive placement, "
+                "pollinator monitoring, and bloom period management"
+            ),
+            "timing": "Bloom period (crop-specific)",
+            "frequency": "annual",
+            "carbon_category": "neutral",
+            "cost_estimate": 180.0,
+            "carbon_impact": 0.0,
+            "labor_hours": 4.0,
+            "typical_duration": "2-4 weeks",
+            "efficiency_tips": (
+                "Place hives at 1-2 per acre at 10-20% bloom for optimal pollination. "
+                "Almonds require 2 hives/acre minimum."
+            ),
+            "sustainability_score": 10,
+            "qr_visibility": "high",
+            "consumer_message": (
+                "Managed bee pollination — bees pollinate the flowers that become fruit. "
+                "Zero emissions from this natural process."
+            ),
+            "backend_event_type": 1,
+            "is_default_enabled": True,
+            "is_required": False,
+            "order_sequence": 23,
+            "backend_event_fields": build_production_event_fields(
+                subtype="PO",
+                area=area,
+                area_unit="ha",
+                fuel_consumed=0.0,
+                fuel_unit="gal",
+                fuel_type="none",
+                equipment_hours=0.0,
+                efficiency="high",
+                observation=f"Pollination management for {crop_slug} — bee hive placement at bloom",
+                extra_data={
+                    "pollinator_type": "honey_bee",
+                    "hive_count": max(1, int(area * 2)),  # 2 hives/ha default
+                    "hive_density_per_hectare": 2,
+                    "bloom_percentage_at_placement": "10-20%",
+                    "hive_source": "local_beekeeper",
+                    "carbon_impact": "zero",
+                    "carbon_notes": (
+                        "Pollination is a biological service with zero direct emissions. "
+                        "Hive transportation emissions excluded per Trazo direct operational methodology."
+                    ),
+                },
+            ),
+        },
+        # 24. Post-Harvest Processing (PH) — hulling, shelling, washing, sorting, packing
+        {
+            "name": "Post-Harvest Processing",
+            "event_type": "production",
+            "description": (
+                f"Post-harvest processing for {crop_slug} — "
+                "hulling/shelling, washing, sorting, grading, and packing operations"
+            ),
+            "timing": "After harvest",
+            "frequency": "annual",
+            "carbon_category": "medium",
+            "cost_estimate": 250.0,
+            "carbon_impact": 45.0,
+            "labor_hours": 12.0,
+            "typical_duration": "1-4 weeks",
+            "efficiency_tips": (
+                "Modern optical sorters reduce waste by 15-30%. "
+                "Electric equipment significantly reduces emissions vs diesel."
+            ),
+            "sustainability_score": 7,
+            "qr_visibility": "high",
+            "consumer_message": (
+                "Post-harvest processing — washing, sorting, and packing " f"to bring quality {crop_slug} to market."
+            ),
+            "backend_event_type": 1,
+            "is_default_enabled": True,
+            "is_required": False,
+            "order_sequence": 24,
+            "backend_event_fields": build_production_event_fields(
+                subtype="PH",
+                area=area,
+                area_unit="ha",
+                fuel_consumed=round(area * 3.5, 1),  # ~3.5 gal/ha for processing equipment
+                fuel_unit="gal",
+                fuel_type="diesel",
+                equipment_hours=round(area * 2.0, 1),
+                efficiency="normal",
+                observation=f"Post-harvest processing for {crop_slug} — hulling, sorting, packing",
+                extra_data={
+                    "processing_steps": ["washing", "sorting", "grading", "packing"],
+                    "equipment_used": "sorting_line",
+                    "packaging_type": "standard_carton",
+                    "cold_storage": False,
+                },
+            ),
+        },
+        # 25. Canopy Management (CM) — leaf pulling, hedging, shoot positioning (grapes/vines)
+        {
+            "name": "Canopy Management",
+            "event_type": "production",
+            "description": (
+                f"Canopy management for {crop_slug} — leaf pulling, hedging, "
+                "shoot positioning, and cluster thinning for air circulation and light penetration"
+            ),
+            "timing": "Post-bloom through veraison",
+            "frequency": "seasonal",
+            "carbon_category": "low",
+            "cost_estimate": 120.0,
+            "carbon_impact": 25.0,
+            "labor_hours": 8.0,
+            "typical_duration": "2-4 weeks",
+            "efficiency_tips": (
+                "Leaf removal at fruit zone improves color, reduces disease, "
+                "and enhances fruit quality without heavy equipment."
+            ),
+            "sustainability_score": 9,
+            "qr_visibility": "medium",
+            "consumer_message": (
+                f"Canopy management — careful hand work opening up the {crop_slug} canopy "
+                "for better sunlight and air flow, improving fruit quality naturally."
+            ),
+            "backend_event_type": 1,
+            "is_default_enabled": True,
+            "is_required": False,
+            "order_sequence": 25,
+            "backend_event_fields": build_production_event_fields(
+                subtype="CM",
+                area=area,
+                area_unit="ha",
+                fuel_consumed=round(area * 1.5, 1),  # Light tractor/equipment use
+                fuel_unit="gal",
+                fuel_type="diesel",
+                equipment_hours=round(area * 1.0, 1),
+                efficiency="normal",
+                observation=f"Canopy management for {crop_slug} — leaf pulling and shoot positioning",
+                extra_data={
+                    "canopy_operations": ["leaf_pulling", "shoot_positioning", "hedging"],
+                    "target_zone": "fruit_zone",
+                    "timing_relative_to_bloom": "post_bloom",
+                    "labor_intensive": True,
+                    "equipment_notes": "Primarily hand labor with light mechanical hedging",
+                },
+            ),
+        },
     ]
 
 
@@ -2703,7 +2915,51 @@ def get_vegetable_events(crop_slug, crop_data):
             ),
         },
     ]
-    events.extend(get_shared_extra_events(crop_slug, crop_data, start_order=7, crop_category="vegetable"))
+    # Phase 2: Post-Harvest Processing for mixed vegetables (washing/packing)
+    events.append(
+        {
+            "name": "Post-Harvest Washing & Packing",
+            "event_type": "production",
+            "description": (
+                f"Post-harvest processing for {crop_slug} — " "field washing, grading, and packing operations"
+            ),
+            "timing": "After harvest",
+            "frequency": "seasonal",
+            "carbon_category": "low",
+            "cost_estimate": 120.0,
+            "carbon_impact": 20.0,
+            "labor_hours": 6.0,
+            "typical_duration": "3-7 days",
+            "efficiency_tips": "Rapid post-harvest cooling preserves quality and reduces waste",
+            "sustainability_score": 8,
+            "qr_visibility": "high",
+            "consumer_message": (
+                f"Post-harvest handling — careful washing, sorting, and packing " f"of {crop_slug} to reach you fresh."
+            ),
+            "backend_event_type": 1,
+            "is_default_enabled": True,
+            "is_required": False,
+            "order_sequence": 7,
+            "backend_event_fields": build_production_event_fields(
+                subtype="PH",
+                area=crop_data["typical_area"],
+                area_unit="ha",
+                fuel_consumed=round(crop_data["typical_area"] * 2.0, 1),
+                fuel_unit="gal",
+                fuel_type="diesel",
+                equipment_hours=round(crop_data["typical_area"] * 1.5, 1),
+                efficiency="normal",
+                observation=f"Post-harvest washing and packing for {crop_slug}",
+                extra_data={
+                    "processing_steps": ["washing", "sorting", "grading", "packing"],
+                    "equipment_used": "wash_line",
+                    "packaging_type": "clamshell_or_carton",
+                    "cold_storage": True,
+                },
+            ),
+        }
+    )
+    events.extend(get_shared_extra_events(crop_slug, crop_data, start_order=8, crop_category="vegetable"))
     return events
 
 

@@ -321,7 +321,7 @@ OPERATION_INTENSITIES = {
 if event_type == "IR":  # Irrigation
     # Use EPA electricity factors, NOT diesel
     kwh_consumed = (water_gallons / 1000) * PUMP_EFFICIENCY_FACTOR
-    co2e = kwh_consumed * EPA_ELECTRICITY_FACTOR  # 0.821 kg CO2/kWh
+    co2e = kwh_consumed * EPA_ELECTRICITY_FACTOR  # 0.39 kg CO2/kWh (EPA eGRID 2023)
 else:
     # Other operations use diesel
     co2e = fuel_gallons * EPA_DIESEL_FACTOR  # 10.21 kg CO2/gallon

@@ -6,8 +6,8 @@ Usage:
     poetry run python manage.py create_demo_user demo@trazo.io --reset
 
 Creates:
-    User (existing) -> Company -> Establishment -> 2 Parcels -> 4 Productions -> ~55 Events
-    Coastal Valleys Ranch, Ventura County CA - Hass Avocado + Valencia Orange
+    User (existing) -> Company -> Establishment -> 3 Parcels -> 6 Productions -> ~85 Events
+    Coastal Valleys Ranch, California - Hass Avocado + Valencia Orange + Nonpareil Almond
     Events include photo albums (Unsplash) for 100% transparency scores.
 """
 
@@ -35,6 +35,12 @@ from history.models import (
 from product.models import Parcel, Product
 from subscriptions.models import Plan, Subscription
 from users.models import User, WorksIn
+
+from ._almond_demo_data import (
+    create_almond_current_events,
+    create_almond_finished_events,
+    create_almond_parcel,
+)
 
 COMPANY_NAME = "Coastal Valleys Ranch"
 
@@ -154,8 +160,9 @@ class Command(BaseCommand):
             zip_code="93003",
             fiscal_id="87-1234567",
             description=(
-                "Family-owned specialty agriculture operation in Ventura County, "
-                "California. Growing premium Hass avocados and Valencia oranges "
+                "Family-owned specialty agriculture operation in California. "
+                "Growing premium Hass avocados and Valencia oranges on the "
+                "Central Coast and Nonpareil almonds in the Central Valley "
                 "since 1998 with a commitment to sustainable farming practices "
                 "and full agricultural transparency."
             ),
@@ -165,7 +172,7 @@ class Command(BaseCommand):
             industry="Specialty Agriculture",
             is_active=True,
             legal_structure="Family LLC",
-            primary_commodities="Hass Avocado, Valencia Orange",
+            primary_commodities="Hass Avocado, Valencia Orange, Nonpareil Almond",
             sustainability_commitment="GLOBALG.A.P. Certified, IPM Program",
             certifications="GLOBALG.A.P., CCOF (transitional)",
             blockchain_subscription_status=True,
@@ -179,13 +186,11 @@ class Command(BaseCommand):
             role=WorksIn.COMPANY_ADMIN,
         )
 
-        # 4. Subscription — use the plan from create_plans (single source of truth)
+        # 4. Subscription — corporate plan (3 parcels, 6 productions)
         try:
-            plan = Plan.objects.get(slug="standard")
+            plan = Plan.objects.get(slug="corporate-monthly")
         except Plan.DoesNotExist:
-            raise CommandError(
-                "Standard plan not found. Run 'python manage.py create_plans' first."
-            )
+            raise CommandError("Corporate plan not found. Run 'python manage.py create_plans' first.")
         now = timezone.now()
         Subscription.objects.create(
             company=company,
@@ -204,9 +209,10 @@ class Command(BaseCommand):
             country="United States",
             company=company,
             description=(
-                "87-acre specialty citrus and avocado farm in Ventura County's "
-                "premier growing region. Micro-sprinkler and drip irrigation "
-                "fed by deep wells."
+                "150-acre specialty agriculture operation across California's "
+                "Central Coast and Central Valley. Avocado and citrus on the "
+                "coast, almonds in the valley. Drip, micro-sprinkler, and "
+                "micro-jet irrigation fed by deep wells."
             ),
             latitude=34.3414,
             longitude=-119.1795,
@@ -214,7 +220,7 @@ class Command(BaseCommand):
             contact_phone="+1-805-555-0143",
             zip_code="93003",
             is_active=True,
-            crops_grown=["Hass Avocado", "Valencia Orange"],
+            crops_grown=["Hass Avocado", "Valencia Orange", "Nonpareil Almond"],
             sustainability_practices=[
                 "Integrated Pest Management",
                 "Cover Cropping",
@@ -222,7 +228,7 @@ class Command(BaseCommand):
                 "Beneficial Insect Releases",
             ],
             employee_count=18,
-            total_acreage=87.0,
+            total_acreage=149.0,
             year_established=1998,
             establishment_type="Specialty Agriculture",
             farming_method="Conventional with IPM",
@@ -282,7 +288,7 @@ class Command(BaseCommand):
         ora_crop, _ = CropType.objects.get_or_create(
             slug="citrus_oranges",
             defaults={
-                "name": "Citrus (Oranges)",
+                "name": "Citrus",
                 "category": "tree_fruit",
                 "description": "Valencia orange production",
                 "typical_farm_size": "20-100 hectares",
@@ -371,7 +377,9 @@ class Command(BaseCommand):
             },
             carbon_calculation_enabled=True,
         )
-        self.stdout.write(f"  Parcels: {avo_parcel.name}, {ora_parcel.name}")
+        # Almond parcel (from _almond_demo_data module)
+        alm_parcel, alm_product, alm_crop = create_almond_parcel(establishment, demo_images=DEMO_IMAGES)
+        self.stdout.write(f"  Parcels: {avo_parcel.name}, {ora_parcel.name}, {alm_parcel.name}")
 
         # 8. Productions
         avo_finished = History(
@@ -489,8 +497,74 @@ class Command(BaseCommand):
         )
         ora_current.save()
 
+        # Almond productions
+        alm_finished = History(
+            name="Almond Season 2024-2025",
+            type=History.ORCHARD,
+            start_date=self._dt(2024, 11, 1),
+            finish_date=self._dt(2025, 10, 15),
+            published=True,
+            description=(
+                "Full production cycle for Nonpareil almond orchard. "
+                "22 agricultural events documented including pollination "
+                "with 124 bee colonies, 4-split nitrogen fertigation, "
+                "NOW mating disruption, hull split harvest via mechanical "
+                "shaking, and post-harvest hulling & shelling. "
+                "Yield: 170,000 kg kernel weight (2,755 kg/ha)."
+            ),
+            production_amount=170000,
+            production_unit="kg",
+            quality_grade="grade_a",
+            harvest_method="mechanical",
+            lot_id="ALM-2024-001",
+            product=alm_product,
+            parcel=alm_parcel,
+            is_outdoor=True,
+            age_of_plants="12-18 years",
+            number_of_plants="6,875",
+            soil_ph="7.0",
+            operator=user,
+            crop_type=alm_crop,
+            earning=0,
+            extra_data={
+                "blockchain_enabled": True,
+                "blockchain_verified": True,
+                "blockchain_transaction": (
+                    "0xc5f3a9d1e7b4f8c2a6d0e3f7b9c1d5a8e2f6b0c4d8" "a1e5f9b3c7d0a4e8f2b6c0d3a7e1f5b9c2d6a0e4f8"
+                ),
+                "blockchain_hash": (
+                    "0x9d4e6f8a0b2c4d6e8f0a1b3c5d7e9f0a2b4c6d8e0" "f1a3b5c7d9e0f2a4b6c8d0e1f3a5b7c9d0e2f4a6b8"
+                ),
+                "smart_contract_address": ("0x1234567890abcdef1234567890abcdef12345678"),
+                "blockchain_network": "polygon",
+                "verification_timestamp": "2025-10-15T12:00:00Z",
+            },
+        )
+        alm_finished.save()
+
+        alm_current = History(
+            name="Almond Season 2025-2026",
+            type=History.ORCHARD,
+            start_date=self._dt(2025, 11, 1),
+            published=False,
+            description=("Current almond production season - dormant management " "and early spring preparation."),
+            production_amount=0,
+            product=alm_product,
+            parcel=alm_parcel,
+            is_outdoor=True,
+            age_of_plants="13-19 years",
+            number_of_plants="6,875",
+            soil_ph="7.0",
+            operator=user,
+            crop_type=alm_crop,
+            earning=0,
+        )
+        alm_current.save()
+
         self.stdout.write(
-            f"  Productions: #{avo_finished.id}, #{avo_current.id}, " f"#{ora_finished.id}, #{ora_current.id}"
+            f"  Productions: #{avo_finished.id}, #{avo_current.id}, "
+            f"#{ora_finished.id}, #{ora_current.id}, "
+            f"#{alm_finished.id}, #{alm_current.id}"
         )
 
         # 9. Events
@@ -498,17 +572,22 @@ class Command(BaseCommand):
         self._create_avocado_current_events(avo_current, user)
         self._create_orange_finished_events(ora_finished, user)
         self._create_orange_current_events(ora_current, user)
+        create_almond_finished_events(alm_finished, user, demo_images=DEMO_IMAGES)
+        create_almond_current_events(alm_current, user, demo_images=DEMO_IMAGES)
 
         # 10. Set current_history on parcels
         avo_parcel.current_history = avo_current
         avo_parcel.save()
         ora_parcel.current_history = ora_current
         ora_parcel.save()
+        alm_parcel.current_history = alm_current
+        alm_parcel.save()
 
         # 11. Update trust metrics on finished productions
         try:
             avo_finished.update_trust_metrics()
             ora_finished.update_trust_metrics()
+            alm_finished.update_trust_metrics()
         except Exception as e:
             self.stdout.write(self.style.WARNING(f"  Trust metrics update failed (non-fatal): {e}"))
 
@@ -516,19 +595,23 @@ class Command(BaseCommand):
         self.stdout.write("")
         self.stdout.write(self.style.SUCCESS("Demo data created successfully!"))
         self.stdout.write("")
-        self.stdout.write(f"  Company:       {company.name} (#{company.id})")
-        self.stdout.write(f"  Establishment: {establishment.name} (#{establishment.id})")
+        self.stdout.write(f"  Company:        {company.name} (#{company.id})")
+        self.stdout.write(f"  Establishment:  {establishment.name} (#{establishment.id})")
         self.stdout.write(f"  Avocado Parcel: {avo_parcel.name} (#{avo_parcel.id})")
         self.stdout.write(f"  Orange Parcel:  {ora_parcel.name} (#{ora_parcel.id})")
+        self.stdout.write(f"  Almond Parcel:  {alm_parcel.name} (#{alm_parcel.id})")
         self.stdout.write("")
         self.stdout.write(f"  Avocado 2024-25 (FINISHED): #{avo_finished.id} - 19 events")
         self.stdout.write(f"  Avocado 2025-26 (CURRENT):  #{avo_current.id} - 9 events")
         self.stdout.write(f"  Orange 2024-25 (FINISHED):  #{ora_finished.id} - 20 events")
         self.stdout.write(f"  Orange 2025-26 (CURRENT):   #{ora_current.id} - 7 events")
+        self.stdout.write(f"  Almond 2024-25 (FINISHED):  #{alm_finished.id} - 22 events")
+        self.stdout.write(f"  Almond 2025-26 (CURRENT):   #{alm_current.id} - 8 events")
         self.stdout.write("")
         self.stdout.write("  Consumer URLs:")
         self.stdout.write(f"    /production/{avo_finished.id}  (Avocado - finished)")
         self.stdout.write(f"    /production/{ora_finished.id}  (Orange - finished)")
+        self.stdout.write(f"    /production/{alm_finished.id}  (Almond - finished)")
 
     # -- Helper: UTC datetime shorthand --
 

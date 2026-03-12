@@ -65,6 +65,7 @@ channels-redis = "^4.2.1"
 daphne = "^4.2.1"
 argon2-cffi = "^25.1.0"
 google-cloud-vision = "^3.9.0"  # MVP Photo Verification - AI content validation
+sentry-sdk = "^2.54.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"

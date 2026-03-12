@@ -3,9 +3,21 @@
 import os
 
 import dj_database_url
+import sentry_sdk
 from decouple import config
 
 from backend.settings.base import *
+
+# Sentry Error Tracking
+SENTRY_DSN = config("SENTRY_DSN", default="")
+if SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        traces_sample_rate=0.1,
+        profiles_sample_rate=0.1,
+        send_default_pii=False,
+        environment=config("ENVIRONMENT", default="production"),
+    )
 
 # Import secure settings after base settings are loaded
 try:

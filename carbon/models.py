@@ -27,7 +27,7 @@ class CropType(models.Model):
         ("other", "Other"),
     ]
 
-    name = models.CharField(max_length=100, unique=True, help_text="e.g., Citrus (Oranges)")
+    name = models.CharField(max_length=100, unique=True, help_text="e.g., Citrus, Almonds")
     slug = models.SlugField(max_length=100, unique=True, help_text="e.g., citrus_oranges")
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
     description = models.TextField(help_text="Brief description of the crop type")

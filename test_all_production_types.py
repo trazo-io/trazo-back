@@ -105,7 +105,7 @@ def test_all_production_types():
 
     # Manual EPA calculations using known factors
     EPA_DIESEL_FACTOR = 10.21  # kg CO2 per gallon (EPA verified)
-    EPA_ELECTRICITY_FACTOR = 0.821  # kg CO2 per kWh
+    EPA_ELECTRICITY_FACTOR = 0.39  # kg CO2 per kWh (EPA eGRID 2023)
     PUMP_FACTOR = 0.85  # kWh per 1000 gallons
 
     results = []
