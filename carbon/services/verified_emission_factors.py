@@ -957,6 +957,14 @@ class VerifiedEmissionFactors:
         # Normalize production type to uppercase (database stores uppercase codes)
         production_type_code = production_type.strip().upper()
 
+        # For electric equipment, fuel_consumed is None because the preview pipeline
+        # converts fuel to gallons (inapplicable for kWh). The actual kWh value is
+        # passed via fuel_consumed_kwh kwarg. Promote it to fuel_consumed so all
+        # downstream calculators see actual consumption instead of falling back to
+        # area-based estimation.
+        if not fuel_consumed and kwargs.get("fuel_type") == "electric":
+            fuel_consumed = kwargs.get("fuel_consumed_kwh")
+
         # Get the calculation method for this production type
         if production_type_code in PRODUCTION_TYPE_MAPPING:
             calc_method = PRODUCTION_TYPE_MAPPING[production_type_code]
@@ -1346,6 +1354,12 @@ class VerifiedEmissionFactors:
         # Extract fuel_type and energy_source from kwargs
         fuel_type = kwargs.get("fuel_type", "diesel")  # Default to diesel for backwards compatibility
         energy_source = kwargs.get("energy_source", "grid")  # Default to grid for electric
+
+        # For electric equipment, fuel_consumed may be None because the preview
+        # pipeline sets fuel_consumed_gallons=None for electric (kWh != gallons).
+        # The actual kWh value is passed separately via fuel_consumed_kwh kwarg.
+        if not fuel_consumed and fuel_type == "electric":
+            fuel_consumed = kwargs.get("fuel_consumed_kwh")
 
         if fuel_consumed:
             # Use actual fuel consumption
