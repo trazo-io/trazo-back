@@ -185,6 +185,17 @@ class RegisterSerializer(BasicUserSerializer):
             "company_code",
         ]
 
+    def validate_password(self, value):
+        """Validate password against AUTH_PASSWORD_VALIDATORS"""
+        from django.contrib.auth.password_validation import validate_password as django_validate_password
+        from django.core.exceptions import ValidationError
+
+        try:
+            django_validate_password(value)
+        except ValidationError as e:
+            raise serializers.ValidationError(e.messages)
+        return value
+
     def validate_email(self, value):
         """
         Validate email uniqueness - critical security validation

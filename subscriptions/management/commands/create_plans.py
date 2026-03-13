@@ -300,13 +300,6 @@ class Command(BaseCommand):
                 "interval": "month",
             },
             {
-                "name": "Extra Storage",
-                "slug": "extra-storage",
-                "description": "Add additional storage beyond your plan limit",
-                "price": 10.00,
-                "interval": "year",
-            },
-            {
                 "name": "Blockchain Verification",
                 "slug": "blockchain-verification",
                 "description": "Add blockchain verification to your plan for immutable transparency records and consumer trust badges",

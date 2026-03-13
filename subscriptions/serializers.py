@@ -138,8 +138,8 @@ class SubscriptionSerializer(serializers.ModelSerializer):
                 "history_weatherevent_events",
                 "history_generalevent_events",
                 "history_equipmentevent_events",
-                "history_soilevent_events",
-                "history_pestevent_events",
+                "history_soilmanagementevent_events",
+                "history_pestmanagementevent_events",
                 "history_businessevent_events",
             ]
 
@@ -374,4 +374,4 @@ class PaymentMethodSerializer(serializers.ModelSerializer):
 class InvoiceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Invoice
-        fields = ["id", "amount", "status", "invoice_date", "due_date", "invoice_pdf"]
+        fields = ["id", "number", "amount", "status", "invoice_date", "due_date", "invoice_pdf", "created_at"]

@@ -148,6 +148,12 @@ class Invoice(models.Model):
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="invoices")
     subscription = models.ForeignKey(Subscription, on_delete=models.SET_NULL, null=True)
     stripe_invoice_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
+    number = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Human-readable invoice number from Stripe (e.g. INV-0042)",
+    )
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="open")
     invoice_date = models.DateTimeField()

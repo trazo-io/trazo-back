@@ -1,13 +1,14 @@
 import logging
 from datetime import datetime
 
-from celery import shared_task
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.core.management import call_command
 from django.db.models import Q
 from django.template.loader import render_to_string
 from django.utils import timezone
+
+from celery import shared_task
 
 logger = logging.getLogger(__name__)
 
@@ -163,6 +164,16 @@ def reset_monthly_scan_counts():
     """Reset scan_count for all active subscriptions. Scheduled for 1st of each month."""
     logger.info("Running monthly scan count reset task")
     call_command("reset_monthly_scan_counts")
+
+
+@shared_task
+def cleanup_processed_webhook_events():
+    """Purge ProcessedWebhookEvent records older than 90 days. Scheduled weekly."""
+    from subscriptions.models import ProcessedWebhookEvent
+
+    cutoff = timezone.now() - timezone.timedelta(days=90)
+    count, _ = ProcessedWebhookEvent.objects.filter(processed_at__lt=cutoff).delete()
+    logger.info("Cleaned up %d processed webhook events older than 90 days", count)
 
 
 @shared_task

@@ -276,7 +276,6 @@ def create_almond_finished_events(prod, user, demo_images=None):
         },
         album=_create_album("herbicide", demo_images),
     )
-    
 
     # 3: Dormant Copper Spray for Bacterial Blast (Chemical)
     ChemicalEvent.objects.create(

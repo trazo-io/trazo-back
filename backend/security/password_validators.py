@@ -132,8 +132,8 @@ class PasswordEntropyValidator:
         if entropy < self.min_entropy:
             raise ValidationError(
                 _(
-                    "Password entropy is too low (%(entropy).1f bits). "
-                    "Use a longer password or more character types."
+                    "Password is too simple. "
+                    "Try making it longer or adding different character types."
                 ),
                 code="password_entropy_low",
                 params={"entropy": entropy, "min_entropy": self.min_entropy},
@@ -141,8 +141,8 @@ class PasswordEntropyValidator:
 
     def get_help_text(self):
         return _(
-            "Your password must have sufficient complexity "
-            "(at least %(min_entropy)d bits of entropy)." % {"min_entropy": self.min_entropy}
+            "Your password must be complex enough — "
+            "use a mix of letters, numbers, and special characters."
         )
 
 

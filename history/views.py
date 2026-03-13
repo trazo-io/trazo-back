@@ -302,6 +302,11 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         if parcel_pk:
             queryset = queryset.filter(parcel_id=parcel_pk)
 
+        # Filter by product if provided as query param
+        product_id = self.request.query_params.get("product")
+        if product_id:
+            queryset = queryset.filter(product_id=product_id)
+
         return queryset
 
     def list(self, request, *args, **kwargs):

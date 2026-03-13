@@ -23,15 +23,7 @@ from rest_framework.viewsets import ViewSet
 from company.models import Company
 from company.serializers import RetrieveCompanySerializer
 
-from .models import (
-    AddOn,
-    Invoice,
-    PaymentMethod,
-    Plan,
-    ProcessedWebhookEvent,
-    Subscription,
-    SubscriptionAddOn,
-)
+from .models import AddOn, Invoice, PaymentMethod, Plan, ProcessedWebhookEvent, Subscription, SubscriptionAddOn
 from .permissions import IsCompanyAdminForSubscription
 from .serializers import (
     AddOnSerializer,
@@ -380,12 +372,13 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
                 f"&company_id={str(subscription.company.id)}&from_addon=true"
             )
 
-            # If return_url is provided, add it to the success URL
+            # If return_url is provided, URL-encode it to prevent param collision
             if return_url:
-                success_url_params += f"&return_url={return_url}"
+                from urllib.parse import quote
+                success_url_params += f"&return_url={quote(return_url, safe='')}"
 
             success_url = f"{frontend_url}/admin/dashboard/stripe-success?{success_url_params}"
-            cancel_url = f"{frontend_url}/admin/dashboard/billing"
+            cancel_url = f"{frontend_url}/admin/dashboard/subscription"
 
             # Create the checkout session
             checkout_session = stripe.checkout.Session.create(
@@ -396,7 +389,7 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
                         "quantity": quantity,
                     }
                 ],
-                mode="payment",
+                mode="subscription",
                 customer=subscription.stripe_customer_id,
                 success_url=success_url,
                 cancel_url=cancel_url,
@@ -499,12 +492,37 @@ class PaymentMethodViewSet(viewsets.ModelViewSet):
 
     serializer_class = PaymentMethodSerializer
     permission_classes = [permissions.IsAuthenticated]
+    http_method_names = ["get", "post", "delete", "head", "options"]
 
     def get_queryset(self):
         user = self.request.user
         if user.is_staff:
             return PaymentMethod.objects.all()
         return PaymentMethod.objects.filter(company__in=user.companies.all())
+
+    def perform_destroy(self, instance):
+        """Delete payment method with Stripe detach and safety checks."""
+        company = instance.company
+
+        # Prevent deleting the default payment method
+        if instance.is_default:
+            from rest_framework.exceptions import ValidationError
+
+            raise ValidationError("Cannot delete the default payment method. Set another card as default first.")
+
+        # Prevent deleting the last payment method
+        if company.payment_methods.count() <= 1:
+            from rest_framework.exceptions import ValidationError
+
+            raise ValidationError("Cannot delete the only payment method. Add another card first.")
+
+        # Detach from Stripe first
+        try:
+            stripe.PaymentMethod.detach(instance.stripe_payment_method_id)
+        except Exception as e:
+            logger.warning("Error detaching payment method from Stripe: %s", e)
+
+        instance.delete()
 
     @action(detail=True, methods=["post"])
     def set_default(self, request, pk=None):
@@ -663,7 +681,7 @@ class CheckoutViewSet(ViewSet):
                             "quantity": quantity,
                         }
                     ],
-                    mode="payment",  # Use one-time payment for add-ons
+                    mode="subscription",  # Add-on prices are recurring
                     success_url=success_url_final,
                     cancel_url=cancel_url_final,
                     metadata={
@@ -1181,6 +1199,7 @@ def handle_invoice_payment_succeeded(invoice):
             defaults={
                 "company": subscription.company,
                 "subscription": subscription,
+                "number": invoice.get("number", ""),
                 "amount": invoice["amount_paid"] / 100,  # Convert from cents
                 "status": "paid",
                 "invoice_date": stripe_ts(invoice["created"]),
@@ -1217,6 +1236,7 @@ def handle_invoice_payment_failed(invoice):
             defaults={
                 "company": subscription.company,
                 "subscription": subscription,
+                "number": invoice.get("number", ""),
                 "amount": invoice["amount_due"] / 100,  # Convert from cents
                 "status": "uncollectible" if invoice.get("uncollectible") else "open",
                 "invoice_date": stripe_ts(invoice["created"]),
@@ -1248,8 +1268,24 @@ def handle_invoice_created(invoice_data):
         # Find subscription with this Stripe subscription ID
         subscription = Subscription.objects.filter(stripe_subscription_id=subscription_id).first()
         if not subscription:
+            # Fallback: find by customer ID (handles race condition where
+            # customer.subscription.created webhook hasn't been processed yet)
+            customer_id = invoice_data.get("customer")
+            if customer_id:
+                subscription = Subscription.objects.filter(stripe_customer_id=customer_id).first()
+                if subscription and not subscription.stripe_subscription_id:
+                    # Backfill the stripe_subscription_id
+                    subscription.stripe_subscription_id = subscription_id
+                    subscription.save(update_fields=["stripe_subscription_id", "updated_at"])
+                    logger.info(
+                        "Backfilled stripe_subscription_id=%s on subscription %s via customer %s",
+                        subscription_id,
+                        subscription.id,
+                        customer_id,
+                    )
+        if not subscription:
             logger.warning(
-                "No subscription found with stripe_subscription_id: %s — "
+                "No subscription found for stripe_subscription_id=%s or customer — "
                 "the invoice.created webhook arrived before the subscription was recorded locally.",
                 subscription_id,
             )
@@ -1259,12 +1295,14 @@ def handle_invoice_created(invoice_data):
         Invoice.objects.update_or_create(
             stripe_invoice_id=invoice_data["id"],
             defaults={
-                "company": subscription.company,  # Add required company field
+                "company": subscription.company,
                 "subscription": subscription,
+                "number": invoice_data.get("number", ""),
                 "amount": invoice_data["total"] / 100,  # Convert from cents
                 "status": "draft",
                 "invoice_date": stripe_ts(invoice_data["created"]),
                 "due_date": (stripe_ts(invoice_data["due_date"]) if invoice_data.get("due_date") else None),
+                "invoice_pdf": invoice_data.get("invoice_pdf", ""),
             },
         )
         logger.info(f"Invoice created: {invoice_data['id']} for subscription {subscription_id}")
@@ -1275,11 +1313,16 @@ def handle_invoice_created(invoice_data):
 
 
 def handle_invoice_finalized(invoice_data):
-    """Process invoice finalization"""
+    """Process invoice finalization — PDF URL becomes available at this stage"""
     try:
         invoice = Invoice.objects.filter(stripe_invoice_id=invoice_data["id"]).first()
         if invoice:
             invoice.status = "open"
+            # PDF URL and number become available when invoice is finalized
+            if invoice_data.get("invoice_pdf"):
+                invoice.invoice_pdf = invoice_data["invoice_pdf"]
+            if invoice_data.get("number"):
+                invoice.number = invoice_data["number"]
             invoice.save()
             logger.info(f"Invoice finalized: {invoice_data['id']}")
         else:
@@ -1296,12 +1339,38 @@ def handle_invoice_paid(invoice_data):
         invoice = Invoice.objects.filter(stripe_invoice_id=invoice_data["id"]).first()
         if invoice:
             invoice.status = "paid"
-            if hasattr(invoice, "paid_at"):
-                invoice.paid_at = timezone.now()
+            # Capture PDF URL and invoice number if available
+            if invoice_data.get("invoice_pdf"):
+                invoice.invoice_pdf = invoice_data["invoice_pdf"]
+            if invoice_data.get("number") and not invoice.number:
+                invoice.number = invoice_data["number"]
             invoice.save()
             logger.info(f"Invoice paid: {invoice_data['id']}")
         else:
-            logger.warning(f"Invoice not found for payment: {invoice_data['id']}")
+            # Invoice record doesn't exist yet — create it (handles webhook ordering race)
+            subscription_id = invoice_data.get("subscription")
+            customer_id = invoice_data.get("customer")
+            subscription = None
+            if subscription_id:
+                subscription = Subscription.objects.filter(stripe_subscription_id=subscription_id).first()
+            if not subscription and customer_id:
+                subscription = Subscription.objects.filter(stripe_customer_id=customer_id).first()
+
+            if subscription:
+                Invoice.objects.create(
+                    stripe_invoice_id=invoice_data["id"],
+                    company=subscription.company,
+                    subscription=subscription,
+                    number=invoice_data.get("number", ""),
+                    amount=invoice_data.get("total", 0) / 100,
+                    status="paid",
+                    invoice_date=stripe_ts(invoice_data.get("created")),
+                    due_date=stripe_ts(invoice_data.get("due_date")) if invoice_data.get("due_date") else None,
+                    invoice_pdf=invoice_data.get("invoice_pdf", ""),
+                )
+                logger.info(f"Invoice created and marked paid: {invoice_data['id']}")
+            else:
+                logger.warning(f"Invoice not found and no subscription for payment: {invoice_data['id']}")
 
     except Exception as e:
         logger.exception("Error in handle_invoice_paid: %s", e)
@@ -1462,24 +1531,37 @@ def handle_subscription_created(subscription_data):
         company = Company.objects.get(id=company_id)
 
         # Get plan from Stripe price ID
-        price_id = subscription_data["items"]["data"][0]["price"]["id"]
-        plan = Plan.objects.get(stripe_price_id=price_id)
+        items_data = subscription_data.get("items", {}).get("data", [])
+        if not items_data:
+            logger.warning("No items in subscription %s", subscription_data.get("id"))
+            return
+
+        price_id = items_data[0].get("price", {}).get("id")
+        plan = Plan.objects.filter(stripe_price_id=price_id).first()
+
+        # Build defaults — only set plan if we found a matching one
+        defaults = {
+            "stripe_subscription_id": subscription_data.get("id"),
+            "stripe_customer_id": subscription_data.get("customer"),
+            "status": subscription_data.get("status", "active"),
+            "cancel_at_period_end": subscription_data.get("cancel_at_period_end", False),
+            "trial_end": (
+                stripe_ts(subscription_data.get("trial_end")) if subscription_data.get("trial_end") else None
+            ),
+        }
+        if plan:
+            defaults["plan"] = plan
+
+        # Only set period fields if present in the data
+        if subscription_data.get("current_period_start"):
+            defaults["current_period_start"] = stripe_ts(subscription_data["current_period_start"])
+        if subscription_data.get("current_period_end"):
+            defaults["current_period_end"] = stripe_ts(subscription_data["current_period_end"])
 
         # Create or update subscription
         subscription, created = Subscription.objects.update_or_create(
             company=company,
-            defaults={
-                "plan": plan,
-                "stripe_subscription_id": subscription_data["id"],
-                "stripe_customer_id": subscription_data["customer"],
-                "status": subscription_data["status"],
-                "current_period_start": stripe_ts(subscription_data["current_period_start"]),
-                "current_period_end": stripe_ts(subscription_data["current_period_end"]),
-                "cancel_at_period_end": subscription_data["cancel_at_period_end"],
-                "trial_end": (
-                    stripe_ts(subscription_data["trial_end"]) if subscription_data.get("trial_end") else None
-                ),
-            },
+            defaults=defaults,
         )
 
         logger.info(
@@ -1544,16 +1626,25 @@ def handle_addon_purchase_completed(session):
             else:
                 logger.info("Created new addon %s with quantity %d", addon.name, quantity)
 
-            # Create an invoice record for the add-on purchase if there's a payment_intent
-            payment_intent = session.get("payment_intent")
-            if payment_intent:
-                Invoice.objects.create(
-                    company=company,
-                    subscription=subscription,
-                    stripe_invoice_id=payment_intent,  # Note: This is payment_intent ID, not invoice ID
-                    amount=addon.price * quantity,
-                    status="paid",
-                    invoice_date=timezone.now(),
+            # Create an invoice record for the add-on purchase
+            # Use the Stripe invoice ID if available, otherwise use payment_intent
+            # prefixed to distinguish from real invoice IDs
+            stripe_invoice_id = session.get("invoice")
+            if not stripe_invoice_id:
+                payment_intent = session.get("payment_intent")
+                stripe_invoice_id = f"addon_{payment_intent}" if payment_intent else None
+
+            if stripe_invoice_id:
+                Invoice.objects.get_or_create(
+                    stripe_invoice_id=stripe_invoice_id,
+                    defaults={
+                        "company": company,
+                        "subscription": subscription,
+                        "number": f"ADDON-{addon.slug}-{quantity}",
+                        "amount": addon.price * quantity,
+                        "status": "paid",
+                        "invoice_date": timezone.now(),
+                    },
                 )
 
             logger.info(f"Successfully processed add-on purchase: {addon.name} x{quantity} for {company.name}")
@@ -1591,26 +1682,36 @@ def handle_setup_intent_succeeded(setup_intent):
             logger.warning("No card details in payment method %s", payment_method_id)
             return
 
-        # Create payment method record
-        is_first = company.payment_methods.count() == 0
+        # Use get_or_create to prevent IntegrityError when payment_method.attached
+        # webhook also fires for the same payment method
+        with transaction.atomic():
+            payment_method_obj, created = PaymentMethod.objects.get_or_create(
+                stripe_payment_method_id=payment_method_id,
+                defaults={
+                    "company": company,
+                    "card_brand": card.get("brand", "").lower(),
+                    "last_4": card.get("last4", ""),
+                    "exp_month": card.get("exp_month", 0),
+                    "exp_year": card.get("exp_year", 0),
+                    "is_default": False,
+                },
+            )
 
-        payment_method_obj = PaymentMethod.objects.create(
-            company=company,
-            stripe_payment_method_id=payment_method_id,
-            card_brand=card.get("brand", "").lower(),
-            last_4=card.get("last4", ""),
-            exp_month=card.get("exp_month", 0),
-            exp_year=card.get("exp_year", 0),
-            is_default=is_first,  # Set as default if it's the first payment method
-        )
-
-        # If this is the first payment method, set it as default in Stripe
-        if is_first:
-            stripe.Customer.modify(customer_id, invoice_settings={"default_payment_method": payment_method_id})
+            if created:
+                # Set as default if it's the first payment method
+                is_first = company.payment_methods.count() == 1
+                if is_first:
+                    payment_method_obj.is_default = True
+                    payment_method_obj.save(update_fields=["is_default"])
+                    stripe.Customer.modify(
+                        customer_id,
+                        invoice_settings={"default_payment_method": payment_method_id},
+                    )
 
         logger.info(
-            "Payment method %s successfully created for company %s",
+            "Payment method %s %s for company %s",
             payment_method_id,
+            "created" if created else "already exists",
             company.name,
         )
 

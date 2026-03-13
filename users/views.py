@@ -73,24 +73,22 @@ class UserViewSet(viewsets.ModelViewSet):
         return obj
 
     def get_permissions(self):
-        # Allow public access to email verification and password reset endpoints
+        # Public actions declare their own permissions via @action decorator
         if self.action in [
             "verify_email",
             "resend_verification_email",
             "request_password_reset",
             "confirm_password_reset",
         ]:
-            permission_classes = [AllowAny]
-        else:
-            permission_classes = [IsAuthenticated]
-        return [permission() for permission in permission_classes]
+            return [AllowAny()]
+        return [IsAuthenticated()]
 
     @action(detail=False, methods=["get"])
     def me(self, request, pk=None):
         serializer = MeSerializer(request.user, context={"request": request})
         return Response(serializer.data)
 
-    @action(detail=False, methods=["post"])
+    @action(detail=False, methods=["post"], authentication_classes=[], permission_classes=[AllowAny])
     def verify_email(self, request, pk=None):
         email = request.data.get("email")
         code = request.data.get("code")
@@ -197,7 +195,7 @@ class UserViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    @action(detail=False, methods=["post"], permission_classes=[AllowAny])
+    @action(detail=False, methods=["post"], authentication_classes=[], permission_classes=[AllowAny])
     def resend_verification_email(self, request, pk=None):
         """
         Resend verification email to user
@@ -323,7 +321,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
         return Response({"message": "Password changed successfully"}, status=status.HTTP_200_OK)
 
-    @action(detail=False, methods=["post"], permission_classes=[AllowAny])
+    @action(detail=False, methods=["post"], authentication_classes=[], permission_classes=[AllowAny])
     def request_password_reset(self, request, pk=None):
         """
         Request password reset via email
@@ -412,7 +410,7 @@ class UserViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK,
         )
 
-    @action(detail=False, methods=["post"], permission_classes=[AllowAny])
+    @action(detail=False, methods=["post"], authentication_classes=[], permission_classes=[AllowAny])
     def confirm_password_reset(self, request, pk=None):
         """
         Confirm password reset with token and set new password
