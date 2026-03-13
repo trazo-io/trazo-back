@@ -38,7 +38,12 @@ class WorksInSerializer(serializers.ModelSerializer):
     def get_establishments_in_charge(self, obj):
         from company.serializers import BasicEstablishmentSerializer
 
-        return BasicEstablishmentSerializer(obj.establishments_in_charge.all(), many=True).data
+        # Company Admins have access to all company establishments
+        if obj.role == WorksIn.COMPANY_ADMIN:
+            establishments = obj.company.establishment_set.all()
+        else:
+            establishments = obj.establishments_in_charge.all()
+        return BasicEstablishmentSerializer(establishments, many=True).data
 
     def get_user(self, obj):
         return obj.user.get_full_name()

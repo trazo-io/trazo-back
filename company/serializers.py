@@ -311,7 +311,17 @@ class UpdateEstablishmentSerializer(ModelSerializer):
                 gallery_image.save()
             validated_data["album"] = gallery
 
-        return super().create(validated_data)
+        establishment = super().create(validated_data)
+
+        # Auto-assign new establishment to all company admins
+        company = establishment.company
+        admin_works_in = WorksIn.objects.filter(
+            company=company, role=WorksIn.COMPANY_ADMIN
+        )
+        for works_in in admin_works_in:
+            works_in.establishments_in_charge.add(establishment)
+
+        return establishment
 
 
 class RetrieveEstablishmentSerializer(ModelSerializer):
