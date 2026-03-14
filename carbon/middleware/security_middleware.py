@@ -122,27 +122,11 @@ class CarbonSecurityMiddleware(MiddlewareMixin):
             # Don't block requests lacking this header, just log as warning
             # Modern SPAs may not always send this header
 
-        # Validate user authentication for critical operations
-        if not request.user or not request.user.is_authenticated:
-            return JsonResponse(
-                {
-                    "error": "Authentication required",
-                    "message": "You must be logged in to perform this action",
-                    "code": "AUTH_REQUIRED",
-                },
-                status=401,
-            )
-
-        # Check for suspicious request patterns
-        if self._detect_suspicious_patterns(request):
-            return JsonResponse(
-                {
-                    "error": "Security policy violation",
-                    "message": "Suspicious activity detected",
-                    "code": "SUSPICIOUS_ACTIVITY",
-                },
-                status=403,
-            )
+        # NOTE: Do NOT check request.user.is_authenticated here.
+        # JWT cookie auth runs at the DRF view layer (CustomAuthentication),
+        # not at the middleware layer. At this point request.user is always
+        # AnonymousUser, so the check would block all authenticated requests.
+        # DRF views enforce authentication via their own permission_classes.
 
         return None
 

@@ -41,12 +41,35 @@ class History(models.Model):
     type = models.CharField(max_length=2, choices=HISTORY_TYPES, blank=True, null=True)
     extra_data = models.JSONField(blank=True, null=True)
     start_date = models.DateTimeField(null=True, blank=True)
+    expected_harvest = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Planned/estimated harvest date",
+    )
     finish_date = models.DateTimeField(null=True, blank=True)
     published = models.BooleanField(default=False, blank=True)
     earning = models.FloatField(default=0)
     lot_id = models.CharField(max_length=50, blank=True, null=True, help_text="Lot identifier")
     description = models.TextField(blank=True, null=True)
     production_amount = models.FloatField(default=0)
+
+    PRODUCTION_METHOD_CHOICES = [
+        ("conventional", "Conventional"),
+        ("organic", "Organic"),
+        ("regenerative", "Regenerative"),
+        ("integrated", "Integrated Pest Management"),
+        ("biodynamic", "Biodynamic"),
+        ("hydroponic", "Hydroponic"),
+        ("no_till", "No-Till"),
+    ]
+    production_method = models.CharField(
+        max_length=30,
+        choices=PRODUCTION_METHOD_CHOICES,
+        blank=True,
+        null=True,
+        default="conventional",
+        help_text="Farming method used for this production",
+    )
 
     # Harvest details for transparency
     UNIT_CHOICES = [

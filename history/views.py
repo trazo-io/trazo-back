@@ -54,6 +54,7 @@ from .serializers import (
     EquipmentEventSerializer,
     GeneralEventSerializer,
     HistorySerializer,
+    HistoryWriteSerializer,
     ListHistoryClassSerializer,
     OptimizedHistoryListSerializer,
     PestManagementEventSerializer,
@@ -147,7 +148,9 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             raise PermissionDenied("You do not have permission to perform this action.")
 
     def get_serializer_class(self):
-        if self.action == "create" or self.action == "update" or self.action == "partial_update":
+        if self.action in ("update", "partial_update"):
+            return HistoryWriteSerializer
+        elif self.action == "create":
             return HistorySerializer
         elif self.action == "list":
             # Use optimized serializer for dashboard list view
@@ -307,6 +310,10 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         if product_id:
             queryset = queryset.filter(product_id=product_id)
 
+        # Filter to only completed productions if requested
+        if self.request.query_params.get("completed") == "true":
+            queryset = queryset.filter(finish_date__isnull=False)
+
         return queryset
 
     def list(self, request, *args, **kwargs):
@@ -361,10 +368,18 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         return response
 
     def partial_update(self, request, *args, **kwargs):
-        """Override partial_update to enforce role-based permissions."""
+        """Override partial_update to enforce role-based permissions and cache invalidation."""
         instance = self.get_object()
         self.check_write_permission(request, instance)
-        return super().partial_update(request, *args, **kwargs)
+
+        response = super().partial_update(request, *args, **kwargs)
+
+        parcel_id = self.kwargs.get("parcel_pk")
+        if parcel_id:
+            cache_key = f"history_list_parcel_{parcel_id}_v3"
+            cache.delete(cache_key)
+
+        return response
 
     def destroy(self, request, *args, **kwargs):
         """Override destroy to invalidate cache and enforce role-based permissions."""
@@ -488,7 +503,6 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             # Create production with enhanced data
             extra_data = {
                 "crop_category": self._categorize_crop(crop_type.name),
-                "production_method": data.get("production_method", "conventional"),
                 "estimated_yield": data.get("estimated_yield"),
                 "irrigation_method": data.get("irrigation_method"),
                 "created_via": "production_start_form",
@@ -514,9 +528,10 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 history = History(
                     name=data["name"],
                     start_date=start_date,
-                    finish_date=expected_harvest,
+                    expected_harvest=expected_harvest,
                     parcel=parcel,
                     product=product,
+                    production_method=data.get("production_method", "conventional"),
                     crop_type=crop_type,
                     extra_data=extra_data,
                     type=data.get("type", "OR"),

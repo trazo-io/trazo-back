@@ -1780,9 +1780,12 @@ class OptimizedHistoryListSerializer(serializers.ModelSerializer):
             "id",
             "public_id",
             "start_date",
+            "expected_harvest",
             "finish_date",
             "name",
+            "type",
             "published",
+            "production_method",
             "earning",
             "parcel",
             "members",
@@ -1995,6 +1998,59 @@ class OptimizedHistoryListSerializer(serializers.ModelSerializer):
         return data
 
 
+class HistoryWriteSerializer(serializers.ModelSerializer):
+    """Lean serializer for create/update — no nested events/images/members."""
+
+    product = serializers.SerializerMethodField()
+    parcel = serializers.SerializerMethodField()
+    crop_type = serializers.SerializerMethodField()
+
+    class Meta:
+        model = History
+        fields = [
+            "id",
+            "public_id",
+            "start_date",
+            "expected_harvest",
+            "finish_date",
+            "name",
+            "type",
+            "published",
+            "production_method",
+            "parcel",
+            "product",
+            "crop_type",
+            "is_outdoor",
+            "age_of_plants",
+            "number_of_plants",
+            "soil_ph",
+            "lot_id",
+            "production_amount",
+            "production_unit",
+            "quality_grade",
+            "harvest_method",
+            "description",
+            "events_status",
+        ]
+        read_only_fields = ["id", "public_id", "events_status"]
+
+    def get_product(self, history):
+        return history.product.name if history.product else None
+
+    def get_parcel(self, history):
+        return history.parcel.name if history.parcel else None
+
+    def get_crop_type(self, history):
+        if history.crop_type:
+            return {
+                "id": history.crop_type.id,
+                "name": history.crop_type.name,
+                "category": history.crop_type.category,
+                "slug": history.crop_type.slug,
+            }
+        return None
+
+
 class HistorySerializer(serializers.ModelSerializer):
     events = serializers.SerializerMethodField()
     certificate_percentage = serializers.SerializerMethodField()
@@ -2011,9 +2067,12 @@ class HistorySerializer(serializers.ModelSerializer):
             "id",
             "public_id",
             "start_date",
+            "expected_harvest",
             "finish_date",
             "name",
+            "type",
             "published",
+            "production_method",
             "events",
             "earning",
             "parcel",
@@ -3601,6 +3660,10 @@ class EquipmentEventSerializer(EventSerializer):
 
 # Soil Management Event Serializers
 class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSerializer):
+    # Grazing fields are optional - only relevant for grazing management subtype
+    animal_count = serializers.IntegerField(required=False, allow_null=True, default=None)
+    grazing_duration_days = serializers.IntegerField(required=False, allow_null=True, default=None)
+
     class Meta:
         model = SoilManagementEvent
         fields = [
@@ -3658,6 +3721,12 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
 
         # Create a copy to avoid modifying the original
         data = data.copy()
+
+        # Convert empty strings to None for optional integer fields
+        integer_fields = ["animal_count", "grazing_duration_days", "equipment_hours"]
+        for field_name in integer_fields:
+            if field_name in data and data[field_name] in ("", None):
+                data[field_name] = None
 
         # Handle custom fields (user-defined additional information)
         custom_fields = self.handle_custom_fields_input(data)
