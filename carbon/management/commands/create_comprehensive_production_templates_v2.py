@@ -556,6 +556,7 @@ CROP_CUSTOMIZATIONS["avocado"] = CROP_CUSTOMIZATIONS["avocados"]
 
 def build_soil_event_fields(
     subtype="ST",
+    name=None,
     area=10.0,
     area_unit="ha",
     working_depth=20.0,
@@ -573,6 +574,7 @@ def build_soil_event_fields(
     amendment_type=None,
     amendment_amount=None,
     equipment_used="tractor_cultivator",
+    test_results=None,
     extra_data=None,
 ):
     """
@@ -600,10 +602,14 @@ def build_soil_event_fields(
         "equipment_used": equipment_used,
     }
 
+    if name:
+        fields["name"] = name
     if amendment_type:
         fields["amendment_type"] = amendment_type
     if amendment_amount:
         fields["amendment_amount"] = amendment_amount
+    if test_results:
+        fields["test_results"] = test_results
     if extra_data:
         fields["extra_data"] = extra_data
 
@@ -612,10 +618,12 @@ def build_soil_event_fields(
 
 def build_production_event_fields(
     subtype="PL",
+    name=None,
     area=10.0,
     area_unit="ha",
     yield_quantity=None,
     yield_unit="tons",
+    harvest_quality_grade=None,
     fuel_consumed=8.0,
     fuel_unit="L",
     fuel_type="diesel",
@@ -655,12 +663,16 @@ def build_production_event_fields(
         "production_efficiency": efficiency,
     }
 
+    if name:
+        fields["name"] = name
+
     # Subtype-specific fields
     if subtype == "PL":
         fields["seeds_source"] = seeds_source
     elif subtype == "HA":
         fields["yield_quantity"] = yield_quantity
         fields["yield_unit"] = yield_unit
+        fields["harvest_quality_grade"] = harvest_quality_grade or "grade_a"
         fields["transportation_distance"] = transportation_distance
         fields["transportation_unit"] = transportation_unit
     elif subtype == "IR":
@@ -668,6 +680,8 @@ def build_production_event_fields(
         fields["irrigation_method"] = irrigation_method
         fields["irrigation_depth"] = irrigation_depth
         fields["irrigation_depth_unit"] = irrigation_depth_unit
+    elif subtype == "PR":
+        fields["equipment_type"] = equipment_type or "tractor"
     elif subtype == "EM":
         fields["equipment_type"] = equipment_type or "tractor"
         fields["equipment_operation_type"] = equipment_operation_type or "MN"
@@ -680,6 +694,7 @@ def build_production_event_fields(
 
 def build_chemical_event_fields(
     subtype="FE",
+    name=None,
     chemical_subtype="synthetic_fertilizer",
     commercial_name="NPK Fertilizer 10-10-10",
     concentration="10-10-10",
@@ -713,29 +728,47 @@ def build_chemical_event_fields(
 
     Subtypes: FE (Fertilizer), PE (Pesticide), HE (Herbicide), FU (Fungicide)
     """
+    # Map application_method to structured choices (broadcast, injection, foliar, drip, banding)
+    _METHOD_TO_STRUCTURED = {
+        "broadcast": "broadcast",
+        "banded": "banding",
+        "banding": "banding",
+        "fertigation": "drip",
+        "drip": "drip",
+        "foliar": "foliar",
+        "foliar_spray": "foliar",
+        "soil_incorporation": "injection",
+        "injection": "injection",
+    }
+
     fields = {
         "type": subtype,
         "chemical_subtype": chemical_subtype,
         "commercial_name": commercial_name,
         "concentration": concentration,
-        "volume": volume,
-        "area": area,
+        # Model fields are CharField — store as strings (matches demo user command)
+        "volume": str(volume),
+        "area": str(area),
         "way_of_application": application_method,
+        "application_method_structured": _METHOD_TO_STRUCTURED.get(application_method, "broadcast"),
         "application_fuel_type": fuel_type,
         "application_fuel_consumed": fuel_consumed,
         "application_fuel_unit": fuel_unit,
         "organic_approved": organic_approved,
         "weather_conditions": weather_conditions,
         "application_timing": application_timing,
-        "time_period": application_timing,
         "observation": observation,
     }
+
+    if name:
+        fields["name"] = name
 
     # Fertilizer-specific fields
     if subtype == "FE":
         fields["nitrogen_percentage"] = nitrogen_pct
         fields["phosphorus_percentage"] = phosphorus_pct
         fields["potassium_percentage"] = potassium_pct
+        fields["target_pest_disease"] = target_pest_disease
 
     # Pesticide/Herbicide/Fungicide-specific fields
     if subtype in ["PE", "HE", "FU"]:
@@ -745,8 +778,11 @@ def build_chemical_event_fields(
         fields["rei_hours"] = rei_hours
         fields["phi_days"] = phi_days
 
+    # Ensure volume_unit is always in extra_data (critical convention from demo data)
+    base_extra = {"volume_unit": volume_unit}
     if extra_data:
-        fields["extra_data"] = extra_data
+        base_extra.update(extra_data)
+    fields["extra_data"] = base_extra
 
     return fields
 
@@ -915,8 +951,12 @@ def build_weather_event_fields(
     # Shared fields
     if crop_impact:
         extra_data["crop_impact"] = crop_impact
+    # Frontend expects "way_of_protection" for FR/HL, "protection_measures" for HT/TS/HW
     if protection_measures:
-        extra_data["protection_measures"] = protection_measures
+        if subtype in ("FR", "HL"):
+            extra_data["way_of_protection"] = protection_measures
+        else:
+            extra_data["protection_measures"] = protection_measures
     if damage_description:
         extra_data["damage_assessment"] = damage_description
 
@@ -1215,7 +1255,9 @@ def get_tree_crop_events(crop_slug, crop_data):
             "order_sequence": 1,
             "backend_event_fields": build_soil_event_fields(
                 subtype="ST",
+                name="Annual Soil Analysis",
                 area=area,
+                working_depth=30.0,
                 soil_ph=6.5,
                 organic_matter_pct=3.0,
                 soil_texture=crop_data.get("soil_type", "loam"),
@@ -1223,6 +1265,7 @@ def get_tree_crop_events(crop_slug, crop_data):
                 fuel_type="none",
                 equipment_hours=0.0,
                 observation=f"Annual soil analysis for {crop_slug} orchard",
+                test_results={"ph": 6.5, "organic_matter_pct": 3.0, "lab": "Soil testing laboratory"},
             ),
         },
         # 2. Cover Crop / Compost Application
@@ -1247,11 +1290,13 @@ def get_tree_crop_events(crop_slug, crop_data):
             "order_sequence": 2,
             "backend_event_fields": build_soil_event_fields(
                 subtype="CC",
+                name="Cover Crop / Compost Application",
                 area=area,
                 fuel_consumed=8.0,
                 fuel_unit="gal",
                 equipment_hours=6.0,
                 amendment_type="Crimson Clover + White Mustard seed mix",
+                amendment_amount="375",
                 observation=f"Cover crop planting for {crop_slug} orchard soil health",
                 extra_data={
                     "seed_mix": {
@@ -1285,6 +1330,7 @@ def get_tree_crop_events(crop_slug, crop_data):
             "order_sequence": 3,
             "backend_event_fields": build_chemical_event_fields(
                 subtype="FE",
+                name="Base Fertilization",
                 chemical_subtype="synthetic_fertilizer",
                 commercial_name=crop_data["commercial_name"],
                 concentration=crop_data["npk"],
@@ -1326,6 +1372,7 @@ def get_tree_crop_events(crop_slug, crop_data):
             "order_sequence": 4,
             "backend_event_fields": build_chemical_event_fields(
                 subtype="FE",
+                name="Secondary Fertigation",
                 chemical_subtype="synthetic_fertilizer",
                 commercial_name=crop_data.get("secondary_fertilizer", crop_data["commercial_name"]),
                 concentration=crop_data.get("secondary_npk", crop_data["npk"]),
@@ -1364,6 +1411,7 @@ def get_tree_crop_events(crop_slug, crop_data):
             "order_sequence": 5,
             "backend_event_fields": build_chemical_event_fields(
                 subtype="FU",
+                name="Fungicide Prevention Treatment",
                 chemical_subtype=crop_data.get("fungicide_subtype", "synthetic_fungicide"),
                 commercial_name=crop_data.get("primary_fungicide", "Copper hydroxide fungicide"),
                 concentration="45",
@@ -1402,6 +1450,7 @@ def get_tree_crop_events(crop_slug, crop_data):
             "order_sequence": 6,
             "backend_event_fields": build_chemical_event_fields(
                 subtype="FU",
+                name="Organic Fungicide Spray",
                 chemical_subtype="copper_fungicide",
                 commercial_name=crop_data.get("copper_fungicide", "Copper hydroxide fungicide"),
                 concentration="46",
@@ -1437,6 +1486,7 @@ def get_tree_crop_events(crop_slug, crop_data):
             "order_sequence": 7,
             "backend_event_fields": build_chemical_event_fields(
                 subtype="HE",
+                name="Herbicide Application",
                 chemical_subtype=crop_data.get("herbicide_subtype", "synthetic_herbicide"),
                 commercial_name=crop_data.get("herbicide", "Post-emergent herbicide"),
                 concentration="48",
@@ -1476,6 +1526,7 @@ def get_tree_crop_events(crop_slug, crop_data):
             "order_sequence": 8,
             "backend_event_fields": build_chemical_event_fields(
                 subtype="PE",
+                name="Pesticide Treatment",
                 chemical_subtype=crop_data.get("pesticide_subtype", "synthetic_pesticide"),
                 commercial_name=crop_data.get("synthetic_pesticide", "Targeted insecticide"),
                 concentration="25",
@@ -1511,6 +1562,7 @@ def get_tree_crop_events(crop_slug, crop_data):
             "order_sequence": 9,
             "backend_event_fields": build_production_event_fields(
                 subtype="IR",
+                name="Season Irrigation Program",
                 area=area,
                 fuel_consumed=3060.0,
                 fuel_unit="kWh",
@@ -1526,6 +1578,10 @@ def get_tree_crop_events(crop_slug, crop_data):
                     "event_count": 18,
                     "water_volume_total": 3600000,
                     "water_volume_unit": "gallons",
+                    "irrigation_depth": "2.5",
+                    "irrigation_depth_unit": "inches",
+                    "irrigation_method": crop_data["irrigation_method"],
+                    "water_source": crop_data.get("water_source", "well_groundwater"),
                 },
             ),
         },
@@ -1551,6 +1607,7 @@ def get_tree_crop_events(crop_slug, crop_data):
             "order_sequence": 10,
             "backend_event_fields": build_production_event_fields(
                 subtype="PR",
+                name="Annual Structural Pruning",
                 area=area,
                 fuel_consumed=12.0,
                 fuel_unit="gal",
@@ -1580,6 +1637,7 @@ def get_tree_crop_events(crop_slug, crop_data):
             "order_sequence": 11,
             "backend_event_fields": build_production_event_fields(
                 subtype="HA",
+                name="Harvest",
                 area=area,
                 yield_quantity=crop_data["yield_per_ha"] * area,
                 yield_unit="kg",
@@ -1616,6 +1674,7 @@ def get_tree_crop_events(crop_slug, crop_data):
             "order_sequence": 12,
             "backend_event_fields": build_production_event_fields(
                 subtype="PL",
+                name="Planting / Replanting",
                 area=2.5,
                 fuel_consumed=18.0,
                 fuel_unit="L",
@@ -1653,6 +1712,7 @@ def get_tree_crop_events(crop_slug, crop_data):
             "order_sequence": 13,
             "backend_event_fields": build_production_event_fields(
                 subtype="CU",
+                name="Mechanical Weed Management",
                 area=area,
                 fuel_consumed=45.0,
                 fuel_unit="gal",
@@ -1683,6 +1743,7 @@ def get_tree_crop_events(crop_slug, crop_data):
             "order_sequence": 14,
             "backend_event_fields": build_production_event_fields(
                 subtype="TH",
+                name="Fruit Thinning",
                 area=area,
                 fuel_consumed=0.0,
                 fuel_type="none",
@@ -1712,6 +1773,7 @@ def get_tree_crop_events(crop_slug, crop_data):
             "order_sequence": 15,
             "backend_event_fields": build_production_event_fields(
                 subtype="EM",
+                name="Equipment Maintenance",
                 area=0.0,
                 fuel_consumed=5.0,
                 fuel_unit="gal",
@@ -1749,6 +1811,7 @@ def get_tree_crop_events(crop_slug, crop_data):
             "order_sequence": 16,
             "backend_event_fields": build_production_event_fields(
                 subtype="EM",
+                name="Sprayer Calibration",
                 area=0.0,
                 fuel_consumed=4.5,
                 fuel_unit="gal",
@@ -2007,6 +2070,7 @@ def get_tree_crop_events(crop_slug, crop_data):
             "order_sequence": 23,
             "backend_event_fields": build_production_event_fields(
                 subtype="PO",
+                name="Pollination Management",
                 area=area,
                 area_unit="ha",
                 fuel_consumed=0.0,
@@ -2059,6 +2123,7 @@ def get_tree_crop_events(crop_slug, crop_data):
             "order_sequence": 24,
             "backend_event_fields": build_production_event_fields(
                 subtype="PH",
+                name="Post-Harvest Processing",
                 area=area,
                 area_unit="ha",
                 fuel_consumed=round(area * 3.5, 1),  # ~3.5 gal/ha for processing equipment
@@ -2106,6 +2171,7 @@ def get_tree_crop_events(crop_slug, crop_data):
             "order_sequence": 25,
             "backend_event_fields": build_production_event_fields(
                 subtype="CM",
+                name="Canopy Management",
                 area=area,
                 area_unit="ha",
                 fuel_consumed=round(area * 1.5, 1),  # Light tractor/equipment use
@@ -2284,7 +2350,9 @@ def get_shared_extra_events(crop_slug, crop_data, start_order=7, crop_category="
             "order_sequence": start_order,
             "backend_event_fields": build_soil_event_fields(
                 subtype="ST",
+                name="Soil Analysis",
                 area=area,
+                working_depth=30.0,
                 soil_ph=6.5,
                 organic_matter_pct=3.0,
                 soil_texture=crop_data.get("soil_type", "loam"),
@@ -2292,6 +2360,7 @@ def get_shared_extra_events(crop_slug, crop_data, start_order=7, crop_category="
                 fuel_type="none",
                 equipment_hours=0.0,
                 observation=f"Annual soil analysis for {crop_slug}",
+                test_results={"ph": 6.5, "organic_matter_pct": 3.0, "lab": "Soil testing laboratory"},
             ),
         },
         # Fungicide
@@ -2316,6 +2385,7 @@ def get_shared_extra_events(crop_slug, crop_data, start_order=7, crop_category="
             "order_sequence": start_order + 1,
             "backend_event_fields": build_chemical_event_fields(
                 subtype="FU",
+                name="Fungicide Treatment",
                 chemical_subtype=crop_data.get("fungicide_subtype", "synthetic_fungicide"),
                 commercial_name=crop_data.get("primary_fungicide", "Preventive fungicide"),
                 concentration="45",
@@ -2350,6 +2420,7 @@ def get_shared_extra_events(crop_slug, crop_data, start_order=7, crop_category="
             "order_sequence": start_order + 2,
             "backend_event_fields": build_chemical_event_fields(
                 subtype="HE",
+                name="Herbicide Application",
                 chemical_subtype=crop_data.get("herbicide_subtype", "synthetic_herbicide"),
                 commercial_name=crop_data.get("herbicide", "Post-emergent herbicide"),
                 concentration="48",
@@ -2384,6 +2455,7 @@ def get_shared_extra_events(crop_slug, crop_data, start_order=7, crop_category="
             "order_sequence": start_order + 3,
             "backend_event_fields": build_production_event_fields(
                 subtype="EM",
+                name="Equipment Maintenance",
                 area=0.0,
                 fuel_consumed=5.0,
                 fuel_unit="gal",
@@ -2523,6 +2595,7 @@ def get_grain_events(crop_slug, crop_data):
             "order_sequence": 1,
             "backend_event_fields": build_soil_event_fields(
                 subtype="TI",
+                name="Land Preparation",
                 area=crop_data["typical_area"],
                 working_depth=20.0,
                 fuel_consumed=25.0,
@@ -2552,6 +2625,7 @@ def get_grain_events(crop_slug, crop_data):
             "order_sequence": 2,
             "backend_event_fields": build_production_event_fields(
                 subtype="PL",
+                name="Planting",
                 area=crop_data["typical_area"],
                 fuel_consumed=15.0,
                 equipment_hours=4.0,
@@ -2581,6 +2655,7 @@ def get_grain_events(crop_slug, crop_data):
             "order_sequence": 3,
             "backend_event_fields": build_chemical_event_fields(
                 subtype="FE",
+                name="Fertilizer Application",
                 chemical_subtype="synthetic_fertilizer",
                 commercial_name=crop_data["commercial_name"],
                 concentration=crop_data["npk"],
@@ -2659,6 +2734,7 @@ def get_grain_events(crop_slug, crop_data):
             "order_sequence": 5,
             "backend_event_fields": build_production_event_fields(
                 subtype="IR",
+                name="Irrigation Management",
                 area=crop_data["typical_area"],
                 fuel_consumed=45.0,
                 fuel_unit="kWh",
@@ -2673,6 +2749,10 @@ def get_grain_events(crop_slug, crop_data):
                     "event_count": 10,
                     "water_volume_total": 2000000,
                     "water_volume_unit": "gallons",
+                    "irrigation_depth": "2.5",
+                    "irrigation_depth_unit": "inches",
+                    "irrigation_method": crop_data["irrigation_method"],
+                    "water_source": crop_data.get("water_source", "well_groundwater"),
                 },
             ),
         },
@@ -2698,6 +2778,7 @@ def get_grain_events(crop_slug, crop_data):
             "order_sequence": 6,
             "backend_event_fields": build_production_event_fields(
                 subtype="HA",
+                name="Harvest",
                 area=crop_data["typical_area"],
                 yield_quantity=crop_data["yield_per_ha"] * crop_data["typical_area"],
                 yield_unit=crop_data["yield_unit"],
@@ -2737,6 +2818,7 @@ def get_vegetable_events(crop_slug, crop_data):
             "order_sequence": 1,
             "backend_event_fields": build_soil_event_fields(
                 subtype="PA",
+                name="Soil Preparation",
                 area=crop_data["typical_area"],
                 working_depth=25.0,
                 fuel_consumed=15.0,
@@ -2766,6 +2848,7 @@ def get_vegetable_events(crop_slug, crop_data):
             "order_sequence": 2,
             "backend_event_fields": build_production_event_fields(
                 subtype="PL",
+                name="Transplanting/Seeding",
                 area=crop_data["typical_area"],
                 fuel_consumed=6.0,
                 equipment_hours=6.0,
@@ -2795,6 +2878,7 @@ def get_vegetable_events(crop_slug, crop_data):
             "order_sequence": 3,
             "backend_event_fields": build_production_event_fields(
                 subtype="IR",
+                name="Drip Irrigation Setup",
                 area=crop_data["typical_area"],
                 fuel_consumed=5.0,
                 fuel_unit="kWh",
@@ -2809,6 +2893,10 @@ def get_vegetable_events(crop_slug, crop_data):
                     "event_count": 20,
                     "water_volume_total": 500000,
                     "water_volume_unit": "gallons",
+                    "irrigation_depth": "1.5",
+                    "irrigation_depth_unit": "inches",
+                    "irrigation_method": "drip",
+                    "water_source": crop_data.get("water_source", "well_groundwater"),
                 },
             ),
         },
@@ -2834,6 +2922,7 @@ def get_vegetable_events(crop_slug, crop_data):
             "order_sequence": 4,
             "backend_event_fields": build_chemical_event_fields(
                 subtype="FE",
+                name="Fertilizer Program",
                 chemical_subtype="synthetic_fertilizer",
                 commercial_name=crop_data["commercial_name"],
                 concentration=crop_data["npk"],
@@ -2905,6 +2994,7 @@ def get_vegetable_events(crop_slug, crop_data):
             "order_sequence": 6,
             "backend_event_fields": build_production_event_fields(
                 subtype="HA",
+                name="Harvest",
                 area=crop_data["typical_area"],
                 yield_quantity=crop_data["yield_per_ha"] * crop_data["typical_area"],
                 yield_unit=crop_data["yield_unit"],
@@ -2942,6 +3032,7 @@ def get_vegetable_events(crop_slug, crop_data):
             "order_sequence": 7,
             "backend_event_fields": build_production_event_fields(
                 subtype="PH",
+                name="Post-Harvest Washing & Packing",
                 area=crop_data["typical_area"],
                 area_unit="ha",
                 fuel_consumed=round(crop_data["typical_area"] * 2.0, 1),
@@ -2988,6 +3079,7 @@ def get_berry_events(crop_slug, crop_data):
             "order_sequence": 1,
             "backend_event_fields": build_soil_event_fields(
                 subtype="PA",
+                name="Bed Preparation",
                 area=crop_data["typical_area"],
                 working_depth=30.0,
                 fuel_consumed=12.0,
@@ -3017,6 +3109,7 @@ def get_berry_events(crop_slug, crop_data):
             "order_sequence": 2,
             "backend_event_fields": build_production_event_fields(
                 subtype="PL",
+                name="Plant Installation",
                 area=crop_data["typical_area"],
                 fuel_consumed=4.0,
                 equipment_hours=12.0,
@@ -3046,6 +3139,7 @@ def get_berry_events(crop_slug, crop_data):
             "order_sequence": 3,
             "backend_event_fields": build_chemical_event_fields(
                 subtype="FE",
+                name="Fertigation System",
                 chemical_subtype="synthetic_fertilizer",
                 commercial_name=crop_data["commercial_name"],
                 concentration=crop_data["npk"],
@@ -3117,6 +3211,7 @@ def get_berry_events(crop_slug, crop_data):
             "order_sequence": 5,
             "backend_event_fields": build_production_event_fields(
                 subtype="IR",
+                name="Irrigation Management",
                 area=crop_data["typical_area"],
                 fuel_consumed=3.0,
                 fuel_unit="kWh",
@@ -3131,6 +3226,10 @@ def get_berry_events(crop_slug, crop_data):
                     "event_count": 24,
                     "water_volume_total": 300000,
                     "water_volume_unit": "gallons",
+                    "irrigation_depth": "0.5",
+                    "irrigation_depth_unit": "inches",
+                    "irrigation_method": "drip",
+                    "water_source": crop_data.get("water_source", "well_groundwater"),
                 },
             ),
         },
@@ -3156,6 +3255,7 @@ def get_berry_events(crop_slug, crop_data):
             "order_sequence": 6,
             "backend_event_fields": build_production_event_fields(
                 subtype="HA",
+                name="Harvest",
                 area=crop_data["typical_area"],
                 yield_quantity=crop_data["yield_per_ha"] * crop_data["typical_area"],
                 yield_unit=crop_data["yield_unit"],
@@ -3195,6 +3295,7 @@ def get_fiber_events(crop_slug, crop_data):
             "order_sequence": 1,
             "backend_event_fields": build_soil_event_fields(
                 subtype="TI",
+                name="Land Preparation",
                 area=crop_data["typical_area"],
                 working_depth=25.0,
                 fuel_consumed=30.0,
@@ -3224,6 +3325,7 @@ def get_fiber_events(crop_slug, crop_data):
             "order_sequence": 2,
             "backend_event_fields": build_production_event_fields(
                 subtype="PL",
+                name="Planting",
                 area=crop_data["typical_area"],
                 fuel_consumed=20.0,
                 equipment_hours=5.0,
@@ -3253,6 +3355,7 @@ def get_fiber_events(crop_slug, crop_data):
             "order_sequence": 3,
             "backend_event_fields": build_chemical_event_fields(
                 subtype="FE",
+                name="Fertilizer Application",
                 chemical_subtype="synthetic_fertilizer",
                 commercial_name=crop_data["commercial_name"],
                 concentration=crop_data["npk"],
@@ -3331,6 +3434,7 @@ def get_fiber_events(crop_slug, crop_data):
             "order_sequence": 5,
             "backend_event_fields": build_production_event_fields(
                 subtype="IR",
+                name="Irrigation",
                 area=crop_data["typical_area"],
                 fuel_consumed=30.0,
                 fuel_unit="kWh",
@@ -3345,6 +3449,10 @@ def get_fiber_events(crop_slug, crop_data):
                     "event_count": 8,
                     "water_volume_total": 1500000,
                     "water_volume_unit": "gallons",
+                    "irrigation_depth": "3.0",
+                    "irrigation_depth_unit": "inches",
+                    "irrigation_method": "furrow",
+                    "water_source": crop_data.get("water_source", "well_groundwater"),
                 },
             ),
         },
@@ -3370,6 +3478,7 @@ def get_fiber_events(crop_slug, crop_data):
             "order_sequence": 6,
             "backend_event_fields": build_production_event_fields(
                 subtype="HA",
+                name="Harvest",
                 area=crop_data["typical_area"],
                 yield_quantity=crop_data["yield_per_ha"] * crop_data["typical_area"],
                 yield_unit=crop_data["yield_unit"],
