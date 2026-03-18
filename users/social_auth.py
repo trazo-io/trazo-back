@@ -61,6 +61,11 @@ class SocialAuthView(APIView):
         """
         Handle social authentication for Google, Facebook, and Apple
         """
+        # Enforce CSRF — DRF skips CsrfViewMiddleware when permission_classes = [AllowAny]
+        from .auth import enforce_csrf
+
+        enforce_csrf(request)
+
         provider = request.data.get("provider")
         access_token = request.data.get("access_token")
         id_token = request.data.get("id_token")  # For Apple Sign In

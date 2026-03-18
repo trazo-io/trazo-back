@@ -60,6 +60,11 @@ celery_app.conf.beat_schedule = {
         "task": "carbon.tasks.batch_submit_monthly_summaries",
         "schedule": crontab(hour=2, minute=0, day_of_month=1),  # 2 AM UTC on 1st of each month
     },
+    # --- GDPR data retention ---
+    "gdpr-cleanup-scan-data": {
+        "task": "history.tasks.gdpr_cleanup_scan_data",
+        "schedule": crontab(hour=3, minute=30),  # Daily at 3:30 AM UTC
+    },
 }
 
 

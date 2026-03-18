@@ -93,9 +93,6 @@ class UserViewSet(viewsets.ModelViewSet):
         email = request.data.get("email")
         code = request.data.get("code")
 
-        # Add logging for debugging
-        logger.info(f"Verifying email: {email}")
-
         if not email:
             return Response(
                 {"error": "Email is required"},
@@ -111,9 +108,10 @@ class UserViewSet(viewsets.ModelViewSet):
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:
+            # Return generic error to prevent email enumeration
             return Response(
-                {"error": "User with this email does not exist"},
-                status=status.HTTP_404_NOT_FOUND,
+                {"error": "Verification code is invalid"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         if user.is_verified:
@@ -218,15 +216,16 @@ class UserViewSet(viewsets.ModelViewSet):
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:
+            # Return generic success to prevent email enumeration
             return Response(
-                {"error": "User with this email does not exist"},
-                status=status.HTTP_404_NOT_FOUND,
+                {"message": "If an account exists, a verification email has been sent"},
+                status=status.HTTP_200_OK,
             )
 
         if user.is_verified:
             return Response(
-                {"error": "User is already verified"},
-                status=status.HTTP_400_BAD_REQUEST,
+                {"message": "If an account exists, a verification email has been sent"},
+                status=status.HTTP_200_OK,
             )
 
         try:
@@ -319,7 +318,30 @@ class UserViewSet(viewsets.ModelViewSet):
 
         logger.info(f"Password changed successfully for user: {user.email}")
 
-        return Response({"message": "Password changed successfully"}, status=status.HTTP_200_OK)
+        # Blacklist the current refresh token to invalidate existing sessions
+        refresh_token = request.COOKIES.get("refresh")
+        if refresh_token:
+            try:
+                token = RefreshToken(refresh_token)
+                token.blacklist()
+            except Exception:
+                pass  # Token may already be blacklisted or invalid
+
+        # Clear auth cookies — user must re-login with new password
+        response = Response(
+            {"message": "Password changed successfully. Please sign in again."},
+            status=status.HTTP_200_OK,
+        )
+        cookie_domain = settings.SIMPLE_JWT.get("AUTH_COOKIE_DOMAIN")
+        samesite = settings.SIMPLE_JWT.get("AUTH_COOKIE_SAMESITE", "Lax")
+        for cookie_name in ("access", "refresh", "logged_in"):
+            response.delete_cookie(
+                cookie_name,
+                domain=cookie_domain,
+                path="/",
+                samesite=samesite,
+            )
+        return response
 
     @action(detail=False, methods=["post"], authentication_classes=[], permission_classes=[AllowAny])
     def request_password_reset(self, request, pk=None):
@@ -522,6 +544,11 @@ class LoginViewSet(viewsets.ModelViewSet, TokenObtainPairView):
         return host.split(".")[0] if "." in host else None
 
     def create(self, request, *args, **kwargs):
+        # Enforce CSRF — DRF skips CsrfViewMiddleware when authentication_classes is empty
+        from .auth import enforce_csrf
+
+        enforce_csrf(request)
+
         serializer = self.get_serializer(data=request.data)
 
         try:
@@ -603,6 +630,11 @@ class RegistrationViewSet(viewsets.ModelViewSet, TokenObtainPairView):
     http_method_names = ["post"]
 
     def create(self, request, *args, **kwargs):
+        # Enforce CSRF — DRF skips CsrfViewMiddleware when authentication_classes is empty
+        from .auth import enforce_csrf
+
+        enforce_csrf(request)
+
         serializer = self.get_serializer(data=request.data)
 
         serializer.is_valid(raise_exception=True)

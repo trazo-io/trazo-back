@@ -1469,6 +1469,16 @@ class HistoryScan(models.Model):
     is_verified_human = models.BooleanField(default=False, help_text="Passed human verification checks")
     user_agent_hash = models.CharField(max_length=64, blank=True, help_text="Hashed user agent for pattern analysis")
 
+    # CLAIM TOKEN — opaque token returned to the client so anonymous scans can be
+    # linked to an account after sign-in, without exposing sequential IDs (IDOR prevention).
+    claim_token = models.CharField(
+        max_length=43,
+        unique=True,
+        db_index=True,
+        blank=True,
+        help_text="Opaque token for anonymous scan claiming (prevents IDOR)",
+    )
+
     # ENGAGEMENT & ANALYTICS
     scan_type = models.CharField(
         max_length=20,
@@ -1517,6 +1527,13 @@ class HistoryScan(models.Model):
         ]
         verbose_name = "History Scan"
         verbose_name_plural = "History Scans"
+
+    def save(self, *args, **kwargs):
+        if not self.claim_token:
+            import secrets
+
+            self.claim_token = secrets.token_urlsafe(32)
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"Scan {self.id} - {self.history} - {self.date.strftime('%Y-%m-%d')}"

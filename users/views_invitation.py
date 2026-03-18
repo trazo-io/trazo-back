@@ -2,7 +2,6 @@ import logging
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.contrib.sites.models import Site
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 
@@ -104,16 +103,7 @@ def create_invitation(request):
                 invitation.establishments.set(establishments)
 
             # Generate invitation link
-            if settings.DEBUG:
-                # Use local frontend URL for development
-                invitation_link = f"{settings.BASE_APP_URL}invitation/{invitation.invitation_code}"
-            elif hasattr(settings, "ENVIRONMENT") and settings.ENVIRONMENT == "staging":
-                # Use staging frontend URL
-                invitation_link = f"{settings.BASE_APP_URL}invitation/{invitation.invitation_code}"
-            else:
-                # Use production domain
-                domain = Site.objects.get_current().domain
-                invitation_link = f"https://{domain}/invitation/{invitation.invitation_code}"
+            invitation_link = f"{settings.BASE_APP_URL}invitation/{invitation.invitation_code}"
 
             # Send invitation email
             email_sent = send_invitation_email(
@@ -342,16 +332,7 @@ def resend_invitation(request, invitation_id):
             return Response({"error": "Only pending invitations can be resent"}, status=status.HTTP_400_BAD_REQUEST)
 
         # Generate invitation link
-        if settings.DEBUG:
-            # Use local frontend URL for development
-            invitation_link = f"{settings.BASE_APP_URL}invitation/{invitation.invitation_code}"
-        elif hasattr(settings, "ENVIRONMENT") and settings.ENVIRONMENT == "staging":
-            # Use staging frontend URL
-            invitation_link = f"{settings.BASE_APP_URL}invitation/{invitation.invitation_code}"
-        else:
-            # Use production domain
-            domain = Site.objects.get_current().domain
-            invitation_link = f"https://{domain}/invitation/{invitation.invitation_code}"
+        invitation_link = f"{settings.BASE_APP_URL}invitation/{invitation.invitation_code}"
 
         # Send invitation email
         email_sent = send_invitation_email(

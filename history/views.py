@@ -1423,7 +1423,9 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
     queryset = HistoryScan.objects.select_related(
         "history", "history__product", "history__parcel", "history__parcel__establishment", "user"
     ).all()
-    authentication_classes = []  # Public endpoint - no auth required
+    # Use default auth (CustomAuthentication) so logged-in users are detected via cookies.
+    # AllowAny still lets anonymous users through — CustomAuthentication returns None
+    # gracefully when no credentials are present.
     permission_classes = [AllowAny]
 
     def __init__(self, *args, **kwargs):
@@ -1479,15 +1481,20 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
             privacy_data = self.privacy_service.process_scan_consent(request)
 
             # Check for consent requirement
+            # User-submitted feedback (comments) is allowed without analytics
+            # consent — it's a user-initiated action under GDPR Art. 6(1)(b),
+            # not passive tracking.  The privacy_service already returns minimal
+            # data (empty hashes, no geolocation) when consent is not given.
             consent_required = self.privacy_service.is_consent_required(request)
             consent_given = privacy_data["consent_given"]
+            has_comment = bool(request.data.get("comment", "").strip())
 
-            if consent_required and not consent_given:
+            if consent_required and not consent_given and not has_comment:
                 return Response(
                     {
                         "error": "Analytics consent required",
                         "consent_required": True,
-                        "message": "To help improve carbon transparency, please allow analytics tracking",
+                        "message": "To help improve agricultural transparency, please allow analytics tracking",
                     },
                     status=status.HTTP_428_PRECONDITION_REQUIRED,
                 )
@@ -1546,6 +1553,7 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
             # Return success response with minimal data
             response_data = {
                 "id": scan.id,
+                "claim_token": scan.claim_token,
                 "message": "Scan recorded successfully",
                 "is_duplicate": is_duplicate,
                 "deduplication_method": dedup_method if is_duplicate else None,
@@ -1810,6 +1818,48 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
             logger.error(f"Comment update failed: {str(e)}", exc_info=True)
 
             return Response({"error": "Failed to update comment"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=["post"], url_path="claim", permission_classes=[IsAuthenticated])
+    def claim_scans(self, request):
+        """
+        Claim anonymous scans after authentication.
+        Accepts opaque claim tokens (not sequential IDs) to prevent IDOR.
+        Only claims scans that are unclaimed (user=None), consented, and < 24h old.
+        """
+        tokens = request.data.get("claim_tokens", [])
+
+        if not isinstance(tokens, list) or not tokens:
+            return Response(
+                {"error": "claim_tokens must be a non-empty list"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if len(tokens) > 50:
+            return Response(
+                {"error": "Too many tokens (max 50)"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Sanitise: only allow non-empty strings, cap length
+        tokens = [str(t)[:64] for t in tokens if isinstance(t, str) and t.strip()]
+        if not tokens:
+            return Response(
+                {"error": "No valid tokens provided"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        cutoff = timezone.now() - timedelta(hours=24)
+        claimed_count = HistoryScan.objects.filter(
+            claim_token__in=tokens,
+            user__isnull=True,
+            date__gte=cutoff,
+            consent_given=True,
+        ).update(user=request.user)
+
+        return Response(
+            {"claimed": claimed_count},
+            status=status.HTTP_200_OK,
+        )
 
     @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated])
     def analytics_insights(self, request):

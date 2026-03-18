@@ -526,7 +526,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://consumer.localhost:3000",
     "http://127.0.0.1:3000",
 ]
-CORS_ALLOW_ALL_ORIGINS = DEBUG  # Allow all origins in development only
+CORS_ALLOW_ALL_ORIGINS = False  # dev.py enables this explicitly for local development
 CORS_ALLOW_HEADERS = [
     "accept",
     "accept-encoding",
@@ -554,7 +554,7 @@ LOGIN_REDIRECT_URL = "/"
 # Additional configuration settings
 SOCIALACCOUNT_QUERY_EMAIL = True
 ACCOUNT_AUTHENTICATION_METHOD = "email"
-ACCOUNT_LOGOUT_ON_GET = True
+ACCOUNT_LOGOUT_ON_GET = False
 ACCOUNT_UNIQUE_EMAIL = True
 ACCOUNT_EMAIL_REQUIRED = True
 ACCOUNT_EMAIL_VERIFICATION = True
@@ -643,8 +643,8 @@ SIMPLE_JWT = {
     "ALGORITHM": "HS256",
     "SIGNING_KEY": SECRET_KEY,
     "VERIFYING_KEY": None,
-    "AUDIENCE": None,
-    "ISSUER": None,
+    "AUDIENCE": config("JWT_AUDIENCE", default="trazo-api"),
+    "ISSUER": config("JWT_ISSUER", default="trazo-auth"),
     "AUTH_HEADER_TYPES": ("Bearer",),
     "AUTH_HEADER_NAME": "HTTP_AUTHORIZATION",
     "USER_ID_FIELD": "id",

@@ -164,40 +164,43 @@ class PrivacyService:
     @staticmethod
     def process_scan_consent(request, explicit_consent: Optional[bool] = None) -> Dict:
         """
-        Process user consent according to GDPR requirements
-        Returns all privacy-safe data for scan creation
+        Process user consent according to GDPR requirements.
+        Consent is determined ONLY from the httpOnly-safe cookie set by the
+        consent banner. The request body / custom header are NOT trusted
+        because they can be forged by any client.
+
+        When consent is not given, fingerprinting and geolocation are skipped
+        entirely (GDPR Art. 5(1)(c) — data minimisation, ePrivacy Art. 5(3)).
         """
-        # Get real IP address
+        # Determine consent from cookie only — never trust request body
+        cookie_consent = request.COOKIES.get("trazo-analytics-consent")
+        consent_given = cookie_consent == "true"
+
+        if not consent_given:
+            # No consent → return minimal data, no fingerprinting/geolocation
+            return {
+                "ip_hash": "",
+                "session_hash": "",
+                "user_agent_hash": "",
+                "consent_given": False,
+                "consent_timestamp": None,
+                "data_retention_until": PrivacyService.calculate_retention_date(False),
+                "country_code": "XX",
+                "region": "Unknown",
+                "ip_address": None,
+                "city": None,
+                "country": None,
+            }
+
+        # --- Consent granted: proceed with privacy-safe data collection ---
+
         raw_ip = PrivacyService.get_client_ip(request)
-
-        # Determine consent status from multiple sources (priority order)
-        consent_given = False
-
-        # 1. Explicit parameter passed to method
-        # 2. explicit_consent in request body (fallback for cookie domain issues)
-        # 3. X-Analytics-Consent header (cross-origin fallback)
-        # 4. Cookie (standard browser consent)
-        request_explicit_consent = None
-        if hasattr(request, "data") and request.data:
-            request_explicit_consent = request.data.get("explicit_consent")
-
-        header_consent = request.META.get("HTTP_X_ANALYTICS_CONSENT")
-
-        if explicit_consent is not None:
-            consent_given = explicit_consent
-        elif request_explicit_consent is not None:
-            consent_given = bool(request_explicit_consent)
-        elif header_consent == "true":
-            consent_given = True
-        else:
-            cookie_consent = request.COOKIES.get("trazo-analytics-consent")
-            consent_given = cookie_consent == "true"
 
         # Process location data (from request data first, fallback to IP geolocation)
         country = request.data.get("country", "") if hasattr(request, "data") else ""
         city = request.data.get("city", "") if hasattr(request, "data") else ""
 
-        # If frontend didn't send location, try IP geolocation as fallback
+        # IP geolocation fallback — only after consent is confirmed
         if not city and not country and raw_ip:
             try:
                 import logging as _logging
@@ -205,13 +208,9 @@ class PrivacyService:
                 import requests as _requests
 
                 _logger = _logging.getLogger(__name__)
-                geo_response = _requests.get(
-                    f"https://ipapi.co/{raw_ip}/json/", timeout=2
-                )
+                geo_response = _requests.get(f"https://ipapi.co/{raw_ip}/json/", timeout=2)
                 if geo_response.status_code == 200:
                     geo_data = geo_response.json()
-                    # ipapi.co returns country_code field for reserved IPs
-                    # Skip if the API indicates a reserved/bogon IP
                     if not geo_data.get("reserved"):
                         city = geo_data.get("city", "")
                         country = geo_data.get("country_name", "")
@@ -226,21 +225,21 @@ class PrivacyService:
         country_code, region = PrivacyService.extract_region_from_location(city, country)
 
         return {
-            # Privacy-safe processed data
+            # Privacy-safe processed data (only computed after consent)
             "ip_hash": PrivacyService.hash_ip(raw_ip) if raw_ip else "",
             "session_hash": PrivacyService.generate_session_fingerprint(request),
             "user_agent_hash": PrivacyService.hash_user_agent(request.META.get("HTTP_USER_AGENT", "")),
             # GDPR compliance
-            "consent_given": consent_given,
-            "consent_timestamp": timezone.now() if consent_given else None,
-            "data_retention_until": PrivacyService.calculate_retention_date(consent_given),
+            "consent_given": True,
+            "consent_timestamp": timezone.now(),
+            "data_retention_until": PrivacyService.calculate_retention_date(True),
             # Privacy-safe location (with defaults to avoid null constraint errors)
-            "country_code": country_code or "XX",  # Default to 'XX' for unknown
-            "region": region or "Unknown",  # Default to 'Unknown'
-            # Clear legacy fields (will be migrated gradually)
-            "ip_address": None,  # Don't store raw IP
-            "city": None,  # Don't store exact city
-            "country": None,  # Don't store full country name
+            "country_code": country_code or "XX",
+            "region": region or "Unknown",
+            # Clear legacy fields
+            "ip_address": None,
+            "city": None,
+            "country": None,
         }
 
     @staticmethod
