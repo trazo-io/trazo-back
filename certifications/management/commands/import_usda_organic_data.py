@@ -10,6 +10,8 @@ Usage:
     poetry run python manage.py import_usda_organic_data --date 2026-03-01
 """
 
+from __future__ import annotations
+
 import os
 import re
 import tempfile
