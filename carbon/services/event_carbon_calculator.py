@@ -1060,9 +1060,7 @@ class EventCarbonCalculator:
                         volume_value = float(str(volume_str_raw).strip())
                     except (ValueError, TypeError):
                         # Legacy format with embedded unit like "3320 Kilograms"
-                        volume_liters = self._convert_volume_to_liters(
-                            str(volume_str_raw), event, crop_name
-                        )
+                        volume_liters = self._convert_volume_to_liters(str(volume_str_raw), event, crop_name)
                         volume_value = None
                         raw_volume_unit = None
                     else:
@@ -1090,9 +1088,7 @@ class EventCarbonCalculator:
                     volume_liters = 0.0
                 elif UnitConverter.is_volume_unit(raw_volume_unit):
                     try:
-                        volume_liters, _ = UnitConverter.convert_volume(
-                            volume_value, unit_normalized, to_unit="liters"
-                        )
+                        volume_liters, _ = UnitConverter.convert_volume(volume_value, unit_normalized, to_unit="liters")
                     except Exception:
                         volume_liters = volume_value  # Fallback: assume liters
                 else:
@@ -1131,7 +1127,13 @@ class EventCarbonCalculator:
                         float(str(area_str).strip())
                         model_area_unit = getattr(event, "area_unit", None)
                         if model_area_unit:
-                            area_unit_map = {"ha": "Hectares", "hectares": "Hectares", "acres": "Acres", "ac": "Acres", "m2": "m2"}
+                            area_unit_map = {
+                                "ha": "Hectares",
+                                "hectares": "Hectares",
+                                "acres": "Acres",
+                                "ac": "Acres",
+                                "m2": "m2",
+                            }
                             normalized = area_unit_map.get(model_area_unit.lower(), model_area_unit)
                             area_str = f"{area_str} {normalized}"
                     except (ValueError, TypeError):
@@ -1345,9 +1347,11 @@ class EventCarbonCalculator:
                 # Item #13: pump_depth_ft overrides water_source-based pump factor.
                 # Standard pump curve: kWh/1000gal = depth_ft * 0.0175  (USDA NRCS pump efficiency)
                 # Check model field first, then extra_data (well_depth_ft or pump_depth_ft)
-                pump_depth_ft = getattr(event, "pump_depth_ft", None) or extra_data.get(
-                    "pump_depth_ft"
-                ) or extra_data.get("well_depth_ft")
+                pump_depth_ft = (
+                    getattr(event, "pump_depth_ft", None)
+                    or extra_data.get("pump_depth_ft")
+                    or extra_data.get("well_depth_ft")
+                )
 
                 # Item #13: electricity_source overrides the default 0.39 kg CO2/kWh grid factor.
                 electricity_source = getattr(event, "electricity_source", None) or extra_data.get("electricity_source")
@@ -1476,7 +1480,9 @@ class EventCarbonCalculator:
                 "co2e": round(base_emissions, 3),
                 "efficiency_score": self._calculate_production_efficiency_score(breakdown, calculation_method),
                 "calculation_method": calculation_method,
-                "verification_status": "usda_verified" if calculation_method == "verified_usda_factors" else "standard",
+                "verification_status": (
+                    "epa_factors_based" if calculation_method == "verified_usda_factors" else "standard"
+                ),
                 "data_sources": data_sources,
                 "breakdown": breakdown,
                 "limitations": limitations,
@@ -2678,11 +2684,11 @@ class EventCarbonCalculator:
             confidence_score = calculation_result.get("confidence_score", 0.5)
             self._create_usda_compliance_record(carbon_entry, event, calculation_result, confidence_score)
 
-            # Update carbon entry USDA verification status based on compliance record
+            # Update carbon entry EPA/USDA factors status based on compliance record
             from ..models import USDAComplianceRecord
 
             compliance_record = USDAComplianceRecord.objects.filter(carbon_entry=carbon_entry).first()
-            if compliance_record and compliance_record.is_usda_verified:
+            if compliance_record and compliance_record.is_epa_factors_based:
                 carbon_entry.usda_factors_based = True
                 carbon_entry.save(update_fields=["usda_factors_based"])
                 logger.info(
@@ -3614,14 +3620,42 @@ class EventCarbonCalculator:
         logger.info(f"No tillage depth indicators found, using default: {depth_category}")
         return depth_category
 
+    # Regional default irrigation application depth (inches per single event).
+    # Source: USDA NASS 2023 Irrigation Survey + USDA ERS Regional Water Use data.
+    # Arid-region crops routinely require 2-3x the water per event compared to
+    # humid-region crops at the same growth stage. Using the national 1-inch default
+    # in states like AZ or NV underestimates a typical application by 2-2.5x.
+    # Added 2026-03-21.
+    REGIONAL_IRRIGATION_DEFAULTS = {
+        # Arid West — high evapotranspiration, deep percolation to root zone
+        "AZ": 2.5,
+        "NM": 2.5,
+        "NV": 2.5,
+        "UT": 2.0,
+        "CA": 2.0,
+        "CO": 1.5,
+        "TX": 1.5,
+        # Semi-arid Great Plains
+        "OK": 1.25,
+        "KS": 1.25,
+        "NE": 1.25,
+        # Humid East — the 1-inch national default is appropriate
+        "default": 1.0,
+    }
+
     def _estimate_irrigation_water_volume(self, event, area_acres: float) -> float:
         """
         Estimate irrigation water volume when not explicitly provided.
 
         Uses USDA NASS 2023 Irrigation and Water Management Survey data:
         - Average seasonal application: 1.5 acre-feet per acre (~489,000 gallons/acre/season)
-        - Typical single irrigation: 0.5-1.5 inches per event
+        - Typical single irrigation: 0.5-1.5 inches per event (national), higher in arid west
         - 1 inch of water per acre = 27,154 gallons
+
+        Regional adjustment (added 2026-03-21):
+        REGIONAL_IRRIGATION_DEFAULTS is consulted when the farm's state is available
+        from the event. Arid-region states (AZ, NM, NV, etc.) require significantly
+        more water per irrigation event than the humid-east default of 1 inch.
 
         Sources:
         - USDA ERS Irrigation & Water Use (ers.usda.gov)
@@ -3638,8 +3672,25 @@ class EventCarbonCalculator:
         # 1 inch water per acre = 27,154 gallons
         GALLONS_PER_INCH_PER_ACRE = 27154.0
 
-        # Default single irrigation: 1 inch (moderate)
-        irrigation_inches = 1.0
+        # Determine regional default from farm state if available
+        state = None
+        try:
+            history = getattr(event, "history", None)
+            if history:
+                parcel = getattr(history, "parcel", None)
+                if parcel:
+                    establishment = getattr(parcel, "establishment", None)
+                    if establishment:
+                        state = getattr(establishment, "state", None)
+        except Exception:
+            pass
+
+        regional_default = self.REGIONAL_IRRIGATION_DEFAULTS.get(
+            (state or "").upper(), self.REGIONAL_IRRIGATION_DEFAULTS["default"]
+        )
+
+        # Start from regional default; override with text-based intensity signals below
+        irrigation_inches = regional_default
 
         # Detect irrigation intensity from event data
         fields_to_check = []
@@ -3652,7 +3703,8 @@ class EventCarbonCalculator:
 
         combined_text = " ".join(fields_to_check)
 
-        # Heavy irrigation indicators (1.5-2 inches)
+        # Heavy irrigation indicators — override regional default with a high value.
+        # 1.75 inches is the heavy midpoint (range 1.5-2 inches).
         heavy_indicators = [
             "heavy",
             "deep",
@@ -3664,7 +3716,8 @@ class EventCarbonCalculator:
             "drought recovery",
         ]
 
-        # Light irrigation indicators (0.5 inches)
+        # Light irrigation indicators — override regional default with a low value.
+        # 0.5 inches is used for supplemental/drip events.
         light_indicators = [
             "light",
             "supplement",
@@ -3676,7 +3729,7 @@ class EventCarbonCalculator:
             "germination",
         ]
 
-        # Check for heavy irrigation
+        # Text-based intensity signals override the regional default.
         for indicator in heavy_indicators:
             if indicator in combined_text:
                 irrigation_inches = 1.75  # Heavy: 1.5-2 inches average
@@ -3689,12 +3742,14 @@ class EventCarbonCalculator:
                     irrigation_inches = 0.5  # Light: 0.5 inches
                     logger.info(f"Detected light irrigation from indicator: '{indicator}'")
                     break
+            # No intensity signal — regional_default already set above
 
         # Calculate total water volume
         water_volume_gallons = area_acres * irrigation_inches * GALLONS_PER_INCH_PER_ACRE
 
         logger.info(
-            f"USDA-based irrigation estimate: {area_acres} acres × {irrigation_inches} inches × "
+            f"USDA-based irrigation estimate: {area_acres} acres × {irrigation_inches} inches "
+            f"(state={state or 'unknown'}, regional_default={regional_default}) × "
             f"{GALLONS_PER_INCH_PER_ACRE} gal/in/acre = {water_volume_gallons:.0f} gallons"
         )
 

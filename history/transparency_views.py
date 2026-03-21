@@ -154,6 +154,23 @@ def production_transparency_detail(request, production_public_id=None):
             "country": establishment.country if establishment else None,
         }
 
+        # Certification data for consumer badges
+        certification_data = []
+        if establishment:
+            try:
+                from certifications.models import Certification
+                from certifications.serializers import ConsumerCertificationSerializer
+
+                active_certs = Certification.objects.filter(
+                    establishment=establishment,
+                    verification_status__in=["verified", "self_reported"],
+                ).exclude(
+                    expiry_date__lt=timezone.now().date(),
+                )
+                certification_data = ConsumerCertificationSerializer(active_certs, many=True).data
+            except Exception as e:
+                logger.warning(f"Failed to load certification data: {e}")
+
         # Product information
         product_info = {
             "name": history.product.name if history.product else "Farm Product",
@@ -232,21 +249,21 @@ def production_transparency_detail(request, production_public_id=None):
         public_history_serializer = PublicHistorySerializer(history, context={"request": request})
         public_history_data = public_history_serializer.data
 
-        # ✅ PHASE 1 FIX: Use CarbonEntry as single source of truth for USDA verification
-        # SEMANTIC CHANGE (2025-12-12): is_usda_verified now means "USDA factors were used"
-        # not "validation passed at high confidence"
+        # Use CarbonEntry as single source of truth for EPA/USDA factors usage
+        # "epa_factors_based" means government-published emission factors were used in
+        # the carbon calculation, NOT that USDA independently verified this farm.
         from carbon.models import CarbonEntry
 
-        # Check if ALL carbon entries for this production have USDA verification
-        # This uses the fixed USDAComplianceRecord.is_usda_verified property which checks:
-        # - validation_method in ["enhanced_api", "local_validation"] (not error)
-        # - crop_type is identified (validation ran properly)
+        # Check if ALL carbon entries for this production used EPA/USDA factors
+        # usda_factors_based=True means the USDAComplianceRecord.is_epa_factors_based
+        # property confirmed: validation_method in ["enhanced_api", "local_validation"]
+        # and crop_type was identified (validation ran properly)
         all_carbon_entries = list(history.carbonentry_set.all())
         total_carbon_entries = len(all_carbon_entries)
-        usda_factors_based_entries = sum(1 for e in all_carbon_entries if e.usda_factors_based)
+        epa_factors_based_entries = sum(1 for e in all_carbon_entries if e.usda_factors_based)
 
-        # USDA verified if ALL carbon entries used USDA factors
-        is_usda_verified = total_carbon_entries > 0 and usda_factors_based_entries == total_carbon_entries
+        # True when ALL carbon entries used EPA/USDA emission factors
+        is_epa_factors_based = total_carbon_entries > 0 and epa_factors_based_entries == total_carbon_entries
 
         # Add progressive loading structure for backward compatibility
         response_data.update(
@@ -268,6 +285,7 @@ def production_transparency_detail(request, production_public_id=None):
                         "farming_approach": transparency_data["farming_approach"],
                         "category_breakdown": transparency_data.get("category_breakdown", {}),
                     },
+                    "certifications": certification_data,
                 },
                 # DETAILED LOAD (30+ seconds) - Deep insights
                 "detailed_view": {
@@ -285,6 +303,16 @@ def production_transparency_detail(request, production_public_id=None):
                 },
                 # Blockchain verification data for consumer-facing badge
                 "blockchain_verification": _get_blockchain_verification_data(history),
+                # Scoring methodology — included here so consumers know how the score
+                # was calculated without needing a separate API call.
+                "methodology": {
+                    "description": "Transparency score based on documented agricultural events",
+                    "data_source": "Farmer-reported data, not independently audited",
+                    "scoring_method": "Weighted category completeness across 7 event categories",
+                    "carbon_scope": "Direct operational emissions only (EPA/USDA-sourced factors)",
+                    "version": "2.0",
+                    "last_updated": "2026-03-21",
+                },
                 # Metadata
                 "api_version": "2.0",
                 "response_timestamp": timezone.now().isoformat(),
@@ -322,7 +350,7 @@ def production_transparency_detail(request, production_public_id=None):
                     "location": (
                         f"{establishment.city}, {establishment.state}" if establishment and establishment.city else None
                     ),
-                    "certifications": establishment.certifications if establishment else None,
+                    "certifications": certification_data or (establishment.certifications if establishment else None),
                     "climate_zone": establishment.climate_zone if establishment else None,
                     "water_sources": establishment.water_sources if establishment else None,
                     "soil_types": establishment.soil_types if establishment else None,
@@ -388,7 +416,7 @@ def production_transparency_detail(request, production_public_id=None):
                 },
                 "product": {"name": history.product.name if history.product else "Farm Product"},
                 "reputation": history.reputation or 0,
-                "isUsdaVerified": is_usda_verified,
+                "isEpaFactorsBased": is_epa_factors_based,
                 "timeline": public_history_data.get("events", []),
                 "harvestDetails": {
                     "amount": history.production_amount,
@@ -789,6 +817,15 @@ def transparency_explanation(request):
             "carbon_score": "Shows environmental impact of production",
             "transparency_score": "Shows how much information is available to verify the carbon score",
             "together": "Both scores help you make informed, sustainable choices",
+        },
+        # Machine-readable methodology block for API consumers and transparency disclosure.
+        "methodology": {
+            "description": "Transparency score based on documented agricultural events",
+            "data_source": "Farmer-reported data, not independently audited",
+            "scoring_method": "Weighted category completeness across 7 event categories",
+            "carbon_scope": "Direct operational emissions only (EPA/USDA-sourced factors)",
+            "version": "2.0",
+            "last_updated": "2026-03-21",
         },
     }
 

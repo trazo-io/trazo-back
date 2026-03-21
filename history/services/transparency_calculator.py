@@ -95,9 +95,22 @@ class TransparencyCalculator:
     #   IR, EM, TH = Production; PA, TI = Soil; TA = Pest
     #   All weather, business, general events
 
+    # Anti-gaming: productions with fewer than this many total events are capped
+    # at MINIMUM_EVENTS_SCORE regardless of category weights. This prevents a
+    # farm from logging nothing (or a single token event) and receiving a high
+    # transparency score due to organic-bypass or weight redistribution.
+    MINIMUM_EVENTS_THRESHOLD = 3
+    MINIMUM_EVENTS_SCORE_CAP = 30  # Maximum score when below threshold
+
     def calculate_transparency_score(self, history: History) -> Dict:
         """
-        Calculate comprehensive transparency score for a production history
+        Calculate comprehensive transparency score for a production history.
+
+        Anti-gaming rules applied (2026-03-21):
+        - Zero total events always yields 0% (not 100% via organic bypass).
+        - Fewer than MINIMUM_EVENTS_THRESHOLD events caps the score at
+          MINIMUM_EVENTS_SCORE_CAP regardless of category weighting. A farm
+          that has logged almost nothing should not appear transparent.
 
         Returns:
             Dict with transparency percentage, message, and category breakdown
@@ -108,6 +121,25 @@ class TransparencyCalculator:
 
             # Count actual events across all categories
             actual_count = self._count_all_events(history)
+
+            # Anti-gaming guard: zero events = zero transparency, full stop.
+            # Without this, the organic-bypass path in _calculate_completeness_score
+            # could award 100% chemical credit (and thus a non-zero weighted score)
+            # to a production that has never had a single event logged.
+            if actual_count == 0:
+                return {
+                    "transparency_percentage": 0,
+                    "message": "No farming activities documented yet",
+                    "completeness_score": 0,
+                    "event_coverage_percentage": 0,
+                    "category_breakdown": {},
+                    "consumer_friendly_categories": [],
+                    "actual_event_count": 0,
+                    "expected_event_count": expected_count,
+                    "farming_approach": self._get_farming_approach(history),
+                    "calculation_timestamp": timezone.now().isoformat(),
+                    "consumer_summary": "No farming activities have been documented for this production.",
+                }
 
             # Calculate base transparency percentage
             if expected_count == 0:
@@ -121,6 +153,12 @@ class TransparencyCalculator:
             # Calculate completeness score (weighted by category, includes photo penalty)
             # Pass history for Item #17 organic farm detection
             completeness_score = self._calculate_completeness_score(category_breakdown, history=history)
+
+            # Anti-gaming cap: fewer than MINIMUM_EVENTS_THRESHOLD events cannot score
+            # higher than MINIMUM_EVENTS_SCORE_CAP. This prevents a single logged event
+            # from triggering the organic-bypass and inflating the score dramatically.
+            if actual_count < self.MINIMUM_EVENTS_THRESHOLD:
+                completeness_score = min(completeness_score, self.MINIMUM_EVENTS_SCORE_CAP)
 
             # The main transparency_percentage should reflect the weighted completeness
             # score (which includes photo penalties), not just raw event count ratio.
@@ -555,12 +593,20 @@ class TransparencyCalculator:
         """
         Calculate overall completeness score (0-100) based on category balance.
 
-        Item #17 — Organic farm correction:
+        Item #17 - Organic farm correction:
         Organic farms log zero chemical events by design. Under the standard weighting
         they lose 20% of their score for the Chemical category even though they are
         being MORE transparent (no synthetic inputs used). The fix redistributes the
         Chemical weight proportionally to the other categories when the farm appears
         to be organic AND has zero chemical events.
+
+        Anti-gaming note (2026-03-21):
+        The organic bypass (awarding 100% chemical credit) is intentionally gated
+        behind a positive total event count check in calculate_transparency_score().
+        Callers MUST NOT call this method directly when actual_count == 0, because
+        the bypass would grant a non-zero score to a production with no events.
+        The MINIMUM_EVENTS_THRESHOLD cap is applied in calculate_transparency_score
+        as a second layer of protection for productions with 1-2 events.
         """
 
         if not category_breakdown:
@@ -644,7 +690,43 @@ class TransparencyCalculator:
         if total_weight == 0:
             return 0
 
-        return int(weighted_score / total_weight)
+        base_score = int(weighted_score / total_weight)
+        cert_bonus = self._calculate_certification_bonus(history)
+        return min(100, base_score + cert_bonus)
+
+    def _calculate_certification_bonus(self, history) -> int:
+        """
+        Calculate bonus points from verified certifications on the establishment.
+        Up to +5 points added to transparency score.
+
+        - Verified + active cert: +3 each (max 2 counted)
+        - Self-reported + active cert: +1 each (max 2 counted)
+        - Expired/revoked: +0
+        """
+        if history is None:
+            return 0
+
+        try:
+            establishment = None
+            if hasattr(history, "parcel") and history.parcel:
+                establishment = history.parcel.establishment
+            if not establishment:
+                return 0
+
+            from certifications.models import Certification
+
+            certs = Certification.objects.filter(establishment=establishment)
+            bonus = 0
+            for cert in certs:
+                if cert.is_active and cert.verification_status == "verified":
+                    bonus += 3
+                elif cert.is_active and cert.verification_status == "self_reported":
+                    bonus += 1
+
+            return min(bonus, 5)
+        except Exception:
+            # Certifications app may not have data yet, gracefully return 0
+            return 0
 
     def _generate_transparency_message(self, transparency_percentage: float, category_breakdown: Dict) -> str:
         """Generate consumer-friendly transparency message with photo verification insights"""

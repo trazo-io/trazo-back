@@ -245,18 +245,29 @@ class UserImpactSummarySerializer(serializers.ModelSerializer):
         return None
 
     def get_verified_farms_scanned(self, obj):
-        """Count farms with verification or certification"""
+        """Count farms with verified certifications"""
         from .models import HistoryScan
 
         user = obj.user if obj.user else None
         if not user:
             return 0
-        return (
-            HistoryScan.objects.filter(user=user, history__parcel__certified=True)
-            .values("history__parcel__establishment")
-            .distinct()
-            .count()
-        )
+        try:
+            from certifications.models import Certification
+
+            certified_est_ids = set(
+                Certification.objects.filter(
+                    verification_status__in=["verified", "self_reported"],
+                ).values_list("establishment_id", flat=True)
+            )
+            return (
+                HistoryScan.objects.filter(user=user)
+                .filter(history__parcel__establishment__in=certified_est_ids)
+                .values("history__parcel__establishment")
+                .distinct()
+                .count()
+            )
+        except Exception:
+            return 0
 
     def get_farming_events_viewed(self, obj):
         """
@@ -379,8 +390,18 @@ class EnhancedHistoryScanSerializer(serializers.ModelSerializer):
             return 30
         else:
             # No events documented - check if there's other transparency indicators
-            if obj.history.parcel and obj.history.parcel.certified:
-                return 20  # Some transparency through certification
+            if obj.history.parcel and obj.history.parcel.establishment:
+                try:
+                    from certifications.models import Certification
+
+                    has_verified_cert = Certification.objects.filter(
+                        establishment=obj.history.parcel.establishment,
+                        verification_status__in=["verified", "self_reported"],
+                    ).exists()
+                    if has_verified_cert:
+                        return 20  # Some transparency through certification
+                except Exception:
+                    pass
             return None  # No transparency data available - don't show fake score
 
     def get_events_viewed(self, obj):
@@ -443,9 +464,27 @@ class EnhancedHistoryScanSerializer(serializers.ModelSerializer):
         """Get real sustainability practices from actual data"""
         practices = []
 
-        # Check for organic certification from parcel data
-        if obj.history.parcel and obj.history.parcel.certified:
-            practices.append("Certified sustainable")
+        # Check for verified certifications from establishment-level data
+        if obj.history.parcel and obj.history.parcel.establishment:
+            try:
+                from certifications.models import Certification
+
+                verified_certs = Certification.objects.filter(
+                    establishment=obj.history.parcel.establishment,
+                    verification_status="verified",
+                )
+                for cert in verified_certs[:2]:
+                    practices.append(f"{cert.get_certification_type_display()} (verified)")
+
+                if not verified_certs.exists():
+                    self_reported = Certification.objects.filter(
+                        establishment=obj.history.parcel.establishment,
+                        verification_status="self_reported",
+                    )
+                    for cert in self_reported[:2]:
+                        practices.append(cert.get_certification_type_display())
+            except Exception:
+                pass
 
         # Check for carbon calculation using EPA/USDA emission factors
         carbon_entry = self._get_carbon_entry(obj.history)
@@ -453,19 +492,22 @@ class EnhancedHistoryScanSerializer(serializers.ModelSerializer):
         if carbon_entry and carbon_entry.usda_factors_based:
             practices.append("EPA/USDA emission factors")
 
-        # Check if establishment has sustainability certifications
-        if obj.history.parcel and obj.history.parcel.establishment:
-            establishment = obj.history.parcel.establishment
-            # Add more specific checks based on actual establishment data
-            if hasattr(establishment, "certifications") and establishment.certifications:
-                practices.append("Farm certified")
-
         # Only return actual verified practices, not mock data
         return practices[:3] if practices else []
 
     def get_is_verified(self, obj):
-        """Check if production has verification"""
-        return bool(obj.history.parcel and obj.history.parcel.certified)
+        """Check if production has verified certifications"""
+        if not obj.history.parcel or not obj.history.parcel.establishment:
+            return False
+        try:
+            from certifications.models import Certification
+
+            return Certification.objects.filter(
+                establishment=obj.history.parcel.establishment,
+                verification_status="verified",
+            ).exists()
+        except Exception:
+            return False
 
     def get_is_favorite(self, obj):
         """Check if user has favorited this product"""

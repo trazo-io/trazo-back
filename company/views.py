@@ -970,11 +970,11 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 if total_entries > 0:
                     usda_factors_based_entries = carbon_entries.filter(usda_factors_based=True).count()
 
-                    # Production is USDA verified if majority of entries are USDA factors-based
-                    production_usda_verified = usda_factors_based_entries >= (total_entries * 0.5)
+                    # Production uses EPA/USDA factors if majority of entries are factors-based
+                    production_epa_factors_based = usda_factors_based_entries >= (total_entries * 0.5)
 
-                    if production_usda_verified:
-                        verified_count = 1  # Count this production as verified
+                    if production_epa_factors_based:
+                        verified_count = 1  # Count this production as factors-verified
 
                 metrics["total_verified_events"] += verified_count
 
@@ -1147,9 +1147,9 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 carbon_entries.filter(usda_factors_based=True).count() if total_carbon_entries > 0 else 0
             )
 
-            production_usda_verified = False
+            production_epa_factors_based = False
             if total_carbon_entries > 0:
-                production_usda_verified = usda_factors_based_entries >= (total_carbon_entries * 0.5)
+                production_epa_factors_based = usda_factors_based_entries >= (total_carbon_entries * 0.5)
 
             # Check blockchain verification for this production
             # Check BOTH field locations for backwards compatibility
@@ -1180,9 +1180,9 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 missing_items.append(f"Document {events_needed} more farming activities")
                 priority_score += 20
 
-            # USDA verification opportunities
-            if not production_usda_verified and total_carbon_entries == 0:
-                missing_items.append("Add USDA-verified farming events")
+            # EPA/USDA factors opportunities
+            if not production_epa_factors_based and total_carbon_entries == 0:
+                missing_items.append("Add farming events to enable EPA/USDA-sourced carbon calculations")
                 priority_score += 25
 
             # Only create opportunity card if there are actionable items
@@ -1211,7 +1211,7 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                         "missing_items": missing_items,
                         "current_events": event_count,
                         "current_photos": photos_count,
-                        "usda_factors_used": production_usda_verified,
+                        "usda_factors_used": production_epa_factors_based,
                         "blockchain_verified": blockchain_verified,
                         "potential_improvement": f"+{potential_improvement}% transparency",
                         "action_url": f"/admin/dashboard/establishment/{establishment.id}/parcel/{parcel.id}",
@@ -1276,27 +1276,27 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # CRITICAL FIX: Populate verification_status for frontend dashboard
         # Count verified productions - track UNIQUE productions with ANY verification type
         # This prevents double-counting a production that has both blockchain AND USDA verification
-        usda_verified_count = 0
+        epa_factors_based_count = 0
         blockchain_verified_count = 0
         verified_production_ids = set()  # Track unique verified productions
 
         for parcel in establishment.parcels.all():
             for history in parcel.histories.all():
-                is_usda_verified = False
+                is_epa_factors_based = False
                 is_blockchain_verified = False
 
-                # Check USDA verification
+                # Check EPA/USDA factors usage
                 carbon_entries = CarbonEntry.objects.filter(production=history)
                 total_entries = carbon_entries.count()
 
                 if total_entries > 0:
                     usda_factors_based_entries = carbon_entries.filter(usda_factors_based=True).count()
 
-                    # Production is USDA verified if majority of entries are USDA factors-based
-                    is_usda_verified = usda_factors_based_entries >= (total_entries * 0.5)
+                    # Production uses EPA/USDA factors if majority of entries are factors-based
+                    is_epa_factors_based = usda_factors_based_entries >= (total_entries * 0.5)
 
-                    if is_usda_verified:
-                        usda_verified_count += 1
+                    if is_epa_factors_based:
+                        epa_factors_based_count += 1
 
                 # Check blockchain verification
                 # Check BOTH field locations for backwards compatibility:
@@ -1320,10 +1320,10 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     verified_production_ids.add(history.id)
 
         # Populate trust indicators for frontend
-        # Note: usda_verified means "uses EPA/USDA emission factors" (automatic),
-        # NOT independent third-party verification by USDA
+        # epa_factors_based_count = productions whose carbon was calculated using
+        # EPA/USDA-published emission factors (automatic, NOT third-party USDA verification)
         metrics["verification_status"] = {
-            "epa_usda_sourced": usda_verified_count,  # Productions using EPA/USDA factors
+            "epa_usda_sourced": epa_factors_based_count,  # Productions using EPA/USDA factors
             "blockchain_verified": blockchain_verified_count,  # Actual on-chain records
             "photo_documented": metrics["total_photos"],  # Photos serve as evidence
             # Total blockchain-verified productions (real verification)

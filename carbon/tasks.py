@@ -450,39 +450,3 @@ def submit_production_to_blockchain(self, production_id):
         raise self.retry(countdown=30, exc=e)
 
 
-@shared_task
-def issue_carbon_credits(production_id, credits_amount):
-    """
-    Issue carbon credits for verified production on blockchain
-    """
-    try:
-        from .services.blockchain import BlockchainCarbonService
-
-        blockchain_service = BlockchainCarbonService()
-
-        production = ProductionTemplate.objects.get(id=production_id)
-        company = production.parcel.establishment.company
-
-        # Only process if company has blockchain subscription
-        if not company.blockchain_subscription_status:
-            logger.info(f"Company {company.name} does not have blockchain subscription, skipping credit issuance")
-            return {"status": "skipped", "reason": "no_blockchain_subscription"}
-
-        # Issue credits on blockchain
-        credits_result = blockchain_service.issue_credits(production_id, credits_amount)
-
-        logger.info(f"Credits issued for production {production_id}: {credits_result}")
-
-        return {
-            "status": "completed",
-            "production_id": production_id,
-            "credits_amount": credits_amount,
-            "credits_result": credits_result,
-        }
-
-    except ProductionTemplate.DoesNotExist:
-        logger.error(f"Production {production_id} not found")
-        return {"status": "error", "message": "Production not found"}
-    except Exception as e:
-        logger.error(f"Error issuing credits for production {production_id}: {str(e)}")
-        return {"status": "error", "message": str(e)}

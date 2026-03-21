@@ -174,7 +174,7 @@ def test_usda_compliance_record_model():
 
         print(f"   ✅ Created compliance record: {compliance_record}")
         print(f"   ✅ Confidence level: {compliance_record.confidence_level}")
-        print(f"   ✅ Is USDA verified: {compliance_record.is_usda_verified}")
+        print(f"   ✅ EPA factors based: {compliance_record.is_epa_factors_based}")
         print(f"   ✅ Needs review: {compliance_record.needs_review}")
 
         # Clean up

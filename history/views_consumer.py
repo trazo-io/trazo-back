@@ -88,9 +88,7 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
             .distinct("history_id")
         )
         # Re-sort by date descending and limit to 3
-        recent_scan_ids = list(
-            recent_scans.values_list("id", flat=True)[:3]
-        )
+        recent_scan_ids = list(recent_scans.values_list("id", flat=True)[:3])
         recent_scans = (
             HistoryScan.objects.filter(id__in=recent_scan_ids)
             .select_related("history", "history__parcel__establishment")
@@ -289,10 +287,26 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
                     carbon_footprint = f"{co2e:.2f} kg CO₂e/kg"
                     carbon_score = get_carbon_score_from_co2e(co2e)
 
-            # Get certifications
+            # Get certifications from establishment-level verified data
             certifications = []
-            if product.parcel and product.parcel.certified:
-                certifications.append("USDA Organic")
+            farming_method = "Conventional"
+            if product.parcel and product.parcel.establishment:
+                try:
+                    from certifications.models import Certification
+
+                    est_certs = Certification.objects.filter(
+                        establishment=product.parcel.establishment,
+                        verification_status__in=["verified", "self_reported"],
+                    )
+                    for cert in est_certs:
+                        label = cert.get_certification_type_display()
+                        if cert.verification_status == "verified":
+                            label += " (verified)"
+                        certifications.append(label)
+                    if est_certs.filter(certification_type="usda_organic").exists():
+                        farming_method = "Organic"
+                except Exception:
+                    pass
             if carbon_entry and carbon_entry.usda_factors_based:
                 certifications.append("EPA/USDA-Sourced Data")
 
@@ -308,10 +322,7 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
                     "location": location,
                     "carbon_score": carbon_score,
                     "carbon_footprint": carbon_footprint,
-                    # Price field removed - no pricing data available in database
-                    # Distance field removed - no location calculation available
-                    "farming_method": "Organic" if product.parcel and product.parcel.certified else "Conventional",
-                    # Sustainability rating removed - would need real sustainability metrics calculation
+                    "farming_method": farming_method,
                     "certifications": certifications,
                 }
             )
@@ -395,14 +406,22 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
         # Convert to awareness metric rather than false "savings"
         carbon_offset = total_carbon_offset
 
-        # Count unique establishments (use parcel__establishment relationship)
+        # Count unique establishments with verified certifications
         t0 = time.time()
-        sustainable_farms = (
-            HistoryScan.objects.filter(user=user, history__parcel__certified=True)  # Use parcel certified field instead
-            .values("history__parcel__establishment")
-            .distinct()
-            .count()
-        )
+        try:
+            from certifications.models import Certification
+
+            certified_est_ids = set(
+                Certification.objects.filter(
+                    verification_status__in=["verified", "self_reported"],
+                ).values_list("establishment_id", flat=True)
+            )
+            scanned_est_ids = set(
+                HistoryScan.objects.filter(user=user).values_list("history__parcel__establishment", flat=True)
+            )
+            sustainable_farms = len(certified_est_ids & scanned_est_ids)
+        except Exception:
+            sustainable_farms = 0
         update_timings["count_sustainable_farms"] = time.time() - t0
 
         # Count local farms based on real data (disable for now until location logic is implemented)
@@ -412,11 +431,19 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
         # Count better choices based on real data
         # For MVP: Count scans where user chose certified/sustainable options
         t0 = time.time()
-        better_choices = HistoryScan.objects.filter(user=user, history__parcel__certified=True).count()
+        # Count scans where user chose farms with verified certifications
+        scanned_with_cert = (
+            HistoryScan.objects.filter(user=user).filter(history__parcel__establishment__in=certified_est_ids).count()
+            if certified_est_ids
+            else 0
+        )
+        better_choices = scanned_with_cert
 
         # If no certified data available, count scans with verified carbon entries
         if better_choices == 0:
-            better_choices = HistoryScan.objects.filter(user=user, history__carbonentry__usda_factors_based=True).count()
+            better_choices = HistoryScan.objects.filter(
+                user=user, history__carbonentry__usda_factors_based=True
+            ).count()
         update_timings["count_better_choices"] = time.time() - t0
 
         # Update impact summary

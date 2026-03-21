@@ -139,19 +139,19 @@ class CarbonCalculationsTestCase(TransactionTestCase):
         entries = CarbonEntry.objects.filter(establishment=self.establishment, year=year)
 
         total_entries_count = entries.count()
-        usda_verified_count = entries.filter(usda_factors_based=True).count()
+        epa_factors_based_count = entries.filter(usda_factors_based=True).count()
 
         # Calculate transparency score
         transparency_score = 10
         if total_entries_count > 0:
             base_score = min(total_entries_count * 0.8, 70)
-            verification_ratio = usda_verified_count / total_entries_count
+            verification_ratio = epa_factors_based_count / total_entries_count
             verification_bonus = verification_ratio * 30
             transparency_score = min(base_score + verification_bonus, 100)
 
         self.assertEqual(total_entries_count, 2)
-        self.assertEqual(usda_verified_count, 2)
-        self.assertEqual(verification_ratio, 1.0)  # 100% verified
+        self.assertEqual(epa_factors_based_count, 2)
+        self.assertEqual(verification_ratio, 1.0)  # 100% EPA factors used
         self.assertGreaterEqual(transparency_score, 30)  # Should be decent score
         self.assertLessEqual(transparency_score, 100)
 

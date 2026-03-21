@@ -1293,7 +1293,7 @@ class OptimizedCarbonCalculator:
             return {
                 "co2e": co2e_kg,
                 "efficiency_score": efficiency_score,
-                "calculation_method": f"usda_verified_{calculation_result['calculation_method']}",
+                "calculation_method": f"epa_factors_based_{calculation_result['calculation_method']}",
                 "usda_factors_used": True,
                 "breakdown": calculation_result.get("breakdown", {}),
                 "data_sources": calculation_result.get("data_sources", []),
@@ -2830,17 +2830,17 @@ class CarbonEstablishmentSummaryViewSet(viewsets.ViewSet):
             # Calculate transparency score for production readiness
             transparency_score = 10  # Base score
             total_entries_count = entries.count()
-            usda_verified_count = 0  # Initialize before conditional block
+            epa_factors_based_count = 0  # Initialize before conditional block
 
             if total_entries_count > 0:
                 # More sophisticated transparency scoring
                 base_score = min(total_entries_count * 0.8, 70)  # Max 70 from entries count
                 verification_bonus = 0
 
-                # Check USDA verification percentage
-                usda_verified_count = entries.filter(usda_factors_based=True).count()
+                # Check EPA/USDA factors usage percentage
+                epa_factors_based_count = entries.filter(usda_factors_based=True).count()
                 if total_entries_count > 0:
-                    verification_ratio = usda_verified_count / total_entries_count
+                    verification_ratio = epa_factors_based_count / total_entries_count
                     verification_bonus = verification_ratio * 30  # Max 30 bonus
 
                 transparency_score = min(base_score + verification_bonus, 100)
@@ -2909,7 +2909,7 @@ class CarbonEstablishmentSummaryViewSet(viewsets.ViewSet):
                     "emissions": emissions_data["count"] or 0,
                     "offsets": offsets_data["count"] or 0,
                     "total": total_entries_count,
-                    "usda_factors_used": usda_verified_count,
+                    "usda_factors_used": epa_factors_based_count,
                 },
                 "photos_count": photo_count,
                 "active_productions_count": active_productions_count,
@@ -2917,7 +2917,7 @@ class CarbonEstablishmentSummaryViewSet(viewsets.ViewSet):
                 "has_data": total_emissions > 0 or total_offsets > 0,
                 "data_quality": {
                     "completeness": min((total_entries_count / 50) * 100, 100),  # Assume 50 entries = 100% complete
-                    "verification_rate": round((usda_verified_count / max(total_entries_count, 1)) * 100, 1),
+                    "verification_rate": round((epa_factors_based_count / max(total_entries_count, 1)) * 100, 1),
                 },
                 "recent_entries": entries_debug,
                 "emissionsByCategory": emissions_by_category,
@@ -3380,14 +3380,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                         "mock_data": verification_result.get("mock_data", False),
                     }
 
-                # Check compliance status
-                compliance_result = blockchain_service.check_compliance(int(pk))
-                blockchain_verification.update(
-                    {
-                        "compliance_status": compliance_result.get("compliant", False),
-                        "eligible_for_credits": compliance_result.get("eligible_for_credits", False),
-                    }
-                )
+                # Compliance and credits removed — contract only stores data hashes
 
             except Exception as e:
                 logger.warning(f"Error with blockchain verification: {e}")
@@ -3460,9 +3453,9 @@ class PublicProductionViewSet(viewsets.ViewSet):
                 if carbon_context["verified_by_usda"]:
                     badges.append(
                         {
-                            "id": "usda_verified",
-                            "name": "USDA Verified",
-                            "description": "Carbon calculations verified by USDA standards",
+                            "id": "epa_factors_based",
+                            "name": "EPA/USDA-Sourced",
+                            "description": "Carbon calculations use EPA/USDA-published emission factors",
                             "icon": "check-circle",
                         }
                     )
@@ -4362,8 +4355,8 @@ class PublicProductionViewSet(viewsets.ViewSet):
             if total_emissions > 0:
                 transparency_score += 30
 
-            # USDA Verification (25 points)
-            if self._check_usda_verification(production):
+            # EPA/USDA Emission Factors Used (25 points)
+            if self._check_epa_factors_based(production):
                 transparency_score += 25
 
             # Blockchain Verification (20 points)
@@ -4445,7 +4438,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                 "relatableFootprint": self._get_relatable_footprint(net_footprint),
                 "industryPercentile": industry_percentile,
                 "industryAverage": industry_average,
-                "isUsdaVerified": self._check_usda_verification(production),
+                "isEpaFactorsBased": self._check_epa_factors_based(production),
                 "cropType": crop_type,
                 "benchmarkSource": f"crop_specific_{crop_type}",
                 # Transparency score (calculated based on verification data)
@@ -5576,12 +5569,12 @@ class PublicProductionViewSet(viewsets.ViewSet):
         except Exception:
             return "Carbon footprint data being calculated"
 
-    def _check_usda_verification(self, production):
-        """Check if production has USDA verification"""
+    def _check_epa_factors_based(self, production):
+        """Check if production has carbon data using EPA/USDA emission factors"""
         try:
-            # Check for USDA certifications or verifications
-            # This would integrate with actual USDA verification system
-            return True  # Placeholder - implement actual verification check
+            from carbon.models import CarbonEntry
+
+            return CarbonEntry.objects.filter(production=production, usda_factors_based=True).exists()
         except Exception:
             return False
 
@@ -5594,8 +5587,8 @@ class PublicProductionViewSet(viewsets.ViewSet):
 
             trust_score = 40  # Base score
 
-            # USDA Verification (25 points)
-            if self._check_usda_verification(production):
+            # EPA/USDA Emission Factors Used (25 points)
+            if self._check_epa_factors_based(production):
                 trust_score += 25
 
             # Blockchain Verification (20 points)
@@ -5667,7 +5660,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
             return {
                 "overall": trust_score,
                 "breakdown": {
-                    "usda_verification": 25 if self._check_usda_verification(production) else 0,
+                    "epa_factors_based": 25 if self._check_epa_factors_based(production) else 0,
                     "blockchain_verification": (
                         20 if blockchain_verification and blockchain_verification.get("verified") else 0
                     ),
@@ -5696,7 +5689,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     "data_completeness": data_completeness,
                 },
                 "factors": {
-                    "usda_factors_used": self._check_usda_verification(production),
+                    "usda_factors_used": self._check_epa_factors_based(production),
                     "blockchain_verified": blockchain_verification and blockchain_verification.get("verified"),
                     "reputation_score": reputation,
                     "carbon_score": carbon_score,
@@ -5845,13 +5838,13 @@ class PublicProductionViewSet(viewsets.ViewSet):
                 }
             )
 
-        # USDA verification badge
+        # EPA/USDA emission factors badge
         if carbon_data.get("usda_factors_used", False):
             badges.append(
                 {
-                    "id": "usda_verified",
-                    "name": "USDA Verified",
-                    "description": "Carbon calculations verified by USDA standards",
+                    "id": "epa_factors_based",
+                    "name": "EPA/USDA-Sourced",
+                    "description": "Carbon calculations use EPA/USDA-published emission factors",
                     "icon": "certificate",
                 }
             )
@@ -8413,93 +8406,23 @@ class BlockchainVerificationViewSet(viewsets.ViewSet):
                 {"error": f"Failed to verify record: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    @action(detail=False, methods=["get"], url_path="compliance-check/(?P<production_id>[^/.]+)")
-    def compliance_check(self, request, production_id=None):
+    @action(detail=False, methods=["get"], url_path="verify/(?P<production_id>[^/.]+)")
+    def verify_production(self, request, production_id=None):
         """
-        Check USDA compliance status for a production.
-        """
-        try:
-            if not production_id:
-                return Response({"error": "production_id is required"}, status=status.HTTP_400_BAD_REQUEST)
-
-            # Check compliance on blockchain
-            compliance_result = blockchain_service.check_compliance(int(production_id))
-
-            return Response({"status": "success", "production_id": production_id, "compliance": compliance_result})
-
-        except Exception as e:
-            logger.error(f"Compliance check error: {e}")
-            return Response(
-                {"error": f"Failed to check compliance: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-    @action(detail=False, methods=["post"], url_path="issue-credits")
-    def issue_credits(self, request):
-        """
-        Issue carbon credits for verified sustainable practices.
-        """
-        try:
-            production_id = request.data.get("production_id")
-            credits_amount = request.data.get("credits_amount")
-
-            if not production_id or not credits_amount:
-                return Response(
-                    {"error": "production_id and credits_amount are required"}, status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Issue credits on blockchain
-            credits_result = blockchain_service.issue_carbon_credits(int(production_id), float(credits_amount))
-
-            return Response(
-                {"status": "success", "message": "Carbon credits issued successfully", "credits": credits_result}
-            )
-
-        except Exception as e:
-            logger.error(f"Credits issuance error: {e}")
-            return Response(
-                {"error": f"Failed to issue credits: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-    @action(detail=False, methods=["get"], url_path="summary/(?P<production_id>[^/.]+)")
-    def blockchain_summary(self, request, production_id=None):
-        """
-        Get comprehensive carbon summary with blockchain verification.
+        Verify a production's data integrity against the blockchain record.
         """
         try:
             if not production_id:
                 return Response({"error": "production_id is required"}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Get comprehensive summary with blockchain data
-            summary = blockchain_service.get_carbon_summary_with_blockchain(int(production_id))
+            verification = blockchain_service.verify_carbon_record(int(production_id))
 
-            return Response({"status": "success", "production_id": production_id, "summary": summary})
-
-        except Exception as e:
-            logger.error(f"Blockchain summary error: {e}")
-            return Response(
-                {"error": f"Failed to get blockchain summary: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-    @action(detail=False, methods=["post"], url_path="batch-process")
-    def batch_process(self, request):
-        """
-        Process multiple productions for blockchain verification.
-        """
-        try:
-            production_ids = request.data.get("production_ids", [])
-
-            if not production_ids or not isinstance(production_ids, list):
-                return Response({"error": "production_ids list is required"}, status=status.HTTP_400_BAD_REQUEST)
-
-            # Process batch
-            batch_result = blockchain_service.batch_process_carbon_entries(production_ids)
-
-            return Response({"status": "success", "message": "Batch processing completed", "results": batch_result})
+            return Response({"status": "success", "production_id": production_id, "verification": verification})
 
         except Exception as e:
-            logger.error(f"Batch processing error: {e}")
+            logger.error(f"Blockchain verification error: {e}")
             return Response(
-                {"error": f"Failed to process batch: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": f"Failed to verify production: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
 
@@ -9658,7 +9581,7 @@ def get_usda_compliance_history(request, production_id):
                     "state": record.state,
                     "regional_factors_used": record.regional_factors_used,
                     "validated_at": record.validated_at.isoformat(),
-                    "is_usda_verified": record.is_usda_verified,
+                    "is_epa_factors_based": record.is_epa_factors_based,
                     "needs_review": record.needs_review,
                 }
             )
@@ -9678,7 +9601,7 @@ def get_usda_compliance_history(request, production_id):
                     "compliant_records": compliant_records,
                     "compliance_rate": (compliant_records / total_records * 100) if total_records > 0 else 0,
                     "average_confidence": round(avg_confidence, 3),
-                    "usda_verified_count": len([r for r in compliance_data if r["is_usda_verified"]]),
+                    "epa_factors_based_count": len([r for r in compliance_data if r["is_epa_factors_based"]]),
                 },
             }
         )

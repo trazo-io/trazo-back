@@ -9,7 +9,7 @@ from .transparency_views import (
     transparency_explanation,
     verify_blockchain,
 )
-from .views import EventViewSet, HistoryScanViewSet, HistoryViewSet, PublicHistoryScanViewSet
+from .views import EventViewSet, HistoryScanViewSet, HistoryViewSet, PublicHistoryScanViewSet, audit_export_by_uuid
 
 router = routers.DefaultRouter()
 
@@ -19,9 +19,15 @@ router.register(r"scans", HistoryScanViewSet, basename="scans")
 router.register(r"public_scans", PublicHistoryScanViewSet, basename="public-scans")
 
 urlpatterns = [
+    # Audit export by UUID — MUST be before router include
+    # (router's regex histories/(?P<pk>[^/.]+) would match UUIDs first)
+    path(
+        "histories/<uuid:public_id>/audit-export/",
+        audit_export_by_uuid,
+        name="audit-export-by-uuid",
+    ),
     path("", include(router.urls)),
-    # New Transparency API Endpoints (Trazo 2.0 - Solves farmer incentive problem)
-    # UUID-based public endpoints (primary)
+    # Transparency API Endpoints
     path(
         "transparency/<uuid:production_public_id>/",
         production_transparency_detail,
@@ -34,7 +40,6 @@ urlpatterns = [
     ),
     path("transparency/quick/<uuid:production_public_id>/", production_instant_trust, name="production-instant-trust"),
     path("transparency/explanation/", transparency_explanation, name="transparency-explanation"),
-    # Public blockchain verification endpoint (UUID only)
     path(
         "transparency/<uuid:production_public_id>/verify-blockchain/",
         verify_blockchain,

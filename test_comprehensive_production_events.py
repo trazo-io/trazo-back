@@ -474,11 +474,11 @@ def test_all_production_events():
 
     print()
 
-    # USDA Verification Analysis
-    usda_verified = len([r for r in successful_results if r.get("usda_factors_used")])
-    print("🏛️ USDA VERIFICATION ANALYSIS:")
-    print(f"   USDA Verified: {usda_verified}/{successful_events} events")
-    print(f"   Verification Rate: {(usda_verified/successful_events)*100:.1f}%")
+    # EPA/USDA Factors Analysis
+    epa_factors_used = len([r for r in successful_results if r.get("usda_factors_used")])
+    print("EPA/USDA FACTORS ANALYSIS:")
+    print(f"   EPA/USDA Factors Used: {epa_factors_used}/{successful_events} events")
+    print(f"   Factors Usage Rate: {(epa_factors_used/successful_events)*100:.1f}%")
 
     print()
     print("=" * 80)

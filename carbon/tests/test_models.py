@@ -869,9 +869,9 @@ class TestUSDAComplianceRecordModel(TransactionTestCase):
         )
         self.assertEqual(low_record.confidence_level, "low")
 
-    def test_is_usda_verified_property(self):
-        """Test is_usda_verified property"""
-        # Verified record
+    def test_is_epa_factors_based_property(self):
+        """Test is_epa_factors_based property"""
+        # Record with successful validation (factors were applied)
         verified_record = USDAComplianceRecord.objects.create(
             carbon_entry=self.carbon_entry,
             compliance_status="compliant",
@@ -879,9 +879,9 @@ class TestUSDAComplianceRecordModel(TransactionTestCase):
             crop_type="Test",
             state="CA",
         )
-        self.assertTrue(verified_record.is_usda_verified)
+        self.assertTrue(verified_record.is_epa_factors_based)
 
-        # Non-verified record (low confidence)
+        # Record without successful validation (factors were not applied)
         unverified_record = USDAComplianceRecord.objects.create(
             carbon_entry=self.carbon_entry,
             compliance_status="compliant",
@@ -889,7 +889,7 @@ class TestUSDAComplianceRecordModel(TransactionTestCase):
             crop_type="Test2",
             state="CA",
         )
-        self.assertFalse(unverified_record.is_usda_verified)
+        self.assertFalse(unverified_record.is_epa_factors_based)
 
     def test_needs_review_property(self):
         """Test needs_review property"""
@@ -1122,7 +1122,7 @@ class TestCarbonIntegrations(TransactionTestCase):
         # Verify the complete flow
         self.assertEqual(carbon_entry.source.name, "Nitrogen Fertilizer")
         self.assertTrue(carbon_entry.usda_factors_based)
-        self.assertTrue(compliance.is_usda_verified)
+        self.assertTrue(compliance.is_epa_factors_based)
         self.assertEqual(compliance.confidence_level, "high")
 
     def test_iot_device_carbon_entry_integration(self):

@@ -1,11 +1,11 @@
 """
-Management command to submit a production to the REAL blockchain (Polygon Amoy testnet).
+Management command to submit a production to the blockchain (Polygon).
 
 This command:
 1. Finds a published production with events
 2. Stores the finalization hash (if not already present)
-3. Submits to the real blockchain via BlockchainCarbonService
-4. Stores the real tx_hash back on the History record
+3. Submits the data hash to the TransparencyVerification contract
+4. Stores the tx_hash back on the History record
 5. Verifies the transaction on-chain
 
 Usage:
@@ -24,7 +24,7 @@ from history.models import History
 
 
 class Command(BaseCommand):
-    help = "Submit a production to the real blockchain (Polygon Amoy testnet)"
+    help = "Submit a production to the blockchain (Polygon)"
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -35,9 +35,9 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        self.stdout.write("\n=== Real Blockchain Submission ===\n")
+        self.stdout.write("\n=== Blockchain Submission ===\n")
 
-        # Check blockchain configuration
+        # Check configuration
         self.stdout.write("--- Checking configuration ---")
         blockchain_enabled = getattr(settings, "BLOCKCHAIN_ENABLED", False)
         rpc_url = getattr(settings, "POLYGON_RPC_URL", "")
@@ -58,8 +58,7 @@ class Command(BaseCommand):
             return
 
         if not contract_address:
-            self.stdout.write(self.style.ERROR("\n  CARBON_CONTRACT_ADDRESS not set. Deploy the contract first:"))
-            self.stdout.write("  cd contracts && npm run deploy:amoy")
+            self.stdout.write(self.style.ERROR("\n  CARBON_CONTRACT_ADDRESS not set. Deploy the contract first."))
             return
 
         # Check Web3 connection
@@ -69,7 +68,7 @@ class Command(BaseCommand):
 
             w3 = Web3(Web3.HTTPProvider(rpc_url))
             if not w3.is_connected():
-                self.stdout.write(self.style.ERROR("  Cannot connect to Polygon Amoy RPC"))
+                self.stdout.write(self.style.ERROR("  Cannot connect to Polygon RPC"))
                 return
             self.stdout.write(self.style.SUCCESS(f"  Connected to chain ID: {w3.eth.chain_id}"))
 
@@ -123,10 +122,11 @@ class Command(BaseCommand):
             finalization_hash = production.extra_data["finalization_hash"]
             self.stdout.write(f"  Already has finalization hash: {finalization_hash[:20]}...")
 
-        # Submit to blockchain using BlockchainCarbonService
+        # Submit to blockchain
         self.stdout.write("\n--- Step 2: Submit to blockchain ---")
         try:
             from carbon.services.blockchain import BlockchainCarbonService
+            from carbon.tasks import build_blockchain_raw_data
 
             service = BlockchainCarbonService()
 
@@ -141,36 +141,31 @@ class Command(BaseCommand):
             self.stdout.write(f"  Contract: {service.contract.address}")
             self.stdout.write(f"  Wallet: {service.account.address}")
 
-            # Prepare carbon data for submission
-            carbon_data = {
-                "production_id": production.id,
-                "total_emissions": 0,
-                "total_offsets": 0,
-                "crop_type": (
-                    production.product.name if hasattr(production, "product") and production.product else "general"
-                ),
-                "calculation_method": "trazo_direct",
-                "usda_factors_used": False,
-                "timestamp": int(timezone.now().timestamp()),
-                "finalization_hash": finalization_hash,
-            }
+            # Build data hash using the shared function
+            company = production.parcel.establishment.company if production.parcel and production.parcel.establishment else None
+            company_id = company.id if company else 0
+            _raw_data, data_hash, _total_co2e, _carbon_count, _event_count = build_blockchain_raw_data(
+                production, company_id
+            )
 
+            self.stdout.write(f"  Data hash: {data_hash[:20]}...")
             self.stdout.write("  Submitting transaction...")
-            result = service.create_carbon_record(production.id, carbon_data)
+
+            result = service.submit_production(production.id, data_hash)
 
             if result:
                 tx_hash = result.get("transaction_hash", "")
                 block_number = result.get("block_number", 0)
-                is_mock = result.get("mock_data", False)
+                is_mock = result.get("mock", False)
 
                 self.stdout.write(f"  TX Hash: {tx_hash}")
                 self.stdout.write(f"  Block: {block_number}")
+                self.stdout.write(f"  Gas Used: {result.get('gas_used', 'N/A')}")
                 self.stdout.write(f"  Mock: {is_mock}")
-                self.stdout.write(f"  Verified: {result.get('blockchain_verified', False)}")
 
                 if is_mock:
                     self.stdout.write(
-                        self.style.WARNING("  WARNING: This is mock data, not a real blockchain transaction.")
+                        self.style.WARNING("  WARNING: Mock data, not a real blockchain transaction.")
                     )
                 else:
                     self.stdout.write(self.style.SUCCESS("  REAL blockchain transaction submitted!"))
@@ -181,6 +176,7 @@ class Command(BaseCommand):
                 production.extra_data["blockchain_network"] = result.get("network", "polygon_amoy")
                 production.extra_data["blockchain_submitted_at"] = timezone.now().isoformat()
                 production.extra_data["blockchain_verified"] = result.get("blockchain_verified", False)
+                production.extra_data["blockchain_data_hash"] = data_hash
                 production.save(update_fields=["extra_data"])
 
                 explorer_url = getattr(settings, "POLYGON_EXPLORER_URL", "https://amoy.polygonscan.com")
@@ -213,7 +209,7 @@ class Command(BaseCommand):
 
         # Show frontend URLs
         public_id = production.public_id if hasattr(production, "public_id") and production.public_id else production.id
-        self.stdout.write(f"\n--- Frontend URLs ---")
+        self.stdout.write("\n--- Frontend URLs ---")
         self.stdout.write(f"  QR Page: http://localhost:3000/production/{public_id}")
         self.stdout.write(f"  API: http://localhost:8000/api/history/transparency/{public_id}/")
         self.stdout.write(f"  Verify: http://localhost:8000/api/history/transparency/{public_id}/verify-blockchain/")

@@ -220,7 +220,7 @@ class Command(BaseCommand):
                 now,  # created_at
                 now,  # updated_at
                 True,  # usda_factors_based
-                "usda_verified",  # verification_status
+                "factors_verified",  # verification_status
                 "USDA Agricultural Research Service",  # data_source
                 "certified_project",  # verification_level
                 0.95,  # trust_score

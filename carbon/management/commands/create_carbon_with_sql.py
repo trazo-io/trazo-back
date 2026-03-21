@@ -63,7 +63,7 @@ class Command(BaseCommand):
                                 production.start_date,
                                 production.start_date,
                                 True,  # usda_factors_based
-                                "usda_verified",
+                                "factors_verified",
                                 "USDA Agricultural Research Service",
                                 "certified_project",
                                 0.9,  # trust_score
@@ -74,10 +74,10 @@ class Command(BaseCommand):
                                 "passed",
                                 True,  # evidence_requirements_met
                                 True,  # documentation_complete
-                                "USDA certified practices documentation",
+                                "EPA/USDA emission factors documentation",
                                 "[]",  # evidence_photos JSON
                                 "[]",  # evidence_documents JSON
-                                f"USDA-{production.id}-{production.start_date.year}",  # external_verification_id
+                                f"EPA-FACTORS-{production.id}-{production.start_date.year}",  # external_verification_id
                                 "",  # iot_device_id
                                 "USDA_STANDARD",  # methodology_template
                             ],
@@ -117,7 +117,7 @@ class Command(BaseCommand):
                                 production.start_date,
                                 production.start_date,
                                 True,  # usda_factors_based
-                                "usda_verified",
+                                "factors_verified",
                                 "USDA Agricultural Research Service",
                                 "certified_project",
                                 0.9,  # trust_score
@@ -131,7 +131,7 @@ class Command(BaseCommand):
                                 "Cover crop and no-till documentation",
                                 "[]",  # evidence_photos JSON
                                 "[]",  # evidence_documents JSON
-                                f"USDA-SEQ-{production.id}-{production.start_date.year}",  # external_verification_id
+                                f"EPA-FACTORS-SEQ-{production.id}-{production.start_date.year}",  # external_verification_id
                                 "",  # iot_device_id
                                 "USDA_SOIL_CARBON",  # methodology_template
                             ],

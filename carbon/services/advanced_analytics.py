@@ -753,7 +753,7 @@ class AdvancedCarbonAnalyticsService:
         """Calculate overall transparency rating (0-100)"""
 
         # Factors contributing to transparency score
-        usda_verified_rate = self.carbon_entries.filter(usda_factors_based=True).count() / max(
+        epa_factors_rate = self.carbon_entries.filter(usda_factors_based=True).count() / max(
             self.carbon_entries.count(), 1
         )
         high_confidence_rate = self.carbon_entries.filter(confidence_level="high").count() / max(
@@ -762,7 +762,7 @@ class AdvancedCarbonAnalyticsService:
 
         # Base transparency score
         transparency = 70  # Base score
-        transparency += usda_verified_rate * 20  # USDA verification bonus
+        transparency += epa_factors_rate * 20  # EPA/USDA factors usage bonus
         transparency += high_confidence_rate * 10  # High confidence bonus
         transparency += 5 if self.production.qr_code else 0  # QR accessibility bonus
 

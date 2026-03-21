@@ -150,10 +150,10 @@ class APIEndpointValidator:
         calc_details = response_data.get("calculation_details", {})
         if calc_details:
             print("\n🔍 Calculation details:")
-            usda_verified = calc_details.get("usda_factors_used", False)
+            epa_factors_used = calc_details.get("usda_factors_used", False)
             confidence = calc_details.get("confidence_score", 0)
 
-            print(f"✅ USDA factors used: {usda_verified}")
+            print(f"EPA/USDA factors used: {epa_factors_used}")
             print(f"✅ Confidence score: {confidence}")
 
             if "emission_factors" in calc_details:

@@ -1369,23 +1369,19 @@ class USDAComplianceRecord(models.Model):
         super().save(*args, **kwargs)
 
     @property
-    def is_usda_verified(self):
+    def is_epa_factors_based(self):
         """
-        Check if USDA factors were used in this carbon calculation.
-
-        SEMANTIC CHANGE (2025-12-12): This property now means "USDA factors were used"
-        rather than "validation passed at high confidence".
-
-        In Trazo's methodology, we ALWAYS use USDA emission factors. This record
-        confirms that USDA validation occurred successfully and that USDA factors
-        were applied to the carbon calculation.
+        Check if EPA/USDA emission factors were used in this carbon calculation.
 
         Returns True if:
         - Validation completed successfully (method is not error)
         - Crop type was identified (calculation ran with proper data)
         - Record is not in a failed state
+
+        This means "EPA/USDA emission factors were applied", NOT that the USDA
+        independently verified this farm's practices.
         """
-        # If validation had an error, USDA factors were not successfully applied
+        # If validation had an error, EPA/USDA factors were not successfully applied
         if self.validation_method == "validation_error":
             return False
 
@@ -1393,9 +1389,9 @@ class USDAComplianceRecord(models.Model):
         if not self.crop_type or self.crop_type == "unknown":
             return False
 
-        # If we successfully validated (even with low confidence), USDA factors were used
+        # If we successfully validated (even with low confidence), EPA/USDA factors were used
         # The confidence_score indicates how precise the calculation is, not whether
-        # USDA factors were actually applied
+        # factors were actually applied
         return self.validation_method in ["enhanced_api", "local_validation"]
 
     @property

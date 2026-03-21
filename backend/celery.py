@@ -65,6 +65,11 @@ celery_app.conf.beat_schedule = {
         "task": "history.tasks.gdpr_cleanup_scan_data",
         "schedule": crontab(hour=3, minute=30),  # Daily at 3:30 AM UTC
     },
+    # --- Certification re-verification ---
+    "reverify-certifications-monthly": {
+        "task": "certifications.tasks.reverify_all_certifications",
+        "schedule": crontab(hour=4, minute=0, day_of_month=1),  # 4 AM UTC on 1st of each month
+    },
 }
 
 

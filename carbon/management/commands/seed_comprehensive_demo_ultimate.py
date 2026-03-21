@@ -510,7 +510,7 @@ class Command(BaseCommand):
                     "description": description,
                     "usda_factors_used": abs(factor) > 0.01,  # All significant factors are verified
                     "usda_factors_based": abs(factor) > 0.01,
-                    "verification_status": "usda_verified" if abs(factor) > 0.01 else "calculated",
+                    "verification_status": "factors_verified" if abs(factor) > 0.01 else "estimated",
                     "data_source": "USDA Agricultural Research Service / EPA / IPCC Guidelines",
                 },
             )
@@ -1371,7 +1371,7 @@ class Command(BaseCommand):
                 description=description,
                 timestamp=event.date if hasattr(event, "date") else timezone.now(),
                 usda_factors_based=True,
-                verification_status="usda_verified",
+                verification_status="factors_verified",
                 data_source="USDA Agricultural Research Service / IPCC Guidelines",
                 additionality_verified=True,
                 additionality_evidence=f"Verified {event.__class__.__name__} data with USDA emission factors",

@@ -108,7 +108,7 @@ class CarbonTransparencyService:
                     transparency_data.get("transparency_percentage", 0)
                 ),
                 "carbon_data_verified": carbon_data["entry_count"] > 0,
-                "usda_factors_used": self._check_usda_verification(production),
+                "usda_factors_used": self._check_epa_factors_based(production),
                 "blockchain_verified": self._check_blockchain_verification(production),
                 "documentation_completeness": transparency_data.get("completeness_score", 0),
                 "category_breakdown": transparency_data.get("category_breakdown", {}),
@@ -433,15 +433,16 @@ class CarbonTransparencyService:
                 return level
         return "Limited"
 
-    def _check_usda_verification(self, production: History) -> bool:
+    def _check_epa_factors_based(self, production: History) -> bool:
         """
-        Check if production has USDA verified carbon data.
-
-        PHASE 1 FIX (2025-12-12): This now checks if USDA factors were used in the
-        carbon calculation (via USDAComplianceRecord.is_usda_verified property).
+        Check if production has carbon data calculated using EPA/USDA emission factors.
 
         Returns True if at least one CarbonEntry exists with usda_factors_based=True,
-        which indicates USDA factors were applied to the carbon calculation.
+        which indicates EPA/USDA-published emission factors were applied to the calculation.
+
+        Note: This does NOT mean USDA independently verified this farm's practices.
+        It means government-published emission factors (EPA 40 CFR Part 98, USDA NRCS)
+        were used in the calculation.
         """
         from ..models import CarbonEntry
 
@@ -635,8 +636,8 @@ class CarbonTransparencyService:
 
         # Generate verification summary
         verification_points = []
-        if self._check_usda_verification(production):
-            verification_points.append("USDA verified carbon data")
+        if self._check_epa_factors_based(production):
+            verification_points.append("EPA/USDA-sourced emission factors")
         if self._check_blockchain_verification(production):
             verification_points.append("Blockchain secured records")
 

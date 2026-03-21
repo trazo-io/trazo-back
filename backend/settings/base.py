@@ -70,6 +70,7 @@ INSTALLED_APPS = [
     "support",
     "education",
     "notifications",
+    "certifications",
     # Django Channels
     "channels",
     # django-allauth apps

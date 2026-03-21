@@ -12,7 +12,8 @@ from django.utils import timezone
 
 from dateutil import parser as date_parser
 from rest_framework import filters, status, viewsets
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view
+from rest_framework.decorators import permission_classes as permission_classes_decorator
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -1412,6 +1413,235 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 {"error": f"Error generating download URL: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+    @action(detail=True, methods=["get"], url_path="audit-export", permission_classes=[IsAuthenticated])
+    def audit_export(self, request, **kwargs):
+        """
+        Generate an audit-ready export for a production.
+
+        Query parameters:
+          certification  one of: all, organic, globalgap, roc, fsma204, scs  (default: all)
+          format         pdf or csv  (default: pdf)
+
+        Returns a downloadable PDF or CSV file.
+        """
+        from django.http import FileResponse
+
+        from .services.audit_export_service import AuditExportService
+
+        production = self.get_object()
+
+        # Verify the requesting user belongs to this production's company
+        self.check_write_permission(request, production)
+
+        cert_type = request.query_params.get("certification", "all").lower()
+        export_format = request.query_params.get("export_format", "pdf").lower()
+
+        valid_certifications = {"all", "organic", "globalgap", "roc", "fsma204", "scs"}
+        if cert_type not in valid_certifications:
+            return Response(
+                {
+                    "error": f"Invalid certification type '{cert_type}'.",
+                    "valid_options": sorted(valid_certifications),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if export_format not in {"pdf", "csv"}:
+            return Response(
+                {"error": "Invalid format. Use 'pdf' or 'csv'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Prefetch all event types and their photo albums to avoid N+1 queries
+        from django.db.models import Prefetch
+
+        from carbon.models import CarbonEntry
+
+        production = (
+            History.objects.select_related(
+                "product",
+                "parcel__establishment__company",
+                "parcel__establishment",
+                "crop_type",
+                "operator",
+            )
+            .prefetch_related(
+                Prefetch(
+                    "history_weatherevent_events",
+                    queryset=WeatherEvent.objects.select_related("album").prefetch_related("album__images"),
+                ),
+                Prefetch(
+                    "history_chemicalevent_events",
+                    queryset=ChemicalEvent.objects.select_related("album").prefetch_related("album__images"),
+                ),
+                Prefetch(
+                    "history_productionevent_events",
+                    queryset=ProductionEvent.objects.select_related("album").prefetch_related("album__images"),
+                ),
+                Prefetch(
+                    "history_generalevent_events",
+                    queryset=GeneralEvent.objects.select_related("album").prefetch_related("album__images"),
+                ),
+                Prefetch(
+                    "history_equipmentevent_events",
+                    queryset=EquipmentEvent.objects.select_related("album").prefetch_related("album__images"),
+                ),
+                Prefetch(
+                    "history_soilmanagementevent_events",
+                    queryset=SoilManagementEvent.objects.select_related("album").prefetch_related("album__images"),
+                ),
+                Prefetch(
+                    "history_pestmanagementevent_events",
+                    queryset=PestManagementEvent.objects.select_related("album").prefetch_related("album__images"),
+                ),
+                Prefetch(
+                    "history_businessevent_events",
+                    queryset=BusinessEvent.objects.select_related("album").prefetch_related("album__images"),
+                ),
+                Prefetch(
+                    "carbonentry_set",
+                    queryset=CarbonEntry.objects.select_related("source").order_by("-timestamp"),
+                ),
+            )
+            .get(pk=production.pk)
+        )
+
+        try:
+            service = AuditExportService(production, certification_type=cert_type)
+
+            if export_format == "csv":
+                buffer = service.generate_csv()
+                response = FileResponse(buffer, content_type="text/csv; charset=utf-8")
+                response["Content-Disposition"] = f'attachment; filename="trazo-audit-{production.public_id}.csv"'
+            else:
+                buffer = service.generate_pdf()
+                response = FileResponse(buffer, content_type="application/pdf")
+                response["Content-Disposition"] = f'attachment; filename="trazo-audit-{production.public_id}.pdf"'
+
+            return response
+
+        except Exception as exc:
+            logger.exception("Audit export failed for production %s: %s", production.pk, exc)
+            return Response(
+                {"error": "Export generation failed. Please try again."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+@api_view(["GET"])
+@permission_classes_decorator([IsAuthenticated])
+def audit_export_by_uuid(request, public_id):
+    """
+    Standalone audit export endpoint that accepts production UUID.
+
+    This supplements the HistoryViewSet action (which uses numeric pk)
+    so frontends can call with the UUID visible in the URL bar.
+    """
+    from django.http import FileResponse
+
+    from .services.audit_export_service import AuditExportService
+
+    production = get_object_or_404(History, public_id=public_id)
+
+    # Permission check: user must belong to the production's company
+    from users.models import WorksIn
+
+    if not request.user.is_superuser:
+        company = production.parcel.establishment.company
+        if not WorksIn.objects.filter(user=request.user, company=company).exists():
+            raise PermissionDenied("You do not have access to this production.")
+
+    cert_type = request.query_params.get("certification", "all").lower()
+    export_format = request.query_params.get("export_format", "pdf").lower()
+
+    valid_certifications = {"all", "organic", "globalgap", "roc", "fsma204", "scs"}
+    if cert_type not in valid_certifications:
+        return Response(
+            {"error": f"Invalid certification type '{cert_type}'."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if export_format not in {"pdf", "csv"}:
+        return Response(
+            {"error": "Invalid format. Use 'pdf' or 'csv'."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Prefetch all event types for efficient export
+    from django.db.models import Prefetch
+
+    from carbon.models import CarbonEntry
+
+    production = (
+        History.objects.select_related(
+            "product",
+            "parcel__establishment__company",
+            "parcel__establishment",
+            "crop_type",
+            "operator",
+        )
+        .prefetch_related(
+            Prefetch(
+                "history_weatherevent_events",
+                queryset=WeatherEvent.objects.select_related("album").prefetch_related("album__images"),
+            ),
+            Prefetch(
+                "history_chemicalevent_events",
+                queryset=ChemicalEvent.objects.select_related("album").prefetch_related("album__images"),
+            ),
+            Prefetch(
+                "history_productionevent_events",
+                queryset=ProductionEvent.objects.select_related("album").prefetch_related("album__images"),
+            ),
+            Prefetch(
+                "history_generalevent_events",
+                queryset=GeneralEvent.objects.select_related("album").prefetch_related("album__images"),
+            ),
+            Prefetch(
+                "history_equipmentevent_events",
+                queryset=EquipmentEvent.objects.select_related("album").prefetch_related("album__images"),
+            ),
+            Prefetch(
+                "history_soilmanagementevent_events",
+                queryset=SoilManagementEvent.objects.select_related("album").prefetch_related("album__images"),
+            ),
+            Prefetch(
+                "history_pestmanagementevent_events",
+                queryset=PestManagementEvent.objects.select_related("album").prefetch_related("album__images"),
+            ),
+            Prefetch(
+                "history_businessevent_events",
+                queryset=BusinessEvent.objects.select_related("album").prefetch_related("album__images"),
+            ),
+            Prefetch(
+                "carbonentry_set",
+                queryset=CarbonEntry.objects.select_related("source").order_by("-timestamp"),
+            ),
+        )
+        .get(pk=production.pk)
+    )
+
+    try:
+        service = AuditExportService(production, certification_type=cert_type)
+
+        if export_format == "csv":
+            buffer = service.generate_csv()
+            response = FileResponse(buffer, content_type="text/csv; charset=utf-8")
+            response["Content-Disposition"] = f'attachment; filename="trazo-audit-{production.public_id}.csv"'
+        else:
+            buffer = service.generate_pdf()
+            response = FileResponse(buffer, content_type="application/pdf")
+            response["Content-Disposition"] = f'attachment; filename="trazo-audit-{production.public_id}.pdf"'
+
+        return response
+
+    except Exception as exc:
+        logger.exception("Audit export failed for production %s: %s", production.pk, exc)
+        return Response(
+            {"error": "Export generation failed. Please try again."},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 
 class PublicHistoryScanViewSet(viewsets.ModelViewSet):

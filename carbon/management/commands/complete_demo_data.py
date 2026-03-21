@@ -148,7 +148,7 @@ class Command(BaseCommand):
                         year=production.start_date.year,
                         description=f"{source_name} for {production.name}",
                         usda_factors_based=True,
-                        verification_status="usda_verified",
+                        verification_status="factors_verified",
                         data_source="USDA Agricultural Research Service",
                         timestamp=production.start_date + timedelta(days=random.randint(30, 300)),
                     )
@@ -171,7 +171,7 @@ class Command(BaseCommand):
                         year=production.start_date.year,
                         description=f"{source_name} for {production.name}",
                         usda_factors_based=True,
-                        verification_status="usda_verified",
+                        verification_status="factors_verified",
                         data_source="USDA Agricultural Research Service",
                         timestamp=production.start_date + timedelta(days=random.randint(30, 300)),
                     )

@@ -291,7 +291,7 @@ class Command(BaseCommand):
                         True,
                         co2e,
                         "USDA Agricultural Research Service",
-                        "usda_verified",
+                        "factors_verified",
                         f"Production-ready {entry_type} from {source.category}",
                         True,
                         None,
