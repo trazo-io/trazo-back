@@ -148,52 +148,75 @@ class HistoryAdmin(admin.ModelAdmin):
         ),
     )
 
-    def production_images(self, obj):
-        if not obj.album:
-            return format_html("<em>No album attached to this production.</em>")
-
-        images = obj.album.images.all()
-        if not images.exists():
-            gallery_url = reverse("admin:common_gallery_change", args=[obj.album.pk])
-            return format_html(
-                '<em>No images yet.</em> <a href="{}">Manage album</a>',
-                gallery_url,
-            )
-
-        html_parts = []
-        for img in images:
+    def _render_gallery_images(self, gallery, label=None):
+        """Render image thumbnails for a gallery with edit/delete links."""
+        parts = []
+        if label:
+            parts.append(format_html(
+                '<div style="font-weight:bold; margin:8px 0 4px; font-size:12px; '
+                'color:#666;">{}</div>',
+                label,
+            ))
+        for img in gallery.images.all():
             url = img.url
+            if not url:
+                continue
             edit_url = reverse("admin:common_galleryimage_change", args=[img.pk])
             delete_url = reverse("admin:common_galleryimage_delete", args=[img.pk])
-            if url:
-                html_parts.append(
-                    format_html(
-                        '<div style="display:inline-block; margin:4px; text-align:center; '
-                        'vertical-align:top;">'
-                        '<a href="{}" target="_blank">'
-                        '<img src="{}" style="max-height:120px; max-width:160px; '
-                        "object-fit:cover; border-radius:4px; border:1px solid #ddd; "
-                        'cursor:pointer;" />'
-                        "</a>"
-                        '<br/><a href="{}" style="font-size:11px;">Edit</a>'
-                        ' | <a href="{}" style="font-size:11px; color:#c00;">Delete</a>'
-                        "</div>",
-                        url,
-                        url,
-                        edit_url,
-                        delete_url,
-                    )
-                )
-
-        gallery_url = reverse("admin:common_gallery_change", args=[obj.album.pk])
-        html_parts.append(
-            format_html(
-                '<div style="margin-top:8px; clear:both;">'
-                '<a href="{}">Manage all images in album</a>'
+            parts.append(format_html(
+                '<div style="display:inline-block; margin:4px; text-align:center; '
+                'vertical-align:top;">'
+                '<a href="{}" target="_blank">'
+                '<img src="{}" style="max-height:120px; max-width:160px; '
+                "object-fit:cover; border-radius:4px; border:1px solid #ddd; "
+                'cursor:pointer;" />'
+                "</a>"
+                '<br/><a href="{}" style="font-size:11px;">Edit</a>'
+                ' | <a href="{}" style="font-size:11px; color:#c00;">Delete</a>'
                 "</div>",
-                gallery_url,
-            )
-        )
+                url, url, edit_url, delete_url,
+            ))
+        return parts
+
+    def production_images(self, obj):
+        html_parts = []
+        total = 0
+
+        # Production's own album
+        if obj.album and obj.album.images.exists():
+            parts = self._render_gallery_images(obj.album, "Production Album")
+            html_parts.extend(parts)
+            total += obj.album.images.count()
+
+        # Collect images from all event types
+        event_relations = [
+            ("history_productionevent_events", "Production Events"),
+            ("history_chemicalevent_events", "Chemical Events"),
+            ("history_weatherevent_events", "Weather Events"),
+            ("history_generalevent_events", "General Events"),
+            ("history_soilmanagementevent_events", "Soil Management Events"),
+            ("history_pestmanagementevent_events", "Pest Management Events"),
+            ("history_equipmentevent_events", "Equipment Events"),
+            ("history_businessevent_events", "Business Events"),
+        ]
+        for relation, label in event_relations:
+            manager = getattr(obj, relation, None)
+            if not manager:
+                continue
+            for event in manager.select_related("album").all():
+                if event.album and event.album.images.exists():
+                    event_label = f"{label} - {event.description[:50]}" if event.description else label
+                    parts = self._render_gallery_images(event.album, event_label)
+                    html_parts.extend(parts)
+                    total += event.album.images.count()
+
+        if not html_parts:
+            return format_html("<em>No images found in this production or its events.</em>")
+
+        html_parts.insert(0, format_html(
+            '<div style="margin-bottom:8px; font-size:13px;"><strong>{} image(s)</strong> total</div>',
+            total,
+        ))
         return format_html("".join(str(p) for p in html_parts))
 
     production_images.short_description = "Images"
