@@ -195,10 +195,28 @@ class USDAOrganicVerifier(BaseCertificationVerifier):
                 direct_matches = candidates.filter(q)
 
         for op in direct_matches[:500]:
-            confidence = difflib.SequenceMatcher(None, normalized_search, op.op_name_normalized).ratio()
+            # Step 1: Match on normalized names (stripped of LLC, Farm, etc.)
+            norm_confidence = difflib.SequenceMatcher(None, normalized_search, op.op_name_normalized).ratio()
 
-            if confidence > best_confidence:
-                best_confidence = confidence
+            if norm_confidence < FUZZY_MATCH_THRESHOLD:
+                continue
+
+            # Step 2: Verify on original names to prevent false positives
+            # e.g., "Green Valley Farm" vs "Green Valley Vineyards, Inc."
+            # normalize to the same "green valley" but the originals are clearly different.
+            # Require at least 0.50 similarity on original names as a sanity check.
+            raw_confidence = difflib.SequenceMatcher(
+                None,
+                operation_name.lower().strip(),
+                op.op_name.lower().strip(),
+            ).ratio()
+
+            # Combined confidence: weighted average (normalized 60%, raw 40%)
+            # This rewards exact normalized matches but penalizes raw name divergence
+            combined = (norm_confidence * 0.6) + (raw_confidence * 0.4)
+
+            if combined > best_confidence:
+                best_confidence = combined
                 best_match = op
 
         if best_match is None or best_confidence < FUZZY_MATCH_THRESHOLD:
