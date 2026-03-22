@@ -1,4 +1,6 @@
 from django.contrib import admin
+from django.urls import reverse
+from django.utils.html import format_html
 
 from .models import (
     ChemicalEvent,
@@ -117,6 +119,7 @@ class HistoryAdmin(admin.ModelAdmin):
         "confidence_score",
         "transparency_score",
         "updated_at",
+        "production_images",
     )
 
     fieldsets = (
@@ -137,8 +140,63 @@ class HistoryAdmin(admin.ModelAdmin):
                 "classes": ("collapse",),
             },
         ),
-        ("Media & QR", {"fields": ("album", "qr_code"), "classes": ("collapse",)}),
+        (
+            "Production Images",
+            {
+                "fields": ("production_images", "qr_code"),
+            },
+        ),
     )
+
+    def production_images(self, obj):
+        if not obj.album:
+            return format_html("<em>No album attached to this production.</em>")
+
+        images = obj.album.images.all()
+        if not images.exists():
+            gallery_url = reverse("admin:common_gallery_change", args=[obj.album.pk])
+            return format_html(
+                '<em>No images yet.</em> <a href="{}">Manage album</a>',
+                gallery_url,
+            )
+
+        html_parts = []
+        for img in images:
+            url = img.url
+            edit_url = reverse("admin:common_galleryimage_change", args=[img.pk])
+            delete_url = reverse("admin:common_galleryimage_delete", args=[img.pk])
+            if url:
+                html_parts.append(
+                    format_html(
+                        '<div style="display:inline-block; margin:4px; text-align:center; '
+                        'vertical-align:top;">'
+                        '<a href="{}" target="_blank">'
+                        '<img src="{}" style="max-height:120px; max-width:160px; '
+                        "object-fit:cover; border-radius:4px; border:1px solid #ddd; "
+                        'cursor:pointer;" />'
+                        "</a>"
+                        '<br/><a href="{}" style="font-size:11px;">Edit</a>'
+                        ' | <a href="{}" style="font-size:11px; color:#c00;">Delete</a>'
+                        "</div>",
+                        url,
+                        url,
+                        edit_url,
+                        delete_url,
+                    )
+                )
+
+        gallery_url = reverse("admin:common_gallery_change", args=[obj.album.pk])
+        html_parts.append(
+            format_html(
+                '<div style="margin-top:8px; clear:both;">'
+                '<a href="{}">Manage all images in album</a>'
+                "</div>",
+                gallery_url,
+            )
+        )
+        return format_html("".join(str(p) for p in html_parts))
+
+    production_images.short_description = "Images"
 
     actions = ["recalculate_trust_metrics", "reset_view_counts"]
 
