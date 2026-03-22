@@ -1370,11 +1370,19 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         """
         Generate download URL for QR code.
         Supports both local file storage (dev) and S3 (production).
+        Supports both numeric ID and UUID (public_id) lookup.
         """
+        import uuid as uuid_module
+
         from django.conf import settings
 
         try:
-            history = self.get_object()
+            # Support UUID lookup (frontend uses public_id/UUID)
+            try:
+                public_uuid = uuid_module.UUID(str(pk))
+                history = get_object_or_404(History, public_id=public_uuid)
+            except (ValueError, AttributeError):
+                history = self.get_object()
 
             if not history.qr_code or not history.qr_code.name:
                 return Response(
