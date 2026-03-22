@@ -32,18 +32,23 @@ from product.models import Parcel, Product
 # Free-to-use Unsplash images for almond production events
 ALMOND_IMAGES = {
     "almond_orchard": [
-        "https://images.unsplash.com/photo-1583533230823-10efb2ba9a38?w=800&q=80",
+        # Row of blooming almond trees in a field
+        "https://images.unsplash.com/photo-1773076088573-2af13cf84c0d?w=800&q=80",
     ],
     "almond_bloom": [
-        "https://images.unsplash.com/photo-1551972873-b7e8754e8e26?w=800&q=80",
+        # White blossom flowers in bloom on tree branch
+        "https://images.unsplash.com/photo-1585742888726-67738ac6febf?w=800&q=80",
     ],
     "almond_harvest": [
-        "https://images.unsplash.com/photo-1574856344991-aaa31b6f4ce3?w=800&q=80",
+        # Row of almond trees with fallen blossoms on the ground
+        "https://images.unsplash.com/photo-1773076088491-d6223773da0c?w=800&q=80",
     ],
     "bee_pollination": [
-        "https://images.unsplash.com/photo-1558642452-9d2a7deb7f62?w=800&q=80",
+        # Honeybee perched on white petaled flower (pollination)
+        "https://images.unsplash.com/photo-1587375317791-8e6c25ecdebe?w=800&q=80",
     ],
     "almond_processing": [
+        # Bowl of shelled almonds (processed almond product)
         "https://images.unsplash.com/photo-1608797178974-15b35a64ede9?w=800&q=80",
     ],
 }

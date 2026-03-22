@@ -1716,9 +1716,7 @@ class OptimizedEventProcessor:
         elif UnitConverter.is_volume_unit(volume_unit):
             # Volume input: convert to liters
             try:
-                volume_liters, _ = UnitConverter.convert_volume(
-                    volume_value, volume_unit_normalized, to_unit="liters"
-                )
+                volume_liters, _ = UnitConverter.convert_volume(volume_value, volume_unit_normalized, to_unit="liters")
             except Exception:
                 volume_liters = volume_value  # Fallback: assume liters
             logger.info(f"   Volume unit detected: {volume_value} {volume_unit} → {volume_liters} L")
@@ -4285,9 +4283,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
             # Skip scan for authenticated producers viewing their own production
             is_owner = False
             if request.user.is_authenticated and production.parcel and production.parcel.establishment:
-                is_owner = request.user.companies.filter(
-                    id=production.parcel.establishment.company_id
-                ).exists()
+                is_owner = request.user.companies.filter(id=production.parcel.establishment.company_id).exists()
 
             if not is_owner:
                 x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
@@ -6147,11 +6143,58 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     # NOTE: contact_person, contact_phone, contact_email intentionally excluded (private info)
                 }
 
+            # === CARBON DATA CALCULATION ===
+            from carbon.models import CarbonEntry
+
+            production_entries = CarbonEntry.objects.select_related("source").filter(production=production)
+            if production_entries.exists():
+                entries = production_entries
+            else:
+                establishment_entries = (
+                    CarbonEntry.objects.select_related("source").filter(establishment=establishment)
+                    if establishment
+                    else CarbonEntry.objects.none()
+                )
+                entries = establishment_entries.filter(
+                    year=production.start_date.year if production.start_date else timezone.now().year
+                )
+
+            total_emissions = entries.filter(type="emission").aggregate(Sum("co2e_amount"))["co2e_amount__sum"] or 0
+            total_offsets = (
+                entries.filter(type="offset").aggregate(Sum("effective_amount"))["effective_amount__sum"] or 0
+            )
+            net_footprint = total_emissions - total_offsets
+
+            # Emissions breakdown by category and source
+            emissions_by_category = {}
+            emissions_by_source = {}
+            for entry in entries.filter(type="emission"):
+                source_name = entry.source.name if entry.source else "Unknown"
+                emissions_by_source[source_name] = emissions_by_source.get(source_name, 0) + float(
+                    entry.co2e_amount or 0
+                )
+                category = entry.source.category if entry.source else "Other"
+                emissions_by_category[category] = emissions_by_category.get(category, 0) + float(entry.co2e_amount or 0)
+
+            # Check if EPA/USDA factors were used
+            is_epa_factors_based = entries.filter(
+                Q(source__usda_factors_based=True)
+                | Q(source__data_source__icontains="epa")
+                | Q(source__data_source__icontains="usda")
+            ).exists()
+
             # Build response matching the expected frontend format
             response_data = {
                 "production_id": production.id,
                 "timeline": public_history_data.get("events", []),
                 "timestamp": timezone.now().isoformat(),
+                # Carbon metrics
+                "totalEmissions": float(total_emissions),
+                "totalOffsets": float(total_offsets),
+                "netFootprint": float(net_footprint),
+                "isEpaFactorsBased": is_epa_factors_based,
+                "emissionsByCategory": emissions_by_category,
+                "emissionsBySource": emissions_by_source,
                 # Harvest details for consumer display
                 "harvestDetails": harvest_details if harvest_details else None,
                 # Establishment/farmer data for consumer transparency
@@ -6539,7 +6582,16 @@ class ProductionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = History
-        fields = ["id", "public_id", "name", "start_date", "finish_date", "published", "transparency_score", "carbon_footprint"]
+        fields = [
+            "id",
+            "public_id",
+            "name",
+            "start_date",
+            "finish_date",
+            "published",
+            "transparency_score",
+            "carbon_footprint",
+        ]
 
     def get_transparency_score(self, obj):
         """Calculate transparency score using the same system as consumer pages"""

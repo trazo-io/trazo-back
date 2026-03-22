@@ -48,61 +48,83 @@ COMPANY_NAME = "Coastal Valleys Ranch"
 # Used to provide photo verification for demo transparency scores
 DEMO_IMAGES = {
     "soil_test": [
+        # Hands holding dark soil, examining texture (soil analysis)
         "https://images.unsplash.com/photo-1492496913980-501348b61469?w=800&q=80",
     ],
     "cover_crop": [
+        # Green agricultural rows (cover crop field)
         "https://images.unsplash.com/photo-1545309451-048d50bb3719?w=800&q=80",
     ],
     "fertilizer": [
-        "https://images.unsplash.com/photo-1700975461387-5054352bca57?w=800&q=80",
+        # Farm machinery/equipment in agricultural field
+        "https://images.unsplash.com/photo-1655130944281-072e0644db75?w=800&q=80",
+        # Aerial view of farm fields with vehicle applying inputs
         "https://images.unsplash.com/photo-1719254271334-4601cbafc38c?w=800&q=80",
     ],
     "fungicide": [
+        # Crop duster airplane spraying over green field
         "https://images.unsplash.com/photo-1660613757833-f2b6eccbb544?w=800&q=80",
-        "https://images.unsplash.com/photo-1416255856099-5f33ae760b09?w=800&q=80",
+        # Agricultural sprayer applying treatment to field
+        "https://images.unsplash.com/photo-1758608951483-0cbeef303869?w=800&q=80",
     ],
     "pesticide": [
+        # Person in protective gear hand-spraying plants
         "https://images.unsplash.com/photo-1581578017093-cd30fce4eeb7?w=800&q=80",
+        # Large agricultural boom sprayer in crop field
         "https://images.unsplash.com/photo-1755931359594-852c73c6609c?w=800&q=80",
     ],
     "herbicide": [
-        "https://images.unsplash.com/photo-1491833167315-f2f6c7c5deab?w=800&q=80",
+        # Farm equipment machines in agricultural field
+        "https://images.unsplash.com/photo-1655130944329-b3a63166f6b5?w=800&q=80",
+        # John Deere tractor with boom sprayer on bare field
         "https://images.unsplash.com/photo-1654741275609-d7861db288c2?w=800&q=80",
     ],
     "scouting": [
-        "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=800&q=80",
+        # Farmer inspecting crops in green grass field
+        "https://images.unsplash.com/photo-1622813071880-3f34337a0418?w=800&q=80",
     ],
     "pruning": [
+        # Arborist pruning tree branches
         "https://images.unsplash.com/photo-1626828476637-5bd713ef9f22?w=800&q=80",
     ],
     "avocado_harvest": [
+        # Avocados hanging on tree branch ready for harvest
         "https://images.unsplash.com/photo-1726177551991-270f9e79b65e?w=800&q=80",
     ],
     "orange_harvest": [
+        # Hand picking orange from citrus tree
         "https://images.unsplash.com/photo-1528582654826-585a71fcf7f4?w=800&q=80",
     ],
     "planting": [
+        # Hands holding soil with small seedling
         "https://images.unsplash.com/photo-1679110663825-c6ec1ad51884?w=800&q=80",
     ],
     "composting": [
+        # Compost pile with organic waste in wooden bin
         "https://images.unsplash.com/photo-1587733761376-3f26fc81d17f?w=800&q=80",
     ],
     "organic_matter": [
-        "https://images.unsplash.com/photo-1563514227147-6d2ff665a6a0?w=800&q=80",
+        # Brown dried leaves/compost material in person's hand
+        "https://images.unsplash.com/photo-1580974563942-76580268810f?w=800&q=80",
     ],
     "beneficial_insects": [
+        # Ladybug on blade of grass (classic beneficial insect)
         "https://images.unsplash.com/photo-1528824620477-1cfafcb6d502?w=800&q=80",
     ],
     "trap_monitoring": [
-        "https://images.unsplash.com/photo-1701673614929-0ce4d3d5c0ba?w=800&q=80",
+        # Farmer in checked shirt monitoring crops in field
+        "https://images.unsplash.com/photo-1587810451787-0c58e490080c?w=800&q=80",
     ],
     "ipm": [
+        # Ladybug on grain head (biological pest control)
         "https://images.unsplash.com/photo-1745081154632-1a927ee0c847?w=800&q=80",
     ],
     "cultivation": [
-        "https://images.unsplash.com/photo-1527847263472-aa5338d178b8?w=800&q=80",
+        # Green tractor plowing/cultivating field under clear sky
+        "https://images.unsplash.com/photo-1762291317833-20c342181282?w=800&q=80",
     ],
     "drone_survey": [
+        # Agricultural drone operating over farm field
         "https://images.unsplash.com/photo-1713952152768-5f28b8093166?w=800&q=80",
     ],
 }
