@@ -1143,6 +1143,10 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                             scanner=scanner,
                             product_name=product_name,
                             scan_location=scan_location,
+                            production_id=history.id,
+                            establishment_id=history.parcel.establishment.id if history.parcel and history.parcel.establishment else None,
+                            product_id=history.product.id if history.product else None,
+                            parcel_id=history.parcel.id if history.parcel else None,
                         )
             except Exception as e:
                 logger.error("Error creating scan notification: %s", e)
@@ -1982,6 +1986,10 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
                             scanner=scanner,
                             product_name=product_name,
                             scan_location=scan_location,
+                            production_id=history.id,
+                            establishment_id=history.parcel.establishment.id if history.parcel and history.parcel.establishment else None,
+                            product_id=history.product.id if history.product else None,
+                            parcel_id=history.parcel.id if history.parcel else None,
                         )
         except Exception as e:
             # Log error but don't break the scan functionality

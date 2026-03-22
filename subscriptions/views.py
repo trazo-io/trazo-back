@@ -98,7 +98,7 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_staff:
+        if user.is_staff and self.action == "list":
             return Subscription.objects.all()
         return Subscription.objects.filter(company__in=user.companies.all())
 

@@ -637,7 +637,7 @@ def global_search(request):
                         "image_url": image_url,
                         "carbon_score": carbon_score,
                         "area": f"{parcel.area} hectares" if parcel.area else None,
-                        "status": "Certified" if parcel.certified else "Standard",
+                        "status": "Standard",
                         "establishment_id": parcel.establishment_id,
                         "company_id": parcel.establishment.company_id,
                         "created_at": None,  # Parcel model doesn't have created_at

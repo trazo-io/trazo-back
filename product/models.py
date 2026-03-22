@@ -179,10 +179,6 @@ class Parcel(models.Model):
             elif image_count >= 1:
                 score += 15
 
-        # Certification (10 points)
-        if self.certified and self.certification_type:
-            score += 10
-
         return min(100, score)
 
     def finish_current_history(self, history_data, images):

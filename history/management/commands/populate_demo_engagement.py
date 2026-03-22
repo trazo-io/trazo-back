@@ -23,6 +23,8 @@ from django.db import transaction
 
 from history.models import History, HistoryScan
 from history.models_consumer import UserImpactSummary
+from notifications.models import Notification
+from notifications.services import notification_service
 from reviews.models import Review
 from users.constants import CONSUMER
 from users.models import User
@@ -302,16 +304,20 @@ class Command(BaseCommand):
                 f"reputation={prod.reputation:.1f}"
             )
 
-        # 6. Create UserImpactSummary per consumer
+        # 6. Create notifications for recent scans (last ~5 per production)
+        total_notifications = self._create_notifications(user, finished_productions, consumers)
+
+        # 7. Create UserImpactSummary per consumer
         self._create_impact_summaries(consumers, finished_productions)
 
-        # 7. Summary
+        # 8. Summary
         self.stdout.write("")
         self.stdout.write(self.style.SUCCESS("Engagement data created!"))
         self.stdout.write("")
         self.stdout.write(f"  Consumers created: {len(consumers)}")
         self.stdout.write(f"  Total scans:       {total_scans}")
         self.stdout.write(f"  Total reviews:     {total_reviews}")
+        self.stdout.write(f"  Notifications:     {total_notifications}")
         self.stdout.write("")
         for prod in finished_productions:
             self.stdout.write(
@@ -333,6 +339,13 @@ class Command(BaseCommand):
         # Delete scans
         scan_count = HistoryScan.objects.filter(history__in=productions).delete()[0]
         self.stdout.write(f"  Deleted {scan_count} scans")
+
+        # Delete notifications for this user from demo consumers
+        notif_count = Notification.objects.filter(
+            recipient__email=productions[0].operator.email,
+            type__in=["product_scan", "product_review"],
+        ).delete()[0]
+        self.stdout.write(f"  Deleted {notif_count} notifications")
 
         # Delete demo consumer users and their impact summaries
         demo_users = User.objects.filter(email__endswith=DEMO_CONSUMER_DOMAIN)
@@ -674,3 +687,39 @@ class Command(BaseCommand):
                     "current_level": 1 + (scan_count // 5),
                 },
             )
+
+    def _create_notifications(self, owner, productions, consumers):
+        """Create scan notifications for the most recent scans per production."""
+        total = 0
+        for prod in productions:
+            product_name = prod.product.name if prod.product else f"Production {prod.id}"
+            establishment_id = prod.parcel.establishment.id if prod.parcel and prod.parcel.establishment else None
+            product_id = prod.product.id if prod.product else None
+            parcel_id = prod.parcel.id if prod.parcel else None
+
+            # Get last 5 scans with a user (so we have a scanner name)
+            recent_scans = (
+                HistoryScan.objects.filter(history=prod, user__isnull=False)
+                .select_related("user")
+                .order_by("-date")[:5]
+            )
+
+            for scan in recent_scans:
+                region = scan.region or "California"
+                country = "US" if scan.country_code == "US" else scan.country_code
+                location = f"{region}, {country}" if region else None
+
+                notification_service.create_product_scan_notification(
+                    product_owner=owner,
+                    scanner=scan.user,
+                    product_name=product_name,
+                    scan_location=location,
+                    production_id=prod.id,
+                    establishment_id=establishment_id,
+                    product_id=product_id,
+                    parcel_id=parcel_id,
+                )
+                total += 1
+
+        self.stdout.write(f"  Notifications: {total} created")
+        return total

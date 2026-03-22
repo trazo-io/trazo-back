@@ -549,7 +549,6 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         from carbon.services.calculator_service import CarbonCalculatorService
         from history.services.transparency_calculator import TransparencyCalculator
 
-        print(f"🚀 DEBUG: dashboard_comprehensive called for pk={pk}, company_pk={company_pk}")
         try:
             # Single optimized query with ALL required data (using our new indexes)
             establishment = get_object_or_404(
@@ -1193,11 +1192,6 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
                 # Calculate potential transparency improvement
                 potential_improvement = min(priority_score, 50)  # Cap at 50%
-
-                # Debug: Log what we're creating
-                print(
-                    f"🎯 PRODUCTION-SPECIFIC OPPORTUNITY: {history.id} - {production_info['crop_type']} - Missing: {missing_items}"
-                )
 
                 opportunities.append(
                     {

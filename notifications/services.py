@@ -59,7 +59,15 @@ class NotificationService:
             return None
 
     def create_product_scan_notification(
-        self, product_owner: User, scanner: Optional[User], product_name: str, scan_location: Optional[str] = None
+        self,
+        product_owner: User,
+        scanner: Optional[User],
+        product_name: str,
+        scan_location: Optional[str] = None,
+        production_id: Optional[int] = None,
+        establishment_id: Optional[int] = None,
+        product_id: Optional[int] = None,
+        parcel_id: Optional[int] = None,
     ) -> Optional[Notification]:
         """
         Create a notification when someone scans a product
@@ -76,7 +84,7 @@ class NotificationService:
             actor_name = "Someone"
             scanner_email = None
 
-        message = f"{actor_name} scanned your product '{product_name}'"
+        message = f"{actor_name} scanned your product {product_name}"
         if scan_location:
             message += f" from {scan_location}"
 
@@ -85,6 +93,10 @@ class NotificationService:
             "scanner_email": scanner_email,
             "scan_location": scan_location,
             "scan_time": timezone.now().isoformat(),
+            "production_id": production_id,
+            "establishment_id": establishment_id,
+            "product_id": product_id,
+            "parcel_id": parcel_id,
         }
 
         return self.create_notification(
@@ -104,6 +116,10 @@ class NotificationService:
         product_name: str,
         rating: Optional[int] = None,
         review_text: Optional[str] = None,
+        production_id: Optional[int] = None,
+        establishment_id: Optional[int] = None,
+        product_id: Optional[int] = None,
+        parcel_id: Optional[int] = None,
     ) -> Optional[Notification]:
         """
         Create a notification when someone leaves a review
@@ -120,7 +136,7 @@ class NotificationService:
             reviewer_name = "Someone"
             reviewer_email = None
 
-        message = f"{reviewer_name} left a review for your product '{product_name}'"
+        message = f"{reviewer_name} left a review for your product {product_name}"
         if rating:
             message += f" (Rating: {rating}/5)"
 
@@ -130,6 +146,10 @@ class NotificationService:
             "rating": rating,
             "review_text": review_text,
             "review_time": timezone.now().isoformat(),
+            "production_id": production_id,
+            "establishment_id": establishment_id,
+            "product_id": product_id,
+            "parcel_id": parcel_id,
         }
 
         return self.create_notification(
