@@ -166,6 +166,8 @@ CRITICAL INSTRUCTIONS:
 - For NPK ratios: "ten ten ten" means "10-10-10". Always format as N-P-K with hyphens.
 - For amounts: Always separate value and unit. "200 pounds per acre" -> value:200, unit:"lbs"
 - Prefer specific event types: use "herbicide" when weed-related, "fungicide" when disease/mold-related, "pruning" when trimming/cutting branches.
+- IMPORTANT: Products like Kocide, copper hydroxide, copper fungicide, sulfur, mancozeb, or any product targeting disease (anthracnose, blight, mildew, rust, phytophthora) MUST be classified as "fungicide", NOT "fertilization". Fungicides do NOT have NPK values — set npk_ratio to null for fungicide events.
+- Only set npk_ratio for fertilization events where NPK is explicitly mentioned.
 - If unsure about a value, set it to null rather than guess.
 - Focus on extracting actionable farming data for transparency documentation.""",
             "es-ES": """Eres un asistente agrícola experto para una plataforma de transparencia agrícola.
@@ -311,16 +313,16 @@ Responda apenas com JSON.""",
                 "keywords": [
                     "fertilizer",
                     "fertilize",
-                    "applied",
-                    "spread",
                     "npk",
                     "nitrogen",
                     "phosphorus",
                     "potassium",
                     "urea",
+                    "compost",
+                    "manure",
                 ],
-                "es": ["fertilizante", "fertilizar", "aplicar", "esparcir", "npk", "nitrógeno", "urea"],
-                "pt": ["fertilizante", "fertilizar", "aplicar", "espalhar", "npk", "nitrogênio", "ureia"],
+                "es": ["fertilizante", "fertilizar", "npk", "nitrógeno", "urea", "compost", "estiércol"],
+                "pt": ["fertilizante", "fertilizar", "npk", "nitrogênio", "ureia", "composto", "esterco"],
             },
             "irrigation": {
                 "keywords": ["irrigate", "irrigation", "water", "watered", "sprinkler", "drip", "flood"],
@@ -333,9 +335,22 @@ Responda apenas com JSON.""",
                 "pt": ["herbicida", "erva daninha", "ervas daninhas"],
             },
             "fungicide": {
-                "keywords": ["fungicide", "fungus", "mildew", "blight", "rot", "mold"],
-                "es": ["fungicida", "hongo", "mildiú", "tizón", "moho"],
-                "pt": ["fungicida", "fungo", "míldio", "ferrugem", "mofo"],
+                "keywords": [
+                    "fungicide",
+                    "fungus",
+                    "mildew",
+                    "blight",
+                    "rot",
+                    "mold",
+                    "copper",
+                    "anthracnose",
+                    "kocide",
+                    "mancozeb",
+                    "sulfur fungicide",
+                    "phytophthora",
+                ],
+                "es": ["fungicida", "hongo", "mildiú", "tizón", "moho", "cobre", "antracnosis"],
+                "pt": ["fungicida", "fungo", "míldio", "ferrugem", "mofo", "cobre", "antracnose"],
             },
             "pesticide": {
                 "keywords": ["spray", "sprayed", "pesticide", "insecticide", "pest"],
@@ -366,13 +381,14 @@ Responda apenas com JSON.""",
         # Detect event type
         lang_suffix = "es" if language == "es-ES" else "pt" if language == "pt-BR" else "keywords"
 
+        max_matches = 0
         for event_type, pattern_data in patterns.items():
             keywords = pattern_data.get(lang_suffix, pattern_data["keywords"])
             matches = sum(1 for keyword in keywords if keyword in text_lower)
-            if matches > 0:
+            if matches > max_matches:
+                max_matches = matches
                 detected_type = event_type
                 confidence = min(30 + matches * 15, 75)  # Max 75% for fallback
-                break
 
         # Extract amounts using regex
         import re

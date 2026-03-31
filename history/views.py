@@ -2560,6 +2560,12 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
                 event.save()
 
+                # Update transparency score after adding event
+                try:
+                    history.update_trust_metrics()
+                except Exception:
+                    pass  # Non-fatal: score will update on next calculation
+
     def update(self, request, *args, **kwargs):
         """
         Override update to prevent changing event types after creation
@@ -2731,7 +2737,15 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 )
 
         # If event types match, proceed with normal update
-        return super().update(request, *args, **kwargs)
+        response = super().update(request, *args, **kwargs)
+
+        # Update transparency score after modifying event
+        try:
+            instance.history.update_trust_metrics()
+        except Exception:
+            pass  # Non-fatal: score will update on next calculation
+
+        return response
 
     def destroy(self, request, *args, **kwargs):
         """Prevent deletion of events on completed productions."""
@@ -2767,7 +2781,15 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         except Exception as e:
             logger.warning("Event audit log failed: %s", e)
 
-        return super().destroy(request, *args, **kwargs)
+        response = super().destroy(request, *args, **kwargs)
+
+        # Update transparency score after deleting event
+        try:
+            history.update_trust_metrics()
+        except Exception:
+            pass  # Non-fatal: score will update on next calculation
+
+        return response
 
     def _validate_structured_fields(self, event_type, validated_data):
         """

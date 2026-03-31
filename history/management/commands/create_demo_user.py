@@ -643,11 +643,14 @@ class Command(BaseCommand):
         alm_parcel.current_history = alm_current
         alm_parcel.save()
 
-        # 11. Update trust metrics on finished productions
+        # 11. Update trust metrics on ALL productions (finished + current)
         try:
             avo_finished.update_trust_metrics()
             ora_finished.update_trust_metrics()
             alm_finished.update_trust_metrics()
+            avo_current.update_trust_metrics()
+            ora_current.update_trust_metrics()
+            alm_current.update_trust_metrics()
         except Exception as e:
             self.stdout.write(self.style.WARNING(f"  Trust metrics update failed (non-fatal): {e}"))
 
