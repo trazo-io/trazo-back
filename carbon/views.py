@@ -9554,6 +9554,15 @@ def get_ai_event_suggestions(request):
             recent_events = []
             farm_context = {}
 
+        # Cache key based on crop + season + location (suggestions are stable for hours)
+        import hashlib
+
+        cache_seed = f"ai_suggestions:{crop_type}:{season}:{location}"
+        cache_key = f"ai_suggestions_{hashlib.md5(cache_seed.encode()).hexdigest()}"
+        cached_result = cache.get(cache_key)
+        if cached_result:
+            return Response(cached_result, status=status.HTTP_200_OK)
+
         # Import here to avoid circular imports
         import asyncio
 
@@ -9585,6 +9594,9 @@ def get_ai_event_suggestions(request):
                 recent_events=recent_events,
                 farm_context=farm_context,
             )
+
+        # Cache for 6 hours — seasonal suggestions change slowly
+        cache.set(cache_key, result, 60 * 60 * 6)
 
         return Response(result, status=status.HTTP_200_OK)
 
