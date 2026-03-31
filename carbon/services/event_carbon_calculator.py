@@ -181,9 +181,17 @@ class EventCarbonCalculator:
 
     @staticmethod
     def _default_state():
-        """Return a sensible default state based on the operating country."""
+        """Return default state when establishment has no state set.
+        WARNING: This affects regional irrigation defaults and USDA factor adjustments.
+        Defaults to CA as it has the most complete regional data coverage.
+        """
         country = getattr(settings, "TRAZO_OPERATING_COUNTRY", "US")
         if country == "US":
+            logger.warning(
+                "Establishment has no state set — defaulting to CA. "
+                "This may produce inaccurate regional factors. "
+                "Ensure establishment.state is populated."
+            )
             return "CA"
         return "Unknown"
 

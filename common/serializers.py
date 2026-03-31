@@ -1,10 +1,12 @@
 from rest_framework import serializers
-from rest_framework.serializers import ModelSerializer
 
 from .models import Gallery, GalleryImage
 
 
 class GalleryImageSerializer(serializers.ModelSerializer):
+    thumbnail_sm = serializers.SerializerMethodField()
+    thumbnail_md = serializers.SerializerMethodField()
+
     class Meta:
         model = GalleryImage
         fields = [
@@ -15,10 +17,19 @@ class GalleryImageSerializer(serializers.ModelSerializer):
             "image_url",
             "file_size",
             "extra_data",
+            "thumbnails",
+            "thumbnail_sm",
+            "thumbnail_md",
             "created_at",
             "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
+
+    def get_thumbnail_sm(self, obj):
+        return obj.thumbnail_url("sm")
+
+    def get_thumbnail_md(self, obj):
+        return obj.thumbnail_url("md")
 
 
 class GallerySerializer(serializers.ModelSerializer):

@@ -1144,7 +1144,11 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                             product_name=product_name,
                             scan_location=scan_location,
                             production_id=history.id,
-                            establishment_id=history.parcel.establishment.id if history.parcel and history.parcel.establishment else None,
+                            establishment_id=(
+                                history.parcel.establishment.id
+                                if history.parcel and history.parcel.establishment
+                                else None
+                            ),
                             product_id=history.product.id if history.product else None,
                             parcel_id=history.parcel.id if history.parcel else None,
                         )
@@ -1995,7 +1999,11 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
                             product_name=product_name,
                             scan_location=scan_location,
                             production_id=history.id,
-                            establishment_id=history.parcel.establishment.id if history.parcel and history.parcel.establishment else None,
+                            establishment_id=(
+                                history.parcel.establishment.id
+                                if history.parcel and history.parcel.establishment
+                                else None
+                            ),
                             product_id=history.product.id if history.product else None,
                             parcel_id=history.parcel.id if history.parcel else None,
                         )
@@ -2481,7 +2489,11 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                                     f"s3.{region}.amazonaws.com",
                                 }
                             )
-                        if parsed_url.scheme != "https" or (allowed_hosts and parsed_url.hostname not in allowed_hosts):
+                        # Allow local dev URLs (http://localhost) but enforce HTTPS + S3 hosts in production
+                        is_local_dev = parsed_url.hostname in ("localhost", "127.0.0.1")
+                        if not is_local_dev and (
+                            parsed_url.scheme != "https" or (allowed_hosts and parsed_url.hostname not in allowed_hosts)
+                        ):
                             logger.warning("Rejected image URL (SSRF protection): %s", image_url)
                             continue
 
@@ -2501,16 +2513,38 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                             response = requests.get(image_url, timeout=10)
                             if response.status_code == 200:
                                 photo_service = PhotoEvidenceService()
+                                # Use content-type header to infer extension if s3_key lacks one
+                                filename = s3_key or "photo.jpg"
+                                if "." not in filename.rsplit("/", 1)[-1]:
+                                    content_type = response.headers.get("Content-Type", "")
+                                    ext_map = {
+                                        "image/jpeg": ".jpg",
+                                        "image/png": ".png",
+                                        "image/webp": ".webp",
+                                        "image/heic": ".heic",
+                                    }
+                                    ext = ext_map.get(content_type.split(";")[0].strip(), ".jpg")
+                                    filename = f"{filename}{ext}"
                                 validation_result = photo_service.validate_and_analyze_photo(
-                                    file_data=response.content, filename=s3_key or "photo.jpg"
+                                    file_data=response.content, filename=filename
                                 )
-                                # Store Vision API validation results in extra_data
+                                # Store Vision API + EXIF metadata in extra_data
                                 extra_data = {
                                     "content_validation": validation_result.get("content_validation", "uncertain"),
                                     "content_confidence": validation_result.get("content_confidence", 0),
                                     "agricultural_labels": validation_result.get("agricultural_labels", []),
                                     "content_bypassed": validation_result.get("content_bypassed", False),
                                 }
+                                # Include EXIF GPS data for verification level upgrade
+                                exif = validation_result.get("metadata", {}).get("exif", {})
+                                if exif:
+                                    if exif.get("gps_latitude"):
+                                        extra_data["gps_latitude"] = exif["gps_latitude"]
+                                        extra_data["gps_longitude"] = exif.get("gps_longitude")
+                                    if exif.get("has_gps"):
+                                        extra_data["has_gps"] = True
+                                    if exif.get("DateTimeOriginal"):
+                                        extra_data["photo_datetime"] = exif["DateTimeOriginal"]
                             else:
                                 extra_data = {"content_validation": "uncertain", "content_confidence": 0}
                         except Exception as e:
@@ -2608,6 +2642,8 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         if album_images:
             from urllib.parse import urlparse
 
+            from django.conf import settings
+
             from .models import Gallery
 
             # Create album if doesn't exist
@@ -2631,7 +2667,11 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                             f"s3.{region}.amazonaws.com",
                         }
                     )
-                if parsed_url.scheme != "https" or (allowed_hosts and parsed_url.hostname not in allowed_hosts):
+                # Allow local dev URLs (http://localhost) but enforce HTTPS + S3 hosts in production
+                is_local_dev = parsed_url.hostname in ("localhost", "127.0.0.1")
+                if not is_local_dev and (
+                    parsed_url.scheme != "https" or (allowed_hosts and parsed_url.hostname not in allowed_hosts)
+                ):
                     logger.warning("Rejected image URL (SSRF protection): %s", image_url)
                     continue
 
@@ -2640,8 +2680,6 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 # MVP Photo Verification: Run Vision API validation on event photos
                 extra_data = {}
                 try:
-                    from django.conf import settings
-
                     import requests
 
                     from carbon.services.photo_evidence_service import PhotoEvidenceService
@@ -2650,16 +2688,39 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     response = requests.get(image_url, timeout=10)
                     if response.status_code == 200:
                         photo_service = PhotoEvidenceService()
+                        # Use content-type header to infer extension if s3_key lacks one
+                        filename = s3_key or "photo.jpg"
+                        if "." not in filename.rsplit("/", 1)[-1]:
+                            content_type = response.headers.get("Content-Type", "")
+                            ext_map = {
+                                "image/jpeg": ".jpg",
+                                "image/png": ".png",
+                                "image/webp": ".webp",
+                                "image/heic": ".heic",
+                            }
+                            ext = ext_map.get(content_type.split(";")[0].strip(), ".jpg")
+                            filename = f"{filename}{ext}"
                         validation_result = photo_service.validate_and_analyze_photo(
-                            file_data=response.content, filename=s3_key or "photo.jpg"
+                            file_data=response.content, filename=filename
                         )
-                        # Store Vision API validation results in extra_data
+                        # Store Vision API + EXIF metadata in extra_data
                         extra_data = {
                             "content_validation": validation_result.get("content_validation", "uncertain"),
                             "content_confidence": validation_result.get("content_confidence", 0),
                             "agricultural_labels": validation_result.get("agricultural_labels", []),
                             "content_bypassed": validation_result.get("content_bypassed", False),
                         }
+                        # Include EXIF GPS data for verification level upgrade
+                        # (photo_documented → photo_verified when GPS present)
+                        exif = validation_result.get("metadata", {}).get("exif", {})
+                        if exif:
+                            if exif.get("gps_latitude"):
+                                extra_data["gps_latitude"] = exif["gps_latitude"]
+                                extra_data["gps_longitude"] = exif.get("gps_longitude")
+                            if exif.get("has_gps"):
+                                extra_data["has_gps"] = True
+                            if exif.get("DateTimeOriginal"):
+                                extra_data["photo_datetime"] = exif["DateTimeOriginal"]
                 except Exception as e:
                     logger.debug("Vision API validation failed for %s: %s", image_url, e)
                     # Default to uncertain if validation fails

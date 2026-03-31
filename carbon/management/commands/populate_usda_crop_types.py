@@ -5,7 +5,7 @@ TRAZO MVP - UNIFIED CROP DATA SEEDING COMMAND
 
 This is the SINGLE source of truth for all crop-related seed data in Trazo.
 Run this command to populate:
-  1. CropType records (21 USDA-verified crops)
+  1. CropType records (22 USDA-verified crops)
   2. ProductionTemplate records (conventional farming approach per crop)
   3. EventTemplate records (typical farming events per template)
 
@@ -27,7 +27,7 @@ MVP DEPLOYMENT CHECKLIST:
 -------------------------
 1. Run migrations: poetry run python manage.py migrate
 2. Run this command: poetry run python manage.py populate_usda_crop_types
-3. Verify: 21 crop types, 21 templates, ~140 events
+3. Verify: 22 crop types, 22 templates, ~140 events
 
 DATA SOURCES:
 -------------
@@ -50,7 +50,7 @@ class Command(BaseCommand):
     help = """
     Unified USDA crop data seeding command for Trazo MVP.
 
-    Seeds 21 crop types with production templates and event templates.
+    Seeds 22 crop types with production templates and event templates.
     Safe to run multiple times (idempotent - uses get_or_create).
 
     Examples:
@@ -119,6 +119,14 @@ class Command(BaseCommand):
 
     def _seed_crop_types(self, stats, dry_run, verbosity):
         """Seed all 22 USDA-verified crop types."""
+        # Clean up stale duplicate: old demo command created slug="avocado"
+        # while canonical slug is "avocados"
+        if not dry_run:
+            stale = CropType.objects.filter(slug="avocado")
+            if stale.exists() and CropType.objects.filter(slug="avocados").exists():
+                stale.delete()
+                self.stdout.write(self.style.WARNING('  🧹 Removed stale "avocado" duplicate (canonical is "avocados")'))
+
         crop_data = self._get_crop_type_data()
 
         for data in crop_data:
@@ -944,7 +952,7 @@ class Command(BaseCommand):
             {
                 "name": "Stone Fruit",
                 "slug": "stone_fruit",
-                "category": "tree_fruits",
+                "category": "tree_fruit",
                 "description": "Tree fruit crops including peaches, nectarines, plums, apricots, and cherries. Require chill hours, careful thinning, and multi-pick harvesting.",
                 "typical_farm_size": "5-50 hectares",
                 "growing_season": "12 months (perennial)",
@@ -977,7 +985,7 @@ class Command(BaseCommand):
             {
                 "name": "Mixed Vegetables",
                 "slug": "mixed_vegetables",
-                "category": "vegetables",
+                "category": "vegetable",
                 "description": "Diversified vegetable production including greens, brassicas, squash, peppers, herbs, and other market garden crops. Common in CSA and farmers market operations.",
                 "typical_farm_size": "2-20 hectares",
                 "growing_season": "Year-round with succession planting",

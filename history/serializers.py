@@ -2454,6 +2454,55 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         # Final fallback: return None (will show as generic "chemical application")
         return None
 
+    def _analyze_event_photos(self, event):
+        """
+        Single-pass analysis of all photos on an event.
+        Returns a dict with GPS, content flags, and image count.
+        Avoids N+1 queries by iterating images only once (uses prefetch_related from view).
+        """
+        result = {
+            "has_gps_data": False,
+            "all_flagged": True,  # Assume flagged until we find a clean photo
+            "content_flag": None,  # Worst flag found (for farmer warning)
+            "image_count": 0,
+        }
+        flagged_values = ("not_agricultural", "ai_generated", "stock_photo")
+
+        if not hasattr(event, "album") or not event.album:
+            return result
+
+        try:
+            for image in event.album.images.all():
+                result["image_count"] += 1
+                ed = getattr(image, "extra_data", None)
+                is_dict = isinstance(ed, dict) if ed else False
+
+                # GPS check
+                if is_dict and (ed.get("gps_latitude") or ed.get("latitude")):
+                    result["has_gps_data"] = True
+
+                # Content validation check
+                if is_dict:
+                    flag = ed.get("content_validation", "")
+                    if flag in flagged_values:
+                        # Track worst flag for farmer warning
+                        if result["content_flag"] is None:
+                            result["content_flag"] = flag
+                    else:
+                        # At least one photo is NOT flagged
+                        result["all_flagged"] = False
+                else:
+                    # No extra_data = assume legitimate (demo data, legacy uploads)
+                    result["all_flagged"] = False
+        except Exception:
+            result["all_flagged"] = False
+
+        # If no images were found, nothing is flagged
+        if result["image_count"] == 0:
+            result["all_flagged"] = False
+
+        return result
+
     def _get_verification_level_for_event(self, event, has_photos=False, blockchain_verified=False):
         """
         Determine verification level for an event in public history view.
@@ -2461,36 +2510,35 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         - self_reported: No photo evidence (50% trust)
         - photo_documented: Has photos without GPS validation (65% trust)
         - photo_verified: Has photos with GPS + timestamp (80% trust)
-        - data_verified: Reserved for future use when actual external data cross-referencing is implemented
-        - certified: Third-party or blockchain verified (100% trust)
+        - data_verified: Blockchain verified (85% trust)
+        - certified: Third-party verified (100% trust, reserved for future)
         """
-        # Check for GPS data in photos
-        # BUGFIX: Check that extra_data is a dict before calling .get()
-        has_gps_data = False
-        if has_photos and hasattr(event, "album") and event.album:
-            for image in event.album.images.all():
-                if hasattr(image, "extra_data") and image.extra_data and isinstance(image.extra_data, dict):
-                    if image.extra_data.get("gps_latitude") or image.extra_data.get("latitude"):
-                        has_gps_data = True
-                        break
-
-        has_timestamp = event.date is not None
-
-        # Tiered verification logic
-        # Blockchain verification at production level means the record is on-chain,
-        # but individual events are not certified by a third party.
-        # The "certified" tier is reserved for actual third-party certification bodies.
-        # Blockchain verification is shown via the separate BLOCKCHAIN SECURED badge.
         if blockchain_verified:
             return "data_verified"
 
         if has_photos:
-            if has_gps_data and has_timestamp:
+            analysis = self._analyze_event_photos(event)
+
+            # All photos flagged as AI/stock/non-agricultural = no trust credit
+            if analysis["all_flagged"]:
+                return "self_reported"
+
+            has_timestamp = event.date is not None
+            if analysis["has_gps_data"] and has_timestamp:
                 return "photo_verified"
             else:
                 return "photo_documented"
 
         return "self_reported"
+
+    def _get_photo_content_flag(self, event):
+        """
+        Check if any photo on this event was flagged by Vision API.
+        Returns the worst flag found, or None if all photos are clean.
+        Used by frontend to show warnings to farmers.
+        """
+        analysis = self._analyze_event_photos(event)
+        return analysis["content_flag"]
 
     def _serialize_prefetched_images(self, album):
         """
@@ -2648,6 +2696,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         # Blockchain verification fields from production
                         "blockchain_verified": blockchain_verified,
                         "blockchain_transaction": blockchain_transaction,
+                        "photo_content_flag": self._get_photo_content_flag(event),
                         "verification_level": self._get_verification_level_for_event(
                             event, photo_count > 0, blockchain_verified
                         ),
@@ -2799,6 +2848,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         # Blockchain verification fields from production
                         "blockchain_verified": blockchain_verified,
                         "blockchain_transaction": blockchain_transaction,
+                        "photo_content_flag": self._get_photo_content_flag(event),
                         "verification_level": self._get_verification_level_for_event(
                             event, photo_count > 0, blockchain_verified
                         ),
@@ -2852,6 +2902,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         # Blockchain verification fields from production
                         "blockchain_verified": blockchain_verified,
                         "blockchain_transaction": blockchain_transaction,
+                        "photo_content_flag": self._get_photo_content_flag(event),
                         "verification_level": self._get_verification_level_for_event(
                             event, photo_count > 0, blockchain_verified
                         ),
@@ -2920,6 +2971,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         # Blockchain verification fields from production
                         "blockchain_verified": blockchain_verified,
                         "blockchain_transaction": blockchain_transaction,
+                        "photo_content_flag": self._get_photo_content_flag(event),
                         "verification_level": self._get_verification_level_for_event(
                             event, photo_count > 0, blockchain_verified
                         ),
@@ -3017,6 +3069,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         # Blockchain verification fields from production
                         "blockchain_verified": blockchain_verified,
                         "blockchain_transaction": blockchain_transaction,
+                        "photo_content_flag": self._get_photo_content_flag(event),
                         "verification_level": self._get_verification_level_for_event(
                             event, photo_count > 0, blockchain_verified
                         ),
@@ -3109,6 +3162,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         # Blockchain verification fields from production
                         "blockchain_verified": blockchain_verified,
                         "blockchain_transaction": blockchain_transaction,
+                        "photo_content_flag": self._get_photo_content_flag(event),
                         "verification_level": self._get_verification_level_for_event(
                             event, photo_count > 0, blockchain_verified
                         ),
@@ -3164,6 +3218,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         # Blockchain verification fields from production
                         "blockchain_verified": blockchain_verified,
                         "blockchain_transaction": blockchain_transaction,
+                        "photo_content_flag": self._get_photo_content_flag(event),
                         "verification_level": self._get_verification_level_for_event(
                             event,
                             photo_count > 0,
@@ -3238,6 +3293,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         # Blockchain verification fields from production
                         "blockchain_verified": blockchain_verified,
                         "blockchain_transaction": blockchain_transaction,
+                        "photo_content_flag": self._get_photo_content_flag(event),
                         "verification_level": self._get_verification_level_for_event(
                             event,
                             photo_count > 0,

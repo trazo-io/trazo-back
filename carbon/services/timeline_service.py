@@ -330,6 +330,19 @@ class TimelineService:
                 "application_method": escape(getattr(event, "way_of_application", "") or ""),
                 "active_ingredient": escape(getattr(event, "commercial_name", "") or ""),
                 "npk_ratio": TimelineService._get_npk_ratio_static(event),
+                # Organic certification status for consumer-facing organic badges
+                "organic_approved": (
+                    getattr(event, "organic_approved", None)
+                    or (
+                        (
+                            event.extra_data.get("organic_certification")
+                            or event.extra_data.get("organic_approved")
+                        )
+                        if isinstance(getattr(event, "extra_data", None), dict)
+                        else None
+                    )
+                ),
+                "chemical_subtype": escape(getattr(event, "chemical_subtype", "") or ""),
             }
 
             # Add album data if available (already prefetched)

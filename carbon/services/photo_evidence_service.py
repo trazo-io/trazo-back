@@ -10,15 +10,20 @@ MVP Photo Verification Enhancement:
 - Detects if photos contain agricultural content
 - Identifies AI-generated or stock images
 - Supports development bypass mode
+- Magic byte content-type validation (defense-in-depth)
+- HEIC/HEIF support for iPhone users
+- EXIF stripping on processed images (privacy protection)
+- GPS geofencing against parcel location
 """
 
 import hashlib
+import io
 import logging
-import mimetypes
+import math
 import os
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
@@ -26,6 +31,16 @@ from django.core.files.storage import default_storage
 from PIL import ExifTags, Image
 
 logger = logging.getLogger(__name__)
+
+# Try to import pillow-heif for HEIC support (iPhone photos)
+try:
+    import pillow_heif
+
+    pillow_heif.register_heif_opener()
+    HEIC_SUPPORTED = True
+except ImportError:
+    HEIC_SUPPORTED = False
+    logger.info("pillow-heif not installed - HEIC/HEIF uploads will be converted on client side")
 
 
 # Import Vision API service (lazy import to avoid circular dependencies)
@@ -48,16 +63,30 @@ class PhotoEvidenceService:
     - Evidence integrity checking
     """
 
-    # MVP Configuration - Simple but secure
-    ALLOWED_MIME_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"]
+    # Configuration - Secure with HEIC support for iPhone users
+    ALLOWED_MIME_TYPES = [
+        "image/jpeg",
+        "image/jpg",
+        "image/png",
+        "image/webp",
+        "image/heic",
+        "image/heif",
+    ]
 
-    ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"]
+    ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"]
     MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB max
     MAX_PHOTOS_PER_ENTRY = 5  # Reasonable limit for MVP
 
     # Image processing settings
     MAX_DIMENSION = 2048  # Resize large images to save storage
     JPEG_QUALITY = 85  # Good quality vs file size balance
+
+    # Thumbnail sizes for consumer QR page performance
+    THUMBNAIL_SIZES = {
+        "sm": (150, 150),  # List views, event cards
+        "md": (400, 400),  # Gallery views, event detail modals
+        "lg": (800, 800),  # Full-screen mobile view
+    }
 
     def __init__(self):
         """Initialize the photo evidence service."""
@@ -66,6 +95,9 @@ class PhotoEvidenceService:
     def validate_photo(self, file_data: bytes, filename: str) -> Dict[str, Any]:
         """
         Validate uploaded photo for security and format compliance.
+
+        Uses magic byte validation (not extension-based MIME detection) for
+        defense-in-depth against disguised malicious files.
 
         Args:
             file_data: Raw file bytes
@@ -92,11 +124,22 @@ class PhotoEvidenceService:
                 result["errors"].append(f'Invalid file extension. Allowed: {", ".join(self.ALLOWED_EXTENSIONS)}')
                 return result
 
-            # MIME type validation
-            detected_mime = mimetypes.guess_type(filename)[0]
+            # Magic byte content-type validation (defense-in-depth)
+            detected_mime = self._detect_mime_from_magic_bytes(file_data)
             if detected_mime not in self.ALLOWED_MIME_TYPES:
-                result["errors"].append(f'Invalid file type. Allowed: {", ".join(self.ALLOWED_MIME_TYPES)}')
+                result["errors"].append(
+                    f"File content does not match an allowed image type. "
+                    f"Detected: {detected_mime or 'unknown'}. "
+                    f'Allowed: {", ".join(self.ALLOWED_MIME_TYPES)}'
+                )
                 return result
+
+            # HEIC support check
+            if file_ext in [".heic", ".heif"] and not HEIC_SUPPORTED:
+                result["warnings"].append(
+                    "HEIC/HEIF support requires pillow-heif. "
+                    "Image will be processed but consider converting to JPEG before upload."
+                )
 
             # Image validation with PIL
             try:
@@ -136,7 +179,7 @@ class PhotoEvidenceService:
                 return result
 
             result["valid"] = True
-            logger.info(f"Photo validation passed: {filename} ({len(file_data)} bytes)")
+            logger.info(f"Photo validation passed: {filename} ({len(file_data)} bytes, type={detected_mime})")
 
         except Exception as e:
             logger.error(f"Photo validation error: {e}")
@@ -327,6 +370,7 @@ class PhotoEvidenceService:
     def _extract_exif_data(self, image: Image) -> Optional[Dict[str, Any]]:
         """
         Extract useful EXIF data from image for verification purposes.
+        Includes full GPS coordinate extraction for geofencing validation.
 
         Args:
             image: PIL Image object
@@ -350,8 +394,13 @@ class PhotoEvidenceService:
                     useful_data[tag] = str(value)
                 elif tag in ["Make", "Model"]:  # Camera info
                     useful_data[tag] = str(value)
-                elif tag in ["GPSInfo"]:  # Location data (if available)
+                elif tag == "GPSInfo":
                     useful_data["has_gps"] = True
+                    # Extract full GPS coordinates for geofencing
+                    gps_coords = self._parse_gps_info(value)
+                    if gps_coords:
+                        useful_data["gps_latitude"] = gps_coords[0]
+                        useful_data["gps_longitude"] = gps_coords[1]
                 elif tag in ["Software"]:  # Editing software detection
                     useful_data[tag] = str(value)
 
@@ -361,21 +410,155 @@ class PhotoEvidenceService:
             logger.warning(f"EXIF extraction failed: {e}")
             return None
 
+    @staticmethod
+    def _parse_gps_info(gps_info: Dict) -> Optional[Tuple[float, float]]:
+        """
+        Parse EXIF GPSInfo tag into decimal latitude/longitude.
+
+        Args:
+            gps_info: Raw GPSInfo dict from EXIF
+
+        Returns:
+            Tuple of (latitude, longitude) in decimal degrees, or None
+        """
+        try:
+            gps_tags = {ExifTags.GPSTAGS.get(k, k): v for k, v in gps_info.items()}
+
+            lat = gps_tags.get("GPSLatitude")
+            lat_ref = gps_tags.get("GPSLatitudeRef")
+            lon = gps_tags.get("GPSLongitude")
+            lon_ref = gps_tags.get("GPSLongitudeRef")
+
+            if not (lat and lat_ref and lon and lon_ref):
+                return None
+
+            def dms_to_decimal(dms, ref):
+                """Convert degrees/minutes/seconds to decimal."""
+                degrees = float(dms[0])
+                minutes = float(dms[1])
+                seconds = float(dms[2])
+                decimal = degrees + minutes / 60 + seconds / 3600
+                if ref in ["S", "W"]:
+                    decimal = -decimal
+                return decimal
+
+            latitude = dms_to_decimal(lat, lat_ref)
+            longitude = dms_to_decimal(lon, lon_ref)
+            return (latitude, longitude)
+
+        except Exception as e:
+            logger.warning(f"GPS coordinate parsing failed: {e}")
+            return None
+
+    @staticmethod
+    def validate_photo_location(
+        photo_lat: float, photo_lon: float, farm_lat: float, farm_lon: float, max_distance_km: float = 50.0
+    ) -> Dict[str, Any]:
+        """
+        Validate that a photo's GPS coordinates are within range of the farm location.
+        Uses Haversine formula for distance calculation.
+
+        Args:
+            photo_lat: Photo EXIF latitude
+            photo_lon: Photo EXIF longitude
+            farm_lat: Farm/establishment latitude
+            farm_lon: Farm/establishment longitude
+            max_distance_km: Maximum allowed distance in km (default 50km)
+
+        Returns:
+            Dict with location_verified bool, distance_km, and message
+        """
+        try:
+            # Haversine formula
+            R = 6371  # Earth radius in km
+            lat1, lat2 = math.radians(photo_lat), math.radians(farm_lat)
+            dlat = math.radians(farm_lat - photo_lat)
+            dlon = math.radians(farm_lon - photo_lon)
+
+            a = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+            c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+            distance_km = R * c
+
+            location_verified = distance_km <= max_distance_km
+
+            return {
+                "location_verified": location_verified,
+                "distance_km": round(distance_km, 2),
+                "message": (
+                    f"Photo taken within {distance_km:.1f}km of farm"
+                    if location_verified
+                    else f"Photo taken {distance_km:.1f}km from farm (max {max_distance_km}km)"
+                ),
+            }
+
+        except Exception as e:
+            logger.warning(f"Location validation error: {e}")
+            return {
+                "location_verified": False,
+                "distance_km": None,
+                "message": "Could not verify photo location",
+            }
+
+    def _detect_mime_from_magic_bytes(self, file_data: bytes) -> Optional[str]:
+        """
+        Detect MIME type from file content magic bytes (not extension).
+        Defense-in-depth: prevents disguised malicious files from passing validation.
+
+        Args:
+            file_data: Raw file bytes
+
+        Returns:
+            Detected MIME type string or None if unrecognized
+        """
+        if len(file_data) < 12:
+            return None
+
+        # JPEG: FF D8 FF
+        if file_data[:3] == b"\xff\xd8\xff":
+            return "image/jpeg"
+
+        # PNG: 89 50 4E 47 0D 0A 1A 0A
+        if file_data[:8] == b"\x89\x50\x4e\x47\x0d\x0a\x1a\x0a":
+            return "image/png"
+
+        # WebP: RIFF....WEBP
+        if file_data[:4] == b"RIFF" and file_data[8:12] == b"WEBP":
+            return "image/webp"
+
+        # HEIC/HEIF: ftyp box with heic/heix/mif1/msf1 brands
+        if len(file_data) >= 12:
+            # ISO Base Media File Format: size(4) + 'ftyp'(4) + brand(4)
+            try:
+                if file_data[4:8] == b"ftyp":
+                    brand = file_data[8:12].decode("ascii", errors="ignore").lower()
+                    heic_brands = {"heic", "heix", "hevc", "hevx", "mif1", "msf1", "avif"}
+                    if brand in heic_brands:
+                        return "image/heic"
+            except Exception:
+                pass
+
+        return None
+
     def _process_image(self, file_data: bytes, file_ext: str) -> bytes:
         """
         Process and optimize image for storage.
+        EXIF data is stripped from the output to protect farmer privacy
+        (GPS coordinates, device info are NOT included in stored images).
+        EXIF is extracted and stored separately in extra_data before this step.
+
+        Supports HEIC/HEIF input (converted to JPEG for storage).
 
         Args:
             file_data: Raw image bytes
             file_ext: File extension
 
         Returns:
-            Processed image bytes
+            Processed image bytes (EXIF-stripped)
         """
         try:
             image = Image.open(ContentFile(file_data))
 
-            # Convert to RGB if necessary (handles RGBA, P, etc.)
+            # Convert to RGB if necessary (handles RGBA, P, HEIC, etc.)
             if image.mode in ("RGBA", "LA", "P"):
                 # Create white background for transparency
                 rgb_image = Image.new("RGB", image.size, (255, 255, 255))
@@ -390,10 +573,13 @@ class PhotoEvidenceService:
             if max(image.size) > self.MAX_DIMENSION:
                 image.thumbnail((self.MAX_DIMENSION, self.MAX_DIMENSION), Image.Resampling.LANCZOS)
 
-            # Save optimized version
-            output = ContentFile(b"")
+            # Save optimized version to BytesIO (PIL save without exif= strips EXIF by default)
+            output = io.BytesIO()
 
-            if file_ext.lower() in [".jpg", ".jpeg"]:
+            # HEIC/HEIF always converted to JPEG for broad compatibility
+            if file_ext.lower() in [".heic", ".heif"]:
+                image.save(output, format="JPEG", quality=self.JPEG_QUALITY, optimize=True)
+            elif file_ext.lower() in [".jpg", ".jpeg"]:
                 image.save(output, format="JPEG", quality=self.JPEG_QUALITY, optimize=True)
             elif file_ext.lower() == ".png":
                 image.save(output, format="PNG", optimize=True)
@@ -409,6 +595,55 @@ class PhotoEvidenceService:
             logger.error(f"Image processing error: {e}")
             # Return original data if processing fails
             return file_data
+
+    def generate_thumbnails(self, file_data: bytes, base_s3_key: str) -> Dict[str, str]:
+        """
+        Generate thumbnail images at multiple sizes for consumer QR page performance.
+        Thumbnails are stored alongside the original in S3 with size suffix.
+
+        Args:
+            file_data: Processed image bytes (already EXIF-stripped)
+            base_s3_key: S3 key of the original image
+
+        Returns:
+            Dict mapping size name to S3 key (e.g. {"sm": "media/.../thumb_sm.jpg"})
+        """
+        thumbnails = {}
+
+        try:
+            image = Image.open(ContentFile(file_data))
+            if image.mode != "RGB":
+                image = image.convert("RGB")
+
+            # Generate the S3 key base (without extension)
+            key_base, key_ext = os.path.splitext(base_s3_key)
+            # Always store thumbnails as JPEG for smallest size
+            thumb_ext = ".jpg"
+
+            for size_name, dimensions in self.THUMBNAIL_SIZES.items():
+                try:
+                    thumb = image.copy()
+                    thumb.thumbnail(dimensions, Image.Resampling.LANCZOS)
+
+                    output = io.BytesIO()
+                    # Lower quality for thumbnails (smaller files, faster QR page loads)
+                    quality = 75 if size_name == "sm" else 80
+                    thumb.save(output, format="JPEG", quality=quality, optimize=True)
+                    output.seek(0)
+
+                    thumb_key = f"{key_base}_thumb_{size_name}{thumb_ext}"
+                    stored_name = default_storage.save(thumb_key, ContentFile(output.getvalue()))
+                    thumbnails[size_name] = stored_name
+
+                    logger.debug(f"Thumbnail {size_name} generated: {stored_name}")
+
+                except Exception as e:
+                    logger.warning(f"Thumbnail {size_name} generation failed: {e}")
+
+        except Exception as e:
+            logger.error(f"Thumbnail generation error: {e}")
+
+        return thumbnails
 
     def _has_suspicious_content(self, file_data: bytes) -> bool:
         """

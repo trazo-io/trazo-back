@@ -48,30 +48,26 @@ class EmissionFactorsRegistry:
             "field_component": 7.9,  # kg CO2e per kg N from field emissions (N2O)
         },
         "phosphorus": {
-            "value": 1.25,  # kg CO2e per kg P2O5 (Conservative estimate)
+            "value": 1.19,  # kg CO2e per kg P2O5 (EPA 40 CFR Part 98)
             "unit": "kg CO2e per kg P2O5",
-            "source": "EPA Greenhouse Gas Emission Factors Hub & Peer-reviewed LCA studies",
-            "reference": "International Journal of LCA - Phosphate fertilizer production emissions",
-            "confidence": "medium",
-            "last_verified": "2025-01-21",
-            "notes": "Phosphate rock mining, processing, and transportation emissions. Conservative upper range estimate.",
+            "source": "EPA 40 CFR Part 98",
+            "reference": "EPA Greenhouse Gas Emission Factors Hub",
+            "confidence": "high",
+            "last_verified": "2025-12-03",
+            "notes": "Manufacturing emissions only. Aligned with verified_emission_factors.py.",
             "literature_range": "1.0-1.5 kg CO2e per kg P2O5",
             "uncertainty": "±20%",
-            "production_component": 0.85,  # kg CO2e per kg P2O5 from mining/processing
-            "field_component": 0.40,  # kg CO2e per kg P2O5 from application effects
         },
         "potassium": {
-            "value": 0.60,  # kg CO2e per kg K2O (Industry consensus)
+            "value": 0.65,  # kg CO2e per kg K2O (EPA 40 CFR Part 98)
             "unit": "kg CO2e per kg K2O",
-            "source": "EPA Greenhouse Gas Emission Factors Hub & International Fertilizer Association",
-            "reference": "IFA Environmental Aspects of Phosphate and Potash Mining",
+            "source": "EPA 40 CFR Part 98",
+            "reference": "EPA Greenhouse Gas Emission Factors Hub",
             "confidence": "high",
-            "last_verified": "2025-01-21",
-            "notes": "Potash mining, refining, and transportation emissions. Matches industry consensus values.",
+            "last_verified": "2025-12-03",
+            "notes": "Manufacturing emissions only. Aligned with verified_emission_factors.py.",
             "literature_range": "0.5-0.7 kg CO2e per kg K2O",
             "uncertainty": "±15%",
-            "production_component": 0.45,  # kg CO2e per kg K2O from mining/processing
-            "field_component": 0.15,  # kg CO2e per kg K2O from application effects
         },
     }
 
@@ -207,13 +203,13 @@ class EmissionFactorsRegistry:
     # Source: EPA eGRID Database 2022, USDA Rural Energy Guidelines
     ELECTRICITY_FACTORS = {
         "grid": {
-            "value": 0.40,  # kg CO2e per kWh (US average)
+            "value": 0.39,  # kg CO2e per kWh (US average, EPA eGRID 2023)
             "unit": "kg CO2e per kWh",
-            "source": "EPA eGRID Database 2022",
-            "reference": "USDA Rural Energy Guidelines",
+            "source": "EPA eGRID 2023",
+            "reference": "767.2 lbs/MWh + 5.12% T&D losses = 0.39 kg CO2/kWh",
             "confidence": "high",
-            "last_verified": "2024-12-27",
-            "notes": "US grid average emission factor, varies by region",
+            "last_verified": "2025-12-03",
+            "notes": "US grid average. Aligned with verified_emission_factors.py.",
         },
         "solar": {
             "value": 0.00,  # kg CO2e per kWh
@@ -306,7 +302,7 @@ class EmissionFactorsRegistry:
     REGIONAL_FACTORS = {
         # Major Agricultural Regions
         "midwest_corn_belt": {
-            "states": ["IL", "IN", "IA", "OH", "MN", "WI", "MI", "MO", "NE", "KS"],
+            "states": ["IL", "IN", "IA", "OH", "MN", "WI", "MI", "MO"],
             "primary_crops": ["corn", "soybeans", "wheat"],
             "n2o_adjustment": 1.05,  # 5% higher N2O due to high N application rates
             "fuel_adjustment": 0.95,  # 5% lower fuel use due to optimal field sizes
@@ -734,7 +730,7 @@ class EmissionFactorsRegistry:
             "region_name": "unknown",
             "n2o_adjustment": 1.0,
             "fuel_adjustment": 1.0,
-            "electricity_grid_factor": 0.40,  # US average
+            "electricity_grid_factor": 0.39,  # US average (EPA eGRID 2023)
             "precipitation_category": "moderate",
             "growing_season_length": 180,
             "category": "regional_adjustment",

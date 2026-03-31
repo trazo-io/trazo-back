@@ -379,12 +379,20 @@ class TransparencyCalculator:
 
                 elif getattr(image, "s3_key", None) or getattr(image, "image_url", None):
                     # URL-based images (S3 uploads or external URLs)
-                    # S3 images are validated during the presigned upload process.
-                    # External URLs are used for trusted sources (e.g., demo data).
                     # Basic validation: URL/key must be non-empty string.
                     url_or_key = image.s3_key or image.image_url or ""
-                    if len(url_or_key.strip()) > 10:
-                        verified_images += 1
+                    if len(url_or_key.strip()) <= 10:
+                        continue
+
+                    # LAYER 6: Vision API content validation (anti-AI/stock photo)
+                    # Photos flagged as not_agricultural, ai_generated, or stock_photo
+                    # don't count toward transparency score
+                    if hasattr(image, "extra_data") and image.extra_data and isinstance(image.extra_data, dict):
+                        content_flag = image.extra_data.get("content_validation", "")
+                        if content_flag in ("not_agricultural", "ai_generated", "stock_photo"):
+                            continue
+
+                    verified_images += 1
 
             # Must have at least the minimum required verified images
             return verified_images >= min_images_required

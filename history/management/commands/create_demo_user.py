@@ -32,6 +32,7 @@ from history.models import (
     SoilManagementEvent,
     WeatherEvent,
 )
+from certifications.models import Certification
 from product.models import Parcel, Product
 from subscriptions.models import Plan, Subscription
 from users.models import User, WorksIn
@@ -196,7 +197,7 @@ class Command(BaseCommand):
             legal_structure="Family LLC",
             primary_commodities="Hass Avocado, Valencia Orange, Nonpareil Almond",
             sustainability_commitment="GLOBALG.A.P. Certified, IPM Program",
-            certifications="GLOBALG.A.P., CCOF (transitional)",
+            certifications="USDA Organic (CCOF), GLOBALG.A.P.",
             blockchain_subscription_status=True,
         )
         self.stdout.write(f"  Company: {company.name} (#{company.id})")
@@ -244,6 +245,7 @@ class Command(BaseCommand):
             is_active=True,
             crops_grown=["Hass Avocado", "Valencia Orange", "Nonpareil Almond"],
             sustainability_practices=[
+                "USDA Organic Certified",
                 "Integrated Pest Management",
                 "Cover Cropping",
                 "Drip Irrigation",
@@ -278,9 +280,9 @@ class Command(BaseCommand):
 
         # CropTypes
         avo_crop, _ = CropType.objects.get_or_create(
-            slug="avocado",
+            slug="avocados",
             defaults={
-                "name": "Avocado (Hass)",
+                "name": "Avocados",
                 "category": "tree_fruit",
                 "description": "Premium Hass avocado production",
                 "typical_farm_size": "10-50 hectares",
@@ -379,7 +381,7 @@ class Command(BaseCommand):
             product=ora_product,
             area=20.0,
             certified=True,
-            certification_type="GLOBALG.A.P.",
+            certification_type="USDA Organic, GLOBALG.A.P.",
             soil_type="Clay Loam",
             contact_person="Maria Lopez",
             address="Block B - Valley Floor",
@@ -389,12 +391,18 @@ class Command(BaseCommand):
                 "irrigation_type": "Micro-sprinkler",
                 "soil_ph": "6.8",
                 "soil_organic_matter": "2.8%",
-                "sustainability_practices": ("Biological pest control, composted pulp, cover crops"),
+                "production_method": "organic",
+                "sustainability_practices": (
+                    "USDA Organic certified, biological pest control, "
+                    "composted pulp, OMRI-listed inputs only, cover crops"
+                ),
                 "consumer_story": (
-                    "Our Valencia orange orchard thrives on the valley "
-                    "floor with nutrient-rich clay loam soil. We release "
-                    "parasitic wasps to control pests naturally and "
-                    "recycle citrus pulp as compost."
+                    "Our USDA Organic certified Valencia orange orchard "
+                    "thrives on the valley floor with nutrient-rich clay "
+                    "loam soil. Every input is OMRI-listed and approved "
+                    "for organic production. We release parasitic wasps "
+                    "to control pests naturally and recycle citrus pulp "
+                    "as compost."
                 ),
             },
             carbon_calculation_enabled=True,
@@ -402,6 +410,31 @@ class Command(BaseCommand):
         # Almond parcel (from _almond_demo_data module)
         alm_parcel, alm_product, alm_crop = create_almond_parcel(establishment, demo_images=DEMO_IMAGES)
         self.stdout.write(f"  Parcels: {avo_parcel.name}, {ora_parcel.name}, {alm_parcel.name}")
+
+        # Structured Certification records (for consumer QR badge display)
+        Certification.objects.create(
+            establishment=establishment,
+            certification_type="usda_organic",
+            certification_number="CCOF-019845",
+            certifier_name="CCOF (California Certified Organic Farmers)",
+            effective_date=self._dt(2024, 8, 1).date(),
+            expiry_date=self._dt(2026, 7, 31).date(),
+            certification_scope="Crops - Valencia Orange",
+            certified_items=["Valencia Orange"],
+            verification_status="verified",
+        )
+        Certification.objects.create(
+            establishment=establishment,
+            certification_type="global_gap",
+            certification_number="GGN-4052852-001",
+            certifier_name="SCS Global Services",
+            effective_date=self._dt(2024, 6, 1).date(),
+            expiry_date=self._dt(2026, 5, 31).date(),
+            certification_scope="Crops - All",
+            certified_items=["Hass Avocado", "Valencia Orange", "Nonpareil Almond"],
+            verification_status="self_reported",
+        )
+        self.stdout.write("  Certifications: USDA Organic (verified), GLOBALG.A.P. (self-reported)")
 
         # 8. Productions
         avo_finished = History(
@@ -469,12 +502,13 @@ class Command(BaseCommand):
             finish_date=self._dt(2025, 8, 15),
             published=True,
             description=(
-                "Full production cycle for Valencia orange orchard. "
-                "20 agricultural events documented including biological "
-                "pest control, composting, organic herbicide, food safety "
-                "audit, and three harvest passes totaling 560,000 kg."
+                "Full USDA Organic production cycle for Valencia orange "
+                "orchard. 20 agricultural events documented with 100% "
+                "OMRI-listed inputs, biological pest control, composting, "
+                "CCOF annual certification, and three harvest passes "
+                "totaling 420,000 kg."
             ),
-            production_amount=560000,
+            production_amount=420000,
             production_unit="kg",
             quality_grade="grade_a",
             harvest_method="manual",
@@ -482,6 +516,7 @@ class Command(BaseCommand):
             product=ora_product,
             parcel=ora_parcel,
             is_outdoor=True,
+            production_method="organic",
             age_of_plants="12-30 years",
             number_of_plants="8,000",
             soil_ph="6.8",
@@ -505,11 +540,14 @@ class Command(BaseCommand):
             type=History.ORCHARD,
             start_date=self._dt(2025, 10, 1),
             published=False,
-            description=("Current orange production season - pre-season preparation."),
+            description=(
+                "Current USDA Organic orange production season - " "pre-season preparation with OMRI-listed inputs."
+            ),
             production_amount=0,
             product=ora_product,
             parcel=ora_parcel,
             is_outdoor=True,
+            production_method="organic",
             age_of_plants="13-31 years",
             number_of_plants="8,000",
             soil_ph="6.8",
@@ -1074,6 +1112,9 @@ class Command(BaseCommand):
                 "maintenance_cost": 850.00,
                 "odometer_hours": 2340,
                 "next_service_hours": 2840,
+                "previous_use": "conventional",
+                "cleaning_protocol": "triple_rinse",
+                "inspected_by": "David Chen",
             },
         )
 
@@ -1178,12 +1219,18 @@ class Command(BaseCommand):
             equipment_hours=Decimal("10.00"),
             production_efficiency="normal",
             observation="120 GEM rootstock trees planted, 6m x 6m spacing",
+            seeds_source="certified_organic",
             extra_data={
                 "trees_planted": 120,
                 "rootstock": "GEM (clonal)",
                 "nursery": "Brokaw Nursery, Saticoy CA",
                 "spacing_m": "6 x 6",
                 "blocks": "3, 7",
+                "seed_supplier": "Brokaw Nursery, Saticoy CA",
+                "seed_variety": "Hass on GEM rootstock",
+                "seed_lot_number": "BN-2024-GEM-0892",
+                "organic_certificate_number": "CCOF-BN-2024-1183",
+                "treated_or_untreated": "untreated",
             },
             album=self._create_album("planting"),
         )
@@ -1647,40 +1694,44 @@ class Command(BaseCommand):
             equipment_used="John Deere 5075E with manure spreader",
             extra_data={
                 "source": "Sunkist Growers, Oxnard",
+                "amendment_source_supplier": "Sunkist Growers, Oxnard",
                 "c_n_ratio": 22,
+                "c_to_n_ratio": "22:1",
+                "compost_temperature_reached_131f": "yes",
                 "moisture_pct": 45,
             },
             album=self._create_album("composting"),
         )
 
-        # 2: Potassium Boost (Tier 1 - essential, 2 photos)
+        # 2: Organic Nitrogen Fertigation (Tier 1 - essential, 2 photos)
         ChemicalEvent.objects.create(
             history=prod,
             index=2,
             date=self._dt(2024, 11, 5),
             description=(
-                "Haifa Multi-K 13-0-46 potassium nitrate fertigation for "
-                "pre-harvest potassium boost. 3,000 kg across 20 ha."
+                "OMRI-listed fish emulsion applied via fertigation. "
+                "First of four seasonal nitrogen applications for "
+                "organic Valencia orange production. 200 L across 20 ha."
             ),
             created_by=user,
             performed_by="Roberto Silva",
             type=ChemicalEvent.FERTILIZER,
-            chemical_subtype="synthetic_fertilizer",
-            name="Pre-Harvest Potassium Boost",
-            commercial_name="Haifa Multi-K 13-0-46",
-            concentration="13-0-46",
-            volume="3000",
+            chemical_subtype="organic_fertilizer",
+            name="Organic Nitrogen Fertigation",
+            commercial_name="Neptune's Harvest Organic Fish Fertilizer (2-4-1)",
+            concentration="2-4-1",
+            volume="200",
             area="20",
             way_of_application="fertigation",
             application_method_structured="drip",
             application_timing="harvest",
             weather_conditions="calm_dry",
-            target_pest_disease="Potassium boost, Pre-harvest fruit sizing",
-            organic_approved="not_organic",
+            target_pest_disease="Nitrogen supplementation, Organic fertility program",
+            organic_approved="omri_listed",
             application_fuel_type="electric",
             application_fuel_consumed=Decimal("3.50"),
             application_fuel_unit="kWh",
-            extra_data={"rate_kg_ha": 150, "cost_usd": 4200, "volume_unit": "kg"},
+            extra_data={"rate_L_ha": 10, "cost_usd": 3600, "volume_unit": "L", "omri_listed": True},
             album=self._create_album("fertilizer"),
         )
 
@@ -1696,7 +1747,7 @@ class Command(BaseCommand):
                 "citrella), California red scale (Aonidiella aurantii), "
                 "citrus thrips, and Asian citrus psyllid. Pressure started "
                 "medium in fall (leafminer on new flush at 15%), triggered "
-                "Delegate WG treatment and parasitoid release. By spring, "
+                "Entrust SC organic treatment and parasitoid release. By spring, "
                 "pest pressure dropped to low with biological controls "
                 "established."
             ),
@@ -1734,28 +1785,28 @@ class Command(BaseCommand):
             album=self._create_album("scouting"),
         )
 
-        # 4: Delegate WG Pesticide (Tier 1 - essential, 2 photos)
+        # 4: Entrust SC Organic Pesticide (Tier 1 - essential, 2 photos)
         ChemicalEvent.objects.create(
             history=prod,
             index=4,
             date=self._dt(2024, 12, 1),
             description=(
-                "Delegate WG (spinetoram) application for citrus leafminer "
-                "control. Bio-rational insecticide, low impact on beneficial "
-                "insects. 150 g/ha rate, 20 ha total."
+                "OMRI-listed spinosad applied at petal fall for citrus "
+                "leafminer control. Entrust SC is the organic alternative "
+                "to synthetic Delegate WG. 1.5 L across 20 ha."
             ),
             created_by=user,
             performed_by="Roberto Silva",
             type=ChemicalEvent.PESTICIDE,
-            chemical_subtype="synthetic_pesticide",
-            name="Citrus Leafminer Treatment",
-            commercial_name="Delegate WG (spinetoram)",
-            volume="3",
-            concentration="25",
+            chemical_subtype="organic_pesticide",
+            name="Organic Citrus Leafminer Treatment",
+            commercial_name="Entrust SC (spinosad 22.5%)",
+            volume="1.5",
+            concentration="22.5",
             area="20",
             way_of_application="ground_spray",
             target_pest_disease="Citrus leafminer (Phyllocnistis citrella)",
-            organic_approved="not_organic",
+            organic_approved="omri_listed",
             rei_hours=Decimal("4.0"),
             phi_days=Decimal("1.0"),
             application_fuel_type="diesel",
@@ -1764,10 +1815,11 @@ class Command(BaseCommand):
             application_timing="post_emergence",
             weather_conditions="calm_dry",
             extra_data={
-                "rate_g_ha": 150,
+                "rate_fl_oz_acre": 6,
                 "water_volume_L_ha": 1500,
                 "spray_equipment": "Turbomist 400",
-                "volume_unit": "kg",
+                "volume_unit": "L",
+                "omri_listed": True,
             },
             album=self._create_album("pesticide"),
         )
@@ -1867,35 +1919,35 @@ class Command(BaseCommand):
             },
         )
 
-        # 8: UAN-32 Nitrogen
+        # 8: Organic Fish/Seaweed Fertigation
         ChemicalEvent.objects.create(
             history=prod,
             index=8,
             date=self._dt(2025, 3, 15),
             description=(
-                "UAN-32 (32-0-0) liquid nitrogen fertigation through "
-                "micro-sprinkler system. Summer nitrogen boost for "
-                "fruit sizing."
+                "OMRI-listed fish/seaweed blend applied via fertigation "
+                "for summer nitrogen supplementation. Combined with "
+                "Maxicrop kelp foliar for micronutrient support."
             ),
             created_by=user,
             performed_by="Roberto Silva",
             type=ChemicalEvent.FERTILIZER,
-            chemical_subtype="synthetic_fertilizer",
-            name="Summer Nitrogen Fertigation",
-            commercial_name="UAN-32 (32-0-0)",
-            concentration="32-0-0",
-            volume="2000",
+            chemical_subtype="organic_fertilizer",
+            name="Organic Summer Nitrogen Fertigation",
+            commercial_name="Neptune's Harvest Fish & Seaweed Blend (2-3-1)",
+            concentration="2-3-1",
+            volume="200",
             area="20",
             way_of_application="fertigation",
             application_method_structured="drip",
             application_timing="fruit_development",
             weather_conditions="calm_dry",
-            target_pest_disease="Nitrogen supplementation, Fruit sizing",
-            organic_approved="not_organic",
+            target_pest_disease="Nitrogen supplementation, Micronutrient support",
+            organic_approved="omri_listed",
             application_fuel_type="electric",
             application_fuel_consumed=Decimal("3.00"),
             application_fuel_unit="kWh",
-            extra_data={"rate_L_ha": 100, "cost_usd": 1800, "volume_unit": "L"},
+            extra_data={"rate_L_ha": 10, "cost_usd": 2400, "volume_unit": "L", "omri_listed": True},
             album=self._create_album("fertilizer"),
         )
 
@@ -1967,8 +2019,8 @@ class Command(BaseCommand):
             index=11,
             date=self._dt(2025, 5, 10),
             description=(
-                "First harvest pass - 180,000 kg export quality Valencia "
-                "oranges. Brix 12-14, excellent color and size."
+                "First harvest pass - 135,000 kg USDA Organic export "
+                "quality Valencia oranges. Brix 12-14, excellent color."
             ),
             created_by=user,
             performed_by="Jose Garcia",
@@ -1976,14 +2028,14 @@ class Command(BaseCommand):
             name="Harvest Pass 1 - Early",
             area_covered=Decimal("20.00"),
             area_unit="ha",
-            yield_quantity=Decimal("180000.00"),
+            yield_quantity=Decimal("135000.00"),
             yield_unit="kg",
             harvest_quality_grade="export_quality",
             production_efficiency="high",
-            observation="Excellent Brix 12-14, size 72-88 count",
+            observation="Excellent Brix 12-14, size 72-88 count, USDA Organic certified",
             extra_data={
                 "crew_size": 20,
-                "bins_filled": 360,
+                "bins_filled": 270,
                 "brix_avg": 13.2,
             },
             album=self._create_album("orange_harvest"),
@@ -1994,19 +2046,21 @@ class Command(BaseCommand):
             history=prod,
             index=12,
             date=self._dt(2025, 6, 5),
-            description=("Second harvest pass - 220,000 kg Grade A. Peak of season, " "highest daily picking rates."),
+            description=(
+                "Second harvest pass - 165,000 kg USDA Organic Grade A. " "Peak of season, highest daily picking rates."
+            ),
             created_by=user,
             performed_by="Jose Garcia",
             type=ProductionEvent.HARVESTING,
             name="Harvest Pass 2 - Peak",
             area_covered=Decimal("20.00"),
             area_unit="ha",
-            yield_quantity=Decimal("220000.00"),
+            yield_quantity=Decimal("165000.00"),
             yield_unit="kg",
             harvest_quality_grade="grade_a",
             production_efficiency="high",
-            observation="Peak harvest, 25 tons/day average",
-            extra_data={"crew_size": 25, "bins_filled": 440},
+            observation="Peak organic harvest, 18 tons/day average",
+            extra_data={"crew_size": 25, "bins_filled": 330},
             album=self._create_album("orange_harvest"),
         )
 
@@ -2016,8 +2070,8 @@ class Command(BaseCommand):
             index=13,
             date=self._dt(2025, 7, 1),
             description=(
-                "Third harvest pass - 160,000 kg domestic market quality. "
-                "Late season fruit, slightly smaller but good juice content."
+                "Third harvest pass - 120,000 kg USDA Organic domestic "
+                "market quality. Late season, good juice content."
             ),
             created_by=user,
             performed_by="Jose Garcia",
@@ -2025,14 +2079,14 @@ class Command(BaseCommand):
             name="Harvest Pass 3 - Late Season",
             area_covered=Decimal("20.00"),
             area_unit="ha",
-            yield_quantity=Decimal("160000.00"),
+            yield_quantity=Decimal("120000.00"),
             yield_unit="kg",
             harvest_quality_grade="domestic",
             production_efficiency="normal",
-            observation=("Late season cleanup, good juice content for local market"),
+            observation="Late season organic cleanup, good juice content for local market",
             extra_data={
                 "crew_size": 15,
-                "bins_filled": 320,
+                "bins_filled": 240,
                 "juice_content_pct": 52,
             },
             album=self._create_album("orange_harvest"),
@@ -2065,39 +2119,40 @@ class Command(BaseCommand):
             },
         )
 
-        # 15: Primus GFS Food Safety Audit
+        # 15: USDA Organic Annual Certification (CCOF)
         BusinessEvent.objects.create(
             history=prod,
             index=15,
             date=self._dt(2025, 8, 1),
             description=(
-                "Primus GFS (Global Food Safety) audit for packinghouse "
-                "and field operations. Conducted by Primus Auditing Ops. "
-                "Score: 97/100. Covers food safety, worker hygiene, "
-                "traceability, and environmental compliance."
+                "Annual USDA Organic certification inspection by CCOF "
+                "(California Certified Organic Farmers). All organic "
+                "production practices, input records, and harvest "
+                "documentation reviewed. Certification renewed for "
+                "12 months."
             ),
             created_by=user,
             performed_by="Ana Torres",
-            type=BusinessEvent.INSPECTION,
-            name="Primus GFS Food Safety Audit",
-            business_type="verification",
-            certification_type="sustainable_agriculture",
+            type=BusinessEvent.CERTIFICATION,
+            name="USDA Organic Annual Certification",
+            business_type="certification",
+            certification_type="organic_usda",
             verification_status="verified",
-            sustainability_practice="water_conservation",
-            verified_certifier_name="Primus Auditing Ops (Azzule Systems)",
-            certificate_number="PrimusGFS-2025-CVR-0847",
+            sustainability_practice="soil_health",
+            verified_certifier_name="CCOF (California Certified Organic Farmers)",
+            certificate_number="CCOF-019845",
             observation=(
-                "Score 97/100. One minor observation: improve signage "
-                "at handwash stations. Corrected same day. Excellent "
-                "traceability from field to packinghouse."
+                "Full organic system plan review. All inputs verified "
+                "OMRI-listed. Buffer zones confirmed. No prohibited "
+                "substances detected. Certification renewed through "
+                "2026-07-31."
             ),
             extra_data={
                 "audit_date": "2025-08-01",
-                "auditor": "Primus Auditing Ops",
-                "standard": "Primus GFS v4.0",
-                "score": 97,
-                "max_score": 100,
-                "observations": 1,
+                "auditor": "CCOF",
+                "standard": "USDA NOP 7 CFR 205",
+                "organic_system_plan": "approved",
+                "prohibited_substances": "none_detected",
                 "valid_until": "2026-07-31",
             },
         )
@@ -2292,22 +2347,21 @@ class Command(BaseCommand):
             album=self._create_album("soil_test"),
         )
 
-        # 1: Bloom Support Fertilizer (Tier 1 - essential, 2 photos)
+        # 1: Organic Bloom Support Fertilizer (Tier 1 - essential, 2 photos)
         ChemicalEvent.objects.create(
             history=prod,
             index=1,
             date=self._dt(2025, 10, 25),
             description=(
-                "JR Peters Citrus FeEd 8-24-12 applied for bloom support. "
-                "High phosphorus for flower development and fruit set."
+                "OMRI-listed organic citrus fertilizer blend applied " "at bloom for phosphorus support and fruit set."
             ),
             created_by=user,
             performed_by="Roberto Silva",
             type=ChemicalEvent.FERTILIZER,
-            chemical_subtype="synthetic_fertilizer",
-            name="Bloom Support Fertilization",
-            commercial_name="JR Peters Citrus FeEd 8-24-12",
-            concentration="8-24-12",
+            chemical_subtype="organic_fertilizer",
+            name="Organic Bloom Support Fertilization",
+            commercial_name="Dr. Earth Organic Citrus Fertilizer (5-5-2)",
+            concentration="5-5-2",
             volume="2400",
             area="20",
             way_of_application="broadcast",
@@ -2315,11 +2369,11 @@ class Command(BaseCommand):
             application_timing="flowering",
             weather_conditions="calm_dry",
             target_pest_disease="Bloom support, Phosphorus supplementation",
-            organic_approved="not_organic",
+            organic_approved="omri_listed",
             application_fuel_type="diesel",
             application_fuel_consumed=Decimal("10.00"),
             application_fuel_unit="L",
-            extra_data={"rate_kg_ha": 120, "cost_usd": 2880, "volume_unit": "kg"},
+            extra_data={"rate_kg_ha": 120, "cost_usd": 3840, "volume_unit": "kg", "omri_listed": True},
             album=self._create_album("fertilizer"),
         )
 

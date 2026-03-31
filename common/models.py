@@ -20,6 +20,11 @@ class GalleryImage(models.Model):
     extra_data = models.JSONField(
         blank=True, null=True, help_text="Stores Vision API validation results, GPS data, and other image metadata"
     )
+    thumbnails = models.JSONField(
+        blank=True,
+        null=True,
+        help_text="S3 keys for thumbnail variants: {sm: key, md: key, lg: key}",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -34,6 +39,14 @@ class GalleryImage(models.Model):
 
     def __str__(self):
         return f"Image {self.id} for Gallery {self.gallery.id}"
+
+    def thumbnail_url(self, size="md"):
+        """Return URL for a specific thumbnail size (sm, md, lg). Falls back to full URL."""
+        if self.thumbnails and size in self.thumbnails:
+            region = getattr(settings, "AWS_S3_REGION_NAME", "us-east-2")
+            bucket = getattr(settings, "AWS_STORAGE_BUCKET_NAME", "trazo-media")
+            return f"https://{bucket}.s3.{region}.amazonaws.com/{self.thumbnails[size]}"
+        return self.url
 
     @property
     def url(self):

@@ -22,8 +22,10 @@ class CropType(models.Model):
         ("grain", "Grain"),
         ("oilseed", "Oilseed"),
         ("vegetable", "Vegetable"),
+        ("berry", "Berry"),
         ("herb", "Herb"),
         ("legume", "Legume"),
+        ("forage", "Forage"),
         ("other", "Other"),
     ]
 

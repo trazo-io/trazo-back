@@ -214,8 +214,9 @@ class EnhancedUSDAFactors:
 
         # Check regional benchmark compliance using local data
         normalized_crop = self._normalize_crop_type(crop_type)
-        if state in self.regional_averages and normalized_crop in self.regional_averages[state]:
-            regional_avg = self.regional_averages[state][normalized_crop]
+        state_upper = (state or "").upper()
+        if state_upper in self.regional_averages and normalized_crop in self.regional_averages[state_upper]:
+            regional_avg = self.regional_averages[state_upper][normalized_crop]
             intensity = co2e_amount / area_hectares if area_hectares > 0 else co2e_amount
 
             performance_ratio = intensity / regional_avg if regional_avg > 0 else 1
@@ -278,8 +279,9 @@ class EnhancedUSDAFactors:
             normalized_crop = self._normalize_crop_type(crop_type)
 
             # Apply regional adjustments if available
-            if state in self.regional_adjustments:
-                crop_adjustments = self.regional_adjustments[state]
+            state_upper = (state or "").upper()
+            if state_upper in self.regional_adjustments:
+                crop_adjustments = self.regional_adjustments[state_upper]
                 if normalized_crop in crop_adjustments:
                     adjustment = crop_adjustments[normalized_crop]
 
@@ -303,31 +305,72 @@ class EnhancedUSDAFactors:
 
     def _normalize_crop_type(self, crop_type: str) -> str:
         """Normalize crop type to match regional data keys"""
-        crop_lower = crop_type.lower()
+        if not crop_type:
+            return "unknown"
+        crop_lower = crop_type.lower().strip()
 
-        # Map specific varieties to general categories
-        if (
-            "orange" in crop_lower
-            or "citrus" in crop_lower
-            or "navel" in crop_lower
-            or "tree_fruit" in crop_lower
-            or "fruit" in crop_lower
-            or "valencia" in crop_lower
-            or "lemon" in crop_lower
-            or "lime" in crop_lower
-            or "grapefruit" in crop_lower
-        ):
+        # Exact matches for Trazo's 22 configured crops
+        exact_map = {
+            "corn": "corn",
+            "maize": "corn",
+            "soybeans": "soybeans",
+            "soybean": "soybeans",
+            "almonds": "almonds",
+            "almond": "almonds",
+            "citrus": "citrus",
+            "wheat": "wheat",
+            "rice": "rice",
+            "cotton": "cotton",
+            "sunflowers": "sunflowers",
+            "apples": "apples",
+            "grapes": "grapes",
+            "avocados": "avocados",
+            "walnuts": "walnuts",
+            "tomatoes": "tomatoes",
+            "potatoes": "potatoes",
+            "lettuce": "lettuce",
+            "carrots": "carrots",
+            "onions": "onions",
+            "mixed_vegetables": "mixed_vegetables",
+            "strawberries": "strawberries",
+            "peanuts": "peanuts",
+            "hay_alfalfa": "hay_alfalfa",
+            "stone_fruit": "stone_fruit",
+        }
+        if crop_lower in exact_map:
+            return exact_map[crop_lower]
+
+        # Substring matches for varieties
+        if any(w in crop_lower for w in ["orange", "navel", "valencia", "lemon", "lime", "grapefruit"]):
             return "citrus"
-        elif "almond" in crop_lower or "nut" in crop_lower:
-            return "almonds"
-        elif "corn" in crop_lower or "maize" in crop_lower:
-            return "corn"
+        elif any(w in crop_lower for w in ["peach", "plum", "cherry", "apricot", "nectarine"]):
+            return "stone_fruit"
+        elif any(w in crop_lower for w in ["apple", "pear"]):
+            return "apples"
+        elif "grape" in crop_lower or "vine" in crop_lower:
+            return "grapes"
+        elif "nut" in crop_lower or "walnut" in crop_lower or "pecan" in crop_lower:
+            return "walnuts"
         elif "soy" in crop_lower or "bean" in crop_lower:
             return "soybeans"
-
-        # Default to citrus for unknown fruit types (most common in California)
-        if any(word in crop_lower for word in ["apple", "pear", "peach", "plum", "cherry", "apricot"]):
-            return "citrus"
+        elif "corn" in crop_lower or "maize" in crop_lower:
+            return "corn"
+        elif "avocado" in crop_lower:
+            return "avocados"
+        elif "strawberr" in crop_lower or "berr" in crop_lower:
+            return "strawberries"
+        elif "lettuce" in crop_lower or "salad" in crop_lower:
+            return "lettuce"
+        elif "tomato" in crop_lower:
+            return "tomatoes"
+        elif "potato" in crop_lower:
+            return "potatoes"
+        elif "onion" in crop_lower:
+            return "onions"
+        elif "peanut" in crop_lower:
+            return "peanuts"
+        elif "hay" in crop_lower or "alfalfa" in crop_lower:
+            return "hay_alfalfa"
 
         return crop_lower
 
@@ -336,9 +379,10 @@ class EnhancedUSDAFactors:
         try:
             # Normalize crop type
             normalized_crop = self._normalize_crop_type(crop_type)
+            state_upper = (state or "").upper()
 
             # Get regional average for comparison
-            if state not in self.regional_averages:
+            if state_upper not in self.regional_averages:
                 return {
                     "level": "unknown",
                     "percentile": None,
@@ -346,7 +390,7 @@ class EnhancedUSDAFactors:
                     "regional_average": None,
                 }
 
-            crop_averages = self.regional_averages[state]
+            crop_averages = self.regional_averages[state_upper]
             if normalized_crop not in crop_averages:
                 return {
                     "level": "unknown",
@@ -420,16 +464,18 @@ class EnhancedUSDAFactors:
 
     def get_enhanced_calculation_metadata(self, crop_type: str, state: str) -> Dict[str, Any]:
         """Get enhanced metadata about USDA calculation methodology"""
+        state_upper = (state or "").upper()
+        normalized_crop = self._normalize_crop_type(crop_type)
         return {
             "data_source": "USDA Agricultural Research Service",
             "methodology": "USDA emission factors with regional adjustments",
-            "regional_specificity": state in self.regional_adjustments,
-            "confidence_level": "high" if state in self.regional_adjustments else "medium",
+            "regional_specificity": state_upper in self.regional_adjustments,
+            "confidence_level": "high" if state_upper in self.regional_adjustments else "medium",
             "last_updated": "2024-12",
             "usda_compliance": True,
             "factors_verified": True,
-            "regional_optimization": state in self.regional_adjustments
-            and crop_type.lower() in self.regional_adjustments[state],
+            "regional_optimization": state_upper in self.regional_adjustments
+            and normalized_crop in self.regional_adjustments.get(state_upper, {}),
             "api_enabled": False,
             "real_time_data": False,
         }
