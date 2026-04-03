@@ -419,8 +419,8 @@ class Command(BaseCommand):
             certifier_name="CCOF (California Certified Organic Farmers)",
             effective_date=self._dt(2024, 8, 1).date(),
             expiry_date=self._dt(2026, 7, 31).date(),
-            certification_scope="Crops - Valencia Orange",
-            certified_items=["Valencia Orange"],
+            certification_scope="Crops - All",
+            certified_items=["Hass Avocado", "Valencia Orange", "Nonpareil Almond"],
             verification_status="verified",
         )
         Certification.objects.create(

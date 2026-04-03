@@ -1663,9 +1663,18 @@ class OptimizedEventProcessor:
         # Backend/stored events use: volume, area, way_of_application
 
         # Get raw values - may be combined strings like "400 kg/ha"
-        volume_raw = event_data.get("volume_applied") or event_data.get("volume") or 0
+        # Support split fields: volume_numeric (ChemicalTab) and volume_applied (legacy/other tabs)
+        # Use explicit None/"" check instead of truthiness to handle "0" and 0 correctly
+        def _first_nonempty(d, *keys, default=0):
+            for key in keys:
+                val = d.get(key)
+                if val is not None and val != "":
+                    return val
+            return default
+
+        volume_raw = _first_nonempty(event_data, "volume_applied", "volume_numeric", "volume", default=0)
         volume_unit_provided = event_data.get("volume_unit", "L")
-        area_raw = event_data.get("area_treated") or event_data.get("area") or 0.0
+        area_raw = _first_nonempty(event_data, "area_treated", "area_numeric", "area", default=0.0)
         area_unit_provided = event_data.get("area_unit", "acres")
         application_method = event_data.get("application_method") or event_data.get("way_of_application") or "broadcast"
 
