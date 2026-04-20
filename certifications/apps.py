@@ -7,4 +7,5 @@ class CertificationsConfig(AppConfig):
     verbose_name = "Certifications"
 
     def ready(self):
+        import certifications.auditlog_registry  # noqa: F401  Register OSP/affidavit audit trail (Sprint 5A)
         import certifications.signals  # noqa: F401

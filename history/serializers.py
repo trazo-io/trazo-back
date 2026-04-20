@@ -1,3 +1,5 @@
+from django.core.exceptions import ValidationError as DjangoValidationError
+
 from rest_framework import serializers
 
 from common.models import Gallery
@@ -429,6 +431,19 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
             "volume_applied",
             "area_treated",
             "application_method",
+            # NOP compliance — supplier & purchase traceability
+            "supplier_name",
+            "purchase_date",
+            "purchase_invoice",
+            "quantity_purchased",
+            "quantity_purchased_unit",
+            # P0-3 — CA DPR Restricted Materials Permit (CA state law)
+            "ca_dpr_permit_number",
+            "ca_dpr_permit_county",
+            "ca_dpr_permit_expires",
+            # Sprint 3 — OMRI / National List cross-reference (7 CFR 205.601/602)
+            "omri_product",
+            "national_list_substance",
         ]
         read_only_fields = ["id"]
         # Allow both old and new field names by making old fields optional
@@ -739,8 +754,23 @@ class ChemicalEventSerializer(EventSerializer):
             "image",
             "carbon_data",
             "verification_level",
+            # NOP compliance — supplier & purchase traceability
+            "supplier_name",
+            "purchase_date",
+            "purchase_invoice",
+            "quantity_purchased",
+            "quantity_purchased_unit",
+            # P0-3 — CA DPR Restricted Materials Permit (CA state law)
+            "ca_dpr_permit_number",
+            "ca_dpr_permit_county",
+            "ca_dpr_permit_expires",
+            # Sprint 3 — OMRI / National List cross-reference
+            "omri_product",
+            "national_list_substance",
+            # Sprint 5.1 — OSP ↔ events drift detector finding (null when in-OSP)
+            "drift_warning",
         ]
-        read_only_fields = ["id", "index", "created_by"]
+        read_only_fields = ["id", "index", "created_by", "drift_warning"]
 
     @staticmethod
     def _parse_value_with_unit(raw_value, default_unit=""):
@@ -898,6 +928,7 @@ class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
 
         if event_type == WeatherEvent.FROST:
             extra_data["lower_temperature"] = data.pop("lower_temperature", None)
+            extra_data["temperature_unit"] = data.pop("temperature_unit", "C")
             extra_data["way_of_protection"] = data.pop("way_of_protection", None)
         elif event_type == WeatherEvent.DROUGHT:
             water_deficit_value = data.pop("water_deficit", None)
@@ -909,6 +940,7 @@ class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
             extra_data["way_of_protection"] = data.pop("way_of_protection", None)
         elif event_type == WeatherEvent.HIGH_TEMPERATURE:
             extra_data["highest_temperature"] = data.pop("highest_temperature", None)
+            extra_data["temperature_unit"] = data.pop("temperature_unit", "C")
             extra_data["start_date"] = data.pop("start_date", None)
             extra_data["end_date"] = data.pop("end_date", None)
         elif event_type == WeatherEvent.TROPICAL_STORM:
@@ -941,7 +973,25 @@ class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
         instance = getattr(self, "instance", None)
         internal_value["extra_data"] = self.merge_custom_fields(merged_extra_data, custom_fields, instance)
 
+        # Meteorological-magnitude plausibility gate. Runs at serializer
+        # level so API writes catch unit-of-measure typos (°C in °F field,
+        # etc.) before they land in the DB. The same bounds are enforced
+        # by WeatherEvent.clean() for admin/manage.py writes.
+        self._validate_weather_magnitudes(internal_value["extra_data"])
+
         return internal_value
+
+    def _validate_weather_magnitudes(self, extra_data):
+        """Run WeatherEvent's plausibility bounds against proposed extra_data."""
+        if not extra_data:
+            return
+        probe = WeatherEvent(extra_data=extra_data)
+        try:
+            probe.clean()
+        except DjangoValidationError as exc:
+            # Convert Django ValidationError → DRF ValidationError so the
+            # API returns a 400 with a structured body rather than a 500.
+            raise serializers.ValidationError({"extra_data": exc.messages})
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -957,6 +1007,7 @@ class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
 
         if type == WeatherEvent.FROST:
             data["lower_temperature"] = extra_data.get("lower_temperature", 0)
+            data["temperature_unit"] = extra_data.get("temperature_unit", "C")
             data["way_of_protection"] = extra_data.get("way_of_protection", "")
         elif type == WeatherEvent.DROUGHT:
             data["water_deficit"] = extra_data.get("water_deficit", 0)
@@ -967,6 +1018,7 @@ class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
             data["way_of_protection"] = extra_data.get("way_of_protection", "")
         elif type == WeatherEvent.HIGH_TEMPERATURE:
             data["highest_temperature"] = extra_data.get("highest_temperature", 0)
+            data["temperature_unit"] = extra_data.get("temperature_unit", "C")
             # Convert date strings to datetime-local format for frontend datetime-local inputs
             start_date = extra_data.get("start_date", "")
             end_date = extra_data.get("end_date", "")
@@ -1229,6 +1281,7 @@ class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
 class WeatherEventSerializer(EventSerializer):
     type = serializers.SerializerMethodField()
     event_type = serializers.SerializerMethodField()
+    weather_type = serializers.SerializerMethodField()
 
     class Meta:
         model = WeatherEvent
@@ -1246,6 +1299,7 @@ class WeatherEventSerializer(EventSerializer):
             "growth_stage",
             "type",
             "event_type",
+            "weather_type",
             "observation",
             "extra_data",
             "image",
@@ -1260,6 +1314,10 @@ class WeatherEventSerializer(EventSerializer):
             return "event.weather.unknown"
         return f"event.weather.{type_display.lower().replace(' ', '_')}"
 
+    def get_weather_type(self, weather_event):
+        """Return raw weather type code (FR, DR, HL, HT, LT, HW, TS, FL, HH, LH) for frontend registry"""
+        return weather_event.type
+
     def get_event_type(self, weather_event):
         return WEATHER_EVENT_TYPE
 
@@ -1269,6 +1327,50 @@ class WeatherEventSerializer(EventSerializer):
         extra_data = instance.extra_data or {} if hasattr(instance, "extra_data") else {}
         if extra_data.get("event_name"):
             data["name"] = extra_data["event_name"]
+
+        # Flatten subtype-specific fields from extra_data to top level so the
+        # timeline card, detail modal, and field registry can read them without
+        # reaching into extra_data. Mirrors UpdateWeatherEventSerializer so list
+        # and edit paths return the same shape.
+        raw_type = instance.type if hasattr(instance, "type") else None
+        if raw_type == WeatherEvent.FROST:
+            data["lower_temperature"] = extra_data.get("lower_temperature")
+            data["temperature_unit"] = extra_data.get("temperature_unit", "C")
+            data["way_of_protection"] = extra_data.get("way_of_protection", "")
+        elif raw_type == WeatherEvent.DROUGHT:
+            data["water_deficit"] = extra_data.get("water_deficit")
+        elif raw_type == WeatherEvent.HAILSTORM:
+            data["duration"] = extra_data.get("duration")
+            data["way_of_protection"] = extra_data.get("way_of_protection", "")
+        elif raw_type == WeatherEvent.HIGH_TEMPERATURE:
+            data["highest_temperature"] = extra_data.get("highest_temperature")
+            data["temperature_unit"] = extra_data.get("temperature_unit", "C")
+            data["start_date"] = extra_data.get("start_date", "")
+            data["end_date"] = extra_data.get("end_date", "")
+        elif raw_type == WeatherEvent.TROPICAL_STORM:
+            data["wind_speed"] = extra_data.get("wind_speed")
+            data["precipitation_amount"] = extra_data.get("precipitation_amount")
+            data["duration"] = extra_data.get("duration")
+            data["damage_assessment"] = extra_data.get("damage_assessment", "")
+        elif raw_type == WeatherEvent.HIGH_WINDS:
+            data["wind_speed"] = extra_data.get("wind_speed")
+            data["duration"] = extra_data.get("duration")
+            data["protection_measures"] = extra_data.get("protection_measures", "")
+        elif raw_type in (WeatherEvent.HIGH_HUMIDITY, WeatherEvent.LOW_HUMIDITY):
+            data["humidity_level"] = extra_data.get("humidity_level")
+            data["duration"] = extra_data.get("duration")
+            data["crop_impact"] = extra_data.get("crop_impact", "")
+
+        # NOTE on description vs observation:
+        # The frontend save path (NewEvent.jsx) renames observation → description
+        # to satisfy CommonEvent's required description column. We intentionally
+        # do NOT mirror description back to observation here — doing so makes the
+        # EventDetailsModal render both fields (identical content) side by side.
+        # Frontend renderers that need the farmer notes fall back to description:
+        #   - EnhancedTimelineRow.getEnhancedDescription checks both
+        #   - eventDataNormalizer mirrors description→observation for Consumer card
+        # Leaving observation empty here keeps the detail modal from duplicating.
+
         return data
 
 
@@ -1312,18 +1414,47 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
             "grain_moisture",
             "pump_depth_ft",
             "electricity_source",
+            # NOP compliance — seed sourcing & equipment cleaning
+            "seed_search_attempts",
+            # NOP 7 CFR 205.204 — seed traceability (planting subtype)
+            "seed_supplier_name",
+            "seed_purchase_date",
+            "seed_purchase_invoice",
+            "seed_lot_number",
+            "seed_certification_status",
+            "seed_treatment",
+            "cleaning_date",
+            "cleaning_method",
+            "cleaning_materials_used",
+            "cleaned_by",
+            "shared_with_conventional",
+            "cleaning_protocol_reference",
+            # NOP Compliance: Post-Harvest Sanitizer Detail (7 CFR 205.272 + § 205.605)
+            "sanitizer_name",
+            "sanitizer_ppm",
+            "rinse_step_documented",
+            "sanitizer_nop_reference",
+            # Sprint 3.2 — Post-harvest storage (NOP 205.272 / FSMA 204 KDE)
+            "storage_location",
+            "storage_temperature_f",
         ]
         read_only_fields = ["id"]
 
     # Fields captured from Quick Add forms that are stored in extra_data
     # (not model fields on ProductionEvent, but valuable for consumer display)
+    # NOTE: equipment_type and equipment_operation_type were removed from here —
+    # they are top-level model fields on ProductionEvent (EM subtype), not extra_data.
+    # Having them here caused them to be popped from data before model save,
+    # resulting in NULL model columns after save.
     EXTRA_DATA_FIELDS = [
         "harvest_method",
         "brix_levels",
         "native_species_planted",
         "habitat_area_hectares",
-        "equipment_type",
-        "equipment_operation_type",
+        # Post-Harvest Processing (PH subtype) — form fields with no model columns
+        "processing_type",
+        "processing_duration_hours",
+        "temperature_control",
     ]
 
     def to_internal_value(self, data):
@@ -1415,9 +1546,10 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
         yield_unit = data.get("yield_unit", "kg")
 
         # Enhanced area_covered validation
-        # Equipment Maintenance (EM) and Pollination (PO) events can legitimately have area_covered=0
+        # Equipment Maintenance (EM), Pollination (PO), and Post-Harvest Processing (PH)
+        # events can legitimately have area_covered=0 (facility/equipment-based, not field-based).
         production_type = data.get("type", "")
-        area_zero_allowed_types = ["EM", "PO"]
+        area_zero_allowed_types = ["EM", "PO", "PH"]
         if area_covered is not None and area_covered <= 0 and production_type not in area_zero_allowed_types:
             raise serializers.ValidationError(
                 {
@@ -1545,6 +1677,15 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
             if field_name in extra_data and field_name not in data:
                 data[field_name] = extra_data[field_name]
 
+        # Backward compat: recover equipment fields from extra_data if model column is empty
+        for field_name in ("equipment_type", "equipment_operation_type"):
+            if not data.get(field_name) and field_name in extra_data:
+                data[field_name] = extra_data[field_name]
+
+        # Map production_efficiency back to operation_efficiency for frontend form
+        if data.get("production_efficiency"):
+            data["operation_efficiency"] = data["production_efficiency"]
+
         return data
 
 
@@ -1599,6 +1740,29 @@ class ProductionEventSerializer(CustomFieldsMixin, EventSerializer):
             "image",
             "carbon_data",
             "verification_level",
+            # NOP compliance — seed sourcing & equipment cleaning
+            "seed_search_attempts",
+            # NOP 7 CFR 205.204 — seed traceability (planting subtype)
+            "seed_supplier_name",
+            "seed_purchase_date",
+            "seed_purchase_invoice",
+            "seed_lot_number",
+            "seed_certification_status",
+            "seed_treatment",
+            "cleaning_date",
+            "cleaning_method",
+            "cleaning_materials_used",
+            "cleaned_by",
+            "shared_with_conventional",
+            "cleaning_protocol_reference",
+            # NOP Compliance: Post-Harvest Sanitizer Detail (7 CFR 205.272 + § 205.605)
+            "sanitizer_name",
+            "sanitizer_ppm",
+            "rinse_step_documented",
+            "sanitizer_nop_reference",
+            # Sprint 3.2 — Post-harvest storage
+            "storage_location",
+            "storage_temperature_f",
         ]
         read_only_fields = ["id", "index", "created_by"]
 
@@ -1616,13 +1780,20 @@ class ProductionEventSerializer(CustomFieldsMixin, EventSerializer):
         return production_event.type or ""
 
     # Same EXTRA_DATA_FIELDS as UpdateProductionEventSerializer for consistent extraction
+    # NOTE: equipment_type and equipment_operation_type removed — they are model fields.
     EXTRA_DATA_FIELDS = [
         "harvest_method",
         "brix_levels",
         "native_species_planted",
         "habitat_area_hectares",
-        "equipment_type",
-        "equipment_operation_type",
+        # Post-Harvest Processing (PH subtype) — form fields with no model columns
+        "processing_type",
+        "processing_duration_hours",
+        "temperature_control",
+        # Operation method free-text (drives manual-labor carbon detection). Stored as
+        # extra_data.method; promoted to top-level so the Event Details Modal's registry
+        # resolver finds it without needing the formatter's extra_data fallback.
+        "method",
     ]
 
     def to_representation(self, instance):
@@ -1642,6 +1813,17 @@ class ProductionEventSerializer(CustomFieldsMixin, EventSerializer):
         for field_name in self.EXTRA_DATA_FIELDS:
             if field_name in extra_data and field_name not in data:
                 data[field_name] = extra_data[field_name]
+
+        # Backward compat: equipment_type/equipment_operation_type were previously
+        # stored in extra_data due to EXTRA_DATA_FIELDS bug. Recover them if the
+        # model column is empty but extra_data has the value.
+        for field_name in ("equipment_type", "equipment_operation_type"):
+            if not data.get(field_name) and field_name in extra_data:
+                data[field_name] = extra_data[field_name]
+
+        # Map production_efficiency back to operation_efficiency for frontend form
+        if data.get("production_efficiency"):
+            data["operation_efficiency"] = data["production_efficiency"]
 
         return data
 
@@ -1666,12 +1848,33 @@ class UpdateGeneralEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
             "duration",
             "people_involved",
             "extra_data",
+            # NOP Compliance: Contamination Incident Reporting
+            "is_contamination_incident",
+            "contamination_source",
+            "contamination_affected_area",
+            "corrective_action_taken",
+            "corrective_action_date",
+            "certifier_notified",
+            "certifier_notification_date",
         ]
         read_only_fields = ["id"]
 
     def to_internal_value(self, data):
         """Handle custom fields and field name remapping for general events."""
         data = data.copy()
+
+        # Convert empty strings to None for nullable fields (contamination incident fields)
+        nullable_fields = [
+            "contamination_source",
+            "contamination_affected_area",
+            "corrective_action_taken",
+            "corrective_action_date",
+            "certifier_notification_date",
+            "people_involved",
+        ]
+        for field_name in nullable_fields:
+            if field_name in data and data[field_name] in ("", None):
+                data[field_name] = None
 
         # Handle custom fields (user-defined additional information)
         custom_fields = self.handle_custom_fields_input(data)
@@ -1749,6 +1952,14 @@ class GeneralEventSerializer(EventSerializer):
             "duration",
             "people_involved",
             "extra_data",
+            # NOP Compliance: Contamination Incident Reporting
+            "is_contamination_incident",
+            "contamination_source",
+            "contamination_affected_area",
+            "corrective_action_taken",
+            "corrective_action_date",
+            "certifier_notified",
+            "certifier_notification_date",
             "image",
             "carbon_data",
             "verification_level",
@@ -2031,8 +2242,18 @@ class HistoryWriteSerializer(serializers.ModelSerializer):
             "harvest_method",
             "description",
             "events_status",
+            # Post-harvest traceability (§ 205.103 + SOE 2024 non-retail invoice)
+            "sold_to",
+            "sale_date",
+            "quantity_sold",
+            "quantity_sold_unit",
+            "box_weight_lb",
+            "organic_on_invoice",
+            "transport_method",
+            "destination",
+            "retention_until",
         ]
-        read_only_fields = ["id", "public_id", "events_status"]
+        read_only_fields = ["id", "public_id", "events_status", "retention_until"]
 
     def get_product(self, history):
         return history.product.name if history.product else None
@@ -2096,8 +2317,26 @@ class HistorySerializer(serializers.ModelSerializer):
             "harvest_method",
             "description",
             "events_status",
+            # NOP compliance — post-finish sales & traceability
+            "sold_to",
+            "sale_date",
+            "quantity_sold",
+            "quantity_sold_unit",
+            "box_weight_lb",
+            "organic_on_invoice",
+            "transport_method",
+            "destination",
+            "retention_until",
         ]
-        read_only_fields = ["id", "public_id", "created_at", "updated_at", "certificate_percentage", "events_status"]
+        read_only_fields = [
+            "id",
+            "public_id",
+            "created_at",
+            "updated_at",
+            "certificate_percentage",
+            "events_status",
+            "retention_until",
+        ]
 
     def get_product(self, history):
         return history.product.name if history.product else None
@@ -2357,7 +2596,57 @@ class PublicHistorySerializer(serializers.ModelSerializer):
             "description",
             "type",
             "transparency_score",
+            "production_method",
+            # Post-harvest traceability (§ 205.103 + SOE 2024 non-retail invoice).
+            # These are B2B-sensitive (buyer name, delivery address, sale quantity)
+            # and MUST be hidden from public QR viewers — to_representation below
+            # strips them for any non-owner caller.
+            "sold_to",
+            "sale_date",
+            "quantity_sold",
+            "quantity_sold_unit",
+            "box_weight_lb",
+            "organic_on_invoice",
+            "transport_method",
+            "destination",
+            "retention_until",
         ]
+
+    # Fields only the production's owning company may see in this serializer's
+    # response. Any consumer hitting /public_history/ via QR code is NOT the
+    # owner, so these get stripped before serialization returns.
+    _OWNER_ONLY_FIELDS = (
+        "sold_to",
+        "sale_date",
+        "quantity_sold",
+        "quantity_sold_unit",
+        "box_weight_lb",
+        "organic_on_invoice",
+        "transport_method",
+        "destination",
+        "retention_until",
+    )
+
+    def _is_owner(self, obj):
+        request = self.context.get("request") if hasattr(self, "context") else None
+        if not request or not getattr(request, "user", None):
+            return False
+        user = request.user
+        if not user.is_authenticated:
+            return False
+        if user.is_superuser:
+            return True
+        company = obj.parcel.establishment.company if obj.parcel and obj.parcel.establishment else None
+        if company is None:
+            return False
+        return user.companies.filter(id=company.id).exists()
+
+    def to_representation(self, obj):
+        data = super().to_representation(obj)
+        if not self._is_owner(obj):
+            for field in self._OWNER_ONLY_FIELDS:
+                data.pop(field, None)
+        return data
 
     def get_events_count(self, obj):
         """Total count of documented farming events for this production."""
@@ -2677,10 +2966,17 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         ),
                         # EPA compliance fields
                         "applicator_name": getattr(event, "applicator_name", None),
+                        "applicator_certification": getattr(event, "applicator_certification", None),
                         "epa_registration_number": getattr(event, "epa_registration_number", None),
                         "restricted_use_pesticide": getattr(event, "restricted_use_pesticide", False),
                         "rei_hours": (str(event.rei_hours) if getattr(event, "rei_hours", None) is not None else None),
                         "phi_days": (str(event.phi_days) if getattr(event, "phi_days", None) is not None else None),
+                        "buffer_zone_meters": (
+                            float(event.buffer_zone_meters)
+                            if getattr(event, "buffer_zone_meters", None) is not None
+                            else None
+                        ),
+                        "is_fertigation": getattr(event, "is_fertigation", None),
                         "organic_approved": (
                             getattr(event, "organic_approved", None)
                             or (
@@ -2692,6 +2988,48 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                                 else None
                             )
                         ),
+                        # NOP traceability (7 CFR 205.103) — supplier + purchase chain.
+                        # Registry declares these with consumer_card: 'secondary'.
+                        "supplier_name": getattr(event, "supplier_name", None),
+                        "purchase_date": (
+                            event.purchase_date.isoformat() if getattr(event, "purchase_date", None) else None
+                        ),
+                        "purchase_invoice": getattr(event, "purchase_invoice", None),
+                        "quantity_purchased": (
+                            float(event.quantity_purchased)
+                            if getattr(event, "quantity_purchased", None) is not None
+                            else None
+                        ),
+                        "quantity_purchased_unit": getattr(event, "quantity_purchased_unit", None),
+                        # P0-3 — CA DPR Restricted Materials Permit (CA state law).
+                        "ca_dpr_permit_number": getattr(event, "ca_dpr_permit_number", None),
+                        "ca_dpr_permit_county": getattr(event, "ca_dpr_permit_county", None),
+                        "ca_dpr_permit_expires": (
+                            event.ca_dpr_permit_expires.isoformat()
+                            if getattr(event, "ca_dpr_permit_expires", None)
+                            else None
+                        ),
+                        # Sprint 3 — OMRI / National List verification status (7 CFR 205.601/602).
+                        # We expose the IDs + human-readable names; consumer card shows as badges.
+                        "omri_product_id": event.omri_product.omri_id if getattr(event, "omri_product", None) else None,
+                        "omri_product_name": (
+                            event.omri_product.product_name if getattr(event, "omri_product", None) else None
+                        ),
+                        "national_list_substance_name": (
+                            event.national_list_substance.substance_name
+                            if getattr(event, "national_list_substance", None)
+                            else None
+                        ),
+                        "national_list_status": (
+                            event.national_list_substance.status
+                            if getattr(event, "national_list_substance", None)
+                            else None
+                        ),
+                        "national_list_cfr_section": (
+                            event.national_list_substance.cfr_section
+                            if getattr(event, "national_list_substance", None)
+                            else None
+                        ),
                         "extra_data": self._sanitize_extra_data_for_public(event),
                         # Blockchain verification fields from production
                         "blockchain_verified": blockchain_verified,
@@ -2700,6 +3038,9 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "verification_level": self._get_verification_level_for_event(
                             event, photo_count > 0, blockchain_verified
                         ),
+                        # Sprint 5.1 — OSP ↔ events drift detector finding. Shape
+                        # documented in certifications.services.drift_detector.
+                        "drift_warning": getattr(event, "drift_warning", None),
                     }
                 )
 
@@ -2769,6 +3110,31 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                                 else None
                             )
                         ),
+                        # Irrigation pump fields (IR subtype) — registry declares both
+                        # with consumer_card: 'details'. Without these on the public
+                        # payload, ConsumerEventCard's registry resolver has nothing
+                        # to render, so "Pump Depth" / "Electricity Source" silently
+                        # disappear on the product-detail QR page.
+                        "pump_depth_ft": float(getattr(event, "pump_depth_ft", None) or 0) or None,
+                        "electricity_source": getattr(event, "electricity_source", None),
+                        # NOP Compliance: Equipment Cleaning Logs (7 CFR 205.272) —
+                        # EM-subtype fields registered with consumer_card: 'secondary'.
+                        # Same visibility gap as the pump fields above.
+                        "cleaning_date": (
+                            event.cleaning_date.isoformat() if getattr(event, "cleaning_date", None) else None
+                        ),
+                        "cleaning_method": getattr(event, "cleaning_method", None),
+                        "cleaning_materials_used": getattr(event, "cleaning_materials_used", None),
+                        "cleaned_by": getattr(event, "cleaned_by", None),
+                        "shared_with_conventional": getattr(event, "shared_with_conventional", None),
+                        "cleaning_protocol_reference": getattr(event, "cleaning_protocol_reference", None),
+                        # Post-harvest sanitizer detail (7 CFR 205.272 + § 205.605).
+                        "sanitizer_name": getattr(event, "sanitizer_name", None),
+                        "sanitizer_ppm": (
+                            str(event.sanitizer_ppm) if getattr(event, "sanitizer_ppm", None) is not None else None
+                        ),
+                        "rinse_step_documented": getattr(event, "rinse_step_documented", None),
+                        "sanitizer_nop_reference": getattr(event, "sanitizer_nop_reference", None),
                         # Harvest fields (model field + extra_data for consumer trust)
                         "harvest_quality_grade": getattr(event, "harvest_quality_grade", None),
                         "grain_moisture": float(getattr(event, "grain_moisture", None) or 0) or None,
@@ -2782,6 +3148,36 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         ),
                         "brix_levels": (
                             (event.extra_data.get("brix_levels") or event.extra_data.get("brix_level"))
+                            if isinstance(getattr(event, "extra_data", None), dict)
+                            else None
+                        ),
+                        # Brix as model field (ProductionEvent.brix_level is a DecimalField).
+                        # Registry reads `brix_level` (singular); `brix_levels` above is legacy.
+                        "brix_level": float(getattr(event, "brix_level", None) or 0) or None,
+                        # Operation method (free-text "production_method") — consumer trust signal
+                        # for hand-labor documentation. Lives in extra_data.method; promoted to
+                        # top-level so the registry's `method` field resolves on the consumer card
+                        # without needing the formatter's extra_data fallback.
+                        "method": (
+                            event.extra_data.get("method")
+                            if isinstance(getattr(event, "extra_data", None), dict)
+                            else None
+                        ),
+                        # Post-Harvest Processing (PH subtype) fields stored in extra_data.
+                        # Registry reads these with extra_data fallback, but promoting them
+                        # keeps the API response consistent with other production fields.
+                        "processing_type": (
+                            event.extra_data.get("processing_type")
+                            if isinstance(getattr(event, "extra_data", None), dict)
+                            else None
+                        ),
+                        "processing_duration_hours": (
+                            event.extra_data.get("processing_duration_hours")
+                            if isinstance(getattr(event, "extra_data", None), dict)
+                            else None
+                        ),
+                        "temperature_control": (
+                            event.extra_data.get("temperature_control")
                             if isinstance(getattr(event, "extra_data", None), dict)
                             else None
                         ),
@@ -2801,6 +3197,24 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                                 if isinstance(getattr(event, "extra_data", None), dict)
                                 else None
                             )
+                        ),
+                        # NOP 5029: Seed commercial availability search documentation (PL subtype)
+                        "seed_search_attempts": getattr(event, "seed_search_attempts", None),
+                        # NOP 7 CFR 205.204: Seed traceability (PL subtype)
+                        "seed_supplier_name": getattr(event, "seed_supplier_name", None),
+                        "seed_purchase_date": (
+                            event.seed_purchase_date.isoformat() if getattr(event, "seed_purchase_date", None) else None
+                        ),
+                        "seed_purchase_invoice": getattr(event, "seed_purchase_invoice", None),
+                        "seed_lot_number": getattr(event, "seed_lot_number", None),
+                        "seed_certification_status": getattr(event, "seed_certification_status", None),
+                        "seed_treatment": getattr(event, "seed_treatment", None),
+                        # Sprint 3.2 — Post-harvest storage (NOP 205.272 / FSMA 204 KDE prep)
+                        "storage_location": getattr(event, "storage_location", None),
+                        "storage_temperature_f": (
+                            float(event.storage_temperature_f)
+                            if getattr(event, "storage_temperature_f", None) is not None
+                            else None
                         ),
                         # Custom fields stored in extra_data (e.g., custom_fields, carbon_calculation)
                         "extra_data": self._sanitize_extra_data_for_public(event),
@@ -3030,6 +3444,11 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                             event, "organic_matter_percentage", None
                         ),  # Organic matter %
                         "test_results": getattr(event, "test_results", None),  # JSONField test data
+                        "carbon_sequestration_potential": (
+                            float(event.carbon_sequestration_potential)
+                            if getattr(event, "carbon_sequestration_potential", None) is not None
+                            else None
+                        ),
                         # Raw values only - no fallbacks
                         "area_covered": getattr(event, "area_covered", None),  # Numeric area covered
                         "area_unit": getattr(event, "area_unit", None),  # ha, acres, m2, km2 (raw)
@@ -3065,6 +3484,27 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                             else None
                         ),
                         "amendment_amount_unit": getattr(event, "amendment_amount_unit", None),
+                        # 🌿 NOP Compliance fields (7 CFR 205.203) — Amendment approval + Compost tracking + Manure timing
+                        "amendment_organic_approved": getattr(event, "amendment_organic_approved", None),
+                        "compost_peak_temp_f": (
+                            str(event.compost_peak_temp_f)
+                            if getattr(event, "compost_peak_temp_f", None) is not None
+                            else None
+                        ),
+                        "compost_duration_days_at_temp": getattr(event, "compost_duration_days_at_temp", None),
+                        "compost_turning_count": getattr(event, "compost_turning_count", None),
+                        "compost_method": getattr(event, "compost_method", None),
+                        "compost_initial_cn_ratio": (
+                            str(event.compost_initial_cn_ratio)
+                            if getattr(event, "compost_initial_cn_ratio", None) is not None
+                            else None
+                        ),
+                        "manure_harvest_interval": getattr(event, "manure_harvest_interval", None),
+                        "manure_application_date": (
+                            event.manure_application_date.isoformat()
+                            if getattr(event, "manure_application_date", None)
+                            else None
+                        ),
                         "extra_data": self._sanitize_extra_data_for_public(event),  # Additional soil management data
                         # Blockchain verification fields from production
                         "blockchain_verified": blockchain_verified,
@@ -3073,6 +3513,8 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "verification_level": self._get_verification_level_for_event(
                             event, photo_count > 0, blockchain_verified
                         ),
+                        # Sprint 5.1 — OSP ↔ events drift detector finding.
+                        "drift_warning": getattr(event, "drift_warning", None),
                     }
                 )
 
@@ -3126,6 +3568,10 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "damage_percentage": float(getattr(event, "damage_percentage", None) or 0) or None,
                         "action_threshold_met": getattr(event, "action_threshold_met", False),
                         "ipm_strategy": getattr(event, "ipm_strategy", None),
+                        # NOP 7 CFR 205.206(e): threshold rationale + pest ID verification
+                        "threshold_rationale": getattr(event, "threshold_rationale", None),
+                        "identification_method": getattr(event, "identification_method", None),
+                        "identified_by": getattr(event, "identified_by", None),
                         # Consumer trust fields
                         "beneficial_insects_used": getattr(event, "beneficial_insects_used", None),
                         "chemical_free_period_days": getattr(event, "chemical_free_period_days", None),
@@ -3215,6 +3661,24 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "activity_name": getattr(event, "activity_name", None),
                         "duration": getattr(event, "duration", None),
                         "people_involved": getattr(event, "people_involved", None),
+                        # NOP 7 CFR 205.201(b): contamination incident reporting + remediation
+                        "is_contamination_incident": getattr(event, "is_contamination_incident", False),
+                        "contamination_source": getattr(event, "contamination_source", None),
+                        "contamination_affected_area": (
+                            float(getattr(event, "contamination_affected_area", None) or 0) or None
+                        ),
+                        "corrective_action_taken": getattr(event, "corrective_action_taken", None),
+                        "corrective_action_date": (
+                            event.corrective_action_date.isoformat()
+                            if getattr(event, "corrective_action_date", None)
+                            else None
+                        ),
+                        "certifier_notified": getattr(event, "certifier_notified", False),
+                        "certifier_notification_date": (
+                            event.certifier_notification_date.isoformat()
+                            if getattr(event, "certifier_notification_date", None)
+                            else None
+                        ),
                         # Blockchain verification fields from production
                         "blockchain_verified": blockchain_verified,
                         "blockchain_transaction": blockchain_transaction,
@@ -3302,8 +3766,8 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                     }
                 )
 
-            # Sort by index first, then by date
-            events_data.sort(key=lambda x: (x.get("index", 0), x.get("date", "")))
+            # Sort by date first, then by index (for same-day events, preserve creation order)
+            events_data.sort(key=lambda x: (x.get("date", ""), x.get("index", 0)))
 
             return events_data
 
@@ -3763,6 +4227,15 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "grazing_purpose",
             "amendment_amount_numeric",
             "amendment_amount_unit",
+            # NOP Compliance: Amendment approval + Compost tracking + Manure timing
+            "amendment_organic_approved",
+            "compost_peak_temp_f",
+            "compost_duration_days_at_temp",
+            "compost_turning_count",
+            "compost_method",
+            "compost_initial_cn_ratio",
+            "manure_harvest_interval",
+            "manure_application_date",
         ]
         read_only_fields = ["id"]
 
@@ -3773,14 +4246,33 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
         Also handles custom fields (user-defined additional information).
         """
         import decimal
-        from decimal import Decimal
+        from decimal import Decimal, InvalidOperation
 
         # Create a copy to avoid modifying the original
         data = data.copy()
 
         # Convert empty strings to None for optional integer fields
-        integer_fields = ["animal_count", "grazing_duration_days", "equipment_hours"]
+        integer_fields = [
+            "animal_count",
+            "grazing_duration_days",
+            "equipment_hours",
+            "compost_duration_days_at_temp",
+            "compost_turning_count",
+        ]
         for field_name in integer_fields:
+            if field_name in data and data[field_name] in ("", None):
+                data[field_name] = None
+
+        # Convert empty strings to None for optional decimal fields
+        # Form sends "" for unfilled numeric inputs; DRF DecimalField rejects empty strings.
+        decimal_null_fields = ["compost_peak_temp_f", "amendment_amount_numeric", "compost_initial_cn_ratio"]
+        for field_name in decimal_null_fields:
+            if field_name in data and data[field_name] in ("", None):
+                data[field_name] = None
+
+        # Convert empty strings to None for optional date fields
+        date_fields = ["manure_application_date"]
+        for field_name in date_fields:
             if field_name in data and data[field_name] in ("", None):
                 data[field_name] = None
 
@@ -3797,6 +4289,16 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
                 value = data.pop(field_name)
                 frontend_extra_data[field_name] = value if value is not None else ""
 
+        # Bridge amendment_amount (string from form) → amendment_amount_numeric (Decimal)
+        # Bridge amendment_unit (form) → amendment_amount_unit (model column)
+        if "amendment_amount" in data and data["amendment_amount"] not in ("", None):
+            try:
+                data["amendment_amount_numeric"] = Decimal(str(data["amendment_amount"]))
+            except (ValueError, InvalidOperation):
+                pass
+        if "amendment_unit" in frontend_extra_data and frontend_extra_data["amendment_unit"]:
+            data["amendment_amount_unit"] = frontend_extra_data["amendment_unit"]
+
         # Process the data through parent first
         internal_value = super().to_internal_value(data)
 
@@ -3808,6 +4310,8 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "fuel_consumed",
             "carbon_sequestration_potential",
             "amendment_amount_numeric",
+            "compost_peak_temp_f",
+            "compost_initial_cn_ratio",
         ]
 
         for field_name in decimal_fields:
@@ -3865,6 +4369,7 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
 class SoilManagementEventSerializer(EventSerializer):
     type = serializers.SerializerMethodField()
     event_type = serializers.SerializerMethodField()
+    soil_management_type = serializers.SerializerMethodField()
 
     class Meta:
         model = SoilManagementEvent
@@ -3882,6 +4387,7 @@ class SoilManagementEventSerializer(EventSerializer):
             "growth_stage",
             "type",
             "event_type",
+            "soil_management_type",
             "soil_ph",
             "organic_matter_percentage",
             "amendment_type",
@@ -3912,17 +4418,32 @@ class SoilManagementEventSerializer(EventSerializer):
             "grazing_purpose",
             "amendment_amount_numeric",
             "amendment_amount_unit",
+            # NOP Compliance: Amendment approval + Compost tracking + Manure timing
+            "amendment_organic_approved",
+            "compost_peak_temp_f",
+            "compost_duration_days_at_temp",
+            "compost_turning_count",
+            "compost_method",
+            "compost_initial_cn_ratio",
+            "manure_harvest_interval",
+            "manure_application_date",
             "image",
             "carbon_data",
             "verification_level",
+            # Sprint 5.1 — OSP ↔ events drift detector finding (null when in-OSP)
+            "drift_warning",
         ]
-        read_only_fields = ["id", "index", "created_by"]
+        read_only_fields = ["id", "index", "created_by", "drift_warning"]
 
     def get_type(self, soil_event):
         type_display = soil_event.get_type_display()
         if type_display is None:
             return "event.soil.unknown"
         return f"event.soil.{type_display.lower().replace(' ', '_')}"
+
+    def get_soil_management_type(self, soil_event):
+        """Return raw soil management type code (ST, PA, OM, CC, TI, CO, GR) for frontend registry"""
+        return soil_event.type
 
     def get_event_type(self, soil_event):
         return SOIL_MANAGEMENT_EVENT_TYPE
@@ -3961,6 +4482,10 @@ class UpdatePestManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "fuel_type",
             "equipment_hours",
             "production_efficiency",
+            # NOP Compliance: Pest ID verification + Threshold rationale
+            "identified_by",
+            "identification_method",
+            "threshold_rationale",
         ]
         read_only_fields = ["id"]
 
@@ -4058,6 +4583,7 @@ class UpdatePestManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
 class PestManagementEventSerializer(EventSerializer):
     type = serializers.SerializerMethodField()
     event_type = serializers.SerializerMethodField()
+    pest_management_type = serializers.SerializerMethodField()
 
     class Meta:
         model = PestManagementEvent
@@ -4075,6 +4601,7 @@ class PestManagementEventSerializer(EventSerializer):
             "growth_stage",
             "type",
             "event_type",
+            "pest_management_type",
             "pest_species",
             "pest_pressure_level",
             "beneficial_species",
@@ -4093,6 +4620,10 @@ class PestManagementEventSerializer(EventSerializer):
             "fuel_type",
             "equipment_hours",
             "production_efficiency",
+            # NOP Compliance: Pest ID verification + Threshold rationale
+            "identified_by",
+            "identification_method",
+            "threshold_rationale",
             "image",
             "carbon_data",
             "verification_level",
@@ -4104,6 +4635,10 @@ class PestManagementEventSerializer(EventSerializer):
         if type_display is None:
             return "event.pest.unknown"
         return f"event.pest.{type_display.lower().replace(' ', '_')}"
+
+    def get_pest_management_type(self, pest_event):
+        """Return raw pest management type code (SC, BR, TM, PI, TA, IP) for frontend registry"""
+        return pest_event.type
 
     def get_event_type(self, pest_event):
         return PEST_MANAGEMENT_EVENT_TYPE
@@ -4285,6 +4820,7 @@ class UpdateBusinessEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
 class BusinessEventSerializer(EventSerializer):
     type = serializers.SerializerMethodField()
     event_type = serializers.SerializerMethodField()
+    business_event_type = serializers.SerializerMethodField()
 
     # Add display fields for better readability
     business_type_display = serializers.SerializerMethodField()
@@ -4308,6 +4844,7 @@ class BusinessEventSerializer(EventSerializer):
             "growth_stage",
             "type",
             "event_type",
+            "business_event_type",
             "name",
             "business_type",
             "business_type_display",
@@ -4334,6 +4871,10 @@ class BusinessEventSerializer(EventSerializer):
         if type_display is None:
             return "event.business.unknown"
         return f"event.business.{type_display.lower().replace(' ', '_')}"
+
+    def get_business_event_type(self, business_event):
+        """Return raw business event type code (CE, AU, TR, IN, CC) for frontend registry"""
+        return business_event.type
 
     def get_event_type(self, business_event):
         return BUSINESS_EVENT_TYPE

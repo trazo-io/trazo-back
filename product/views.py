@@ -15,8 +15,13 @@ from backend.permissions import CompanyNestedViewSet
 from history.serializers import HistorySerializer
 from subscriptions.permissions import HasParcelCreationPermission
 
-from .models import Parcel, Product
-from .serializers import CreateParcelSerializer, ProductListSerializer, RetrieveParcelSerializer
+from .models import Parcel, ParcelCropHistory, Product
+from .serializers import (
+    CreateParcelSerializer,
+    ParcelCropHistorySerializer,
+    ProductListSerializer,
+    RetrieveParcelSerializer,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +75,21 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         context = super().get_serializer_context()
         context["request"] = self.request
         return context
+
+    @action(detail=True, methods=["get"], url_path="transition-status")
+    def transition_status(self, request, pk=None, parcel_pk=None, company_pk=None, establishment_pk=None):
+        """
+        NOP 7 CFR 205.202 organic transition status for this parcel.
+
+        Returns earliest organic-eligible harvest date, days remaining, and the list
+        of prohibited-substance findings driving the calculation.
+        """
+        from product.services.transition_status_service import compute_transition_status
+
+        establishments = self.company.establishment_set.all()
+        parcel = get_object_or_404(Parcel, id=pk, establishment__in=establishments.all())
+        status_obj = compute_transition_status(parcel)
+        return Response(status_obj.to_dict())
 
     @action(detail=True, methods=["get"])
     def current_history(self, request, pk=None, parcel_pk=None, company_pk=None, establishment_pk=None):
@@ -256,7 +276,9 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                         logger.info("BLOCKCHAIN: Task completed for production %s, result=%s", production_id, result)
                     except Exception as exc:
                         logger.error(
-                            "BLOCKCHAIN: Background submission failed for production %s: %s", production_id, exc,
+                            "BLOCKCHAIN: Background submission failed for production %s: %s",
+                            production_id,
+                            exc,
                             exc_info=True,
                         )
                     finally:
@@ -275,7 +297,9 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     company.id,
                 )
             else:
-                logger.info("BLOCKCHAIN: Skipped — no blockchain subscription for company %s", company.id if company else None)
+                logger.info(
+                    "BLOCKCHAIN: Skipped — no blockchain subscription for company %s", company.id if company else None
+                )
         except Exception as e:
             # Never let blockchain submission failure block production finalization
             logger.error("BLOCKCHAIN: Failed to queue submission for production %s: %s", history.id, e, exc_info=True)
@@ -405,3 +429,17 @@ class ProductsViewSet(CompanyNestedViewSet, mixins.ListModelMixin):
     queryset = Product.objects.all()
     serializer_class = ProductListSerializer
     filter_backends = [filters.OrderingFilter]
+
+
+class ParcelCropHistoryViewSet(viewsets.ModelViewSet):
+    serializer_class = ParcelCropHistorySerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = ParcelCropHistory.objects.filter(
+            parcel__establishment__company__in=self.request.user.companies.all()
+        ).select_related("parcel")
+        parcel_id = self.request.query_params.get("parcel")
+        if parcel_id:
+            qs = qs.filter(parcel_id=parcel_id)
+        return qs

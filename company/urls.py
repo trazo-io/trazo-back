@@ -2,11 +2,15 @@ from django.urls import include, path, re_path
 
 from rest_framework_nested import routers
 
+from certifications.views import (
+    CertificationViewSet,
+    LandownerAffidavitViewSet,
+    OrganicSystemPlanViewSet,
+    OSPAnnualUpdateViewSet,
+)
 from history.views import EventViewSet, HistoryScanViewSet, HistoryViewSet
 from product.views import ParcelViewSet, ProductsViewSet
 from reviews.views import ReviewsViewSet
-
-from certifications.views import CertificationViewSet
 
 from .views import CompanyViewSet, EstablishmentViewSet, PublicEstablishmentViewSet
 
@@ -26,6 +30,11 @@ company_router.register(r"establishments", EstablishmentViewSet, basename="compa
 establishment_router = routers.NestedDefaultRouter(company_router, r"establishments", lookup="establishment")
 
 establishment_router.register(r"certifications", CertificationViewSet, basename="establishment-certifications")
+establishment_router.register(r"osps", OrganicSystemPlanViewSet, basename="establishment-osps")
+establishment_router.register(
+    r"osp-annual-updates", OSPAnnualUpdateViewSet, basename="establishment-osp-annual-updates"
+)
+establishment_router.register(r"affidavits", LandownerAffidavitViewSet, basename="establishment-affidavits")
 establishment_router.register(r"scans", HistoryScanViewSet, basename="establishment-scans")
 establishment_router.register(r"events", EventViewSet, basename="establishment-events")
 establishment_router.register(r"parcels", ParcelViewSet, basename="establishment-parcels")

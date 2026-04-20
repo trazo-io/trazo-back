@@ -20,6 +20,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from carbon.models import CropType
+from certifications.models import Certification
 from common.models import Gallery, GalleryImage
 from company.models import Company, Establishment
 from history.models import (
@@ -32,16 +33,11 @@ from history.models import (
     SoilManagementEvent,
     WeatherEvent,
 )
-from certifications.models import Certification
 from product.models import Parcel, Product
 from subscriptions.models import Plan, Subscription
 from users.models import User, WorksIn
 
-from ._almond_demo_data import (
-    create_almond_current_events,
-    create_almond_finished_events,
-    create_almond_parcel,
-)
+from ._almond_demo_data import create_almond_current_events, create_almond_finished_events, create_almond_parcel
 
 COMPANY_NAME = "Coastal Valleys Ranch"
 
@@ -1222,7 +1218,8 @@ class Command(BaseCommand):
             equipment_hours=Decimal("10.00"),
             production_efficiency="normal",
             observation="120 GEM rootstock trees planted, 6m x 6m spacing",
-            seeds_source="certified_organic",
+            seeds_source="commercial",
+            seed_certification_status="certified_organic",
             extra_data={
                 "trees_planted": 120,
                 "rootstock": "GEM (clonal)",

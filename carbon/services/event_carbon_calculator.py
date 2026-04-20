@@ -429,6 +429,11 @@ class EventCarbonCalculator:
                 biological_factor = VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["biological_fungicide_manufacturing"]
                 emission_factor = biological_factor.value  # 2.0 kg CO2/kg
                 emission_factor_label = "biological fungicide"
+            elif chemical_subtype == "organic_fungicide":
+                # Organic fungicides (neem oil, potassium bicarbonate, essential oils)
+                organic_factor = VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["organic_fungicide_manufacturing"]
+                emission_factor = organic_factor.value  # 2.5 kg CO2/kg
+                emission_factor_label = "organic fungicide"
 
             # Calculate manufacturing emissions using selected emission factor
             manufacturing_emissions = active_ingredient_kg * emission_factor
@@ -814,7 +819,8 @@ class EventCarbonCalculator:
             # Add benchmark comparison if possible
             if "co2e" in result and result["co2e"] > 0:
                 # Calculate carbon intensity (simplified)
-                area_hectares = self._convert_area_to_hectares(getattr(event, "area", "1"))
+                # Pass event so area_unit is honored (prevents acres being treated as hectares)
+                area_hectares = self._convert_area_to_hectares(getattr(event, "area", "1"), event=event)
                 if area_hectares > 0:
                     carbon_intensity = result["co2e"] / area_hectares
                     benchmark = self.enhanced_usda.get_usda_benchmark_comparison(carbon_intensity, crop_name, state)
@@ -960,8 +966,9 @@ class EventCarbonCalculator:
             # Use EPA/USDA verified emission factors for chemical calculations
             # ENHANCED 2025-01-21: Pass chemical_subtype for explicit emission factor selection.
             # Takes precedence over keyword detection from product_name.
-            # Supports: organic_herbicide, copper_fungicide, sulfur_fungicide, biological_fungicide,
-            #           organic_pesticide, biological_pesticide, organic_fertilizer, slow_release_fertilizer
+            # Supports: organic_herbicide, organic_fungicide, copper_fungicide, sulfur_fungicide,
+            #           biological_fungicide, organic_pesticide, biological_pesticide,
+            #           organic_fertilizer, slow_release_fertilizer
             # ENHANCED 2025-12-11: Pass application fuel parameters for accurate fuel emission tracking.
             # Enables tracking of actual fuel consumed by application equipment (electric, diesel, etc.)
             # ENHANCED 2025-12-24: Pass concentration for accurate active ingredient calculation.
@@ -1161,8 +1168,9 @@ class EventCarbonCalculator:
 
             # Extract explicit chemical_subtype for accurate emission factor selection
             # This takes precedence over keyword detection from product_name
-            # Values: organic_herbicide, copper_fungicide, sulfur_fungicide, biological_fungicide,
-            #         organic_pesticide, biological_pesticide, organic_fertilizer, slow_release_fertilizer
+            # Values: organic_herbicide, organic_fungicide, copper_fungicide, sulfur_fungicide,
+            #         biological_fungicide, organic_pesticide, biological_pesticide,
+            #         organic_fertilizer, slow_release_fertilizer
             chemical_subtype = getattr(event, "chemical_subtype", "") or ""
 
             # Extract application fuel fields (ADDED 2025-12-11)
@@ -1304,6 +1312,7 @@ class EventCarbonCalculator:
             area_covered = production_data.get("area_covered", 0.0)
             fuel_consumed = production_data.get("fuel_consumed")
             equipment_hours = production_data.get("equipment_hours")
+            method = production_data.get("method")  # Farmer-documented method (enables manual-operation routing)
 
             if event.type == "IR":  # Irrigation
                 # Use EPA electricity factors for irrigation pumps
@@ -1399,13 +1408,16 @@ class EventCarbonCalculator:
             elif event.type == "CM":  # Canopy Management - same fuel-based calc as other production events
                 fuel_type = getattr(event, "fuel_type", "diesel")
                 energy_source = getattr(event, "energy_source", "grid")
+                # Pass raw "CM" code so manual-method short-circuit works for hand canopy work
+                # (leaf pulling, hedging, shoot positioning often done by hand with shears)
                 calculation_result = VerifiedEmissionFactors.calculate_production_event_emissions(
-                    production_type="pruning",  # Same fuel pattern as pruning
+                    production_type="CM",
                     area_covered=area_covered,
                     fuel_consumed=fuel_consumed,
                     equipment_hours=equipment_hours,
                     fuel_type=fuel_type,
                     energy_source=energy_source,
+                    method=method,
                 )
                 base_emissions = calculation_result["co2e_kg"]
                 data_sources = calculation_result["data_sources"]
@@ -1416,12 +1428,16 @@ class EventCarbonCalculator:
             elif event.type in [
                 "HA",
                 "PL",
-                "GE",
                 "PR",
-                "IR",
                 "EM",
-            ]:  # Harvesting, Planting, General, Pruning, Irrigation, Equipment Maintenance
-                # Use EPA/USDA production emission factors
+                "TH",
+                "TR",
+                "CU",
+            ]:  # Harvesting, Planting, Pruning, Equipment Maint., Thinning, Transplanting, Cultivation
+                # Use EPA/USDA production emission factors.
+                # Pass the raw 2-letter code so PRODUCTION_TYPE_MAPPING in VerifiedEmissionFactors
+                # routes to the correct per-type calculator (e.g. TH -> _calculate_thinning_emissions
+                # with 0.75 gal/ha, not the 2.5 gal/ha general-production fallback).
                 # Sprint 5: Check for aggregate harvest data
                 if event.type == "HA":
                     extra_data = getattr(event, "extra_data", None) or {}
@@ -1440,12 +1456,13 @@ class EventCarbonCalculator:
                 energy_source = getattr(event, "energy_source", "grid")  # Default to grid if not specified
 
                 calculation_result = VerifiedEmissionFactors.calculate_production_event_emissions(
-                    production_type=production_type,
+                    production_type=event.type,
                     area_covered=area_covered,
                     fuel_consumed=fuel_consumed,
                     equipment_hours=equipment_hours,
                     fuel_type=fuel_type,
                     energy_source=energy_source,
+                    method=method,
                 )
 
                 base_emissions = calculation_result["co2e_kg"]
@@ -1467,6 +1484,7 @@ class EventCarbonCalculator:
                     equipment_hours=equipment_hours,
                     fuel_type=fuel_type,
                     energy_source=energy_source,
+                    method=method,
                 )
 
                 base_emissions = calculation_result["co2e_kg"]
@@ -1900,11 +1918,28 @@ class EventCarbonCalculator:
             efficiency_score = 60.0
 
             if event.type == "FC":  # Fuel Consumption
+                # `fuel_amount` is normalized to **liters** (or kWh for electric) by
+                # _get_structured_equipment_data. `FUEL_EMISSION_FACTORS` are all
+                # per-gallon except electricity (per-kWh) and natural_gas (per-cubic-foot).
+                # FIX 2026-04-11: convert liters → gallons before applying per-gallon
+                # factors. Previously, this line multiplied liters by a per-gallon
+                # factor, producing a ~3.785x overestimate for every liquid fuel.
                 fuel_amount = equipment_data["fuel_amount"]
                 fuel_type = equipment_data["fuel_type"].lower()
 
                 emission_factor = self.FUEL_EMISSION_FACTORS.get(fuel_type, self.FUEL_EMISSION_FACTORS["diesel"])
-                base_emissions = fuel_amount * emission_factor
+
+                if fuel_type == "electric":
+                    # fuel_amount is kWh, factor is per-kWh
+                    base_emissions = fuel_amount * emission_factor
+                elif fuel_type == "natural_gas":
+                    # Factor is per cubic foot. Approximate 1 L natural gas ≈ 0.035 cf.
+                    base_emissions = (fuel_amount * 0.035) * emission_factor
+                else:
+                    # Liquid fuels (diesel / gasoline / propane / biodiesel / none):
+                    # fuel_amount is in liters, factor is per gallon → convert first.
+                    fuel_gallons = fuel_amount / 3.78541
+                    base_emissions = fuel_gallons * emission_factor
 
                 # Apply efficiency modifier based on structured efficiency rating
                 efficiency_modifier = {
@@ -1953,8 +1988,19 @@ class EventCarbonCalculator:
 
             elif event.type == "BD":  # Breakdown
                 # Use actual fuel/repair data if available, otherwise 0
+                # Reference VerifiedEmissionFactors as the single source of truth for emission factors
+                # (avoids factor drift when EPA/USDA updates are applied).
                 repair_fuel = self._extract_numeric_value(getattr(event, "fuel_consumed", "0"), default=0.0)
-                base_emissions = repair_fuel * 2.70 if repair_fuel > 0 else 0.0  # diesel kg CO₂/L
+                if repair_fuel > 0:
+                    from .verified_emission_factors import VerifiedEmissionFactors
+
+                    fuel_unit = getattr(event, "fuel_unit", "L") or "L"
+                    # Convert to gallons for EPA diesel factor (10.21 kg CO2/gal)
+                    repair_fuel_gallons = repair_fuel / 3.78541 if fuel_unit == "L" else repair_fuel
+                    diesel_factor = VerifiedEmissionFactors.EPA_DIESEL_FACTORS["agricultural_equipment"]
+                    base_emissions = repair_fuel_gallons * diesel_factor.value
+                else:
+                    base_emissions = 0.0
                 cost_estimate = float(event.maintenance_cost or 0)
                 efficiency_score = 30.0  # Broken equipment is very inefficient
 
@@ -2017,8 +2063,11 @@ class EventCarbonCalculator:
             data_completeness_factors = []
 
             # Get area managed - critical for proper scaling
+            # CRITICAL: pass event so area_unit is read correctly (acres vs hectares).
+            # Without event, _convert_area_to_hectares defaults to 'ha' and treats 85 acres as 85 ha.
             area_hectares = self._convert_area_to_hectares(
-                getattr(event, "area_covered", None) or getattr(event, "area", "0")
+                getattr(event, "area_covered", None) or getattr(event, "area", "0"),
+                event=event,
             )
 
             # ENHANCED: Calculate fuel consumption emissions (standardized across event types)
@@ -2045,21 +2094,30 @@ class EventCarbonCalculator:
                 fuel_unit = getattr(event, "fuel_unit", "L")
                 fuel_type = getattr(event, "fuel_type", "diesel") or "diesel"
 
+                # Reference VerifiedEmissionFactors as single source of truth (prevents drift)
+                from .verified_emission_factors import VerifiedEmissionFactors
+
                 if fuel_type == "electric":
-                    # Electric equipment: use kWh directly
-                    fuel_emissions = float(fuel_consumed) * self.FUEL_EMISSION_FACTORS.get("electric", 0.39)
+                    # Electric equipment: use kWh directly with country-specific grid factor
+                    electricity_factor = VerifiedEmissionFactors.get_country_electricity_factor().value
+                    fuel_emissions = float(fuel_consumed) * electricity_factor
+                    fuel_gallons = 0  # No gallons involved for electric
                 else:
                     # Convert to gallons for EPA calculation
                     if fuel_unit == "L":
                         fuel_gallons = float(fuel_consumed) / 3.78541
-                    else:  # already in gallons
+                    elif fuel_unit in ("gal", "gallons"):
+                        fuel_gallons = float(fuel_consumed)
+                    else:
+                        # Unknown unit — log warning and assume gallons
+                        logger.warning(f"Soil Management: unexpected fuel_unit={fuel_unit!r}, assuming gallons")
                         fuel_gallons = float(fuel_consumed)
 
-                    # Use centralized EPA factor for the actual fuel type
-                    emission_factor = self.FUEL_EMISSION_FACTORS.get(
-                        fuel_type, self.FUEL_EMISSION_FACTORS.get("diesel", 10.21)
+                    # Use VerifiedEmissionFactors EPA_FUEL_FACTORS for the actual fuel type
+                    fuel_factor = VerifiedEmissionFactors.EPA_FUEL_FACTORS.get(
+                        fuel_type, VerifiedEmissionFactors.EPA_FUEL_FACTORS.get("diesel")
                     )
-                    fuel_emissions = fuel_gallons * emission_factor
+                    fuel_emissions = fuel_gallons * fuel_factor.value
                 confidence_score = 90.0  # High confidence with fuel data
                 data_completeness_factors.extend(["fuel_consumption_documented", "epa_factors_applied"])
 
@@ -2257,6 +2315,18 @@ class EventCarbonCalculator:
             if soil_flux_factor_data:
                 data_sources.append(soil_flux_factor_data["source"])
 
+            # Map raw subtype code to human-readable label
+            soil_type_labels = {
+                "ST": "soil_testing",
+                "PA": "ph_adjustment",
+                "OM": "organic_matter",
+                "CC": "cover_crop",
+                "TI": "tillage",
+                "CO": "composting",
+                "GR": "grazing",
+            }
+            soil_label = soil_type_labels.get(event.type, event.type)
+
             result = {
                 "co2e": round(base_emissions, 3),
                 "efficiency_score": confidence_score,
@@ -2283,8 +2353,11 @@ class EventCarbonCalculator:
                     "data_completeness": data_completeness_factors,
                 },
                 "breakdown": {
-                    "soil_activity": event.type,
+                    "soil_activity": soil_label,
                     "area_managed": area_hectares,
+                    # Backend always converts to hectares; preview label must match to avoid
+                    # "85 acres × -1 kg/acre = -85" display that doesn't match the stored total.
+                    "area_unit": "ha",
                     "fuel_consumed": fuel_consumed or 0,
                     "fuel_unit": getattr(event, "fuel_unit", "L"),
                     "equipment_hours": equipment_hours or 0,
@@ -2457,29 +2530,38 @@ class EventCarbonCalculator:
 
             # Calculate fuel emissions if fuel data provided
             if fuel_consumed and fuel_consumed > 0:
+                # Reference VerifiedEmissionFactors as single source of truth (prevents drift)
+                from .verified_emission_factors import VerifiedEmissionFactors
+
                 if fuel_type == "electric":
-                    # EPA eGRID 2023: 0.39 kg CO2e per kWh
-                    fuel_emissions = fuel_consumed * 0.39
+                    # Country-specific electricity factor (US: 0.39 kg CO2/kWh EPA eGRID 2023)
+                    electricity_factor = VerifiedEmissionFactors.get_country_electricity_factor().value
+                    fuel_emissions = fuel_consumed * electricity_factor
                     calculation_method = "epa_egrid_electricity"
                     data_source = "EPA eGRID 2023"
                     logger.info(
-                        f"Pest Management electric calculation: {fuel_consumed} {fuel_unit} × 0.39 = {fuel_emissions:.2f} kg CO2e"
+                        f"Pest Management electric: {fuel_consumed} {fuel_unit} × {electricity_factor} = {fuel_emissions:.2f} kg CO2e"
                     )
                 else:
                     # Convert to gallons for EPA calculation
                     if fuel_unit == "L":
                         fuel_gallons = float(fuel_consumed) / 3.78541
-                    else:  # already in gallons
+                    elif fuel_unit in ("gal", "gallons"):
+                        fuel_gallons = float(fuel_consumed)
+                    else:
+                        logger.warning(f"Pest Management: unexpected fuel_unit={fuel_unit!r}, assuming gallons")
                         fuel_gallons = float(fuel_consumed)
 
-                    # EPA fuel factors from centralized registry (choices.py)
-                    emission_factor = self.FUEL_EMISSION_FACTORS.get(fuel_type, 10.21)
-                    fuel_emissions = fuel_gallons * emission_factor
+                    # Use VerifiedEmissionFactors for fuel factor (single source of truth)
+                    fuel_factor = VerifiedEmissionFactors.EPA_FUEL_FACTORS.get(
+                        fuel_type, VerifiedEmissionFactors.EPA_FUEL_FACTORS.get("diesel")
+                    )
+                    fuel_emissions = fuel_gallons * fuel_factor.value
 
                     calculation_method = "epa_fuel_combustion"
                     data_source = "EPA GHG Emission Factors Hub (40 CFR Part 98)"
                     logger.info(
-                        f"Pest Management fuel calculation: {fuel_consumed} {fuel_unit} = {fuel_gallons:.2f} gal × {emission_factor} = {fuel_emissions:.2f} kg CO2e"
+                        f"Pest Management fuel: {fuel_consumed} {fuel_unit} = {fuel_gallons:.2f} gal × {fuel_factor.value} = {fuel_emissions:.2f} kg CO2e"
                     )
 
                 confidence_score = 90.0  # High confidence with fuel data
@@ -2518,6 +2600,17 @@ class EventCarbonCalculator:
 
             recommendations = self._generate_pest_recommendations(event, total_emissions)
 
+            # Map raw subtype code to human-readable label
+            pest_type_labels = {
+                "SC": "scouting",
+                "BR": "beneficial_release",
+                "TM": "trap_monitoring",
+                "PI": "pest_identification",
+                "TA": "threshold_assessment",
+                "IP": "ipm_implementation",
+            }
+            pest_label = pest_type_labels.get(event.type, event.type)
+
             result = {
                 "co2e": round(total_emissions, 3),
                 "efficiency_score": confidence_score,
@@ -2525,8 +2618,8 @@ class EventCarbonCalculator:
                 "data_source": data_source,
                 "verification_status": verification_status,
                 "breakdown": {
-                    "pest_activity": event.type,
-                    "pest_management_type": event.type,
+                    "pest_activity": pest_label,
+                    "pest_management_type": pest_label,
                     "base_emissions": round(base_emissions, 3),
                     "fuel_emissions": round(fuel_emissions, 3),
                     "fuel_consumed": fuel_consumed,
@@ -2789,12 +2882,24 @@ class EventCarbonCalculator:
             if hasattr(event, "fuel_consumed") and event.fuel_consumed is not None:
                 fuel_amount = float(event.fuel_consumed)
                 fuel_unit = getattr(event, "fuel_unit", "L")
+                fuel_type_for_density = (getattr(event, "fuel_type", None) or "diesel").lower()
 
-                # Convert to liters if needed
-                if fuel_unit == "gal":
+                # Convert to liters if needed (electric stays in kWh)
+                if fuel_type_for_density == "electric":
+                    pass  # leave fuel_amount as kWh — downstream handles per-kWh factor
+                elif fuel_unit == "gal":
                     fuel_amount *= 3.78541  # gallons to liters
                 elif fuel_unit == "kg":
-                    fuel_amount *= 1.2  # approximate kg to L for diesel
+                    # Convert kg → L using fuel-specific density (L/kg = 1 / kg-per-L).
+                    # Agent finding #2: treating all fuels as diesel density (1.2 L/kg)
+                    # mis-converted propane by ~2.4x. Sources: EPA 40 CFR Part 98 densities.
+                    kg_to_l = {
+                        "diesel": 1.18,  # 0.85 kg/L
+                        "gasoline": 1.34,  # 0.745 kg/L
+                        "propane": 2.03,  # 0.493 kg/L
+                        "biodiesel": 1.15,  # 0.87 kg/L
+                    }.get(fuel_type_for_density, 1.18)
+                    fuel_amount *= kg_to_l
 
                 return {
                     "fuel_amount": fuel_amount,
@@ -2866,6 +2971,10 @@ class EventCarbonCalculator:
                 }
 
             # Fallback to legacy fields and history data
+            # FIX (2026-04-12): Read actual model values for fuel/equipment even when
+            # area_covered is NULL. EM (Equipment Maintenance) events legitimately have
+            # no area_covered but DO have fuel_consumed and equipment_hours. Previously
+            # these were hardcoded to 0.0, causing carbon=0 and "No CO₂ data" on timeline.
             area = 1.0  # Default area
             if hasattr(event, "history") and event.history and hasattr(event.history, "parcel"):
                 parcel_area = getattr(event.history.parcel, "area", "1")
@@ -2873,14 +2982,14 @@ class EventCarbonCalculator:
 
             return {
                 "area_hectares": area,
-                "yield_quantity": 0.0,
-                "yield_unit": "kg",
-                "fuel_consumed": 0.0,
-                "fuel_unit": "L",
-                "equipment_hours": 0.0,
-                "transportation_distance": 0.0,
-                "transportation_unit": "km",
-                "efficiency": "normal",
+                "yield_quantity": float(getattr(event, "yield_quantity", 0) or 0),
+                "yield_unit": getattr(event, "yield_unit", "kg"),
+                "fuel_consumed": float(getattr(event, "fuel_consumed", 0) or 0),
+                "fuel_unit": getattr(event, "fuel_unit", "L"),
+                "equipment_hours": float(getattr(event, "equipment_hours", 0) or 0),
+                "transportation_distance": float(getattr(event, "transportation_distance", 0) or 0),
+                "transportation_unit": getattr(event, "transportation_unit", "km"),
+                "efficiency": getattr(event, "production_efficiency", "normal"),
                 "data_source": "legacy_fields",
             }
 
@@ -2960,11 +3069,47 @@ class EventCarbonCalculator:
             # Estimate water volume for irrigation
             water_volume_gallons = None
             if event.type == "IR":  # Irrigation
-                if hasattr(event, "volume") and event.volume:
-                    water_volume_gallons = self._convert_volume_to_gallons(event.volume, event, crop_name)
-                else:
-                    # Estimate based on area (1000 gallons per acre is conservative)
-                    water_volume_gallons = area_covered * 1000
+                # Preferred: farmer-reported irrigation_depth × area (USDA standard:
+                # 27,154 gal/inch/acre). This is the accurate path and matches the
+                # live carbon preview. Must be checked before legacy fallbacks.
+                irrigation_depth_raw = getattr(event, "irrigation_depth", None)
+                irrigation_depth_unit = getattr(event, "irrigation_depth_unit", "inches") or "inches"
+                if irrigation_depth_raw and area_covered:
+                    try:
+                        depth_inches = float(irrigation_depth_raw)
+                        if irrigation_depth_unit == "cm":
+                            depth_inches = depth_inches * 0.3937
+                        water_volume_gallons = area_covered * depth_inches * 27154.0
+                    except (TypeError, ValueError):
+                        water_volume_gallons = None
+                if not water_volume_gallons:
+                    if hasattr(event, "volume") and event.volume:
+                        water_volume_gallons = self._convert_volume_to_gallons(event.volume, event, crop_name)
+                    else:
+                        # Estimate based on area (1000 gallons per acre is conservative)
+                        water_volume_gallons = area_covered * 1000
+
+            # Extract farmer-documented method for manual-operation detection
+            # (e.g. "Hand thinning with pruning shears" should not apply USDA mechanical averages).
+            # Priority order:
+            #   1. extra_data.method          — free-text `production_method` bridged by frontend
+            #   2. extra_data.production_method — legacy alias
+            #   3. extra_data.harvest_method  — structured HA dropdown (hand_picking, mechanical, ...)
+            # Including harvest_method ensures the structured HA dropdown choice alone is
+            # sufficient to route manual harvests through _is_manual_method() — the farmer
+            # shouldn't also have to type "Hand thinning" into production_method to get
+            # accurate manual-operation carbon. Note: History.production_method is a
+            # different field (organic/conventional) and must NOT be used here.
+            extra_data = getattr(event, "extra_data", None) or {}
+            # `getattr(event, "harvest_method", None)` is a defensive fallback for any
+            # future serializer that writes the dropdown top-level on ProductionEvent.
+            # Currently it resolves to None (ProductionEvent has no such attr) — safe.
+            method = (
+                extra_data.get("method")
+                or extra_data.get("production_method")
+                or extra_data.get("harvest_method")
+                or getattr(event, "harvest_method", None)
+            )
 
             return {
                 "production_type": production_type,
@@ -2973,6 +3118,7 @@ class EventCarbonCalculator:
                 "fuel_consumed": fuel_consumed,
                 "equipment_hours": equipment_hours,
                 "water_volume_gallons": water_volume_gallons,
+                "method": method,
                 "structured_data": structured_data,
             }
 
@@ -2985,6 +3131,7 @@ class EventCarbonCalculator:
                 "fuel_consumed": None,
                 "equipment_hours": None,
                 "water_volume_gallons": None,
+                "method": None,
                 "structured_data": {},
             }
 
@@ -3378,8 +3525,22 @@ class EventCarbonCalculator:
                 return number
             elif "m²" in area_str or "m2" in area_str:
                 return number / 10000
-            else:
-                return number  # Assume hectares if no unit
+
+            # No unit suffix in the string — fall back to event.area_unit
+            # CRITICAL: the preview path (carbon/views.py MockSoilEvent) sends area_covered as a
+            # plain number string like "85" with area_unit set separately. Without this fallback,
+            # acres get treated as hectares (85 → 85 instead of 34.4).
+            event_area_unit = getattr(event, "area_unit", None) if event else None
+            if event_area_unit and str(event_area_unit).lower() in ["acre", "acres", "ac"]:
+                return number * 0.404686
+            if event_area_unit and str(event_area_unit).lower() in [
+                "m²",
+                "m2",
+                "sqm",
+                "square_meters",
+            ]:
+                return number / 10000
+            return number  # Assume hectares if no unit info available
 
         except:
             if event:

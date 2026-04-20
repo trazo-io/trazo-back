@@ -216,6 +216,7 @@ REST_FRAMEWORK = {
         "qr_scan": "10000/hour",
         "blockchain": "1000/hour",
     },
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 
 # SECURITY: Disable aggressive rate limiting in development
@@ -242,6 +243,11 @@ MIDDLEWARE = [
     # REMOVED: backend.security.middleware.RateLimitHeadersMiddleware
     # REMOVED: backend.security.middleware.SecurityEventMiddleware
     "subscriptions.middleware.UsageTrackingMiddleware",
+    # Resolve JWT cookie to request.user BEFORE AuditlogMiddleware so audit
+    # entries carry a named actor (7 CFR 205.103 / 21 CFR Part 11 attribution).
+    "users.middleware.JWTCookieActorMiddleware",
+    # NOP audit trail — captures request user on every model save (Sprint 2)
+    "auditlog.middleware.AuditlogMiddleware",
 ]
 
 # Disable rate limiting for development

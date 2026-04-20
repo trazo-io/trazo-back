@@ -152,30 +152,36 @@ class HistoryAdmin(admin.ModelAdmin):
         """Render image thumbnails for a gallery with edit/delete links."""
         parts = []
         if label:
-            parts.append(format_html(
-                '<div style="font-weight:bold; margin:8px 0 4px; font-size:12px; '
-                'color:#666;">{}</div>',
-                label,
-            ))
+            parts.append(
+                format_html(
+                    '<div style="font-weight:bold; margin:8px 0 4px; font-size:12px; ' 'color:#666;">{}</div>',
+                    label,
+                )
+            )
         for img in gallery.images.all():
             url = img.url
             if not url:
                 continue
             edit_url = reverse("admin:common_galleryimage_change", args=[img.pk])
             delete_url = reverse("admin:common_galleryimage_delete", args=[img.pk])
-            parts.append(format_html(
-                '<div style="display:inline-block; margin:4px; text-align:center; '
-                'vertical-align:top;">'
-                '<a href="{}" target="_blank">'
-                '<img src="{}" style="max-height:120px; max-width:160px; '
-                "object-fit:cover; border-radius:4px; border:1px solid #ddd; "
-                'cursor:pointer;" />'
-                "</a>"
-                '<br/><a href="{}" style="font-size:11px;">Edit</a>'
-                ' | <a href="{}" style="font-size:11px; color:#c00;">Delete</a>'
-                "</div>",
-                url, url, edit_url, delete_url,
-            ))
+            parts.append(
+                format_html(
+                    '<div style="display:inline-block; margin:4px; text-align:center; '
+                    'vertical-align:top;">'
+                    '<a href="{}" target="_blank">'
+                    '<img src="{}" style="max-height:120px; max-width:160px; '
+                    "object-fit:cover; border-radius:4px; border:1px solid #ddd; "
+                    'cursor:pointer;" />'
+                    "</a>"
+                    '<br/><a href="{}" style="font-size:11px;">Edit</a>'
+                    ' | <a href="{}" style="font-size:11px; color:#c00;">Delete</a>'
+                    "</div>",
+                    url,
+                    url,
+                    edit_url,
+                    delete_url,
+                )
+            )
         return parts
 
     def production_images(self, obj):
@@ -213,10 +219,13 @@ class HistoryAdmin(admin.ModelAdmin):
         if not html_parts:
             return format_html("<em>No images found in this production or its events.</em>")
 
-        html_parts.insert(0, format_html(
-            '<div style="margin-bottom:8px; font-size:13px;"><strong>{} image(s)</strong> total</div>',
-            total,
-        ))
+        html_parts.insert(
+            0,
+            format_html(
+                '<div style="margin-bottom:8px; font-size:13px;"><strong>{} image(s)</strong> total</div>',
+                total,
+            ),
+        )
         return format_html("".join(str(p) for p in html_parts))
 
     production_images.short_description = "Images"

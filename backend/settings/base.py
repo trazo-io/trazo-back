@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
+    "drf_spectacular",
     "whitenoise.runserver_nostatic",
     "corsheaders",
     "users",
@@ -87,6 +88,8 @@ INSTALLED_APPS = [
     "django_ratelimit",
     # Security
     "backend.security",
+    # NOP audit trail (Sprint 2 — 21 CFR Part 11 principles for organic recordkeeping)
+    "auditlog",
 ]
 
 MIDDLEWARE = [
@@ -112,6 +115,11 @@ MIDDLEWARE = [
     "backend.security.middleware.RateLimitHeadersMiddleware",  # Add rate limit headers
     "backend.security.middleware.SecurityEventMiddleware",  # Log security events last
     "subscriptions.middleware.UsageTrackingMiddleware",
+    # Resolve JWT cookie to request.user BEFORE AuditlogMiddleware so audit
+    # entries carry a named actor (7 CFR 205.103 / 21 CFR Part 11 attribution).
+    "users.middleware.JWTCookieActorMiddleware",
+    # NOP audit trail — captures request user on every model save (Sprint 2)
+    "auditlog.middleware.AuditlogMiddleware",
 ]
 
 ROOT_URLCONF = "backend.urls"
@@ -144,6 +152,44 @@ REST_FRAMEWORK = {
         "qr_scan": "300/hour",
         "blockchain": "20/hour",
     },
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+# drf-spectacular: OpenAPI 3.1 schema configuration
+# Used to generate TypeScript types for the frontend via openapi-typescript.
+# Source of truth for the API contract between Django backend and React frontend.
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Trazo API",
+    "DESCRIPTION": (
+        "Trazo Agricultural Transparency Platform API. "
+        "Provides endpoints for event logging, transparency scoring, carbon calculations, "
+        "and QR-code consumer transparency data."
+    ),
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,  # /api/schema/ not included in schema itself
+    "COMPONENT_SPLIT_REQUEST": True,  # Separate request/response schemas
+    "SCHEMA_PATH_PREFIX": r"/api/",
+    "SORT_OPERATIONS": False,
+    "ENUM_NAME_OVERRIDES": {
+        # Prevents duplicate enum warnings when same choices used in multiple models
+        "FuelTypeEnum": "carbon.choices.FUEL_TYPES",
+    },
+    # Trazo-specific: tag operations by app for navigation
+    "TAGS": [
+        {"name": "events", "description": "Agricultural event logging (8 event types)"},
+        {"name": "transparency", "description": "Transparency score and consumer data"},
+        {"name": "carbon", "description": "Carbon footprint calculations"},
+        {"name": "products", "description": "Production and parcel management"},
+        {"name": "subscriptions", "description": "Billing and feature gating"},
+    ],
+    "SERVERS": [
+        {"url": "http://localhost:8000", "description": "Local development"},
+        {"url": "https://trazo-api-6gtyp.ondigitalocean.app", "description": "Production"},
+    ],
+    # Filter endpoints before schema generation (skip non-introspectable views)
+    "PREPROCESSING_HOOKS": [
+        "backend.schema_hooks.exclude_problematic_endpoints",
+    ],
 }
 
 TEMPLATES = [

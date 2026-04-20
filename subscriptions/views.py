@@ -375,6 +375,7 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
             # If return_url is provided, URL-encode it to prevent param collision
             if return_url:
                 from urllib.parse import quote
+
                 success_url_params += f"&return_url={quote(return_url, safe='')}"
 
             success_url = f"{frontend_url}/admin/dashboard/stripe-success?{success_url_params}"

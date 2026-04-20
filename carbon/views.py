@@ -249,6 +249,12 @@ class EventTemplateViewSet(viewsets.ReadOnlyModelViewSet):
             "display_priority", "template_category", "order_sequence", "name"
         )
 
+        # Filter by farming_approach when provided (e.g. 'organic', 'regenerative').
+        # Unrecognised values are silently ignored to stay backward compatible.
+        farming_approach = request.query_params.get("farming_approach")
+        if farming_approach:
+            templates = templates.filter(production_template__farming_approach=farming_approach)
+
         serializer = QuickEventTemplateSerializer(templates, many=True)
         return Response({"crop_type": CropTypeSerializer(crop_type).data, "templates": serializer.data})
 
@@ -977,6 +983,9 @@ class OptimizedCarbonCalculator:
                     elif chemical_subtype_lower in ["biological_fungicide", "biological"]:
                         factor = VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["biological_fungicide_manufacturing"]
                         factor_label = "biological fungicide"
+                    elif chemical_subtype_lower == "organic_fungicide":
+                        factor = VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["organic_fungicide_manufacturing"]
+                        factor_label = "organic fungicide"
                     else:
                         factor = VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["fungicide_manufacturing"]
                         factor_label = "synthetic fungicide"
@@ -1263,6 +1272,20 @@ class OptimizedCarbonCalculator:
             fuel_consumed_kwh = processed_event.get("fuel_consumed_kwh")
             if fuel_consumed_kwh is not None:
                 calc_kwargs["fuel_consumed_kwh"] = fuel_consumed_kwh
+            # Pass irrigation-specific fields for accurate carbon calculation
+            pump_depth_ft = processed_event.get("pump_depth_ft")
+            if pump_depth_ft is not None:
+                calc_kwargs["pump_depth_ft"] = pump_depth_ft
+            electricity_source = processed_event.get("electricity_source")
+            if electricity_source:
+                calc_kwargs["electricity_source"] = electricity_source
+            irrigation_depth_inches = processed_event.get("irrigation_depth_inches")
+            if irrigation_depth_inches is not None:
+                calc_kwargs["irrigation_depth_inches"] = irrigation_depth_inches
+            # Pass farmer-documented method for manual-operation detection
+            method = processed_event.get("method")
+            if method:
+                calc_kwargs["method"] = method
 
             # Use proper USDA verified emission factors with validation
             calculation_result = VerifiedEmissionFactors.calculate_production_event_emissions(
@@ -1478,6 +1501,7 @@ class OptimizedCarbonCalculator:
                 self.method = event_data.get("method", "")
                 # Fuel consumption fields (converted to proper types)
                 self.fuel_consumed = event_data.get("fuel_consumed")
+                self.fuel_type = event_data.get("fuel_type", "diesel")
                 self.fuel_unit = event_data.get("fuel_unit", "L")
                 self.equipment_hours = event_data.get("equipment_hours")
                 # Tillage-specific fields
@@ -1489,10 +1513,17 @@ class OptimizedCarbonCalculator:
                 self.temperature_range = event_data.get("temperature_range")
                 # SPRINT 6 FIX (2025-12-26): Add amendment fields for lime dissolution calculation
                 # These are CRITICAL for IPCC lime dissolution emissions (0.44 kg CO2/kg limestone)
-                # Frontend sends: amendment_type (limestone/dolomite), amendment_amount, amendment_unit
+                # Bridge legacy (amendment_unit) and registry (amendment_amount_unit) naming conventions
                 self.amendment_type = event_data.get("amendment_type")
                 self.amendment_amount = event_data.get("amendment_amount")
                 self.amendment_unit = event_data.get("amendment_unit", "kg")
+                # Calculator reads these via getattr — must exist as attributes
+                self.amendment_amount_unit = event_data.get("amendment_amount_unit") or self.amendment_unit
+                # Parse amendment_amount to numeric for calculator's preferred code path
+                try:
+                    self.amendment_amount_numeric = float(self.amendment_amount) if self.amendment_amount else None
+                except (ValueError, TypeError):
+                    self.amendment_amount_numeric = None
                 # Add a minimal id for USDA metadata (prevents attribute error)
                 self.id = event_data.get("id", 1)
 
@@ -1938,6 +1969,9 @@ class OptimizedEventProcessor:
                 "fuel_type": fuel_type,
                 "energy_source": event_data.get("energy_source", "grid"),
                 "conversion_audit": conversion_audit,  # Track conversions for transparency
+                # Farmer-documented method enables manual-operation detection in VerifiedEmissionFactors
+                # (e.g. "Hand thinning" → manual path instead of USDA mechanical averages)
+                "method": event_data.get("method") or event_data.get("production_method"),
             }
 
             # Add optional converted values if present
@@ -1959,6 +1993,34 @@ class OptimizedEventProcessor:
             water_source = event_data.get("water_source")
             if water_source:
                 processed_data["water_source"] = water_source
+
+            # Pass irrigation-specific fields for accurate carbon calculation
+            # pump_depth_ft overrides water_source-based pump factor (USDA NRCS pump curve)
+            pump_depth_raw = event_data.get("pump_depth_ft")
+            if pump_depth_raw is not None and pump_depth_raw != "":
+                try:
+                    processed_data["pump_depth_ft"] = float(pump_depth_raw)
+                except (ValueError, TypeError):
+                    pass
+
+            # electricity_source overrides default grid factor (solar=0.02, wind=0.01)
+            electricity_source = event_data.get("electricity_source")
+            if electricity_source:
+                processed_data["electricity_source"] = electricity_source
+
+            # irrigation_depth enables precise water volume calculation
+            # (area × depth × 27,154 gal/inch/acre) instead of text-based heuristics
+            irrigation_depth_raw = event_data.get("irrigation_depth")
+            if irrigation_depth_raw is not None and irrigation_depth_raw != "":
+                try:
+                    depth_value = float(irrigation_depth_raw)
+                    depth_unit = event_data.get("irrigation_depth_unit", "inches")
+                    # Convert to inches for USDA calculation (1 cm = 0.3937 inches)
+                    if depth_unit == "cm":
+                        depth_value = depth_value * 0.3937
+                    processed_data["irrigation_depth_inches"] = depth_value
+                except (ValueError, TypeError):
+                    pass
 
             # Mark that unit conversions were successfully applied
             processed_data["unit_conversions_applied"] = True
@@ -2014,6 +2076,15 @@ class OptimizedEventProcessor:
                 "fuel_type": event_data.get("fuel_type", "diesel"),
                 "energy_source": event_data.get("energy_source", "grid"),
                 "water_source": event_data.get("water_source"),
+                # Irrigation-specific fields (pass through with minimal conversion)
+                "pump_depth_ft": safe_float(event_data.get("pump_depth_ft"), default=None),
+                "electricity_source": event_data.get("electricity_source"),
+                # Electric fuel: pass kWh directly (no gallon conversion)
+                **(
+                    {"fuel_consumed_kwh": safe_float(event_data.get("fuel_consumed"))}
+                    if event_data.get("fuel_type") == "electric" and event_data.get("fuel_consumed")
+                    else {}
+                ),
                 # Add fallback indicators for debugging
                 "processing_method": "fallback_basic",
                 "unit_conversions_applied": False,
@@ -2126,6 +2197,7 @@ class OptimizedEventProcessor:
             "method": event_data.get("method", ""),
             # Fuel consumption fields for standardized calculation (convert to float)
             "fuel_consumed": float(event_data.get("fuel_consumed", 0)) if event_data.get("fuel_consumed") else None,
+            "fuel_type": event_data.get("fuel_type", "diesel"),
             "fuel_unit": event_data.get("fuel_unit", "L"),
             "equipment_hours": (
                 float(event_data.get("equipment_hours", 0)) if event_data.get("equipment_hours") else None
@@ -2139,10 +2211,13 @@ class OptimizedEventProcessor:
             "temperature_range": event_data.get("temperature_range"),
             # SPRINT 6 FIX (2025-12-26): Add amendment fields for lime dissolution calculation
             # These are CRITICAL for IPCC lime dissolution emissions (0.44 kg CO2/kg limestone)
-            # Frontend sends: amendment_type (limestone/dolomite), amendment_amount, amendment_unit
+            # Frontend form sends legacy names: amendment_amount, amendment_unit
+            # Calculator reads registry names: amendment_amount_numeric, amendment_amount_unit
+            # Bridge both naming conventions so calculator getattr() finds them
             "amendment_type": event_data.get("amendment_type"),
             "amendment_amount": event_data.get("amendment_amount"),
             "amendment_unit": event_data.get("amendment_unit", "kg"),
+            "amendment_amount_unit": event_data.get("amendment_amount_unit") or event_data.get("amendment_unit", "kg"),
         }
 
     @classmethod
@@ -2397,9 +2472,17 @@ def calculate_event_carbon_impact(request):
                     )
                     self.area_unit = event_data.get("area_unit", "ha")
 
-                    # Handle fuel consumption with unit conversion
-                    fuel_consumed = event_data.get("fuel_consumed")
-                    self.fuel_consumed = float(fuel_consumed) if fuel_consumed and fuel_consumed.strip() else None
+                    # Handle fuel consumption with unit conversion. Frontend sends
+                    # strings via react-hook-form, but the saved-event path can send
+                    # numbers — coerce defensively so a bare float doesn't AttributeError
+                    # on .strip(). Empty/whitespace strings and zero collapse to None so
+                    # downstream calcs treat them as "not reported".
+                    fuel_raw = event_data.get("fuel_consumed")
+                    try:
+                        fuel_str = str(fuel_raw).strip() if fuel_raw is not None else ""
+                        self.fuel_consumed = float(fuel_str) if fuel_str else None
+                    except (TypeError, ValueError):
+                        self.fuel_consumed = None
                     self.fuel_unit = event_data.get("fuel_unit", "L")
 
                     # Equipment hours (frontend sends 'equipment_hours' not 'equipment_operating_hours')
@@ -2419,6 +2502,32 @@ def calculate_event_carbon_impact(request):
                     self.transportation_unit = event_data.get("transportation_unit", "km")
                     self.production_efficiency = event_data.get("production_efficiency", "normal")
 
+                    # Fuel type + energy source needed for electric-equipment routing and
+                    # so downstream _calculate_harvesting_emissions etc. select the right
+                    # EPA factor (diesel 10.21 vs gasoline 8.78 vs electricity 0.39/kWh).
+                    # Preserve empty string when farmer didn't select a fuel type — that
+                    # is the explicit signal for "no powered equipment" used by the
+                    # manual-operation short-circuit. Downstream per-type calculators
+                    # still default to diesel when they actually need a factor.
+                    self.fuel_type = event_data.get("fuel_type") or ""
+                    self.energy_source = event_data.get("energy_source") or "grid"
+
+                    # Farmer-documented production method (free-text, e.g. "Hand thinning
+                    # with pruning shears"). Drives the manual-operation short-circuit in
+                    # VerifiedEmissionFactors.calculate_production_event_emissions:
+                    # "hand"/"manual"/"shears" keywords route HA/TH/PL/PR/TR/CU/CM events
+                    # to ~0.1 kg CO₂e/acre instead of USDA mechanical averages (~246 kg).
+                    # Without this wiring the preview could never match the saved-event
+                    # calculation, which reads extra_data.method off the real model.
+                    self.method = event_data.get("production_method") or event_data.get("method") or ""
+
+                    # Structured harvest method dropdown (HA subtype: hand_picking, mechanical,
+                    # shake_and_catch, ...). Distinct from `method` above (free-text). Mirrored
+                    # into extra_data below so _extract_production_event_data() picks it up via
+                    # extra_data.get("harvest_method") — this lets the dropdown alone drive
+                    # manual-operation detection without also requiring free-text input.
+                    self.harvest_method = event_data.get("harvest_method") or ""
+
                     # Legacy support for existing fields
                     duration = event_data.get("duration", "2 hours")
                     equipment_used = event_data.get("equipment_used", "irrigation_system")
@@ -2437,7 +2546,13 @@ def calculate_event_carbon_impact(request):
                     self.area = f"{self.area_covered} {self.area_unit}"
                     self.equipment = equipment_used
 
-                    # Create structured data for EPA calculations with correct field names
+                    # Create structured data for EPA calculations with correct field names.
+                    # `method` is read by _extract_production_event_data() from extra_data
+                    # to trigger manual-operation detection — must be mirrored here.
+                    # Harvest-specific fields (quality grade, brix, grain moisture) are
+                    # also mirrored so the registry-driven preview matches the saved-event
+                    # rendering path, which reads these via extra_data fallbacks
+                    # (see fieldDisplayUtils.ts `extraData.quality_grade`, `extraData.brix_level`).
                     self.extra_data = {
                         "area_covered": self.area_covered,
                         "area_unit": self.area_unit,
@@ -2451,6 +2566,14 @@ def calculate_event_carbon_impact(request):
                         "production_efficiency": self.production_efficiency,
                         "equipment_used": equipment_used,
                         "duration": duration,
+                        "method": self.method,
+                        "production_method": self.method,
+                        "harvest_method": self.harvest_method,
+                        # Harvest sibling fields for preview/saved-event parity
+                        "harvest_quality_grade": event_data.get("harvest_quality_grade"),
+                        "quality_grade": (event_data.get("quality_grade") or event_data.get("harvest_quality_grade")),
+                        "brix_level": (event_data.get("brix_level") or event_data.get("brix_levels")),
+                        "grain_moisture": event_data.get("grain_moisture"),
                     }
 
                     # Mock history for crop information (needed for EPA calculations)
@@ -5053,6 +5176,9 @@ class PublicProductionViewSet(viewsets.ViewSet):
                         # Blockchain verification - inherited from production level
                         "blockchain_verified": is_blockchain_verified,
                         "blockchain_transaction": blockchain_tx if is_blockchain_verified else "",
+                        # Sprint 5.1 — OSP ↔ events drift detector payload (null for
+                        # event types without the field, e.g. weather/equipment).
+                        "drift_warning": getattr(event, "drift_warning", None),
                     }
 
                     # Add event-type specific fields for better transparency
@@ -5318,36 +5444,20 @@ class PublicProductionViewSet(viewsets.ViewSet):
 
             calculator = EventCarbonCalculator()
 
-            # Prepare event data for calculation
-            event_data = {
-                "type": event_category,
-                "date": event.date.isoformat() if event.date else None,
-                "volume": getattr(event, "volume", None),
-                "concentration": getattr(event, "concentration", None),
-                "area": getattr(event, "area", None),
-                "equipment": getattr(event, "commercial_name", None) or getattr(event, "equipment", None),
-                "description": getattr(event, "description", "") or getattr(event, "name", ""),
-                "observation": getattr(event, "observation", ""),
-                "parcel_id": production.parcel.id if production.parcel else None,
-                "establishment_id": (
-                    production.parcel.establishment.id
-                    if production.parcel and production.parcel.establishment
-                    else None
-                ),
-            }
-
-            # Calculate based on event category
+            # Calculate based on event category. These methods accept the Django model
+            # instance directly and extract their own data via the event's relationships
+            # (event.history, event.extra_data, event.type, etc.).
             result = None
             if event_category == "chemical":
-                result = calculator.calculate_chemical_impact(event_data)
+                result = calculator.calculate_chemical_event_impact(event)
             elif event_category == "production":
-                result = calculator.calculate_production_impact(event_data)
+                result = calculator.calculate_production_event_impact(event)
             elif event_category == "equipment":
-                result = calculator.calculate_equipment_impact(event_data)
+                result = calculator.calculate_equipment_event_impact(event)
             elif event_category == "soil_management":
-                result = calculator.calculate_soil_management_impact(event_data)
+                result = calculator.calculate_soil_management_event_impact(event)
             elif event_category == "pest_management":
-                result = calculator.calculate_pest_management_impact(event_data)
+                result = calculator.calculate_pest_management_event_impact(event)
 
             if result:
                 return {

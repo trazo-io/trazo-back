@@ -6,7 +6,7 @@ from common.serializers import GallerySerializer
 from users.models import User
 from users.serializers import BasicUserSerializer
 
-from .models import Parcel, Product
+from .models import Parcel, ParcelCropHistory, Product
 
 
 class ParcelBasicSerializer(ModelSerializer):
@@ -478,3 +478,21 @@ class ProductListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = ["id", "name", "description", "image"]
+
+
+class ParcelCropHistorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ParcelCropHistory
+        fields = [
+            "id",
+            "parcel",
+            "year",
+            "crop_grown",
+            "production_method",
+            "substances_applied",
+            "date_last_prohibited",
+            "notes",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]

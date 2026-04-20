@@ -334,10 +334,7 @@ class TimelineService:
                 "organic_approved": (
                     getattr(event, "organic_approved", None)
                     or (
-                        (
-                            event.extra_data.get("organic_certification")
-                            or event.extra_data.get("organic_approved")
-                        )
+                        (event.extra_data.get("organic_certification") or event.extra_data.get("organic_approved"))
                         if isinstance(getattr(event, "extra_data", None), dict)
                         else None
                     )

@@ -10,9 +10,10 @@ Requires: requests (already installed), SENDGRID_API_KEY in settings.
 
 import logging
 
-import requests
 from django.conf import settings
 from django.core.mail.backends.base import BaseEmailBackend
+
+import requests
 
 logger = logging.getLogger(__name__)
 

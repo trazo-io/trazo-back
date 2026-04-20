@@ -281,7 +281,6 @@ Trazo uses a **weighted category system** that evaluates how thoroughly you docu
                         "Set target transparency score for next month",
                         "Share QR code with friends to get consumer perspective",
                     ],
-
                 },
             ]
 
@@ -390,7 +389,6 @@ Trazo uses a **weighted category system** that evaluates how thoroughly you docu
                         "Practice writing consumer-friendly event descriptions",
                         "Check transparency score improvement after logging events",
                     ],
-
                 },
                 {
                     "title": "Chemical Applications: Building Consumer Confidence Through Transparency",
@@ -496,7 +494,6 @@ Protective equipment used and equipment cleaned after application."
                         "Test different photo angles and descriptions for maximum trust building",
                     ],
                     "cost_savings_potential": "Transparency in chemical applications can command 20-30% premium pricing",
-
                 },
             ]
 
@@ -673,7 +670,6 @@ protected crop quality while managing resources responsibly."
                         "Test your QR story with family/friends for clarity and trust building",
                         "Set up metrics tracking for QR page engagement and consumer feedback",
                     ],
-
                 },
             ]
 
@@ -865,7 +861,6 @@ protected crop quality while managing resources responsibly."
                         "Set up automated backup and sync preferences in the Trazo app",
                         "Create photo quality standards and train farm team on mobile documentation best practices",
                     ],
-
                 },
                 {
                     "title": "Blockchain Verification: Immutable Agricultural Records",
@@ -1042,7 +1037,6 @@ in the accuracy of agricultural practices used to grow your food."
                         "Create consumer education materials explaining your blockchain verification",
                         "Set up verification priorities for different types of farming events based on value and importance",
                     ],
-
                 },
             ]
 
@@ -1235,7 +1229,6 @@ Scan the QR code to see exactly how your food was grown."
                         "Create transparency pricing strategy with specific premium targets",
                         "Set up systems to measure and track transparency ROI and customer feedback",
                     ],
-
                 },
             ]
 
@@ -1404,7 +1397,6 @@ This approach ensures carbon data supports your transparency story rather than r
                         "Create consumer-friendly explanations of your environmental impact improvements",
                         "Prepare B2B carbon reports for customers who specifically request carbon data",
                     ],
-
                 },
             ]
 
@@ -1630,7 +1622,6 @@ This approach transforms compliance from a burden into a competitive advantage, 
                         "Generate test compliance reports for your major certification and regulatory requirements",
                         "Create inspection preparation checklist using Trazo's automated report features",
                     ],
-
                 },
             ]
 
@@ -1794,7 +1785,6 @@ Your transparency score uses a **weighted category system**:
                         "Set a daily reminder to log at least 1 event per farm activity day",
                         "Check your transparency score before and after logging 5 events",
                     ],
-
                 },
                 {
                     "title": "Choosing the Right Event Type: A Decision Guide",
@@ -1999,7 +1989,6 @@ If you did multiple activities, Quick Add supports sequential logging:
                         "Set up Quick Add templates for your most common event types",
                         "Test logging multiple events in one session using batch logging",
                     ],
-
                 },
                 {
                     "title": "Photos That Build Consumer Trust",
@@ -2132,7 +2121,6 @@ Example Consumer View:
                         "Set up your phone camera for quick access during field work",
                         "Take sample photos in different lighting conditions to understand quality",
                     ],
-
                 },
             ]
 

@@ -3,10 +3,7 @@ from datetime import date
 from django.test import TestCase
 
 from certifications.models import USDAOrganicOperation
-from certifications.services.usda_organic_verifier import (
-    FUZZY_MATCH_THRESHOLD,
-    USDAOrganicVerifier,
-)
+from certifications.services.usda_organic_verifier import FUZZY_MATCH_THRESHOLD, USDAOrganicVerifier
 
 
 class USDAOrganicVerifierPropertiesTest(TestCase):

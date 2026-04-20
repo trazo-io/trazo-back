@@ -342,6 +342,14 @@ class VerifiedEmissionFactors:
             last_updated="2025-01-21",
             notes="Biological fungicides (Bacillus, Trichoderma) - lower emissions due to fermentation-based production",
         ),
+        "organic_fungicide_manufacturing": EmissionFactor(
+            value=2.5,  # kg CO2 per kg (naturally-derived extraction)
+            unit="kg_CO2_per_kg",
+            source="LCA Studies - Natural Fungicide Extraction (Neem Oil, Potassium Bicarbonate)",
+            confidence_level=0.75,
+            last_updated="2026-04-09",
+            notes="Organic fungicides (neem oil, potassium bicarbonate, essential oils) - moderate emissions from extraction/purification",
+        ),
         "organic_pesticide_manufacturing": EmissionFactor(
             value=3.5,  # kg CO2 per kg (naturally-derived pesticides)
             unit="kg_CO2_per_kg",
@@ -933,6 +941,72 @@ class VerifiedEmissionFactors:
             "limitations": "Wind damage varies significantly with crop type, support structures, and terrain exposure",
         }
 
+    # Keywords that indicate manual labor in a farmer's free-text "method" field.
+    # Used by _is_manual_method() to short-circuit USDA blanket averages when the
+    # farmer explicitly documents hand-only work.
+    _MANUAL_METHOD_KEYWORDS = (
+        "hand",  # hand thinning, hand harvest, hand pruning, by hand
+        "manual",  # manual work, manual operation, manual labor
+        "shears",  # pruning shears, hand shears
+        "handheld",  # handheld tools only
+        "a mano",  # Spanish: by hand
+        "a pie",  # Spanish: on foot / manual
+    )
+    _MECHANICAL_METHOD_KEYWORDS = (
+        "mechanical",
+        "tractor",
+        "harvester",
+        "sprayer",
+        "machine",
+        "powered",
+        "motorized",
+    )
+    # Structured harvest_method dropdown values that represent manual/hand labor.
+    # Matched by exact value (not substring) so we don't get false positives on
+    # free-text like "strip-cleaned by machine". Dropdown values are defined in
+    # ProductionTab.jsx / HARVEST_METHOD_LABELS (productionEvent.ts). `shake_and_catch`
+    # is mechanical (tree shaker + catcher) so intentionally excluded; `mixed` is
+    # ambiguous (manual + mechanical) and defaults to mechanical routing via the
+    # USDA averages path.
+    _STRUCTURED_MANUAL_HARVEST_VALUES = frozenset(
+        {
+            "hand_picking",
+            "selective_hand_picking",
+            "strip_picking",  # Hand stripping (berries, olives, tea leaves)
+            "manual",
+        }
+    )
+
+    @classmethod
+    def _is_manual_method(cls, method: str = None) -> bool:
+        """Detect manual/hand-labor operations from a method field.
+
+        Trazo's Direct Operational Emissions philosophy: carbon calculations should
+        reflect what the farmer *actually did*. When the farmer documents manual
+        methods (hand thinning, pruning shears, etc.), applying mechanical USDA
+        averages produces incorrect carbon values that penalize transparency.
+
+        Handles two input shapes:
+          1. Structured dropdown value (e.g. "hand_picking", "strip_picking") —
+             exact-match against `_STRUCTURED_MANUAL_HARVEST_VALUES`.
+          2. Free-text description (e.g. "Hand thinning with pruning shears",
+             "by hand") — keyword search with mechanical-wins tie-break.
+
+        Returns True only when manual is indicated AND no mechanical keyword is
+        present (mechanical wins on ambiguous strings like "tractor-mounted hand
+        sprayer").
+        """
+        if not method:
+            return False
+        method_lower = method.lower().strip()
+        # 1. Structured dropdown exact-match — reliable, no substring false-positives
+        if method_lower in cls._STRUCTURED_MANUAL_HARVEST_VALUES:
+            return True
+        # 2. Free-text keyword search — mechanical wins precedence
+        if any(kw in method_lower for kw in cls._MECHANICAL_METHOD_KEYWORDS):
+            return False
+        return any(kw in method_lower for kw in cls._MANUAL_METHOD_KEYWORDS)
+
     @classmethod
     def calculate_production_event_emissions(
         cls,
@@ -968,6 +1042,9 @@ class VerifiedEmissionFactors:
             "TH": cls._calculate_thinning_emissions,
             "PR": lambda ac, fc, eh, **kw: cls._calculate_manual_operation_emissions(ac, fc, eh, "pruning", **kw),
             "EM": cls._calculate_general_production_emissions,
+            "CM": lambda ac, fc, eh, **kw: cls._calculate_manual_operation_emissions(
+                ac, fc, eh, "canopy_management", **kw
+            ),  # Canopy management (leaf pulling, hedging) - same fuel profile as pruning
             # Full name aliases (safety net for any code path that passes descriptive names)
             "PLANTING": cls._calculate_planting_emissions,
             "HARVESTING": cls._calculate_harvesting_emissions,
@@ -976,6 +1053,9 @@ class VerifiedEmissionFactors:
             "CULTIVATION": cls._calculate_cultivation_emissions,
             "THINNING": cls._calculate_thinning_emissions,
             "PRUNING": lambda ac, fc, eh, **kw: cls._calculate_manual_operation_emissions(ac, fc, eh, "pruning", **kw),
+            "CANOPY_MANAGEMENT": lambda ac, fc, eh, **kw: cls._calculate_manual_operation_emissions(
+                ac, fc, eh, "canopy_management", **kw
+            ),
         }
 
         # Normalize production type to uppercase (database stores uppercase codes)
@@ -985,9 +1065,71 @@ class VerifiedEmissionFactors:
         # converts fuel to gallons (inapplicable for kWh). The actual kWh value is
         # passed via fuel_consumed_kwh kwarg. Promote it to fuel_consumed so all
         # downstream calculators see actual consumption instead of falling back to
-        # area-based estimation.
-        if not fuel_consumed and kwargs.get("fuel_type") == "electric":
+        # area-based estimation. Use `is None` (not falsy) so an explicit 0 from the
+        # farmer is respected, not overwritten.
+        if fuel_consumed is None and kwargs.get("fuel_type") == "electric":
             fuel_consumed = kwargs.get("fuel_consumed_kwh")
+
+        # METHOD-AWARE SHORT-CIRCUIT (Trazo Direct Operational Emissions philosophy):
+        # If the farmer documented a manual method (hand thinning, hand harvest, pruning
+        # shears, etc.) AND didn't report fuel consumption or a powered-equipment fuel
+        # type, route to the manual operation calculator (~0.1 kg CO2e/acre) instead of
+        # applying USDA blanket averages (which assume mechanical operations).
+        #
+        # NOTE on `equipment_hours`: the form label "Equipment Operating Hours" is
+        # ambiguous — farmers documenting a hand harvest often fill it with crew-hours
+        # (e.g. 5 days × 8 hours = 40) rather than tractor-hours. We therefore gate on
+        # `fuel_type` instead: if no fuel_type was selected (or it's an empty string),
+        # the farmer is explicitly signalling "no powered equipment" and the 40 hours
+        # are worker hours. This matches the form helper text: "Select a fuel type
+        # only if powered equipment was used. Leave blank for hand/manual operations."
+        method = kwargs.get("method")
+        fuel_type_kw = (kwargs.get("fuel_type") or "").strip().lower()
+        # Fuel takes priority over manual detection. If the farmer reported *any*
+        # positive fuel consumption (bin transport ATV, auxiliary diesel, etc.),
+        # we MUST honor it — even if method="hand_picking" or method="Hand thinning".
+        # Example: hand avocado harvest with 8 gal diesel for bin-hauling ATV must
+        # produce 8 × 10.21 = 81.68 kg CO2e via the harvesting calculator, not the
+        # 0.1 kg/acre manual shortcut. `not fuel_consumed` treats None/0/"" as "no
+        # fuel reported" — farmers who explicitly enter 0 get manual routing (correct).
+        try:
+            fuel_value_numeric = float(fuel_consumed) if fuel_consumed is not None else 0.0
+        except (TypeError, ValueError):
+            fuel_value_numeric = 0.0
+        no_powered_equipment = fuel_value_numeric <= 0 and fuel_type_kw in ("", "none")
+        if (
+            cls._is_manual_method(method)
+            and no_powered_equipment
+            and production_type_code in ("TH", "HA", "PL", "PR", "TR", "CU", "CM")
+        ):
+            # Use the same friendly labels as the USDA-averaged branch so the frontend
+            # renders "Manual Thinning" / "Manual Pruning" instead of truncation
+            # artifacts like "Manual Th" / "Manual Pr" (subtype code capitalized).
+            friendly_labels = {
+                "TH": "thinning",
+                "HA": "harvesting",
+                "PL": "planting",
+                "PR": "pruning",
+                "TR": "transplanting",
+                "CU": "cultivation",
+                "CM": "canopy_management",
+            }
+            friendly_label = friendly_labels.get(production_type_code, production_type_code.lower())
+            result = cls._calculate_manual_operation_emissions(
+                area_covered,
+                None,
+                None,
+                operation_type=f"manual_{friendly_label}",
+            )
+            # Enrich breakdown with farmer-documented context
+            result["breakdown"]["method_documented"] = method
+            result["breakdown"]["manual_operation_detected"] = True
+            result["breakdown"]["production_type_code"] = production_type_code
+            result["limitations"] = (
+                "Manual operation detected from documented method — emissions reflect "
+                "hand-tool wear and worker logistics only (no fuel, no powered equipment)."
+            )
+            return result
 
         # Get the calculation method for this production type
         if production_type_code in PRODUCTION_TYPE_MAPPING:
@@ -995,12 +1137,44 @@ class VerifiedEmissionFactors:
 
             # Special handling for irrigation which can use diesel or electric pumps
             # SPRINT 6 FIX (2025-12-25): Support diesel-powered irrigation pumps
+            # 2026-04-10 FIX: Don't silently drop pump emissions when electricity_source
+            # is set alongside diesel fuel. `electricity_source` explicitly identifies
+            # the pump as electric, so any diesel reported is auxiliary (service truck,
+            # maintenance tractor, etc.) and must be ADDED to pump emissions — unless
+            # the selected power source is "diesel_generator", in which case the
+            # generator fuel is already baked into the 0.65 kg CO2e/kWh factor.
             if production_type_code == "IR":
                 fuel_type = kwargs.get("fuel_type", "electric")  # Default to electric for irrigation
                 energy_source = kwargs.get("energy_source", "grid")
+                explicit_electricity_source = kwargs.get("electricity_source")
 
-                # If farmer provides diesel fuel consumption, use direct diesel calculation
-                if fuel_consumed and fuel_type == "diesel":
+                # Semantic classification of the reported diesel fuel (if any):
+                #
+                #   electricity_source  fuel_type  fuel_consumed  →  interpretation
+                #   ------------------  ---------  -------------  ------------------
+                #   (not set)           diesel     > 0            →  diesel pump fuel (direct calc)
+                #   diesel_generator    diesel     > 0            →  generator fuel (already in 0.65 factor)
+                #   grid/solar/wind/mix diesel     > 0            →  auxiliary equipment (add on top)
+                #   any                 electric   -              →  electric — handled elsewhere
+                #
+                has_diesel_fuel = bool(fuel_consumed) and fuel_type == "diesel"
+                # Diesel pump: the only case where fuel_consumed *replaces* the
+                # water-volume-based pump calc. Requires diesel fuel AND no explicit
+                # electric power source. A "diesel_generator" selection means the pump
+                # is electric (driven by a generator) — not a diesel mechanical pump.
+                diesel_pump_mode = has_diesel_fuel and not explicit_electricity_source
+                # Auxiliary diesel: reported alongside a non-diesel electric pump.
+                # Grid/solar/wind/mixed pumps cannot have burned the reported diesel,
+                # so it must be auxiliary (service vehicle, standby tractor, etc.).
+                # "diesel_generator" is EXCLUDED to avoid double-counting — its 0.65
+                # kg CO2e/kWh factor already amortizes generator diesel consumption.
+                add_auxiliary_diesel = (
+                    has_diesel_fuel
+                    and explicit_electricity_source
+                    and explicit_electricity_source != "diesel_generator"
+                )
+
+                if diesel_pump_mode:
                     diesel_factor = cls.EPA_DIESEL_FACTORS["agricultural_equipment"]
                     co2e_kg = float(fuel_consumed) * diesel_factor.value
                     breakdown = {
@@ -1019,48 +1193,116 @@ class VerifiedEmissionFactors:
                         "data_sources": [diesel_factor.source],
                         "limitations": "Diesel-powered irrigation is less common but used for mobile/remote systems",
                     }
-                else:
-                    # Electric irrigation pump
-                    fuel_consumed_kwh = kwargs.get("fuel_consumed_kwh")
-                    if fuel_consumed_kwh and fuel_consumed_kwh > 0:
-                        # Farmer provided actual kWh — use directly
-                        electricity_factor = cls.get_country_electricity_factor()
-                        if energy_source in ["solar", "wind"]:
-                            co2e_kg = 0.0
-                            calc_basis = "actual_electric_consumption_renewable"
-                        else:
-                            co2e_kg = fuel_consumed_kwh * electricity_factor.value
-                            calc_basis = "actual_electric_consumption_grid"
-                        water_gallons = kwargs.get("water_volume_gallons", 0)
-                        breakdown = {
-                            "production_activity": "irrigation",
-                            "fuel_type": "electric",
-                            "actual_kwh_consumed": fuel_consumed_kwh,
-                            "electricity_emission_factor_kg_per_kwh": electricity_factor.value,
-                            "energy_source": energy_source,
-                            "water_volume_gallons": water_gallons,
-                            "calculation_basis": calc_basis,
-                            "confidence_level": electricity_factor.confidence_level,
-                            "note": "Electric irrigation pump - actual kWh provided by farmer",
-                        }
-                        return {
-                            "co2e_kg": round(co2e_kg, 3),
-                            "calculation_method": "verified_epa_electric_irrigation",
-                            "breakdown": breakdown,
-                            "data_sources": [electricity_factor.source],
-                            "limitations": "Based on farmer-reported electricity consumption",
-                        }
+
+                # Electric irrigation pump (grid / solar / wind / mixed / diesel_generator)
+                # Resolve electricity_source → emission factor override
+                # electricity_source (form field) takes precedence over energy_source (generic)
+                electricity_source = explicit_electricity_source
+                effective_energy_source = electricity_source or energy_source
+
+                # Compute water volume from area × irrigation_depth when available
+                # This is more accurate than text-based heuristics
+                GALLONS_PER_INCH_PER_ACRE = 27154.0
+                irrigation_depth_inches = kwargs.get("irrigation_depth_inches")
+                water_gallons = kwargs.get("water_volume_gallons")
+                if not water_gallons and area_covered and irrigation_depth_inches:
+                    water_gallons = area_covered * irrigation_depth_inches * GALLONS_PER_INCH_PER_ACRE
+                elif not water_gallons and area_covered:
+                    # Fallback: crude estimate (1 inch default)
+                    water_gallons = area_covered * 1.0 * GALLONS_PER_INCH_PER_ACRE
+
+                pump_depth_ft = kwargs.get("pump_depth_ft")
+
+                fuel_consumed_kwh = kwargs.get("fuel_consumed_kwh")
+                if fuel_consumed_kwh and fuel_consumed_kwh > 0 and not water_gallons:
+                    # Farmer provided actual kWh but no water volume — use kWh directly
+                    electricity_factor = cls.get_country_electricity_factor()
+                    if effective_energy_source in ["solar", "wind"]:
+                        effective_factor = cls.ELECTRICITY_SOURCE_FACTORS.get(effective_energy_source, 0.02)
+                        co2e_kg = fuel_consumed_kwh * effective_factor
+                        calc_basis = f"actual_electric_consumption_{effective_energy_source}"
                     else:
-                        # No actual kWh — estimate from water volume
-                        water_gallons = kwargs.get("water_volume_gallons", area_covered * 1000)
-                        water_source = kwargs.get("water_source")
-                        return calc_method(water_gallons, water_source=water_source)
+                        co2e_kg = fuel_consumed_kwh * electricity_factor.value
+                        calc_basis = "actual_electric_consumption_grid"
+                    breakdown = {
+                        "production_activity": "irrigation",
+                        "fuel_type": "electric",
+                        "actual_kwh_consumed": fuel_consumed_kwh,
+                        "kwh_consumed": fuel_consumed_kwh,
+                        "electricity_emission_factor_kg_per_kwh": (
+                            cls.ELECTRICITY_SOURCE_FACTORS.get(effective_energy_source, electricity_factor.value)
+                        ),
+                        "energy_source": effective_energy_source,
+                        "electricity_source": effective_energy_source,
+                        "area_covered_acres": area_covered,
+                        "water_volume_gallons": 0,
+                        "calculation_basis": calc_basis,
+                        "confidence_level": electricity_factor.confidence_level,
+                        "note": "Electric irrigation pump - actual kWh provided by farmer, no water volume available",
+                    }
+                    return {
+                        "co2e_kg": round(co2e_kg, 3),
+                        "calculation_method": "verified_epa_electric_irrigation",
+                        "breakdown": breakdown,
+                        "data_sources": [electricity_factor.source],
+                        "limitations": "Based on farmer-reported electricity consumption",
+                    }
+
+                # Water-volume-based calculation (primary path for irrigation)
+                # Computes pump energy from water volume × pump factor × electricity factor
+                if not water_gallons:
+                    water_gallons = area_covered * 1000 if area_covered else 0
+                pump_result = calc_method(
+                    water_gallons,
+                    water_source=kwargs.get("water_source"),
+                    pump_depth_ft=pump_depth_ft,
+                    electricity_source=electricity_source,
+                )
+
+                # Record the pump-only emissions as a first-class breakdown field so
+                # the frontend doesn't have to re-derive it from kWh × factor. Keeps
+                # one source of truth when aux diesel is added below.
+                pump_only_kg = round(float(pump_result.get("co2e_kg", 0.0)), 3)
+                pump_result.setdefault("breakdown", {})["pump_electricity_emissions_kg"] = pump_only_kg
+
+                # 2026-04-10 FIX: When the pump is explicitly electric (grid/solar/wind/
+                # mixed — NOT diesel_generator) but the farmer ALSO reports diesel fuel,
+                # that diesel must be auxiliary equipment (service vehicle, standby
+                # tractor, maintenance) and is ADDED on top of pump electricity.
+                if add_auxiliary_diesel:
+                    diesel_factor = cls.EPA_DIESEL_FACTORS["agricultural_equipment"]
+                    aux_diesel_kg = round(float(fuel_consumed) * diesel_factor.value, 3)
+                    pump_result["co2e_kg"] = round(pump_only_kg + aux_diesel_kg, 3)
+                    breakdown = pump_result["breakdown"]
+                    breakdown["auxiliary_diesel_fuel_gallons"] = float(fuel_consumed)
+                    breakdown["auxiliary_diesel_emissions_kg"] = aux_diesel_kg
+                    breakdown["auxiliary_diesel_emission_factor_kg_per_gallon"] = diesel_factor.value
+                    breakdown["auxiliary_diesel_note"] = (
+                        "Diesel fuel reported alongside electric pump — counted as "
+                        "auxiliary equipment (service vehicle, standby tractor, or "
+                        "maintenance) in addition to pump electricity."
+                    )
+                    pump_result.setdefault("data_sources", []).append(diesel_factor.source)
+                    # Append (don't clobber) so downstream EPA-badge detection still
+                    # matches `verified_epa_usda_factors` prefix checks.
+                    pump_result["calculation_method"] = (
+                        pump_result.get("calculation_method", "verified_epa_usda_factors") + "+auxiliary_diesel"
+                    )
+
+                return pump_result
             else:
                 return calc_method(
                     area_covered, fuel_consumed, equipment_hours, production_type_code=production_type_code, **kwargs
                 )
         else:
-            # Fallback for unknown production types
+            # Fallback for unknown production types — log a warning so silent
+            # miscalculations are visible in production (Trazo carbon correctness).
+            logger.warning(
+                "Unknown production_type_code=%r — falling back to general production "
+                "factor (2.5 gal/ha). Add this code to PRODUCTION_TYPE_MAPPING if it "
+                "represents a distinct operation.",
+                production_type_code,
+            )
             return cls._calculate_general_production_emissions(
                 area_covered, fuel_consumed, equipment_hours, production_type_code=production_type_code, **kwargs
             )
@@ -1082,7 +1324,7 @@ class VerifiedEmissionFactors:
         fuel_type = kwargs.get("fuel_type", "diesel")  # Default to diesel for backwards compatibility
         energy_source = kwargs.get("energy_source", "grid")  # Default to grid for electric
 
-        if fuel_consumed:
+        if fuel_consumed is not None:
             # Use actual fuel consumption
             fuel_consumed = float(fuel_consumed)  # Convert Decimal to float for calculation
             if fuel_type == "electric":
@@ -1139,7 +1381,7 @@ class VerifiedEmissionFactors:
             breakdown["diesel_emission_factor_kg_per_gallon"] = actual_fuel_factor.value
             breakdown["usda_harvesting_factor_gallons_per_hectare"] = harvesting_factor.value
 
-        if fuel_consumed:
+        if fuel_consumed is not None:
             fuel_unit = "kWh" if fuel_type == "electric" else "gallons"
             breakdown[f"actual_fuel_consumed_{fuel_unit}"] = fuel_consumed
         if equipment_hours:
@@ -1180,7 +1422,7 @@ class VerifiedEmissionFactors:
         fuel_type = kwargs.get("fuel_type", "diesel")  # Default to diesel for backwards compatibility
         energy_source = kwargs.get("energy_source", "grid")  # Default to grid for electric
 
-        if fuel_consumed:
+        if fuel_consumed is not None:
             # Use actual fuel consumption
             fuel_consumed = float(fuel_consumed)  # Convert Decimal to float for calculation
             if fuel_type == "electric":
@@ -1237,7 +1479,7 @@ class VerifiedEmissionFactors:
             breakdown["diesel_emission_factor_kg_per_gallon"] = actual_fuel_factor.value
             breakdown["usda_planting_factor_gallons_per_hectare"] = planting_factor.value
 
-        if fuel_consumed:
+        if fuel_consumed is not None:
             fuel_unit = "kWh" if fuel_type == "electric" else "gallons"
             breakdown[f"actual_fuel_consumed_{fuel_unit}"] = fuel_consumed
         if equipment_hours:
@@ -1278,7 +1520,7 @@ class VerifiedEmissionFactors:
         fuel_type = kwargs.get("fuel_type", "diesel")  # Default to diesel for backwards compatibility
         energy_source = kwargs.get("energy_source", "grid")  # Default to grid for electric
 
-        if fuel_consumed:
+        if fuel_consumed is not None:
             # Use actual fuel consumption
             fuel_consumed = float(fuel_consumed)  # Convert Decimal to float for calculation
             if fuel_type == "electric":
@@ -1337,7 +1579,7 @@ class VerifiedEmissionFactors:
             breakdown["diesel_emission_factor_kg_per_gallon"] = actual_fuel_factor.value
             breakdown["usda_transplanting_factor_gallons_per_hectare"] = transplanting_factor.value
 
-        if fuel_consumed:
+        if fuel_consumed is not None:
             fuel_unit = "kWh" if fuel_type == "electric" else "gallons"
             breakdown[f"actual_fuel_consumed_{fuel_unit}"] = fuel_consumed
         if equipment_hours:
@@ -1382,10 +1624,11 @@ class VerifiedEmissionFactors:
         # For electric equipment, fuel_consumed may be None because the preview
         # pipeline sets fuel_consumed_gallons=None for electric (kWh != gallons).
         # The actual kWh value is passed separately via fuel_consumed_kwh kwarg.
-        if not fuel_consumed and fuel_type == "electric":
+        # Use `is None` so an explicit 0 kWh from the farmer is respected.
+        if fuel_consumed is None and fuel_type == "electric":
             fuel_consumed = kwargs.get("fuel_consumed_kwh")
 
-        if fuel_consumed:
+        if fuel_consumed is not None:
             # Use actual fuel consumption
             fuel_consumed = float(fuel_consumed)  # Convert Decimal to float for calculation
             if fuel_type == "electric":
@@ -1460,7 +1703,7 @@ class VerifiedEmissionFactors:
             breakdown["diesel_emission_factor_kg_per_gallon"] = actual_fuel_factor.value
             breakdown["usda_production_factor_gallons_per_hectare"] = production_factor.value
 
-        if fuel_consumed:
+        if fuel_consumed is not None:
             fuel_unit = "kWh" if fuel_type == "electric" else "gallons"
             breakdown[f"actual_fuel_consumed_{fuel_unit}"] = fuel_consumed
         if equipment_hours:
@@ -1494,12 +1737,17 @@ class VerifiedEmissionFactors:
         electricity_factor = cls.get_country_electricity_factor()
         thinning_factor = cls.PRODUCTION_FACTORS["thinning_diesel"]  # 0.75 gal/ha (not 2.5)
 
+        # Convert Decimal types to float to prevent type errors in calculations
+        # (BUG FIX: was missing — all other calculators have this guard)
+        area_covered = float(area_covered)
+
         # Extract fuel_type and energy_source from kwargs
         fuel_type = kwargs.get("fuel_type", "diesel")  # Default to diesel for backwards compatibility
         energy_source = kwargs.get("energy_source", "grid")  # Default to grid for electric
 
-        if fuel_consumed:
+        if fuel_consumed is not None:
             # Use actual fuel consumption
+            fuel_consumed = float(fuel_consumed)  # Convert Decimal to float
             if fuel_type == "electric":
                 # Electric equipment - fuel_consumed is in kWh
                 if energy_source in ["solar", "wind"]:
@@ -1516,6 +1764,9 @@ class VerifiedEmissionFactors:
                 fuel_factor, calculation_basis = cls._get_fuel_factor_for_type(fuel_type)
                 co2e_kg = fuel_consumed * fuel_factor.value
                 area_hectares = area_covered * 0.404686
+            # Skip validation for actual fuel consumption - farmers provide measured values
+            # (BUG FIX: was missing — validation cap silently lowered actual farmer data)
+            skip_validation = True
         else:
             # Use USDA standard for thinning (0.75 gal/ha - lightweight operation)
             # Fixed: Do NOT multiply by equipment_hours - thinning factor is area-based
@@ -1523,6 +1774,7 @@ class VerifiedEmissionFactors:
             fuel_gallons = area_hectares * thinning_factor.value
             co2e_kg = fuel_gallons * diesel_factor.value
             calculation_basis = "usda_standard_per_hectare"
+            skip_validation = False
 
         breakdown = {
             "production_activity": "thinning",
@@ -1551,14 +1803,17 @@ class VerifiedEmissionFactors:
             breakdown["diesel_emission_factor_kg_per_gallon"] = actual_fuel_factor.value
             breakdown["usda_thinning_factor_gallons_per_hectare"] = thinning_factor.value
 
-        if fuel_consumed:
+        if fuel_consumed is not None:
             fuel_unit = "kWh" if fuel_type == "electric" else "gallons"
             breakdown[f"actual_fuel_consumed_{fuel_unit}"] = fuel_consumed
         if equipment_hours:
             breakdown["equipment_hours"] = equipment_hours
 
-        # Add validation for unrealistic results (FIX #2)
-        validated_result = cls._validate_production_emissions(co2e_kg, area_covered, "thinning", breakdown)
+        # Add validation for unrealistic results (FIX #2) - skip for actual fuel data
+        if skip_validation:
+            validated_result = {"co2e_kg": co2e_kg, "breakdown": breakdown, "warnings": [], "limitations": []}
+        else:
+            validated_result = cls._validate_production_emissions(co2e_kg, area_covered, "thinning", breakdown)
 
         return {
             "co2e_kg": round(validated_result["co2e_kg"], 3),
@@ -1597,7 +1852,7 @@ class VerifiedEmissionFactors:
         fuel_type = kwargs.get("fuel_type", "diesel")  # Default to diesel for backwards compatibility
         energy_source = kwargs.get("energy_source", "grid")  # Default to grid for electric
 
-        if fuel_consumed:
+        if fuel_consumed is not None:
             # Use actual fuel consumption
             fuel_consumed = float(fuel_consumed)  # Convert Decimal to float for calculation
             if fuel_type == "electric":
@@ -1633,7 +1888,7 @@ class VerifiedEmissionFactors:
         }
 
         # Add fuel-type specific breakdown information
-        if fuel_consumed:
+        if fuel_consumed is not None:
             if fuel_type == "electric":
                 breakdown["electricity_emission_factor_kg_per_kwh"] = electricity_factor.value
                 breakdown["actual_fuel_consumed_kwh"] = fuel_consumed
@@ -1683,7 +1938,7 @@ class VerifiedEmissionFactors:
         fuel_type = kwargs.get("fuel_type", "diesel")  # Default to diesel for backwards compatibility
         energy_source = kwargs.get("energy_source", "grid")  # Default to grid for electric
 
-        if fuel_consumed:
+        if fuel_consumed is not None:
             # Use actual fuel consumption
             fuel_consumed = float(fuel_consumed)  # Convert Decimal to float for calculation
             if fuel_type == "electric":
@@ -1737,7 +1992,7 @@ class VerifiedEmissionFactors:
             breakdown["diesel_emission_factor_kg_per_gallon"] = actual_fuel_factor.value
             breakdown["cultivation_intensity_factor"] = cultivation_factor.value
 
-        if fuel_consumed:
+        if fuel_consumed is not None:
             fuel_unit = "kWh" if fuel_type == "electric" else "gallons"
             breakdown[f"actual_fuel_consumed_{fuel_unit}"] = fuel_consumed
         if equipment_hours:
@@ -1781,7 +2036,7 @@ class VerifiedEmissionFactors:
 
         intensity_factor = application_factors.get(application_type, 1.0)
 
-        if fuel_consumed:
+        if fuel_consumed is not None:
             co2e_kg = fuel_consumed * diesel_factor.value
             calculation_basis = "actual_fuel_consumption"
         elif equipment_hours and area_covered:
@@ -1864,8 +2119,9 @@ class VerifiedEmissionFactors:
             product_name: Product name for detecting specific chemical types (DEPRECATED - use chemical_subtype)
             chemical_subtype: Explicit chemical subtype for accurate emission factor selection.
                             Takes precedence over product_name keyword detection.
-                            Values: organic_herbicide, copper_fungicide, sulfur_fungicide, biological_fungicide,
-                                    organic_pesticide, biological_pesticide, organic_fertilizer, etc.
+                            Values: organic_herbicide, organic_fungicide, copper_fungicide, sulfur_fungicide,
+                                    biological_fungicide, organic_pesticide, biological_pesticide,
+                                    organic_fertilizer, etc.
             application_fuel_type: Actual fuel type for application equipment (diesel, electric, etc.)
                                   If provided, overrides estimated fuel consumption method
             application_fuel_consumed: Actual fuel consumed by application equipment (in specified unit)
@@ -1900,12 +2156,33 @@ class VerifiedEmissionFactors:
         # When chemical_mass_kg is provided (input was in mass units like kg/lbs),
         # use it directly — no density conversion needed.
         # When only volume_liters is available, convert using density.
+        #
+        # FIX 2026-04-11: Route PE/FU/HE through a chemical-formulation density
+        # lookup instead of the fertilizer density table. Fertilizer densities
+        # (1.25 kg/L for "spray" method) overestimate the mass of d-limonene,
+        # neem oil, and other low-density organic formulations by ~40%, which
+        # inflates manufacturing emissions and undermines the audit-ready
+        # transparency pitch. Pesticide/herbicide/fungicide densities come from
+        # EPA Pesticide Product Label System and industry formulation guides.
+        #
+        # `density_applied` is None when mass was supplied directly — the
+        # breakdown should not claim a density was used in that case.
         if chemical_mass_kg is not None and chemical_mass_kg > 0:
             total_fertilizer_kg = chemical_mass_kg
-            fertilizer_density = 1.0  # Not used, but set for breakdown reporting
+            fertilizer_density = 1.0  # placeholder for any downstream readers
+            density_applied = None
         else:
-            fertilizer_density = cls._get_fertilizer_density(npk_content, application_method)
+            if chemical_type.lower() in ["pesticide", "pe", "herbicide", "he", "fungicide", "fu"]:
+                fertilizer_density = cls._get_chemical_density(
+                    chemical_type=chemical_type,
+                    chemical_subtype=chemical_subtype,
+                    product_name=product_name,
+                    organic_approved=organic_approved,
+                )
+            else:
+                fertilizer_density = cls._get_fertilizer_density(npk_content, application_method)
             total_fertilizer_kg = volume_liters * fertilizer_density
+            density_applied = fertilizer_density
 
         # Determine specific chemical subtype using priority order:
         # 1. Explicit chemical_subtype parameter (highest priority - from UI dropdown)
@@ -1942,6 +2219,7 @@ class VerifiedEmissionFactors:
         )
         is_sulfur_fungicide = chemical_subtype_lower in ["sulfur_fungicide", "sulfur"]
         is_biological_fungicide = chemical_subtype_lower in ["biological_fungicide", "biological"]
+        is_organic_fungicide = chemical_subtype_lower in ["organic_fungicide"]
         is_organic_pesticide = (
             chemical_subtype_lower in ["organic_pesticide", "organic"]
             # SPRINT 6 FIX: Also check organic_approved for pesticides
@@ -2024,6 +2302,12 @@ class VerifiedEmissionFactors:
                 active_ingredient_percentage = user_concentration if user_concentration else 0.30
                 active_ingredient_kg = total_fertilizer_kg * active_ingredient_percentage
                 manufacturing_emissions = active_ingredient_kg * biological_fungicide_factor.value
+            elif is_organic_fungicide:
+                # Use organic fungicide factor (neem oil, potassium bicarbonate, essential oils)
+                organic_fungicide_factor = cls.EPA_CHEMICAL_FACTORS["organic_fungicide_manufacturing"]
+                active_ingredient_percentage = user_concentration if user_concentration else 0.25
+                active_ingredient_kg = total_fertilizer_kg * active_ingredient_percentage
+                manufacturing_emissions = active_ingredient_kg * organic_fungicide_factor.value
             else:
                 # Use generic synthetic fungicide manufacturing emission factor
                 fungicide_factor = cls.EPA_CHEMICAL_FACTORS["fungicide_manufacturing"]
@@ -2061,6 +2345,13 @@ class VerifiedEmissionFactors:
         # UPDATED 2025-12-11: Support for actual fuel tracking (diesel, electric, etc.)
         # Falls back to estimated fuel consumption if actual consumption not provided
 
+        # Track the actual fuel factor used for breakdown transparency.
+        # Defaults to the generic `application_fuel` (diesel) factor; each branch
+        # below overrides this with the real factor applied to the selected fuel
+        # type so the breakdown line stays self-consistent with the emissions total.
+        used_fuel_factor_value = fuel_factor.value
+        used_fuel_factor_unit = "gal"
+
         # Item #14: Fertigation — fertilizer injected through irrigation system.
         # Application fuel is already counted in the irrigation event, so skip it here
         # to avoid double-counting. Only manufacturing emissions (NPK factors) are calculated.
@@ -2090,25 +2381,32 @@ class VerifiedEmissionFactors:
                 fuel_liters = application_fuel_consumed
 
             # Route to correct emission factor based on fuel type
+            # (used_fuel_factor_value is pre-initialized above; each branch
+            # below updates it with the real factor applied)
             if application_fuel_type.lower() == "electric":
                 # Electric equipment: use kWh consumption and electricity factor
                 application_fuel_kwh = fuel_liters  # Already in kWh if unit was kWh
                 electricity_factor = cls.get_country_electricity_factor()
                 application_emissions = application_fuel_kwh * electricity_factor.value
+                used_fuel_factor_value = electricity_factor.value
+                used_fuel_factor_unit = "kWh"
                 calculation_method_note = "Actual electric consumption (kWh)"
             elif application_fuel_type.lower() == "diesel":
                 fuel_gallons = fuel_liters / 3.78541  # Convert to gallons
                 application_emissions = fuel_gallons * fuel_factor.value
+                used_fuel_factor_value = fuel_factor.value
                 calculation_method_note = "Actual diesel consumption"
             elif application_fuel_type.lower() == "gasoline":
                 gasoline_factor = cls.EPA_FUEL_FACTORS.get("gasoline", fuel_factor)
                 fuel_gallons = fuel_liters / 3.78541  # Convert to gallons
                 application_emissions = fuel_gallons * gasoline_factor.value
+                used_fuel_factor_value = gasoline_factor.value
                 calculation_method_note = "Actual gasoline consumption"
             elif application_fuel_type.lower() == "propane":
                 propane_factor = cls.EPA_FUEL_FACTORS.get("propane", fuel_factor)
                 fuel_gallons = fuel_liters / 3.78541  # Convert to gallons
                 application_emissions = fuel_gallons * propane_factor.value
+                used_fuel_factor_value = propane_factor.value
                 calculation_method_note = "Actual propane consumption"
             elif application_fuel_type.lower() == "natural_gas":
                 # Natural gas factor is per cubic foot, estimate 1 cf ≈ 0.0283 m³
@@ -2116,21 +2414,26 @@ class VerifiedEmissionFactors:
                 # Assume 1 L natural gas ≈ 0.035 cubic feet
                 fuel_cubic_feet = fuel_liters * 0.035
                 application_emissions = fuel_cubic_feet * natural_gas_factor.value
+                used_fuel_factor_value = natural_gas_factor.value
+                used_fuel_factor_unit = "cf"
                 calculation_method_note = "Actual natural gas consumption"
             elif application_fuel_type.lower() == "biodiesel":
                 # Biodiesel is similar to diesel (slightly lower emissions)
                 biodiesel_factor = cls.EPA_FUEL_FACTORS.get("biodiesel", fuel_factor)
                 fuel_gallons = fuel_liters / 3.78541  # Convert to gallons
                 application_emissions = fuel_gallons * biodiesel_factor.value
+                used_fuel_factor_value = biodiesel_factor.value
                 calculation_method_note = "Actual biodiesel consumption"
             elif application_fuel_type.lower() == "none" or application_fuel_type == "":
                 # Manual or non-fuel equipment
                 application_emissions = 0.0
+                used_fuel_factor_value = 0.0
                 calculation_method_note = "Manual application (no fuel)"
             else:
                 # Unknown fuel type, use diesel as fallback
                 fuel_gallons = fuel_liters / 3.78541  # Convert to gallons
                 application_emissions = fuel_gallons * fuel_factor.value
+                used_fuel_factor_value = fuel_factor.value
                 calculation_method_note = f"Actual fuel consumption ({application_fuel_type}) - using diesel factor"
 
             # For tracking
@@ -2144,7 +2447,10 @@ class VerifiedEmissionFactors:
 
             # UPDATED: Real-world agricultural fuel consumption rates based on equipment type
             # Source: Agricultural Engineering Standards, EPA Farm Equipment Data, USDA Energy Use Studies
-            application_rate_per_hectare = volume_liters / area_hectares  # L/ha
+            # NOTE 2026-04-11: removed stray `application_rate_per_hectare = volume_liters / area_hectares`
+            # — the variable was never read downstream and crashed with ZeroDivisionError when
+            # area_hectares was 0 (which the outer `area_hectares <= 0` guard at line 2079
+            # should prevent, but belt-and-suspenders is cheap).
 
             # Estimate fuel consumption based on application method and equipment type
             # These values are based on real-world agricultural engineering data
@@ -2187,6 +2493,8 @@ class VerifiedEmissionFactors:
             total_fuel_gallons = total_fuel_liters / 3.78541  # Convert to gallons
 
             application_emissions = total_fuel_gallons * fuel_factor.value
+            # Estimated fallback uses the default diesel fuel_factor — already
+            # initialized above, no override needed.
 
         # Total emissions
         total_co2e = manufacturing_emissions + application_emissions
@@ -2197,13 +2505,22 @@ class VerifiedEmissionFactors:
             "volume_applied_liters": volume_liters,
             "area_treated_hectares": area_hectares,
             "chemical_mass_kg": total_fertilizer_kg,
+            # Only report density when it was actually used (volume→mass conversion).
+            # When chemical_mass_kg was provided directly, density is not applicable.
+            "formulation_density_kg_per_l": (round(density_applied, 3) if density_applied is not None else None),
             "manufacturing_emissions_kg_co2e": round(manufacturing_emissions, 3),
             "application_fuel_liters": total_fuel_liters,
             "application_fuel_gallons": round(total_fuel_gallons, 3),
             "application_fuel_type": application_fuel_type or "diesel",  # Include fuel type for transparency
             "application_emissions_kg_co2e": round(application_emissions, 3),
             "application_method": application_method,
-            "epa_diesel_factor_kg_co2_per_gallon": fuel_factor.value,
+            # Legacy key (backward compatible): now holds the ACTUAL factor applied
+            # to the selected fuel type (gasoline, biodiesel, propane, electric kWh, etc.),
+            # not the default diesel factor. Frontend displays this as "kg CO₂e/gal (EPA factor)".
+            "epa_diesel_factor_kg_co2_per_gallon": round(used_fuel_factor_value, 3),
+            # Generic successor key + unit for future frontend use.
+            "epa_fuel_factor_kg_co2_per_unit": round(used_fuel_factor_value, 3),
+            "epa_fuel_factor_unit": used_fuel_factor_unit,
             "confidence_level": fuel_factor.confidence_level,
         }
 
@@ -2332,6 +2649,21 @@ class VerifiedEmissionFactors:
                         "note": "Biological fungicide (Bacillus, Trichoderma) uses lower emission factor due to fermentation-based production",
                         "confidence_level": min(
                             biological_fungicide_factor.confidence_level, fuel_factor.confidence_level
+                        ),
+                    }
+                )
+            elif is_organic_fungicide:
+                organic_fungicide_factor = cls.EPA_CHEMICAL_FACTORS["organic_fungicide_manufacturing"]
+                breakdown.update(
+                    {
+                        "active_ingredient_percentage": round(active_ingredient_percentage * 100, 1),
+                        "active_ingredient_kg": round(active_ingredient_kg, 3),
+                        "concentration_source": concentration_source,
+                        "emission_factor_kg_co2_per_kg": organic_fungicide_factor.value,
+                        "fungicide_subtype": "organic",
+                        "note": "Organic fungicide (neem oil, potassium bicarbonate) uses lower emission factor due to natural extraction",
+                        "confidence_level": min(
+                            organic_fungicide_factor.confidence_level, fuel_factor.confidence_level
                         ),
                     }
                 )
@@ -2543,6 +2875,120 @@ class VerifiedEmissionFactors:
         else:
             logger.warning(f"Unknown application method '{application_method}', using default 1.0 kg/L density")
             return 1.0  # kg/L
+
+    @classmethod
+    def _get_chemical_density(
+        cls,
+        chemical_type: str,
+        chemical_subtype: str = "",
+        product_name: str = "",
+        organic_approved: str = "",
+    ) -> float:
+        """
+        Get accurate density (kg/L) for pesticide / herbicide / fungicide
+        formulations. Distinct from `_get_fertilizer_density()`, which returns
+        NPK-weighted values tuned for fertilizer manufacturing.
+
+        Formulated agrichemicals are mostly water-based suspensions/solutions
+        around 1.0 kg/L, with notable exceptions for oil-based organics
+        (d-limonene, neem, citrus → ~0.85-0.92) and metal-heavy suspensions
+        (copper fungicides → ~1.20-1.25).
+
+        Precedence order (highest to lowest):
+          1. Explicit chemical_subtype from the UI dropdown — user's choice
+             always wins over free-text product name.
+          2. Product-name keyword detection — covers products where subtype
+             was not selected (voice input, template fill, legacy data).
+          3. Subtype-driven organic defaults — when no keyword matched but
+             the subtype or organic_approved flag indicates organic status.
+          4. Synthetic EC/SC default (1.05 kg/L).
+
+        Matches the chemical_type / chemical_subtype precedence used by the
+        manufacturing emission factor selection block above (~line 2128).
+
+        Density sources:
+          - EPA Pesticide Product Label System
+          - USDA ARS Pesticide Formulation Guidelines
+          - Knowles, D. "Chemistry and Technology of Agrochemical Formulations"
+            (Springer 1998) — formulation density tables
+          - International Copper Association — Copper Bordeaux product data
+        """
+        subtype_lower = (chemical_subtype or "").lower()
+        product_lower = (product_name or "").lower()
+        type_lower = (chemical_type or "").lower()
+        organic_lower = (organic_approved or "").lower()
+
+        is_certified_organic = organic_lower in [
+            "omri_listed",
+            "organic_equivalent",
+            "organic_certified",
+            "organic",
+            "usda_organic",
+            "certified_organic",
+        ]
+
+        # ---- TIER 1: Explicit subtype checks (user's UI choice, highest priority) ----
+        # Copper-based fungicides — heavy metal suspensions (1.20-1.30 kg/L).
+        # Explicit subtype wins even if the product name also mentions oil/neem.
+        if subtype_lower in ["copper_fungicide", "copper"]:
+            return 1.25  # kg/L
+        # Sulfur fungicides — elemental sulfur suspensions (1.05-1.15 kg/L)
+        if subtype_lower in ["sulfur_fungicide", "sulfur"]:
+            return 1.10  # kg/L
+        # Biological agents (Bt, Spinosad, Trichoderma) — aqueous suspensions
+        if subtype_lower in ["biological_pesticide", "biological_fungicide", "biological"]:
+            return 1.00  # kg/L
+
+        # ---- TIER 2: Product-name keyword detection ----
+        # Oil-based organic formulations (d-limonene, neem, citrus, clove).
+        # Density: 0.85-0.92 kg/L. Use 0.88 as representative mid-range.
+        oil_based_keywords = [
+            "d-limonene",
+            "limonene",
+            "citrus",
+            "neem",
+            "clove oil",
+            "eugenol",
+            "essential oil",
+            "fatty acid",
+            "herbicidal soap",
+        ]
+        if any(kw in product_lower for kw in oil_based_keywords):
+            return 0.88  # kg/L
+
+        # Copper fungicide by product name (when subtype not explicitly set)
+        if cls._is_copper_fungicide(product_lower):
+            return 1.25  # kg/L
+
+        # Sulfur fungicide by product name
+        if "sulfur" in product_lower:
+            return 1.10  # kg/L
+
+        # Acetic-acid / vinegar / citric-acid herbicides — aqueous organic acids.
+        # Density close to water (1.02-1.05 kg/L).
+        if any(kw in product_lower for kw in ["vinegar", "acetic", "citric"]):
+            return 1.03  # kg/L
+
+        # ---- TIER 3: Organic subtype defaults (no product match) ----
+        # Matches the manufacturing factor selection rules:
+        #   - organic_herbicide accepts "organic" as shorthand
+        #   - organic_pesticide accepts "organic" as shorthand
+        #   - organic_fungicide does NOT accept "organic" (specific code only)
+        if subtype_lower in ["organic_herbicide", "organic"] and type_lower in ["herbicide", "he"]:
+            return 0.88  # kg/L
+        if is_certified_organic and type_lower in ["herbicide", "he"]:
+            return 0.88  # kg/L
+        if subtype_lower in ["organic_pesticide", "organic"] and type_lower in ["pesticide", "pe"]:
+            return 0.92  # kg/L
+        if is_certified_organic and type_lower in ["pesticide", "pe"]:
+            return 0.92  # kg/L
+        if subtype_lower == "organic_fungicide" or (is_certified_organic and type_lower in ["fungicide", "fu"]):
+            return 0.95  # kg/L
+
+        # ---- TIER 4: Synthetic default (EC/SC formulations) ----
+        # Slightly heavier than water due to adjuvants and solvent carriers.
+        # 1.05 kg/L is the industry median for emulsifiable concentrates.
+        return 1.05  # kg/L
 
     @classmethod
     def _validate_production_emissions(

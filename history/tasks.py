@@ -8,8 +8,9 @@ manually via:  poetry run python manage.py cleanup_scan_data
 
 import logging
 
-from celery import shared_task
 from django.core.management import call_command
+
+from celery import shared_task
 
 logger = logging.getLogger(__name__)
 

@@ -181,7 +181,9 @@ def get_presigned_url(request):
 
             # Return the permanent S3 URL (not presigned) for storage in the database.
             # Presigned read URLs are generated on-demand when viewing images.
-            permanent_url = f"https://{settings.AWS_STORAGE_BUCKET_NAME}.s3.{settings.AWS_S3_REGION_NAME}.amazonaws.com/{key}"
+            permanent_url = (
+                f"https://{settings.AWS_STORAGE_BUCKET_NAME}.s3.{settings.AWS_S3_REGION_NAME}.amazonaws.com/{key}"
+            )
 
             return Response(
                 {

@@ -1,0 +1,284 @@
+"""
+Consumer Claim Validator — Sprint 5A.
+
+Gates what organic/transitional language the consumer QR page is allowed to display
+for a production. This is the primary FTC exposure point in Trazo: a farm still in
+transition could technically flip History.production_method='organic' and surface
+"Organic" on a QR page, which would violate:
+
+  - 7 CFR 205.100(c)(1): operations producing products sold as "organic" must be
+    certified.
+  - 7 CFR 205.300(a): products may not be labeled/represented as organic without
+    certification.
+  - 16 CFR 260.6(d) (FTC Green Guides): marketers should not use environmental
+    certifications/seals that do not convey the basis for the certification.
+  - 16 CFR 260.6(c): third-party certification does not eliminate substantiation duty.
+
+Verified sources:
+  - eCFR 7 CFR 205.300: https://www.ecfr.gov/current/title-7/part-205/section-205.300
+  - Cornell LII 16 CFR 260.6: https://www.law.cornell.edu/cfr/text/16/260.6
+  - AMS NOP Labeling Guidance: https://www.ams.usda.gov/rules-regulations/organic/labeling
+
+This service is the single source of truth for "what can the QR page say?" It is
+called from history/transparency_views.py before certification_data is serialized.
+"""
+
+from dataclasses import asdict, dataclass
+from typing import List, Optional
+
+from django.utils import timezone
+
+ORGANIC_CERT_TYPE = "usda_organic"
+
+# FTC 16 CFR 260.6(d) requires disclosing the basis for any environmental claim.
+# Keep disclaimers terse and factually accurate — these render on consumer QR pages.
+DISCLAIMER_CERTIFIED = (
+    "Certified by a USDA-accredited certifying agent. " "Verification via USDA Organic Integrity Database."
+)
+DISCLAIMER_TRANSITIONING = (
+    "This farm is in transition to organic certification under 7 CFR 205.202(b). "
+    "Product may not be labeled or sold as organic until certification is complete."
+)
+DISCLAIMER_SELF_REPORTED = (
+    "Farmer-reported organic practices. Not independently verified. " "Not USDA Certified Organic."
+)
+DISCLAIMER_CONVENTIONAL = "This production is not certified organic. Practices documented by the farmer."
+
+
+@dataclass
+class ConsumerClaimResult:
+    """
+    Structured outcome of the organic-claim evaluation for a production.
+
+    Fields:
+      can_display_organic          True iff an active USDA Organic cert exists
+      can_display_transitioning    True iff in 36-month transition window
+      display_label                Human-readable label for the QR page
+      disclaimer                   Required disclosure per 16 CFR 260.6(d)
+      status                       Machine key — "certified_organic" | "transitioning"
+                                     | "self_reported" | "conventional"
+      status_color                 UI hint — "green" | "yellow" | "gray"
+      reason                       Diagnostic explanation (admin/debug)
+      transition_complete_date     ISO date or None
+      days_remaining               int or None
+    """
+
+    can_display_organic: bool
+    can_display_transitioning: bool
+    display_label: str
+    disclaimer: str
+    status: str
+    status_color: str
+    reason: str
+    transition_complete_date: Optional[str] = None
+    days_remaining: Optional[int] = None
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+class ConsumerClaimValidator:
+    """
+    Evaluates what organic claim a consumer QR page may display for a production.
+
+    Usage:
+        result = ConsumerClaimValidator().validate(history)
+        response["organic_claim"] = result.to_dict()
+
+    Logic priority (strongest signal wins):
+        1. Active verified USDA Organic Certification -> "certified_organic"
+        2. In 36-month transition window (per 7 CFR 205.202(b))  -> "transitioning"
+        3. History.production_method in {organic, regenerative, biodynamic}
+           but no cert and no transition record -> "self_reported"
+        4. Otherwise -> "conventional"
+    """
+
+    # History.production_method values that imply organic-adjacent claims.
+    # See history/models.py:78-84. Treat these as "claimed organic" without a cert.
+    SELF_REPORTED_ORGANIC_METHODS = {"organic", "regenerative", "biodynamic"}
+
+    def validate(self, history) -> ConsumerClaimResult:
+        """
+        Evaluate the organic-claim status for a History (production).
+
+        Args:
+            history: history.models.History instance. Must have parcel + establishment
+                     loaded (caller is responsible — this service does no queries on
+                     those relations beyond what Django lazy-loads).
+
+        Returns:
+            ConsumerClaimResult with display-ready fields.
+        """
+        establishment = history.parcel.establishment if history.parcel else None
+        if establishment is None:
+            return self._conventional_result(reason="No establishment linked to this production.")
+
+        # Priority 1 — active verified USDA Organic cert.
+        cert = self._get_active_usda_organic_cert(establishment)
+        if cert is not None:
+            return ConsumerClaimResult(
+                can_display_organic=True,
+                can_display_transitioning=False,
+                display_label="USDA Certified Organic",
+                disclaimer=DISCLAIMER_CERTIFIED,
+                status="certified_organic",
+                status_color="green",
+                reason=(
+                    f"Active Certification #{cert.id} "
+                    f"(verification_status={cert.verification_status}, "
+                    f"expiry={cert.expiry_date})."
+                ),
+            )
+
+        # Priority 2 — transitioning (per 7 CFR 205.202(b)).
+        transition = self._get_transition_status(history.parcel)
+        if transition is not None and self._is_in_transition_window(transition):
+            months_in = self._months_since_last_prohibited(transition)
+            label = (
+                f"Transitioning to Organic — {months_in} of 36 months documented"
+                if months_in is not None
+                else "Transitioning to Organic"
+            )
+            return ConsumerClaimResult(
+                can_display_organic=False,
+                can_display_transitioning=True,
+                display_label=label,
+                disclaimer=DISCLAIMER_TRANSITIONING,
+                status="transitioning",
+                status_color="yellow",
+                reason=(
+                    f"Parcel {transition.parcel_id} in transition; "
+                    f"complete date {transition.transition_complete_date}, "
+                    f"{transition.days_remaining} days remaining."
+                ),
+                transition_complete_date=(
+                    transition.transition_complete_date.isoformat() if transition.transition_complete_date else None
+                ),
+                days_remaining=transition.days_remaining,
+            )
+
+        # Priority 3 — farmer claims organic-adjacent method without certification.
+        method = (history.production_method or "").lower()
+        if method in self.SELF_REPORTED_ORGANIC_METHODS:
+            method_display = method.capitalize()
+            return ConsumerClaimResult(
+                can_display_organic=False,
+                can_display_transitioning=False,
+                display_label=f"{method_display} practices (farmer-reported)",
+                disclaimer=DISCLAIMER_SELF_REPORTED,
+                status="self_reported",
+                status_color="gray",
+                reason=(
+                    f"History.production_method='{method}' with no active USDA "
+                    f"Organic cert and no transition record."
+                ),
+            )
+
+        # Priority 4 — conventional.
+        return self._conventional_result(
+            reason=f"production_method='{method or 'conventional'}', no cert, no transition."
+        )
+
+    # ---- helpers ----------------------------------------------------------
+
+    def _conventional_result(self, reason: str) -> ConsumerClaimResult:
+        return ConsumerClaimResult(
+            can_display_organic=False,
+            can_display_transitioning=False,
+            display_label="Conventional",
+            disclaimer=DISCLAIMER_CONVENTIONAL,
+            status="conventional",
+            status_color="gray",
+            reason=reason,
+        )
+
+    def _get_active_usda_organic_cert(self, establishment):
+        """
+        Returns the establishment's active verified USDA Organic Certification, or None.
+
+        "Active" per Certification.is_active semantics (models.py:151-158): not expired,
+        not revoked, not suspended. We additionally require verification_status='verified'
+        because self-reported organic claims must not surface the USDA Organic badge
+        (7 CFR 205.300 / 260.6(d)).
+
+        Note on cert_type='usda_organic' specifically: Trazo models CCOF / Oregon Tilth /
+        Real Organic Project etc. as separate certification_type values (see
+        constants.py CERTIFICATION_TYPE_CHOICES). In reality, CCOF and Oregon Tilth are
+        USDA-accredited certifying agents that issue the USDA Organic certification —
+        a CCOF-type cert in Trazo should also have a usda_organic-type cert if the
+        farm is certified organic. We intentionally require the explicit usda_organic
+        record here because FTC/NOP enforcement treats the USDA badge as a claim
+        that must map to an actual USDA cert record, not be inferred from a
+        certifier-named record. Farms need to add the usda_organic cert explicitly
+        to surface the badge — this is the conservative, compliant reading.
+        """
+        from certifications.models import Certification
+
+        today = timezone.now().date()
+        cert = (
+            Certification.objects.filter(
+                establishment=establishment,
+                certification_type=ORGANIC_CERT_TYPE,
+                verification_status="verified",
+            )
+            .exclude(expiry_date__lt=today)
+            .order_by("-effective_date", "-created_at")
+            .first()
+        )
+        return cert
+
+    def _get_transition_status(self, parcel):
+        """Lazy import to avoid a hard dep from certifications -> product."""
+        if parcel is None:
+            return None
+        try:
+            from product.services.transition_status_service import compute_transition_status
+
+            return compute_transition_status(parcel)
+        except Exception:
+            # Transition calc is a derived signal; never block the QR page on a failure.
+            return None
+
+    def _is_in_transition_window(self, transition) -> bool:
+        """
+        True iff there is a prohibited-substance record AND the 36-month clock has
+        not yet elapsed. is_eligible=True means transition is complete but no cert
+        issued — that is still "self-reported" territory, not "transitioning."
+        """
+        return (
+            transition.last_prohibited_date is not None
+            and transition.transition_complete_date is not None
+            and not transition.is_eligible
+        )
+
+    def _months_since_last_prohibited(self, transition) -> Optional[int]:
+        if transition.last_prohibited_date is None:
+            return None
+        today = timezone.now().date()
+        months = (today.year - transition.last_prohibited_date.year) * 12
+        months += today.month - transition.last_prohibited_date.month
+        # Clamp to [0, 36] — we never show "-3 months" or "40 months documented."
+        return max(0, min(36, months))
+
+
+def filter_certifications_for_consumer(certifications: List) -> List:
+    """
+    Strips from the certification list any USDA Organic cert that is not verified +
+    active. Intended to run alongside ConsumerClaimValidator so a self-reported
+    organic cert never surfaces as a badge on the QR page.
+
+    Non-USDA Organic certs pass through unchanged — they are governed by their own
+    verification workflow and this function only polices the USDA Organic badge.
+
+    Returns a new list.
+    """
+    today = timezone.now().date()
+    out = []
+    for cert in certifications:
+        if cert.certification_type == ORGANIC_CERT_TYPE:
+            if cert.verification_status != "verified":
+                continue
+            if cert.expiry_date and cert.expiry_date < today:
+                continue
+        out.append(cert)
+    return out

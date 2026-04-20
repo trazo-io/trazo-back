@@ -125,7 +125,9 @@ class Command(BaseCommand):
             stale = CropType.objects.filter(slug="avocado")
             if stale.exists() and CropType.objects.filter(slug="avocados").exists():
                 stale.delete()
-                self.stdout.write(self.style.WARNING('  🧹 Removed stale "avocado" duplicate (canonical is "avocados")'))
+                self.stdout.write(
+                    self.style.WARNING('  🧹 Removed stale "avocado" duplicate (canonical is "avocados")')
+                )
 
         crop_data = self._get_crop_type_data()
 

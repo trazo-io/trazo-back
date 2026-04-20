@@ -8,6 +8,8 @@ CERTIFICATION_TYPE_CHOICES = [
     ("global_gap", "GlobalG.A.P."),
     ("fair_trade", "Fair Trade Certified"),
     ("rainforest_alliance", "Rainforest Alliance"),
+    ("sqf", "SQF Certified"),
+    ("kosher", "Kosher Certified"),
     ("other", "Other"),
 ]
 
@@ -38,7 +40,8 @@ BUSINESS_EVENT_TYPE_MAP = {
     "carbon_neutral": "other",
     "sustainable_agriculture": "other",
     "water_stewardship": "other",
-    "food_safety": "other",
+    "food_safety": "sqf",
+    "kosher": "kosher",
 }
 
 # Known text mappings for data migration from Establishment.certifications TextField
@@ -61,4 +64,12 @@ LEGACY_TEXT_MAP = {
     "fair trade": "fair_trade",
     "fair trade certified": "fair_trade",
     "rainforest alliance": "rainforest_alliance",
+    "sqf": "sqf",
+    "sqf certified": "sqf",
+    "safe quality food": "sqf",
+    "gfsi": "sqf",
+    "kosher": "kosher",
+    "ou kosher": "kosher",
+    "orthodox union": "kosher",
+    "kosher certified": "kosher",
 }

@@ -270,9 +270,7 @@ class BlockchainCarbonService:
 
             self.logger.info("Submitting production %s to blockchain (hash=%s...)", production_id, data_hash[:16])
 
-            transaction = self.contract.functions.recordProduction(
-                production_id, hash_bytes
-            ).build_transaction(
+            transaction = self.contract.functions.recordProduction(production_id, hash_bytes).build_transaction(
                 {
                     "from": self.account.address,
                     "gas": 150000,  # AccessControl + storage ~117K, with buffer

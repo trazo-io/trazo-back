@@ -20,17 +20,13 @@ from django.test import TestCase
 
 from PIL import Image
 
-from carbon.services.photo_evidence_service import (
-    HEIC_SUPPORTED,
-    PhotoEvidenceService,
-    photo_evidence_service,
-)
+from carbon.services.photo_evidence_service import HEIC_SUPPORTED, PhotoEvidenceService, photo_evidence_service
 from common.models import Gallery, GalleryImage
-
 
 # ---------------------------------------------------------------------------
 # Helpers: generate test images as raw bytes
 # ---------------------------------------------------------------------------
+
 
 def _make_jpeg(width=640, height=480, color=(34, 139, 34)):
     """Generate a valid JPEG image as bytes."""
@@ -81,6 +77,7 @@ def _make_tiny_image(width=50, height=50):
 # ---------------------------------------------------------------------------
 # Fix #4: Magic Byte MIME Detection
 # ---------------------------------------------------------------------------
+
 
 class TestMagicByteDetection(TestCase):
     """Tests that MIME type is detected from file content, not extension."""
@@ -148,6 +145,7 @@ class TestMagicByteDetection(TestCase):
 # Fix #2: HEIC/HEIF Format Support
 # ---------------------------------------------------------------------------
 
+
 class TestHEICSupport(TestCase):
     """Tests HEIC format acceptance in configuration."""
 
@@ -161,14 +159,13 @@ class TestHEICSupport(TestCase):
 
     def test_pillow_heif_registered(self):
         """pillow-heif should be installed and registered."""
-        assert HEIC_SUPPORTED is True, (
-            "pillow-heif is not installed. Run: poetry add pillow-heif"
-        )
+        assert HEIC_SUPPORTED is True, "pillow-heif is not installed. Run: poetry add pillow-heif"
 
 
 # ---------------------------------------------------------------------------
 # Fix #3: File Size Alignment
 # ---------------------------------------------------------------------------
+
 
 class TestFileSizeValidation(TestCase):
     """Tests file size limits are consistent and enforced."""
@@ -206,6 +203,7 @@ class TestFileSizeValidation(TestCase):
 # Fix #6: EXIF Stripping on Processed Images
 # ---------------------------------------------------------------------------
 
+
 class TestEXIFStripping(TestCase):
     """Tests that processed images have EXIF data stripped for privacy."""
 
@@ -241,9 +239,9 @@ class TestEXIFStripping(TestCase):
         img = Image.open(io.BytesIO(processed))
         # _process_image uses thumbnail() which modifies in-place
         # For JPEG re-encoding the dimensions should be capped
-        assert max(img.size) <= 2048 or len(processed) < len(large), (
-            f"Processed image should be resized or at least compressed: {img.size}"
-        )
+        assert max(img.size) <= 2048 or len(processed) < len(
+            large
+        ), f"Processed image should be resized or at least compressed: {img.size}"
 
     def test_rgba_converted_to_rgb(self):
         """RGBA PNG images should be converted to RGB when saved as JPEG."""
@@ -262,14 +260,17 @@ class TestEXIFStripping(TestCase):
 # Fix #7: GPS Geofencing Validation
 # ---------------------------------------------------------------------------
 
+
 class TestGPSGeofencing(TestCase):
     """Tests GPS coordinate extraction and distance validation."""
 
     def test_nearby_location_verified(self):
         """Photo taken 6km from farm should be verified (within 50km default)."""
         result = PhotoEvidenceService.validate_photo_location(
-            photo_lat=40.7128, photo_lon=-74.0060,  # NYC
-            farm_lat=40.7282, farm_lon=-74.0776,     # Newark, NJ (~6km)
+            photo_lat=40.7128,
+            photo_lon=-74.0060,  # NYC
+            farm_lat=40.7282,
+            farm_lon=-74.0776,  # Newark, NJ (~6km)
         )
         assert result["location_verified"] is True
         assert result["distance_km"] < 10
@@ -277,8 +278,10 @@ class TestGPSGeofencing(TestCase):
     def test_distant_location_rejected(self):
         """Photo taken 3900km from farm should NOT be verified."""
         result = PhotoEvidenceService.validate_photo_location(
-            photo_lat=34.0522, photo_lon=-118.2437,  # Los Angeles
-            farm_lat=40.7128, farm_lon=-74.0060,      # NYC (~3940km)
+            photo_lat=34.0522,
+            photo_lon=-118.2437,  # Los Angeles
+            farm_lat=40.7128,
+            farm_lon=-74.0060,  # NYC (~3940km)
         )
         assert result["location_verified"] is False
         assert result["distance_km"] > 3000
@@ -286,8 +289,10 @@ class TestGPSGeofencing(TestCase):
     def test_same_location_zero_distance(self):
         """Photo at exact farm location should have ~0km distance."""
         result = PhotoEvidenceService.validate_photo_location(
-            photo_lat=40.7128, photo_lon=-74.0060,
-            farm_lat=40.7128, farm_lon=-74.0060,
+            photo_lat=40.7128,
+            photo_lon=-74.0060,
+            farm_lat=40.7128,
+            farm_lon=-74.0060,
         )
         assert result["location_verified"] is True
         assert result["distance_km"] < 0.01
@@ -296,8 +301,10 @@ class TestGPSGeofencing(TestCase):
         """Custom max_distance_km should be respected."""
         # 6km apart
         result = PhotoEvidenceService.validate_photo_location(
-            photo_lat=40.7128, photo_lon=-74.0060,
-            farm_lat=40.7282, farm_lon=-74.0776,
+            photo_lat=40.7128,
+            photo_lon=-74.0060,
+            farm_lat=40.7282,
+            farm_lon=-74.0776,
             max_distance_km=5.0,  # Strict 5km radius
         )
         assert result["location_verified"] is False  # 6km > 5km
@@ -305,8 +312,10 @@ class TestGPSGeofencing(TestCase):
     def test_southern_hemisphere(self):
         """GPS works for southern hemisphere coordinates."""
         result = PhotoEvidenceService.validate_photo_location(
-            photo_lat=-34.6037, photo_lon=-58.3816,  # Buenos Aires
-            farm_lat=-34.5500, farm_lon=-58.4500,     # Nearby
+            photo_lat=-34.6037,
+            photo_lon=-58.3816,  # Buenos Aires
+            farm_lat=-34.5500,
+            farm_lon=-58.4500,  # Nearby
         )
         assert result["location_verified"] is True
         assert result["distance_km"] < 20
@@ -314,8 +323,10 @@ class TestGPSGeofencing(TestCase):
     def test_invalid_coordinates_handled(self):
         """Invalid coordinates should not crash, return not verified."""
         result = PhotoEvidenceService.validate_photo_location(
-            photo_lat=float("inf"), photo_lon=0,
-            farm_lat=0, farm_lon=0,
+            photo_lat=float("inf"),
+            photo_lon=0,
+            farm_lat=0,
+            farm_lon=0,
         )
         assert result["location_verified"] is False
 
@@ -323,6 +334,7 @@ class TestGPSGeofencing(TestCase):
 # ---------------------------------------------------------------------------
 # Fix #5: Thumbnail Generation
 # ---------------------------------------------------------------------------
+
 
 class TestThumbnailGeneration(TestCase):
     """Tests thumbnail generation service."""
@@ -365,9 +377,7 @@ class TestThumbnailGeneration(TestCase):
             with default_storage.open(stored_path, "rb") as f:
                 thumb_img = Image.open(f)
                 max_dim = max(self.service.THUMBNAIL_SIZES[size_name])
-                assert max(thumb_img.size) <= max_dim, (
-                    f"Thumbnail {size_name} too large: {thumb_img.size} > {max_dim}"
-                )
+                assert max(thumb_img.size) <= max_dim, f"Thumbnail {size_name} too large: {thumb_img.size} > {max_dim}"
 
     def test_small_image_thumbnail_not_upscaled(self):
         """An image smaller than thumbnail size should not be upscaled."""
@@ -386,6 +396,7 @@ class TestThumbnailGeneration(TestCase):
 # ---------------------------------------------------------------------------
 # Model: GalleryImage.thumbnail_url()
 # ---------------------------------------------------------------------------
+
 
 class TestGalleryImageThumbnails(TestCase):
     """Tests GalleryImage model thumbnail URL generation."""
@@ -433,6 +444,7 @@ class TestGalleryImageThumbnails(TestCase):
 # ---------------------------------------------------------------------------
 # EXIF Extraction (GPS coordinates)
 # ---------------------------------------------------------------------------
+
 
 class TestEXIFExtraction(TestCase):
     """Tests EXIF data extraction, especially GPS coordinates."""
@@ -505,6 +517,7 @@ class TestEXIFExtraction(TestCase):
 # Full Validation Pipeline
 # ---------------------------------------------------------------------------
 
+
 class TestFullValidationPipeline(TestCase):
     """End-to-end tests of the validate_photo method."""
 
@@ -561,6 +574,7 @@ class TestFullValidationPipeline(TestCase):
 # ---------------------------------------------------------------------------
 # Serializer: Thumbnail fields exposed
 # ---------------------------------------------------------------------------
+
 
 class TestGalleryImageSerializer(TestCase):
     """Tests that the serializer exposes thumbnail URLs."""

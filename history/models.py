@@ -17,6 +17,27 @@ from qrcode.image.styles.colormasks import SolidFillColorMask
 from qrcode.image.styles.moduledrawers import RoundedModuleDrawer
 
 from carbon.choices import FUEL_TYPES
+from common.field_registry import (
+    APPLICATION_METHOD,
+    CHEMICAL_SUBTYPE,
+    ELECTRICITY_SOURCE,
+    EQUIPMENT_OPERATION_TYPE,
+    EQUIPMENT_TYPE,
+    GROWTH_STAGE,
+    HARVEST_QUALITY_GRADE,
+    IRRIGATION_METHOD,
+    ORGANIC_APPROVED,
+    PRODUCTION_EFFICIENCY,
+    SEED_CERTIFICATION_STATUS,
+    SEEDS_SOURCE,
+    UNIT_AREA,
+    UNIT_DEPTH,
+    UNIT_DISTANCE,
+    UNIT_FUEL,
+    UNIT_VOLUME,
+    UNIT_YIELD,
+    WATER_SOURCE,
+)
 from common.models import Gallery
 from product.models import Parcel
 
@@ -181,6 +202,87 @@ class History(models.Model):
         default="no_events",
         help_text="Status of background template event creation",
     )
+
+    # NOP Compliance: Post-Harvest Sales & Traceability (7 CFR 205.103)
+    # These fields are filled AFTER production is finalized (post-finish).
+    # NOT part of blockchain hash — hash is computed at finish time, sales happen after.
+    sold_to = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="Buyer/recipient name (for trace-back audit)",
+    )
+    sale_date = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Date of sale or delivery",
+    )
+    quantity_sold = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        help_text="Quantity sold to buyer",
+    )
+    quantity_sold_unit = models.CharField(
+        max_length=20,
+        choices=UNIT_CHOICES,
+        blank=True,
+        null=True,
+        help_text="Unit for quantity sold",
+    )
+    # Box-to-pound conversion for mass-balance reconciliation (§ 205.103(b)(2)
+    # one-step traceability). Optional: when null, the audit export falls back
+    # to a crop-specific industry default (CROP_DEFAULT_BOX_WEIGHTS in
+    # audit_export_service.py). Standard Hass avocado carton = 25 lb per USDA-
+    # AMS Marketing Order 915.
+    box_weight_lb = models.DecimalField(
+        max_digits=7,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        help_text=(
+            "Weight in pounds of one sales box / carton / lug. Used for mass-"
+            "balance reconciliation between boxes shipped and harvest weight."
+        ),
+    )
+    organic_on_invoice = models.BooleanField(
+        default=False,
+        help_text="Whether organic status is identified on sales documents (SOE requirement)",
+    )
+    transport_method = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Transportation method (truck, rail, etc.)",
+    )
+    destination = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="Delivery destination/receiving location",
+    )
+
+    # NOP Compliance: Record Retention (7 CFR 205.103(b)(4))
+    # Auto-set to finish_date + 5 years. Prevents deletion within retention period.
+    retention_until = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Records retained until this date (auto-set: finish_date + 5 years per NOP)",
+    )
+
+    def delete(self, *args, **kwargs):
+        """Prevent deletion of productions within NOP 5-year retention period."""
+        from django.utils import timezone
+
+        if self.retention_until and self.retention_until > timezone.now().date():
+            from django.core.exceptions import ValidationError
+
+            raise ValidationError(
+                f"Cannot delete: NOP requires record retention until {self.retention_until}. "
+                f"Records must be maintained for 5 years per 7 CFR 205.103(b)(4)."
+            )
+        super().delete(*args, **kwargs)
 
     def __str__(self) -> str:
         return (
@@ -569,6 +671,15 @@ class History(models.Model):
         self.quality_grade = history_data.get("quality_grade")
         self.harvest_method = history_data.get("harvest_method")
 
+        # NOP 7 CFR 205.103(b)(4): 5-year record retention
+        from datetime import timedelta
+
+        if self.finish_date:
+            finish_dt = self.finish_date
+            if hasattr(finish_dt, "date"):
+                finish_dt = finish_dt.date()
+            self.retention_until = finish_dt + timedelta(days=5 * 365)
+
         self.save()
 
     def compute_finalization_hash(self):
@@ -634,7 +745,7 @@ class History(models.Model):
             + PestManagementEventSerializer(self.history_pestmanagementevent_events.all(), many=True).data
             + BusinessEventSerializer(self.history_businessevent_events.all(), many=True).data
         )
-        return sorted(events, key=lambda event: event["index"])
+        return sorted(events, key=lambda event: (event["date"], event["index"]))
 
 
 class CommonEvent(models.Model):
@@ -673,16 +784,7 @@ class CommonEvent(models.Model):
     )
     growth_stage = models.CharField(
         max_length=30,
-        choices=[
-            ("dormant", "Dormant"),
-            ("budbreak", "Bud Break"),
-            ("bloom", "Bloom/Flowering"),
-            ("fruit_set", "Fruit Set"),
-            ("vegetative", "Vegetative Growth"),
-            ("maturation", "Maturation"),
-            ("harvest_ready", "Harvest Ready"),
-            ("post_harvest", "Post-Harvest"),
-        ],
+        choices=GROWTH_STAGE,
         blank=True,
         null=True,
         help_text="Crop growth stage at time of event",
@@ -728,6 +830,91 @@ class WeatherEvent(CommonEvent):
     observation = models.TextField(blank=True, null=True)
     extra_data = models.JSONField(blank=True, null=True)
 
+    # Plausibility ranges for meteorological magnitudes. These are NOT
+    # regulatory thresholds — they're sanity bounds to catch unit-of-measure
+    # mistakes (e.g. °C entered in a °F field, kph in an mph field) before the
+    # value ships in an inspector-facing PDF. An entry like 140°F on a
+    # California farm is instantly implausible (world-record high is ~134°F,
+    # Death Valley 1913) and undermines credibility of the rest of the data.
+    _PLAUSIBILITY_BOUNDS = {
+        # temperature in °F / °C (evaluated against both, narrower of the two)
+        "temperature_f": (-40, 135),  # world record high ~134°F
+        "temperature_c": (-40, 57),  # world record high ~56.7°C
+        "wind_speed_mph": (0, 250),  # world record gust 253 mph, Barrow Island
+        "precipitation_in": (0, 50),  # single-event max ~43 in (Tropical Cyclone Denise, 1966)
+        "humidity_pct": (0, 100),
+        "hail_size_in": (0, 8),  # largest verified ~8 in (Vivian, SD 2010)
+    }
+
+    def _plausibility_check(self, unit: str, value, low: float, high: float, field: str):
+        """Return a ValidationError-style message if the magnitude is outside
+        plausible meteorological bounds, else None. Used by clean() and by
+        the serializer's pre-save validation so both the admin and the API
+        catch unit-of-measure typos."""
+        if value is None:
+            return None
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return None  # non-numeric handled elsewhere
+        if numeric < low or numeric > high:
+            return (
+                f"{field} {numeric}{unit} is outside the plausible range "
+                f"[{low}, {high}]{unit}. Check that the value was entered in "
+                "the correct unit — e.g. °C in a °F field will trigger this."
+            )
+        return None
+
+    def clean(self):
+        """
+        Validate that numeric meteorological magnitudes are within plausible
+        ranges. Catches °C-in-°F and kph-in-mph typos at save-time so they
+        never ship in an inspector-facing PDF.
+        """
+        from django.core.exceptions import ValidationError
+
+        super().clean()
+        extra = self.extra_data or {}
+        issues = {}
+
+        # Temperature — unit-aware; extra_data.temperature_unit in {"F", "C"}.
+        temp_unit = (extra.get("temperature_unit") or "F").upper()
+        temp_bounds_key = "temperature_c" if temp_unit == "C" else "temperature_f"
+        low, high = self._PLAUSIBILITY_BOUNDS[temp_bounds_key]
+        unit_sym = "°C" if temp_unit == "C" else "°F"
+        for key in ("highest_temperature", "lowest_temperature", "temperature", "lower_temperature"):
+            msg = self._plausibility_check(unit_sym, extra.get(key), low, high, key)
+            if msg:
+                issues.setdefault("extra_data", []).append(msg)
+
+        wind_low, wind_high = self._PLAUSIBILITY_BOUNDS["wind_speed_mph"]
+        msg = self._plausibility_check(" mph", extra.get("wind_speed"), wind_low, wind_high, "wind_speed")
+        if msg:
+            issues.setdefault("extra_data", []).append(msg)
+
+        precip_low, precip_high = self._PLAUSIBILITY_BOUNDS["precipitation_in"]
+        for key in ("precipitation", "precipitation_amount"):
+            msg = self._plausibility_check(" in", extra.get(key), precip_low, precip_high, key)
+            if msg:
+                issues.setdefault("extra_data", []).append(msg)
+
+        hum_low, hum_high = self._PLAUSIBILITY_BOUNDS["humidity_pct"]
+        # Check both humidity key variants separately — using ``or`` to pick
+        # between them treats 0% (a valid low-humidity reading) as falsy
+        # and silently swaps it for humidity_level, masking a real value.
+        for key in ("humidity", "humidity_level"):
+            msg = self._plausibility_check("%", extra.get(key), hum_low, hum_high, key)
+            if msg:
+                issues.setdefault("extra_data", []).append(msg)
+
+        hail_low, hail_high = self._PLAUSIBILITY_BOUNDS["hail_size_in"]
+        msg = self._plausibility_check(" in", extra.get("hail_size"), hail_low, hail_high, "hail_size")
+        if msg:
+            issues.setdefault("extra_data", []).append(msg)
+
+        if issues:
+            raise ValidationError(issues)
+
 
 class ChemicalEvent(CommonEvent):
     FERTILIZER = "FE"
@@ -751,6 +938,7 @@ class ChemicalEvent(CommonEvent):
 
     FUNGICIDE_SUBTYPE_CHOICES = [
         ("synthetic", "Synthetic (Chlorothalonil, Mancozeb, etc.)"),
+        ("organic", "Organic/Natural (Neem Oil, Potassium Bicarbonate, etc.)"),
         ("copper", "Copper-Based (Bordeaux Mix, Copper Sulfate, Kocide, etc.)"),
         ("sulfur", "Sulfur-Based"),
         ("biological", "Biological (Bacillus, Trichoderma, etc.)"),
@@ -768,25 +956,8 @@ class ChemicalEvent(CommonEvent):
         ("slow_release", "Slow-Release/Controlled"),
     ]
 
-    # Combined choices for database storage
-    CHEMICAL_SUBTYPE_CHOICES = [
-        # Herbicide subtypes
-        ("synthetic_herbicide", "Synthetic Herbicide"),
-        ("organic_herbicide", "Organic/Natural Herbicide"),
-        # Fungicide subtypes
-        ("synthetic_fungicide", "Synthetic Fungicide"),
-        ("copper_fungicide", "Copper-Based Fungicide"),
-        ("sulfur_fungicide", "Sulfur-Based Fungicide"),
-        ("biological_fungicide", "Biological Fungicide"),
-        # Pesticide subtypes
-        ("synthetic_pesticide", "Synthetic Pesticide"),
-        ("organic_pesticide", "Organic/Natural Pesticide"),
-        ("biological_pesticide", "Biological Pesticide"),
-        # Fertilizer subtypes
-        ("synthetic_fertilizer", "Synthetic/Chemical Fertilizer"),
-        ("organic_fertilizer", "Organic Fertilizer"),
-        ("slow_release_fertilizer", "Slow-Release Fertilizer"),
-    ]
+    # Combined choices imported from common/field_registry.py (SSOT)
+    CHEMICAL_SUBTYPE_CHOICES = CHEMICAL_SUBTYPE
 
     type = models.CharField(max_length=2, choices=CHEMICAL_EVENTS, blank=True, null=True)
 
@@ -822,13 +993,7 @@ class ChemicalEvent(CommonEvent):
     )
     application_method_structured = models.CharField(
         max_length=20,
-        choices=[
-            ("broadcast", "Broadcast"),
-            ("injection", "Soil Injection"),
-            ("foliar", "Foliar Application"),
-            ("drip", "Drip/Fertigation"),
-            ("banding", "Band Application"),
-        ],
+        choices=APPLICATION_METHOD,
         null=True,
         blank=True,
         help_text="Structured application method",
@@ -853,12 +1018,7 @@ class ChemicalEvent(CommonEvent):
     )
     application_fuel_unit = models.CharField(
         max_length=10,
-        choices=[
-            ("L", "Liters"),
-            ("gal", "Gallons"),
-            ("kg", "Kilograms"),
-            ("kWh", "Kilowatt-hours"),
-        ],
+        choices=UNIT_FUEL,
         default="gal",
         blank=True,
         help_text="Fuel unit for application equipment",
@@ -880,18 +1040,7 @@ class ChemicalEvent(CommonEvent):
     # These detailed options provide better transparency for consumers about organic certification types
     organic_approved = models.CharField(
         max_length=20,
-        choices=[
-            # Legacy choices (kept for backward compatibility)
-            ("yes", "Yes - Organic Approved"),
-            ("no", "No - Not Organic"),
-            ("not_applicable", "Not Applicable"),
-            # New detailed organic certification options (Sprint 6)
-            ("omri_listed", "OMRI Listed - Organic certified"),
-            ("usda_nop_approved", "USDA NOP Approved - National Organic Program"),
-            ("organic_equivalent", "Organic Equivalent - Meets organic standards"),
-            ("not_organic", "Not Organic Approved - Conventional use only"),
-            ("transitional", "Transitional - In certification process"),
-        ],
+        choices=ORGANIC_APPROVED,
         blank=True,
         null=True,
         help_text="Whether this chemical is approved for organic farming",
@@ -947,14 +1096,7 @@ class ChemicalEvent(CommonEvent):
     )
     volume_unit = models.CharField(
         max_length=20,
-        choices=[
-            ("L", "Liters"),
-            ("gal", "Gallons"),
-            ("mL", "Milliliters"),
-            ("oz", "Ounces"),
-            ("kg", "Kilograms"),
-            ("lbs", "Pounds"),
-        ],
+        choices=UNIT_VOLUME,
         default="gal",
         blank=True,
         help_text="Volume unit",
@@ -968,11 +1110,7 @@ class ChemicalEvent(CommonEvent):
     )
     area_unit = models.CharField(
         max_length=10,
-        choices=[
-            ("ha", "Hectares"),
-            ("acres", "Acres"),
-            ("m2", "Square Meters"),
-        ],
+        choices=UNIT_AREA,
         default="acres",
         blank=True,
         help_text="Area unit",
@@ -984,6 +1122,97 @@ class ChemicalEvent(CommonEvent):
         default=False,
         help_text="Fertigation — fertilizer injected through irrigation system. "
         "Skips application fuel to avoid double-counting with irrigation events.",
+    )
+
+    # NOP Compliance: Supplier & Purchase Tracking (7 CFR 205.103)
+    # Required for mass-balance audits — purchased inputs must match applied inputs
+    supplier_name = models.CharField(
+        max_length=150,
+        blank=True,
+        null=True,
+        help_text="Input supplier/vendor name for audit trail",
+    )
+    purchase_date = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Date input was purchased",
+    )
+    purchase_invoice = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Purchase invoice or receipt reference number",
+    )
+    quantity_purchased = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        help_text="Total quantity purchased (for mass-balance audit reconciliation)",
+    )
+    quantity_purchased_unit = models.CharField(
+        max_length=10,
+        choices=UNIT_VOLUME,
+        blank=True,
+        null=True,
+        help_text="Unit for quantity purchased",
+    )
+
+    # Sprint 3 — OMRI / National List cross-reference (7 CFR 205.601/602)
+    # Farmer-confirmed OMRI ID (nullable) and auto-suggested National List match (nullable).
+    # See certifications.services.omri_verifier for the matching logic.
+    omri_product = models.ForeignKey(
+        "certifications.OMRIProduct",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="chemical_events",
+        help_text="Farmer-confirmed OMRI product ID (reported, not Trazo-verified)",
+    )
+    national_list_substance = models.ForeignKey(
+        "certifications.NationalListSubstance",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="chemical_events",
+        help_text="Matched National List entry (7 CFR 205.601/602) — auto-suggested",
+    )
+
+    # Sprint 5.1 — Drift detector. Populated by post_save signal when the input
+    # used on this event is not in the establishment's active OSP.approved_*.
+    # Null = no drift (either input is approved or no active OSP to compare to).
+    # Shape: see certifications.services.drift_detector.build_drift_warning().
+    drift_warning = models.JSONField(
+        blank=True,
+        null=True,
+        help_text=(
+            "Drift detector payload (7 CFR 205.400(f)(2)). Non-null when this "
+            "event's input is not in the active OSP's approved_inputs — treated "
+            "as an operation change requiring certifier notification."
+        ),
+    )
+
+    # P0-3 — CA DPR Restricted Materials Permit (California state law).
+    # Required for county-restricted materials (copper hydroxide, sulfur,
+    # pyrethrin, spinosad, rotenone) even when NOP-allowed under § 205.601.
+    # Enforcement is county Ag Commissioner — permit # + county + expiry
+    # are surfaced to the inspector via the drift-finding sub-badge.
+    ca_dpr_permit_number = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="CA DPR Restricted Materials Permit # issued by the county Ag Commissioner",
+    )
+    ca_dpr_permit_county = models.CharField(
+        max_length=60,
+        blank=True,
+        null=True,
+        help_text="CA county that issued the permit (e.g., 'San Diego', 'Fresno')",
+    )
+    ca_dpr_permit_expires = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Expiration date of the CA DPR restricted-materials permit",
     )
 
     def clean(self):
@@ -1100,12 +1329,7 @@ class ProductionEvent(CommonEvent):
     )
     area_unit = models.CharField(
         max_length=10,
-        choices=[
-            ("ha", "Hectares"),
-            ("acres", "Acres"),
-            ("m2", "Square Meters"),
-            ("km2", "Square Kilometers"),
-        ],
+        choices=UNIT_AREA,
         default="acres",
         blank=True,
         help_text="Area unit",
@@ -1115,14 +1339,7 @@ class ProductionEvent(CommonEvent):
     )
     yield_unit = models.CharField(
         max_length=10,
-        choices=[
-            ("kg", "Kilograms"),
-            ("tons", "Tonnes"),
-            ("lbs", "Pounds"),
-            ("boxes", "Boxes"),
-            ("plants", "Plants"),
-            ("seeds", "Seeds"),
-        ],
+        choices=UNIT_YIELD,
         default="lbs",
         blank=True,
         help_text="Yield unit",
@@ -1132,12 +1349,7 @@ class ProductionEvent(CommonEvent):
     )
     fuel_unit = models.CharField(
         max_length=10,
-        choices=[
-            ("L", "Liters"),
-            ("gal", "Gallons"),
-            ("kg", "Kilograms"),
-            ("kWh", "Kilowatt-hours"),
-        ],
+        choices=UNIT_FUEL,
         default="gal",
         blank=True,
         help_text="Fuel unit",
@@ -1154,22 +1366,14 @@ class ProductionEvent(CommonEvent):
     )
     transportation_unit = models.CharField(
         max_length=10,
-        choices=[
-            ("km", "Kilometers"),
-            ("miles", "Miles"),
-            ("m", "Meters"),
-        ],
+        choices=UNIT_DISTANCE,
         default="miles",
         blank=True,
         help_text="Transportation unit",
     )
     production_efficiency = models.CharField(
         max_length=10,
-        choices=[
-            ("high", "High Efficiency"),
-            ("normal", "Normal Efficiency"),
-            ("low", "Low Efficiency"),
-        ],
+        choices=PRODUCTION_EFFICIENCY,
         default="normal",
         blank=True,
         help_text="Production efficiency rating for carbon scoring",
@@ -1180,31 +1384,67 @@ class ProductionEvent(CommonEvent):
     # Optimized for: farmer practicality, consumer trust, transparency-first approach
     seeds_source = models.CharField(
         max_length=50,
-        choices=[
-            ("certified_organic", "Certified Organic Seeds"),
-            ("farm_saved", "Farm-Saved Seeds"),
-            ("local", "Local Nursery/Supplier"),
-            ("cooperative", "Farmer Cooperative"),
-            ("commercial", "Commercial Supplier"),
-            ("other", "Other"),
-        ],
+        choices=SEEDS_SOURCE,
         blank=True,
         null=True,
-        help_text="Source of seeds/seedlings for consumer transparency (does not affect carbon calculations)",
+        help_text=(
+            "Where the seed/planting stock came from (transparency field; does not affect carbon). "
+            "For regulatory classification (organic/transitional/non-organic), use seed_certification_status."
+        ),
+    )
+    # NOP Compliance: Seed Commercial Availability Search (NOP 5029)
+    # When non-organic seed is used, NOP requires documentation of at least 3 supplier searches
+    seed_search_attempts = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Organic seed search documentation per NOP 5029. "
+        "Format: [{supplier_name, date_contacted, result, notes}]",
+    )
+    # NOP Compliance: Seed Traceability (7 CFR 205.204 / NOP 5029)
+    # Planting subtype (type="PL") only. Mirrors ChemicalEvent.supplier_name pattern (migration 0146).
+    seed_supplier_name = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="Name of the seed/planting stock supplier (NOP 7 CFR 205.204 traceability)",
+    )
+    seed_purchase_date = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Date seed/planting stock was purchased (traceability to supplier invoice)",
+    )
+    seed_purchase_invoice = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Supplier invoice number for the seed/planting stock purchase",
+    )
+    seed_lot_number = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Supplier lot/batch identifier for the seed/planting stock",
+    )
+    seed_certification_status = models.CharField(
+        max_length=30,
+        choices=SEED_CERTIFICATION_STATUS,
+        blank=True,
+        null=True,
+        help_text=(
+            "Regulatory classification per NOP 7 CFR 205.204. "
+            "Non-organic treated seed with prohibited substances disqualifies the crop."
+        ),
+    )
+    seed_treatment = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="Seed coatings, inoculants, or pelleting materials applied (NOP 7 CFR 205.204(a)(5))",
     )
     # Updated 2025-12-06: Aligned with transparency-first frontend choices
     water_source = models.CharField(
         max_length=50,
-        choices=[
-            ("well_groundwater", "Well/Groundwater"),
-            ("municipal", "Municipal Water Supply"),
-            ("rainwater_harvesting", "Rainwater Harvesting"),
-            ("irrigation_canal", "Irrigation Canal/District"),
-            ("river_stream", "River/Stream"),
-            ("pond_reservoir", "Pond/Reservoir"),
-            ("recycled_water", "Recycled/Reclaimed Water"),
-            ("other", "Other"),
-        ],
+        choices=WATER_SOURCE,
         blank=True,
         null=True,
         help_text="Water source for irrigation - affects pump energy factor in carbon calculations (USDA NRCS)",
@@ -1214,17 +1454,7 @@ class ProductionEvent(CommonEvent):
     # These fields enable accurate water usage estimation for transparency reporting
     irrigation_method = models.CharField(
         max_length=30,
-        choices=[
-            ("flood", "Flood Irrigation"),
-            ("furrow", "Furrow Irrigation"),
-            ("drip", "Drip Irrigation"),
-            ("sprinkler", "Sprinkler System"),
-            ("center_pivot", "Center Pivot"),
-            ("sub_irrigation", "Sub-surface Irrigation"),
-            ("micro_sprinkler", "Micro-sprinkler"),
-            ("hand_watering", "Hand Watering"),
-            ("rain_fed", "Rain-fed Only"),
-        ],
+        choices=IRRIGATION_METHOD,
         blank=True,
         null=True,
         help_text="Irrigation method used (USDA NASS 2023 categories for transparency)",
@@ -1238,10 +1468,7 @@ class ProductionEvent(CommonEvent):
     )
     irrigation_depth_unit = models.CharField(
         max_length=10,
-        choices=[
-            ("inches", "Inches"),
-            ("cm", "Centimeters"),
-        ],
+        choices=UNIT_DEPTH,
         default="inches",
         blank=True,
         null=True,
@@ -1269,49 +1496,42 @@ class ProductionEvent(CommonEvent):
     )
     equipment_type = models.CharField(
         max_length=30,
-        choices=[
-            ("tractor", "Tractor"),
-            ("harvester", "Harvester/Combine"),
-            ("sprayer", "Sprayer"),
-            ("truck", "Truck/Transport"),
-            ("generator", "Generator"),
-            ("pump", "Irrigation Pump"),
-            ("other", "Other Equipment"),
-        ],
+        choices=EQUIPMENT_TYPE,
         blank=True,
         null=True,
         help_text="Type of equipment used (for carbon calculation accuracy)",
     )
     equipment_operation_type = models.CharField(
         max_length=2,
-        choices=[
-            ("FC", "Fuel Consumption"),
-            ("MN", "Maintenance"),
-            ("RE", "Repair"),
-            ("CA", "Calibration"),
-            ("BD", "Breakdown"),
-            ("EI", "Inspection"),
-        ],
+        choices=EQUIPMENT_OPERATION_TYPE,
         blank=True,
         null=True,
         help_text="Type of equipment operation (for Equipment Maintenance events)",
     )
 
     # MVP Target Market Fields
-    HARVEST_QUALITY_CHOICES = [
-        ("export_quality", "Export Quality"),
-        ("grade_a", "Grade A"),
-        ("grade_b", "Grade B"),
-        ("grade_c", "Grade C"),
-        ("domestic", "Domestic Market"),
-        ("processing", "Processing/Juice"),
-    ]
     harvest_quality_grade = models.CharField(
         max_length=20,
-        choices=HARVEST_QUALITY_CHOICES,
+        choices=HARVEST_QUALITY_GRADE,
         blank=True,
         null=True,
         help_text="Harvest quality grade for premium fruit operations (CA citrus, Uruguay exports)",
+    )
+
+    # Sprint 3.2 — Post-harvest storage traceability (NOP 205.272 commingling; FSMA 204 prep).
+    # Used on Harvest (HA) events to connect harvested lot -> bin/cooler/warehouse -> sale.
+    storage_location = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Post-harvest storage location (e.g., 'Cooler 3', 'Warehouse B-Bin-12') for lot traceback",
+    )
+    storage_temperature_f = models.DecimalField(
+        max_digits=5,
+        decimal_places=1,
+        blank=True,
+        null=True,
+        help_text="Storage temperature in °F (quality control + FSMA 204 KDE)",
     )
     grain_moisture = models.DecimalField(
         max_digits=5,
@@ -1332,16 +1552,92 @@ class ProductionEvent(CommonEvent):
     )
     electricity_source = models.CharField(
         max_length=20,
-        choices=[
-            ("grid", "Grid Electricity"),
-            ("solar", "Solar"),
-            ("wind", "Wind"),
-            ("diesel_generator", "Diesel Generator"),
-            ("mixed", "Mixed Sources"),
-        ],
+        choices=ELECTRICITY_SOURCE,
         blank=True,
         null=True,
         help_text="Electricity source for pump — affects CO2 emission factor",
+    )
+
+    # NOP Compliance: Equipment Cleaning Logs (7 CFR 205.272)
+    # For Equipment Maintenance (EM) subtype — required when equipment shared with conventional
+    cleaning_date = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Date equipment was cleaned (for shared equipment compliance)",
+    )
+    cleaning_method = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="Cleaning method used (pressure wash, manual scrub, steam, etc.)",
+    )
+    cleaning_materials_used = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="Cleaning materials/agents used (must be NOP-approved for organic)",
+    )
+    cleaned_by = models.CharField(
+        max_length=150,
+        blank=True,
+        null=True,
+        help_text="Person who performed or verified the cleaning",
+    )
+    shared_with_conventional = models.BooleanField(
+        default=False,
+        help_text="Whether this equipment is shared between organic and conventional operations",
+    )
+    cleaning_protocol_reference = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="Reference to cleaning SOP or protocol used (e.g., SOP-CLEAN-001)",
+    )
+
+    # NOP Compliance: Post-Harvest Sanitizer Detail (7 CFR 205.272 + § 205.605)
+    # Chlorine/peracetic/hydrogen peroxide etc. used in post-harvest brush
+    # wash require concentration + rinse-step documentation + a § 205.605
+    # reference so an inspector can confirm the sanitizer is on the National
+    # List (allowed synthetics in organic crop handling).
+    sanitizer_name = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="Sanitizer used (e.g., 'Chlorine (sodium hypochlorite)', 'Peracetic acid', 'Hydrogen peroxide')",
+    )
+    sanitizer_ppm = models.DecimalField(
+        max_digits=7,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        help_text="Sanitizer concentration in ppm (chlorine ≤ 4 mg/L residual per § 205.605(b))",
+    )
+    rinse_step_documented = models.BooleanField(
+        default=False,
+        help_text="Potable-water rinse step performed after sanitizer contact (required under § 205.272(b))",
+    )
+    sanitizer_nop_reference = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="National List reference (e.g., '§ 205.605(b) - Hydrogen peroxide') or OMRI certificate # for sanitizer",
+    )
+
+    # Phase 2 — Seed source drift detector (§ 205.204 / NOP 5029).
+    # Populated by post_save signal on Planting (type="PL") events when the
+    # seed certification status documents a non-organic source without the
+    # required commercial-availability search, or is missing outright.
+    # Shape mirrors ChemicalEvent.drift_warning so the frontend banner and
+    # audit PDF can handle all three event models uniformly.
+    # Null = no finding (either organic seed or no active OSP to compare).
+    drift_warning = models.JSONField(
+        blank=True,
+        null=True,
+        help_text=(
+            "Seed source drift payload (§ 205.204 / NOP 5029). Non-null when "
+            "a Planting event's seed certification or search documentation is "
+            "incomplete or prohibited."
+        ),
     )
 
     def clean(self):
@@ -1349,8 +1645,9 @@ class ProductionEvent(CommonEvent):
         errors = {}
 
         # Validate area_covered - must be positive for most operations
-        # Equipment Maintenance (EM) and Pollination (PO) can have area_covered=0
-        if self.area_covered is not None and self.area_covered <= 0 and self.type not in ("EM", "PO"):
+        # Equipment Maintenance (EM), Pollination (PO), and Post-Harvest Processing (PH)
+        # can have area_covered=0 (facility/equipment-based, not field-based).
+        if self.area_covered is not None and self.area_covered <= 0 and self.type not in ("EM", "PO", "PH"):
             errors["area_covered"] = "Area covered must be greater than 0"
 
         # Validate transportation_distance - cannot be negative
@@ -1386,8 +1683,104 @@ class ProductionEvent(CommonEvent):
                 f"Transportation distance ({self.transportation_distance} {self.transportation_unit}) is very long. Consider local processing to reduce carbon footprint."
             )
 
+        # NOP 5029 / 7 CFR 205.204(a)(1): Non-organic seed requires documented commercial
+        # availability search of at least 3 suppliers. Applies to planting events only.
+        if self.type == "PL" and self.seed_certification_status in (
+            "non_organic_untreated",
+            "non_organic_treated",
+        ):
+            attempts = self.seed_search_attempts or []
+            if len(attempts) < 3:
+                errors["seed_search_attempts"] = (
+                    "NOP 5029 (7 CFR 205.204(a)(1)) requires documentation of at least 3 "
+                    "supplier searches when using non-organic seed or planting stock. "
+                    f"Current search attempts: {len(attempts)}. Add more suppliers to seed_search_attempts."
+                )
+
+        # NOP 7 CFR 205.203(c)(1): Raw manure harvest interval. Blocks harvest entries
+        # scheduled inside the unsafe window (90 or 120 days, by crop soil-contact flag).
+        # Composted events that meet 205.203(c)(2) (temp >=131F + turnings >=5) do not trigger.
+        # Bypass with obj.skip_manure_validation = True for historical data imports.
+        if self.type == "HA" and not getattr(self, "skip_manure_validation", False):
+            manure_error = self._validate_raw_manure_harvest_interval()
+            if manure_error:
+                errors["date"] = manure_error
+
         if errors:
             raise ValidationError(errors)
+
+    def _validate_raw_manure_harvest_interval(self):
+        """
+        NOP 7 CFR 205.203(c)(1) raw-manure harvest-interval validator.
+
+        Returns an error message string if the harvest date violates the 90/120-day
+        window after a raw manure application on the same parcel; None otherwise.
+
+        "Raw" means the source SoilManagementEvent does NOT satisfy the 205.203(c)(2)
+        compost exception (temp >=131F + turnings >=5). Once the most recent non-exempt
+        manure event is found, no need to check older ones — they age, they don't get fresher.
+        """
+        from datetime import timedelta
+
+        if not self.date or not self.history or not self.history.parcel:
+            return None
+
+        crop_type = getattr(self.history, "crop_type", None)
+        soil_contact = True  # Conservative default (120-day window)
+        if crop_type is not None and crop_type.has_soil_contact is not None:
+            soil_contact = crop_type.has_soil_contact
+        interval_days = 120 if soil_contact else 90
+
+        # SoilManagementEvent is defined later in this module; by the time this method
+        # runs the entire module is loaded, so direct reference works without import.
+        parcel_id = self.history.parcel_id
+        manure_events = SoilManagementEvent.objects.filter(
+            history__parcel_id=parcel_id,
+            manure_application_date__isnull=False,
+            manure_application_date__lte=self.date.date(),
+        ).order_by("-manure_application_date")
+
+        for ev in manure_events:
+            # Skip events that satisfy the 205.203(c)(2) compost exception.
+            # (c)(2) requires: C:N 25:1–40:1 + 131–170°F + method-specific duration
+            # (windrow: 15d @temp + 5 turnings; static/in-vessel: 3d @temp).
+            peak_temp = ev.compost_peak_temp_f
+            turnings = ev.compost_turning_count
+            duration = ev.compost_duration_days_at_temp
+            cn = ev.compost_initial_cn_ratio
+            method = ev.compost_method
+            cn_ok = cn is not None and 25.0 <= float(cn) <= 40.0
+            temp_ok = peak_temp is not None and 131.0 <= float(peak_temp) <= 170.0
+            if method == "windrow":
+                duration_ok = (duration or 0) >= 15 and (turnings or 0) >= 5
+            elif method in ("static_aerated", "in_vessel"):
+                duration_ok = (duration or 0) >= 3
+            else:
+                duration_ok = False  # Missing method — (c)(2) cannot be asserted.
+            compost_exempt = cn_ok and temp_ok and duration_ok
+            if compost_exempt:
+                continue
+
+            application_date = ev.manure_application_date
+            safe_harvest_date = application_date + timedelta(days=interval_days)
+            if self.date.date() < safe_harvest_date:
+                days_remaining = (safe_harvest_date - self.date.date()).days
+                return (
+                    f"NOP 7 CFR 205.203(c)(1): Harvest date {self.date.date()} is inside the "
+                    f"{interval_days}-day raw-manure safety window. Last raw manure applied on "
+                    f"{application_date}; earliest organic-eligible harvest is "
+                    f"{safe_harvest_date} ({days_remaining} days after this harvest). "
+                    f"Adjust the harvest date or confirm the amendment met 7 CFR 205.203(c)(2) "
+                    f"compost requirements: initial C:N 25:1–40:1, 131–170°F, plus "
+                    f"method-specific duration (windrow 15+ days with 5+ turnings; "
+                    f"static aerated / in-vessel 3+ days)."
+                )
+
+            # Most recent non-exempt event is outside the window; older events are
+            # guaranteed to be even older. No need to scan further.
+            return None
+
+        return None
 
 
 class GeneralEvent(CommonEvent):
@@ -1409,6 +1802,53 @@ class GeneralEvent(CommonEvent):
     )
     people_involved = models.PositiveIntegerField(
         blank=True, null=True, help_text="Number of people involved in the activity"
+    )
+
+    # NOP Compliance: Contamination Incident Reporting (7 CFR 205.201(b))
+    CONTAMINATION_SOURCE_CHOICES = [
+        ("spray_drift", "Spray Drift from Adjacent Land"),
+        ("equipment", "Equipment Contamination"),
+        ("storage", "Storage Commingling"),
+        ("water", "Water Contamination"),
+        ("soil", "Soil Contamination"),
+        ("other", "Other"),
+    ]
+    is_contamination_incident = models.BooleanField(
+        default=False,
+        help_text="Whether this event documents a contamination incident (7 CFR 205.201(b))",
+    )
+    contamination_source = models.CharField(
+        max_length=30,
+        choices=CONTAMINATION_SOURCE_CHOICES,
+        blank=True,
+        null=True,
+        help_text="Source of contamination (spray drift, equipment, storage, etc.)",
+    )
+    contamination_affected_area = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        help_text="Area affected by contamination in acres",
+    )
+    corrective_action_taken = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Corrective actions taken in response to contamination incident",
+    )
+    corrective_action_date = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Date corrective action was completed",
+    )
+    certifier_notified = models.BooleanField(
+        default=False,
+        help_text="Whether the certifying agent was notified of the contamination incident",
+    )
+    certifier_notification_date = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Date certifier was notified of contamination incident",
     )
 
     extra_data = models.JSONField(blank=True, null=True)
@@ -1631,12 +2071,7 @@ class EquipmentEvent(CommonEvent):
     )
     fuel_unit = models.CharField(
         max_length=10,
-        choices=[
-            ("L", "Liters"),
-            ("gal", "Gallons"),
-            ("kg", "Kilograms"),
-            ("kWh", "Kilowatt-hours"),
-        ],
+        choices=UNIT_FUEL,
         default="gal",
         blank=True,
         help_text="Fuel unit",
@@ -1653,22 +2088,14 @@ class EquipmentEvent(CommonEvent):
     )
     area_unit = models.CharField(
         max_length=10,
-        choices=[
-            ("ha", "Hectares"),
-            ("acres", "Acres"),
-            ("m2", "Square Meters"),
-        ],
+        choices=UNIT_AREA,
         default="acres",
         blank=True,
         help_text="Area unit",
     )
     operation_efficiency = models.CharField(
         max_length=10,
-        choices=[
-            ("high", "High Efficiency"),
-            ("normal", "Normal Efficiency"),
-            ("low", "Low Efficiency"),
-        ],
+        choices=PRODUCTION_EFFICIENCY,
         default="normal",
         blank=True,
         help_text="Operation efficiency rating for carbon scoring",
@@ -1821,12 +2248,7 @@ class SoilManagementEvent(CommonEvent):
     )
     area_unit = models.CharField(
         max_length=10,
-        choices=[
-            ("ha", "Hectares"),
-            ("acres", "Acres"),
-            ("m2", "Square Meters"),
-            ("km2", "Square Kilometers"),
-        ],
+        choices=UNIT_AREA,
         default="acres",
         blank=True,
         help_text="Area unit",
@@ -1840,12 +2262,7 @@ class SoilManagementEvent(CommonEvent):
     )
     fuel_unit = models.CharField(
         max_length=10,
-        choices=[
-            ("L", "Liters"),
-            ("gal", "Gallons"),
-            ("kg", "Kilograms"),
-            ("kWh", "Kilowatt-hours"),
-        ],
+        choices=UNIT_FUEL,
         default="gal",
         blank=True,
         help_text="Fuel unit",
@@ -1869,22 +2286,14 @@ class SoilManagementEvent(CommonEvent):
     )
     transportation_unit = models.CharField(
         max_length=10,
-        choices=[
-            ("km", "Kilometers"),
-            ("miles", "Miles"),
-            ("m", "Meters"),
-        ],
+        choices=UNIT_DISTANCE,
         default="miles",
         blank=True,
         help_text="Transportation unit",
     )
     production_efficiency = models.CharField(
         max_length=10,
-        choices=[
-            ("high", "High Efficiency"),
-            ("normal", "Normal Efficiency"),
-            ("low", "Low Efficiency"),
-        ],
+        choices=PRODUCTION_EFFICIENCY,
         default="normal",
         blank=True,
         help_text="Production efficiency rating for carbon scoring",
@@ -1940,6 +2349,111 @@ class SoilManagementEvent(CommonEvent):
     )
     equipment_used = models.CharField(
         max_length=200, blank=True, null=True, help_text="Equipment used for soil management operation"
+    )
+
+    # NOP Compliance: Amendment Organic Approval (7 CFR 205.203(b))
+    amendment_organic_approved = models.CharField(
+        max_length=20,
+        choices=ORGANIC_APPROVED,
+        blank=True,
+        null=True,
+        help_text="Whether this amendment/input is approved for organic farming (7 CFR 205.203(b))",
+    )
+
+    # NOP Compliance: Compost Temperature Tracking (7 CFR 205.203(c)(2))
+    # Required for on-farm composting: must reach 131-170°F; windrow 15+ days @temp,
+    # static aerated / in-vessel 3+ days @temp.
+    compost_peak_temp_f = models.DecimalField(
+        max_digits=5,
+        decimal_places=1,
+        blank=True,
+        null=True,
+        help_text="Peak temperature reached during composting in °F (must reach 131-170°F per 7 CFR 205.203(c)(2))",
+    )
+    compost_duration_days_at_temp = models.PositiveIntegerField(
+        blank=True,
+        null=True,
+        help_text=(
+            "Number of days compost maintained required temperature "
+            "(windrow: 15+ days; static aerated / in-vessel: 3+ days per 7 CFR 205.203(c)(2))"
+        ),
+    )
+    compost_turning_count = models.PositiveIntegerField(
+        blank=True,
+        null=True,
+        help_text="Number of times compost was turned (minimum 5 turnings for windrow per 7 CFR 205.203(c)(2))",
+    )
+
+    # NOP Compliance: Initial C:N ratio + method (7 CFR 205.203(c)(2))
+    # Regulatory: a pile with C:N outside 25:1-40:1 at start of composting
+    # does NOT satisfy § 205.203(c)(2) and must be treated as raw manure
+    # under (c)(1) 90/120-day intervals.
+    COMPOST_METHOD_WINDROW = "windrow"
+    COMPOST_METHOD_STATIC_AERATED = "static_aerated"
+    COMPOST_METHOD_IN_VESSEL = "in_vessel"
+    COMPOST_METHOD_CHOICES = [
+        (COMPOST_METHOD_WINDROW, "Windrow (turned, open air)"),
+        (COMPOST_METHOD_STATIC_AERATED, "Static Aerated Pile"),
+        (COMPOST_METHOD_IN_VESSEL, "In-Vessel"),
+    ]
+    compost_method = models.CharField(
+        max_length=20,
+        choices=COMPOST_METHOD_CHOICES,
+        blank=True,
+        null=True,
+        help_text=(
+            "Compost method (7 CFR 205.203(c)(2)). Windrow requires 15+ days at "
+            "131–170°F with 5+ turnings; static aerated / in-vessel require 3+ days "
+            "at 131–170°F."
+        ),
+    )
+    compost_initial_cn_ratio = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        help_text=(
+            "Initial carbon-to-nitrogen ratio (C:N) of the compost feedstock. "
+            "7 CFR 205.203(c)(2) requires 25:1–40:1 at the start of composting. "
+            "Outside this range, the pile must be handled as raw manure under (c)(1)."
+        ),
+    )
+
+    # NOP Compliance: Raw Manure Harvest Interval (7 CFR 205.203(c)(1))
+    # (c)(1) governs raw animal manure pre-harvest intervals; composted materials
+    # live under (c)(2). Do not confuse the citations — an inspector flags either.
+    MANURE_INTERVAL_CHOICES = [
+        ("120", "120 days — edible portion contacts soil (root crops, leafy greens)"),
+        ("90", "90 days — edible portion does NOT contact soil (tree fruit, trellised crops)"),
+        ("na", "N/A — composted manure or no manure applied"),
+    ]
+    manure_harvest_interval = models.CharField(
+        max_length=5,
+        choices=MANURE_INTERVAL_CHOICES,
+        blank=True,
+        null=True,
+        help_text=(
+            "Required harvest interval after raw manure application: "
+            "120 days if crop contacts soil, 90 days otherwise (7 CFR 205.203(c)(1))"
+        ),
+    )
+    manure_application_date = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Date raw manure was applied (used to calculate earliest safe harvest date)",
+    )
+
+    # Sprint 5.1 — Drift detector (same contract as ChemicalEvent.drift_warning).
+    # Populated when amendment_type does not resolve to an approved input on
+    # the establishment's active OSP.
+    drift_warning = models.JSONField(
+        blank=True,
+        null=True,
+        help_text=(
+            "Drift detector payload (7 CFR 205.400(f)(2)). Non-null when this "
+            "event's amendment is not in the active OSP's approved_inputs — "
+            "treated as an operation change requiring certifier notification."
+        ),
     )
 
     def clean(self):
@@ -2006,6 +2520,78 @@ class SoilManagementEvent(CommonEvent):
                 f"Transportation distance ({self.transportation_distance} {self.transportation_unit}) is very long. Consider local processing to reduce carbon footprint."
             )
 
+        # NOP Manure validation (7 CFR 205.203(c)(1))
+        if self.manure_application_date and not self.manure_harvest_interval:
+            errors["manure_harvest_interval"] = (
+                "Harvest interval (90 or 120 days) is required when a manure application date is specified."
+            )
+
+        # NOP Manure interval vs crop soil-contact classification.
+        # Per 7 CFR 205.203(c)(1):
+        #   (c)(1)(ii) — 120 days required when edible portion has direct
+        #                soil contact (root crops, leafy greens).
+        #   (c)(1)(iii) — 90 days required when edible portion does NOT
+        #                 have direct soil contact (tree fruit, nuts,
+        #                 elevated vine fruits).
+        # A farmer selecting "120" for a canopy crop is factually wrong
+        # even when the resulting harvest date would satisfy the stricter
+        # rule: the choice wording includes "edible portion contacts
+        # soil" which is false for avocados / apples / etc., and a CCOF
+        # inspector reads that as a record-keeping failure under
+        # § 205.103. Block the mismatch at save time so the log cannot
+        # contain the wrong classification. We only BLOCK when the crop
+        # has an authoritative ``has_soil_contact`` flag set — when the
+        # crop type is unknown or the flag is None, we defer to the
+        # PDF-side consistency linter rather than guessing.
+        if self.manure_harvest_interval in ("90", "120"):
+            crop_type = None
+            try:
+                crop_type = self.history.crop_type
+            except Exception:  # noqa: BLE001 — FK not populated yet during form clean()
+                crop_type = None
+            if crop_type is not None and getattr(crop_type, "has_soil_contact", None) is not None:
+                has_contact = bool(crop_type.has_soil_contact)
+                selected = self.manure_harvest_interval
+                if has_contact and selected == "90":
+                    errors["manure_harvest_interval"] = (
+                        f"Crop '{crop_type.name}' has direct soil contact for its "
+                        "edible portion, so 7 CFR 205.203(c)(1)(ii) requires a "
+                        "120-day pre-harvest interval. Selecting 90 days is a "
+                        "record-keeping mismatch even if the harvest date would "
+                        "satisfy the stricter rule."
+                    )
+                elif not has_contact and selected == "120":
+                    errors["manure_harvest_interval"] = (
+                        f"Crop '{crop_type.name}' does NOT have direct soil "
+                        "contact for its edible portion (tree / canopy crop), "
+                        "so 7 CFR 205.203(c)(1)(iii) applies — the required "
+                        "interval is 90 days. The '120 days — edible portion "
+                        "contacts soil' choice is for root crops and leafy "
+                        "greens; using it here mis-classifies the crop and "
+                        "creates an inspector-visible record-keeping conflict."
+                    )
+
+        # NOP Composting validation (7 CFR 205.203(c)(1)+(c)(2))
+        if self.type == self.COMPOSTING:
+            if self.compost_peak_temp_f is not None:
+                temp = float(self.compost_peak_temp_f)
+                if temp < 90 or temp > 200:
+                    errors["compost_peak_temp_f"] = (
+                        f"Temperature ({temp}°F) seems outside reasonable range (90-200°F). Please verify."
+                    )
+            if self.compost_duration_days_at_temp is not None and self.compost_duration_days_at_temp > 365:
+                errors["compost_duration_days_at_temp"] = "Duration at temperature exceeds one year. Please verify."
+            if self.compost_turning_count is not None and self.compost_turning_count > 100:
+                errors["compost_turning_count"] = "Turning count seems unusually high. Please verify."
+            # § 205.203(c)(2) initial C:N must fall in 25:1–40:1 at start of composting.
+            if self.compost_initial_cn_ratio is not None:
+                ratio = float(self.compost_initial_cn_ratio)
+                if ratio < 5 or ratio > 100:
+                    errors["compost_initial_cn_ratio"] = (
+                        f"Initial C:N ratio ({ratio}:1) is outside plausible feedstock range (5:1–100:1). "
+                        "Please verify — typical NOP-compliant composts start at 25:1–40:1."
+                    )
+
         if errors:
             raise ValidationError(errors)
 
@@ -2071,11 +2657,7 @@ class PestManagementEvent(CommonEvent):
     )
     area_unit = models.CharField(
         max_length=10,
-        choices=[
-            ("ha", "Hectares"),
-            ("acres", "Acres"),
-            ("m2", "Square Meters"),
-        ],
+        choices=UNIT_AREA,
         default="acres",
         blank=True,
         help_text="Area unit",
@@ -2089,12 +2671,7 @@ class PestManagementEvent(CommonEvent):
     )
     fuel_unit = models.CharField(
         max_length=10,
-        choices=[
-            ("L", "Liters"),
-            ("gal", "Gallons"),
-            ("kg", "Kilograms"),
-            ("kWh", "Kilowatt-hours"),
-        ],
+        choices=UNIT_FUEL,
         default="gal",
         blank=True,
         help_text="Fuel unit",
@@ -2111,14 +2688,44 @@ class PestManagementEvent(CommonEvent):
     )
     production_efficiency = models.CharField(
         max_length=10,
-        choices=[
-            ("high", "High Efficiency"),
-            ("normal", "Normal Efficiency"),
-            ("low", "Low Efficiency"),
-        ],
+        choices=PRODUCTION_EFFICIENCY,
         default="normal",
         blank=True,
         help_text="Equipment efficiency level for carbon calculations",
+    )
+
+    # NOP Compliance: Pest Identification Verification (7 CFR 205.206)
+    IDENTIFIED_BY_CHOICES = [
+        ("farmer", "Farmer / Farm Staff"),
+        ("agronomist", "Licensed Agronomist"),
+        ("entomologist", "Entomologist"),
+        ("extension_service", "Extension Service Agent"),
+        ("crop_consultant", "Crop Consultant"),
+        ("lab", "Laboratory Analysis"),
+    ]
+    identified_by = models.CharField(
+        max_length=30,
+        choices=IDENTIFIED_BY_CHOICES,
+        blank=True,
+        null=True,
+        help_text="Who identified the pest species (7 CFR 205.206 - pest management practice standard)",
+    )
+    identification_method = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="Method used for pest identification (e.g., field guide, lab analysis, visual inspection)",
+    )
+
+    # NOP Compliance: Action Threshold Rationale (7 CFR 205.206(e))
+    threshold_rationale = models.TextField(
+        blank=True,
+        null=True,
+        help_text=(
+            "Justification for why action threshold was/wasn't met "
+            "(e.g., '5 trap catches/week per UC Davis IPM guidelines'). "
+            "Required per 7 CFR 205.206(e) before applying any pest control material."
+        ),
     )
 
     class Meta:
@@ -2165,6 +2772,8 @@ class BusinessEvent(CommonEvent):
         # Global Food Safety & Trade Certifications
         ("global_gap", "GlobalG.A.P. Certified"),
         ("fair_trade", "Fair Trade Certified"),
+        ("food_safety", "SQF / Food Safety Certified"),
+        ("kosher", "Kosher Certified"),
     ]
 
     CARBON_CREDIT_UNITS = [

@@ -65,6 +65,14 @@ class EstablishmentSerializer(ModelSerializer):
             "soil_types",
             "conservation_practices",
             "irrigation_methods",
+            # NOP compliance — OFPP fraud prevention plan
+            "fraud_prevention_plan_uploaded",
+            "fraud_prevention_plan_date",
+            "fraud_prevention_plan_document",
+            "ofpp_responsible_person",
+            # NOP compliance — Split operation tracking (7 CFR 205.272)
+            "has_split_operation",
+            "split_operation_plan",
         )
 
     def get_parcels(self, establishment):
@@ -163,6 +171,14 @@ class UpdateEstablishmentSerializer(ModelSerializer):
             "soil_types",
             "conservation_practices",
             "irrigation_methods",
+            # NOP compliance — OFPP fraud prevention plan
+            "fraud_prevention_plan_uploaded",
+            "fraud_prevention_plan_date",
+            "fraud_prevention_plan_document",
+            "ofpp_responsible_person",
+            # NOP compliance — Split operation tracking (7 CFR 205.272)
+            "has_split_operation",
+            "split_operation_plan",
         )
 
     def to_representation(self, instance):
@@ -315,9 +331,7 @@ class UpdateEstablishmentSerializer(ModelSerializer):
 
         # Auto-assign new establishment to all company admins
         company = establishment.company
-        admin_works_in = WorksIn.objects.filter(
-            company=company, role=WorksIn.COMPANY_ADMIN
-        )
+        admin_works_in = WorksIn.objects.filter(company=company, role=WorksIn.COMPANY_ADMIN)
         for works_in in admin_works_in:
             works_in.establishments_in_charge.add(establishment)
 
@@ -369,6 +383,14 @@ class RetrieveEstablishmentSerializer(ModelSerializer):
             "soil_types",
             "conservation_practices",
             "irrigation_methods",
+            # NOP compliance — OFPP fraud prevention plan
+            "fraud_prevention_plan_uploaded",
+            "fraud_prevention_plan_date",
+            "fraud_prevention_plan_document",
+            "ofpp_responsible_person",
+            # NOP compliance — Split operation tracking (7 CFR 205.272)
+            "has_split_operation",
+            "split_operation_plan",
             # SerializerMethodFields
             "parcels",
             "images",
@@ -728,21 +750,21 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
                     if h.extra_data["blockchain"].get("verified", False):
                         blockchain_verified_count += 1
 
-        # --- 6. TRANSPARENCY PERCENTILE (based on transparency score, NOT carbon) ---
-        # Rank this farm's transparency against platform average
-        # This aligns with transparency-first: more documentation = better ranking
+        # --- 6. TRANSPARENCY TIER (non-comparative, based on farm's own score) ---
+        # Score-tier label derived directly from this farm's transparency score.
+        # Does NOT compare against other farms — no cohort data exists to support
+        # a real percentile claim. This avoids fabricated "Top X%" badges that
+        # would violate FTC Green Guides (16 CFR 260) on unsubstantiated claims.
         if transparency_score >= 90:
-            transparency_percentile = 95
+            transparency_tier = "excellent"
         elif transparency_score >= 80:
-            transparency_percentile = 85
+            transparency_tier = "strong"
         elif transparency_score >= 70:
-            transparency_percentile = 75
+            transparency_tier = "good"
         elif transparency_score >= 60:
-            transparency_percentile = 60
-        elif transparency_score >= 40:
-            transparency_percentile = 40
+            transparency_tier = "solid"
         else:
-            transparency_percentile = max(5, int(transparency_score))
+            transparency_tier = "developing"
 
         # --- 7. SUBSCRIPTION CONTEXT ---
         subscription = establishment.company.subscription if hasattr(establishment.company, "subscription") else None
@@ -763,8 +785,8 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
             # Production counts
             "total_productions": total_productions,
             "blockchain_verified_count": blockchain_verified_count,
-            # Transparency-based ranking
-            "transparency_percentile": transparency_percentile,
+            # Score-tier label (non-comparative, derived from farm's own score)
+            "transparency_tier": transparency_tier,
             # Subscription
             "subscription_usage_percentage": round(subscription_usage_percentage, 1),
         }

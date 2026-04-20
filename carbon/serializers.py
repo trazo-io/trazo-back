@@ -115,7 +115,6 @@ class ProductionTemplateSerializer(serializers.ModelSerializer):
             "total_carbon_impact",
             "total_cost_estimate",
             "created_at",
-            "updated_at",
         ]
         read_only_fields = [
             "id",
@@ -126,7 +125,6 @@ class ProductionTemplateSerializer(serializers.ModelSerializer):
             "total_carbon_impact",
             "total_cost_estimate",
             "created_at",
-            "updated_at",
         ]
 
 

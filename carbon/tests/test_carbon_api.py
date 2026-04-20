@@ -57,7 +57,14 @@ class CarbonCalculationAPITestCase(TestCase):
         self.assertIsInstance(response.data, dict)
 
         # Verify expected fields are present
-        expected_fields = ["co2e", "efficiency_score", "usda_factors_used", "calculation_method", "event_type", "timestamp"]
+        expected_fields = [
+            "co2e",
+            "efficiency_score",
+            "usda_factors_used",
+            "calculation_method",
+            "event_type",
+            "timestamp",
+        ]
         for field in expected_fields:
             self.assertIn(field, response.data, f"Missing expected field: {field}")
 

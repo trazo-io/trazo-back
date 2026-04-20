@@ -1,6 +1,52 @@
 from django.contrib import admin
 
-from .models import Certification, CertificationVerificationLog
+from .models import (
+    ApprovedInputChangeLog,
+    Certification,
+    CertificationVerificationLog,
+    IngestionRun,
+    NationalListRevision,
+    WSDAMaterial,
+)
+
+
+@admin.register(WSDAMaterial)
+class WSDAMaterialAdmin(admin.ModelAdmin):
+    list_display = (
+        "brand_name",
+        "manufacturer",
+        "category",
+        "wsda_id",
+        "is_cdfa_oim_registered",
+        "cdfa_oim_reg_number",
+    )
+    list_filter = ("category", "is_cdfa_oim_registered")
+    search_fields = ("brand_name", "manufacturer", "wsda_id", "cdfa_oim_reg_number")
+    ordering = ("brand_name",)
+
+
+@admin.register(IngestionRun)
+class IngestionRunAdmin(admin.ModelAdmin):
+    list_display = ("ran_at", "source", "status", "rows_created", "rows_updated")
+    list_filter = ("source", "status")
+    readonly_fields = ("ran_at", "source", "status", "rows_created", "rows_updated", "message")
+    ordering = ("-ran_at",)
+
+
+@admin.register(NationalListRevision)
+class NationalListRevisionAdmin(admin.ModelAdmin):
+    list_display = ("fetched_at", "cfr_section", "content_hash", "response_bytes", "change_detected")
+    list_filter = ("cfr_section", "change_detected")
+    readonly_fields = (
+        "cfr_section",
+        "fetched_at",
+        "source_url",
+        "content_hash",
+        "response_bytes",
+        "raw_json",
+        "change_detected",
+    )
+    ordering = ("-fetched_at",)
 
 
 class CertificationVerificationLogInline(admin.TabularInline):
@@ -72,3 +118,32 @@ class CertificationVerificationLogAdmin(admin.ModelAdmin):
         "error_message",
         "raw_response",
     ]
+
+
+@admin.register(ApprovedInputChangeLog)
+class ApprovedInputChangeLogAdmin(admin.ModelAdmin):
+    list_display = [
+        "osp",
+        "kind",
+        "action",
+        "target_name_at_change",
+        "changed_by",
+        "changed_at",
+    ]
+    list_filter = ["kind", "action"]
+    search_fields = [
+        "target_name_at_change",
+        "change_notification_reference",
+        "osp__establishment__name",
+    ]
+    readonly_fields = [
+        "osp",
+        "kind",
+        "target_national_list",
+        "target_omri",
+        "target_name_at_change",
+        "action",
+        "changed_by",
+        "changed_at",
+    ]
+    ordering = ["-changed_at"]

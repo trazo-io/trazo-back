@@ -1,4 +1,4 @@
-from django.db.models.signals import post_delete, post_save
+from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 
 from carbon.services.event_carbon_calculator import EventCarbonCalculator
@@ -13,6 +13,55 @@ from .models import (
     SoilManagementEvent,
     WeatherEvent,
 )
+
+
+# ---------------------------------------------------------------------------
+# Sprint 3 — Auto-classify ChemicalEvent against the National List (7 CFR 205.601/602)
+# on every save. Populates national_list_substance FK so the audit export can
+# show "Allowed per §205.601(i)" rather than "Self-reported" even when the
+# frontend hasn't been updated to let farmers set it manually.
+# Never overwrites a farmer/admin-set value.
+# ---------------------------------------------------------------------------
+@receiver(pre_save, sender=ChemicalEvent)
+def auto_classify_chemical_against_national_list(sender, instance, **kwargs):
+    # Respect explicit set — only classify when not already set.
+    if instance.national_list_substance_id is not None:
+        return
+    if not instance.commercial_name:
+        return
+
+    try:
+        from certifications.models import NationalListSubstance
+        from certifications.services.omri_verifier import OMRIProductVerifier, _normalize
+
+        verifier = OMRIProductVerifier()
+        if not verifier.health_check():
+            return  # National List not seeded yet; skip silently
+        result = verifier.verify(operation_name=instance.commercial_name)
+        if not result.found:
+            return
+
+        normalized = _normalize(instance.commercial_name)
+        nl = NationalListSubstance.objects.filter(substance_name_normalized=normalized).first()
+        if nl is None:
+            candidates = [
+                n
+                for n in NationalListSubstance.objects.values_list("substance_name_normalized", flat=True)
+                if len(n) >= 5 and n in normalized
+            ]
+            if candidates:
+                best = max(candidates, key=len)
+                nl = NationalListSubstance.objects.filter(substance_name_normalized=best).first()
+        if nl is not None:
+            instance.national_list_substance = nl
+    except Exception:  # noqa: BLE001 — classification is advisory; never block a save
+        import logging
+
+        logging.getLogger(__name__).exception(
+            "Auto-classification failed for ChemicalEvent commercial_name=%r",
+            instance.commercial_name,
+        )
+
 
 # Module-level singleton — EventCarbonCalculator is stateless, no need to
 # re-instantiate (and re-load all USDA factors) on every signal fire.
@@ -124,8 +173,15 @@ def calculate_production_event_carbon(sender, instance, created, **kwargs):
 
         calculation_result = calculator.calculate_production_event_impact(instance)
 
-        # Create carbon entry as the authoritative source - single source of truth
-        if calculation_result.get("co2e", 0) > 0:
+        # Create carbon entry as the authoritative source - single source of truth.
+        # For facility-based subtypes (EM, PO, PH), create an entry even when co2e=0:
+        # electric packing lines / pollination-by-bee-hive / equipment cleaning with
+        # no fuel use legitimately produce 0 emissions, and the timeline should
+        # display "0 kg CO₂e" (a transparency signal) rather than "No CO₂ data"
+        # (which reads as missing data).
+        co2e_value = calculation_result.get("co2e", 0)
+        facility_subtypes = ("EM", "PO", "PH")
+        if co2e_value > 0 or (co2e_value >= 0 and instance.type in facility_subtypes):
             carbon_entry = calculator.create_carbon_entry_from_event(instance, calculation_result)
 
         action = "created" if created else "updated"

@@ -154,22 +154,42 @@ def production_transparency_detail(request, production_public_id=None):
             "country": establishment.country if establishment else None,
         }
 
-        # Certification data for consumer badges
+        # Certification data for consumer badges + FTC-compliant organic claim gate.
+        # The organic_claim block is the regulatory single source of truth for what
+        # the QR page may say about organic status (7 CFR 205.300, 16 CFR 260.6(d)).
+        # See certifications/services/consumer_claim_validator.py.
         certification_data = []
+        organic_claim = None
         if establishment:
             try:
                 from certifications.models import Certification
                 from certifications.serializers import ConsumerCertificationSerializer
-
-                active_certs = Certification.objects.filter(
-                    establishment=establishment,
-                    verification_status__in=["verified", "self_reported"],
-                ).exclude(
-                    expiry_date__lt=timezone.now().date(),
+                from certifications.services.consumer_claim_validator import (
+                    ConsumerClaimValidator,
+                    filter_certifications_for_consumer,
                 )
+
+                active_certs = list(
+                    Certification.objects.filter(
+                        establishment=establishment,
+                        verification_status__in=["verified", "self_reported"],
+                    ).exclude(
+                        expiry_date__lt=timezone.now().date(),
+                    )
+                )
+                # Strip any unverified USDA Organic cert so it never surfaces as a
+                # badge — the organic_claim block below is the only gate for
+                # organic language on the consumer page.
+                active_certs = filter_certifications_for_consumer(active_certs)
                 certification_data = ConsumerCertificationSerializer(active_certs, many=True).data
+
+                organic_claim = ConsumerClaimValidator().validate(history).to_dict()
             except Exception as e:
-                logger.warning(f"Failed to load certification data: {e}")
+                logger.warning(f"Failed to load certification/organic-claim data: {e}")
+
+        # Organic story summary — aggregates existing data for consumer display
+        # Uses already-prefetched ChemicalEvents, zero extra DB queries
+        organic_summary = _build_organic_summary(history, certification_data, establishment)
 
         # Product information
         product_info = {
@@ -286,6 +306,8 @@ def production_transparency_detail(request, production_public_id=None):
                         "category_breakdown": transparency_data.get("category_breakdown", {}),
                     },
                     "certifications": certification_data,
+                    "organic_claim": organic_claim,  # FTC 16 CFR 260.6(d) gate
+                    "organic_summary": organic_summary,
                 },
                 # DETAILED LOAD (30+ seconds) - Deep insights
                 "detailed_view": {
@@ -620,6 +642,60 @@ def production_instant_trust(request, production_public_id=None):
             {"success": False, "error": "service_error", "message": "Unable to load trust indicators at this time"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
+
+
+def _build_organic_summary(history, certification_data, establishment):
+    """
+    Aggregate organic data from already-prefetched ChemicalEvents and certifications.
+    Returns a consumer-facing summary — no extra DB queries.
+    """
+    ORGANIC_APPROVED_VALUES = {"omri_listed", "usda_nop_approved", "organic_equivalent", "yes"}
+    NOT_ORGANIC_VALUES = {"not_organic", "no"}
+
+    # Count organic-approved chemical inputs from prefetched events
+    # Only count events where organic_approved was explicitly set (not null/blank)
+    # null = farmer didn't fill this field, NOT "this input is non-organic"
+    chemical_events = list(history.history_chemicalevent_events.all())
+    events_with_status = [e for e in chemical_events if e.organic_approved and e.organic_approved.strip()]
+    organic_inputs = sum(1 for e in events_with_status if e.organic_approved in ORGANIC_APPROVED_VALUES)
+    non_organic_inputs = sum(1 for e in events_with_status if e.organic_approved in NOT_ORGANIC_VALUES)
+    classified_count = len(events_with_status)
+
+    # Check for verified organic certification from already-loaded data
+    has_verified_organic = any(
+        c.get("display_name", "").lower().startswith("usda organic") and c.get("status") == "verified_via_database"
+        for c in (certification_data or [])
+    )
+    has_self_reported_organic = any(
+        c.get("display_name", "").lower().startswith("usda organic") and c.get("status") == "self_reported"
+        for c in (certification_data or [])
+    )
+
+    # Production-level farming method
+    production_method = getattr(history, "production_method", None) or ""
+    farm_method = getattr(establishment, "farming_method", None) or ""
+    is_organic_production = production_method == "organic" or farm_method == "organic"
+
+    # Only return summary when the farm is actually an organic operation.
+    # Having organic-approved inputs alone does NOT make it an organic farm —
+    # a conventional farm can use OMRI-listed products without being organic.
+    is_organic_farm = is_organic_production or has_verified_organic or has_self_reported_organic
+    if not is_organic_farm:
+        return None
+
+    return {
+        "is_organic_farm": is_organic_farm,
+        "certification_verified": has_verified_organic,
+        "certification_self_reported": has_self_reported_organic and not has_verified_organic,
+        # Only include input stats when farmers actually classified their inputs
+        "has_input_data": classified_count > 0,
+        "total_chemical_inputs": classified_count,
+        "organic_approved_inputs": organic_inputs,
+        "all_inputs_organic": classified_count > 0 and organic_inputs == classified_count,
+        "organic_input_percentage": (
+            round((organic_inputs / classified_count * 100)) if classified_count > 0 else None
+        ),
+    }
 
 
 def _get_trust_level(transparency_percentage):

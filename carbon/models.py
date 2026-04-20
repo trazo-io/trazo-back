@@ -64,6 +64,17 @@ class CropType(models.Model):
     usda_factors_used = models.BooleanField(default=False)
     data_source = models.CharField(max_length=200, default="USDA Agricultural Research Service")
     is_active = models.BooleanField(default=True)
+    # NOP 7 CFR 205.203(c)(1): Raw manure harvest interval depends on whether the edible
+    # portion of the crop contacts soil. 120 days for crops with soil contact (leafy greens,
+    # root crops, melons, squash); 90 days for crops without (tree fruit, tree nut, sweet corn).
+    has_soil_contact = models.BooleanField(
+        default=True,
+        help_text=(
+            "Whether the edible portion of this crop contacts the soil. "
+            "Determines the raw-manure harvest interval per NOP 7 CFR 205.203(c)(1) "
+            "(True = 120 days, False = 90 days). Conservative default is True."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

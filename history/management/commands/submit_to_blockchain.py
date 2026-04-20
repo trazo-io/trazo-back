@@ -142,7 +142,11 @@ class Command(BaseCommand):
             self.stdout.write(f"  Wallet: {service.account.address}")
 
             # Build data hash using the shared function
-            company = production.parcel.establishment.company if production.parcel and production.parcel.establishment else None
+            company = (
+                production.parcel.establishment.company
+                if production.parcel and production.parcel.establishment
+                else None
+            )
             company_id = company.id if company else 0
             _raw_data, data_hash, _total_co2e, _carbon_count, _event_count = build_blockchain_raw_data(
                 production, company_id
@@ -164,9 +168,7 @@ class Command(BaseCommand):
                 self.stdout.write(f"  Mock: {is_mock}")
 
                 if is_mock:
-                    self.stdout.write(
-                        self.style.WARNING("  WARNING: Mock data, not a real blockchain transaction.")
-                    )
+                    self.stdout.write(self.style.WARNING("  WARNING: Mock data, not a real blockchain transaction."))
                 else:
                     self.stdout.write(self.style.SUCCESS("  REAL blockchain transaction submitted!"))
 

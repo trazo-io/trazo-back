@@ -586,6 +586,7 @@ class TransparencyCalculator:
         organic_subtypes = {
             "organic_herbicide",
             "organic_pesticide",
+            "organic_fungicide",
             "biological_fungicide",
             "organic_fertilizer",
             "sulfur_fungicide",
@@ -654,6 +655,7 @@ class TransparencyCalculator:
                     organic_subtypes = {
                         "organic_herbicide",
                         "organic_pesticide",
+                        "organic_fungicide",
                         "biological_fungicide",
                         "organic_fertilizer",
                         "sulfur_fungicide",
@@ -1268,14 +1270,28 @@ class TransparencyCalculator:
         return opportunities
 
     def _calculate_establishment_benchmarks(self, metrics: Dict) -> Dict:
-        """Calculate benchmark comparisons for establishment"""
+        """Score-tier label derived from this farm's own transparency score.
+
+        No cross-farm percentile or regional comparison is produced — no cohort
+        data exists to support those claims, and unsubstantiated comparative
+        claims risk FTC Green Guides (16 CFR 260) violations.
+        """
+        score = metrics["overall_transparency_score"]
+        if score >= 90:
+            tier = "excellent"
+        elif score >= 80:
+            tier = "strong"
+        elif score >= 70:
+            tier = "good"
+        elif score >= 60:
+            tier = "solid"
+        else:
+            tier = "developing"
         return {
-            "transparency_percentile": min(95, metrics["overall_transparency_score"] * 1.2),
-            "industry_ranking": "Excellent" if metrics["overall_transparency_score"] > 85 else "Good",
-            "regional_comparison": "Above Average",  # Would be calculated with regional data
-            "improvement_potential": 100 - metrics["overall_transparency_score"],
+            "transparency_tier": tier,
+            "improvement_potential": 100 - score,
             "next_milestone": {
-                "target_score": min(100, metrics["overall_transparency_score"] + 10),
+                "target_score": min(100, score + 10),
                 "required_actions": metrics["enhancement_opportunities"][:3],
             },
         }

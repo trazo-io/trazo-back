@@ -109,3 +109,11 @@ def _trigger_background_verification(cert_id):
             connections.close_all()
 
     transaction.on_commit(lambda: threading.Thread(target=_bg_verify, daemon=True).start())
+
+
+# Sprint 5.1 — OSP ↔ events drift detector. Attach post_save handlers on
+# ChemicalEvent + SoilManagementEvent. Safe to import here: this module is
+# loaded from CertificationsConfig.ready(), so both apps are resolved by then.
+from certifications.services.drift_detector import attach_signals as _attach_drift_signals  # noqa: E402
+
+_attach_drift_signals()

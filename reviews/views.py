@@ -80,7 +80,11 @@ class ReviewsViewSet(viewsets.ModelViewSet):
                             rating=review.rating,
                             review_text=review.written_review,
                             production_id=review.production.id,
-                            establishment_id=review.production.parcel.establishment.id if review.production.parcel and review.production.parcel.establishment else None,
+                            establishment_id=(
+                                review.production.parcel.establishment.id
+                                if review.production.parcel and review.production.parcel.establishment
+                                else None
+                            ),
                             product_id=review.production.product.id if review.production.product else None,
                             parcel_id=review.production.parcel.id if review.production.parcel else None,
                         )

@@ -189,3 +189,64 @@ class Parcel(models.Model):
             self.save()
             return history
         return None
+
+
+class ParcelCropHistory(models.Model):
+    """Track annual crop rotation history per parcel for organic audit compliance.
+
+    7 CFR 205.202 requires 36-month field history showing all crops grown
+    and substances applied. Inspectors ask: 'What was planted here for the last 3 years?'
+    """
+
+    parcel = models.ForeignKey(
+        Parcel,
+        on_delete=models.CASCADE,
+        related_name="crop_history",
+        help_text="Parcel this crop history entry belongs to",
+    )
+    year = models.IntegerField(
+        help_text="Calendar year of this crop history entry",
+    )
+    crop_grown = models.CharField(
+        max_length=200,
+        help_text="Crop or cover crop grown during this year",
+    )
+    production_method = models.CharField(
+        max_length=30,
+        choices=[
+            ("conventional", "Conventional"),
+            ("organic", "Organic"),
+            ("transitional", "Transitional"),
+            ("regenerative", "Regenerative"),
+            ("fallow", "Fallow"),
+        ],
+        blank=True,
+        null=True,
+        help_text="Production method used during this year",
+    )
+    substances_applied = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Summary of all substances applied during this year (for 36-month history)",
+    )
+    date_last_prohibited = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Date of last prohibited substance application (if any)",
+    )
+    notes = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Additional notes about this year's field use",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("parcel", "year")
+        ordering = ["-year"]
+        verbose_name = "Parcel Crop History"
+        verbose_name_plural = "Parcel Crop Histories"
+
+    def __str__(self):
+        return f"{self.parcel.name} - {self.year}: {self.crop_grown}"

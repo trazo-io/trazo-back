@@ -23,14 +23,7 @@ from celery import shared_task
 
 from company.models import Company, Establishment
 
-from .models import (
-    CarbonAuditLog,
-    CarbonBenchmark,
-    CarbonEntry,
-    CarbonReport,
-    ProductionTemplate,
-    SustainabilityBadge,
-)
+from .models import CarbonAuditLog, CarbonBenchmark, CarbonEntry, CarbonReport, ProductionTemplate, SustainabilityBadge
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -342,14 +335,12 @@ def _submit_single_production_to_blockchain(production, company, blockchain_serv
     # Extract finalization hash — the primary integrity anchor.
     extra = production.extra_data if isinstance(production.extra_data, dict) else {}
     if not extra.get("finalization_hash"):
-        logger.warning(
-            "Production %s has no finalization hash — cannot submit to blockchain", production.id
-        )
+        logger.warning("Production %s has no finalization hash — cannot submit to blockchain", production.id)
         return False
 
     # Build raw_data and hash using the shared function (single source of truth)
-    raw_data, data_hash, total_co2e, carbon_entry_count, finalization_event_count = (
-        build_blockchain_raw_data(production, company.id)
+    raw_data, data_hash, total_co2e, carbon_entry_count, finalization_event_count = build_blockchain_raw_data(
+        production, company.id
     )
 
     # Submit to blockchain
@@ -448,5 +439,3 @@ def submit_production_to_blockchain(self, production_id):
     except Exception as e:
         logger.error("BLOCKCHAIN TASK: Error for production %s: %s", production_id, e, exc_info=True)
         raise self.retry(countdown=30, exc=e)
-
-

@@ -278,6 +278,47 @@ class Establishment(models.Model):
         default=list, blank=True, help_text="Irrigation methods used (drip, sprinkler, flood, etc.)"
     )
 
+    # SOE Compliance: Organic Fraud Prevention Plan (7 CFR 205.201(a)(3))
+    # Required since March 19, 2024 for all certified organic operations
+    fraud_prevention_plan_uploaded = models.BooleanField(
+        default=False,
+        help_text="Whether an Organic Fraud Prevention Plan has been uploaded",
+    )
+    fraud_prevention_plan_date = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Date the fraud prevention plan was last updated",
+    )
+    fraud_prevention_plan_document = models.FileField(
+        upload_to="ofpp/",
+        blank=True,
+        null=True,
+        help_text="Uploaded Organic Fraud Prevention Plan document",
+    )
+    ofpp_responsible_person = models.CharField(
+        max_length=150,
+        blank=True,
+        null=True,
+        help_text="Person responsible for fraud prevention oversight",
+    )
+
+    # NOP Compliance: Split Operation Tracking (7 CFR 205.201(a)(5), 7 CFR 205.272)
+    has_split_operation = models.BooleanField(
+        default=False,
+        help_text=(
+            "Whether this establishment operates both organic and conventional production "
+            "(7 CFR 205.201(a)(5) — requires commingling prevention documentation)"
+        ),
+    )
+    split_operation_plan = models.TextField(
+        blank=True,
+        null=True,
+        help_text=(
+            "Description of measures to prevent commingling of organic and conventional products "
+            "(labeling, storage separation, equipment cleaning protocols per 7 CFR 205.272)"
+        ),
+    )
+
     class Meta:
         verbose_name = _("Establishment")
         verbose_name_plural = _("Establishments")

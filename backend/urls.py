@@ -22,6 +22,8 @@ from django.middleware.csrf import get_token
 from django.urls import include, path
 from django.views.decorators.csrf import ensure_csrf_cookie
 
+from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
+
 
 @ensure_csrf_cookie
 def get_csrf_token(request):
@@ -44,11 +46,17 @@ urlpatterns = [
     path("accounts/", include("allauth.urls")),
     # Global CSRF token endpoint
     path("api/csrf-token/", get_csrf_token, name="csrf_token"),
+    # OpenAPI 3.1 schema (source of truth for frontend TypeScript types)
+    # Generate types: cd trazo-app && npm run typegen
+    path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+    path("api/schema/swagger-ui/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
+    path("api/schema/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
     path("api/", include("users.urls")),
     path("api/", include("company.urls")),
     path("api/", include("product.urls")),
     path("api/", include("history.urls")),
     path("api/", include("history.urls_consumer")),  # Consumer API endpoints
+    path("api/", include("certifications.urls")),  # NOP input verifier (Sprint 3)
     path("api/", include("reviews.urls")),
     path("api/", include("common.urls")),
     path("api/", include("subscriptions.urls")),

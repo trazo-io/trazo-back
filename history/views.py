@@ -11,6 +11,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
 from dateutil import parser as date_parser
+from drf_spectacular.utils import OpenApiParameter, PolymorphicProxySerializer, extend_schema, extend_schema_view
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action, api_view
 from rest_framework.decorators import permission_classes as permission_classes_decorator
@@ -130,6 +131,30 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         if self.action in ["create", "start_production"]:
             return [IsAuthenticated(), HasProductionCreationPermission()]
         return super().get_permissions()
+
+    def get_object(self):
+        """
+        Resolve the history by either integer pk or UUID (public_id).
+
+        The frontend routes productions by their UUID (public_id) — e.g.
+        /production/<uuid>/ — and passes that same identifier to mutations
+        like partial_update. Without this override, PATCH /histories/<uuid>/
+        would raise 404 because DRF's default lookup tries to coerce the
+        UUID into an integer pk.
+        """
+        import uuid as uuid_module
+
+        lookup_value = self.kwargs.get(self.lookup_url_kwarg or self.lookup_field)
+        if lookup_value is not None:
+            try:
+                uuid_module.UUID(str(lookup_value))
+                queryset = self.filter_queryset(self.get_queryset())
+                obj = get_object_or_404(queryset, public_id=lookup_value)
+                self.check_object_permissions(self.request, obj)
+                return obj
+            except (ValueError, AttributeError):
+                pass
+        return super().get_object()
 
     def check_write_permission(self, request, history_obj):
         """Check that the user has write access (CA or FM role) for this history's company."""
@@ -1443,7 +1468,7 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         """
         from django.http import FileResponse
 
-        from .services.audit_export_service import AuditExportService
+        from .services.audit_export_service import AuditExportService, OFPPMissingError, PhotoEmbedMisconfigurationError
 
         production = self.get_object()
 
@@ -1452,6 +1477,24 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         cert_type = request.query_params.get("certification", "all").lower()
         export_format = request.query_params.get("export_format", "pdf").lower()
+        # strict_ofpp=true is an opt-in gate intended for certifier-handoff
+        # exports ("Mark as Submitted"). Default is False so farmers can
+        # always generate a diagnostic preview and SEE the OFPP [FAIL] row
+        # on page 1. Accepts the usual truthy strings.
+        # strict_ofpp tri-state: unset → service-side default (True for
+        # organic / all-certs exports, False otherwise). Explicit "false"
+        # / "0" / "no" → diagnostic preview (caller wants to SEE the FAIL
+        # row on page 1). Explicit "true" / "1" / "yes" → force strict
+        # even on non-organic cert types.
+        _raw_strict = request.query_params.get("strict_ofpp")
+        if _raw_strict is None:
+            strict_ofpp = None
+        elif _raw_strict.lower() in ("1", "true", "yes"):
+            strict_ofpp = True
+        elif _raw_strict.lower() in ("0", "false", "no"):
+            strict_ofpp = False
+        else:
+            strict_ofpp = None
 
         valid_certifications = {"all", "organic", "globalgap", "roc", "fsma204", "scs"}
         if cert_type not in valid_certifications:
@@ -1531,18 +1574,134 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 response = FileResponse(buffer, content_type="text/csv; charset=utf-8")
                 response["Content-Disposition"] = f'attachment; filename="trazo-audit-{production.public_id}.csv"'
             else:
-                buffer = service.generate_pdf()
+                buffer = service.generate_pdf(strict_ofpp=strict_ofpp)
                 response = FileResponse(buffer, content_type="application/pdf")
                 response["Content-Disposition"] = f'attachment; filename="trazo-audit-{production.public_id}.pdf"'
 
             return response
 
+        except PhotoEmbedMisconfigurationError as exc:
+            # Deliberate gate — we refuse to ship an inspector-grade audit
+            # PDF whose photo-evidence layer is empty or broken. Returns
+            # 503 so the frontend can surface a "server not audit-ready"
+            # banner instead of a generic 500.
+            logger.error(
+                "Audit PDF emission refused for production %s (photo-evidence gate): %s",
+                production.pk,
+                exc,
+            )
+            return Response(
+                {
+                    "error": "audit_pdf_photo_evidence_unavailable",
+                    "detail": str(exc),
+                    "mode": exc.mode,
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except OFPPMissingError as exc:
+            # strict_ofpp=true was requested but the establishment's OFPP
+            # is a FAIL. Return 422 (Unprocessable Entity) — the request
+            # was well-formed but the business precondition isn't met.
+            # Frontend should surface an actionable "upload OFPP before
+            # submitting" prompt rather than a generic 500.
+            logger.warning(
+                "Strict-OFPP export refused for production %s: %s",
+                production.pk,
+                exc,
+            )
+            return Response(
+                {
+                    "error": "audit_pdf_ofpp_missing",
+                    "detail": exc.reason,
+                    "doc_name": exc.doc_name,
+                },
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
         except Exception as exc:
             logger.exception("Audit export failed for production %s: %s", production.pk, exc)
             return Response(
                 {"error": "Export generation failed. Please try again."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+    @action(detail=True, methods=["get"], url_path="audit-trail", permission_classes=[IsAuthenticated])
+    def audit_trail(self, request, **kwargs):
+        """
+        Return the chronological edit history (django-auditlog) for this production
+        and all its child events. NOP / 21 CFR Part 11 trustworthy-records support.
+
+        Response:
+          { "entries": [{ "timestamp": "...", "actor": "...", "action": "create|update|delete",
+                          "model": "ProductionEvent", "object_id": "...", "changes": {...} }, ...],
+            "production_finalized": bool,  # finish_date is set
+            "finish_date": "..." | null,
+            "warning": "..." | null }       # post-finalization edit warning
+        """
+        from auditlog.models import LogEntry
+
+        production = self.get_object()
+        self.check_write_permission(request, production)
+
+        # Gather LogEntries for the History row plus all its child events.
+        history_entries = LogEntry.objects.get_for_object(production)
+
+        event_querysets = [
+            production.history_productionevent_events.all(),
+            production.history_chemicalevent_events.all(),
+            production.history_soilmanagementevent_events.all(),
+            production.history_pestmanagementevent_events.all(),
+            production.history_businessevent_events.all(),
+            production.history_weatherevent_events.all(),
+            production.history_generalevent_events.all(),
+        ]
+        event_log_entries = []
+        for qs in event_querysets:
+            for ev in qs:
+                event_log_entries.extend(LogEntry.objects.get_for_object(ev))
+
+        all_entries = list(history_entries) + event_log_entries
+        all_entries.sort(key=lambda le: le.timestamp, reverse=True)
+
+        action_map = {
+            LogEntry.Action.CREATE: "create",
+            LogEntry.Action.UPDATE: "update",
+            LogEntry.Action.DELETE: "delete",
+            LogEntry.Action.ACCESS: "access",
+        }
+
+        finalize_warning = None
+        if production.finish_date:
+            post_finalize = [
+                le
+                for le in all_entries
+                if le.action == LogEntry.Action.UPDATE and le.timestamp.date() > production.finish_date.date()
+            ]
+            if post_finalize:
+                finalize_warning = (
+                    f"This production was finalized on {production.finish_date.date()}. "
+                    f"{len(post_finalize)} edit(s) recorded after finalization. "
+                    f"Inspector should review these changes."
+                )
+
+        return Response(
+            {
+                "entries": [
+                    {
+                        "timestamp": le.timestamp.isoformat(),
+                        "actor": le.actor.email if le.actor else "system",
+                        "action": action_map.get(le.action, "unknown"),
+                        "model": le.content_type.model_class().__name__ if le.content_type else "Unknown",
+                        "object_id": str(le.object_pk),
+                        "object_repr": le.object_repr,
+                        "changes": le.changes_dict,
+                    }
+                    for le in all_entries
+                ],
+                "production_finalized": bool(production.finish_date),
+                "finish_date": production.finish_date.isoformat() if production.finish_date else None,
+                "warning": finalize_warning,
+            }
+        )
 
 
 @api_view(["GET"])
@@ -1556,7 +1715,7 @@ def audit_export_by_uuid(request, public_id):
     """
     from django.http import FileResponse
 
-    from .services.audit_export_service import AuditExportService
+    from .services.audit_export_service import AuditExportService, OFPPMissingError, PhotoEmbedMisconfigurationError
 
     production = get_object_or_404(History, public_id=public_id)
 
@@ -1570,6 +1729,18 @@ def audit_export_by_uuid(request, public_id):
 
     cert_type = request.query_params.get("certification", "all").lower()
     export_format = request.query_params.get("export_format", "pdf").lower()
+    # strict_ofpp tri-state: unset → service-side default (True for
+    # organic / all-certs, False otherwise). Explicit "false" → diagnostic
+    # preview. Explicit "true" → force strict on non-organic too.
+    _raw_strict = request.query_params.get("strict_ofpp")
+    if _raw_strict is None:
+        strict_ofpp = None
+    elif _raw_strict.lower() in ("1", "true", "yes"):
+        strict_ofpp = True
+    elif _raw_strict.lower() in ("0", "false", "no"):
+        strict_ofpp = False
+    else:
+        strict_ofpp = None
 
     valid_certifications = {"all", "organic", "globalgap", "roc", "fsma204", "scs"}
     if cert_type not in valid_certifications:
@@ -1646,12 +1817,40 @@ def audit_export_by_uuid(request, public_id):
             response = FileResponse(buffer, content_type="text/csv; charset=utf-8")
             response["Content-Disposition"] = f'attachment; filename="trazo-audit-{production.public_id}.csv"'
         else:
-            buffer = service.generate_pdf()
+            buffer = service.generate_pdf(strict_ofpp=strict_ofpp)
             response = FileResponse(buffer, content_type="application/pdf")
             response["Content-Disposition"] = f'attachment; filename="trazo-audit-{production.public_id}.pdf"'
 
         return response
 
+    except PhotoEmbedMisconfigurationError as exc:
+        logger.error(
+            "Audit PDF emission refused for production %s (photo-evidence gate): %s",
+            production.pk,
+            exc,
+        )
+        return Response(
+            {
+                "error": "audit_pdf_photo_evidence_unavailable",
+                "detail": str(exc),
+                "mode": exc.mode,
+            },
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    except OFPPMissingError as exc:
+        logger.warning(
+            "Strict-OFPP export refused for production %s: %s",
+            production.pk,
+            exc,
+        )
+        return Response(
+            {
+                "error": "audit_pdf_ofpp_missing",
+                "detail": exc.reason,
+                "doc_name": exc.doc_name,
+            },
+            status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
     except Exception as exc:
         logger.exception("Audit export failed for production %s: %s", production.pk, exc)
         return Response(
@@ -2213,6 +2412,105 @@ class HistoryScanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         return Response(ListHistoryClassSerializer(history_scans[0:9], many=True, context={"history_scan": True}).data)
 
 
+# Polymorphic event serializer mapping for drf-spectacular schema generation.
+# Maps event_type integer codes to their corresponding serializer classes.
+# Used by PolymorphicProxySerializer to tell OpenAPI consumers which shape to expect
+# based on the event_type field in the request/response.
+EVENT_POLYMORPHIC_SERIALIZERS = [
+    WeatherEventSerializer,  # event_type = 0
+    ProductionEventSerializer,  # event_type = 1
+    ChemicalEventSerializer,  # event_type = 2
+    GeneralEventSerializer,  # event_type = 3
+    EquipmentEventSerializer,  # event_type = 4
+    SoilManagementEventSerializer,  # event_type = 5
+    PestManagementEventSerializer,  # event_type = 6
+    BusinessEventSerializer,  # event_type = 7
+]
+
+EVENT_UPDATE_POLYMORPHIC_SERIALIZERS = [
+    UpdateWeatherEventSerializer,
+    UpdateProductionEventSerializer,
+    UpdateChemicalEventSerializer,
+    UpdateGeneralEventSerializer,
+    UpdateEquipmentEventSerializer,
+    UpdateSoilManagementEventSerializer,
+    UpdatePestManagementEventSerializer,
+    UpdateBusinessEventSerializer,
+]
+
+
+@extend_schema_view(
+    list=extend_schema(
+        summary="List agricultural events",
+        description=(
+            "Returns events filtered by event_type. Response shape varies based on "
+            "event_type (0=Weather, 1=Production, 2=Chemical, 3=General, 4=Equipment, "
+            "5=SoilManagement, 6=PestManagement, 7=Business)."
+        ),
+        parameters=[
+            OpenApiParameter(
+                name="event_type",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description="Event type code (0-7). Determines response serializer.",
+                required=True,
+                enum=[0, 1, 2, 3, 4, 5, 6, 7],
+            ),
+        ],
+        responses=PolymorphicProxySerializer(
+            component_name="Event",
+            serializers=EVENT_POLYMORPHIC_SERIALIZERS,
+            resource_type_field_name="event_type",
+        ),
+    ),
+    retrieve=extend_schema(
+        summary="Get event detail",
+        responses=PolymorphicProxySerializer(
+            component_name="EventDetail",
+            serializers=EVENT_UPDATE_POLYMORPHIC_SERIALIZERS,
+            resource_type_field_name="event_type",
+        ),
+    ),
+    create=extend_schema(
+        summary="Create agricultural event",
+        request=PolymorphicProxySerializer(
+            component_name="CreateEvent",
+            serializers=EVENT_UPDATE_POLYMORPHIC_SERIALIZERS,
+            resource_type_field_name="event_type",
+        ),
+        responses=PolymorphicProxySerializer(
+            component_name="CreatedEvent",
+            serializers=EVENT_UPDATE_POLYMORPHIC_SERIALIZERS,
+            resource_type_field_name="event_type",
+        ),
+    ),
+    update=extend_schema(
+        summary="Update event (full)",
+        request=PolymorphicProxySerializer(
+            component_name="UpdateEvent",
+            serializers=EVENT_UPDATE_POLYMORPHIC_SERIALIZERS,
+            resource_type_field_name="event_type",
+        ),
+        responses=PolymorphicProxySerializer(
+            component_name="UpdatedEvent",
+            serializers=EVENT_UPDATE_POLYMORPHIC_SERIALIZERS,
+            resource_type_field_name="event_type",
+        ),
+    ),
+    partial_update=extend_schema(
+        summary="Update event (partial)",
+        request=PolymorphicProxySerializer(
+            component_name="PartialUpdateEvent",
+            serializers=EVENT_UPDATE_POLYMORPHIC_SERIALIZERS,
+            resource_type_field_name="event_type",
+        ),
+        responses=PolymorphicProxySerializer(
+            component_name="PartialUpdatedEvent",
+            serializers=EVENT_UPDATE_POLYMORPHIC_SERIALIZERS,
+            resource_type_field_name="event_type",
+        ),
+    ),
+)
 class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     filter_backends = [filters.OrderingFilter]
 
@@ -2832,10 +3130,11 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         elif event_type == PRODUCTION_EVENT_TYPE:
             # Validate area covered is positive
-            # Equipment Maintenance (EM) can have area_covered=0
+            # Equipment Maintenance (EM), Pollination (PO), and Post-Harvest Processing (PH)
+            # can legitimately have area_covered=0 (facility/equipment-based, not field-based).
             production_type = validated_data.get("type", "")
             area_covered = validated_data.get("area_covered")
-            if area_covered is not None and area_covered <= 0 and production_type != "EM":
+            if area_covered is not None and area_covered <= 0 and production_type not in ("EM", "PO", "PH"):
                 raise ValidationError("Area covered must be greater than 0")
 
             # Validate yield amount is positive

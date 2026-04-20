@@ -16,22 +16,16 @@ import io
 import random
 
 from django.test import TestCase
+from django.utils import timezone
 
 from PIL import Image
 
 from carbon.services.photo_evidence_service import PhotoEvidenceService, photo_evidence_service
-from django.utils import timezone
-
 from common.models import Gallery, GalleryImage
 
 TODAY = timezone.now().date()
 from common.serializers import GalleryImageSerializer, GallerySerializer
-from history.models import (
-    ChemicalEvent,
-    History,
-    ProductionEvent,
-    SoilManagementEvent,
-)
+from history.models import ChemicalEvent, History, ProductionEvent, SoilManagementEvent
 
 
 def _make_farm_photo(width=800, height=600):
@@ -41,9 +35,9 @@ def _make_farm_photo(width=800, height=600):
     for x in range(width):
         for y in range(height):
             pixels[x, y] = (
-                random.randint(20, 80),     # Dark greens (foliage)
-                random.randint(80, 180),    # Green channel
-                random.randint(10, 60),     # Low blue
+                random.randint(20, 80),  # Dark greens (foliage)
+                random.randint(80, 180),  # Green channel
+                random.randint(10, 60),  # Low blue
             )
     buf = io.BytesIO()
     img.save(buf, format="JPEG", quality=85)
@@ -259,9 +253,9 @@ class TestPhotoUploadToEvent(TestCase):
         assert max(img.size) <= 2048, f"Should resize to 2048px max, got {img.size}"
         assert img.mode == "RGB"
         # Processed should be smaller (resized + recompressed)
-        assert len(processed) < original_size, (
-            f"Processed ({len(processed)}) should be smaller than original ({original_size})"
-        )
+        assert (
+            len(processed) < original_size
+        ), f"Processed ({len(processed)}) should be smaller than original ({original_size})"
 
     # -----------------------------------------------------------------------
     # Flow 6: EXIF extraction stores GPS in extra_data
@@ -288,7 +282,7 @@ class TestPhotoUploadToEvent(TestCase):
             **metadata,
             "exif": {
                 "has_gps": True,
-                "gps_latitude": 32.8801,   # Fallbrook, CA (avocado country)
+                "gps_latitude": 32.8801,  # Fallbrook, CA (avocado country)
                 "gps_longitude": -117.2497,
                 "DateTimeOriginal": "2026:03:27 10:30:00",
                 "Make": "Apple",
