@@ -91,7 +91,7 @@ class Command(BaseCommand):
 
         if existing and reset:
             self.stdout.write("  Deleting existing Solana Verde fixture...")
-            existing.delete()
+            self._cascade_delete(existing)
             self.stdout.write(self.style.SUCCESS("  Deleted."))
 
         # 3. Base infrastructure (company, establishment, parcel, certifications,
@@ -110,7 +110,7 @@ class Command(BaseCommand):
         self.stdout.write(f"  Establishment:  {establishment.name} (#{establishment.id})")
         self.stdout.write(f"  Parcel:         {parcel.name} (#{parcel.id})")
 
-        # 4. Events — 22 finished (NOP-complete) + 6 current (active dashboard)
+        # 4. Events — 23 finished (NOP-complete) + 6 current (active dashboard)
         finished_count = create_finished_events(production_finished, user, demo_images=DEMO_IMAGES)
         current_count = create_current_events(production_current, user, demo_images=DEMO_IMAGES)
 
@@ -147,6 +147,53 @@ class Command(BaseCommand):
         self.stdout.write("    supplier chain (4 chemicals), compost temp/duration/turnings,")
         self.stdout.write("    manure 120-day, pest ID + threshold rationale, equipment cleaning,")
         self.stdout.write("    contamination incident chain, seed organic search log, sales record.")
+
+    def _cascade_delete(self, company):
+        """
+        Delete fixture in dependency order.
+
+        Workaround: Django's default cascade fires auditlog post_delete signals
+        for each Event, and `CommonEvent.__str__` crashes when its already-deleted
+        History is fetched via FK. Deleting events via raw SQL (`_raw_delete`)
+        bypasses signals, then cascade handles the rest cleanly.
+        """
+        from django.db import connection
+
+        from history.models import (
+            BusinessEvent,
+            ChemicalEvent,
+            EquipmentEvent,
+            GeneralEvent,
+            History,
+            PestManagementEvent,
+            ProductionEvent,
+            SoilManagementEvent,
+            WeatherEvent,
+        )
+
+        histories = History.objects.filter(parcel__establishment__company=company)
+        history_ids = list(histories.values_list("id", flat=True))
+
+        if history_ids:
+            event_models = [
+                BusinessEvent,
+                ChemicalEvent,
+                EquipmentEvent,
+                GeneralEvent,
+                PestManagementEvent,
+                ProductionEvent,
+                SoilManagementEvent,
+                WeatherEvent,
+            ]
+            with connection.cursor() as cur:
+                for M in event_models:
+                    table = M._meta.db_table
+                    cur.execute(
+                        f"DELETE FROM {table} WHERE history_id = ANY(%s)",
+                        [history_ids],
+                    )
+
+        company.delete()
 
     def _verify_invariants(self, finished_production, parcel):
         """Assert NOP compliance invariants. Fail loud so regressions don't slip."""

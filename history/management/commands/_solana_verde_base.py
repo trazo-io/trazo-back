@@ -264,22 +264,6 @@ def create_solana_verde_base(user):
             ),
         },
         carbon_calculation_enabled=True,
-        transparency_description=(
-            "Our premier south-facing hillside grove producing premium Hass avocados "
-            "with full organic certification and regenerative soil practices."
-        ),
-        sustainability_practices=(
-            "Drip irrigation (95% efficiency), cover cropping (winter legumes for "
-            "N-fixation), on-farm composting, beneficial insect habitat (hedgerows), "
-            "no-till between rows, mulching with wood chips, EQIP conservation plan."
-        ),
-        consumer_story=(
-            "Every avocado from this grove is grown with care for the land. "
-            "Our 15-year soil health program has increased organic matter from 1.8% to 4.2%. "
-            "We maintain 12 native hedgerow species and pollinator strips to support the "
-            "ecosystem. When you eat one of our avocados, you are supporting a farm that "
-            "puts soil health and biodiversity first."
-        ),
     )
 
     # ------------------------------------------------------------------ #

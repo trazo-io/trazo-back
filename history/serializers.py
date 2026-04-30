@@ -2988,19 +2988,14 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                                 else None
                             )
                         ),
-                        # NOP traceability (7 CFR 205.103) — supplier + purchase chain.
-                        # Registry declares these with consumer_card: 'secondary'.
-                        "supplier_name": getattr(event, "supplier_name", None),
-                        "purchase_date": (
-                            event.purchase_date.isoformat() if getattr(event, "purchase_date", None) else None
-                        ),
-                        "purchase_invoice": getattr(event, "purchase_invoice", None),
-                        "quantity_purchased": (
-                            float(event.quantity_purchased)
-                            if getattr(event, "quantity_purchased", None) is not None
-                            else None
-                        ),
-                        "quantity_purchased_unit": getattr(event, "quantity_purchased_unit", None),
+                        # NOP traceability fields (7 CFR 205.103) — supplier_name,
+                        # purchase_date, purchase_invoice, quantity_purchased(_unit) are
+                        # commercially sensitive and intentionally excluded from the public
+                        # consumer endpoint. They surface only in the certifier-facing NOP
+                        # PDF (audit_export_service mass-balance section). The codebase's
+                        # _sanitize_extra_data_for_public() already blocks "supplier" in
+                        # extra_data; this comment documents the equivalent policy for
+                        # top-level model fields. See AUDIT_INSTRUCTIONS Standard Fix #5.
                         # P0-3 — CA DPR Restricted Materials Permit (CA state law).
                         "ca_dpr_permit_number": getattr(event, "ca_dpr_permit_number", None),
                         "ca_dpr_permit_county": getattr(event, "ca_dpr_permit_county", None),
@@ -3117,17 +3112,14 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         # disappear on the product-detail QR page.
                         "pump_depth_ft": float(getattr(event, "pump_depth_ft", None) or 0) or None,
                         "electricity_source": getattr(event, "electricity_source", None),
-                        # NOP Compliance: Equipment Cleaning Logs (7 CFR 205.272) —
-                        # EM-subtype fields registered with consumer_card: 'secondary'.
-                        # Same visibility gap as the pump fields above.
-                        "cleaning_date": (
-                            event.cleaning_date.isoformat() if getattr(event, "cleaning_date", None) else None
-                        ),
-                        "cleaning_method": getattr(event, "cleaning_method", None),
-                        "cleaning_materials_used": getattr(event, "cleaning_materials_used", None),
-                        "cleaned_by": getattr(event, "cleaned_by", None),
-                        "shared_with_conventional": getattr(event, "shared_with_conventional", None),
-                        "cleaning_protocol_reference": getattr(event, "cleaning_protocol_reference", None),
+                        # NOTE: Equipment cleaning fields (cleaning_date, cleaning_method,
+                        # cleaning_materials_used, cleaned_by, cleaning_protocol_reference,
+                        # shared_with_conventional) are intentionally serialized only in the
+                        # EM subtype block further down (after equipment_operation_type).
+                        # Python dict-literal duplicate keys silently overwrite, which had
+                        # previously masked drift between two blocks of the same fields
+                        # (e.g., shared_with_conventional default disagreement).
+
                         # Post-harvest sanitizer detail (7 CFR 205.272 + § 205.605).
                         "sanitizer_name": getattr(event, "sanitizer_name", None),
                         "sanitizer_ppm": (
@@ -3198,6 +3190,21 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                                 else None
                             )
                         ),
+                        # NOP 7 CFR 205.272 — Equipment cleaning logs (EM/CL subtype).
+                        # Registry gates these on equipment_operation_type === 'CL'; the
+                        # consumer card is the canonical surface for split-operation
+                        # transparency ("equipment was shared with a conventional farm,
+                        # here is our cleaning evidence"). Without these on the public
+                        # payload, the registry resolver has nothing to render even
+                        # though the read serializer exposes them to authenticated views.
+                        "cleaning_date": (
+                            event.cleaning_date.isoformat() if getattr(event, "cleaning_date", None) else None
+                        ),
+                        "cleaning_method": getattr(event, "cleaning_method", None),
+                        "cleaning_materials_used": getattr(event, "cleaning_materials_used", None),
+                        "cleaned_by": getattr(event, "cleaned_by", None),
+                        "cleaning_protocol_reference": getattr(event, "cleaning_protocol_reference", None),
+                        "shared_with_conventional": getattr(event, "shared_with_conventional", False),
                         # NOP 5029: Seed commercial availability search documentation (PL subtype)
                         "seed_search_attempts": getattr(event, "seed_search_attempts", None),
                         # NOP 7 CFR 205.204: Seed traceability (PL subtype)
@@ -3750,8 +3757,19 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "certificate_number": getattr(event, "certificate_number", None),
                         "verification_status": getattr(event, "verification_status", None),
                         "sustainability_practice": getattr(event, "sustainability_practice", None),
+                        # Gate carbon_credits_unit on truthy carbon_credits_earned to prevent
+                        # an orphan "Carbon Credits Unit: tCO2e" card on the consumer QR when
+                        # business_type changed from 'carbon_credits' to 'certification' but the
+                        # model's default 'tCO2e' unit value persisted on the row. Bug class:
+                        # stale conditional field surfaces when parent context changes. Fix
+                        # mechanism mirrors Standard Fix #5 (gate in hand-rolled get_events()
+                        # dict), even though the field is not commercially sensitive.
                         "carbon_credits_earned": float(getattr(event, "carbon_credits_earned", None) or 0) or None,
-                        "carbon_credits_unit": getattr(event, "carbon_credits_unit", None),
+                        "carbon_credits_unit": (
+                            getattr(event, "carbon_credits_unit", None)
+                            if (getattr(event, "carbon_credits_earned", None) or 0)
+                            else None
+                        ),
                         "verified_certifier_name": getattr(event, "verified_certifier_name", None),
                         "extra_data": self._sanitize_extra_data_for_public(event),
                         # Blockchain verification fields from production

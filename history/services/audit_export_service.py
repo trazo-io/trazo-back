@@ -6423,6 +6423,20 @@ class AuditExportService:
             elements.append(self._body("Production data not available."))
             return elements
 
+        # Branch wording on OSP presence so the prose never claims cross-
+        # reference against an "active OSP" when none is on file. Drift
+        # signal still resolves against the establishment-level approved-
+        # inputs registry; the OSP-narrative master plan is what's missing.
+        from certifications.models import OrganicSystemPlan
+
+        try:
+            establishment = self.production.parcel.establishment
+        except AttributeError:
+            establishment = None
+        osp_on_file = False
+        if establishment is not None:
+            osp_on_file = OrganicSystemPlan.objects.filter(establishment=establishment).exists()
+
         # `self.production` is the History row (naming is historical). Events
         # link to it via CommonEvent.history, so a single-hop filter covers
         # every ChemicalEvent / SoilManagementEvent / planting ProductionEvent
@@ -6441,40 +6455,65 @@ class AuditExportService:
         )
 
         if not chem_drift and not soil_drift and not seed_drift:
-            elements.append(
-                Paragraph(
+            if osp_on_file:
+                summary_body = (
                     "<b>No drift findings.</b> Every chemical input, soil amendment, "
                     "and planting-event seed source logged during this production "
                     "cycle matched an entry on the establishment's active OSP "
-                    "approved-inputs list and § 205.204 seed documentation requirements.",
-                    self._styles["body"],
+                    "approved-inputs list and § 205.204 seed documentation requirements."
                 )
-            )
-            elements.append(self._spacer(0.05))
-            elements.append(
-                Paragraph(
+                summary_note = (
                     "Inputs are cross-checked against the active OSP's "
                     "approved_national_list_substances and approved_omri_products "
                     "sets at event save-time. 7 CFR 205.400(f)(2) requires producers "
                     "to notify their certifying agent of any change in practices or "
-                    "procedures that may affect the organic status of the operation.",
-                    self._styles["footer_note"],
+                    "procedures that may affect the organic status of the operation."
                 )
-            )
+            else:
+                summary_body = (
+                    "<b>No drift findings.</b> Every chemical input, soil amendment, "
+                    "and planting-event seed source logged during this production "
+                    "cycle resolved against the establishment-level approved-inputs "
+                    "registry and § 205.204 seed documentation requirements. Once "
+                    "the OSP is filed, this section will additionally cross-check "
+                    "against the OSP's approved-inputs list."
+                )
+                summary_note = (
+                    "Inputs are cross-checked against the establishment's "
+                    "approved_national_list_substances and approved_omri_products "
+                    "registry at event save-time. 7 CFR 205.400(f)(2) requires "
+                    "producers to notify their certifying agent of any change in "
+                    "practices or procedures that may affect the organic status of "
+                    "the operation; an OSP-on-file is the canonical location for "
+                    "that approved-inputs list."
+                )
+            elements.append(Paragraph(summary_body, self._styles["body"]))
+            elements.append(self._spacer(0.05))
+            elements.append(Paragraph(summary_note, self._styles["footer_note"]))
             return elements
 
-        elements.append(
-            Paragraph(
+        if osp_on_file:
+            findings_warning = (
                 "<b>The events listed below reference inputs not present on the "
                 "active OSP's approved-inputs registry at event save-time.</b> "
                 "Per 7 CFR 205.400(f)(2), the producer must notify the certifier "
                 "of any change in practices or procedures that may affect the "
                 "organic status of the operation. Add the input to the OSP "
                 "(if approved), or document the change-notification filing "
-                "submitted to the certifier.",
-                self._warning_style(),
+                "submitted to the certifier."
             )
-        )
+        else:
+            findings_warning = (
+                "<b>The events listed below reference inputs not present on the "
+                "establishment's approved-inputs registry at event save-time, "
+                "and no Organic System Plan is on file to cross-reference.</b> "
+                "Per 7 CFR 205.400(f)(2), the producer must notify the certifier "
+                "of any change in practices or procedures that may affect the "
+                "organic status of the operation. File the OSP and add each "
+                "input below to the OSP approved-inputs list, or document the "
+                "change-notification filing submitted to the certifier."
+            )
+        elements.append(Paragraph(findings_warning, self._warning_style()))
         elements.append(self._spacer(0.05))
 
         headers = ["Event Date", "Event Type", "Input", "Reason", "Resolution", "Verified"]

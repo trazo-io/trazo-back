@@ -180,7 +180,6 @@ def create_current_events(production, user, demo_images=None):
         created_by=user,
         performed_by="Carlos Mendez",
         type=PestManagementEvent.SCOUTING,
-        name="Early-Season IPM Scout",
         pest_species="No pests above threshold",
         pest_pressure_level="Low",
         action_threshold_met=False,

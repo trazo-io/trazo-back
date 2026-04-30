@@ -1456,7 +1456,7 @@ class OptimizedCarbonCalculator:
                 self.trap_count = event_data.get("trap_count", 0)
                 self.damage_percentage = event_data.get("damage_percentage", 0)
                 self.action_threshold_met = event_data.get("action_threshold_met", False)
-                self.imp_strategy = event_data.get("imp_strategy", "")
+                self.ipm_strategy = event_data.get("ipm_strategy", "")
                 # Add a minimal id for USDA metadata (prevents attribute error)
                 self.id = event_data.get("id", 1)
                 # Sprint 3 Epic 3.1: Add fuel/equipment fields for carbon calculation

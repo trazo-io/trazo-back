@@ -189,7 +189,7 @@ def production_transparency_detail(request, production_public_id=None):
 
         # Organic story summary — aggregates existing data for consumer display
         # Uses already-prefetched ChemicalEvents, zero extra DB queries
-        organic_summary = _build_organic_summary(history, certification_data, establishment)
+        organic_summary = _build_organic_summary(history, certification_data, establishment, organic_claim)
 
         # Product information
         product_info = {
@@ -343,6 +343,11 @@ def production_transparency_detail(request, production_public_id=None):
                     # 🚨 CRITICAL FIX: Complete farmer/establishment data for ProductDetail.tsx
                     "id": str(establishment.public_id) if establishment else None,
                     "name": establishment.name if establishment else "Farm",
+                    # Optional establishment/grower photo — first image from
+                    # establishment.album if present. Consumed by
+                    # GrowerStoryCard.tsx (Avatar src). Null when farm hasn't
+                    # uploaded a profile photo; Avatar falls back to initials.
+                    "establishment_image": _first_album_image_url(establishment),
                     "description": establishment.description if establishment else "",
                     "address": establishment.address if establishment else None,
                     "city": establishment.city if establishment else None,
@@ -644,10 +649,18 @@ def production_instant_trust(request, production_public_id=None):
         )
 
 
-def _build_organic_summary(history, certification_data, establishment):
+def _build_organic_summary(history, certification_data, establishment, organic_claim=None):
     """
     Aggregate organic data from already-prefetched ChemicalEvents and certifications.
     Returns a consumer-facing summary — no extra DB queries.
+
+    `organic_claim` is the dict output of ConsumerClaimValidator — the regulatory
+    single source of truth for the production's organic status (certified vs
+    transitioning vs self_reported vs conventional). Threaded in so the consumer
+    narrative (ProductDetail.tsx) can disambiguate transitional from certified
+    from self-reported farms — otherwise "reports following organic practices"
+    leaks onto transitional productions whose headline says "not yet organic"
+    (FTC 16 CFR 260.6(d) qualified-claim risk).
     """
     ORGANIC_APPROVED_VALUES = {"omri_listed", "usda_nop_approved", "organic_equivalent", "yes"}
     NOT_ORGANIC_VALUES = {"not_organic", "no"}
@@ -661,30 +674,46 @@ def _build_organic_summary(history, certification_data, establishment):
     non_organic_inputs = sum(1 for e in events_with_status if e.organic_approved in NOT_ORGANIC_VALUES)
     classified_count = len(events_with_status)
 
-    # Check for verified organic certification from already-loaded data
-    has_verified_organic = any(
-        c.get("display_name", "").lower().startswith("usda organic") and c.get("status") == "verified_via_database"
-        for c in (certification_data or [])
-    )
-    has_self_reported_organic = any(
-        c.get("display_name", "").lower().startswith("usda organic") and c.get("status") == "self_reported"
-        for c in (certification_data or [])
-    )
-
     # Production-level farming method
     production_method = getattr(history, "production_method", None) or ""
     farm_method = getattr(establishment, "farming_method", None) or ""
     is_organic_production = production_method == "organic" or farm_method == "organic"
 
+    # Consumer claim status is the regulatory single source of truth — the badge
+    # (OrganicClaimBadge, gated on organic_claim.status) and the narrative
+    # (gated on certification_verified/is_in_transition below) must agree.
+    # When organic_claim is available, derive both flags from it so
+    # ConsumerClaimValidator is the sole authority for certified/transitioning
+    # state. Fallback display_name scan runs only when organic_claim is missing
+    # (exception path at the caller, or direct test invocations).
+    claim_status = (organic_claim or {}).get("status")
+    is_in_transition = claim_status == "transitioning"
+    if organic_claim is not None:
+        has_verified_organic = claim_status == "certified_organic"
+        has_self_reported_organic = claim_status == "self_reported"
+    else:
+        has_verified_organic = any(
+            c.get("display_name", "").lower().startswith("usda organic") and c.get("status") == "verified_via_database"
+            for c in (certification_data or [])
+        )
+        has_self_reported_organic = any(
+            c.get("display_name", "").lower().startswith("usda organic") and c.get("status") == "self_reported"
+            for c in (certification_data or [])
+        )
+
     # Only return summary when the farm is actually an organic operation.
     # Having organic-approved inputs alone does NOT make it an organic farm —
     # a conventional farm can use OMRI-listed products without being organic.
-    is_organic_farm = is_organic_production or has_verified_organic or has_self_reported_organic
+    # Transitional productions also qualify — the narrative must explain the
+    # transition state instead of claiming "following organic practices."
+    is_organic_farm = is_organic_production or has_verified_organic or has_self_reported_organic or is_in_transition
     if not is_organic_farm:
         return None
 
     return {
         "is_organic_farm": is_organic_farm,
+        "claim_status": claim_status,
+        "is_in_transition": is_in_transition,
         "certification_verified": has_verified_organic,
         "certification_self_reported": has_self_reported_organic and not has_verified_organic,
         # Only include input stats when farmers actually classified their inputs
@@ -765,6 +794,22 @@ def _get_verification_status(history, transparency_data=None):
     verifications["transparency_verified"] = transparency_data["transparency_percentage"] >= 85
 
     return verifications
+
+
+def _first_album_image_url(establishment):
+    """Return a stable URL for the first image in the establishment's album.
+
+    Consumed by the consumer QR farmer block as the grower-story avatar source.
+    Returns None when the establishment has no album, no images, or the image
+    row has no resolvable URL — callers (GrowerStoryCard.tsx) render an
+    initials-based fallback in that case.
+    """
+    if not establishment or not getattr(establishment, "album_id", None):
+        return None
+    first_image = establishment.album.images.first()
+    if first_image is None:
+        return None
+    return getattr(first_image, "url", None)
 
 
 def _get_blockchain_verification_data(history):

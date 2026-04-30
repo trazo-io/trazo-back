@@ -1775,7 +1775,7 @@ class Command(BaseCommand):
             release_quantity=50000,
             action_threshold_met=True,
             extra_data={
-                "imp_strategy": "Beneficial insect releases + organic oils targeting citrus leafminer and aphids",
+                "ipm_strategy": "Beneficial insect releases + organic oils targeting citrus leafminer and aphids",
                 "beneficial_insects_released": 50000,
                 "organic_treatments": ["Neem oil", "Insecticidal soap", "Bacillus thuringiensis"],
                 "pest_reduction_percentage": 95,

@@ -1,8 +1,9 @@
 """
-Solana Verde Organic Ranch — 22 finished-production events.
+Solana Verde Organic Ranch — 23 finished-production events.
 
 Covers the 2026-01-15 -> 2026-04-14 Hass Avocado season on Hillside Grove A.
-Events map 1:1 to Phase 7 of E2E_ORGANIC_FARM_TESTING_GUIDE.md (Events 1-21 + 8b).
+Events map to Phase 7 of E2E_ORGANIC_FARM_TESTING_GUIDE.md (Events 1-21 + 8b = 22)
+plus one PL replant event for seed_search_attempts (NOP 5029) coverage = 23 total.
 
 NOP fields covered:
   - ChemicalEvent: supplier_name, purchase_date, purchase_invoice (events 3,7,10,13)
@@ -52,8 +53,8 @@ AVOCADO_IMAGES = {
 }
 
 
-def _dt(year, month, day, hour=8):
-    return datetime(year, month, day, hour, 0, tzinfo=dt_tz.utc)
+def _dt(year, month, day, hour=8, minute=0):
+    return datetime(year, month, day, hour, minute, tzinfo=dt_tz.utc)
 
 
 def _create_album(image_key, demo_images=None):
@@ -71,9 +72,13 @@ def _create_album(image_key, demo_images=None):
 
 def create_finished_events(production, user, demo_images=None):
     """
-    Create 22 NOP-complete events on the finished 2026 Hass Avocado production.
+    Create 23 NOP-complete events on the finished 2026 Hass Avocado production.
 
-    Returns the count of events created (22).
+    Maps to Phase 7 Events 1-21 + 8b of E2E_ORGANIC_FARM_TESTING_GUIDE.md (22),
+    plus one PL replant event that exercises seed_search_attempts (NOP 5029) —
+    23 total.
+
+    Returns the count of events created (23).
     """
     # ------------------------------------------------------------------ #
     # Event 1: Soil Test (ST) — 2026-01-10                                #
@@ -223,6 +228,7 @@ def create_finished_events(production, user, demo_images=None):
         area_unit="acres",
         way_of_application="fertigation",
         application_method_structured="drip",
+        is_fertigation=True,
         application_timing="pre_plant",
         weather_conditions="calm_dry",
         target_pest_disease="Pre-bloom bloom nutrition, early fruit development",
@@ -989,7 +995,7 @@ def create_finished_events(production, user, demo_images=None):
             "cartons_packed": 448,
             "carton_weight_lbs": 25,
             "lot_id": "SVR-2026-HA-001",
-            "oqr_stickers_applied": True,
+            "qr_stickers_applied": True,
             "sanitizer_chlorine_ppm": 200,
             "cooler_humidity_pct": 90,
         },
@@ -1091,4 +1097,4 @@ def create_finished_events(production, user, demo_images=None):
         album=_create_album("planting", demo_images),
     )
 
-    return 22
+    return 23
