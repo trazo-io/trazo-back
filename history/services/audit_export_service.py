@@ -6,6 +6,11 @@ Supports certification-specific filtering for:
   organic, globalgap, roc, fsma204, scs, all
 """
 
+# Defer annotation evaluation (PEP 563) so PEP 604 syntax like `str | None`
+# works on Python 3.9. Production runs python:3.9-slim per Dockerfile, where
+# `X | None` raises TypeError at class-body execution time without this.
+from __future__ import annotations
+
 import csv
 import io
 import logging
