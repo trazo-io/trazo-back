@@ -15,7 +15,14 @@ from datetime import timezone as dt_tz
 from decimal import Decimal
 
 from carbon.models import CropType
-from certifications.models import Certification
+from certifications.models import (
+    OSP_SECTION_KEYS,
+    Certification,
+    NationalListSubstance,
+    OMRIProduct,
+    OrganicSystemPlan,
+    WSDAMaterial,
+)
 from company.models import Company, Establishment
 from history.models import History
 from product.models import Parcel, ParcelCropHistory, Product
@@ -153,7 +160,7 @@ def create_solana_verde_base(user):
     # ------------------------------------------------------------------ #
     # Certifications                                                       #
     # ------------------------------------------------------------------ #
-    Certification.objects.create(
+    ccof_cert = Certification.objects.create(
         establishment=establishment,
         certification_type="usda_organic",
         certification_number="CCOF-2012-4287",
@@ -175,6 +182,14 @@ def create_solana_verde_base(user):
         certified_items=["Hass Avocado"],
         verification_status="self_reported",
     )
+
+    # ------------------------------------------------------------------ #
+    # Organic System Plan (7 CFR 205.201) — active v1, linked to CCOF      #
+    # cert. Six required narrative sections fully populated with real     #
+    # operation details (no "farmer to complete" placeholders) so the     #
+    # audit-export PDF renders a submission-ready dossier.                #
+    # ------------------------------------------------------------------ #
+    _seed_solana_verde_osp(establishment, ccof_cert, user)
 
     # ------------------------------------------------------------------ #
     # Product & CropType                                                   #
@@ -392,3 +407,243 @@ def create_solana_verde_base(user):
         production_finished,
         production_current,
     )
+
+
+def _seed_solana_verde_osp(establishment, ccof_cert, user):
+    """
+    Create an active Organic System Plan v1 for Solana Verde with fully-populated
+    narratives for the six required sections per 7 CFR 205.201(a)(1)-(6).
+
+    Linked to the active CCOF certification. Approved-input M2M tables are
+    populated when seed_omri_minimal / seed_wsda_materials / seed_national_list
+    have been run beforehand; otherwise the M2M attaches a partial set silently.
+    """
+    # OSP submission/approval timeline reflects a real CCOF cycle: drafted +
+    # submitted in the prior fall, certifier-approved in mid-December, and made
+    # effective on the new calendar year. Last-updated stamp on each section
+    # uses the effective date so the audit PDF shows a consistent OSP age,
+    # independent of when the seed command is actually run.
+    submitted_at_dt = datetime(2025, 11, 15, 17, 0, tzinfo=dt_tz.utc)
+    approved_at_dt = datetime(2025, 12, 20, 17, 0, tzinfo=dt_tz.utc)
+    effective_date_value = date(2026, 1, 1)
+    last_updated_iso = effective_date_value.isoformat()
+
+    practices_procedures = (
+        "Operation: Solana Verde Organic Ranch — 285-acre orchard in Fallbrook, "
+        "San Diego County, California (climate zone Csb, Mediterranean).\n\n"
+        "Crops grown: Hass avocados (primary, 4,250 trees on 34.40 ha), "
+        "winter cover crops (crimson clover + hairy vetch interplanted between "
+        "tree rows), pollinator-strip companion herbs (yarrow, phacelia).\n\n"
+        "Tree management: 25ft x 25ft spacing, 15-17 year established trees, "
+        "Duke 7 phytophthora-resistant rootstock used for replants. Annual "
+        "pruning February-March (skirting + dead-wood removal) — prunings "
+        "chipped and returned to row middles as mulch.\n\n"
+        "Irrigation: drip system (95% efficiency) fed by on-site 180-foot well, "
+        "with soil moisture sensors monitoring every zone. Irrigation events "
+        "logged per-event in Trazo with duration and volume; no flood or "
+        "overhead application.\n\n"
+        "Soil management (§ 205.203): on-farm composting (prunings + cover crop "
+        "+ aged horse manure, C:N 18:1), 2 tons/acre application annually in "
+        "6-foot rings around tree basins. Cover-crop residue incorporated as "
+        "green manure each spring. Soil organic matter has risen from 1.8% (2009) "
+        "to 4.2% (2025) per UC ANR-protocol soil tests.\n\n"
+        "Pest management (§ 205.206): IPM-first program — weekly scouting (June-"
+        "October), beneficial-insect releases (lacewings, lady beetles), "
+        "monitoring traps for persea mite and avocado thrips, threshold-based "
+        "intervention only. Approved organic inputs (copper hydroxide, DiPel "
+        "DF, Entrust SC) listed and classified in section (a)(2) — applied at "
+        "or below label rate when pest pressure exceeds documented thresholds.\n\n"
+        "Conservation practices: hedgerows around field perimeters, pollinator "
+        "strips, no-till between tree rows. CCOF inspection records, Bee Better "
+        "habitat plan, and CDFA water-use reports retained per § 205.103."
+    )
+
+    inputs_list = (
+        "All inputs are logged per-event in Trazo (chemical, soil, and pest "
+        "management events), classified against OMRI / WSDA / CDFA-OIM / 7 CFR "
+        "205.601 National List at entry time. The Trazo Audit Export "
+        "'OMRI / National List Verification' section enumerates the full "
+        "year-to-date list with classification, supplier, purchase date, and "
+        "invoice number for each application.\n\n"
+        "Inputs currently in use on Hillside Grove A (each cross-references the "
+        "approved-materials catalog attached to this OSP):\n"
+        "  - Neptune's Harvest Organic Fish and Seaweed Fertilizer 2-3-1 "
+        "(OMRI + WSDA listed) — foliar feed, 1 gal/acre, sourced from "
+        "Cal-West Ag Supply, Fallbrook CA.\n"
+        "  - Copper hydroxide (7 CFR 205.601(i)(1) National List allowed) — "
+        "fungicide for anthracnose, label rate 1.5 lb/acre, sourced from "
+        "Wilbur-Ellis Vista CA. Used in compliance with § 205.601(i)(1) "
+        "tolerance and resistance-management restrictions.\n"
+        "  - DiPel DF Bacillus thuringiensis (OMRI + WSDA listed; § 205.601(e) "
+        "Microbial products) — caterpillar control, 0.5 lb/acre, sourced from "
+        "Wilbur-Ellis Vista CA.\n"
+        "  - Entrust SC Naturalyte Insect Control / Spinosad (OMRI + WSDA "
+        "listed; § 205.601(e) Spinosad) — thrips control, 4 fl oz/acre, "
+        "sourced from Cal-West Ag Supply.\n"
+        "  - On-farm compost (prunings + cover crop + aged horse manure) — no "
+        "purchase, internal mass-balance tracked per 7 CFR 205.203(c).\n"
+        "  - Brokaw Nursery (Saticoy CA) certified-organic Hass nursery stock "
+        "on Duke 7 rootstock — used for replants, NOP 5029 supplier-search log "
+        "documented per planting event.\n\n"
+        "No prohibited substances per 7 CFR 205.602/.604 are stocked on premises."
+    )
+
+    monitoring_plan = (
+        "Monitoring practices (§ 205.201(a)(3)):\n"
+        "  - Weekly pest-scouting Jun-Oct: random transects, persea mite + "
+        "thrips trap counts, beneficial-population observation, threshold "
+        "rationale logged on each Pest Management event.\n"
+        "  - Daily soil-moisture readout from in-field sensors during irrigation "
+        "season; irrigation events triggered only when sensor falls below "
+        "set-point.\n"
+        "  - Monthly compost-pile temperature log during active turning phase "
+        "(target 131-170°F per § 205.203(c)(2)); turning count, peak temp, and "
+        "duration recorded on each compost event.\n"
+        "  - Annual soil test (UC ANR protocol) — pH, organic matter, "
+        "macronutrients, EC. Results filed under the establishment's soil-test "
+        "history.\n"
+        "  - Annual CCOF inspection (most recent 2026-03-28 by Sarah Chen, "
+        "PASSED). Continuous certification CCOF-2012-4287.\n\n"
+        "Fraud Prevention Plan (7 CFR 205.201(a)(3), SOE rule effective "
+        "2024-03-19):\n"
+        "  - OFPP uploaded 2026-03-19, responsible person Maria Elena Gutierrez.\n"
+        "  - Vulnerability assessment covers: input procurement, supplier "
+        "verification (organic certificates on file for all chemical and seed "
+        "suppliers), commingling at harvest/handling, post-harvest recordkeeping.\n"
+        "  - Supplier verification: every input supplier provides a current "
+        "organic certificate (Wilbur-Ellis, Cal-West Ag Supply, Brokaw Nursery) "
+        "filed with the OFPP.\n"
+        "  - Fraud-risk review cadence: annual, conducted before each CCOF "
+        "inspection cycle.\n\n"
+        "Certifier notification duty (7 CFR 205.400(f)):\n"
+        "  - Any application or drift of a prohibited substance reported to "
+        "CCOF immediately per § 205.400(f)(1).\n"
+        "  - Any change in the certified operation (new input, new parcel, "
+        "buffer modification, split-operation change) reported to CCOF "
+        "immediately per § 205.400(f)(2)."
+    )
+
+    recordkeeping = (
+        "Records are maintained in Trazo, a digital recordkeeping system, and "
+        "retained for 5 years per 7 CFR 205.103. Records include: production "
+        "events (planting, irrigation, harvest, post-harvest), chemical / soil / "
+        "pest management events with supplier name + purchase date + invoice "
+        "number, harvest yield logs, sales invoices to Organically Grown "
+        "Company (OGC) with 'organic' on invoice per § 205.301(f), input / "
+        "material lists with OMRI / WSDA / CDFA-OIM / National List "
+        "classification, certifications (CCOF + Bee Better), OSP versions, "
+        "annual updates, ParcelCropHistory (3-year crop rotation history per "
+        "§ 205.202).\n\n"
+        "Change history is captured via django-auditlog applying 21 CFR Part 11 "
+        "trustworthy-records principles: per-field user attribution, UTC "
+        "timestamp, before/after diff. Operator credentials are individual "
+        "(Maria Elena Gutierrez has primary admin access; field staff have "
+        "scoped event-creation rights). Records are exportable on demand as a "
+        "consolidated audit PDF for CCOF inspection."
+    )
+
+    commingling = (
+        "Split-operation status: NO — Solana Verde Organic Ranch is wholly "
+        "organic. No conventional production occurs on this operation, on any "
+        "parcel, at any time of year (§ 205.201(a)(5)).\n\n"
+        "Buffer zones (§ 205.202(c)): hedgerows on east and north property "
+        "boundaries provide 25-foot vegetative buffer from neighboring "
+        "conventional citrus. South and west boundaries face open hillside / "
+        "natural habitat — no adjacent conventional operations within 100 feet. "
+        "Drift-deposition signage at north boundary (refreshed 2026-03-29 per "
+        "CCOF inspector observation).\n\n"
+        "Storage separation: all certified-organic inputs stored in the "
+        "dedicated organic-inputs locker (locked, separate from any "
+        "non-organic items). Inventory log maintained.\n\n"
+        "Equipment cleaning (§ 205.272): tractors, sprayers, and harvest bins "
+        "used exclusively on this operation. When equipment is shared with the "
+        "neighboring conventional citrus operator (rented sprayer, 2026-02-14), "
+        "documented triple-rinse cleaning is performed per the Equipment "
+        "Maintenance event with cleaning_date, cleaning_method, cleaned_by, and "
+        "shared_with_conventional flag set true.\n\n"
+        "Harvest commingling prevention: dedicated organic harvest bins, "
+        "labelled at fill, transported direct to OGC cold-chain refer truck "
+        "with seal-and-manifest tracking. No co-loading with non-organic loads."
+    )
+
+    additional = (
+        "Certifier-specific attachments (CCOF G-forms, land-history "
+        "affidavits, parcel maps, hedgerow inventory, 5-year crop-rotation "
+        "diagram, water-source affidavit, well-permit copy) are filed with "
+        "CCOF and referenced in Trazo via the OSP attachments section.\n\n"
+        "Material / activity change requests: any operational change (new "
+        "parcel, hedgerow modification, fence relocation, input list addition, "
+        "split-operation change) is filed as a Material/Activity change "
+        "request with CCOF per § 205.400(f)(2) and reflected in the next "
+        "annual update per § 205.406.\n\n"
+        "Bee Better Certified (BBV-2024-0891, Xerces Society, valid through "
+        "2027-05-31): pollinator habitat plan filed with Xerces; hedgerow + "
+        "pollinator-strip survey logs maintained alongside organic records.\n\n"
+        "FSMA 204 readiness: Critical Tracking Events (CTE) and Key Data "
+        "Elements (KDE) for harvest, cooling, packing, and shipping are "
+        "captured in the History production lot record (lot_id SVR-2026-HA-001) "
+        "with sold_to / sale_date / quantity_sold / transport_method / "
+        "destination fields populated for downstream traceability."
+    )
+
+    narratives = {
+        "practices_procedures": practices_procedures,
+        "inputs_list": inputs_list,
+        "monitoring_plan": monitoring_plan,
+        "recordkeeping_description": recordkeeping,
+        "commingling_barriers": commingling,
+        "additional_certifier_info": additional,
+    }
+    sections = {key: {"narrative": narratives[key], "last_updated": last_updated_iso} for key in OSP_SECTION_KEYS}
+
+    osp = OrganicSystemPlan.objects.create(
+        establishment=establishment,
+        certification=ccof_cert,
+        version_number=1,
+        status="active",
+        effective_date=effective_date_value,
+        submitted_at=submitted_at_dt,
+        approved_at=approved_at_dt,
+        sections=sections,
+        created_by=user,
+    )
+
+    # Approved-input catalogs — attach ONLY the products that are explicitly
+    # named in the inputs_list narrative above. The audit PDF cross-checks each
+    # registry entry against the narrative; entries not name-matched in the
+    # narrative are flagged as § 205.201(a)(2) gaps. Tight matching keeps the
+    # demo's compliance snapshot at PASS for inputs traceability.
+    #
+    # Empty querysets are tolerated because seed_omri_minimal /
+    # seed_wsda_materials / seed_national_list run independently.
+    omri_named = OMRIProduct.objects.filter(
+        product_name__in=[
+            "Neptune's Harvest Organic Fish and Seaweed Fertilizer 2-3-1",
+            "DiPel DF Biological Insecticide Water Dispersible Granule",
+            "Entrust SC Naturalyte Insect Control",
+        ]
+    )
+    if omri_named.exists():
+        osp.approved_omri_products.add(*omri_named)
+
+    wsda_named = WSDAMaterial.objects.filter(
+        brand_name__in=[
+            "Neptune's Harvest Fish & Seaweed 2-3-1",
+            "Dipel DF",
+            "Entrust SC",
+        ]
+    )
+    if wsda_named.exists():
+        osp.approved_wsda_materials.add(*wsda_named)
+
+    nl_named = NationalListSubstance.objects.filter(
+        substance_name__in=[
+            "Copper hydroxide",
+            "Spinosad",
+            "Microbial products (Bacillus thuringiensis, etc.)",
+        ]
+    )
+    if nl_named.exists():
+        osp.approved_national_list_substances.add(*nl_named)
+
+    return osp

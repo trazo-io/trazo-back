@@ -13,9 +13,6 @@ Usage:
     poetry run python manage.py submit_to_blockchain --production-id 99
 """
 
-import hashlib
-import json
-
 from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils import timezone
@@ -106,16 +103,13 @@ class Command(BaseCommand):
             production.extra_data = {}
 
         if not production.extra_data.get("finalization_hash"):
-            events = production.get_events()
-            event_data = json.dumps(events, sort_keys=True, default=str, separators=(",", ":"))
-            try:
-                finalization_hash = Web3.keccak(text=event_data).hex().removeprefix("0x")
-            except Exception:
-                finalization_hash = hashlib.sha256(event_data.encode()).hexdigest()
+            # Use canonical hash impl — same one integrity check re-runs.
+            # Diverging from this causes false-positive tamper warnings.
+            finalization_hash, event_count = production.compute_finalization_hash()
 
             production.extra_data["finalization_hash"] = finalization_hash
             production.extra_data["finalization_timestamp"] = timezone.now().isoformat()
-            production.extra_data["finalization_event_count"] = len(events)
+            production.extra_data["finalization_event_count"] = event_count
             production.save(update_fields=["extra_data"])
             self.stdout.write(f"  Stored finalization hash: {finalization_hash[:20]}...")
         else:

@@ -1,9 +1,11 @@
 """
-Solana Verde Organic Ranch — 23 finished-production events.
+Solana Verde Organic Ranch — 24 finished-production events.
 
 Covers the 2026-01-15 -> 2026-04-14 Hass Avocado season on Hillside Grove A.
 Events map to Phase 7 of E2E_ORGANIC_FARM_TESTING_GUIDE.md (Events 1-21 + 8b = 22)
-plus one PL replant event for seed_search_attempts (NOP 5029) coverage = 23 total.
+plus one PL replant event for seed_search_attempts (NOP 5029) coverage and one
+post-finish OGC delivery BusinessEvent (§ 205.501(a)(21) + § 205.301(f) +
+FSMA 204 shipping CTE) = 24 total.
 
 NOP fields covered:
   - ChemicalEvent: supplier_name, purchase_date, purchase_invoice (events 3,7,10,13)
@@ -19,6 +21,8 @@ NOP fields covered:
   - GeneralEvent: is_contamination_incident, contamination_source,
       contamination_affected_area, corrective_action_taken, corrective_action_date,
       certifier_notified, certifier_notification_date (event 20)
+  - BusinessEvent (Sale/Delivery): bill_of_lading, purchase_order, invoice_number,
+      buyer_organic_cert_on_file, organic_on_invoice, fsma_204_cte (event 24)
 """
 
 from datetime import date, datetime
@@ -72,13 +76,13 @@ def _create_album(image_key, demo_images=None):
 
 def create_finished_events(production, user, demo_images=None):
     """
-    Create 23 NOP-complete events on the finished 2026 Hass Avocado production.
+    Create 24 NOP-complete events on the finished 2026 Hass Avocado production.
 
     Maps to Phase 7 Events 1-21 + 8b of E2E_ORGANIC_FARM_TESTING_GUIDE.md (22),
-    plus one PL replant event that exercises seed_search_attempts (NOP 5029) —
-    23 total.
+    plus one PL replant event (NOP 5029 seed_search_attempts) and one OGC
+    delivery BusinessEvent (§ 205.501(a)(21) downstream traceability) — 24 total.
 
-    Returns the count of events created (23).
+    Returns the count of events created (24).
     """
     # ------------------------------------------------------------------ #
     # Event 1: Soil Test (ST) — 2026-01-10                                #
@@ -1097,4 +1101,68 @@ def create_finished_events(production, user, demo_images=None):
         album=_create_album("planting", demo_images),
     )
 
-    return 23
+    # ------------------------------------------------------------------ #
+    # Event 24: Sale & Delivery to OGC (Business - CM) — 2026-04-15      #
+    # § 205.501(a)(21) traceability + § 205.301(f) "organic on invoice"  #
+    # + FSMA 204 Critical Tracking Event (shipping). Documents the full  #
+    # downstream chain so an inspector can trace lot SVR-2026-HA-001     #
+    # from this farm to OGC's Portland distribution hub.                  #
+    # ------------------------------------------------------------------ #
+    BusinessEvent.objects.create(
+        history=production,
+        index=24,
+        # 06:30 PDT (UTC-7) = 13:30 UTC. Narrative time references are PT.
+        date=_dt(2026, 4, 15, 13, 30),
+        description=(
+            "Refrigerated shipment of lot SVR-2026-HA-001 to Organically Grown Company (OGC). "
+            "448 cartons (5,080 kg, 11,200 lbs net) loaded at 06:00 PT into OGC-contracted "
+            "refrigerated trailer (Cool-Chain Logistics #CCL-2814) at 38°F set point. "
+            "Bill of Lading BOL-OGC-2026-04-15-007 signed by driver Tomás Reyes and Maria "
+            "Elena Gutierrez. Pre-loading: trailer interior swept and inspected — no "
+            "non-organic residue. All 448 cartons bear lot SVR-2026-HA-001 sticker + Trazo "
+            "QR code. PO #OGC-PO-2026-0412 from OGC Procurement. Invoice #SVR-INV-2026-041 "
+            "marks each line item ORGANIC per 7 CFR 205.301(f). Departed Fallbrook 06:30 PT, "
+            "ETA OGC Portland Distribution Hub 2026-04-16 18:00 PT (1,030 mi, ~26 hrs "
+            "transit, fixed cold-chain). § 205.501(a)(21) downstream attestation: OGC has "
+            "filed signed receipt of organic certification copy CCOF-2012-4287 on file at "
+            "Solana Verde."
+        ),
+        created_by=user,
+        performed_by="Maria Elena Gutierrez",
+        type=BusinessEvent.COMPLIANCE,
+        name="Shipment to OGC — Lot SVR-2026-HA-001",
+        business_type="compliance",
+        certification_type="organic_usda",
+        verification_status="verified",
+        verified_certifier_name="CCOF (California Certified Organic Farmers)",
+        certificate_number="CCOF-2012-4287",
+        observation=(
+            "Sale and delivery record per § 205.501(a)(21) and § 205.301(f). "
+            "FSMA 204 Critical Tracking Event (shipping) populated. All 448 cartons "
+            "labelled 'Organic' with farm lot ID, traceable end-to-end."
+        ),
+        extra_data={
+            "buyer_name": "Organically Grown Company (OGC)",
+            "buyer_address": "1800 Prairie Rd, Eugene, OR 97402",
+            "destination": "OGC Distribution Hub, 5005 NE Portland Hwy, Portland, OR 97218",
+            "lot_id": "SVR-2026-HA-001",
+            "cartons_shipped": 448,
+            "net_weight_kg": 5080,
+            "net_weight_lbs": 11200,
+            "bill_of_lading": "BOL-OGC-2026-04-15-007",
+            "purchase_order": "OGC-PO-2026-0412",
+            "invoice_number": "SVR-INV-2026-041",
+            "carrier": "Cool-Chain Logistics",
+            "trailer_number": "CCL-2814",
+            "trailer_set_point_f": 38,
+            "departure_time": "2026-04-15T06:30:00-07:00",
+            "estimated_arrival": "2026-04-16T18:00:00-07:00",
+            "transit_distance_miles": 1030,
+            "organic_on_invoice": True,
+            "buyer_organic_cert_on_file": True,
+            "fsma_204_cte": "shipping",
+            "downstream_attestation_signed": True,
+        },
+    )
+
+    return 24

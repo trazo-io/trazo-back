@@ -2,10 +2,12 @@
 Create the Solana Verde Organic Ranch pilot-ready NOP-compliant farm fixture.
 
 This is the canonical CCOF demo + PDF regression fixture + drift-detector stress test.
-Populates all 14 NOP fields closed in the 2026-04 pivot (supplier/invoice chain,
+Populates the NOP fields closed in the 2026-04 pivot (supplier/invoice chain,
 compost temp/duration/turnings, manure interval, pest ID + threshold rationale,
 contamination incident chain, equipment cleaning, OFPP, split operation,
-ParcelCropHistory, seed organic search log, 5-year retention, sales/delivery).
+ParcelCropHistory, seed organic search log, 5-year retention, sales/delivery)
+plus an active Organic System Plan v1 (six § 205.201(a) narrative sections) and
+an OGC delivery BusinessEvent (BOL/PO/invoice + § 205.301(f) organic-on-invoice).
 
 Source of truth for every literal value:
   documentation/testing/E2E_ORGANIC_FARM_TESTING_GUIDE.md
@@ -110,7 +112,7 @@ class Command(BaseCommand):
         self.stdout.write(f"  Establishment:  {establishment.name} (#{establishment.id})")
         self.stdout.write(f"  Parcel:         {parcel.name} (#{parcel.id})")
 
-        # 4. Events — 23 finished (NOP-complete) + 6 current (active dashboard)
+        # 4. Events — 24 finished (NOP-complete + OGC delivery) + 6 current
         finished_count = create_finished_events(production_finished, user, demo_images=DEMO_IMAGES)
         current_count = create_current_events(production_current, user, demo_images=DEMO_IMAGES)
 
@@ -146,7 +148,9 @@ class Command(BaseCommand):
         self.stdout.write("  NOP coverage verified: OFPP, split-op, ParcelCropHistory (3yr),")
         self.stdout.write("    supplier chain (4 chemicals), compost temp/duration/turnings,")
         self.stdout.write("    manure 120-day, pest ID + threshold rationale, equipment cleaning,")
-        self.stdout.write("    contamination incident chain, seed organic search log, sales record.")
+        self.stdout.write("    contamination incident chain, seed organic search log, sales record,")
+        self.stdout.write("    active OSP v1 (six § 205.201 sections fully populated, linked to")
+        self.stdout.write("    CCOF cert), OGC delivery BusinessEvent (BOL/PO/invoice + § 205.301(f)).")
 
     def _cascade_delete(self, company):
         """
@@ -197,7 +201,8 @@ class Command(BaseCommand):
 
     def _verify_invariants(self, finished_production, parcel):
         """Assert NOP compliance invariants. Fail loud so regressions don't slip."""
-        from history.models import ChemicalEvent, GeneralEvent, ProductionEvent, SoilManagementEvent
+        from certifications.models import OSP_SECTION_KEYS, OrganicSystemPlan
+        from history.models import BusinessEvent, ChemicalEvent, GeneralEvent, ProductionEvent, SoilManagementEvent
         from product.models import ParcelCropHistory
 
         # 1. Every ChemicalEvent has supplier_name + purchase_date + purchase_invoice
@@ -260,3 +265,39 @@ class Command(BaseCommand):
             raise CommandError("NOP invariant failed: finished production missing retention_until.")
         if not finished_production.sold_to:
             raise CommandError("NOP invariant failed: finished production missing sold_to (Phase 9 sales record).")
+
+        # 8. Active OSP v1 with all six § 205.201(a) sections populated
+        establishment = parcel.establishment
+        active_osp = (
+            OrganicSystemPlan.objects.filter(establishment=establishment, status="active")
+            .order_by("-version_number")
+            .first()
+        )
+        if not active_osp:
+            raise CommandError(
+                "NOP invariant failed: no active OrganicSystemPlan for establishment. "
+                "§ 205.201 requires every certified operation to maintain an active OSP."
+            )
+        for key in OSP_SECTION_KEYS:
+            narrative = (active_osp.sections or {}).get(key, {}).get("narrative", "").strip()
+            if len(narrative) < 200:
+                raise CommandError(
+                    f"NOP invariant failed: OSP section '{key}' narrative under 200 chars "
+                    f"({len(narrative)}). Audit PDF flags any short section as incomplete."
+                )
+
+        # 9. OGC delivery BusinessEvent (§ 205.501(a)(21) + § 205.301(f))
+        ogc_delivery = BusinessEvent.objects.filter(
+            history=finished_production,
+            type=BusinessEvent.COMPLIANCE,
+        ).first()
+        if not ogc_delivery:
+            raise CommandError(
+                "NOP invariant failed: no OGC delivery BusinessEvent (type=COMPLIANCE) "
+                "on finished production. § 205.501(a)(21) downstream traceability requires "
+                "a sale/delivery record with BOL/PO/invoice metadata."
+            )
+        extra = ogc_delivery.extra_data or {}
+        for required_key in ("bill_of_lading", "purchase_order", "invoice_number", "organic_on_invoice"):
+            if not extra.get(required_key):
+                raise CommandError(f"NOP invariant failed: OGC delivery missing extra_data.{required_key}.")
