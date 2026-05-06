@@ -287,6 +287,25 @@ class BlockchainCarbonService:
 
             tx_hex = tx_hash.hex() if tx_hash.hex().startswith("0x") else f"0x{tx_hash.hex()}"
 
+            # status == 1 means success; status == 0 means the contract reverted.
+            # Without this check, reverted txs were silently treated as successful
+            # submissions, leaving the DB claiming `blockchain_verified=True` for
+            # productions whose on-chain record never persisted.
+            if receipt.get("status") != 1:
+                self.logger.error(
+                    "Production %s tx %s reverted on-chain (block=%s, gas=%s)",
+                    production_id,
+                    tx_hex,
+                    receipt["blockNumber"],
+                    receipt["gasUsed"],
+                )
+                if self.blockchain_required:
+                    raise BlockchainOperationError(
+                        f"Blockchain submission reverted: tx={tx_hex}. "
+                        f"Likely cause: productionId {production_id} already recorded on-chain."
+                    )
+                return None
+
             self.logger.info("Production %s submitted: tx=%s, block=%s", production_id, tx_hex, receipt["blockNumber"])
 
             return {
