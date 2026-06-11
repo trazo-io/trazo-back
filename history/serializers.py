@@ -26,6 +26,7 @@ from .custom_fields import (
 )
 from .models import (
     BusinessEvent,
+    BuyerDocRequest,
     ChemicalEvent,
     CommonEvent,
     EquipmentEvent,
@@ -37,6 +38,8 @@ from .models import (
     SoilManagementEvent,
     WeatherEvent,
 )
+from .services.claim_resolver import resolve_input_status
+from .services.privacy import public_parcel_geo
 
 
 class CustomFieldsMixin:
@@ -2542,10 +2545,30 @@ class PublicEstablishmentSerializer(serializers.ModelSerializer):
 
 class PublicParcelSerializer(serializers.ModelSerializer):
     establishment = PublicEstablishmentSerializer()
+    # Phase 3 privacy — geo fields gated by Parcel.location_disclosure_level
+    # (see history/services/privacy.py; a public field polygon is a
+    # theft/scouting exposure unless the farmer opted in to exact).
+    polygon = serializers.SerializerMethodField()
+    map_metadata = serializers.SerializerMethodField()
+    location_disclosure_level = serializers.CharField(read_only=True)
 
     class Meta:
         model = Parcel
-        fields = ["id", "name", "polygon", "map_metadata", "establishment", "agricultural_details"]
+        fields = [
+            "id",
+            "name",
+            "polygon",
+            "map_metadata",
+            "location_disclosure_level",
+            "establishment",
+            "agricultural_details",
+        ]
+
+    def get_polygon(self, parcel):
+        return public_parcel_geo(parcel)["polygon"]
+
+    def get_map_metadata(self, parcel):
+        return public_parcel_geo(parcel)["map_metadata"]
 
 
 class PublicHistoryListSerializer(serializers.ModelSerializer):
@@ -2670,6 +2693,25 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                     pass
         return count
 
+    @staticmethod
+    def _public_performer(event, show_full_names):
+        """
+        Consent-gated performer display for the public consumer payload.
+
+        Worker full names on a public page paired with the farm's location are
+        a CCPA exposure and a doxing vector. Unless the establishment opted in
+        (Establishment.show_full_performer_names), mask to "Farm team (A.T.)".
+        Mirrors the frontend's maskPerformerName so both layers agree.
+        """
+        name = getattr(event, "performed_by", None)
+        if not name:
+            return name
+        if show_full_names:
+            return name
+        parts = [p for p in str(name).strip().split() if p]
+        initials = ".".join(p[0].upper() for p in parts[:2])
+        return f"Farm team ({initials}.)" if initials else "Farm team"
+
     def _sanitize_extra_data_for_public(self, event):
         """Remove business-sensitive fields from extra_data for public API."""
         raw = getattr(event, "extra_data", None)
@@ -2694,6 +2736,66 @@ class PublicHistorySerializer(serializers.ModelSerializer):
             sanitized["custom_fields"] = extract_custom_fields_for_display(raw, visibility_filter="consumer")
 
         return sanitized if sanitized else None
+
+    # Subtype codes that always matter to a shopper's story: planting/harvest,
+    # every crop-input application, core soil practices, pest interventions.
+    ALWAYS_HIGHLIGHT_TYPES = frozenset(
+        {
+            "PL",  # planting
+            "HA",  # harvest
+            "FE",  # fertilizer
+            "PE",  # pesticide
+            "FU",  # fungicide
+            "HE",  # herbicide
+            "CC",  # cover crop
+            "OM",  # organic matter / compost
+            "PA",  # soil amendment
+            "TM",  # pest treatment
+            "BR",  # beneficial release
+            "PI",  # pest identification
+        }
+    )
+    # First occurrence only — one soil test / one scouting trip tells the
+    # story; ten of them is the audit log (proof view).
+    FIRST_OCCURRENCE_HIGHLIGHT_TYPES = frozenset({"ST", "SC", "IR"})
+
+    def _consumer_subtype_code(self, ev):
+        """
+        The public event dicts store the subtype code in family-specific keys:
+        chemical → chemical_type (FE/PE/FU/HE), soil → soil_management_type
+        (ST/PA/OM/CC/TI/CO), pest → pest_management_type (SC/TM/BR/PI/TA/IP).
+        Production and weather events carry their code directly in "type"
+        (PL/HA/IR/… and FR/DR/…). Equipment/general/business are never
+        consumer highlights.
+        """
+        family = ev.get("type")
+        if family == "chemical":
+            return ev.get("chemical_type")
+        if family == "soil_management":
+            return ev.get("soil_management_type")
+        if family == "pest_management":
+            return ev.get("pest_management_type")
+        if family in ("equipment", "general", "business"):
+            return None
+        return family
+
+    def _annotate_consumer_highlights(self, events_data):
+        """
+        Tag each public event with is_highlight for the consumer QR page's
+        curated journey view (Phase 2 plan, Section G). Rule-based, computed
+        at serialization time — no model change. The proof view ignores the
+        flag and shows every event.
+        """
+        seen_first = set()
+        for ev in events_data:
+            code = self._consumer_subtype_code(ev)
+            if code in self.ALWAYS_HIGHLIGHT_TYPES:
+                ev["is_highlight"] = True
+            elif code in self.FIRST_OCCURRENCE_HIGHLIGHT_TYPES and code not in seen_first:
+                seen_first.add(code)
+                ev["is_highlight"] = True
+            else:
+                ev["is_highlight"] = False
 
     def _get_chemical_type_with_fallback(self, event):
         """
@@ -2889,6 +2991,15 @@ class PublicHistorySerializer(serializers.ModelSerializer):
             general_events = history.history_generalevent_events.all()
             business_events = history.history_businessevent_events.all()
 
+            # Phase 3 — consent-gated worker names (CCPA; name + farm geo is a
+            # doxing vector). Masked at the source so no public payload ever
+            # carries a full name unless the establishment opted in.
+            show_full_names = bool(
+                history.parcel
+                and history.parcel.establishment
+                and getattr(history.parcel.establishment, "show_full_performer_names", False)
+            )
+
             # Create lightweight event data without carbon calculations
             for i, event in enumerate(chemical_events):
                 # Get serialized images from prefetched data (no additional queries)
@@ -2906,7 +3017,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "date": event.date.isoformat() if event.date else None,
                         "description": event.description or "Chemical Application",
                         "observation": getattr(event, "observation", ""),
-                        "performed_by": getattr(event, "performed_by", None),
+                        "performed_by": self._public_performer(event, show_full_names),
                         "type": "chemical",
                         "chemical_type": self._get_chemical_type_with_fallback(
                             event
@@ -3025,6 +3136,10 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                             if getattr(event, "national_list_substance", None)
                             else None
                         ),
+                        # Phase 3 — server-resolved input status. Single source of
+                        # truth for the consumer "Crop Inputs" chips; frontend should
+                        # prefer this over re-deriving from organic_approved/RUP.
+                        "input_status": resolve_input_status(event),
                         "extra_data": self._sanitize_extra_data_for_public(event),
                         # Blockchain verification fields from production
                         "blockchain_verified": blockchain_verified,
@@ -3055,7 +3170,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "date": event.date.isoformat() if event.date else None,
                         "description": event.description or "Production Activity",
                         "observation": event.observation or "",
-                        "performed_by": getattr(event, "performed_by", None),
+                        "performed_by": self._public_performer(event, show_full_names),
                         "type": getattr(event, "type", "production"),
                         "event_type": PRODUCTION_EVENT_TYPE,
                         "production_type": getattr(event, "type", ""),
@@ -3119,7 +3234,6 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         # Python dict-literal duplicate keys silently overwrite, which had
                         # previously masked drift between two blocks of the same fields
                         # (e.g., shared_with_conventional default disagreement).
-
                         # Post-harvest sanitizer detail (7 CFR 205.272 + § 205.605).
                         "sanitizer_name": getattr(event, "sanitizer_name", None),
                         "sanitizer_ppm": (
@@ -3300,7 +3414,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "date": event.date.isoformat() if event.date else None,
                         "description": event.description or "Weather Event",
                         "observation": event.observation or "",
-                        "performed_by": getattr(event, "performed_by", None),
+                        "performed_by": self._public_performer(event, show_full_names),
                         "type": getattr(
                             event, "type", "weather"
                         ),  # 🌦️ PRESERVE WEATHER TYPE: Use actual weather type (FR, DR, etc.) instead of generic "weather"
@@ -3354,7 +3468,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "date": event.date.isoformat() if event.date else None,
                         "description": event.description or "Equipment Use",
                         "observation": getattr(event, "observation", ""),
-                        "performed_by": getattr(event, "performed_by", None),
+                        "performed_by": self._public_performer(event, show_full_names),
                         "type": "equipment",  # FIXED: Always return "equipment" as main type for Equipment events
                         "certified": getattr(event, "certified", False),
                         "index": getattr(event, "index", 0),
@@ -3423,7 +3537,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "date": event.date.isoformat() if event.date else None,
                         "description": event.description or "Soil Management",
                         "observation": getattr(event, "observation", ""),
-                        "performed_by": getattr(event, "performed_by", None),
+                        "performed_by": self._public_performer(event, show_full_names),
                         "type": "soil_management",
                         "event_type": SOIL_MANAGEMENT_EVENT_TYPE,
                         "certified": getattr(event, "certified", False),
@@ -3549,7 +3663,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "date": event.date.isoformat() if event.date else None,
                         "description": event.description or "Pest Management",
                         "observation": getattr(event, "observation", ""),
-                        "performed_by": getattr(event, "performed_by", None),
+                        "performed_by": self._public_performer(event, show_full_names),
                         "type": "pest_management",
                         "event_type": PEST_MANAGEMENT_EVENT_TYPE,
                         "certified": getattr(event, "certified", False),
@@ -3646,7 +3760,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "date": event.date.isoformat() if event.date else None,
                         "description": event.name or event.description or "General Event",
                         "observation": event.observation or "",
-                        "performed_by": getattr(event, "performed_by", None),
+                        "performed_by": self._public_performer(event, show_full_names),
                         "type": "general",
                         "event_type": GENERAL_EVENT_TYPE,
                         "certified": getattr(event, "certified", False),
@@ -3733,7 +3847,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "date": event.date.isoformat() if event.date else None,
                         "description": event.name or event.description or f"Business Event - {business_display}",
                         "observation": event.observation or "",
-                        "performed_by": getattr(event, "performed_by", None),
+                        "performed_by": self._public_performer(event, show_full_names),
                         "type": "business",
                         "event_type": BUSINESS_EVENT_TYPE,
                         "certified": getattr(event, "certified", False),
@@ -3786,6 +3900,8 @@ class PublicHistorySerializer(serializers.ModelSerializer):
 
             # Sort by date first, then by index (for same-day events, preserve creation order)
             events_data.sort(key=lambda x: (x.get("date", ""), x.get("index", 0)))
+
+            self._annotate_consumer_highlights(events_data)
 
             return events_data
 
@@ -4908,3 +5024,43 @@ class BusinessEventSerializer(EventSerializer):
 
     def get_sustainability_practice_display(self, business_event):
         return business_event.get_sustainability_practice_display() if business_event.sustainability_practice else None
+
+
+class BuyerDocRequestCreateSerializer(serializers.ModelSerializer):
+    """Public create — consumer proof view buyer CTA. Production resolved
+    from public_id in the view (never expose integer IDs publicly)."""
+
+    class Meta:
+        model = BuyerDocRequest
+        fields = ["requester_name", "requester_email", "organization", "message"]
+
+    def validate_message(self, value):
+        if value and len(value) > 1000:
+            raise serializers.ValidationError("Message too long (max 1000 characters)")
+        return value
+
+
+class BuyerDocRequestSerializer(serializers.ModelSerializer):
+    """Owner-facing lead list row."""
+
+    production_public_id = serializers.UUIDField(source="production.public_id", read_only=True)
+    production_name = serializers.CharField(source="production.name", read_only=True)
+    product_name = serializers.CharField(source="production.product.name", read_only=True, default=None)
+    lot_id = serializers.CharField(source="production.lot_id", read_only=True, default=None)
+
+    class Meta:
+        model = BuyerDocRequest
+        fields = [
+            "id",
+            "production_public_id",
+            "production_name",
+            "product_name",
+            "lot_id",
+            "requester_name",
+            "requester_email",
+            "organization",
+            "message",
+            "status",
+            "created_at",
+        ]
+        read_only_fields = [f for f in fields if f != "status"]

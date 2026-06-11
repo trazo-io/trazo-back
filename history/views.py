@@ -40,6 +40,7 @@ from .constants import (
 )
 from .models import (
     BusinessEvent,
+    BuyerDocRequest,
     ChemicalEvent,
     EquipmentEvent,
     GeneralEvent,
@@ -1100,15 +1101,30 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         import uuid as uuid_module
 
         queryset = self.get_queryset()
-        # UUID-only lookup for public endpoint (prevents integer enumeration)
+        # UUID-only lookup for anonymous traffic (prevents integer enumeration).
+        # The producer app's own routes carry the INTERNAL integer id, so an
+        # authenticated user may use it — but only for productions their
+        # company owns (the farmer previewing their own page).
         try:
             public_uuid = uuid_module.UUID(str(pk))
             history = get_object_or_404(queryset, public_id=public_uuid)
         except (ValueError, AttributeError):
-            return Response(
-                {"error": "Invalid production identifier. UUID required."},
-                status=status.HTTP_400_BAD_REQUEST,
+            if not (request.user.is_authenticated and str(pk).isdigit()):
+                return Response(
+                    {"error": "Invalid production identifier. UUID required."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            history = get_object_or_404(queryset, pk=pk)
+            owns_it = (
+                history.parcel
+                and history.parcel.establishment
+                and request.user.companies.filter(id=history.parcel.establishment.company_id).exists()
             )
+            if not owns_it:
+                return Response(
+                    {"error": "Invalid production identifier. UUID required."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         # Skip scan tracking for authenticated producers viewing their own production
         is_owner = False
         if request.user.is_authenticated and history.parcel and history.parcel.establishment:
@@ -2315,6 +2331,41 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
         )
 
     @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated])
+    def roi_summary(self, request):
+        """
+        Phase 4 — farmer ROI card data: scans trend (30d vs prior 30d),
+        engagement rate, reviews count/rating, certification views.
+        Same access rule as analytics_insights (CA/FM on the establishment).
+        """
+        establishment_id = request.query_params.get("establishment_id")
+        if not establishment_id:
+            return Response({"error": "establishment_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        from company.models import Establishment
+        from users.models import WorksIn
+
+        try:
+            establishment = Establishment.objects.get(id=establishment_id)
+        except Establishment.DoesNotExist:
+            return Response({"error": "Establishment not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        has_access = WorksIn.objects.filter(
+            user=request.user,
+            company=establishment.company,
+            role__in=["CA", "FM"],
+        ).exists()
+        if not has_access:
+            return Response({"error": "Access denied to this establishment"}, status=status.HTTP_403_FORBIDDEN)
+
+        from .services.analytics_service import AnalyticsService
+
+        try:
+            return Response(AnalyticsService.get_roi_summary(establishment.id), status=status.HTTP_200_OK)
+        except Exception:
+            logger.error("ROI summary failed", exc_info=True)
+            return Response({"error": "Failed to generate ROI summary"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated])
     def analytics_insights(self, request):
         """
         Get privacy-safe analytics insights for producers
@@ -2773,6 +2824,12 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     for idx, image_url in enumerate(album_images, 1):
                         # SECURITY: Validate image URL against allowed S3 domains to prevent SSRF
                         from urllib.parse import urlparse
+
+                        # The later `from django.conf import settings` inside the
+                        # Vision try-block makes `settings` function-local, so it
+                        # must be imported before THIS first use or the whole
+                        # branch raises UnboundLocalError.
+                        from django.conf import settings
 
                         parsed_url = urlparse(image_url)
                         allowed_hosts = set()
@@ -3263,3 +3320,165 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         except Exception as e:
             return Response({"error": f"Validation error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class BuyerDocRequestViewSet(viewsets.GenericViewSet):
+    """
+    Phase 4 — buyer documentation requests ("leads").
+
+    create: PUBLIC (proof-view CTA). Body: production_id (public UUID),
+            requester_name, requester_email, organization?, message?.
+            Bot-checked, deduplicated (same email + production within 24h
+            returns the existing request), IP stored as hash only.
+    list:   OWNER (CA/FM via WorksIn). ?establishment_id= required.
+    partial_update: OWNER. Status transitions only (new/contacted/closed).
+    """
+
+    queryset = BuyerDocRequest.objects.select_related(
+        "production", "production__product", "production__parcel__establishment"
+    )
+
+    def get_permissions(self):
+        if self.action == "create":
+            return [AllowAny()]
+        return [IsAuthenticated()]
+
+    def create(self, request):
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        from .serializers import BuyerDocRequestCreateSerializer
+        from .services.bot_detection_service import BotDetectionService
+        from .services.privacy_service import PrivacyService
+
+        production_public_id = request.data.get("production_id")
+        if not production_public_id:
+            return Response({"error": "production_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        should_block, reason = BotDetectionService.should_block_request(request, request.data)
+        if should_block:
+            return Response({"error": "Request blocked"}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+        try:
+            production = History.objects.select_related("parcel__establishment__company").get(
+                public_id=production_public_id, published=True
+            )
+        except (History.DoesNotExist, DjangoValidationError, ValueError):
+            return Response({"error": "Production not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = BuyerDocRequestCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data["requester_email"].strip().lower()
+
+        # Idempotency: same buyer asking about the same lot within 24h is one
+        # lead, not N notifications.
+        existing = BuyerDocRequest.objects.filter(
+            production=production,
+            requester_email__iexact=email,
+            created_at__gte=timezone.now() - timedelta(hours=24),
+        ).first()
+        if existing:
+            return Response(
+                {"id": existing.id, "message": "Request already received", "duplicate": True},
+                status=status.HTTP_200_OK,
+            )
+
+        raw_ip = PrivacyService.get_client_ip(request)
+        doc_request = serializer.save(
+            production=production,
+            requester_email=email,
+            ip_hash=PrivacyService.hash_ip(raw_ip) if raw_ip else "",
+        )
+
+        self._notify_company_admins(doc_request, production)
+
+        return Response(
+            {"id": doc_request.id, "message": "Request received", "duplicate": False},
+            status=status.HTTP_201_CREATED,
+        )
+
+    def _notify_company_admins(self, doc_request, production):
+        """In-app notification to company admins — failure must not break the lead."""
+        try:
+            from notifications.services import NotificationService
+            from users.models import WorksIn
+
+            company = production.parcel.establishment.company
+            admins = WorksIn.objects.filter(company=company, role="CA").select_related("user")
+            product_name = production.product.name if production.product else "your product"
+            org = f" ({doc_request.organization})" if doc_request.organization else ""
+            service = NotificationService()
+            for works_in in admins:
+                service.create_notification(
+                    recipient=works_in.user,
+                    notification_type="system_alert",
+                    title="Buyer documentation request",
+                    message=(
+                        f"{doc_request.requester_name}{org} requested supplier documentation " f"for {product_name}."
+                    ),
+                    priority="high",
+                    related_object=doc_request,
+                    extra_data={
+                        "buyer_email": doc_request.requester_email,
+                        "organization": doc_request.organization,
+                        "production_id": production.id,
+                        "production_public_id": str(production.public_id),
+                        "establishment_id": production.parcel.establishment_id,
+                    },
+                )
+        except Exception:
+            logger.error("Buyer doc-request notification failed", exc_info=True)
+
+    def list(self, request):
+        from company.models import Establishment
+        from users.models import WorksIn
+
+        from .serializers import BuyerDocRequestSerializer
+
+        establishment_id = request.query_params.get("establishment_id")
+        if not establishment_id:
+            return Response({"error": "establishment_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            establishment = Establishment.objects.get(id=establishment_id)
+        except Establishment.DoesNotExist:
+            return Response({"error": "Establishment not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        has_access = WorksIn.objects.filter(
+            user=request.user, company=establishment.company, role__in=["CA", "FM"]
+        ).exists()
+        if not has_access:
+            return Response({"error": "Access denied to this establishment"}, status=status.HTTP_403_FORBIDDEN)
+
+        leads = self.get_queryset().filter(production__parcel__establishment=establishment)
+        status_filter = request.query_params.get("status")
+        if status_filter in {"new", "contacted", "closed"}:
+            leads = leads.filter(status=status_filter)
+
+        return Response(BuyerDocRequestSerializer(leads[:200], many=True).data, status=status.HTTP_200_OK)
+
+    def partial_update(self, request, pk=None):
+        from users.models import WorksIn
+
+        from .serializers import BuyerDocRequestSerializer
+
+        try:
+            lead = self.get_queryset().get(pk=pk)
+        except BuyerDocRequest.DoesNotExist:
+            return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        has_access = WorksIn.objects.filter(
+            user=request.user,
+            company=lead.production.parcel.establishment.company,
+            role__in=["CA", "FM"],
+        ).exists()
+        if not has_access:
+            return Response({"error": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
+
+        new_status = request.data.get("status")
+        if new_status not in {"new", "contacted", "closed"}:
+            return Response({"error": "Invalid status"}, status=status.HTTP_400_BAD_REQUEST)
+
+        lead.status = new_status
+        lead.save(update_fields=["status"])
+        return Response(BuyerDocRequestSerializer(lead).data, status=status.HTTP_200_OK)

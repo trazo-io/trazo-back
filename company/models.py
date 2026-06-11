@@ -319,6 +319,18 @@ class Establishment(models.Model):
         ),
     )
 
+    # Phase 3 consumer-QR privacy: worker full names on the public page are a
+    # CCPA exposure and a doxing vector (name + farm geolocation). Default OFF;
+    # the public serializer masks performed_by to "Farm team (A.T.)" unless the
+    # establishment explicitly opts in (with worker consent collected offline).
+    show_full_performer_names = models.BooleanField(
+        default=False,
+        help_text=(
+            "Display workers' full names on the public consumer page. Requires the "
+            "workers' consent — when off, names are masked to initials (e.g. 'Farm team (A.T.)')"
+        ),
+    )
+
     class Meta:
         verbose_name = _("Establishment")
         verbose_name_plural = _("Establishments")

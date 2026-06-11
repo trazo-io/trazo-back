@@ -58,6 +58,25 @@ class Parcel(models.Model):
         default=False, help_text="Meets USDA requirements for carbon credit verification"
     )
 
+    # Phase 3 consumer-QR privacy: a public field polygon is a theft/scouting
+    # exposure. Farmer-controlled disclosure on the consumer page:
+    #   exact       — full polygon + precise map (current behavior, opt-in)
+    #   approximate — satellite map near the field, no boundary, center ~1 km
+    #   hidden      — no map or geodata, name/area only
+    # New parcels default to approximate; existing parcels are grandfathered to
+    # exact by the data migration (they were already published that way).
+    LOCATION_DISCLOSURE_CHOICES = [
+        ("exact", "Exact — field boundary and precise location"),
+        ("approximate", "Approximate — general area only (~1 km)"),
+        ("hidden", "Hidden — no location shown to consumers"),
+    ]
+    location_disclosure_level = models.CharField(
+        max_length=20,
+        choices=LOCATION_DISCLOSURE_CHOICES,
+        default="approximate",
+        help_text="How precisely this parcel's location is shown on the public consumer page",
+    )
+
     def __str__(self):
         return str(self.id) + " - " + self.name + " - " + self.establishment.name
 

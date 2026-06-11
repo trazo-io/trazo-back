@@ -183,7 +183,35 @@ def production_transparency_detail(request, production_public_id=None):
                 active_certs = filter_certifications_for_consumer(active_certs)
                 certification_data = ConsumerCertificationSerializer(active_certs, many=True).data
 
-                organic_claim = ConsumerClaimValidator().validate(history).to_dict()
+                validator = ConsumerClaimValidator()
+                organic_claim = validator.validate(history).to_dict()
+
+                # Phase 3 — lot-level gate. The farm-level claim above answers
+                # "may this OPERATION be called organic"; this resolves whether
+                # THIS lot may carry it (prohibited inputs, cert validity at
+                # harvest, crop scope — 7 CFR 205.105/205.300). Downgrade-only.
+                from history.services.claim_resolver import (
+                    build_organic_claim_evidence,
+                    resolve_lot_organic_eligibility,
+                )
+
+                active_organic_cert = (
+                    validator._get_active_usda_organic_cert(establishment)
+                    if organic_claim.get("status") == "certified_organic"
+                    else None
+                )
+                lot_eligibility = resolve_lot_organic_eligibility(history, active_organic_cert)
+                organic_claim["lot_eligibility"] = lot_eligibility.to_dict()
+                organic_claim["evidence"] = build_organic_claim_evidence(organic_claim, lot_eligibility)
+                if lot_eligibility.eligible is False:
+                    # Server-side belt: the page must not represent this lot as
+                    # organic regardless of what the frontend renders.
+                    organic_claim["can_display_organic"] = False
+                    organic_claim["display_label"] = lot_eligibility.display_label
+                    organic_claim["disclaimer"] = (
+                        "The farm holds USDA Organic certification, but this specific lot "
+                        "is not represented as organic. " + lot_eligibility.detail
+                    )
             except Exception as e:
                 logger.warning(f"Failed to load certification/organic-claim data: {e}")
 
@@ -285,6 +313,19 @@ def production_transparency_detail(request, production_public_id=None):
         # True when ALL carbon entries used EPA/USDA emission factors
         is_epa_factors_based = total_carbon_entries > 0 and epa_factors_based_entries == total_carbon_entries
 
+        # Phase 3 — proof points: the score's forward-compatible successor.
+        # Counts of verifiable facts, no self-graded percentage. Dashboard and
+        # legacy consumers keep transparency_percentage untouched.
+        proof_points = {
+            "practices_documented": transparency_data.get("actual_event_count", 0),
+            "photos": len(public_history_data.get("images") or []),
+            "certifications_verified": sum(1 for c in certification_data if c.get("status") == "verified_via_database"),
+            "certifications_total": len(certification_data),
+            "blockchain_recorded": bool(is_blockchain_verified),
+            "lot_documented": bool(history.lot_id),
+            "harvest_date_documented": bool(history.finish_date),
+        }
+
         # Add progressive loading structure for backward compatibility
         response_data.update(
             {
@@ -296,6 +337,7 @@ def production_transparency_detail(request, production_public_id=None):
                         "status": transparency_benchmarks["benchmark_level"],
                     },
                 },
+                "proof_points": proof_points,
                 # STANDARD LOAD (10 seconds) - Core transparency details
                 "standard_view": {
                     "transparency_details": {
@@ -443,8 +485,16 @@ def production_transparency_detail(request, production_public_id=None):
                 },
                 "product": {"name": history.product.name if history.product else "Farm Product"},
                 "reputation": history.reputation or 0,
+                # Phase 4 — consumer review aggregate for the hero rating line.
+                # Distinct from `reputation` (farmer-side metric): this is real
+                # consumer feedback, shown only when count > 0.
+                "reviews": _build_reviews_summary(history),
                 "isEpaFactorsBased": is_epa_factors_based,
                 "timeline": public_history_data.get("events", []),
+                # Harvest completion date for the consumer hero/harvest pillar.
+                # The formatter's farm_context.production_period is popped above,
+                # so without this the frontend never receives a harvest date.
+                "finish_date": history.finish_date.isoformat() if history.finish_date else None,
                 "harvestDetails": {
                     "amount": history.production_amount,
                     "unit": history.production_unit,
@@ -452,12 +502,7 @@ def production_transparency_detail(request, production_public_id=None):
                     "quality_grade": history.quality_grade,
                     "harvest_method": history.harvest_method,
                 },
-                "parcel": {
-                    "name": history.parcel.name if history.parcel else None,
-                    "area": history.parcel.area if history.parcel else None,
-                    "polygon": history.parcel.polygon if history.parcel else None,
-                    "map_metadata": history.parcel.map_metadata if history.parcel else None,
-                },
+                "parcel": _build_public_parcel(history.parcel),
                 "images": public_history_data.get("images", []),  # Photo gallery for ProductDetail
             }
         )  # Close the response_data.update() call
@@ -649,6 +694,45 @@ def production_instant_trust(request, production_public_id=None):
         )
 
 
+def _build_reviews_summary(history):
+    """Aggregate consumer reviews for this production — count + average only."""
+    try:
+        from django.db.models import Avg, Count
+
+        agg = history.reviews.aggregate(count=Count("id"), average=Avg("rating"))
+        return {
+            "count": agg["count"] or 0,
+            "average": round(agg["average"], 1) if agg["average"] is not None else None,
+        }
+    except Exception:
+        return {"count": 0, "average": None}
+
+
+def _build_public_parcel(parcel):
+    """
+    Disclosure-gated parcel block for the public payload (Phase 3 privacy).
+
+    A public field polygon is a theft/scouting exposure; the farmer controls
+    precision via Parcel.location_disclosure_level:
+      exact       — full polygon + map metadata (grandfathered existing parcels)
+      approximate — center rounded to 2 decimals (~1 km), no boundary
+      hidden      — no geodata at all
+    """
+    if not parcel:
+        return {"name": None, "area": None, "polygon": None, "map_metadata": None}
+
+    from history.services.privacy import public_parcel_geo
+
+    geo = public_parcel_geo(parcel)
+    return {
+        "name": parcel.name,
+        "area": parcel.area,
+        "polygon": geo["polygon"],
+        "map_metadata": geo["map_metadata"],
+        "location_disclosure_level": geo["level"],
+    }
+
+
 def _build_organic_summary(history, certification_data, establishment, organic_claim=None):
     """
     Aggregate organic data from already-prefetched ChemicalEvents and certifications.
@@ -662,17 +746,23 @@ def _build_organic_summary(history, certification_data, establishment, organic_c
     leaks onto transitional productions whose headline says "not yet organic"
     (FTC 16 CFR 260.6(d) qualified-claim risk).
     """
-    ORGANIC_APPROVED_VALUES = {"omri_listed", "usda_nop_approved", "organic_equivalent", "yes"}
-    NOT_ORGANIC_VALUES = {"not_organic", "no"}
+    # Shared vocabulary with the lot gate and the input-status chips
+    # (history/services/claim_resolver.py) — one classification, three surfaces.
+    from history.services.claim_resolver import (
+        ORGANIC_APPROVED_VALUES,
+        PROHIBITED_INPUT_VALUES,
+        event_organic_classification,
+    )
 
     # Count organic-approved chemical inputs from prefetched events
     # Only count events where organic_approved was explicitly set (not null/blank)
     # null = farmer didn't fill this field, NOT "this input is non-organic"
     chemical_events = list(history.history_chemicalevent_events.all())
-    events_with_status = [e for e in chemical_events if e.organic_approved and e.organic_approved.strip()]
-    organic_inputs = sum(1 for e in events_with_status if e.organic_approved in ORGANIC_APPROVED_VALUES)
-    non_organic_inputs = sum(1 for e in events_with_status if e.organic_approved in NOT_ORGANIC_VALUES)
-    classified_count = len(events_with_status)
+    classifications = [event_organic_classification(e) for e in chemical_events]
+    classified = [c for c in classifications if c]
+    organic_inputs = sum(1 for c in classified if c in ORGANIC_APPROVED_VALUES)
+    non_organic_inputs = sum(1 for c in classified if c in PROHIBITED_INPUT_VALUES)
+    classified_count = len(classified)
 
     # Production-level farming method
     production_method = getattr(history, "production_method", None) or ""

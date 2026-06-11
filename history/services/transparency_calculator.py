@@ -638,14 +638,20 @@ class TransparencyCalculator:
         # Item #17: Determine if this is an organic production with no chemical events
         organic_production = False
         if has_zero_chemical_events and history is not None:
-            # Check business events for organic certification keywords
-            business_events = BusinessEvent.objects.filter(history=history)
-            organic_keywords = ["organic", "certified organic", "usda organic", "omri", "nop", "biodynamic"]
-            for event in business_events:
-                desc_lower = (event.description or "").lower()
-                if any(kw in desc_lower for kw in organic_keywords):
-                    organic_production = True
-                    break
+            # Anti-gaming tightening (Phase 3, 2026-06-11): this bypass previously
+            # triggered on a bare "organic" keyword in any business-event
+            # description — one free-text event saying "organic" was worth +20
+            # points of chemical-category credit. Now it requires the same gate
+            # the consumer organic claim uses (ConsumerClaimValidator): a
+            # verified USDA Organic certification or documented transition
+            # records. Free-text claims no longer qualify.
+            try:
+                from certifications.services.consumer_claim_validator import ConsumerClaimValidator
+
+                claim = ConsumerClaimValidator().validate(history)
+                organic_production = claim.status in ("certified_organic", "transitioning")
+            except Exception:
+                organic_production = False
 
             # Also check chemical events for organic-only subtypes (organic farms may
             # still log organic amendments — they just don't log synthetic chemicals)

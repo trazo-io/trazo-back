@@ -2888,3 +2888,47 @@ class BusinessEvent(CommonEvent):
     class Meta:
         verbose_name = "Business Event"
         verbose_name_plural = "Business Events"
+
+
+class BuyerDocRequest(models.Model):
+    """
+    Phase 4 — buyer documentation request from the consumer proof view.
+
+    A retail/wholesale buyer scanning a product can request supplier
+    documentation (certificates, audit packet) without calling anyone. Each
+    request becomes a lead on the farmer's dashboard plus an in-app
+    notification. Public endpoint is rate-limited and deduplicated (same
+    email + production within 24h is idempotent).
+    """
+
+    STATUS_CHOICES = [
+        ("new", "New"),
+        ("contacted", "Contacted"),
+        ("closed", "Closed"),
+    ]
+
+    production = models.ForeignKey(
+        History,
+        on_delete=models.CASCADE,
+        related_name="buyer_doc_requests",
+    )
+    requester_name = models.CharField(max_length=120)
+    requester_email = models.EmailField()
+    organization = models.CharField(max_length=160, blank=True, default="")
+    message = models.TextField(blank=True, default="", max_length=1000)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="new", db_index=True)
+    # SHA-256 like HistoryScan.ip_hash — rate limiting without storing raw IPs.
+    ip_hash = models.CharField(max_length=64, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Buyer Documentation Request"
+        verbose_name_plural = "Buyer Documentation Requests"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["production", "-created_at"], name="buyerdocreq_prod_date_idx"),
+            models.Index(fields=["requester_email", "created_at"], name="buyerdocreq_email_date_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.requester_email} -> {self.production_id} ({self.status})"

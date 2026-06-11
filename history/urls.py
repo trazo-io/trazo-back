@@ -9,7 +9,14 @@ from .transparency_views import (
     transparency_explanation,
     verify_blockchain,
 )
-from .views import EventViewSet, HistoryScanViewSet, HistoryViewSet, PublicHistoryScanViewSet, audit_export_by_uuid
+from .views import (
+    BuyerDocRequestViewSet,
+    EventViewSet,
+    HistoryScanViewSet,
+    HistoryViewSet,
+    PublicHistoryScanViewSet,
+    audit_export_by_uuid,
+)
 
 router = routers.DefaultRouter()
 
@@ -17,6 +24,7 @@ router.register(r"histories", HistoryViewSet, basename="histories")
 router.register(r"events", EventViewSet, basename="events")
 router.register(r"scans", HistoryScanViewSet, basename="scans")
 router.register(r"public_scans", PublicHistoryScanViewSet, basename="public-scans")
+router.register(r"buyer_doc_requests", BuyerDocRequestViewSet, basename="buyer-doc-requests")
 
 urlpatterns = [
     # Audit export by UUID — MUST be before router include

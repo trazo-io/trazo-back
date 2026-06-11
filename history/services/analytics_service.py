@@ -349,6 +349,92 @@ class AnalyticsService:
         return insights
 
     @staticmethod
+    def get_roi_summary(establishment_id: int) -> Dict:
+        """
+        Phase 4 — farmer ROI card. One compact payload answering "is logging
+        events paying off?": scan volume trend (last 30 days vs the 30 before),
+        engagement rate, reviews, and how often the page carrying the farm's
+        verified certification was viewed.
+
+        Same quality filter as the rest of the dashboard (no duplicates, no
+        likely bots); aggregates only — no individual scan data leaves here.
+        """
+        from certifications.models import Certification
+
+        from ..models import HistoryScan
+
+        cache_key = f"roi_summary:{establishment_id}"
+        cached = cache.get(cache_key)
+        if cached:
+            return cached
+
+        now = timezone.now()
+        current_start = now - timedelta(days=30)
+        previous_start = now - timedelta(days=60)
+
+        quality = HistoryScan.objects.filter(
+            history__parcel__establishment_id=establishment_id,
+            is_duplicate=False,
+            bot_score__lt=0.5,
+        )
+
+        current = quality.filter(date__gte=current_start)
+        previous = quality.filter(date__gte=previous_start, date__lt=current_start)
+
+        scans_30d = current.count()
+        scans_prev_30d = previous.count()
+        if scans_prev_30d > 0:
+            mom_change_pct = round((scans_30d - scans_prev_30d) / scans_prev_30d * 100, 1)
+        else:
+            # No baseline: a percentage would be misleading (∞%); frontend
+            # renders "new" instead.
+            mom_change_pct = None
+
+        engaged_30d = current.filter(engagement_score__gt=0.5).count()
+        engaged_rate_pct = round(engaged_30d / scans_30d * 100, 1) if scans_30d else 0.0
+
+        # Reviews — consumer feedback with ratings, linked to this
+        # establishment's productions.
+        from reviews.models import Review
+
+        reviews_qs = Review.objects.filter(production__parcel__establishment_id=establishment_id)
+        reviews_count = reviews_qs.count()
+        average_rating = reviews_qs.aggregate(avg=Avg("rating"))["avg"]
+        reviews_30d = reviews_qs.filter(date__gte=current_start).count()
+
+        # Certification visibility — every consumer page view renders the
+        # farm's verified certification badge, so quality scans in the window
+        # ARE certification views. Only claimed when a verified cert exists.
+        verified_certs = list(
+            Certification.objects.filter(
+                establishment_id=establishment_id,
+                verification_status="verified",
+            )
+            .exclude(expiry_date__lt=now.date())
+            .values_list("certification_type", flat=True)
+        )
+        certification_views_30d = scans_30d if verified_certs else 0
+
+        summary = {
+            "scans_30d": scans_30d,
+            "scans_prev_30d": scans_prev_30d,
+            "mom_change_pct": mom_change_pct,
+            "engaged_rate_pct": engaged_rate_pct,
+            "reviews_count": reviews_count,
+            "reviews_30d": reviews_30d,
+            "average_rating": round(average_rating, 1) if average_rating is not None else None,
+            "has_verified_certification": bool(verified_certs),
+            "certification_views_30d": certification_views_30d,
+            "total_scans_all_time": quality.count(),
+            "generated_at": now.isoformat(),
+        }
+
+        # Short cache — the dashboard polls this; 5 minutes keeps it fresh
+        # without hammering the scans table.
+        cache.set(cache_key, summary, 300)
+        return summary
+
+    @staticmethod
     def get_scan_trends(establishment_id: int, days: int = 90) -> Dict:
         """
         Get trend analysis for the establishment
