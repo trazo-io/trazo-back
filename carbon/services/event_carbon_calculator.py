@@ -83,10 +83,19 @@ class EventCarbonCalculator:
 
     @property
     def FUEL_EMISSION_FACTORS(self):
-        """Get fuel emission factors from centralized registry (choices.py)"""
+        """Get fuel emission factors from centralized registry (choices.py).
+
+        F08 fix (2026-06): the static choices.py `electric` value is the US grid
+        (0.39). Override it with the operating country's grid factor so equipment
+        and other electric calc paths don't leak US emissions for a UY deployment.
+        """
         from carbon.choices import FUEL_TYPE_FACTORS
 
-        return {fuel: data["value"] for fuel, data in FUEL_TYPE_FACTORS.items()}
+        from .verified_emission_factors import VerifiedEmissionFactors
+
+        factors = {fuel: data["value"] for fuel, data in FUEL_TYPE_FACTORS.items()}
+        factors["electric"] = VerifiedEmissionFactors.get_country_electricity_factor().value
+        return factors
 
     @property
     def APPLICATION_EFFICIENCY(self):
@@ -1194,12 +1203,15 @@ class EventCarbonCalculator:
                 except (ValueError, TypeError):
                     concentration = None
 
-            # Warn when concentration is missing for non-fertilizer chemicals.
-            # Calculator assumes 100% active ingredient, which can overestimate by ~10x.
+            # Inform when concentration is missing for non-fertilizer chemicals.
+            # F03-consistent (2026-06): the calculator now OMITS active-ingredient
+            # manufacturing emissions when concentration is absent (no fabricated %AI
+            # default) — application-fuel emissions still count. Encourage data entry.
             if concentration is None and chemical_type in ["PE", "FU", "HE"]:
-                logger.warning(
-                    "Chemical event %s: Missing concentration for %s. "
-                    "Assuming 100%% active ingredient — carbon estimate may be ~10x too high.",
+                logger.info(
+                    "Chemical event %s: no concentration for %s — active-ingredient "
+                    "manufacturing emissions omitted (no phantom %%AI default). Enter "
+                    "concentration for an accurate manufacturing estimate.",
                     getattr(event, "id", "unknown"),
                     chemical_type,
                 )
@@ -1373,11 +1385,28 @@ class EventCarbonCalculator:
                 # Item #13: electricity_source overrides the default 0.39 kg CO2/kWh grid factor.
                 electricity_source = getattr(event, "electricity_source", None) or extra_data.get("electricity_source")
 
-                calculation_result = VerifiedEmissionFactors.calculate_drought_irrigation_emissions(
+                # F06 fix (2026-06): route the SAVED IR path through the SAME entry
+                # point the live preview uses (calculate_production_event_emissions),
+                # so diesel-pump fuel and AUXILIARY diesel (service vehicle/standby
+                # pump) are included identically. The previous call to the bare
+                # calculate_drought_irrigation_emissions had no fuel parameter and
+                # silently dropped auxiliary diesel the preview showed (e.g. 5 gal =
+                # 51 kg). water_volume_gallons is already resolved above, so the
+                # function uses it directly; fuel_type/electricity_source select
+                # diesel-pump vs auxiliary-diesel vs electric exactly as in preview.
+                fuel_type = getattr(event, "fuel_type", None) or extra_data.get("fuel_type")
+                energy_source = getattr(event, "energy_source", None) or extra_data.get("energy_source") or "grid"
+                calculation_result = VerifiedEmissionFactors.calculate_production_event_emissions(
+                    production_type="IR",
+                    area_covered=area_covered,
+                    fuel_consumed=fuel_consumed,
+                    equipment_hours=equipment_hours,
+                    fuel_type=fuel_type,
+                    energy_source=energy_source,
+                    electricity_source=electricity_source,
                     water_volume_gallons=water_volume_gallons,
                     water_source=water_source,
                     pump_depth_ft=float(pump_depth_ft) if pump_depth_ft is not None else None,
-                    electricity_source=electricity_source,
                 )
 
                 base_emissions = calculation_result["co2e_kg"]
@@ -1433,7 +1462,12 @@ class EventCarbonCalculator:
                 "TH",
                 "TR",
                 "CU",
-            ]:  # Harvesting, Planting, Pruning, Equipment Maint., Thinning, Transplanting, Cultivation
+                # Batch 3 (2026-06): frost protection (wind machines/heaters) and
+                # orchard-floor mowing are fuel-driven Production ops — route through
+                # the same fuel pipeline so reported diesel/propane is counted.
+                "FP",
+                "MO",
+            ]:  # Harvesting, Planting, Pruning, Equipment Maint., Thinning, Transplanting, Cultivation, Frost, Mowing
                 # Use EPA/USDA production emission factors.
                 # Pass the raw 2-letter code so PRODUCTION_TYPE_MAPPING in VerifiedEmissionFactors
                 # routes to the correct per-type calculator (e.g. TH -> _calculate_thinning_emissions
@@ -1773,10 +1807,10 @@ class EventCarbonCalculator:
                     # Convert Celsius to Fahrenheit (frontend collects temperature in °C)
                     highest_temp = highest_temp_c * 9 / 5 + 32
 
-                    # Use USDA verified electricity emission factor for cooling systems
-                    electricity_factor = VerifiedEmissionFactors.get_emission_factor(
-                        "electricity", "electricity_us_avg"
-                    )
+                    # Use the operating country's grid electricity factor for cooling
+                    # systems. F08 fix (2026-06): was hardcoded "electricity_us_avg"
+                    # (US 0.39) — leaked US emissions for non-US deployments.
+                    electricity_factor = VerifiedEmissionFactors.get_country_electricity_factor()
                     misting_factor = VerifiedEmissionFactors.get_emission_factor("equipment", "misting_system")
 
                     if electricity_factor and misting_factor and highest_temp > 95:
@@ -2836,17 +2870,38 @@ class EventCarbonCalculator:
                     "K": float(event.potassium_percentage),
                 }
 
-            # Fallback to parsing concentration string (only for fertilizers)
-            concentration = self._get_intelligent_concentration(event.concentration, event, crop_name)
-            return self._parse_npk_content(concentration, chemical_type)
+            # Fallback to parsing the FARMER-ENTERED concentration string (FE only).
+            # F03 fix (2026-06): do NOT inject a phantom "10-10-10"/crop default when
+            # the farmer left concentration blank. Fabricating an NPK composition
+            # manufactures nitrogen-manufacturing + N2O emissions from data the farmer
+            # never provided, contradicting the no-phantom policy used for soil and
+            # irrigation. Absent/unknown composition -> 0 NPK (no emissions), and the
+            # event is surfaced as composition-not-provided rather than silently
+            # invented.
+            return self._npk_from_raw_concentration(event, chemical_type)
 
         except Exception as e:
             logger.warning(f"Error getting structured NPK content, using fallback: {e}")
             chemical_type = getattr(event, "type", "FE")
             if chemical_type in ["PE", "FU", "HE"]:
                 return {"N": 0.0, "P": 0.0, "K": 0.0}  # NO NPK for non-fertilizers
-            concentration = self._get_intelligent_concentration(event.concentration, event, crop_name)
-            return self._parse_npk_content(concentration, chemical_type)
+            return self._npk_from_raw_concentration(event, chemical_type)
+
+    def _npk_from_raw_concentration(self, event, chemical_type: str) -> Dict[str, float]:
+        """Parse NPK from the farmer-entered concentration only — no phantom default.
+
+        Returns zeros (and logs a completeness note) when the concentration is
+        blank/unknown, so missing fertilizer composition contributes 0 emissions
+        instead of a fabricated 10-10-10. See F03 (2026-06).
+        """
+        raw_conc = getattr(event, "concentration", None)
+        if not raw_conc or str(raw_conc).strip().lower() in ("", "unknown", "n/a", "na", "none", "null"):
+            logger.info(
+                "FE event %s has no NPK/concentration — NPK treated as 0 (no phantom default, F03)",
+                getattr(event, "id", "?"),
+            )
+            return {"N": 0.0, "P": 0.0, "K": 0.0}
+        return self._parse_npk_content(str(raw_conc), chemical_type)
 
     def _get_structured_application_method(self, event, crop_name: str = "default") -> str:
         """
@@ -2943,6 +2998,22 @@ class EventCarbonCalculator:
         """
         Get production data from structured fields or fallback to legacy fields
         """
+
+        # F07 fix (2026-06): preserve None for unreported fuel. Coercing None->0.0
+        # made calculate_production_event_emissions treat it as an explicit "0 fuel"
+        # (manual routing -> 0 kg) instead of "no fuel reported" (USDA area estimate),
+        # so saved HA/PL/TR/CU/TH with empty fuel computed 0 while the preview showed
+        # the area-based estimate. None flows through to the area-estimate fallback,
+        # matching the preview path. Explicit farmer-entered 0 is still respected.
+        def _fuel_or_none():
+            raw = getattr(event, "fuel_consumed", None)
+            if raw is None or raw == "":
+                return None
+            try:
+                return float(raw)
+            except (TypeError, ValueError):
+                return None
+
         try:
             # Check for structured fields first
             if hasattr(event, "area_covered") and event.area_covered is not None:
@@ -2961,7 +3032,7 @@ class EventCarbonCalculator:
                     "area_hectares": area,
                     "yield_quantity": float(getattr(event, "yield_quantity", 0) or 0),
                     "yield_unit": getattr(event, "yield_unit", "kg"),
-                    "fuel_consumed": float(getattr(event, "fuel_consumed", 0) or 0),
+                    "fuel_consumed": _fuel_or_none(),
                     "fuel_unit": getattr(event, "fuel_unit", "L"),
                     "equipment_hours": float(getattr(event, "equipment_hours", 0) or 0),
                     "transportation_distance": float(getattr(event, "transportation_distance", 0) or 0),
@@ -2984,7 +3055,7 @@ class EventCarbonCalculator:
                 "area_hectares": area,
                 "yield_quantity": float(getattr(event, "yield_quantity", 0) or 0),
                 "yield_unit": getattr(event, "yield_unit", "kg"),
-                "fuel_consumed": float(getattr(event, "fuel_consumed", 0) or 0),
+                "fuel_consumed": _fuel_or_none(),
                 "fuel_unit": getattr(event, "fuel_unit", "L"),
                 "equipment_hours": float(getattr(event, "equipment_hours", 0) or 0),
                 "transportation_distance": float(getattr(event, "transportation_distance", 0) or 0),

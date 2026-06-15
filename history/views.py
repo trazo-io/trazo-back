@@ -48,6 +48,7 @@ from .models import (
     HistoryScan,
     PestManagementEvent,
     ProductionEvent,
+    SalesRecord,
     SoilManagementEvent,
     WeatherEvent,
 )
@@ -1470,6 +1471,248 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 {"error": f"Error generating download URL: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+    @action(detail=True, methods=["get"], url_path="lot-tag", permission_classes=[IsAuthenticated])
+    def lot_tag(self, request, pk=None):
+        """
+        Printable container/case lot tags (SOE § 205.307 — nonretail containers
+        must carry lot-traceable identification). Letter page, 8 identical tags
+        (2×4 grid): farm, crop, LOT ID, harvest date, QR to the consumer page,
+        and an organic line ONLY when the lot-eligibility resolver passes —
+        the same gate the consumer page uses.
+        """
+        import uuid as uuid_module
+        from io import BytesIO
+
+        from django.http import HttpResponse
+
+        from users.models import WorksIn
+
+        try:
+            public_uuid = uuid_module.UUID(str(pk))
+            history = get_object_or_404(
+                History.objects.select_related("product", "parcel__establishment__company"),
+                public_id=public_uuid,
+            )
+        except (ValueError, AttributeError):
+            history = self.get_object()
+
+        establishment = history.parcel.establishment if history.parcel else None
+        if not (
+            establishment
+            and WorksIn.objects.filter(user=request.user, company=establishment.company, role__in=["CA", "FM"]).exists()
+        ):
+            return Response({"error": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
+
+        # Organic line gated by the lot-level resolver (downgrade-only, same
+        # vocabulary as the consumer page and the audit PDF cross-checks).
+        organic_line = None
+        try:
+            from certifications.services.consumer_claim_validator import ConsumerClaimValidator
+
+            from .services.claim_resolver import resolve_lot_organic_eligibility
+
+            cert = ConsumerClaimValidator()._get_active_usda_organic_cert(establishment)
+            eligibility = resolve_lot_organic_eligibility(history, cert)
+            if eligibility.eligible is True and cert is not None:
+                certifier = (cert.certifier_name or "").split(" (")[0]
+                organic_line = f"Certified organic by {certifier}" if certifier else "Certified organic"
+        except Exception:
+            logger.warning("Lot-tag organic gate failed; omitting organic line", exc_info=True)
+
+        from django.conf import settings
+
+        import qrcode
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib.units import inch
+        from reportlab.lib.utils import ImageReader
+        from reportlab.pdfgen import canvas as rl_canvas
+
+        consumer_url = f"{settings.BASE_CONSUMER_URL}production/{history.public_id}"
+        qr_img = qrcode.make(consumer_url, box_size=6, border=2)
+        qr_buf = BytesIO()
+        qr_img.save(qr_buf, format="PNG")
+        qr_buf.seek(0)
+        qr_reader = ImageReader(qr_buf)
+
+        buf = BytesIO()
+        page_w, page_h = letter
+        c = rl_canvas.Canvas(buf, pagesize=letter)
+        cols, rows = 2, 4
+        tag_w, tag_h = page_w / cols, page_h / rows
+
+        farm_name = establishment.name if establishment else "Farm"
+        crop = history.product.name if history.product else "Crop"
+        lot = history.lot_id or "—"
+        harvest = history.finish_date.strftime("%b %d, %Y") if history.finish_date else "In progress"
+
+        for row in range(rows):
+            for col in range(cols):
+                x0 = col * tag_w
+                y0 = page_h - (row + 1) * tag_h
+                c.setLineWidth(0.5)
+                c.setDash(2, 2)
+                c.rect(x0 + 6, y0 + 6, tag_w - 12, tag_h - 12)
+                c.setDash()
+
+                text_x = x0 + 0.25 * inch
+                cursor = y0 + tag_h - 0.45 * inch
+                c.setFont("Helvetica-Bold", 13)
+                c.drawString(text_x, cursor, farm_name[:32])
+                cursor -= 0.26 * inch
+                c.setFont("Helvetica", 11)
+                c.drawString(text_x, cursor, crop[:32])
+                cursor -= 0.3 * inch
+                c.setFont("Helvetica-Bold", 14)
+                c.drawString(text_x, cursor, f"LOT {lot}"[:30])
+                cursor -= 0.26 * inch
+                c.setFont("Helvetica", 10)
+                c.drawString(text_x, cursor, f"Harvested {harvest}")
+                if organic_line:
+                    cursor -= 0.24 * inch
+                    c.setFont("Helvetica-Bold", 10)
+                    c.drawString(text_x, cursor, organic_line[:40])
+
+                qr_size = 1.05 * inch
+                c.drawImage(
+                    qr_reader,
+                    x0 + tag_w - qr_size - 0.22 * inch,
+                    y0 + 0.22 * inch,
+                    qr_size,
+                    qr_size,
+                )
+                c.setFont("Helvetica", 6.5)
+                c.drawString(x0 + 0.25 * inch, y0 + 0.18 * inch, "Scan for the full growing record")
+            # one page of 8 identical tags is the default; future: copies param
+        c.showPage()
+        c.save()
+        buf.seek(0)
+
+        response = HttpResponse(buf.getvalue(), content_type="application/pdf")
+        safe_lot = (history.lot_id or str(history.public_id)[:8]).replace("/", "-")
+        response["Content-Disposition"] = f'attachment; filename="lot-tags-{safe_lot}.pdf"'
+        return response
+
+    @action(detail=False, methods=["get"], url_path="recent-inputs", permission_classes=[IsAuthenticated])
+    def recent_inputs(self, request):
+        """
+        Distinct chemical products this establishment has used before —
+        powers the "My products" quick-pick that prefills the chemical form
+        (farmers reapply the same inputs all season).
+        """
+        from company.models import Establishment
+        from users.models import WorksIn
+
+        establishment_id = request.query_params.get("establishment_id")
+        if not establishment_id:
+            return Response({"error": "establishment_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            establishment = Establishment.objects.get(id=establishment_id)
+        except Establishment.DoesNotExist:
+            return Response({"error": "Establishment not found"}, status=status.HTTP_404_NOT_FOUND)
+        if not WorksIn.objects.filter(user=request.user, company=establishment.company, role__in=["CA", "FM"]).exists():
+            return Response({"error": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
+
+        events = (
+            ChemicalEvent.objects.filter(history__parcel__establishment=establishment)
+            .exclude(commercial_name__isnull=True)
+            .exclude(commercial_name="")
+            .order_by("-date")[:200]
+        )
+        seen = set()
+        products = []
+        for e in events:
+            key = e.commercial_name.strip().lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            products.append(
+                {
+                    "commercial_name": e.commercial_name,
+                    # F27 fix (2026-06): active_ingredient is NOT a ChemicalEvent model
+                    # field (it lands in extra_data) — direct e.active_ingredient raised
+                    # AttributeError, 500-ing the whole picker on every chemical form load.
+                    "active_ingredient": (
+                        getattr(e, "active_ingredient", None) or (e.extra_data or {}).get("active_ingredient", "") or ""
+                    ),
+                    "concentration": e.concentration or "",
+                    "organic_approved": e.organic_approved or "",
+                    "epa_registration_number": getattr(e, "epa_registration_number", None) or "",
+                    "application_method": getattr(e, "application_method_structured", None) or "",
+                    "type": e.type,
+                    "last_used": e.date.date().isoformat() if e.date else None,
+                }
+            )
+            if len(products) >= 20:
+                break
+        return Response(products, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=["get"], url_path="pur-export", permission_classes=[IsAuthenticated])
+    def pur_export(self, request):
+        """
+        California Pesticide Use Report (PUR / DPR-PML-017C) for an establishment + month.
+
+        Generated from logged chemical events (pesticides/fungicides/herbicides) using
+        the F20 legal spray-record fields. Due to the County Ag Commissioner by the 10th
+        of the following month (3 CCR 6626).
+
+        Query parameters:
+          establishment_id  (required)
+          month             1-12 (required)
+          year              e.g. 2026 (required)
+          export_format     json (default, preview + per-row completeness) or csv (download).
+                            NOTE: named export_format, not "format" — DRF reserves the
+                            "format" query param for content negotiation (a ?format=csv
+                            would 404 with no csv renderer registered).
+        """
+        from django.http import FileResponse
+
+        from company.models import Establishment
+        from users.models import WorksIn
+
+        from .services.pur_export_service import PURExportService
+
+        establishment_id = request.query_params.get("establishment_id")
+        if not establishment_id:
+            return Response({"error": "establishment_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            establishment = Establishment.objects.select_related("company").get(id=establishment_id)
+        except (Establishment.DoesNotExist, ValueError):
+            return Response({"error": "Establishment not found"}, status=status.HTTP_404_NOT_FOUND)
+        if not WorksIn.objects.filter(user=request.user, company=establishment.company, role__in=["CA", "FM"]).exists():
+            return Response({"error": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            month = int(request.query_params.get("month", ""))
+            year = int(request.query_params.get("year", ""))
+        except (TypeError, ValueError):
+            return Response({"error": "month and year are required integers"}, status=status.HTTP_400_BAD_REQUEST)
+        if not (1 <= month <= 12):
+            return Response({"error": "month must be 1-12"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # "export_format" (NOT "format"): DRF reserves ?format= for content negotiation.
+        export_format = request.query_params.get("export_format", "json").lower()
+        if export_format not in {"json", "csv"}:
+            return Response(
+                {"error": "Invalid export_format. Use 'json' or 'csv'."}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        service = PURExportService(establishment, month, year)
+
+        if export_format == "csv":
+            buffer = service.to_csv()
+            response = FileResponse(buffer, content_type="text/csv; charset=utf-8")
+            response["Content-Disposition"] = (
+                f'attachment; filename="trazo-pur-{establishment_id}-{year}-{month:02d}.csv"'
+            )
+            return response
+
+        summary = service.summary()
+        # Drop the internal _missing_required key from the JSON preview rows (the
+        # human-readable gaps are already in each row's "notes").
+        for row in summary["rows"]:
+            row.pop("_missing_required", None)
+        return Response(summary, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["get"], url_path="audit-export", permission_classes=[IsAuthenticated])
     def audit_export(self, request, **kwargs):
@@ -3482,3 +3725,79 @@ class BuyerDocRequestViewSet(viewsets.GenericViewSet):
         lead.status = new_status
         lead.save(update_fields=["status"])
         return Response(BuyerDocRequestSerializer(lead).data, status=status.HTTP_200_OK)
+
+
+class SalesRecordViewSet(viewsets.GenericViewSet):
+    """
+    Owner-gated sales records per production lot (SOE traceback:
+    "crop and quantity sold, date of sale, buyer" — verified at every
+    annual inspection). list/create/destroy only; never public.
+    """
+
+    permission_classes = [IsAuthenticated]
+    queryset = SalesRecord.objects.select_related("production__parcel__establishment__company")
+
+    def _production_for(self, request, production_public_id):
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        from users.models import WorksIn
+
+        try:
+            production = History.objects.select_related("parcel__establishment__company").get(
+                public_id=production_public_id
+            )
+        except (History.DoesNotExist, ValueError, DjangoValidationError):
+            # ValueError/ValidationError cover malformed UUID strings.
+            return None, Response({"error": "Production not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        has_access = WorksIn.objects.filter(
+            user=request.user,
+            company=production.parcel.establishment.company,
+            role__in=["CA", "FM"],
+        ).exists()
+        if not has_access:
+            return None, Response({"error": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
+        return production, None
+
+    def list(self, request):
+        from .serializers import SalesRecordSerializer
+
+        production_public_id = request.query_params.get("production_id")
+        if not production_public_id:
+            return Response({"error": "production_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+        production, err = self._production_for(request, production_public_id)
+        if err:
+            return err
+        records = self.get_queryset().filter(production=production)
+        return Response(SalesRecordSerializer(records, many=True).data, status=status.HTTP_200_OK)
+
+    def create(self, request):
+        from .serializers import SalesRecordSerializer
+
+        production_public_id = request.data.get("production_id")
+        if not production_public_id:
+            return Response({"error": "production_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+        production, err = self._production_for(request, production_public_id)
+        if err:
+            return err
+        serializer = SalesRecordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        record = serializer.save(production=production)
+        return Response(SalesRecordSerializer(record).data, status=status.HTTP_201_CREATED)
+
+    def destroy(self, request, pk=None):
+        try:
+            record = self.get_queryset().get(pk=pk)
+        except SalesRecord.DoesNotExist:
+            return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+        from users.models import WorksIn
+
+        has_access = WorksIn.objects.filter(
+            user=request.user,
+            company=record.production.parcel.establishment.company,
+            role__in=["CA", "FM"],
+        ).exists()
+        if not has_access:
+            return Response({"error": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
+        record.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

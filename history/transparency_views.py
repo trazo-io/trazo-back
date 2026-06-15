@@ -313,18 +313,12 @@ def production_transparency_detail(request, production_public_id=None):
         # True when ALL carbon entries used EPA/USDA emission factors
         is_epa_factors_based = total_carbon_entries > 0 and epa_factors_based_entries == total_carbon_entries
 
-        # Phase 3 — proof points: the score's forward-compatible successor.
-        # Counts of verifiable facts, no self-graded percentage. Dashboard and
-        # legacy consumers keep transparency_percentage untouched.
-        proof_points = {
-            "practices_documented": transparency_data.get("actual_event_count", 0),
-            "photos": len(public_history_data.get("images") or []),
-            "certifications_verified": sum(1 for c in certification_data if c.get("status") == "verified_via_database"),
-            "certifications_total": len(certification_data),
-            "blockchain_recorded": bool(is_blockchain_verified),
-            "lot_documented": bool(history.lot_id),
-            "harvest_date_documented": bool(history.finish_date),
-        }
+        # NOTE: the "proof_points" object (a forward-compatible fact-count successor to the
+        # transparency %) was built here and returned but consumed by ZERO frontend code — the
+        # consumer page already surfaces every one of those facts directly (trust pillars =
+        # practices/photos/certs, the "How It Was Grown" counts, the certification card, and the
+        # blockchain status). It was dead, redundant payload weight and has been removed (2026-06
+        # audit P2-3). Re-introduce it only alongside a UI that actually renders it.
 
         # Add progressive loading structure for backward compatibility
         response_data.update(
@@ -337,7 +331,6 @@ def production_transparency_detail(request, production_public_id=None):
                         "status": transparency_benchmarks["benchmark_level"],
                     },
                 },
-                "proof_points": proof_points,
                 # STANDARD LOAD (10 seconds) - Core transparency details
                 "standard_view": {
                     "transparency_details": {
@@ -391,19 +384,34 @@ def production_transparency_detail(request, production_public_id=None):
                     # uploaded a profile photo; Avatar falls back to initials.
                     "establishment_image": _first_album_image_url(establishment),
                     "description": establishment.description if establishment else "",
-                    "address": establishment.address if establishment else None,
+                    # 2026-06 audit P1 (location PII): street address, exact coords and
+                    # zip are WITHHELD from the public QR payload — same rationale as the
+                    # contact strip below (P2-6) and the printed-GPS removal in
+                    # ParcelMapInfo (2026-06). The consumer UI shows only city/state, and
+                    # the map uses the parcel's location_disclosure_level-gated geo; exposing
+                    # establishment address/coords here bypassed that privacy control and
+                    # leaked the farm's exact location to any anonymous API caller.
+                    "address": None,
                     "city": establishment.city if establishment else None,
                     "state": establishment.state if establishment else None,
                     "country": establishment.country if establishment else None,
                     "zone": establishment.zone if establishment else None,
-                    "latitude": establishment.latitude if establishment else None,
-                    "longitude": establishment.longitude if establishment else None,
-                    "contact_person": establishment.contact_person if establishment else None,
-                    "contact_phone": establishment.contact_phone if establishment else None,
-                    "contact_email": establishment.contact_email if establishment else None,
-                    "email": establishment.contact_email if establishment else None,  # Use contact_email field
-                    "phone": establishment.contact_phone if establishment else None,  # Use contact_phone field
-                    "zip_code": establishment.zip_code if establishment else None,
+                    "latitude": None,
+                    "longitude": None,
+                    # 2026-06 audit P2-6: the farm's direct contact (incl. the named contact
+                    # person — PII) is INTENTIONALLY withheld from the public QR payload. A
+                    # random shopper must not get the producer's personal phone/email/name; a
+                    # wholesale buyer reaches the farm through the BuyerDocRequest form, which
+                    # the farm controls. This endpoint is anonymous (no story-vs-proof distinction
+                    # server-side), so contact is stripped unconditionally rather than gated.
+                    "contact_person": None,
+                    "contact_phone": None,
+                    "contact_email": None,
+                    "email": None,
+                    "phone": None,
+                    # P1 (location PII): zip narrows the farm to a few sq mi; city/state
+                    # already cover the public "location" string. Withheld.
+                    "zip_code": None,
                     "about": establishment.about if establishment else None,
                     "main_activities": establishment.main_activities if establishment else None,
                     "location_highlights": establishment.location_highlights if establishment else None,
@@ -434,20 +442,17 @@ def production_transparency_detail(request, production_public_id=None):
                             "description": (
                                 establishment.company.description if establishment and establishment.company else ""
                             ),
-                            "address": (
-                                establishment.company.address if establishment and establishment.company else None
-                            ),
+                            # P1 (location PII): company street address withheld — see farmer block.
+                            "address": None,
                             "city": establishment.company.city if establishment and establishment.company else None,
                             "state": establishment.company.state if establishment and establishment.company else None,
                             "country": (
                                 establishment.company.country if establishment and establishment.company else None
                             ),
-                            "email": (
-                                establishment.company.contact_email if establishment and establishment.company else None
-                            ),  # Company uses contact_email
-                            "phone": (
-                                establishment.company.contact_phone if establishment and establishment.company else None
-                            ),  # Company uses contact_phone
+                            # P2-6: company direct contact withheld from the public payload
+                            # (buyers use the BuyerDocRequest form). See farmer block above.
+                            "email": None,
+                            "phone": None,
                             "website": (
                                 establishment.company.website if establishment and establishment.company else None
                             ),
@@ -462,12 +467,10 @@ def production_transparency_detail(request, production_public_id=None):
                                 if establishment and establishment.company and establishment.company.logo
                                 else None
                             ),
-                            "fiscal_id": (
-                                establishment.company.fiscal_id if establishment and establishment.company else None
-                            ),
-                            "contact_email": (
-                                establishment.company.contact_email if establishment and establishment.company else None
-                            ),
+                            # fiscal_id (company tax ID) + contact_email are sensitive business
+                            # data, not consumer transparency — withheld from the public payload (P2-6).
+                            "fiscal_id": None,
+                            "contact_email": None,
                             "total_establishments": (
                                 establishment.company.establishment_set.count()
                                 if establishment and establishment.company

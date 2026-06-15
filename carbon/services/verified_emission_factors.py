@@ -170,12 +170,19 @@ class VerifiedEmissionFactors:
             notes="US average delivered electricity",
         ),
         "UY": EmissionFactor(
-            value=0.04,
+            value=0.006263,
             unit="kg_CO2_per_kWh",
-            source="ADME Uruguay 2023 (~97% renewable grid)",
+            source="MIEM/DNE Balance Energético Nacional (BEN) 2024 — Factor de emisión de CO2 del SIN (FE_SIN 6.263 tCO2/GWh)",
             confidence_level=0.90,
-            last_updated="2025-06-01",
-            notes="Uruguay grid is predominantly wind + hydro",
+            last_updated="2026-06-13",
+            notes=(
+                "Official MIEM/DNE BEN 2024 grid factor (99% renewable: hydro 50%, wind 33%, "
+                "biomass 13%, solar 3%, fossil 1% per ADME Informe Anual 2024). NOTE: the BEN "
+                "factor is highly volatile YoY (0.101 in 2021 -> 0.006 in 2024) as it tracks the "
+                "hydro/thermal mix; a 3-yr trailing average (~0.041) is a defensible conservative "
+                "alternative if stability is preferred. Corrected 2026-06-13 from stale 0.04 "
+                "(~6.4x too high vs 2024)."
+            ),
         ),
         "AR": EmissionFactor(
             value=0.35,
@@ -752,8 +759,15 @@ class VerifiedEmissionFactors:
 
     # Item #13: Electricity emission factors by source (kg CO2/kWh)
     # Used when electricity_source is set on a ProductionEvent irrigation event.
+    # F08 fix (2026-06): "grid" intentionally NOT in this dict. A literal grid
+    # constant (0.39, US) bypassed the per-country factor — a UY grid-irrigation
+    # event was reported at US 0.39 instead of the true UY grid (~0.006). With
+    # "grid" absent, every lookup site (the `electricity_source in …` guard at
+    # ~L795 and the `.get(source, electricity_factor.value)` fallbacks at ~L1228,
+    # ~L1240) falls through to get_country_electricity_factor(), which honours
+    # TRAZO_OPERATING_COUNTRY. Only genuinely source-specific factors (renewables,
+    # on-site generator) belong here.
     ELECTRICITY_SOURCE_FACTORS = {
-        "grid": 0.39,  # EPA eGRID 2023 US average (corrected 2025-12-03)
         "solar": 0.02,  # Life-cycle average for utility-scale solar PV
         "wind": 0.01,  # Life-cycle average for wind turbines
         "diesel_generator": 0.65,  # Diesel generator (less efficient than grid diesel)
@@ -1045,6 +1059,11 @@ class VerifiedEmissionFactors:
             "CM": lambda ac, fc, eh, **kw: cls._calculate_manual_operation_emissions(
                 ac, fc, eh, "canopy_management", **kw
             ),  # Canopy management (leaf pulling, hedging) - same fuel profile as pruning
+            # Batch 3 (2026-06): frost protection & mowing are fuel-driven equipment
+            # operations — use the general-production calculator (honours reported
+            # fuel_consumed; falls back to a light area-based estimate) like EM.
+            "FP": cls._calculate_general_production_emissions,
+            "MO": cls._calculate_general_production_emissions,
             # Full name aliases (safety net for any code path that passes descriptive names)
             "PLANTING": cls._calculate_planting_emissions,
             "HARVESTING": cls._calculate_harvesting_emissions,
@@ -1673,6 +1692,8 @@ class VerifiedEmissionFactors:
             "PH": "post_harvest_processing",
             "CM": "canopy_management",
             "EM": "equipment_maintenance",
+            "FP": "frost_protection",
+            "MO": "mowing_floor_management",
         }
         activity_label = activity_labels.get(production_type_code, "general_crop_production")
 
@@ -2242,6 +2263,18 @@ class VerifiedEmissionFactors:
             # Always divide by 100 to convert to decimal fraction
             user_concentration = concentration / 100.0
 
+        # F03-consistent fix (2026-06): do NOT fabricate an active-ingredient % for
+        # non-fertilizer chemicals (PE/HE/FU) when the farmer left concentration blank.
+        # The per-subtype defaults below (0.25-0.99) silently invented manufacturing
+        # emissions — over- or under-stating by up to ~10x — and presented them as
+        # EPA-sourced, contradicting the no-phantom policy already applied to fertilizer
+        # NPK (F03). When the AI% is unknown we OMIT the manufacturing portion (set 0)
+        # and flag it; the application-fuel emissions below are real and still counted.
+        ai_concentration_missing = (
+            chemical_type.lower() in ["pesticide", "pe", "herbicide", "he", "fungicide", "fu"]
+            and user_concentration is None
+        )
+
         if chemical_type.lower() in ["pesticide", "pe"]:
             # Check for organic or biological pesticide subtypes
             if is_organic_pesticide:
@@ -2339,6 +2372,12 @@ class VerifiedEmissionFactors:
                 manufacturing_emissions = (
                     n_kg * nitrogen_factor.value + p_kg * phosphorus_factor.value + k_kg * potassium_factor.value
                 )
+
+        # F03-consistent fix (2026-06): override the phantom-default manufacturing
+        # emissions with 0 when the AI concentration was not provided (see flag above).
+        # No fabricated active-ingredient assumption is presented as EPA-sourced.
+        if ai_concentration_missing:
+            manufacturing_emissions = 0.0
 
         # Application emissions (fuel for equipment)
         # SPRINT 3 EPIC 3.3: Application Fuel Tracking
@@ -2527,6 +2566,19 @@ class VerifiedEmissionFactors:
         # Add chemical-specific breakdown data including explicit subtype info
         # FIX 2025-12-24: Use actual calculated values instead of hardcoded defaults
         breakdown["chemical_subtype_used"] = chemical_subtype if chemical_subtype else "auto-detected"
+
+        # F03-consistent fix (2026-06): surface when AI manufacturing was omitted because
+        # the farmer didn't enter a concentration (no fabricated %AI). Application fuel
+        # emissions are unaffected. Lets the UI/audit show "enter concentration for an
+        # accurate manufacturing estimate" instead of a silently-invented number.
+        breakdown["active_ingredient_concentration_provided"] = not ai_concentration_missing
+        if ai_concentration_missing:
+            breakdown["manufacturing_emissions_omitted"] = True
+            breakdown["manufacturing_omitted_reason"] = (
+                "Active-ingredient concentration not provided — manufacturing emissions omitted "
+                "rather than assuming a default %AI. Enter the product concentration for an "
+                "accurate estimate."
+            )
 
         # Track if user provided concentration vs using default
         concentration_source = "user_provided" if user_concentration else "default"

@@ -30,7 +30,7 @@ FUEL_TYPE_FACTORS = {
         "unit": "kg CO₂e/gallon",
         "source": "EPA 40 CFR Part 98 Table C-1 (0.125 mmBtu/gal × 70.22 kg CO₂/mmBtu)",
     },
-    "electric": {"value": 0.39, "unit": "kg CO₂e/kWh", "source": "EPA eGRID 2022 (823.1 lbs/MWh + 5.12% T&D losses)"},
+    "electric": {"value": 0.39, "unit": "kg CO₂e/kWh", "source": "EPA eGRID 2023 (767.2 lbs/MWh + 5.12% T&D losses)"},
     "propane": {
         "value": 5.72,
         "unit": "kg CO₂e/gallon",

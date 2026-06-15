@@ -14,6 +14,7 @@ Two consent-gated surfaces:
 import json
 
 from django.test import TestCase
+from django.urls import reverse
 from django.utils import timezone
 
 from company.models import Company, Establishment
@@ -146,3 +147,53 @@ class ParcelDisclosureTests(_Base):
         self.parcel.save()
         geo = public_parcel_geo(self.parcel)
         self.assertIsNone(geo["map_metadata"])
+
+
+class FarmerLocationPIITests(_Base):
+    """P1 (2026-06): the public transparency endpoint must not leak the farm's
+    street address, exact GPS coordinates, or zip. The consumer UI shows only
+    city/state and the map uses the parcel's location_disclosure_level-gated
+    geo; exposing establishment/company address + coords here bypassed that
+    privacy control and handed any anonymous API caller the farm's exact spot.
+    """
+
+    def setUp(self):
+        super().setUp()
+        ProductionEvent.objects.create(history=self.history, type="PL", date=timezone.now())
+        self.establishment.address = "2847 Orchard Valley Road"
+        self.establishment.city = "Fallbrook"
+        self.establishment.state = "California"
+        self.establishment.latitude = 33.3764
+        self.establishment.longitude = -117.251
+        self.establishment.zip_code = "92028"
+        self.establishment.save()
+        self.company.address = "2847 Orchard Valley Road"
+        self.company.save()
+
+    def _get(self):
+        url = reverse("production-transparency-detail", kwargs={"production_public_id": str(self.history.public_id)})
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200, resp.content[:300])
+        return resp
+
+    def test_location_pii_stripped(self):
+        farmer = self._get().json()["farmer"]
+        self.assertIsNone(farmer.get("address"))
+        self.assertIsNone(farmer.get("latitude"))
+        self.assertIsNone(farmer.get("longitude"))
+        self.assertIsNone(farmer.get("zip_code"))
+        self.assertIsNone((farmer.get("company") or {}).get("address"))
+
+    def test_city_state_retained(self):
+        # Coarse location is intended consumer transparency — must NOT be over-stripped.
+        farmer = self._get().json()["farmer"]
+        self.assertEqual(farmer.get("city"), "Fallbrook")
+        self.assertEqual(farmer.get("state"), "California")
+        self.assertEqual(farmer.get("location"), "Fallbrook, California")
+
+    def test_exact_address_and_coords_absent_from_blob(self):
+        blob = self._get().content.decode()
+        self.assertNotIn("2847 Orchard Valley Road", blob, "street address leaked")
+        self.assertNotIn("33.3764", blob, "exact latitude leaked")
+        self.assertNotIn("-117.251", blob, "exact longitude leaked")
+        self.assertNotIn("92028", blob, "zip leaked")

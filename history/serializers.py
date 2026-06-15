@@ -35,11 +35,26 @@ from .models import (
     HistoryScan,
     PestManagementEvent,
     ProductionEvent,
+    SalesRecord,
     SoilManagementEvent,
     WeatherEvent,
 )
 from .services.claim_resolver import resolve_input_status
 from .services.privacy import public_parcel_geo
+
+
+def ensure_event_description(data, default_label):
+    """F01 fix (2026-06): CommonEvent.description is a non-blank TextField, so any
+    event saved with the (clearly "Optional") Observations/notes field empty returned
+    {"description":["This field may not be blank."]} as a SILENT 400 — no toast, the
+    save button looked dead. Affected Chemical/Production/Weather/Soil/General (Pest
+    already had its own fallback). Default a blank description from the event
+    name/type so the save succeeds and the consumer card shows something sensible.
+    Mutates ``data`` in place; call at the top of to_internal_value after data.copy().
+    """
+    if not str(data.get("description") or "").strip():
+        name = str(data.get("name") or data.get("commercial_name") or data.get("event_name") or "").strip()
+        data["description"] = f"{default_label}: {name}" if name else default_label
 
 
 class CustomFieldsMixin:
@@ -444,6 +459,25 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
             "ca_dpr_permit_number",
             "ca_dpr_permit_county",
             "ca_dpr_permit_expires",
+            # F20 — legal spray-record completeness (GLOBALG.A.P. + CA PUR / DPR-PML-017C)
+            "manufacturer",
+            "application_start",
+            "application_end",
+            "planted_area",
+            "planted_area_unit",
+            "operator_id",
+            "site_id",
+            "application_county",
+            "mtrs_section",
+            "mtrs_township",
+            "mtrs_range",
+            "mtrs_base_meridian",
+            "ffm_code",
+            # F21 — supervisor review (FSMA 112.161(b)) + GG authorizer (FV-GFS 32.02.01 #10)
+            "authorizer_name",
+            "reviewed",
+            "reviewer_name",
+            "review_date",
             # Sprint 3 — OMRI / National List cross-reference (7 CFR 205.601/602)
             "omri_product",
             "national_list_substance",
@@ -464,6 +498,23 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
         This ensures backward compatibility while supporting modern frontend conventions.
         """
         data = data.copy()
+
+        # F01 fix (2026-06): CommonEvent.description is a non-blank TextField, so a
+        # chemical event saved with the (clearly "Optional") Observations field empty
+        # returned {"description":["This field may not be blank."]} as a SILENT 400 —
+        # no toast, button looked dead. Mirror the Pest serializer's fallback: when
+        # description is blank, derive a meaningful one from the product/name/type so
+        # the save succeeds and the consumer card shows something sensible.
+        if not str(data.get("description") or "").strip():
+            chem_type = (data.get("type") or "").upper()
+            type_label = {
+                "FE": "Fertilizer application",
+                "PE": "Pesticide application",
+                "FU": "Fungicide application",
+                "HE": "Herbicide application",
+            }.get(chem_type, "Chemical application")
+            product = str(data.get("commercial_name") or data.get("name") or "").strip()
+            data["description"] = f"{type_label}: {product}" if product else type_label
 
         # 🚨 FIELD NAME NORMALIZATION: Map frontend names → backend model names
         # This allows frontend to send new names while backend uses existing model fields
@@ -767,6 +818,25 @@ class ChemicalEventSerializer(EventSerializer):
             "ca_dpr_permit_number",
             "ca_dpr_permit_county",
             "ca_dpr_permit_expires",
+            # F20 — legal spray-record completeness (GLOBALG.A.P. + CA PUR / DPR-PML-017C)
+            "manufacturer",
+            "application_start",
+            "application_end",
+            "planted_area",
+            "planted_area_unit",
+            "operator_id",
+            "site_id",
+            "application_county",
+            "mtrs_section",
+            "mtrs_township",
+            "mtrs_range",
+            "mtrs_base_meridian",
+            "ffm_code",
+            # F21 — supervisor review (FSMA 112.161(b)) + GG authorizer (FV-GFS 32.02.01 #10)
+            "authorizer_name",
+            "reviewed",
+            "reviewer_name",
+            "review_date",
             # Sprint 3 — OMRI / National List cross-reference
             "omri_product",
             "national_list_substance",
@@ -918,6 +988,7 @@ class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
         if event_type is None:
             raise serializers.ValidationError({"type": ["This field is required."]}, code="required")
         data = data.copy()
+        ensure_event_description(data, "Weather event")  # F01: avoid silent 400 on blank notes
 
         # Handle custom fields (user-defined additional information)
         custom_fields = self.handle_custom_fields_input(data)
@@ -1458,11 +1529,23 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
         "processing_type",
         "processing_duration_hours",
         "temperature_control",
+        # F42 fix (2026-06): Canopy Management (CM subtype) — form fields with no
+        # model columns. Previously persisted only via the tab's nested extra_data;
+        # a flat submission would silently drop them. Listing here ensures both the
+        # nested and flat shapes round-trip.
+        "canopy_operation",
+        "pass_number",
+        # Batch 3 (2026-06): Frost Protection (FP) + Mowing (MO) subtype fields with
+        # no model columns. Fuel/equipment/area use existing ProductionEvent columns.
+        "protection_method",  # FP: wind_machine / orchard_heater / under_tree_sprinkler
+        "low_temperature",  # FP: low temp that triggered protection
+        "floor_management_type",  # MO: mow / mulch / cover_crop / herbicide_strip
     ]
 
     def to_internal_value(self, data):
         """Handle custom fields and extra_data fields for production events."""
         data = data.copy()
+        ensure_event_description(data, "Production activity")  # F01: avoid silent 400 on blank notes
 
         # Map EM-specific operation_efficiency → production_efficiency (model field)
         if "operation_efficiency" in data and "production_efficiency" not in data:
@@ -1552,7 +1635,10 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
         # Equipment Maintenance (EM), Pollination (PO), and Post-Harvest Processing (PH)
         # events can legitimately have area_covered=0 (facility/equipment-based, not field-based).
         production_type = data.get("type", "")
-        area_zero_allowed_types = ["EM", "PO", "PH"]
+        # FP (Frost Protection) is equipment-hours-driven (wind machines/heaters) like
+        # EM — area protected may legitimately be left at 0. MO (Mowing) keeps the >0
+        # rule since orchard-floor area is meaningful.
+        area_zero_allowed_types = ["EM", "PO", "PH", "FP"]
         if area_covered is not None and area_covered <= 0 and production_type not in area_zero_allowed_types:
             raise serializers.ValidationError(
                 {
@@ -1797,6 +1883,14 @@ class ProductionEventSerializer(CustomFieldsMixin, EventSerializer):
         # extra_data.method; promoted to top-level so the Event Details Modal's registry
         # resolver finds it without needing the formatter's extra_data fallback.
         "method",
+        # F42 fix (2026-06): Canopy Management (CM subtype) fields — see the matching
+        # note on UpdateProductionEventSerializer.EXTRA_DATA_FIELDS above.
+        "canopy_operation",
+        "pass_number",
+        # Batch 3 (2026-06): Frost Protection (FP) + Mowing (MO) subtype fields.
+        "protection_method",
+        "low_temperature",
+        "floor_management_type",
     ]
 
     def to_representation(self, instance):
@@ -1865,6 +1959,7 @@ class UpdateGeneralEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
     def to_internal_value(self, data):
         """Handle custom fields and field name remapping for general events."""
         data = data.copy()
+        ensure_event_description(data, "Farm activity")  # F01: avoid silent 400 on blank notes
 
         # Convert empty strings to None for nullable fields (contamination incident fields)
         nullable_fields = [
@@ -2712,24 +2807,516 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         initials = ".".join(p[0].upper() for p in parts[:2])
         return f"Farm team ({initials}.)" if initials else "Farm team"
 
+    # ALLOW-LIST for the PUBLIC consumer payload's free-form extra_data JSON.
+    #
+    # extra_data is an open dict — a deny-list there is whack-a-mole (the 2026-06 audit found
+    # buyer identity, pricing/margin, invoices, logistics, audit findings, inspector PII, and
+    # supplier identities leaking under ~30 different key names, several aliasing past the old
+    # deny-list: auditor / audit_score / inspected_by / major_nc, cost_vs_conventional /
+    # hive_rental_per_colony / premium_market_percentage, nursery / bee_source / processor /
+    # lab_name, and original_extra_data which re-embedded the whole unsanitized blob).
+    #
+    # This is the durable fix: ONLY keys on this allow-list reach the consumer. Any unknown key
+    # — including every future one — is dropped by default (safe). The set was derived empirically
+    # from the union of agronomic/consumer-transparency keys present across all published
+    # productions, with commercial / PII / audit / logistics / internal-debug keys removed.
+    #
+    # TOUCHPOINT: a NEW consumer-facing extra_data key will NOT display until added here. That is
+    # the intended trade-off (silent-drop of a benign field beats silent-leak of a sensitive one).
+    # Sensitive keys deliberately EXCLUDED: cost*/price*/premium*/revenue, buyer_*/invoice/PO/BOL,
+    # *supplier*/nursery/bee_source/processor/lab_name/source/manure_source/compost_source,
+    # auditor/audit_*/inspector/inspected_by/*_nc/control_points, carrier/trailer*/destination*/
+    # transit*/departure*, original_*/ui_*/migrated_from/test_production/*_template_id, attestations.
+    ALLOWED_EXTRA_DATA_KEYS = frozenset(
+        {
+            "acid_ratio",
+            "acre_feet_per_acre",
+            "action_recommended",
+            "active_ingredient",
+            "active_ingredient_total_kg",
+            "amount",
+            "application_conditions",
+            "application_details",
+            "application_fuel",
+            "application_fuel_consumed",
+            "application_fuel_type",
+            "application_fuel_unit",
+            "application_method",
+            "application_rate",
+            "application_rate_oz_acre",
+            "application_rate_range",
+            "application_rate_tons_acre",
+            "application_timing",
+            "area_covered_total",
+            "area_hectares",
+            "area_treated",
+            "area_treated_total",
+            "area_unit",
+            "average_pest_pressure",
+            "avg_fruit_weight_oz",
+            "avg_mites_per_trap",
+            "band_distance_m",
+            "beneficial_insect_presence",
+            "beneficial_insects_released",
+            "beneficial_insects_supported",
+            "bins_filled",
+            "biocontrol_target",
+            "biodiversity_enhancement",
+            "biodiversity_score_improvement",
+            "biomass_chipped_tons",
+            "biomass_disposition",
+            "biomass_production",
+            "biomass_removed_kg",
+            "blockchain_block_number",
+            "blockchain_hash",
+            "blockchain_transaction",
+            "blockchain_verified",
+            "blocks",
+            "bloom_end",
+            "bloom_peak",
+            "bloom_start",
+            "brix_avg",
+            "brix_level",
+            "brix_levels",
+            "buffer_zone_meters",
+            "c_n_ratio",
+            "c_to_n_ratio",
+            "calcium_content_percent",
+            "canopy_operation",
+            "canopy_removed_pct",
+            "canopy_target_height_ft",
+            "carbon_impact",
+            "carbon_score",
+            "carton_weight_lbs",
+            "cartons_packed",
+            "cartons_shipped",
+            "chemical_free_period_days",
+            "chemical_subtype",
+            "chemical_treatments_avoided",
+            "cimis_et0_inches_day",
+            "cimis_station",
+            "cleaning_protocol",
+            "clipping_disposition",
+            "cn_ratio",
+            "cold_storage_days",
+            "colonies_per_acre",
+            "colonies_placed",
+            "colonies_removed",
+            "colony_strength",
+            "color_break_percent",
+            "compost_age_months",
+            "compost_ph",
+            "compost_temperature_reached_131f",
+            "composted",
+            "consumer_ready",
+            "cooler_humidity_pct",
+            "cooling_methods",
+            "copper_metallic_pct",
+            "cover_crop_species",
+            "coverage_pattern",
+            "crew_size",
+            "crop_damage_prevented",
+            "crop_growth_stage",
+            "crop_impact",
+            "crop_safety",
+            "custom_fields",
+            "damage_assessment",
+            "data_integrity_score",
+            "date_end",
+            "date_start",
+            "diameter",
+            "dilution_rate",
+            "dilution_ratio",
+            "direction",
+            "drought_severity",
+            "dry_matter_pct",
+            "dry_matter_tons_acre",
+            "duration",
+            "duration_days",
+            "duration_hours",
+            "earliest_safe_harvest",
+            "economic_threshold",
+            "economic_threshold_met",
+            "effectiveness",
+            "emitter_height_m",
+            "emitters_deployed",
+            "emitters_per_acre",
+            "emitters_replaced",
+            "end_date",
+            "environmental_impact",
+            "environmental_safeguards",
+            "equipment",
+            "equipment_cleaned",
+            "equipment_efficiency",
+            "equipment_harvester",
+            "equipment_hours",
+            "equipment_name",
+            "equipment_operation_type",
+            "equipment_sweeper",
+            "establishment_success",
+            "event_count",
+            "event_name",
+            "expected_benefits",
+            "expected_biomass_tons_ha",
+            "expected_parasitism_rate",
+            "expiry_date",
+            "export_percentage",
+            "extra_irrigation_gal",
+            "fertigation_duration_hours",
+            "field_to_packhouse_hours",
+            "final_season_harvest",
+            "floor_management_type",
+            "flow_rate_test",
+            "forecast_low_celsius",
+            "frac_group",
+            "frost_damage",
+            "frost_duration",
+            "fruit_drop_pct",
+            "fruit_removed_lbs",
+            "fruit_size_mm",
+            "fuel_consumed_total",
+            "fuel_consumption_total",
+            "fuel_liters",
+            "fuel_type",
+            "fuel_unit",
+            "grade_a_pct",
+            "grade_b_pct",
+            "grade_pct",
+            "grain_quality",
+            "ground_dry_days_target",
+            "growth_stage",
+            "habitat_area_hectares",
+            "harvest_days",
+            "harvest_duration_days",
+            "harvest_efficiency",
+            "harvest_method",
+            "heat_index",
+            "heat_stress_prevention",
+            "highest_temperature",
+            "hive_count",
+            "hlb_detections",
+            "hlb_prevention_program",
+            "hlb_status",
+            "hull_split_delay_days",
+            "hull_split_pct",
+            "hull_split_timing",
+            "hull_weight_tons",
+            "humidity",
+            "humidity_level",
+            "imp_strategy",
+            "irac_group",
+            "irrigation_depth",
+            "irrigation_depth_unit",
+            "irrigation_efficiency",
+            "irrigation_increase",
+            "irrigation_method",
+            "irrigation_reduced",
+            "irrigation_schedule",
+            "irrigation_type",
+            "is_summary",
+            "juice_content_pct",
+            "k2o_content_kg",
+            "kernel_moisture_pct",
+            "kernel_weight_kg",
+            "kg_per_bin",
+            "lab_tested",
+            "leaf_tissue_analysis_triggered",
+            "lot_id",
+            "low_temperature",
+            "lower_temperature",
+            "maintenance_tasks",
+            "maturity_level",
+            "max_score",
+            "method",
+            "micronutrients",
+            "min_dry_matter_pct",
+            "minimum_temperature",
+            "minimum_temperature_celsius",
+            "mist_water_gallons",
+            "mode_of_action",
+            "moisture_content",
+            "moisture_pct",
+            "monitoring_method",
+            "monitoring_period",
+            "mowing_height_inches",
+            "n_applied_lbs_acre",
+            "n_budget_pct",
+            "n_content_kg",
+            "n_fixation_lbs_acre",
+            "name",
+            "native_species_planted",
+            "net_weight_kg",
+            "net_weight_lbs",
+            "next_service_hours",
+            "nitrogen_fixation",
+            "nitrogen_fixation_potential",
+            "nitrogen_ppm",
+            "nitrogen_total_kg",
+            "nitrogen_use_efficiency",
+            "now_damage_pct",
+            "nozzle_type",
+            "nozzles_replaced",
+            "nozzles_tested",
+            "npk_k",
+            "npk_n",
+            "npk_p",
+            "nutrient_timing",
+            "observation",
+            "observations",
+            "observations_summary",
+            "odometer_hours",
+            "oil_content_pct",
+            "omri_listed",
+            "organic_approved",
+            "organic_certification",
+            "organic_matter_content",
+            "organic_system_plan",
+            "organic_treatments",
+            "p2o5_content_kg",
+            "packaging_materials_kg",
+            "palmer_drought_index",
+            "parasitism_rate_target",
+            "parasitoid_species",
+            "pass_number",
+            "pathogen_reduction",
+            "pest_pressure_at_application",
+            "pest_reduction_achieved",
+            "pest_reduction_percentage",
+            "pest_species_observed",
+            "pesticide_reduction",
+            "phi_days",
+            "phosphorus_ppm",
+            "phosphorus_total_kg",
+            "pickers_count",
+            "placement",
+            "placement_date",
+            "planting_depth",
+            "planting_method",
+            "planting_population",
+            "pollinator_type",
+            "pollinizer_varieties",
+            "potassium_ppm",
+            "potassium_total_kg",
+            "pre_cool_temp_f",
+            "pre_cool_time_hours",
+            "pre_dawn_application",
+            "pre_sodium_ppm",
+            "precipitation",
+            "precipitation_amount",
+            "precision_technology",
+            "previous_use",
+            "processing_energy_kwh",
+            "processing_method",
+            "product",
+            "production_efficiency",
+            "program",
+            "prohibited_substances",
+            "protection_measures",
+            "protection_measures_available",
+            "protection_method",
+            "protein_content",
+            "pruning_type",
+            "prunings_disposal",
+            "prunings_tons",
+            "pump_efficiency_pct",
+            "pump_pressure_psi",
+            "qr_stickers_applied",
+            "quality_grade",
+            "quality_grade_distribution",
+            "quality_rejection_rate",
+            "rate_L_ha",
+            "rate_fl_oz_acre",
+            "rate_g_ha",
+            "rate_kg_ha",
+            "rate_lbs_acre",
+            "rate_oz_acre",
+            "recommendation",
+            "rei_hours",
+            "reject_threshold_pct",
+            "release_method",
+            "release_quantity",
+            "release_rate_eggs_acre",
+            "release_timing",
+            "remaining_yield_lbs_est",
+            "removal_date",
+            "replant_reason",
+            "residual_control",
+            "residue_free",
+            "residue_management",
+            "resistance_management",
+            "restricted_use_pesticide",
+            "result",
+            "rootstock",
+            "rotation_note",
+            "row_position",
+            "row_spacing",
+            "sample_trees",
+            "samples_collected",
+            "sampling_depth",
+            "sampling_method",
+            "sampling_pattern",
+            "sanitizer_chlorine_ppm",
+            "scheduling_method",
+            "score",
+            "scouting_frequency",
+            "season_coverage",
+            "seed_lot_number",
+            "seed_mix",
+            "seed_treatment",
+            "seed_variety",
+            "seeding_rate",
+            "seeding_rate_kg_ha",
+            "sensor_count",
+            "shake_passes",
+            "shell_weight_tons",
+            "shielded_application",
+            "skirt_clearance_inches",
+            "slow_release",
+            "soil_carbon_target",
+            "soil_moisture",
+            "soil_moisture_after",
+            "soil_moisture_at_application",
+            "soil_moisture_before",
+            "soil_moisture_deficit",
+            "soil_moisture_depletion_days",
+            "soil_moisture_vwc_pct",
+            "soil_moisture_vwc_pct_start",
+            "soil_test_based",
+            "solar_energy_percentage",
+            "solubor_rate_kg_ha",
+            "spacing_m",
+            "species",
+            "species_count",
+            "spray_equipment",
+            "spray_number",
+            "spray_volume",
+            "spray_volume_L_ha",
+            "standard",
+            "start_date",
+            "storage_duration_months",
+            "supplemental_microsprinklers",
+            "system_pressure_psi",
+            "system_types",
+            "tank_capacity_gal",
+            "tank_mix",
+            "target",
+            "target_count_per_carton",
+            "target_pest_disease",
+            "target_sodium_ppm",
+            "target_weeds",
+            "tasks",
+            "temperature",
+            "test_weight",
+            "thinning_pct",
+            "threshold",
+            "threshold_trigger",
+            "threshold_vwc_pct",
+            "thrips_per_leaf_avg",
+            "thrips_per_leaf_trigger",
+            "thrips_threshold",
+            "tillage_direction",
+            "tillage_intensity",
+            "tillage_type",
+            "timing",
+            "total_eggs",
+            "total_season_yield_kg",
+            "total_wasps",
+            "total_water_gallons_est",
+            "traceability_score",
+            "transparency_benefit",
+            "transparency_testing",
+            "trap_density",
+            "trap_type",
+            "traps_installed",
+            "traps_per_ha",
+            "treated_or_untreated",
+            "treatment_threshold",
+            "tree_size",
+            "trees_damaged",
+            "trees_per_hour",
+            "trees_planted",
+            "trees_replanted",
+            "trees_shaken",
+            "trigger",
+            "trust_impact",
+            "unit",
+            "usda_grade",
+            "verification_confidence",
+            "verification_timestamp",
+            "volume_applied_total",
+            "volume_unit",
+            "wasps_per_ha",
+            "wasps_released",
+            "water_amount",
+            "water_applied",
+            "water_deficit",
+            "water_efficiency",
+            "water_sensitive_cards",
+            "water_source",
+            "water_volume",
+            "water_volume_L",
+            "water_volume_L_ha",
+            "water_volume_gal_acre",
+            "water_volume_total",
+            "water_volume_unit",
+            "way_of_protection",
+            "weather_conditions",
+            "weather_influence",
+            "weight",
+            "well_capacity_gpm",
+            "well_depth_ft",
+            "wind_machines",
+            "wind_speed",
+            "yield_average",
+            "yield_kg_ha",
+            "yield_lbs_acre",
+            "yield_revision_lbs",
+            "zinc_content_pct",
+            "zinc_sulfate_rate_kg_ha",
+        }
+    )
+
+    # Defense-in-depth: even an allow-listed key is dropped if it matches one of these
+    # unambiguously-commercial substrings (guards against a future maintainer mistakenly
+    # adding a sensitive key to the allow-list). Deliberately narrow — none of these match
+    # any current allow-listed agronomic key.
+    EXTRA_DATA_SENSITIVE_SUBSTRINGS = (
+        "invoice",
+        "purchase_order",
+        "bill_of_lading",
+        "buyer_",
+        "_cost",
+        "cost_per",
+        "cost_vs",
+        "premium_pct",
+        "_supplier",
+        "supplier_",
+        "trailer_",
+        "original_",
+        "ui_",
+    )
+
     def _sanitize_extra_data_for_public(self, event):
-        """Remove business-sensitive fields from extra_data for public API."""
+        """Allow-list extra_data for the public consumer API.
+
+        ONLY keys in ALLOWED_EXTRA_DATA_KEYS reach the consumer; unknown keys are dropped by
+        default (safe). A secondary commercial-substring guard catches any sensitive key that
+        is ever mistakenly added to the allow-list. NOTE: free-text narrative fields (event
+        ``description``/notes and the company bio) are serialized elsewhere and can still embed
+        vendor names / unqualified green claims — that is a separate product-level decision
+        (2026-06 audit P0-2 / P1-7), not handled here.
+        """
         raw = getattr(event, "extra_data", None)
         if not raw or not isinstance(raw, dict):
             return None
 
-        BLOCKED_KEYS = {
-            "cost_usd",
-            "maintenance_cost",
-            "cost",
-            "revenue",
-            "supplier",
-            "gypsum_source",
-            "carbon_calculation",
-            "carbon_notes",
-        }
+        def is_safe(key):
+            if key not in self.ALLOWED_EXTRA_DATA_KEYS:
+                return False
+            lk = str(key).lower()
+            return not any(sub in lk for sub in self.EXTRA_DATA_SENSITIVE_SUBSTRINGS)
 
-        sanitized = {k: v for k, v in raw.items() if k not in BLOCKED_KEYS}
+        sanitized = {k: v for k, v in raw.items() if is_safe(k)}
 
         # Filter custom_fields to consumer visibility only
         if "custom_fields" in sanitized:
@@ -2753,11 +3340,13 @@ class PublicHistorySerializer(serializers.ModelSerializer):
             "TM",  # pest treatment
             "BR",  # beneficial release
             "PI",  # pest identification
+            "FP",  # frost protection (infrequent, notable crop defense)
         }
     )
     # First occurrence only — one soil test / one scouting trip tells the
-    # story; ten of them is the audit log (proof view).
-    FIRST_OCCURRENCE_HIGHLIGHT_TYPES = frozenset({"ST", "SC", "IR"})
+    # story; ten of them is the audit log (proof view). Mowing (MO) recurs
+    # through the season, so one mowing tells the consumer story.
+    FIRST_OCCURRENCE_HIGHLIGHT_TYPES = frozenset({"ST", "SC", "IR", "MO"})
 
     def _consumer_subtype_code(self, ev):
         """
@@ -3319,14 +3908,16 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "cleaned_by": getattr(event, "cleaned_by", None),
                         "cleaning_protocol_reference": getattr(event, "cleaning_protocol_reference", None),
                         "shared_with_conventional": getattr(event, "shared_with_conventional", False),
-                        # NOP 5029: Seed commercial availability search documentation (PL subtype)
-                        "seed_search_attempts": getattr(event, "seed_search_attempts", None),
-                        # NOP 7 CFR 205.204: Seed traceability (PL subtype)
-                        "seed_supplier_name": getattr(event, "seed_supplier_name", None),
-                        "seed_purchase_date": (
-                            event.seed_purchase_date.isoformat() if getattr(event, "seed_purchase_date", None) else None
-                        ),
-                        "seed_purchase_invoice": getattr(event, "seed_purchase_invoice", None),
+                        # NOP 7 CFR 205.204 seed traceability (PL subtype). seed_supplier_name,
+                        # seed_purchase_date, seed_purchase_invoice, and seed_search_attempts (NOP 5029
+                        # commercial-availability search docs, which embed contacted-supplier identities)
+                        # are commercially sensitive vendor/purchase records and are INTENTIONALLY
+                        # EXCLUDED from the public consumer endpoint. They surface only on the
+                        # certifier-facing NOP PDF (audit_export_service). Same policy and class as the
+                        # chemical supplier_name/purchase_* fields above (see L3103-3110) and Standard
+                        # Fix #5 in AUDIT_INSTRUCTIONS. Regression: test_public_serializer_leakage.py.
+                        # seed_lot_number / seed_certification_status / seed_treatment are legitimate
+                        # consumer transparency (what was planted, not who sold it) and remain public.
                         "seed_lot_number": getattr(event, "seed_lot_number", None),
                         "seed_certification_status": getattr(event, "seed_certification_status", None),
                         "seed_treatment": getattr(event, "seed_treatment", None),
@@ -4077,6 +4668,7 @@ class UpdateEquipmentEventSerializer(CustomFieldsMixin, serializers.ModelSeriali
         """
         # Create a copy to avoid modifying the original
         data = data.copy()
+        ensure_event_description(data, "Equipment activity")  # F01: avoid silent 400 on blank notes
 
         # Handle custom fields (user-defined additional information)
         custom_fields = self.handle_custom_fields_input(data)
@@ -4384,6 +4976,7 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
 
         # Create a copy to avoid modifying the original
         data = data.copy()
+        ensure_event_description(data, "Soil management")  # F01: avoid silent 400 on blank notes
 
         # Convert empty strings to None for optional integer fields
         integer_fields = [
@@ -4669,7 +5262,14 @@ class UpdatePestManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
         for field_name in extra_data_only_fields:
             if field_name in data:
                 value = data.pop(field_name)
-                frontend_extra_data[field_name] = value if value is not None else ""
+                # F32 fix (2026-06): don't clobber a real value already in extra_data
+                # with an empty top-level field. The frontend copies observation ->
+                # extra_data.observations_summary for summary events, while the
+                # never-rendered top-level field submits "" — overwriting wiped the
+                # real summary (consumer card showed blank). Only take the top-level
+                # value when it is non-empty or extra_data doesn't already carry it.
+                if (value not in (None, "")) or (field_name not in frontend_extra_data):
+                    frontend_extra_data[field_name] = value if value is not None else ""
 
         # Handle custom fields (user-defined additional information)
         custom_fields = self.handle_custom_fields_input(data)
@@ -4823,6 +5423,7 @@ class UpdateBusinessEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
         """
         # Create a copy to avoid modifying the original
         data = data.copy()
+        ensure_event_description(data, "Business event")  # F01: avoid silent 400 on blank notes
 
         # Handle custom fields (user-defined additional information)
         custom_fields = self.handle_custom_fields_input(data)
@@ -5064,3 +5665,21 @@ class BuyerDocRequestSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = [f for f in fields if f != "status"]
+
+
+class SalesRecordSerializer(serializers.ModelSerializer):
+    """Owner-facing sales record (SOE traceback). Never on public endpoints."""
+
+    class Meta:
+        model = SalesRecord
+        fields = [
+            "id",
+            "sale_date",
+            "buyer_name",
+            "quantity",
+            "quantity_unit",
+            "invoice_number",
+            "organic_on_invoice",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_at"]

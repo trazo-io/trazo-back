@@ -578,6 +578,60 @@ class AuditExportService:
         t.setStyle(style)
         return t
 
+    def _event_note_text(self, ev):
+        """
+        Farmer-authored free-text note for an event.
+
+        ChemicalEvent (and Production/General) carry a dedicated
+        ``observation`` column. Soil and Pest events have NO observation
+        column — the form's note arrives via ``extra_data`` (``observation``
+        / ``observations_summary``, the keys the event serializers stash
+        free-text into). Returns "" when no note exists.
+        """
+        note = (getattr(ev, "observation", None) or "").strip()
+        if note:
+            return note
+        extra = getattr(ev, "extra_data", None)
+        if isinstance(extra, dict):
+            for key in ("observation", "observations_summary", "notes"):
+                value = extra.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+        return ""
+
+    def _build_event_notes_subtable(self, events, title, type_labels):
+        """
+        Supplemental notes sub-table (date | type label | note ≤120 chars).
+
+        Mirrors the Production Event Notes pattern: the main section tables
+        keep one compact row per event, so free-text notes — the richest
+        farmer-authored documentation — would overflow them. Renders ONLY
+        when at least one event has a non-empty note; returns [] otherwise.
+        """
+        noted = [(ev, self._event_note_text(ev)) for ev in events]
+        noted = [(ev, note) for ev, note in noted if note]
+        if not noted:
+            return []
+
+        elements = [self._spacer(0.15), self._body(f"<b>{title}</b>"), self._spacer(0.05)]
+
+        notes_headers = ["Date", "Type", "Notes"]
+        notes_data = [[self._hdr(h) for h in notes_headers]]
+        for ev, note in noted:
+            notes_data.append(
+                [
+                    self._cell(_fmt_date(ev.date)),
+                    self._cell(type_labels.get(ev.type, _val(ev.type))),
+                    self._cell(note, 120),
+                ]
+            )
+
+        notes_widths = [0.7 * inch, 1.0 * inch, 4.9 * inch]
+        notes_table = Table(notes_data, colWidths=notes_widths, repeatRows=1)
+        notes_table.setStyle(self._base_table_style())
+        elements.append(notes_table)
+        return elements
+
     # ------------------------------------------------------------------
     # PDF generation — public entry point
     # ------------------------------------------------------------------
@@ -2465,8 +2519,11 @@ class AuditExportService:
 
         # 7 CFR 205.206 + EPA WPS — restricted-use materials require EPA reg #
         # documentation for organic and ROC inspections, not just GlobalG.A.P.
+        # RUP flag (40 CFR 152.175): inspectors cross-check restricted-use
+        # materials against the applicator certification in Table 2.
         if self.certification_type in ("organic", "globalgap", "roc", "all"):
             app_headers.append("EPA Reg #")
+            app_headers.append("RUP")
 
         app_header_row = [self._hdr(h) for h in app_headers]
         app_data = [app_header_row]
@@ -2506,6 +2563,7 @@ class AuditExportService:
 
             if self.certification_type in ("organic", "globalgap", "roc", "all"):
                 row.append(self._cell(ev.epa_registration_number))
+                row.append(self._cell("Yes" if ev.restricted_use_pesticide else None))
 
             app_data.append(row)
 
@@ -2527,6 +2585,14 @@ class AuditExportService:
             base_widths.extend([0.4 * inch, 0.4 * inch, 0.4 * inch])  # REI, PHI, Buffer
         if self.certification_type in ("organic", "globalgap", "roc", "all"):
             base_widths.append(0.5 * inch)  # EPA Reg
+            # RUP is a narrow Yes/— column. Adding it pushes the packed
+            # variant past the 7.0" budget, so trim Product, NPK, Target and
+            # Organic to compensate (base variant keeps its original widths).
+            base_widths.append(0.35 * inch)  # RUP
+            base_widths[1] -= 0.10 * inch  # Product 0.9 -> 0.8
+            base_widths[3] -= 0.05 * inch  # NPK / Conc. 0.55 -> 0.5
+            base_widths[7] -= 0.10 * inch  # Target 0.65 -> 0.55
+            base_widths[8] -= 0.05 * inch  # Organic 0.55 -> 0.5
 
         t = Table(app_data, colWidths=base_widths, repeatRows=1)
         t.setStyle(self._base_table_style())
@@ -2549,6 +2615,7 @@ class AuditExportService:
                 "Qty Purchased",
                 "Applicator",
                 "Cert #",
+                "CA DPR Permit",
             ]
             trace_header_row = [self._hdr(h) for h in trace_headers]
             trace_data = [trace_header_row]
@@ -2558,6 +2625,15 @@ class AuditExportService:
                 qty_purchased = ""
                 if ev.quantity_purchased is not None:
                     qty_purchased = f"{_fmt_float(ev.quantity_purchased)} {_val(ev.quantity_purchased_unit, '')}"
+
+                # CA DPR restricted-materials permit (county Ag Commissioner).
+                # Surface expiry inline so the inspector can check validity
+                # against the application date without leaving the table.
+                dpr_permit = None
+                if ev.ca_dpr_permit_number:
+                    dpr_permit = ev.ca_dpr_permit_number
+                    if ev.ca_dpr_permit_expires:
+                        dpr_permit += f" exp {ev.ca_dpr_permit_expires:%Y-%m-%d}"
 
                 trace_data.append(
                     [
@@ -2569,6 +2645,7 @@ class AuditExportService:
                         self._cell(qty_purchased or None),
                         self._cell(ev.applicator_name or ev.performed_by, 25),
                         self._cell(ev.applicator_certification, 20),
+                        self._cell(dpr_permit, 40),
                     ]
                 )
 
@@ -2578,6 +2655,8 @@ class AuditExportService:
             # Column widths: Purchase Date widened to fit "YYYY-MM-DD" without
             # wrapping; Supplier widened so common org names ("Hydra Organics",
             # "Pacific Gold Dairy") render fully; Cert # narrowed to compensate.
+            # CA DPR Permit gets 0.95" so "PERMIT-# exp YYYY-MM-DD" wraps to
+            # two clean lines; total stays inside the 7.0" budget.
             trace_widths = [
                 0.55 * inch,  # Date Applied
                 0.85 * inch,  # Product
@@ -2587,6 +2666,7 @@ class AuditExportService:
                 0.65 * inch,  # Qty Purchased
                 0.70 * inch,  # Applicator
                 0.45 * inch,  # Cert #
+                0.95 * inch,  # CA DPR Permit
             ]
             t2 = Table(trace_data, colWidths=trace_widths, repeatRows=1)
             t2.setStyle(self._base_table_style())
@@ -2670,6 +2750,9 @@ class AuditExportService:
                         self._styles["footer_note"],
                     )
                 )
+
+        # --- Application Notes (mirrors the Production Event Notes pattern) ---
+        elements.extend(self._build_event_notes_subtable(events, "Application Notes", CHEMICAL_TYPE_LABELS))
 
         return elements
 
@@ -3581,6 +3664,9 @@ class AuditExportService:
                     )
                 )
 
+        # --- Soil Notes (mirrors the Production Event Notes pattern) ---
+        elements.extend(self._build_event_notes_subtable(events, "Soil Notes", SOIL_TYPE_LABELS))
+
         return elements
 
     # ------------------------------------------------------------------
@@ -3717,6 +3803,9 @@ class AuditExportService:
                     self._warning_style(),
                 )
             )
+
+        # --- Pest Notes (mirrors the Production Event Notes pattern) ---
+        elements.extend(self._build_event_notes_subtable(events, "Pest Notes", PEST_TYPE_LABELS))
 
         return elements
 
@@ -6995,10 +7084,24 @@ class AuditExportService:
             self.production.history_generalevent_events.filter(is_contamination_incident=False).order_by("date")
         )
 
+        # Pointer to the excluded incidents — an inspector scanning this
+        # section must not conclude contamination went undocumented just
+        # because the rows live in the SOE Compliance Status section.
+        contamination_count = self.production.history_generalevent_events.filter(is_contamination_incident=True).count()
+        contamination_pointer = None
+        if contamination_count > 0:
+            contamination_pointer = Paragraph(
+                f"<i>{contamination_count} contamination incident(s) recorded — "
+                "see SOE Compliance Status section (§ 205.272).</i>",
+                self._styles["footer_note"],
+            )
+
         headers = ["Date", "Activity Type", "Name", "People", "Duration", "Notes", "By"]
 
         if not events:
             elements.append(self._empty_table(headers))
+            if contamination_pointer is not None:
+                elements.append(contamination_pointer)
             return elements
 
         header_row = [self._hdr(h) for h in headers]
@@ -7032,6 +7135,8 @@ class AuditExportService:
         t = Table(data, colWidths=col_widths, repeatRows=1)
         t.setStyle(self._base_table_style())
         elements.append(t)
+        if contamination_pointer is not None:
+            elements.append(contamination_pointer)
         return elements
 
     # OFPP filename heuristic — surfaces misfiled receipts/invoices uploaded

@@ -15,6 +15,7 @@ from .views import (
     HistoryScanViewSet,
     HistoryViewSet,
     PublicHistoryScanViewSet,
+    SalesRecordViewSet,
     audit_export_by_uuid,
 )
 
@@ -25,6 +26,7 @@ router.register(r"events", EventViewSet, basename="events")
 router.register(r"scans", HistoryScanViewSet, basename="scans")
 router.register(r"public_scans", PublicHistoryScanViewSet, basename="public-scans")
 router.register(r"buyer_doc_requests", BuyerDocRequestViewSet, basename="buyer-doc-requests")
+router.register(r"sales_records", SalesRecordViewSet, basename="sales-records")
 
 urlpatterns = [
     # Audit export by UUID — MUST be before router include

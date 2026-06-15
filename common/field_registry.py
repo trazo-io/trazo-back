@@ -100,6 +100,14 @@ APPLICATION_METHOD = [
     ("foliar", "Foliar Application"),
     ("drip", "Drip/Fertigation"),
     ("banding", "Band Application"),
+    # F20 (2026-06): DPR-PML-017C box 21 application-method categories + the
+    # orchard-standard air-blast. Fumigation additionally requires ffm_code.
+    ("ground_spray", "Ground Spray"),
+    ("air_blast", "Air-Blast (orchard sprayer)"),
+    ("aerial", "Aerial"),
+    ("fumigation", "Fumigation"),
+    ("chemigation", "Chemigation"),
+    ("soil_incorporation", "Soil Incorporation"),
 ]
 
 # USDA NASS 2023 irrigation methods

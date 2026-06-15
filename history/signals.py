@@ -1,3 +1,5 @@
+import logging
+
 from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 
@@ -13,6 +15,8 @@ from .models import (
     SoilManagementEvent,
     WeatherEvent,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -75,6 +79,22 @@ def _get_calculator():
     return _calculator
 
 
+# F09 (2026-06): the carbon-calc signal handlers below previously swallowed
+# exceptions with a bare print(), so a crashed calculation looked identical to a
+# true zero-emission event (no CarbonEntry, no trace). They now log at ERROR with
+# exc_info so failures are visible in logs/monitoring (Sentry).
+#
+# NOTE: an earlier revision of this fix ALSO wrote a 0-amount CarbonEntry flagged
+# verification_status="calculation_error" to make failures queryable in the DB.
+# That was reverted — its description contained the "{cls}(ID={id})" substring
+# that the consumer/event carbon lookup matches on
+# (history/serializers.py:~244, description__icontains=event_id_pattern,
+# order_by("-created_at").first()), so a failed event could surface co2e=0 and
+# data_source="calculation_error" on the consumer event card. A DB error marker
+# needs a description that avoids that pattern + success-path cleanup + a
+# consumer-query exclusion; deferred as a reviewed change.
+
+
 @receiver(post_save, sender=ChemicalEvent)
 def calculate_chemical_event_carbon(sender, instance, created, **kwargs):
     """
@@ -129,7 +149,7 @@ def calculate_chemical_event_carbon(sender, instance, created, **kwargs):
         print(f"✅ Carbon calculation {action} for Chemical Event {instance.id}: {calculation_result['co2e']} kg CO2e")
 
     except Exception as e:
-        print(f"❌ Error calculating carbon for Chemical Event {instance.id}: {e}")
+        logger.error("Error calculating carbon for Chemical Event %s: %s", instance.id, e, exc_info=True)
 
 
 @receiver(post_save, sender=ProductionEvent)
@@ -190,7 +210,7 @@ def calculate_production_event_carbon(sender, instance, created, **kwargs):
         )
 
     except Exception as e:
-        print(f"❌ Error calculating carbon for Production Event {instance.id}: {e}")
+        logger.error("Error calculating carbon for Production Event %s: %s", instance.id, e, exc_info=True)
 
 
 @receiver(post_save, sender=WeatherEvent)
@@ -246,7 +266,7 @@ def calculate_weather_event_carbon(sender, instance, created, **kwargs):
             )
 
     except Exception as e:
-        print(f"❌ Error calculating carbon for Weather Event {instance.id}: {e}")
+        logger.error("Error calculating carbon for Weather Event %s: %s", instance.id, e, exc_info=True)
 
 
 @receiver(post_save, sender=GeneralEvent)
@@ -318,7 +338,7 @@ def calculate_general_event_carbon(sender, instance, created, **kwargs):
             )
 
     except Exception as e:
-        print(f"❌ Error calculating carbon for General Event {instance.id}: {e}")
+        logger.error("Error calculating carbon for General Event %s: %s", instance.id, e, exc_info=True)
 
 
 @receiver(post_save, sender=BusinessEvent)
@@ -415,7 +435,7 @@ def calculate_equipment_event_carbon(sender, instance, created, **kwargs):
         print(f"✅ Carbon calculation {action} for Equipment Event {instance.id}: {calculation_result['co2e']} kg CO2e")
 
     except Exception as e:
-        print(f"❌ Error calculating carbon for Equipment Event {instance.id}: {e}")
+        logger.error("Error calculating carbon for Equipment Event %s: %s", instance.id, e, exc_info=True)
 
 
 @receiver(post_save, sender=SoilManagementEvent)
@@ -473,7 +493,7 @@ def calculate_soil_management_event_carbon(sender, instance, created, **kwargs):
         )
 
     except Exception as e:
-        print(f"❌ Error calculating carbon for Soil Management Event {instance.id}: {e}")
+        logger.error("Error calculating carbon for Soil Management Event %s: %s", instance.id, e, exc_info=True)
 
 
 @receiver(post_save, sender=PestManagementEvent)
@@ -530,4 +550,4 @@ def calculate_pest_management_event_carbon(sender, instance, created, **kwargs):
         )
 
     except Exception as e:
-        print(f"❌ Error calculating carbon for Pest Management Event {instance.id}: {e}")
+        logger.error("Error calculating carbon for Pest Management Event %s: %s", instance.id, e, exc_info=True)

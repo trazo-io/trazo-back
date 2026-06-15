@@ -790,6 +790,29 @@ class CommonEvent(models.Model):
         help_text="Crop growth stage at time of event",
     )
 
+    # F21 (2026-06): supervisor review / sign-off. FSMA Produce Safety Rule
+    # § 112.161(b) requires review-required records (training, agricultural water,
+    # biological soil amendments, equipment/tool cleaning) to be reviewed "within a
+    # reasonable time" by a supervisor, with the reviewer's name and the review date.
+    # Universal on CommonEvent so any event type can carry a sign-off; the certifier
+    # PDF surfaces it. (NOT codified as "7 working days" — that figure is not in the
+    # regulation; see research-fsma-sgma.md.)
+    reviewed = models.BooleanField(
+        default=False,
+        help_text="Whether a supervisor has reviewed this record (FSMA PSR § 112.161(b)).",
+    )
+    reviewer_name = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Name of the supervisor who reviewed the record (FSMA PSR § 112.161(b)).",
+    )
+    review_date = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Date the record was reviewed/signed off.",
+    )
+
     class Meta:
         abstract = True
 
@@ -840,8 +863,13 @@ class WeatherEvent(CommonEvent):
         # temperature in °F / °C (evaluated against both, narrower of the two)
         "temperature_f": (-40, 135),  # world record high ~134°F
         "temperature_c": (-40, 57),  # world record high ~56.7°C
-        "wind_speed_mph": (0, 250),  # world record gust 253 mph, Barrow Island
-        "precipitation_in": (0, 50),  # single-event max ~43 in (Tropical Cyclone Denise, 1966)
+        # F12 fix (2026-06): the WeatherTab form collects wind in km/h and
+        # precipitation in mm (metric), so the stored extra_data values are metric.
+        # Bounds were imperial (mph / inches), so a legitimate 150 mm storm or a
+        # 300 km/h gust failed the (0,50)/(0,250) checks with a 400. Bounds are now
+        # metric to match the form's units.
+        "wind_speed_kmh": (0, 410),  # world record gust 253 mph ≈ 407 km/h (Barrow Island)
+        "precipitation_mm": (0, 1200),  # single-event max ~43 in ≈ 1092 mm (TC Denise, 1966)
         "humidity_pct": (0, 100),
         "hail_size_in": (0, 8),  # largest verified ~8 in (Vivian, SD 2010)
     }
@@ -887,14 +915,14 @@ class WeatherEvent(CommonEvent):
             if msg:
                 issues.setdefault("extra_data", []).append(msg)
 
-        wind_low, wind_high = self._PLAUSIBILITY_BOUNDS["wind_speed_mph"]
-        msg = self._plausibility_check(" mph", extra.get("wind_speed"), wind_low, wind_high, "wind_speed")
+        wind_low, wind_high = self._PLAUSIBILITY_BOUNDS["wind_speed_kmh"]
+        msg = self._plausibility_check(" km/h", extra.get("wind_speed"), wind_low, wind_high, "wind_speed")
         if msg:
             issues.setdefault("extra_data", []).append(msg)
 
-        precip_low, precip_high = self._PLAUSIBILITY_BOUNDS["precipitation_in"]
+        precip_low, precip_high = self._PLAUSIBILITY_BOUNDS["precipitation_mm"]
         for key in ("precipitation", "precipitation_amount"):
-            msg = self._plausibility_check(" in", extra.get(key), precip_low, precip_high, key)
+            msg = self._plausibility_check(" mm", extra.get(key), precip_low, precip_high, key)
             if msg:
                 issues.setdefault("extra_data", []).append(msg)
 
@@ -1069,6 +1097,15 @@ class ChemicalEvent(CommonEvent):
     applicator_certification = models.CharField(
         max_length=100, blank=True, null=True, help_text="Applicator certification/license number (required for RUPs)"
     )
+    # F21 (2026-06): GLOBALG.A.P. IFA v6 FV-GFS 32.02.01 #10 — the technically
+    # responsible person who AUTHORIZED the plant-protection-product application
+    # (often the grower or PCA), distinct from the applicator who applied it.
+    authorizer_name = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Technically-responsible person who authorized the application (GLOBALG.A.P. FV-GFS 32.02.01 #10).",
+    )
     rei_hours = models.DecimalField(
         max_digits=6,
         decimal_places=1,
@@ -1215,6 +1252,78 @@ class ChemicalEvent(CommonEvent):
         help_text="Expiration date of the CA DPR restricted-materials permit",
     )
 
+    # ------------------------------------------------------------------
+    # F20 (2026-06): Legal spray-record completeness.
+    # Lets one Trazo chemical event double as (a) the CA legal pesticide-use
+    # record / monthly PUR (DPR-PML-017C) and (b) a GLOBALG.A.P. IFA v6
+    # FV-GFS 32.02.01 PPP application record. All nullable — only the CA fields
+    # matter for a CA establishment; GG needs manufacturer + start/end + dose.
+    # ------------------------------------------------------------------
+    # Universal (GLOBALG.A.P. + DPR box 28 + traceability)
+    manufacturer = models.CharField(
+        max_length=120,
+        blank=True,
+        null=True,
+        help_text="Product manufacturer/registrant (GLOBALG.A.P. FV-GFS 32.02.01; DPR-PML-017C box 28). "
+        "commercial_name holds the brand/trade name.",
+    )
+    application_start = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text="Date/time the application started (3 CCR 6624(c)(2) / DPR box 17).",
+    )
+    application_end = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text="Date/time the application completed (3 CCR 6624(c)(2) / DPR box 18).",
+    )
+    # CA requires BOTH total planted acreage (box 9) AND acreage treated (the
+    # existing `area` field / box 19). They differ for band/spot/strip treatments.
+    planted_area = models.CharField(
+        max_length=60,
+        blank=True,
+        null=True,
+        help_text="Total planted acres/units at the site (DPR-PML-017C box 9). Distinct from `area` (acreage treated).",
+    )
+    planted_area_unit = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        help_text="Unit for planted_area (acres, ha, sq_ft, units).",
+    )
+    # CA Pesticide Use Report identity (only relevant for CA establishments).
+    operator_id = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="Operator ID / permit number issued by the county Ag Commissioner (DPR box 3). "
+        "Required for ALL CA ag pesticide use, not only restricted materials.",
+    )
+    site_id = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        help_text="County-issued site identification number, 1-8 chars (DPR box 8).",
+    )
+    application_county = models.CharField(
+        max_length=60,
+        blank=True,
+        null=True,
+        help_text="County where the application was performed (DPR box 10).",
+    )
+    mtrs_section = models.CharField(max_length=20, blank=True, null=True, help_text="Legal section (DPR box 11).")
+    mtrs_township = models.CharField(max_length=20, blank=True, null=True, help_text="Township N/S (DPR box 12).")
+    mtrs_range = models.CharField(max_length=20, blank=True, null=True, help_text="Range E/W (DPR box 13).")
+    mtrs_base_meridian = models.CharField(
+        max_length=20, blank=True, null=True, help_text="Base & Meridian: H/M/S (DPR box 14)."
+    )
+    ffm_code = models.CharField(
+        max_length=10,
+        blank=True,
+        null=True,
+        help_text="Field fumigation method code — required for fumigation method / 1,3-D (DPR box 21 / 3 CCR 6624(c)(8)).",
+    )
+
     def clean(self):
         """
         Model-level validation for NPK percentages, EPA compliance, and business logic
@@ -1302,6 +1411,13 @@ class ProductionEvent(CommonEvent):
     POST_HARVEST_PROCESSING = "PH"  # Hulling, shelling, washing, sorting, packing
     CANOPY_MANAGEMENT = "CM"  # Leaf pulling, hedging, shoot positioning (distinct from Pruning)
 
+    # Batch 3 (2026-06): Scope-1 fuel operations that previously had no structured
+    # home — frost-fuel and orchard-floor mowing were either logged as Weather/General
+    # (carbon-invisible: weather excluded, General flat 0.1) or miscategorized as CU
+    # (tillage). Both route through the existing ProductionEvent fuel pipeline.
+    FROST_PROTECTION = "FP"  # Wind machines / heaters / under-tree sprinklers on cold nights
+    MOWING = "MO"  # Orchard-floor mowing / mulching / cover-crop or herbicide-strip management
+
     PRODUCTION_EVENTS = (
         (PLANTING, "Planting"),
         (HARVESTING, "Harvesting"),
@@ -1316,6 +1432,9 @@ class ProductionEvent(CommonEvent):
         (POLLINATION, "Pollination"),  # Bee placement / pollinator management
         (POST_HARVEST_PROCESSING, "Post-Harvest Processing"),  # Hulling, shelling, washing, sorting, packing
         (CANOPY_MANAGEMENT, "Canopy Management"),  # Leaf pulling, hedging, shoot positioning
+        # Batch 3 additions
+        (FROST_PROTECTION, "Frost Protection"),  # Wind machines / heaters (Scope-1 fuel)
+        (MOWING, "Mowing / Orchard-Floor"),  # Mowing, mulching, floor management
     )
 
     type = models.CharField(max_length=2, choices=PRODUCTION_EVENTS)
@@ -2932,3 +3051,43 @@ class BuyerDocRequest(models.Model):
 
     def __str__(self):
         return f"{self.requester_email} -> {self.production_id} ({self.status})"
+
+
+class SalesRecord(models.Model):
+    """
+    Lightweight sales record per production lot — the SOE traceback unit.
+
+    Inspectors verify "crop and quantity sold, date of sale, buyer" at every
+    annual inspection, and mass-balance audits are mandatory under the
+    Strengthening Organic Enforcement rule. The legacy single History.sold_to
+    field can't represent multiple sales from one lot; these records feed the
+    audit PDF's Traceability + Mass-Balance sections.
+
+    NOT consumer-facing — buyer identity and quantities are commercially
+    sensitive (same policy as ChemicalEvent supplier fields).
+    """
+
+    production = models.ForeignKey(
+        History,
+        on_delete=models.CASCADE,
+        related_name="sales_records",
+    )
+    sale_date = models.DateField()
+    buyer_name = models.CharField(max_length=160)
+    quantity = models.DecimalField(max_digits=12, decimal_places=2)
+    quantity_unit = models.CharField(max_length=20, default="kg")
+    invoice_number = models.CharField(max_length=80, blank=True, default="")
+    # § 205.307 — sales documents for organic product must identify it as organic.
+    organic_on_invoice = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Sales Record"
+        verbose_name_plural = "Sales Records"
+        ordering = ["-sale_date", "-created_at"]
+        indexes = [
+            models.Index(fields=["production", "-sale_date"], name="salesrecord_prod_date_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.sale_date} {self.buyer_name} {self.quantity} {self.quantity_unit}"
