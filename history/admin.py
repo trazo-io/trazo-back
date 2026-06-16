@@ -1,4 +1,10 @@
+import re
+import uuid
+
+from django import forms
+from django.conf import settings
 from django.contrib import admin
+from django.core.files.storage import default_storage
 from django.urls import reverse
 from django.utils.html import format_html
 
@@ -80,7 +86,32 @@ class EventAdmin(admin.ModelAdmin):
         return super().has_delete_permission(request, obj)
 
 
+class HistoryAdminForm(forms.ModelForm):
+    """Adds a one-shot file uploader for the consumer hero/cover photo.
+
+    The production model stores the cover as a URL (``cover_image_url``) so it travels the same
+    publicly-readable-S3-URL path as every other consumer photo. This non-model field lets staff
+    upload a local file: ``save_model`` pushes it to the media bucket and writes the resulting URL
+    back to ``cover_image_url``. Leave it blank to keep the current cover or paste a URL directly.
+    """
+
+    cover_image_file = forms.ImageField(
+        required=False,
+        label="Upload hero photo",
+        help_text=(
+            "Upload a photo to use as the consumer QR hero/cover. It is saved to the media bucket "
+            "and set as the cover, overriding the auto-picked first timeline photo. Leave blank to "
+            "keep the current cover, or paste a public image URL in the field above instead."
+        ),
+    )
+
+    class Meta:
+        model = History
+        fields = "__all__"
+
+
 class HistoryAdmin(admin.ModelAdmin):
+    form = HistoryAdminForm
     list_display = (
         "name",
         "public_id",
@@ -99,6 +130,7 @@ class HistoryAdmin(admin.ModelAdmin):
     )
     search_fields = (
         "name",
+        "public_id",
         "product__name",
         "parcel__establishment__name",
         "start_date",
@@ -120,6 +152,7 @@ class HistoryAdmin(admin.ModelAdmin):
         "transparency_score",
         "updated_at",
         "production_images",
+        "cover_preview",
     )
 
     fieldsets = (
@@ -141,12 +174,68 @@ class HistoryAdmin(admin.ModelAdmin):
             },
         ),
         (
+            "Hero / Cover Photo (consumer QR)",
+            {
+                "fields": ("cover_preview", "cover_image_url", "cover_image_file"),
+                "description": (
+                    "The hero photo shown at the top of the public consumer page "
+                    "(consumer.trazo.io/production/&lt;public_id&gt;). Upload a file OR paste a "
+                    "public image URL. When set it overrides the auto-picked first timeline photo. "
+                    "Clear the URL to fall back to auto-pick."
+                ),
+            },
+        ),
+        (
             "Production Images",
             {
                 "fields": ("production_images", "qr_code"),
             },
         ),
     )
+
+    def cover_preview(self, obj):
+        """Thumbnail of the current consumer hero/cover photo."""
+        url = getattr(obj, "cover_image_url", None) if obj else None
+        if url:
+            return format_html(
+                '<a href="{}" target="_blank">'
+                '<img src="{}" style="max-height:160px; max-width:280px; object-fit:cover; '
+                'border-radius:8px; border:1px solid #ddd;" /></a>',
+                url,
+                url,
+            )
+        return format_html(
+            '<span style="color:#888;">No cover set — the consumer hero auto-picks the first ' "timeline photo.</span>"
+        )
+
+    cover_preview.short_description = "Current cover"
+
+    def save_model(self, request, obj, form, change):
+        """If a hero file was uploaded, store it in the media bucket and set cover_image_url.
+
+        Mirrors the app upload flow (common.views.get_presigned_url): the file lands under the
+        public ``media/`` prefix and the permanent (non-presigned) S3 URL is persisted, so the
+        consumer page renders it exactly like every other photo.
+        """
+        upload = form.cleaned_data.get("cover_image_file")
+        if upload:
+            # Sanitize the filename (spaces/unicode would yield a broken, unencoded
+            # S3 URL) — mirrors common.views.get_upload_urls.
+            safe_name = re.sub(r"[^\w\-.]", "_", upload.name)
+            is_s3 = settings.DEFAULT_FILE_STORAGE == "storages.backends.s3boto3.S3Boto3Storage"
+            # On S3 the photo must live under the proven-public "media/" prefix (where the
+            # app uploads consumer photos). On the local filesystem MEDIA_URL already adds
+            # "media/", so the storage key must NOT repeat it.
+            prefix = "media/production_hero" if is_s3 else "production_hero"
+            saved_key = default_storage.save(f"{prefix}/{uuid.uuid4()}-{safe_name}", upload)
+            if is_s3:
+                obj.cover_image_url = (
+                    f"https://{settings.AWS_STORAGE_BUCKET_NAME}.s3."
+                    f"{settings.AWS_S3_REGION_NAME}.amazonaws.com/{saved_key}"
+                )
+            else:
+                obj.cover_image_url = request.build_absolute_uri(default_storage.url(saved_key))
+        super().save_model(request, obj, form, change)
 
     def _render_gallery_images(self, gallery, label=None):
         """Render image thumbnails for a gallery with edit/delete links."""

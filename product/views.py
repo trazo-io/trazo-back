@@ -212,7 +212,17 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         _t1 = time.monotonic()
 
         history_data = request.data
-        images = request.FILES.getlist("album[images]")
+        # Cover/album photos. Two shapes can arrive under "album[images]":
+        #  - raw file uploads -> request.FILES (DRF-backed, available after request.data)
+        #  - pre-uploaded S3 URL strings (the normal app flow — TrazoImageUpload uploads
+        #    first, then submits the URLs) -> form fields in request.data.
+        # NOTE: read the strings from request.data, NOT request.POST — once DRF parses the
+        # multipart body via request.data (above), Django's request.POST is empty. Filter
+        # request.data to str so file objects (also present there) aren't double-counted.
+        file_images = list(request.FILES.getlist("album[images]"))
+        raw_images = request.data.getlist("album[images]") if hasattr(request.data, "getlist") else []
+        url_images = [u for u in raw_images if isinstance(u, str) and u]
+        images = file_images + url_images
         history = parcel.finish_current_history(history_data, images)
         _t2 = time.monotonic()
 

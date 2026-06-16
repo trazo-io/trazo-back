@@ -2340,6 +2340,8 @@ class HistoryWriteSerializer(serializers.ModelSerializer):
             "harvest_method",
             "description",
             "events_status",
+            # Consumer QR hero/cover override (see PublicHistorySerializer.get_images)
+            "cover_image_url",
             # Post-harvest traceability (§ 205.103 + SOE 2024 non-retail invoice)
             "sold_to",
             "sale_date",
@@ -2462,6 +2464,14 @@ class HistorySerializer(serializers.ModelSerializer):
         try:
             request = self.context.get("request")
             images = []
+
+            # Explicit hero/cover override (set by staff in the admin or the finish-production
+            # flow). Surfaced FIRST so it becomes images[0] -> the consumer hero background and
+            # the lead gallery photo. The dedup pass below keeps it at index 0 even if the same
+            # URL also appears in the album/events. Blank -> auto-pick (album then timeline).
+            cover_url = getattr(history, "cover_image_url", None)
+            if cover_url:
+                images.append(cover_url)
 
             # Get images from production's own album
             if history.album:
@@ -2707,6 +2717,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
             "events",
             "events_count",
             "images",
+            "cover_image_url",
             "operator",
             "lot_id",
             "production_amount",
@@ -4511,6 +4522,14 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         try:
             request = self.context.get("request")
             images = []
+
+            # Explicit hero/cover override (set by staff in the admin or the finish-production
+            # flow). Surfaced FIRST so it becomes images[0] -> the consumer hero background and
+            # the lead gallery photo. The dedup pass below keeps it at index 0 even if the same
+            # URL also appears in the album/events. Blank -> auto-pick (album then timeline).
+            cover_url = getattr(history, "cover_image_url", None)
+            if cover_url:
+                images.append(cover_url)
 
             # Get images from production's own album
             if history.album:

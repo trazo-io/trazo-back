@@ -139,6 +139,17 @@ class History(models.Model):
     )
     qr_code = models.ImageField(upload_to="qr_codes", blank=True)
     album = models.ForeignKey("common.Gallery", on_delete=models.CASCADE, blank=True, null=True)
+    cover_image_url = models.URLField(
+        max_length=1000,
+        blank=True,
+        null=True,
+        help_text=(
+            "Optional hero/cover photo for the public consumer QR page. When set, this image is "
+            "shown first (the hero background) and leads the photo gallery, overriding the "
+            "auto-picked first timeline photo. Leave blank to auto-pick. Must be a publicly "
+            "readable URL (the admin upload widget stores one in the media bucket)."
+        ),
+    )
     reputation = models.FloatField(default=0, validators=[MinValueValidator(0), MaxValueValidator(5)])
 
     # Trust metrics for enhanced transparency
@@ -642,12 +653,27 @@ class History(models.Model):
 
         from django.utils import timezone
 
-        if images is not None:
+        if images:
             gallery = Gallery.objects.create()
             for image_data in images:
-                gallery_image = gallery.images.create(image=image_data)
-                gallery_image.save()
+                # Pre-uploaded photos arrive as S3 URL strings (store on image_url so the
+                # consumer serializer reads them directly); raw file uploads go on the
+                # ImageField. Mixed lists are handled per item.
+                if isinstance(image_data, str):
+                    gallery.images.create(image_url=image_data)
+                else:
+                    gallery.images.create(image=image_data)
             self.album = gallery
+            # The first photo is the cover. Persist it as the explicit hero override
+            # (PublicHistorySerializer.get_images surfaces cover_image_url at images[0])
+            # so the consumer hero is deterministic instead of relying on array order.
+            # Don't clobber a cover an admin set earlier.
+            if not self.cover_image_url:
+                first_image = gallery.images.first()
+                if first_image:
+                    self.cover_image_url = first_image.image_url or (
+                        first_image.image.url if first_image.image else None
+                    )
 
         # Handle finish_date with timezone awareness
         finish_date = history_data["finish_date"]
