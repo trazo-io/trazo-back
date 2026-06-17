@@ -288,8 +288,13 @@ class TestEnhancedScanCreation(TestCase):
         # Should be blocked
         self.assertEqual(response.status_code, 429)
 
-    def test_consent_requirement(self):
-        """Test that consent is required"""
+    def test_no_consent_records_anonymous_scan(self):
+        """Without analytics consent, the scan is still recorded ANONYMOUSLY
+        (no PII, no session dedup) rather than rejected with 428. Anonymous
+        aggregate counting is not personal-data processing under GDPR, so it
+        needs no consent; full analytics + session dedup stay gated on consent.
+        (Previously this returned 428, which undercounted QR engagement and
+        surfaced a console error on every non-consented page load.)"""
         request = self.factory.post(
             "/",
             {
@@ -300,8 +305,10 @@ class TestEnhancedScanCreation(TestCase):
         # No consent cookie
         response = self.viewset.create(request)
 
-        self.assertEqual(response.status_code, 428)  # Precondition Required
-        self.assertIn("consent_required", response.data)
+        self.assertEqual(response.status_code, 201)
+        scan = HistoryScan.objects.get(id=response.data["id"])
+        self.assertFalse(scan.consent_given)  # recorded anonymously
+        self.assertFalse(scan.is_duplicate)  # session dedup skipped (no identity)
 
     def test_input_validation(self):
         """Test input validation"""

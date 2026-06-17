@@ -26,7 +26,6 @@ from .models import (
     EquipmentEvent,
     GeneralEvent,
     History,
-    HistoryScan,
     PestManagementEvent,
     ProductionEvent,
     SoilManagementEvent,
@@ -510,6 +509,54 @@ def production_transparency_detail(request, production_public_id=None):
             }
         )  # Close the response_data.update() call
 
+        # Claim-safety gate (2026-06): the self-assigned transparency SCORE is a
+        # farmer-dashboard engagement KPI, NOT a consumer-facing claim. A self-created
+        # "% documented / data-quality grade" served to anonymous shoppers is the
+        # self-declared sustainability-label class banned by EU ECGT 2024/825 (live
+        # 2026-09-27) and an FTC 16 CFR 260.6 general-benefit risk — and it is scrapable
+        # straight from this JSON even when the UI hides it. So the graded headline is
+        # withheld from the public payload; only the OWNER (authenticated farmer viewing
+        # their own production = the dashboard) still receives it. Consumers keep the
+        # EVIDENCE the score is built from: event counts, category breakdown,
+        # certifications, photos, carbon facts, timeline.
+        if not is_owner:
+            quick_view = response_data.get("quick_view")
+            if isinstance(quick_view, dict):
+                quick_view.pop("transparency_score", None)
+
+            transparency_block = response_data.get("transparency")
+            if isinstance(transparency_block, dict):
+                for graded_key in (
+                    "completeness_percentage",
+                    "documentation_score",
+                    "data_quality_grade",
+                    "verification_status",
+                ):
+                    transparency_block.pop(graded_key, None)
+
+            standard_view = response_data.get("standard_view")
+            if isinstance(standard_view, dict):
+                details = standard_view.get("transparency_details")
+                if isinstance(details, dict):
+                    # Drop the rolled-up grade; keep the factual evidence counts
+                    # (actual_events / expected_events / category_breakdown).
+                    details.pop("completeness_score", None)
+                    # Per-category breakdown: keep the factual counts
+                    # (actual_count / photo_verified_count / expected_count), strip
+                    # the per-category graded "% complete" + status verdict.
+                    breakdown = details.get("category_breakdown")
+                    if isinstance(breakdown, dict):
+                        for category in breakdown.values():
+                            if isinstance(category, dict):
+                                category.pop("completeness_percentage", None)
+                                category.pop("status", None)
+
+            # detailed_view (the "30s deep insights": raw current_score, benchmark
+            # level/grade, improvement coaching, verification status) is farmer-facing
+            # only — NO consumer component reads it. Drop it wholesale for anonymous
+            # so the raw score + grade can't be scraped from this surface.
+            response_data.pop("detailed_view", None)
+
         return Response(response_data, status=status.HTTP_200_OK)
 
     except (History.DoesNotExist, Http404):
@@ -528,173 +575,6 @@ def production_transparency_detail(request, production_public_id=None):
             error_message="Service temporarily unavailable", error_details="Please try again in a moment"
         )
         return Response(error_response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@api_view(["GET"])
-@permission_classes([AllowAny])
-def production_transparency_summary(request, production_public_id=None):
-    """
-    Lightweight transparency summary for mobile QR scanning
-    Optimized for < 1 second response time
-
-    Accepts UUID (production_public_id) only.
-    """
-    try:
-        # Build lookup filter: UUID only (prevents integer enumeration)
-        if production_public_id is None:
-            return Response({"error": "Production identifier required"}, status=status.HTTP_400_BAD_REQUEST)
-        lookup_kwargs = {"published": True, "public_id": production_public_id}
-
-        # Get production with optimized queries (prefetch all event types with albums)
-        history = get_object_or_404(
-            History.objects.select_related("product", "parcel__establishment").prefetch_related(
-                # Prefetch all 8 event types with albums and images
-                Prefetch(
-                    "history_weatherevent_events",
-                    queryset=WeatherEvent.objects.select_related("album").prefetch_related("album__images"),
-                ),
-                Prefetch(
-                    "history_chemicalevent_events",
-                    queryset=ChemicalEvent.objects.select_related("album").prefetch_related("album__images"),
-                ),
-                Prefetch(
-                    "history_productionevent_events",
-                    queryset=ProductionEvent.objects.select_related("album").prefetch_related("album__images"),
-                ),
-                Prefetch(
-                    "history_generalevent_events",
-                    queryset=GeneralEvent.objects.select_related("album").prefetch_related("album__images"),
-                ),
-                Prefetch(
-                    "history_equipmentevent_events",
-                    queryset=EquipmentEvent.objects.select_related("album").prefetch_related("album__images"),
-                ),
-                Prefetch(
-                    "history_soilmanagementevent_events",
-                    queryset=SoilManagementEvent.objects.select_related("album").prefetch_related("album__images"),
-                ),
-                Prefetch(
-                    "history_pestmanagementevent_events",
-                    queryset=PestManagementEvent.objects.select_related("album").prefetch_related("album__images"),
-                ),
-                Prefetch(
-                    "history_businessevent_events",
-                    queryset=BusinessEvent.objects.select_related("album").prefetch_related("album__images"),
-                ),
-            ),
-            **lookup_kwargs,
-        )
-
-        # Quick transparency calculation (cached if possible)
-        transparency_calculator = TransparencyCalculator()
-        transparency_data = transparency_calculator.calculate_transparency_score(history)
-
-        # Minimal carbon data (existing calculation)
-        try:
-            carbon_service = CarbonCalculatorService()
-            carbon_result = carbon_service.calculate_production_carbon(history.id)
-            carbon_score = carbon_result.get("total_co2_kg_per_kg", 0)
-        except Exception:
-            carbon_score = 0
-
-        # Use standardized transparency formatter for mobile
-        formatter = TransparencyResponseFormatter()
-
-        # Prepare minimal carbon data for quick response
-        minimal_carbon_data = {"kg_per_kg": carbon_score}
-
-        # Get standardized quick response
-        response_data = formatter.format_quick_response(production=history, minimal_carbon_data=minimal_carbon_data)
-
-        # Add farm and product context for backward compatibility
-        response_data.update(
-            {
-                "farm_name": history.parcel.establishment.name if history.parcel else "Farm",
-                "product_name": history.product.name if history.product else "Farm Product",
-                "transparency_level": (
-                    "excellent"
-                    if transparency_data["transparency_percentage"] >= 90
-                    else "good" if transparency_data["transparency_percentage"] >= 70 else "basic"
-                ),
-            }
-        )
-
-        return Response(response_data, status=status.HTTP_200_OK)
-
-    except History.DoesNotExist:
-        formatter = TransparencyResponseFormatter()
-        error_response = formatter.format_error_response("Production not found")
-        return Response(error_response, status=status.HTTP_404_NOT_FOUND)
-
-
-@api_view(["GET"])
-@permission_classes([AllowAny])
-def production_instant_trust(request, production_public_id=None):
-    """
-    Ultra-fast instant trust endpoint for QR scanning
-    Optimized for <750ms response time with essential trust indicators only
-    Returns: transparency score, consumer message, basic farm info
-
-    Accepts UUID (production_public_id) only.
-    """
-    try:
-        # Build lookup filter: UUID only (prevents integer enumeration)
-        if production_public_id is None:
-            return Response(
-                {"success": False, "error": "missing_id", "message": "Production identifier required"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        lookup_kwargs = {"published": True, "public_id": production_public_id}
-
-        # Ultra-lightweight query - only get essential fields
-        history = (
-            History.objects.select_related("product", "parcel__establishment")
-            .only("id", "public_id", "product__name", "parcel__establishment__name", "extra_data", "published")
-            .get(**lookup_kwargs)
-        )
-
-        # Fast transparency calculation
-        transparency_calculator = TransparencyCalculator()
-        transparency_data = transparency_calculator.calculate_transparency_score(history)
-
-        # Build instant trust response with new consumer-friendly messaging
-        instant_trust_data = {
-            "success": True,
-            "transparency_percentage": transparency_data["transparency_percentage"],
-            "consumer_summary": transparency_data.get(
-                "consumer_summary",
-                f"This food has {transparency_data['transparency_percentage']:.0f}% transparency with {transparency_data['actual_event_count']} documented farming practices",
-            ),
-            "actual_event_count": transparency_data["actual_event_count"],
-            "expected_event_count": transparency_data["expected_event_count"],
-            "farm_name": history.parcel.establishment.name if history.parcel else "Verified Farm",
-            "product_name": history.product.name if history.product else "Farm Product",
-            "trust_level": _get_trust_level(transparency_data["transparency_percentage"]),
-            "is_verified": transparency_data["transparency_percentage"] >= 70,
-            "instant_trust_message": _get_instant_trust_message(transparency_data),
-            "response_time": "instant",  # Flag for frontend optimization
-            "api_version": "2.1",
-        }
-
-        return Response(instant_trust_data, status=status.HTTP_200_OK)
-
-    except History.DoesNotExist:
-        return Response(
-            {
-                "success": False,
-                "error": "production_not_found",
-                "message": "This product was not found in our transparency system",
-            },
-            status=status.HTTP_404_NOT_FOUND,
-        )
-
-    except Exception as e:
-        lookup_ref = production_public_id or "unknown"
-        logger.error(f"Instant trust error for production {lookup_ref}: {str(e)}")
-        return Response(
-            {"success": False, "error": "service_error", "message": "Unable to load trust indicators at this time"},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
 
 
 def _build_reviews_summary(history):
@@ -818,37 +698,6 @@ def _build_organic_summary(history, certification_data, establishment, organic_c
             round((organic_inputs / classified_count * 100)) if classified_count > 0 else None
         ),
     }
-
-
-def _get_trust_level(transparency_percentage):
-    """Get consumer-friendly trust level for instant display"""
-    if transparency_percentage >= 95:
-        return "complete"
-    elif transparency_percentage >= 85:
-        return "excellent"
-    elif transparency_percentage >= 70:
-        return "good"
-    elif transparency_percentage >= 50:
-        return "basic"
-    else:
-        return "limited"
-
-
-def _get_instant_trust_message(transparency_data):
-    """Generate instant trust message for immediate consumer confidence"""
-    score = transparency_data["transparency_percentage"]
-    practices = transparency_data["actual_event_count"]
-
-    if score >= 95:
-        return f"Complete farming transparency with {practices} documented practices"
-    elif score >= 85:
-        return f"Excellent transparency with {practices} farming practices documented"
-    elif score >= 70:
-        return f"Good transparency - {practices} farming practices shared"
-    elif score >= 50:
-        return f"Basic transparency with {practices} practices documented"
-    else:
-        return f"Building transparency - {practices} practices currently documented"
 
 
 def _get_verification_status(history, transparency_data=None):

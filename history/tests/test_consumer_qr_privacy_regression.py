@@ -197,3 +197,103 @@ class FarmerLocationPIITests(_Base):
         self.assertNotIn("33.3764", blob, "exact latitude leaked")
         self.assertNotIn("-117.251", blob, "exact longitude leaked")
         self.assertNotIn("92028", blob, "zip leaked")
+
+
+class TransparencyScoreGatingTests(_Base):
+    """Claim-safety (2026-06): the self-assigned transparency SCORE is a
+    farmer-dashboard engagement KPI, NOT a consumer claim. A self-created
+    "% documented / data-quality grade" served to anonymous shoppers is the
+    self-declared sustainability-label class banned by EU ECGT 2024/825 and an
+    FTC 16 CFR 260.6 risk — and is scrapable from JSON even when the UI hides it.
+
+    The graded headline must be withheld from the public payload while the
+    authenticated OWNER (the producer dashboard) still receives it, and the
+    EVIDENCE the score is built from must stay (event counts, category breakdown).
+    """
+
+    def setUp(self):
+        super().setUp()
+        ProductionEvent.objects.create(history=self.history, type="PL", date=timezone.now())
+
+    def _url(self):
+        return reverse(
+            "production-transparency-detail",
+            kwargs={"production_public_id": str(self.history.public_id)},
+        )
+
+    def _anon_payload(self):
+        resp = self.client.get(self._url())
+        self.assertEqual(resp.status_code, 200, resp.content[:300])
+        return resp.json()
+
+    def test_graded_score_gated_for_anonymous(self):
+        payload = self._anon_payload()
+        self.assertNotIn(
+            "transparency_score",
+            payload.get("quick_view") or {},
+            "self-graded transparency score served to an anonymous consumer",
+        )
+        transparency_block = payload.get("transparency") or {}
+        for graded_key in (
+            "completeness_percentage",
+            "documentation_score",
+            "data_quality_grade",
+            "verification_status",
+        ):
+            self.assertNotIn(graded_key, transparency_block, f"graded field '{graded_key}' leaked to anonymous")
+        details = (payload.get("standard_view") or {}).get("transparency_details") or {}
+        self.assertNotIn("completeness_score", details, "rolled-up grade leaked to anonymous")
+        # Per-category graded "% complete" + status verdict stripped.
+        for name, category in (details.get("category_breakdown") or {}).items():
+            self.assertNotIn("completeness_percentage", category, f"category '{name}' grade leaked to anonymous")
+            self.assertNotIn("status", category, f"category '{name}' status verdict leaked to anonymous")
+        # The "30s deep insights" block (raw current_score + benchmark grade) is
+        # farmer-only and must not reach an anonymous caller at all.
+        self.assertNotIn("detailed_view", payload, "farmer-only detailed_view (raw score/grade) leaked to anonymous")
+
+    def test_no_graded_number_anywhere_in_anonymous_blob(self):
+        # Belt-and-suspenders: no graded score key may survive ANYWHERE in the
+        # tree, even nested — the score is scrapable from raw JSON if it does.
+        import json as _json
+
+        blob = self._anon_payload()
+
+        def walk(node):
+            if isinstance(node, dict):
+                for k, v in node.items():
+                    if k in ("current_score", "transparency_percentage", "benchmark_level", "documentation_score"):
+                        raise AssertionError(
+                            f"graded key '{k}' survived in anonymous payload: {_json.dumps(node)[:200]}"
+                        )
+                    walk(v)
+            elif isinstance(node, list):
+                for v in node:
+                    walk(v)
+
+        walk(blob)
+
+    def test_evidence_kept_for_anonymous(self):
+        # The factual evidence the score is built from is intended consumer
+        # transparency — it must NOT be over-stripped along with the grade.
+        details = (self._anon_payload().get("standard_view") or {}).get("transparency_details") or {}
+        self.assertIn("actual_events", details, "event count (evidence) over-stripped")
+        self.assertIn("category_breakdown", details, "category breakdown (evidence) over-stripped")
+        # Factual per-category counts survive even though the grade was stripped.
+        for name, category in (details.get("category_breakdown") or {}).items():
+            self.assertIn("actual_count", category, f"category '{name}' factual count over-stripped")
+
+    def test_score_present_for_authenticated_owner(self):
+        # The producer dashboard hits this same endpoint authenticated; the owner
+        # must still receive their KPI score AND the deep-insights block. Gating is
+        # anonymous-only.
+        from rest_framework.test import APIClient
+
+        self.user.companies.add(self.company)
+        client = APIClient()
+        client.force_authenticate(self.user)
+        resp = client.get(self._url())
+        self.assertEqual(resp.status_code, 200, resp.content[:300])
+        body = resp.json()
+        score = (body.get("quick_view") or {}).get("transparency_score") or {}
+        self.assertIn("percentage", score, "owner (producer dashboard) lost its transparency score")
+        self.assertIn("detailed_view", body, "owner (producer dashboard) lost its deep-insights block")

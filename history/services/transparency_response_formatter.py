@@ -82,27 +82,6 @@ class TransparencyResponseFormatter:
             "blockchain_verification": blockchain_verification or {"verified": False},
         }
 
-    def format_quick_response(self, production, minimal_carbon_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """
-        Format quick response for progressive loading
-        Optimized for <1s response time
-        """
-        return {
-            "transparency": {
-                "completeness_percentage": getattr(production, "transparency_percentage", 75),
-                "data_quality_grade": getattr(production, "carbon_grade", "C"),
-                "verification_status": "verified" if getattr(production, "blockchain_verified", False) else "pending",
-            },
-            "carbon_impact": {
-                "kg_per_kg": (
-                    self._safe_round(minimal_carbon_data.get("kg_per_kg", 0), 3) if minimal_carbon_data else 0.0
-                ),
-                "unit": "kg CO₂ per kg product",
-            },
-            "response_format": "transparency_quick_v2",
-            "timestamp": timezone.now().isoformat(),
-        }
-
     def format_error_response(self, error_message: str, error_details: Optional[str] = None) -> Dict[str, Any]:
         """
         Format error response maintaining transparency structure

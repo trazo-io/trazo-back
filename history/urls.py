@@ -3,9 +3,7 @@ from django.urls import include, path
 from rest_framework import routers
 
 from .transparency_views import (
-    production_instant_trust,
     production_transparency_detail,
-    production_transparency_summary,
     transparency_explanation,
     verify_blockchain,
 )
@@ -43,12 +41,6 @@ urlpatterns = [
         production_transparency_detail,
         name="production-transparency-detail",
     ),
-    path(
-        "transparency/<uuid:production_public_id>/summary/",
-        production_transparency_summary,
-        name="production-transparency-summary",
-    ),
-    path("transparency/quick/<uuid:production_public_id>/", production_instant_trust, name="production-instant-trust"),
     path("transparency/explanation/", transparency_explanation, name="transparency-explanation"),
     path(
         "transparency/<uuid:production_public_id>/verify-blockchain/",

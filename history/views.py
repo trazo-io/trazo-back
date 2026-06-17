@@ -2193,20 +2193,27 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
             consent_given = privacy_data["consent_given"]
             has_comment = bool(request.data.get("comment", "").strip())
 
-            if consent_required and not consent_given and not has_comment:
-                return Response(
-                    {
-                        "error": "Analytics consent required",
-                        "consent_required": True,
-                        "message": "To help improve agricultural transparency, please allow analytics tracking",
-                    },
-                    status=status.HTTP_428_PRECONDITION_REQUIRED,
-                )
+            # Privacy-first: if the visitor hasn't consented to analytics (and
+            # isn't leaving a comment), still record an ANONYMOUS aggregate scan
+            # rather than rejecting it with 428. privacy_data is already minimal
+            # here (empty session/IP hashes, no geolocation), so this is an
+            # anonymous count — not personal-data processing — and needs no
+            # consent under GDPR. Full analytics + session dedup remain gated on
+            # consent below. (Previously this returned 428, so non-consenting
+            # scans were never counted, undercounting QR engagement and surfacing
+            # a console error on every load.)
+            anonymous_mode = consent_required and not consent_given and not has_comment
 
-            # Session deduplication check (use history.id, not the UUID production_id)
-            is_duplicate, original_scan, dedup_method = self.deduplication_service.check_comprehensive_duplicate(
-                privacy_data["session_hash"], privacy_data["ip_hash"], history.id
-            )
+            # Session deduplication check (use history.id, not the UUID
+            # production_id). Skip in anonymous_mode — with empty session/IP
+            # hashes there is no identity to dedup against, and forcing it would
+            # collapse every anonymous scan into a single "duplicate".
+            if anonymous_mode:
+                is_duplicate, original_scan, dedup_method = False, None, None
+            else:
+                is_duplicate, original_scan, dedup_method = self.deduplication_service.check_comprehensive_duplicate(
+                    privacy_data["session_hash"], privacy_data["ip_hash"], history.id
+                )
 
             # Calculate bot score and engagement
             bot_score = self.bot_detection_service.calculate_bot_score(request, request.data)
