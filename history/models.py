@@ -2315,6 +2315,9 @@ class SoilManagementEvent(CommonEvent):
     TILLAGE = "TI"
     COMPOSTING = "CO"
     GRAZING = "GR"
+    # Biodiversity / habitat (GTM-v3): documented habitat PRACTICES — facts only, never a score.
+    HABITAT_DEVELOPMENT = "HD"  # planted/established habitat (hedgerow, insectary, riparian, living floor)
+    NESTING_SHELTER = "NS"  # installed wildlife structures (owl/raptor/bee/bat boxes, insect hotel)
 
     SOIL_TYPE_CHOICES = [
         (SOIL_TEST, "Soil Test"),
@@ -2324,6 +2327,8 @@ class SoilManagementEvent(CommonEvent):
         (TILLAGE, "Tillage"),
         (COMPOSTING, "Composting"),
         (GRAZING, "Grazing Management"),
+        (HABITAT_DEVELOPMENT, "Habitat Development"),
+        (NESTING_SHELTER, "Nesting / Shelter Structures"),
     ]
 
     type = models.CharField(max_length=2, choices=SOIL_TYPE_CHOICES, default=SOIL_TEST)
@@ -2334,6 +2339,30 @@ class SoilManagementEvent(CommonEvent):
     test_results = models.JSONField(null=True, blank=True)  # Store complex test data
     carbon_sequestration_potential = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
     extra_data = models.JSONField(blank=True, null=True)
+
+    # Biodiversity / habitat fields (for HD / NS subtypes). Facts only — free-text species/notes
+    # live in extra_data (mirrors cover_crop_species); the living-floor / bugs / birds proof rides
+    # on the event photo album + an optional wildlife_observed note. No counts beyond structures, no score.
+    habitat_type = models.CharField(
+        max_length=40,
+        blank=True,
+        null=True,
+        help_text="Habitat practice (HD) or structure (NS) — e.g. hedgerow, insectary_strip, barn_owl_box",
+    )
+    habitat_structure_count = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Number of structures installed (NS subtype, e.g. 6 barn-owl boxes)",
+    )
+    habitat_install_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text=(
+            "When the habitat was established (HD) or the structures installed (NS). "
+            "Drives the consumer maturity story (an 8-year-old hedgerow vs a new one) and "
+            "gives a certifier a date for the practice."
+        ),
+    )
 
     # Grazing management fields (for GR subtype)
     animal_type = models.CharField(
@@ -2788,6 +2817,43 @@ class PestManagementEvent(CommonEvent):
         null=True,
         help_text="Whether beneficial insects are used for pest control",
     )
+
+    # Beneficial-release traceability (BR subtype) — NOP 7 CFR 205.206 requires the SOURCE of any
+    # introduced biological control to be documented; reusing beneficial_species/release_quantity
+    # above, these add supplier + lot + organic status so a certifier can trace the release.
+    beneficial_supplier = models.CharField(
+        max_length=200, blank=True, null=True, help_text="Insectary/supplier the beneficials came from (BR)"
+    )
+    beneficial_lot_number = models.CharField(
+        max_length=100, blank=True, null=True, help_text="Supplier lot / batch number for the release (BR)"
+    )
+    beneficial_organic_approved = models.CharField(
+        max_length=10,
+        choices=[("yes", "Yes"), ("no", "No"), ("unknown", "Unknown")],
+        blank=True,
+        null=True,
+        help_text="Whether the beneficial organism is approved for organic systems (BR)",
+    )
+
+    # Trap monitoring (TM subtype) — trap_count above is the NUMBER OF TRAPS; these capture the
+    # trap kind and the actual catch so an auditor sees real IPM pressure data.
+    trap_type = models.CharField(
+        max_length=20,
+        choices=[
+            ("sticky", "Sticky card"),
+            ("pheromone", "Pheromone lure"),
+            ("delta", "Delta trap"),
+            ("bucket_funnel", "Bucket / funnel"),
+            ("other", "Other"),
+        ],
+        blank=True,
+        null=True,
+        help_text="Kind of trap deployed (TM)",
+    )
+    pest_catch_count = models.PositiveIntegerField(
+        null=True, blank=True, help_text="Insects caught across the traps this monitoring (TM) — not the # of traps"
+    )
+
     chemical_free_period_days = models.PositiveIntegerField(
         blank=True, null=True, help_text="Days since last synthetic chemical application"
     )

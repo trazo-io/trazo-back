@@ -57,6 +57,23 @@ def ensure_event_description(data, default_label):
         data["description"] = f"{default_label}: {name}" if name else default_label
 
 
+def coerce_blank_nullable_dates(serializer, data):
+    """The add-event form posts EVERY field for EVERY subtype, so a date column that is
+    irrelevant to the chosen subtype arrives as "" — and DRF's Date/DateTimeField rejects ""
+    ("Date has wrong format"), 400ing the whole event with no user-facing error. This is the
+    class behind the seed_purchase_date (production), cleaning_date (production HA/PH/EM) and
+    purchase_date / ca_dpr_permit_expires (chemical) bugs. Introspect the serializer's declared
+    fields and coerce blank -> None for every nullable date field, so no hand-maintained list can
+    miss one. Only touches fields that explicitly accept null (allow_null=True), so a genuinely
+    required date still errors correctly. Mutates ``data`` in place; call before super()."""
+    from rest_framework import serializers as _drf
+
+    for name, field in serializer.fields.items():
+        if isinstance(field, (_drf.DateField, _drf.DateTimeField)) and field.allow_null:
+            if name in data and data[name] in ("", None):
+                data[name] = None
+
+
 class CustomFieldsMixin:
     """
     Mixin for event serializers to handle custom fields.
@@ -563,6 +580,10 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
 
         # Handle custom fields (user-defined additional information)
         custom_fields = self.handle_custom_fields_input(data)
+
+        # Coerce blank nullable date fields (purchase_date, ca_dpr_permit_expires, cleaning_date)
+        # to None — the form posts them "" on subtypes that don't use them, which 400s the event.
+        coerce_blank_nullable_dates(self, data)
 
         internal_value = super().to_internal_value(data)
 
@@ -1595,6 +1616,13 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
         for field_name in model_irrigation_fields:
             if field_name in frontend_extra_data and field_name not in data:
                 data[field_name] = frontend_extra_data.pop(field_name)
+
+        # Convert empty strings to None for optional DATE fields. The form posts EVERY production
+        # field for every subtype, so a non-planting event (irrigation, pruning, etc.) sends
+        # seed_purchase_date="", the pollination dates="", and a non-cleaning event sends
+        # cleaning_date="" — DRF's DateField rejects "" and the whole event 400s. Introspect every
+        # nullable date field so no hand-maintained list can miss one (cleaning_date was missed).
+        coerce_blank_nullable_dates(self, data)
 
         internal_value = super().to_internal_value(data)
 
@@ -2925,6 +2953,10 @@ class PublicHistorySerializer(serializers.ModelSerializer):
             "copper_metallic_pct",
             "cover_crop_species",
             "coverage_pattern",
+            # Biodiversity / habitat (HD / NS) — consumer-safe documented facts, no PII
+            "species_planted",
+            "wildlife_observed",
+            "structure_notes",
             "crew_size",
             "crop_damage_prevented",
             "crop_growth_stage",
@@ -4200,6 +4232,15 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "animal_count": getattr(event, "animal_count", None),
                         "grazing_duration_days": getattr(event, "grazing_duration_days", None),
                         "grazing_purpose": getattr(event, "grazing_purpose", None),
+                        # 🦉 BIODIVERSITY / HABITAT FIELDS (HD / NS subtypes) — facts only, no score
+                        "habitat_type": getattr(event, "habitat_type", None),
+                        "habitat_structure_count": getattr(event, "habitat_structure_count", None),
+                        # habitat maturity is a positive consumer story (an 8-yr-old hedgerow vs new)
+                        "habitat_install_date": (
+                            event.habitat_install_date.isoformat()
+                            if getattr(event, "habitat_install_date", None)
+                            else None
+                        ),
                         # 📏 AMENDMENT NUMERIC FIELDS
                         "amendment_amount_numeric": (
                             str(event.amendment_amount_numeric)
@@ -4287,7 +4328,14 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "pest_pressure_level": getattr(event, "pest_pressure_level", None),
                         "beneficial_species": getattr(event, "beneficial_species", None),
                         "release_quantity": getattr(event, "release_quantity", None),
+                        # BR organic-approval IS a consumer transparency positive (like chemical
+                        # organic-approved). Supplier + lot are deliberately NOT exposed here —
+                        # commercially sensitive, audit-PDF only.
+                        "beneficial_organic_approved": getattr(event, "beneficial_organic_approved", None),
                         "trap_count": getattr(event, "trap_count", None),
+                        # TM real IPM pressure data — consumer-visible (trap kind + actual catch)
+                        "trap_type": getattr(event, "trap_type", None),
+                        "pest_catch_count": getattr(event, "pest_catch_count", None),
                         "damage_percentage": float(getattr(event, "damage_percentage", None) or 0) or None,
                         "action_threshold_met": getattr(event, "action_threshold_met", False),
                         "ipm_strategy": getattr(event, "ipm_strategy", None),
@@ -4981,6 +5029,10 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "compost_initial_cn_ratio",
             "manure_harvest_interval",
             "manure_application_date",
+            # Biodiversity / habitat (HD / NS subtypes)
+            "habitat_type",
+            "habitat_structure_count",
+            "habitat_install_date",
         ]
         read_only_fields = ["id"]
 
@@ -5004,6 +5056,7 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "equipment_hours",
             "compost_duration_days_at_temp",
             "compost_turning_count",
+            "habitat_structure_count",
         ]
         for field_name in integer_fields:
             if field_name in data and data[field_name] in ("", None):
@@ -5011,13 +5064,19 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
 
         # Convert empty strings to None for optional decimal fields
         # Form sends "" for unfilled numeric inputs; DRF DecimalField rejects empty strings.
-        decimal_null_fields = ["compost_peak_temp_f", "amendment_amount_numeric", "compost_initial_cn_ratio"]
+        # area_covered is "" for habitat structures (NS) and optional for HD — coerce to null.
+        decimal_null_fields = [
+            "compost_peak_temp_f",
+            "amendment_amount_numeric",
+            "compost_initial_cn_ratio",
+            "area_covered",
+        ]
         for field_name in decimal_null_fields:
             if field_name in data and data[field_name] in ("", None):
                 data[field_name] = None
 
         # Convert empty strings to None for optional date fields
-        date_fields = ["manure_application_date"]
+        date_fields = ["manure_application_date", "habitat_install_date"]
         for field_name in date_fields:
             if field_name in data and data[field_name] in ("", None):
                 data[field_name] = None
@@ -5029,11 +5088,30 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
         frontend_extra_data = data.pop("extra_data", {}) or {}
 
         # Extract fields that don't have model columns into extra_data
-        extra_data_only_fields = ["amendment_unit"]
+        # Biodiversity / habitat (HD / NS): species_planted / wildlife_observed / structure_notes are
+        # free-text with no model column — route them into extra_data (mirrors cover_crop_species).
+        extra_data_only_fields = ["amendment_unit", "species_planted", "wildlife_observed", "structure_notes"]
         for field_name in extra_data_only_fields:
             if field_name in data:
                 value = data.pop(field_name)
                 frontend_extra_data[field_name] = value if value is not None else ""
+
+        # Grazing Summary Mode (GTM-v3): the frontend sends summary fields (is_summary + the
+        # rotation totals) at top level; none are model columns, so route them into extra_data —
+        # mirroring the production/pest summary pattern. Lets a grazing rotation be one event.
+        summary_only_fields = [
+            "is_summary",
+            "date_start",
+            "date_end",
+            "event_count",
+            "total_grazing_days",
+            "area_covered_total",
+        ]
+        for field_name in summary_only_fields:
+            if field_name in data:
+                value = data.pop(field_name)
+                if value is not None and value != "":
+                    frontend_extra_data[field_name] = value
 
         # Bridge amendment_amount (string from form) → amendment_amount_numeric (Decimal)
         # Bridge amendment_unit (form) → amendment_amount_unit (model column)
@@ -5111,6 +5189,65 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
 
         return data
 
+    def validate(self, attrs):
+        """Enforce the NOP raw-manure pre-harvest interval (7 CFR 205.203(c)(1)) on the API write
+        path. SoilManagementEvent.clean() carries these rules, but DRF never calls full_clean() on
+        objects.create()/update(), so without this a farmer could log a manure application via the
+        API with a missing or crop-mismatched harvest interval — a record-keeping failure a CCOF
+        inspector reads under § 205.103. Scoped to the manure rules only (we deliberately do NOT run
+        the full clean(), which also hard-errors on transportation/fuel bounds and would change
+        unrelated behavior). Mirrors the WeatherEvent probe.clean() enforcement pattern.
+        """
+        attrs = super().validate(attrs)
+        instance = getattr(self, "instance", None)
+
+        def _field(name):
+            if name in attrs:
+                return attrs.get(name)
+            return getattr(instance, name, None)
+
+        manure_date = _field("manure_application_date")
+        interval = _field("manure_harvest_interval")
+
+        if manure_date and not interval:
+            raise serializers.ValidationError(
+                {
+                    "manure_harvest_interval": "Harvest interval (90 or 120 days) is required when a "
+                    "manure application date is specified."
+                }
+            )
+
+        # Interval must match the crop's edible-portion soil contact when the crop type carries an
+        # authoritative flag; otherwise defer (the PDF-side linter handles unknown crops).
+        if interval in ("90", "120"):
+            history = attrs.get("history") or (instance.history if instance else None)
+            crop_type = None
+            try:
+                crop_type = history.crop_type if history else None
+            except Exception:  # noqa: BLE001 — FK may be unpopulated
+                crop_type = None
+            has_contact = getattr(crop_type, "has_soil_contact", None) if crop_type else None
+            if has_contact is not None:
+                has_contact = bool(has_contact)
+                if has_contact and interval == "90":
+                    raise serializers.ValidationError(
+                        {
+                            "manure_harvest_interval": "This crop's edible portion has direct soil "
+                            "contact, so 7 CFR 205.203(c)(1)(ii) requires a 120-day pre-harvest "
+                            "interval. Selecting 90 days is a record-keeping mismatch."
+                        }
+                    )
+                if not has_contact and interval == "120":
+                    raise serializers.ValidationError(
+                        {
+                            "manure_harvest_interval": "This crop's edible portion does NOT contact "
+                            "soil (tree / canopy crop), so 7 CFR 205.203(c)(1)(iii) requires a "
+                            "90-day pre-harvest interval. The 120-day choice is for root/leafy crops."
+                        }
+                    )
+
+        return attrs
+
 
 class SoilManagementEventSerializer(EventSerializer):
     type = serializers.SerializerMethodField()
@@ -5173,6 +5310,10 @@ class SoilManagementEventSerializer(EventSerializer):
             "compost_initial_cn_ratio",
             "manure_harvest_interval",
             "manure_application_date",
+            # Biodiversity / habitat (HD / NS) — needed so the producer edit form pre-fills them
+            "habitat_type",
+            "habitat_structure_count",
+            "habitat_install_date",
             "image",
             "carbon_data",
             "verification_level",
@@ -5214,7 +5355,14 @@ class UpdatePestManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "pest_pressure_level",
             "beneficial_species",
             "release_quantity",
+            # Beneficial-release traceability (BR) — NOP 205.206
+            "beneficial_supplier",
+            "beneficial_lot_number",
+            "beneficial_organic_approved",
             "trap_count",
+            # Trap monitoring (TM) detail
+            "trap_type",
+            "pest_catch_count",
             "damage_percentage",
             "action_threshold_met",
             "ipm_strategy",
@@ -5359,7 +5507,14 @@ class PestManagementEventSerializer(EventSerializer):
             "pest_pressure_level",
             "beneficial_species",
             "release_quantity",
+            # Beneficial-release traceability (BR) — NOP 205.206
+            "beneficial_supplier",
+            "beneficial_lot_number",
+            "beneficial_organic_approved",
             "trap_count",
+            # Trap monitoring (TM) detail
+            "trap_type",
+            "pest_catch_count",
             "damage_percentage",
             "action_threshold_met",
             "ipm_strategy",

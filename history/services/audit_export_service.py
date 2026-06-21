@@ -64,6 +64,31 @@ SOIL_TYPE_LABELS = {
     "TI": "Tillage",
     "CO": "Composting",
     "GR": "Grazing Management",
+    "HD": "Habitat Development",
+    "NS": "Nesting / Shelter Structures",
+}
+
+# Humanize SoilManagementEvent.habitat_type (HD / NS subtypes) for the Biodiversity & Habitat
+# Records sub-table. Mirrors the frontend HABITAT_TYPES enum (soilEvent.ts); unknown values fall through.
+HABITAT_TYPE_LABELS = {
+    # HD — Habitat Development (NRCS conservation practice codes noted for the certifier)
+    "hedgerow": "Hedgerow (NRCS 422)",
+    "insectary_strip": "Insectary / Beneficial-Insect Strip",
+    "native_planting": "Native Planting",
+    "pollinator_habitat": "Pollinator Habitat (NRCS 327)",
+    "field_border": "Field Border (NRCS 386)",
+    "riparian_buffer": "Riparian Buffer (NRCS 391)",
+    "living_groundcover_habitat": "Living Groundcover Habitat",
+    "wildlife_corridor": "Wildlife Corridor",
+    # NS — Nesting / Shelter structures
+    "barn_owl_box": "Barn-Owl Box",
+    "raptor_perch": "Raptor Perch",
+    "songbird_box": "Songbird Box",
+    "native_bee_block": "Native-Bee Nest Block",
+    "bat_box": "Bat Box",
+    "insect_hotel": "Insect Hotel",
+    "beetle_bank": "Beetle Bank",
+    "brush_pile_hibernacula": "Brush Pile / Hibernacula",
 }
 
 # SoilManagementEvent.amendment_type is a free CharField (no model-level choices),
@@ -79,6 +104,15 @@ AMENDMENT_TYPE_LABELS = {
     "compost": "Compost",
     "manure": "Manure",
     "other": "Other Amendment",
+}
+
+# Humanize SoilManagementEvent.grazing_purpose for the Grazing Management Records sub-table.
+# Mirrors the frontend grazing_purpose choices (soilEvent.ts); unknown values fall through.
+GRAZING_PURPOSE_LABELS = {
+    "weed_control": "Weed Control",
+    "cover_crop": "Cover Crop Termination",
+    "soil_health": "Soil Health",
+    "vegetation_management": "Vegetation Management",
 }
 
 
@@ -3374,6 +3408,8 @@ class AuditExportService:
         data = [header_row]
         has_amendments_without_approval = False
         compost_events = []
+        grazing_events = []
+        habitat_events = []
         for ev in events:
             amount = ""
             if ev.amendment_amount_numeric:
@@ -3395,13 +3431,23 @@ class AuditExportService:
                     organic_status = "NOT SPECIFIED"
                     has_amendments_without_approval = True
 
+            # Cover-crop species lives in extra_data.cover_crop_species, NOT amendment_type, so a
+            # cover-crop row otherwise showed a blank "Amendment" cell — the planted mix (the whole
+            # point of the record) was dropped from the dossier. Surface it in the Amendment column.
+            amendment_display = _amendment_type_label(ev.amendment_type)
+            if not ev.amendment_type and ev.type == "CC":
+                _ed = ev.extra_data if isinstance(ev.extra_data, dict) else {}
+                _species = _ed.get("cover_crop_species")
+                if _species:
+                    amendment_display = _species
+
             data.append(
                 [
                     self._cell(_fmt_date(ev.date)),
                     self._cell(SOIL_TYPE_LABELS.get(ev.type, _val(ev.type))),
                     self._cell(str(ev.soil_ph) if ev.soil_ph is not None else None),
                     self._cell(str(ev.organic_matter_percentage) if ev.organic_matter_percentage is not None else None),
-                    self._cell(_amendment_type_label(ev.amendment_type), 50),
+                    self._cell(amendment_display, 50),
                     self._cell(amount or None),
                     self._cell(area),
                     self._cell(organic_status or None),
@@ -3411,6 +3457,15 @@ class AuditExportService:
             # Collect composting events for sub-table
             if ev.type == "CO":
                 compost_events.append(ev)
+            # Collect grazing events for sub-table — the main soil table's amendment-oriented
+            # columns leave every grazing detail blank, so integrated grazing (a key regenerative
+            # practice) was invisible to the certifier. Surface it in a dedicated sub-table below.
+            if ev.type == "GR":
+                grazing_events.append(ev)
+            # Collect biodiversity / habitat events (HD developed habitat, NS nesting/shelter) for a
+            # dedicated sub-table — the amendment-oriented main columns leave habitat detail blank.
+            if ev.type in ("HD", "NS"):
+                habitat_events.append(ev)
 
         col_widths = [
             0.6 * inch,
@@ -3505,6 +3560,116 @@ class AuditExportService:
                         self._warning_style(),
                     )
                 )
+
+        # --- Grazing Management Records ---
+        # Integrated livestock grazing is a documented soil-health / weed-control practice (and a
+        # core regenerative signal). The main soil table carries no animal columns, so surface the
+        # detail here: animal type/count, grazing days, purpose, and — for summary-mode entries —
+        # the rotation period and number of passes.
+        if grazing_events:
+            elements.append(Spacer(1, 10))
+            elements.append(
+                Paragraph(
+                    "<b>Grazing Management Records</b>",
+                    self._sub_header_style(),
+                )
+            )
+            grazing_headers = ["Period", "Animal", "Count", "Grazing Days", "Passes", "Purpose", "Area"]
+            grazing_data = [[self._hdr(h) for h in grazing_headers]]
+            for gev in grazing_events:
+                ed = gev.extra_data if isinstance(gev.extra_data, dict) else {}
+                is_summary = ed.get("is_summary") in (True, "true")
+
+                if is_summary and ed.get("date_start") and ed.get("date_end"):
+                    period = f"{ed.get('date_start')} – {ed.get('date_end')}"
+                else:
+                    period = _fmt_date(gev.date)
+
+                grazing_days = ed.get("total_grazing_days") if is_summary else gev.grazing_duration_days
+                # Pass count only applies to a summary rotation; single events render a dash via _cell.
+                passes = ed.get("event_count") if is_summary else None
+
+                area_total = ed.get("area_covered_total") if is_summary else None
+                area_val = area_total if area_total else gev.area_covered
+                area_disp = f"{_fmt_float(area_val)} {_val(gev.area_unit, '')}".strip() if area_val else None
+
+                purpose = GRAZING_PURPOSE_LABELS.get(gev.grazing_purpose, _val(gev.grazing_purpose))
+
+                grazing_data.append(
+                    [
+                        self._cell(period),
+                        self._cell(_val(gev.animal_type)),
+                        self._cell(str(gev.animal_count) if gev.animal_count is not None else None),
+                        self._cell(str(grazing_days) if grazing_days not in (None, "") else None),
+                        self._cell(str(passes) if passes not in (None, "") else None),
+                        self._cell(purpose, 40),
+                        self._cell(area_disp),
+                    ]
+                )
+            grazing_widths = [1.3 * inch, 0.8 * inch, 0.6 * inch, 0.9 * inch, 0.6 * inch, 1.2 * inch, 0.7 * inch]
+            gt = Table(grazing_data, colWidths=grazing_widths, repeatRows=1)
+            gt.setStyle(self._base_table_style())
+            elements.append(gt)
+
+        # --- Biodiversity & Habitat Records ---
+        # Documented habitat PRACTICES (HD: hedgerows, insectary, riparian, living groundcover) and
+        # nesting/shelter structures (NS: owl/raptor/bee/bat boxes, insect hotels) — facts a ROC /
+        # Bee Better auditor reads directly. NO biodiversity score/index (banned self-label class);
+        # the living-floor / bugs / birds proof rides on the event photos, not a number.
+        if habitat_events:
+            elements.append(Spacer(1, 10))
+            elements.append(
+                Paragraph(
+                    "<b>Biodiversity &amp; Habitat Records</b>",
+                    self._sub_header_style(),
+                )
+            )
+            habitat_headers = [
+                "Date",
+                "Category",
+                "Practice / Structure",
+                "Count",
+                "Since",
+                "Area",
+                "Species / Notes",
+            ]
+            habitat_data = [[self._hdr(h) for h in habitat_headers]]
+            for hev in habitat_events:
+                ed = hev.extra_data if isinstance(hev.extra_data, dict) else {}
+                category = SOIL_TYPE_LABELS.get(hev.type, _val(hev.type))
+                practice = HABITAT_TYPE_LABELS.get(hev.habitat_type, _val(hev.habitat_type))
+                count = str(hev.habitat_structure_count) if hev.habitat_structure_count is not None else None
+                since = _fmt_date(hev.habitat_install_date) if hev.habitat_install_date else None
+                area_disp = (
+                    f"{_fmt_float(hev.area_covered)} {_val(hev.area_unit, '')}".strip() if hev.area_covered else None
+                )
+                notes = (
+                    " · ".join(
+                        p
+                        for p in (
+                            ed.get("species_planted"),
+                            ed.get("structure_notes"),
+                            ed.get("wildlife_observed"),
+                        )
+                        if p
+                    )
+                    or None
+                )
+                habitat_data.append(
+                    [
+                        self._cell(_fmt_date(hev.date)),
+                        self._cell(category),
+                        self._cell(practice, 40),
+                        self._cell(count),
+                        self._cell(since),
+                        self._cell(area_disp),
+                        self._cell(notes, 60),
+                    ]
+                )
+            habitat_widths = [0.8 * inch, 1.0 * inch, 1.3 * inch, 0.45 * inch, 0.7 * inch, 0.6 * inch, 1.45 * inch]
+            ht = Table(habitat_data, colWidths=habitat_widths, repeatRows=1)
+            ht.setStyle(self._base_table_style())
+            elements.append(ht)
 
         # --- Soil Equipment Operations (CC mowing, OM/PA spreading, etc.) ---
         # Soil events with fuel/equipment data (cover crop termination, amendment
@@ -3749,6 +3914,62 @@ class AuditExportService:
         t = Table(data, colWidths=col_widths, repeatRows=1)
         t.setStyle(self._base_table_style())
         elements.append(t)
+
+        # --- Beneficial-Release & Trap Detail (7 CFR 205.206) ---
+        # Source traceability for introduced biological controls (supplier / lot / organic status)
+        # and real trap-monitoring catch data — the main table stays readable; a certifier reads the
+        # release provenance and trap pressure here.
+        BR_ORGANIC_LABELS = {"yes": "Yes", "no": "No", "unknown": "Unknown"}
+        TRAP_TYPE_LABELS = {
+            "sticky": "Sticky card",
+            "pheromone": "Pheromone lure",
+            "delta": "Delta trap",
+            "bucket_funnel": "Bucket / funnel",
+            "other": "Other",
+        }
+        detail_events = [
+            ev
+            for ev in events
+            if ev.beneficial_supplier
+            or ev.beneficial_lot_number
+            or ev.beneficial_organic_approved
+            or ev.trap_type
+            or ev.pest_catch_count is not None
+        ]
+        if detail_events:
+            elements.append(Spacer(1, 10))
+            elements.append(
+                Paragraph(
+                    "<b>Beneficial-Release &amp; Trap Detail (7 CFR 205.206)</b>",
+                    self._sub_header_style(),
+                )
+            )
+            detail_headers = [
+                "Date",
+                "Type",
+                "Supplier",
+                "Lot #",
+                "Organic OK",
+                "Trap Type",
+                "Catch",
+            ]
+            detail_data = [[self._hdr(h) for h in detail_headers]]
+            for ev in detail_events:
+                detail_data.append(
+                    [
+                        self._cell(_fmt_date(ev.date)),
+                        self._cell(PEST_TYPE_LABELS.get(ev.type, _val(ev.type))),
+                        self._cell(ev.beneficial_supplier, 40),
+                        self._cell(ev.beneficial_lot_number, 30),
+                        self._cell(BR_ORGANIC_LABELS.get(ev.beneficial_organic_approved)),
+                        self._cell(TRAP_TYPE_LABELS.get(ev.trap_type) if ev.trap_type else None),
+                        self._cell(str(ev.pest_catch_count) if ev.pest_catch_count is not None else None),
+                    ]
+                )
+            detail_widths = [0.7 * inch, 1.0 * inch, 1.5 * inch, 0.9 * inch, 0.7 * inch, 1.0 * inch, 0.6 * inch]
+            dt = Table(detail_data, colWidths=detail_widths, repeatRows=1)
+            dt.setStyle(self._base_table_style())
+            elements.append(dt)
 
         # NOP Threshold Monitoring & Rationale Sub-Table (7 CFR 205.206(a) + (e))
         # Per § 205.206(a), scouting/monitoring decisions are documented whether or
@@ -7875,6 +8096,33 @@ class AuditExportService:
                 if ev.manure_application_date:
                     manure_info += f" (applied: {_fmt_date(ev.manure_application_date)})"
                 notes = (notes + " | " if notes else "") + manure_info
+
+            # Cover-crop species lives in extra_data, not amendment_type — surface it in the
+            # Amendment column so the CSV matches the PDF (and doesn't drop the planted mix).
+            _soil_ed = ev.extra_data if isinstance(ev.extra_data, dict) else {}
+            amendment_label = _amendment_type_label(ev.amendment_type)
+            if not ev.amendment_type and ev.type == "CC" and _soil_ed.get("cover_crop_species"):
+                amendment_label = _soil_ed["cover_crop_species"]
+
+            # Grazing detail (animal/count/days/purpose + rotation) has no dedicated columns —
+            # fold it into notes so integrated grazing isn't dropped from the CSV dossier.
+            if ev.type == "GR":
+                _is_summary = _soil_ed.get("is_summary") in (True, "true")
+                g_parts = []
+                if ev.animal_type:
+                    g_parts.append(f"{ev.animal_type}" + (f" x{ev.animal_count}" if ev.animal_count else ""))
+                _g_days = _soil_ed.get("total_grazing_days") if _is_summary else ev.grazing_duration_days
+                if _g_days not in (None, ""):
+                    g_parts.append(f"{_g_days} grazing days")
+                if _is_summary and _soil_ed.get("event_count"):
+                    g_parts.append(f"{_soil_ed['event_count']} passes")
+                if _is_summary and _soil_ed.get("date_start") and _soil_ed.get("date_end"):
+                    g_parts.append(f"{_soil_ed['date_start']}–{_soil_ed['date_end']}")
+                if ev.grazing_purpose:
+                    g_parts.append(GRAZING_PURPOSE_LABELS.get(ev.grazing_purpose, ev.grazing_purpose))
+                if g_parts:
+                    notes = (notes + " | " if notes else "") + "Grazing: " + ", ".join(g_parts)
+
             # NOP pad: organic status goes in column index 16 (Organic Status).
             # Use get_<field>_display() so the inspector sees "OMRI Listed", not raw
             # "omri_listed" codes — matches the other two render sites in this file.
@@ -7895,7 +8143,7 @@ class AuditExportService:
                         "Soil Management",
                         SOIL_TYPE_LABELS.get(ev.type, _val(ev.type)),
                         _val(ev.description),
-                        _amendment_type_label(ev.amendment_type),
+                        amendment_label,
                         amount,
                         unit,
                         "",
@@ -8319,5 +8567,10 @@ class AuditExportService:
                 writer.writerow(["Parcel data not available"])
 
         wrapper.flush()
+        # Detach the TextIOWrapper from the BytesIO before returning. Without this, the wrapper is
+        # garbage-collected when this frame exits and its __del__ CLOSES the underlying buffer — so
+        # the caller (FileResponse / .getvalue()) receives a closed buffer ("I/O operation on closed
+        # file"). detach() flushes and severs the link, leaving the BytesIO open and complete.
+        wrapper.detach()
         buffer.seek(0)
         return buffer

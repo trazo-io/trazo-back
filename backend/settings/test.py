@@ -105,3 +105,13 @@ AWS_S3_ENABLED = False
 AWS_STORAGE_BUCKET_NAME = "test-bucket"
 STRIPE_PUBLISHABLE_KEY = "pk_test_fake"
 STRIPE_SECRET_KEY = "sk_test_fake"
+
+# Use local filesystem storage during tests. base.py defaults DEFAULT_FILE_STORAGE to S3, so any
+# FileField/ImageField save (e.g. QR/album images created in fixtures) otherwise tries to PutObject
+# to a real bucket and fails with AccessDenied — defeating "minimal external dependencies".
+DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
+
+# base.py forces SECURE_SSL_REDIRECT=True when DEBUG is False (production hardening). DEBUG is False
+# here, so without this the test client's http requests get a 301 redirect to https and every
+# endpoint test fails. Disable HTTPS redirect for the test environment.
+SECURE_SSL_REDIRECT = False

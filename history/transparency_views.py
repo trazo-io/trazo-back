@@ -218,6 +218,13 @@ def production_transparency_detail(request, production_public_id=None):
         # Uses already-prefetched ChemicalEvents, zero extra DB queries
         organic_summary = _build_organic_summary(history, certification_data, establishment, organic_claim)
 
+        # Documented-practices summary — the consumer "real vs. fake organic"
+        # differentiator (GTM-v3). Surfaces FACTS the farmer logged (integrated grazing,
+        # cover crops, on-farm compost) so a practice-based regenerative grower stands out
+        # from an input-substitution "organic" neighbor. Facts only — NO grade, NO self-label,
+        # NO regenerative badge (transparency-first.md / EU ECGT). Uses prefetched soil events.
+        practice_summary = _build_practice_summary(history)
+
         # Product information
         product_info = {
             "name": history.product.name if history.product else "Farm Product",
@@ -342,6 +349,7 @@ def production_transparency_detail(request, production_public_id=None):
                     "certifications": certification_data,
                     "organic_claim": organic_claim,  # FTC 16 CFR 260.6(d) gate
                     "organic_summary": organic_summary,
+                    "practice_summary": practice_summary,  # documented facts (grazing/cover/compost)
                 },
                 # DETAILED LOAD (30+ seconds) - Deep insights
                 "detailed_view": {
@@ -698,6 +706,97 @@ def _build_organic_summary(history, certification_data, establishment, organic_c
             round((organic_inputs / classified_count * 100)) if classified_count > 0 else None
         ),
     }
+
+
+def _build_practice_summary(history):
+    """Aggregate documented soil/regenerative PRACTICE facts for consumer display.
+
+    GTM-v3 "real vs. fake organic" differentiator: a practice-based regenerative grower
+    (integrated grazing, cover crops, on-farm compost) should be visibly distinguishable from
+    an input-substitution "organic" neighbor — but ONLY through the FACTS the farmer actually
+    logged, never a grade, verdict, or regenerative badge (transparency-first.md; EU ECGT
+    2024/825; FTC 16 CFR 260.6). The difference shows itself: a real grower's list is full
+    because they did and logged the practices; a spray-style farm's is empty.
+
+    Reads already-prefetched SoilManagementEvents — zero extra DB queries. Returns None when
+    no qualifying practices exist (the card section is simply hidden).
+    """
+    soil_events = list(history.history_soilmanagementevent_events.all())
+    if not soil_events:
+        return None
+
+    grazing = [e for e in soil_events if e.type == SoilManagementEvent.GRAZING]
+    cover_crop = [e for e in soil_events if e.type == SoilManagementEvent.COVER_CROP]
+    compost = [e for e in soil_events if e.type == SoilManagementEvent.COMPOSTING]
+
+    practices = []
+
+    if grazing:
+        animals = sorted({(e.animal_type or "").strip().lower() for e in grazing if e.animal_type})
+        total_days = sum(e.grazing_duration_days or 0 for e in grazing)
+        practices.append(
+            {
+                "key": "integrated_grazing",
+                "count": len(grazing),
+                "animal_types": animals,
+                "total_grazing_days": total_days or None,
+            }
+        )
+
+    if cover_crop:
+        species = sorted(
+            {
+                (e.extra_data or {}).get("cover_crop_species", "").strip()
+                for e in cover_crop
+                if isinstance(e.extra_data, dict) and (e.extra_data or {}).get("cover_crop_species")
+            }
+        )
+        practices.append({"key": "cover_crops", "count": len(cover_crop), "species": species})
+
+    if compost:
+        methods = sorted({(e.compost_method or "").strip() for e in compost if e.compost_method})
+        practices.append({"key": "on_farm_compost", "count": len(compost), "methods": methods})
+
+    # Biodiversity / habitat (HD = developed habitat, NS = nesting/shelter structures). FACTS only —
+    # the habitat types and structure totals the farmer logged, never a biodiversity score/index or a
+    # species-richness number (banned self-label class). The living-floor / bugs / birds proof rides
+    # on the event photos, surfaced elsewhere.
+    habitat_dev = [e for e in soil_events if e.type == SoilManagementEvent.HABITAT_DEVELOPMENT]
+    nesting = [e for e in soil_events if e.type == SoilManagementEvent.NESTING_SHELTER]
+
+    # earliest install/establish date drives the consumer maturity story ("hedgerow since 2019")
+    def _earliest_install(events):
+        dates = [e.habitat_install_date for e in events if getattr(e, "habitat_install_date", None)]
+        return min(dates).isoformat() if dates else None
+
+    if habitat_dev:
+        habitat_types = sorted({(e.habitat_type or "").strip() for e in habitat_dev if e.habitat_type})
+        practices.append(
+            {
+                "key": "habitat_development",
+                "count": len(habitat_dev),
+                "habitat_types": habitat_types,
+                "established_since": _earliest_install(habitat_dev),
+            }
+        )
+
+    if nesting:
+        structures = sorted({(e.habitat_type or "").strip() for e in nesting if e.habitat_type})
+        total_structures = sum(e.habitat_structure_count or 0 for e in nesting)
+        practices.append(
+            {
+                "key": "nesting_shelter",
+                "count": len(nesting),
+                "structures": structures,
+                "total_structures": total_structures or None,
+                "installed_since": _earliest_install(nesting),
+            }
+        )
+
+    if not practices:
+        return None
+
+    return {"practices": practices}
 
 
 def _get_verification_status(history, transparency_data=None):

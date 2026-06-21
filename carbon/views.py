@@ -2414,7 +2414,18 @@ def calculate_event_carbon_impact(request):
                 if event_type == "chemical":
                     self.type = event_data.get("type", "FE")  # Use actual type from form
                     self.commercial_name = event_data.get("commercial_name", "")
-                    self.concentration = event_data.get("concentration", "10-10-10")
+                    # V5 (2026-06): NPK concentration is only meaningful for fertilizers (FE).
+                    # Do NOT inject an NPK "10-10-10" guess for PE/FU/HE — it is nonsensical for a
+                    # pesticide/fungicide/herbicide and fed a bogus N-manufacturing term into carbon.
+                    # For FE with no stated grade, keep a conservative mid-range estimate (over-counts
+                    # rather than under-counts emissions); for everything else pass the real value.
+                    _conc = event_data.get("concentration")
+                    if _conc not in (None, "") and str(_conc).strip():
+                        self.concentration = _conc
+                    elif self.type == "FE":
+                        self.concentration = "10-10-10"  # conservative NPK estimate, fertilizer only
+                    else:
+                        self.concentration = _conc
                     self.volume = event_data.get("volume", "10")  # Volume number only
                     self.volume_unit = event_data.get("volume_unit", "liters")
                     self.area = event_data.get("area", "1.0")  # Area number only
@@ -3448,9 +3459,12 @@ class PublicProductionViewSet(viewsets.ViewSet):
             }
 
             # Quick mode: return minimal data for fast loading (transparency-first)
+            # CLAIM-SAFETY (V1, 2026-06): the self-graded transparency SCORE is a PRODUCER-dashboard
+            # KPI only. It is WITHHELD from the anonymous consumer payload per transparency-first.md
+            # (EU ECGT 2024/825, live 2026-09-27) and FTC 16 CFR 260.6. Consumers get factual carbon +
+            # evidence, never a self-assigned grade. Do NOT re-add transparencyScore here.
             if quick_mode:
                 quick_response = {
-                    "transparencyScore": round(transparency_score, 1),
                     "verificationLevel": verification_level,
                     "carbonFootprint": round(carbon_footprint_per_kg, 2),
                     "carbonNegative": carbon_context["is_carbon_negative"],
@@ -3466,8 +3480,10 @@ class PublicProductionViewSet(viewsets.ViewSet):
             blockchain_verification = None
             try:
                 # Prepare transparency data for blockchain
+                # BUGFIX (2026-06): use production.id, not int(pk) — pk is a UUID (public_id) on
+                # the consumer QR path, so int(pk) raised ValueError and 500'd the full payload.
                 transparency_blockchain_data = {
-                    "production_id": int(pk),
+                    "production_id": production.id,
                     "transparency_score": transparency_score,
                     "verification_level": verification_level,
                     "total_emissions": float(total_emissions),
@@ -3486,10 +3502,12 @@ class PublicProductionViewSet(viewsets.ViewSet):
                 }
 
                 # Check if blockchain record exists, create if not
-                verification_result = blockchain_service.verify_carbon_record(int(pk))
+                verification_result = blockchain_service.verify_carbon_record(production.id)
                 if not verification_result.get("verified", False):
                     # Create new blockchain record with transparency data
-                    blockchain_result = blockchain_service.create_carbon_record(int(pk), transparency_blockchain_data)
+                    blockchain_result = blockchain_service.create_carbon_record(
+                        production.id, transparency_blockchain_data
+                    )
                     blockchain_verification = {
                         "verified": True,
                         "transaction_hash": blockchain_result.get("transaction_hash"),
@@ -3522,7 +3540,9 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     "network": "ethereum_testnet",
                     "verification_date": timezone.now().isoformat(),
                     "compliance_status": True,
-                    "eligible_for_credits": carbon_score >= 70,
+                    # BUGFIX (2026-06): carbon_score was never defined (NameError crashed the
+                    # fallback). Use the computed transparency_score for credit eligibility.
+                    "eligible_for_credits": transparency_score >= 70,
                     "fallback_data": True,
                 }
 
@@ -3669,12 +3689,12 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     timeline_data = []
 
             # Build transparency-first response for consumer QR experience
+            # CLAIM-SAFETY (V1, 2026-06): the self-graded score family — transparencyScore,
+            # documentationCompleteness ("% documented") and categoryBreakdown — is a PRODUCER-dashboard
+            # KPI and is WITHHELD from the anonymous consumer payload (EU ECGT 2024/825; FTC 16 CFR 260.6).
+            # Consumers get factual carbon + documented evidence, never a self-assigned grade.
             response_data = {
-                # PRIMARY: Transparency information comes first
-                "transparencyScore": round(transparency_score, 1),
                 "verificationLevel": verification_level,
-                "documentationCompleteness": transparency_data.get("completeness_score", 0),
-                "categoryBreakdown": transparency_data.get("category_breakdown", {}),
                 # SECONDARY: Carbon data for scientific context (non-competitive)
                 "carbonFootprint": {
                     "per_kg": round(carbon_footprint_per_kg, 2),
@@ -3758,24 +3778,25 @@ class PublicProductionViewSet(viewsets.ViewSet):
             return Response(validated_response, status=status.HTTP_200_OK)
 
         except History.DoesNotExist:
-            logger.warning(f"🚨 Production not found: {production_id}")
+            logger.warning(f"🚨 Production not found: {pk}")
             return Response({"error": "Production not found or not published"}, status=status.HTTP_404_NOT_FOUND)
         except PermissionError as e:
-            logger.error(f"🚨 Permission denied for production {production_id}: {e}")
+            logger.error(f"🚨 Permission denied for production {pk}: {e}")
             return Response({"error": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
         except ValidationError as e:
-            logger.warning(f"🚨 Validation error for production {production_id}: {e}")
+            logger.warning(f"🚨 Validation error for production {pk}: {e}")
             return Response({"error": "Invalid data"}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            logger.error(f"🚨 QR summary error for production {production_id}: {type(e).__name__}: {e}")
+            logger.error(f"🚨 QR summary error for production {pk}: {type(e).__name__}: {e}")
             logger.error(f"🚨 QR summary traceback: {traceback.format_exc()}")
 
-            # Return graceful fallback response for QR consumers
+            # Return graceful fallback response for QR consumers.
+            # CLAIM-SAFETY (V1): even the error path must NOT emit the self-graded score family
+            # (transparencyScore / documentationCompleteness) — withheld from the anonymous
+            # consumer payload on every branch.
             fallback_response = {
                 "error": "Service temporarily unavailable",
-                "transparencyScore": 0,
                 "verificationLevel": "Limited",
-                "documentationCompleteness": 0,
                 "carbonFootprint": {
                     "per_kg": 0.0,
                     "total_emissions": 0.0,
@@ -4069,21 +4090,44 @@ class PublicProductionViewSet(viewsets.ViewSet):
         return achievements
 
     def _get_consumer_safe_social_proof(self, production):
-        """Get social proof data safe for consumers"""
+        """Get social proof data safe for consumers.
+
+        CLAIM-SAFETY (V2, 2026-06): previously returned a hardcoded static
+        ``transparency_score: 95`` "for consumer confidence" — a fabricated self-graded number
+        in the anonymous payload (EU ECGT 2024/825 / FTC 16 CFR 260.6). Replaced with REAL
+        community-feedback evidence (review count + average rating + qualitative engagement),
+        mirroring the compliant builder used elsewhere. No score, no invented numbers.
+        """
         try:
-            # Return only non-sensitive aggregated data
+            from history.models import HistoryScan
+            from reviews.models import Review
+
+            review_count = Review.objects.filter(production=production).count()
+            reviews = Review.objects.filter(production=production)
+            if reviews.exists():
+                avg_rating = sum(r.rating for r in reviews) / reviews.count()
+            else:
+                avg_rating = (
+                    float(production.reputation) if production.reputation and production.reputation > 0 else 0.0
+                )
+
+            # Scan counts stay internal; expose only qualitative trust indicators.
+            total_scans = HistoryScan.objects.filter(history=production).count()
+
             return {
-                "transparency_score": 95,  # Static high score for consumer confidence
-                "verification_badges": 3,
-                "data_completeness": "High",
-                "last_updated": "Recently verified",
+                "reviewsCount": review_count,
+                "averageRating": round(avg_rating, 1),
+                "communityEngagement": (
+                    "high" if total_scans >= 100 else ("medium" if total_scans >= 25 else "growing")
+                ),
+                "verifiedByConsumers": total_scans >= 10,
             }
         except Exception:
             return {
-                "transparency_score": 90,
-                "verification_badges": 2,
-                "data_completeness": "Good",
-                "last_updated": "Verified",
+                "reviewsCount": 0,
+                "averageRating": 0.0,
+                "communityEngagement": "growing",
+                "verifiedByConsumers": False,
             }
 
     def _get_public_farmer_info(self, establishment):
