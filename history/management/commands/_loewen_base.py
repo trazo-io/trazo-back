@@ -40,14 +40,14 @@ ESTABLISHMENT_NAME = "Loewen Family Farm"
 # (page still renders; just no photo for that event). image_url accepts any
 # public URL, no S3 upload needed.
 LOEWEN_IMAGES = {
-    "hero": [],          # sheep grazing under walnut trees (cover_image_url)
-    "grazing": [],       # sheep in the orchard
-    "cover_crop": [],    # flowering cover crop / tall grass between rows
-    "habitat": [],       # owl box / hedgerow / birds
-    "wildlife": [],      # owl in box / ladybugs on leaf / songbird close-up
-    "harvest": [],       # walnut harvest / walnuts in-shell
-    "soil_test": [],     # hands in healthy soil
-    "orchard": [],       # walnut orchard rows (album / general)
+    "hero": ["https://plus.unsplash.com/premium_photo-1661848408966-ff1e956a5168?q=80&w=1287&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"],          # sheep grazing under walnut trees (cover_image_url)
+    "grazing": ["https://images.unsplash.com/photo-1731761087961-5a1f1e00dd4b?q=80&w=1287&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"],       # sheep in the orchard
+    "cover_crop": ["https://images.unsplash.com/photo-1634842833794-20e708360622?q=80&w=2340&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"],    # flowering cover crop / tall grass between rows
+    "habitat": ["https://images.unsplash.com/photo-1774343837058-01115f35eb81?q=80&w=1294&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"],       # owl box / hedgerow / birds
+    "wildlife": ["https://images.unsplash.com/photo-1727860623632-b044a28d84e8?q=80&w=2342&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"],      # owl in box / ladybugs on leaf / songbird close-up
+    "harvest": ["https://images.unsplash.com/photo-1664632808272-8a7d1366e4b2?q=80&w=1335&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"],       # walnut harvest / walnuts in-shell
+    "soil_test": ["https://plus.unsplash.com/premium_photo-1729087867383-7987cb3a10d6?q=80&w=2148&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"],     # hands in healthy soil
+    "orchard": ["https://images.unsplash.com/photo-1591025274565-15f8a5b5171b?q=80&w=2340&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"],       # walnut orchard rows (album / general)
 }
 
 
