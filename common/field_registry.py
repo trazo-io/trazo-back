@@ -68,6 +68,7 @@ UNIT_YIELD = [
     ("tons", "Tonnes"),
     ("lbs", "Pounds"),
     ("boxes", "Boxes"),
+    ("bins", "Bins"),  # F18: tree-crop harvest unit — CA avocado/citrus are picked into field bins
     ("plants", "Plants"),
     ("seeds", "Seeds"),
 ]

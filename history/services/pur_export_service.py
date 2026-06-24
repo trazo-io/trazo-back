@@ -167,6 +167,22 @@ class PURExportService:
         area_unit = _s(getattr(event, "area_unit", None))
         area_display = f"{area_treated} {area_unit}".strip()
 
+        # F-PUR (2026-06): box 26 (Rate Per Acre) was hard-coded blank. Compute it from the product
+        # volume and treated area the farmer already logged — no new input. e.g. 10 gal / 15 acres
+        # -> "0.67 gal/acre". Leave blank if either is missing/zero (can't fabricate a rate).
+        rate_display = ""
+        try:
+            vnum = float(event.volume) if event.volume not in (None, "") else None
+            anum = float(event.area) if event.area not in (None, "") else None
+            # Need both units for a meaningful rate; without them the value is ambiguous, so leave
+            # box 26 blank rather than print "gal/" or " /acre".
+            if vnum is not None and anum and volume_unit and area_unit:
+                # singularize the area unit for the rate ("acres" -> "acre", "ha" -> "ha")
+                area_singular = area_unit[:-1] if area_unit.endswith("s") else area_unit
+                rate_display = f"{vnum / anum:.2f} {volume_unit}/{area_singular}"
+        except (TypeError, ValueError, ZeroDivisionError):
+            rate_display = ""
+
         product_mfr = _s(event.commercial_name)
         manufacturer = _s(event.manufacturer)
         if manufacturer:
@@ -200,7 +216,7 @@ class PURExportService:
             "epa_registration_number": _s(event.epa_registration_number),
             "total_product_used": total_product,
             "rei_days": _s(event.rei_hours),
-            "rate_per_acre": "",
+            "rate_per_acre": rate_display,
             "dilution": "",
             "product_and_manufacturer": product_mfr,
         }

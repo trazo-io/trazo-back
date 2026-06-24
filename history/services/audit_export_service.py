@@ -3066,6 +3066,9 @@ class AuditExportService:
                         measurements.append(f"{brix}° Brix")
                 if ev.grain_moisture:
                     measurements.append(f"{_fmt_float(ev.grain_moisture)}% moisture")
+                # F43: dry-matter % — avocado/nut maturity (the CA orchard ICP metric)
+                if getattr(ev, "dry_matter_percentage", None) is not None:
+                    measurements.append(f"{_fmt_float(ev.dry_matter_percentage)}% dry matter")
                 measurement_display = " / ".join(measurements) if measurements else None
 
                 # Sprint 3.2 — storage location + optional temperature on HA events
@@ -3410,6 +3413,7 @@ class AuditExportService:
         compost_events = []
         grazing_events = []
         habitat_events = []
+        st_events = []  # F19: soil tests carrying lab results (test_results JSON)
         for ev in events:
             amount = ""
             if ev.amendment_amount_numeric:
@@ -3466,6 +3470,10 @@ class AuditExportService:
             # dedicated sub-table — the amendment-oriented main columns leave habitat detail blank.
             if ev.type in ("HD", "NS"):
                 habitat_events.append(ev)
+            # F19: collect soil tests that carry lab RESULTS (test_results JSON) for a dedicated
+            # sub-table — the main table shows only pH/OM; a certifier needs N/P/K/CEC + lab + date.
+            if ev.type == "ST" and isinstance(ev.test_results, dict) and ev.test_results:
+                st_events.append(ev)
 
         col_widths = [
             0.6 * inch,
@@ -3508,6 +3516,7 @@ class AuditExportService:
                 "Peak Temp (°F)",
                 "Days at Temp",
                 "Turnings",
+                "Feedstock",
                 "Amendment",
                 "Compliant",
             ]
@@ -3537,14 +3546,35 @@ class AuditExportService:
                         self._cell(peak),
                         self._cell(days),
                         self._cell(turns),
-                        self._cell(cev.amendment_type, 40),
+                        self._cell(cev.compost_feedstock, 40),
+                        self._cell(cev.amendment_type, 30),
                         self._cell(compliant),
                     ]
                 )
-            compost_widths = [0.7 * inch, 0.9 * inch, 0.8 * inch, 0.7 * inch, 1.2 * inch, 0.7 * inch]
+            compost_widths = [
+                0.65 * inch,
+                0.8 * inch,
+                0.65 * inch,
+                0.55 * inch,
+                1.25 * inch,
+                0.95 * inch,
+                0.6 * inch,
+            ]
             ct = Table(compost_data, colWidths=compost_widths, repeatRows=1)
             ct.setStyle(self._base_table_style())
             elements.append(ct)
+
+            # F24: the NOP 5021 temperature-monitoring readings (free-text log) — the detailed
+            # readings behind the peak-temp summary above. Shown verbatim per event.
+            log_events = [ev for ev in compost_events if (ev.compost_temperature_log or "").strip()]
+            if log_events:
+                elements.append(Spacer(1, 6))
+                log_data = [[self._hdr("Date"), self._hdr("Temperature Monitoring Readings")]]
+                for lev in log_events:
+                    log_data.append([self._cell(_fmt_date(lev.date)), self._cell(lev.compost_temperature_log, 200)])
+                lt = Table(log_data, colWidths=[0.8 * inch, 5.6 * inch], repeatRows=1)
+                lt.setStyle(self._base_table_style())
+                elements.append(lt)
 
             # Warning if any compost event is missing temperature data
             missing_temp = any(
@@ -3670,6 +3700,33 @@ class AuditExportService:
             ht = Table(habitat_data, colWidths=habitat_widths, repeatRows=1)
             ht.setStyle(self._base_table_style())
             elements.append(ht)
+
+        # --- Soil Test Results (F19) ---
+        # Lab results (N/P/K/CEC) + provenance for ST events — a soil test with only pH/OM is an
+        # incomplete agronomic/certifier record. Read from the test_results JSONField.
+        if st_events:
+            elements.append(Spacer(1, 10))
+            elements.append(Paragraph("<b>Soil Test Results</b>", self._sub_header_style()))
+            st_headers = ["Date", "Lab", "Sample #", "Report Date", "N (ppm)", "P (ppm)", "K (ppm)", "CEC"]
+            st_data = [[self._hdr(h) for h in st_headers]]
+            for sev in st_events:
+                tr = sev.test_results if isinstance(sev.test_results, dict) else {}
+                st_data.append(
+                    [
+                        self._cell(_fmt_date(sev.date)),
+                        self._cell(tr.get("lab_name"), 24),
+                        self._cell(tr.get("sample_id")),
+                        self._cell(tr.get("report_date")),
+                        self._cell(_val(tr.get("nitrogen"))),
+                        self._cell(_val(tr.get("phosphorus"))),
+                        self._cell(_val(tr.get("potassium"))),
+                        self._cell(_val(tr.get("cec"))),
+                    ]
+                )
+            st_widths = [0.7 * inch, 1.2 * inch, 0.8 * inch, 0.8 * inch, 0.6 * inch, 0.6 * inch, 0.6 * inch, 0.6 * inch]
+            st_table = Table(st_data, colWidths=st_widths, repeatRows=1)
+            st_table.setStyle(self._base_table_style())
+            elements.append(st_table)
 
         # --- Soil Equipment Operations (CC mowing, OM/PA spreading, etc.) ---
         # Soil events with fuel/equipment data (cover crop termination, amendment
@@ -3884,16 +3941,35 @@ class AuditExportService:
                 f"{_fmt_float(ev.area_covered)} {_val(ev.area_unit, '')}".strip() if ev.area_covered else None
             )
 
+            # F44: surface the quantitative UC-IPM monitoring count next to the qualitative pressure
+            pressure_display = ev.pest_pressure_level or None
+            if ev.monitoring_count is not None:
+                # Compact units (the Pressure column is narrow) — e.g. "low · 5/leaf".
+                _unit_lbls = {
+                    "per_leaf": "/leaf",
+                    "per_trap": "/trap",
+                    "per_tree": "/tree",
+                    "per_100_fruit": "/100fr",
+                    "percent_infested": "% inf",
+                    "per_sample": "/sample",
+                }
+                _cnt = f"{_fmt_float(ev.monitoring_count)}{_unit_lbls.get(ev.monitoring_unit, '')}"
+                pressure_display = f"{pressure_display} · {_cnt}" if pressure_display else _cnt
+
             data.append(
                 [
                     self._cell(_fmt_date(ev.date)),
                     self._cell(PEST_TYPE_LABELS.get(ev.type, _val(ev.type))),
                     self._cell(ev.pest_species, 50),
                     self._cell(identified or None, 40),
-                    self._cell(ev.pest_pressure_level),
+                    self._cell(pressure_display),
                     self._cell(damage_display),
                     self._cell(area_display),
-                    self._cell("Yes" if ev.action_threshold_met else "No"),
+                    self._cell(
+                        "Not assessed"
+                        if ev.action_threshold_met is None
+                        else ("Yes" if ev.action_threshold_met else "No")
+                    ),
                     self._cell(ev.ipm_strategy, 60),
                     self._cell(beneficial_display or None, 40),
                 ]
@@ -3991,7 +4067,11 @@ class AuditExportService:
                     [
                         self._cell(_fmt_date(ev.date)),
                         self._cell(ev.pest_species, 40),
-                        self._cell("Yes" if ev.action_threshold_met else "No"),
+                        self._cell(
+                            "Not assessed"
+                            if ev.action_threshold_met is None
+                            else ("Yes" if ev.action_threshold_met else "No")
+                        ),
                         self._cell(ev.threshold_rationale, 120),
                     ]
                 )

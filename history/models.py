@@ -1685,6 +1685,17 @@ class ProductionEvent(CommonEvent):
         null=True,
         help_text="Grain moisture percentage at harvest (Midwest corn/soy operations)",
     )
+    # F43 (2026-06): tree-crop maturity metric — the correct vocabulary for the CA orchard ICP.
+    # Avocado uses dry-matter % as the legal CA maturity standard (CDFA; Hass min ~20.8%); nuts use
+    # kernel dry-matter at drydown. brix_level is for citrus/sugar fruit; grain_moisture is grain-only.
+    dry_matter_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        help_text="Dry matter % at harvest — avocado/nut maturity (CA Hass legal min ~20.8%)",
+    )
 
     # Item #13: Pump depth and electricity source for irrigation (IR) events.
     # These fields enable accurate energy calculation per USDA NRCS pump curve methodology.
@@ -2592,6 +2603,22 @@ class SoilManagementEvent(CommonEvent):
             "Outside this range, the pile must be handled as raw manure under (c)(1)."
         ),
     )
+    # F24 (2026-06): complete the NOP 5021 compost record. A single peak temp + day count is not a
+    # monitoring log — a certifier needs the feedstock and the actual temperature readings over time.
+    compost_feedstock = models.CharField(
+        max_length=300,
+        blank=True,
+        null=True,
+        help_text="Feedstock composition/source (e.g., 'horse manure + straw + green waste') — NOP 5021",
+    )
+    compost_temperature_log = models.TextField(
+        blank=True,
+        null=True,
+        help_text=(
+            "Temperature-monitoring readings over the composting period (date · temp · turned?) — "
+            "the NOP 5021 monitoring log. One reading per line."
+        ),
+    )
 
     # NOP Compliance: Raw Manure Harvest Interval (7 CFR 205.203(c)(1))
     # (c)(1) governs raw animal manure pre-harvest intervals; composted materials
@@ -2797,11 +2824,38 @@ class PestManagementEvent(CommonEvent):
     type = models.CharField(max_length=2, choices=PEST_TYPE_CHOICES, default=SCOUTING)
     pest_species = models.CharField(max_length=200, blank=True)
     pest_pressure_level = models.CharField(max_length=50, blank=True)  # Low, Medium, High
+    # F44 (2026-06): quantitative UC-IPM monitoring count — the actual data behind a scouting/trap
+    # decision (e.g. "5 mites/leaf", "12% fruit infested", "8 moths/trap"). pest_pressure_level is
+    # the qualitative summary; this is the measured number a certifier/PCA expects.
+    monitoring_count = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Measured monitoring count (e.g. 5 mites per leaf) — SC/TM/PI",
+    )
+    monitoring_unit = models.CharField(
+        max_length=20,
+        choices=[
+            ("per_leaf", "per leaf"),
+            ("per_trap", "per trap"),
+            ("per_tree", "per tree"),
+            ("per_100_fruit", "per 100 fruit"),
+            ("percent_infested", "% infested"),
+            ("per_sample", "per sample"),
+        ],
+        blank=True,
+        null=True,
+        help_text="Unit for monitoring_count (UC IPM monitoring form vocabulary)",
+    )
     beneficial_species = models.CharField(max_length=200, blank=True)
     release_quantity = models.CharField(max_length=100, blank=True)
     trap_count = models.IntegerField(null=True, blank=True)
     damage_percentage = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
-    action_threshold_met = models.BooleanField(default=False)
+    # F17 fix (2026-06): nullable so "not assessed" (None) is distinct from "below threshold" (False).
+    # An unanswered NOP 205.206(e) threshold question must NOT be fabricated into a definitive
+    # "below threshold" record on the audit export.
+    action_threshold_met = models.BooleanField(null=True, blank=True, default=None)
     ipm_strategy = models.TextField(blank=True)
     extra_data = models.JSONField(blank=True, null=True)
 

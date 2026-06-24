@@ -4,6 +4,7 @@ CERTIFICATION_TYPE_CHOICES = [
     ("cng", "Certified Naturally Grown"),
     ("real_organic_project", "Real Organic Project"),
     ("roc", "Regenerative Organic Certified"),
+    ("korean_organic", "Korean Organic Certification"),
     ("non_gmo_project", "Non-GMO Project Verified"),
     ("global_gap", "GlobalG.A.P."),
     ("fair_trade", "Fair Trade Certified"),

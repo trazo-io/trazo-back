@@ -1507,6 +1507,7 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
             "equipment_operation_type",
             "harvest_quality_grade",
             "grain_moisture",
+            "dry_matter_percentage",
             "pump_depth_ft",
             "electricity_source",
             # NOP compliance — seed sourcing & equipment cleaning
@@ -1852,6 +1853,7 @@ class ProductionEventSerializer(CustomFieldsMixin, EventSerializer):
             "equipment_operation_type",
             "harvest_quality_grade",
             "grain_moisture",
+            "dry_matter_percentage",
             "pump_depth_ft",
             "electricity_source",
             "image",
@@ -3892,6 +3894,12 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         # Brix as model field (ProductionEvent.brix_level is a DecimalField).
                         # Registry reads `brix_level` (singular); `brix_levels` above is legacy.
                         "brix_level": float(getattr(event, "brix_level", None) or 0) or None,
+                        # F43: tree-crop maturity (avocado/nut) — the correct vocabulary for the ICP
+                        "dry_matter_percentage": (
+                            float(getattr(event, "dry_matter_percentage", None))
+                            if getattr(event, "dry_matter_percentage", None) is not None
+                            else None
+                        ),
                         # Operation method (free-text "production_method") — consumer trust signal
                         # for hand-labor documentation. Lives in extra_data.method; promoted to
                         # top-level so the registry's `method` field resolves on the consumer card
@@ -4263,6 +4271,10 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                             if getattr(event, "compost_initial_cn_ratio", None) is not None
                             else None
                         ),
+                        # F24: compost feedstock + temperature log are NOP-5021 certifier/agronomic
+                        # detail — surfaced in the audit PDF only, not the consumer payload (no
+                        # consumer registry entry, and the consumer story is "compost applied", not
+                        # the feedstock recipe). Keeps the anonymous payload lean + consistent.
                         "manure_harvest_interval": getattr(event, "manure_harvest_interval", None),
                         "manure_application_date": (
                             event.manure_application_date.isoformat()
@@ -4326,6 +4338,14 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "pest_management_type": getattr(event, "type", None),
                         "pest_species": getattr(event, "pest_species", None),
                         "pest_pressure_level": getattr(event, "pest_pressure_level", None),
+                        # F44: quantitative monitoring count (e.g. 5 mites/leaf) — consumer-visible
+                        # IPM evidence behind the spray decision
+                        "monitoring_count": (
+                            float(getattr(event, "monitoring_count", None))
+                            if getattr(event, "monitoring_count", None) is not None
+                            else None
+                        ),
+                        "monitoring_unit": getattr(event, "monitoring_unit", None),
                         "beneficial_species": getattr(event, "beneficial_species", None),
                         "release_quantity": getattr(event, "release_quantity", None),
                         # BR organic-approval IS a consumer transparency positive (like chemical
@@ -4337,7 +4357,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "trap_type": getattr(event, "trap_type", None),
                         "pest_catch_count": getattr(event, "pest_catch_count", None),
                         "damage_percentage": float(getattr(event, "damage_percentage", None) or 0) or None,
-                        "action_threshold_met": getattr(event, "action_threshold_met", False),
+                        "action_threshold_met": getattr(event, "action_threshold_met", None),
                         "ipm_strategy": getattr(event, "ipm_strategy", None),
                         # NOP 7 CFR 205.206(e): threshold rationale + pest ID verification
                         "threshold_rationale": getattr(event, "threshold_rationale", None),
@@ -5027,6 +5047,8 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "compost_turning_count",
             "compost_method",
             "compost_initial_cn_ratio",
+            "compost_feedstock",
+            "compost_temperature_log",
             "manure_harvest_interval",
             "manure_application_date",
             # Biodiversity / habitat (HD / NS subtypes)
@@ -5308,6 +5330,8 @@ class SoilManagementEventSerializer(EventSerializer):
             "compost_turning_count",
             "compost_method",
             "compost_initial_cn_ratio",
+            "compost_feedstock",
+            "compost_temperature_log",
             "manure_harvest_interval",
             "manure_application_date",
             # Biodiversity / habitat (HD / NS) — needed so the producer edit form pre-fills them
@@ -5353,6 +5377,8 @@ class UpdatePestManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "type",
             "pest_species",
             "pest_pressure_level",
+            "monitoring_count",
+            "monitoring_unit",
             "beneficial_species",
             "release_quantity",
             # Beneficial-release traceability (BR) — NOP 205.206
@@ -5403,8 +5429,10 @@ class UpdatePestManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             if field in data and data[field] == "":
                 data[field] = None
 
-        if "action_threshold_met" in data and data["action_threshold_met"] == "":
-            data["action_threshold_met"] = False
+        # F17 fix (2026-06): a blank threshold answer is "not assessed" (None), NOT a definitive
+        # "below threshold" (False). Coercing "" -> False fabricated a NOP 205.206(e) record.
+        if "action_threshold_met" in data and data["action_threshold_met"] in ("", None):
+            data["action_threshold_met"] = None
 
         if "damage_percentage" in data and data["damage_percentage"] == "":
             data["damage_percentage"] = None
@@ -5505,6 +5533,8 @@ class PestManagementEventSerializer(EventSerializer):
             "pest_management_type",
             "pest_species",
             "pest_pressure_level",
+            "monitoring_count",
+            "monitoring_unit",
             "beneficial_species",
             "release_quantity",
             # Beneficial-release traceability (BR) — NOP 205.206
