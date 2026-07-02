@@ -139,6 +139,17 @@ class History(models.Model):
     )
     qr_code = models.ImageField(upload_to="qr_codes", blank=True)
     album = models.ForeignKey("common.Gallery", on_delete=models.CASCADE, blank=True, null=True)
+    # Off-farm post-harvest handler (huller / dryer / cold storage) this lot was
+    # sent to. CCOF G6.1 / 7 CFR 205.272 — the handler's organic certificate is
+    # surfaced in the audit export's Post-Harvest section. SET_NULL so deleting a
+    # facility record never deletes the production.
+    post_harvest_facility = models.ForeignKey(
+        "certifications.PostHarvestFacility",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="productions",
+    )
     cover_image_url = models.URLField(
         max_length=1000,
         blank=True,
@@ -272,6 +283,26 @@ class History(models.Model):
         blank=True,
         null=True,
         help_text="Delivery destination/receiving location",
+    )
+    # NOP Compliance: Clean-transport record for bins moved to an off-farm handler
+    # (CCOF G6.1 / 7 CFR 205.272 / 205.307). When organic product travels in a shared
+    # truck/container, the operation must document the vehicle and that a clean-transport
+    # affidavit is on file. Audit-only; never surfaced to consumers.
+    transport_vehicle_id = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Vehicle / container / trailer identifier for the off-farm transfer",
+    )
+    transport_affidavit_on_file = models.BooleanField(
+        default=False,
+        help_text="Whether a clean-transport affidavit is on file for the shared vehicle (CCOF G6.1)",
+    )
+    transport_affidavit_document = models.FileField(
+        upload_to="transport_affidavits/",
+        blank=True,
+        null=True,
+        help_text="Scanned clean-transport affidavit for the off-farm transfer",
     )
 
     # NOP Compliance: Record Retention (7 CFR 205.103(b)(4))
@@ -1045,6 +1076,28 @@ class ChemicalEvent(CommonEvent):
     potassium_percentage = models.DecimalField(
         max_digits=5, decimal_places=2, null=True, blank=True, help_text="Potassium content percentage"
     )
+    # NOP 5012 — Approval of Liquid Fertilizers. Certifiers must verify that
+    # liquid/soluble fertilizers are not adulterated with prohibited synthetic
+    # nitrogen (sodium nitrate is capped at 20% of the crop's N need; synthetic
+    # N sources are prohibited under § 205.105(a)). Capturing the nitrogen source
+    # lets the audit export flag an unverified or synthetic N source for review.
+    NITROGEN_SOURCE_CHOICES = [
+        ("organic", "Organic (plant / animal / approved natural source)"),
+        ("mined_natural", "Mined / natural — restricted (e.g., sodium (Chilean) nitrate, ≤20% of N need)"),
+        ("synthetic_prohibited", "Synthetic — prohibited under § 205.105(a)"),
+        ("unknown", "Unknown / not verified"),
+    ]
+    nitrogen_source = models.CharField(
+        max_length=24,
+        choices=NITROGEN_SOURCE_CHOICES,
+        blank=True,
+        null=True,
+        help_text=(
+            "Nitrogen source for a liquid/soluble fertilizer (NOP 5012). Synthetic N is "
+            "prohibited (§ 205.105(a)); sodium nitrate is restricted to 20% of the crop's "
+            "N requirement (§ 205.602 annotation)."
+        ),
+    )
     application_method_structured = models.CharField(
         max_length=20,
         choices=APPLICATION_METHOD,
@@ -1220,6 +1273,16 @@ class ChemicalEvent(CommonEvent):
         null=True,
         help_text="Unit for quantity purchased",
     )
+    chemical_lot_number = models.CharField(
+        max_length=80,
+        blank=True,
+        null=True,
+        help_text=(
+            "Manufacturer/supplier lot or batch number of the purchased input — an "
+            "explicitly required NOP purchase-record field (CCOF G8.0, Oregon Tilth) for "
+            "input traceability and mass-balance. Audit-only; never surfaced to consumers."
+        ),
+    )
 
     # Sprint 3 — OMRI / National List cross-reference (7 CFR 205.601/602)
     # Farmer-confirmed OMRI ID (nullable) and auto-suggested National List match (nullable).
@@ -1348,6 +1411,23 @@ class ChemicalEvent(CommonEvent):
         blank=True,
         null=True,
         help_text="Field fumigation method code — required for fumigation method / 1,3-D (DPR box 21 / 3 CCR 6624(c)(8)).",
+    )
+    # Tank-mix partners (adjuvants / spreader-stickers) applied together with the
+    # primary product. CA-registered adjuvants ARE reportable to the PUR and each
+    # needs its OWN DPR-PML-017C line (boxes 23/24), so this is a structured list —
+    # each partner emits a separate PUR row. Shape (per item):
+    #   {"commercial_name": str, "manufacturer": str, "epa_registration_number": str,
+    #    "volume": str, "volume_unit": str, "organic_approved": bool}
+    # Audit/compliance field; never surfaced to consumers.
+    tank_mix_partners = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "Tank-mix partners (adjuvants/spreader-stickers) applied with the primary "
+            "product. Each CA-registered partner is reportable on its own PUR line "
+            "(boxes 23/24). List of {commercial_name, manufacturer, "
+            "epa_registration_number, volume, volume_unit, organic_approved}."
+        ),
     )
 
     def clean(self):
@@ -1584,7 +1664,7 @@ class ProductionEvent(CommonEvent):
         max_length=200,
         blank=True,
         null=True,
-        help_text="Seed coatings, inoculants, or pelleting materials applied (NOP 7 CFR 205.204(a)(5))",
+        help_text="Seed coatings, inoculants, or pelleting materials applied (NOP 7 CFR 205.204(a)(2))",
     )
     # Updated 2025-12-06: Aligned with transparency-first frontend choices
     water_source = models.CharField(
@@ -1714,6 +1794,30 @@ class ProductionEvent(CommonEvent):
         help_text="Electricity source for pump — affects CO2 emission factor",
     )
 
+    # NOP Compliance: Irrigation/Well Water Test (7 CFR 205.272 / 205.671)
+    # For the Irrigation (IR) subtype. CCOF requires an annual water-source analysis
+    # demonstrating no prohibited substances / contamination. Mirrors the SoilManagementEvent
+    # ST test_results pattern. Audit-only; never surfaced to consumers.
+    water_test_date = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Date the irrigation/well water sample was taken or analyzed",
+    )
+    water_test_lab = models.CharField(
+        max_length=150,
+        blank=True,
+        null=True,
+        help_text="Name of the laboratory that analyzed the water sample",
+    )
+    water_test_results = models.JSONField(
+        blank=True,
+        null=True,
+        help_text=(
+            "List of {parameter, value, unit, result} dicts from the water analysis "
+            "(e.g. coliform, nitrate, pH). Backs the certifier Water Quality record."
+        ),
+    )
+
     # NOP Compliance: Equipment Cleaning Logs (7 CFR 205.272)
     # For Equipment Maintenance (EM) subtype — required when equipment shared with conventional
     cleaning_date = models.DateField(
@@ -1766,11 +1870,26 @@ class ProductionEvent(CommonEvent):
         decimal_places=2,
         blank=True,
         null=True,
-        help_text="Sanitizer concentration in ppm (chlorine ≤ 4 mg/L residual per § 205.605(b))",
+        help_text="Applied/wash sanitizer concentration in ppm (dose at point of use)",
+    )
+    # NOP 5026 — chlorine materials. § 205.605(b) caps the RESIDUAL chlorine in
+    # water at the point of last crop contact / discharge at the Safe Drinking
+    # Water Act MRDL (4 mg/L free chlorine or chloramine; 0.8 mg/L chlorine
+    # dioxide). This is distinct from the applied wash dose above.
+    sanitizer_residual_ppm_at_discharge = models.DecimalField(
+        max_digits=7,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        help_text=(
+            "Residual chlorine (ppm) measured in water at the point of last crop "
+            "contact / discharge — must not exceed the SDWA MRDL (4 mg/L free "
+            "chlorine/chloramine, 0.8 mg/L chlorine dioxide) per NOP 5026 / § 205.605(b)."
+        ),
     )
     rinse_step_documented = models.BooleanField(
         default=False,
-        help_text="Potable-water rinse step performed after sanitizer contact (required under § 205.272(b))",
+        help_text="Potable-water rinse step performed after sanitizer contact (required under § 205.605(b))",
     )
     sanitizer_nop_reference = models.CharField(
         max_length=200,
@@ -1915,6 +2034,16 @@ class ProductionEvent(CommonEvent):
                 duration_ok = False  # Missing method — (c)(2) cannot be asserted.
             compost_exempt = cn_ok and temp_ok and duration_ok
             if compost_exempt:
+                continue
+
+            # NOP 5006 processed-manure exemption: manure processed to reduce
+            # pathogens is exempt from the (c)(1) interval when the processing is
+            # documented (peak temperature and/or an OMRI/supplier attestation).
+            # Undocumented "processed_5006" falls through and is treated as raw.
+            processed_5006_exempt = ev.manure_treatment == "processed_5006" and (
+                ev.processed_manure_temp_f is not None or bool((ev.processed_manure_attestation or "").strip())
+            )
+            if processed_5006_exempt:
                 continue
 
             application_date = ev.manure_application_date
@@ -2347,6 +2476,21 @@ class SoilManagementEvent(CommonEvent):
     organic_matter_percentage = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     amendment_type = models.CharField(max_length=100, blank=True)
     amendment_amount = models.CharField(max_length=100, blank=True)
+    # Specific product identity for the amendment. amendment_type is only a generic
+    # category (compost/manure/gypsum/...); the NOP/CCOF input record (7 CFR 205.203 /
+    # CCOF Input Record) needs the actual product + manufacturer.
+    amendment_product_name = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="Specific commercial product name of the amendment, e.g. Malibu Compost Bu's Blend.",
+    )
+    amendment_manufacturer = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="Manufacturer / supplier of the amendment product.",
+    )
     test_results = models.JSONField(null=True, blank=True)  # Store complex test data
     carbon_sequestration_potential = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
     extra_data = models.JSONField(blank=True, null=True)
@@ -2644,6 +2788,48 @@ class SoilManagementEvent(CommonEvent):
         help_text="Date raw manure was applied (used to calculate earliest safe harvest date)",
     )
 
+    # NOP 5006 — Processed Animal Manures in Organic Crop Production.
+    # A third manure class sits between raw (c)(1) and composted (c)(2):
+    # manure PROCESSED to reduce human pathogens (heat-dried, pelletized,
+    # thermophilic PFRP) that does NOT meet the (c)(2) compost definition is
+    # still exempt from the (c)(1) 90/120-day raw interval. The exemption is
+    # granted only when DOCUMENTED (processing temperature and/or an OMRI/
+    # supplier attestation); undocumented "processed" manure is handled as raw.
+    MANURE_TREATMENT_CHOICES = [
+        ("raw", "Raw / uncomposted animal manure — 90/120-day interval applies (c)(1)"),
+        ("composted", "Composted per 7 CFR 205.203(c)(2) — no interval"),
+        ("processed_5006", "Processed to reduce pathogens per NOP 5006 — no interval"),
+    ]
+    manure_treatment = models.CharField(
+        max_length=16,
+        choices=MANURE_TREATMENT_CHOICES,
+        blank=True,
+        null=True,
+        help_text=(
+            "Animal-manure processing class. 'processed_5006' (heat-dried / "
+            "pelletized / PFRP) exempts the crop from the raw-manure harvest "
+            "interval when supported by a processing temperature or an OMRI / "
+            "supplier attestation (NOP 5006)."
+        ),
+    )
+    processed_manure_temp_f = models.DecimalField(
+        max_digits=5,
+        decimal_places=1,
+        blank=True,
+        null=True,
+        help_text="Peak processing temperature (°F) for NOP 5006 processed manure (pathogen reduction).",
+    )
+    processed_manure_attestation = models.CharField(
+        max_length=300,
+        blank=True,
+        null=True,
+        help_text=(
+            "Supplier / OMRI attestation for NOP 5006 processed manure "
+            "(e.g., 'OMRI-listed heat-processed poultry pellets, PFRP') — the "
+            "documentation basis for the raw-interval exemption."
+        ),
+    )
+
     # Sprint 5.1 — Drift detector (same contract as ChemicalEvent.drift_warning).
     # Populated when amendment_type does not resolve to an approved input on
     # the establishment's active OSP.
@@ -2722,9 +2908,16 @@ class SoilManagementEvent(CommonEvent):
             )
 
         # NOP Manure validation (7 CFR 205.203(c)(1))
-        if self.manure_application_date and not self.manure_harvest_interval:
+        # The 90/120-day interval only applies to RAW manure. Composted (c)(2)
+        # and processed (NOP 5006) manure are interval-exempt, so don't force
+        # an interval selection for them.
+        if (
+            self.manure_application_date
+            and not self.manure_harvest_interval
+            and self.manure_treatment not in ("composted", "processed_5006")
+        ):
             errors["manure_harvest_interval"] = (
-                "Harvest interval (90 or 120 days) is required when a manure application date is specified."
+                "Harvest interval (90 or 120 days) is required when a raw manure application date is specified."
             )
 
         # NOP Manure interval vs crop soil-contact classification.
@@ -3237,3 +3430,49 @@ class SalesRecord(models.Model):
 
     def __str__(self):
         return f"{self.sale_date} {self.buyer_name} {self.quantity} {self.quantity_unit}"
+
+
+class LabelImage(models.Model):
+    """
+    A container-label artifact (retail / nonretail / unpackaged) for a production,
+    surfaced in the audit export's Container Labeling block (CCOF G7.0 / NOPB34 /
+    7 CFR 205.307). Reuses common.GalleryImage for the actual image (S3 +
+    thumbnails + external-URL support); this model only adds labeling metadata.
+    """
+
+    LABEL_TYPE_CHOICES = [
+        ("nonretail", "Nonretail container (shipping/storage)"),
+        ("retail", "Retail package"),
+        ("unpackaged", "Unpackaged / PLU tag"),
+    ]
+    CONTAINER_TYPE_CHOICES = [
+        ("box", "Box"),
+        ("bin", "Bin"),
+        ("tote", "Tote"),
+        ("bag", "Bag"),
+        ("tag", "Tag / PLU"),
+    ]
+
+    history = models.ForeignKey("history.History", on_delete=models.CASCADE, related_name="label_images")
+    label_type = models.CharField(max_length=20, choices=LABEL_TYPE_CHOICES, default="nonretail")
+    container_type = models.CharField(max_length=20, choices=CONTAINER_TYPE_CHOICES, blank=True, null=True)
+    gallery_image = models.ForeignKey(
+        "common.GalleryImage",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="label_uses",
+        help_text="The actual label image (reuses Gallery S3 + thumbnail infra).",
+    )
+    lot_link_note = models.TextField(
+        blank=True,
+        null=True,
+        help_text="How this label links the container to the lot / traceback ID (SOE 205.307).",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["label_type", "created_at"]
+
+    def __str__(self):
+        return f"{self.get_label_type_display()} label for production {self.history_id}"

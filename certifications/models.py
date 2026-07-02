@@ -173,6 +173,124 @@ class Certification(models.Model):
         return "pending"
 
 
+class PostHarvestFacility(models.Model):
+    """
+    An off-farm post-harvest handler (huller, sheller, dryer, cold storage,
+    packer) that a production's crop is sent to. Under CCOF G6.1 (NOPB39) and
+    NOP 7 CFR 205.272, when an organic crop is handled by another certified
+    operation the audit trail must carry that handler's name + current organic
+    certificate (issued within 15 months). Mirrors the Certification model's
+    verification fields so the same USDA-OID verifier can validate the handler.
+    """
+
+    FACILITY_TYPE_CHOICES = [
+        ("huller", "Huller / Sheller"),
+        ("dryer", "Dryer"),
+        ("cold_storage", "Cold Storage"),
+        ("packer", "Packer / Packing Shed"),
+        ("custom", "Custom Post-Harvest Handler"),
+    ]
+
+    public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, db_index=True)
+    establishment = models.ForeignKey(
+        "company.Establishment",
+        on_delete=models.CASCADE,
+        related_name="post_harvest_facilities",
+        help_text="Farm operation that sends crop to this handler",
+    )
+    name = models.CharField(max_length=200, help_text="Handler / facility name")
+    facility_type = models.CharField(max_length=20, choices=FACILITY_TYPE_CHOICES, default="huller")
+    address = models.CharField(max_length=200, blank=True, null=True)
+    city = models.CharField(max_length=100, blank=True, null=True)
+    state = models.CharField(max_length=50, blank=True, null=True)
+
+    # Handler's organic certificate (G6.1: must be current, issued within 15 months)
+    certification_number = models.CharField(max_length=100, blank=True, null=True)
+    certifier_name = models.CharField(max_length=200, blank=True, null=True)
+    effective_date = models.DateField(blank=True, null=True)
+    expiry_date = models.DateField(blank=True, null=True)
+    cert_document = models.FileField(
+        upload_to="facility_certs/",
+        blank=True,
+        null=True,
+        help_text="Uploaded copy of the handler's organic certificate (S3)",
+    )
+
+    # Verification state — mirrors Certification; validated via USDAOrganicVerifier.
+    verification_status = models.CharField(
+        max_length=20,
+        choices=VERIFICATION_STATUS_CHOICES,
+        default="pending",
+    )
+    last_verified_at = models.DateTimeField(blank=True, null=True)
+    verification_source = models.CharField(max_length=50, blank=True, null=True)
+    raw_api_response = models.JSONField(blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_post_harvest_facilities",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Post-Harvest Facility"
+        verbose_name_plural = "Post-Harvest Facilities"
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["establishment", "facility_type"])]
+
+    def __str__(self):
+        return f"{self.name} ({self.get_facility_type_display()})"
+
+    @property
+    def is_verified(self):
+        return self.verification_status == "verified"
+
+    @property
+    def cert_is_current(self):
+        """
+        CCOF G6.1 / NOP 7 CFR 205.272 freshness rule: a handler's organic
+        certificate must be current — issued within ~15 months (and not past its
+        expiry). Returns True (current), False (expired/stale), or None when there
+        is no effective_date to evaluate (unknown -> flag for inspector review).
+        """
+        from datetime import timedelta
+
+        if not self.effective_date:
+            return None
+        today = timezone.now().date()
+        if self.expiry_date and self.expiry_date < today:
+            return False
+        return self.effective_date >= (today - timedelta(days=456))  # ~15 months
+
+    def verify(self):
+        """
+        Best-effort verification of the handler's organic certificate against the
+        USDA Organic Integrity Database, reusing the verifier the farm's own certs
+        use. Falls back to self_reported when OID has no match (third-party hullers
+        frequently are not resolvable by name).
+        """
+        from certifications.services.usda_organic_verifier import USDAOrganicVerifier
+
+        result = USDAOrganicVerifier().verify(self.name, self.state or "", self.certification_number)
+        # Only a positive OID match upgrades to "verified". A no-match is NOT proof
+        # the handler is uncertified (our OID mirror may be incomplete or the name may
+        # not fuzzy-match), so fall back to self_reported rather than "not_found" —
+        # which would misleadingly read as "handler not certified" on the audit PDF.
+        self.verification_status = "verified" if getattr(result, "status", None) == "verified" else "self_reported"
+        self.last_verified_at = timezone.now()
+        self.verification_source = "usda_organic_integrity_db"
+        self.raw_api_response = {
+            "found": getattr(result, "found", None),
+            "notes": getattr(result, "notes", ""),
+        }
+        return result
+
+
 class CertificationVerificationLog(models.Model):
     """Audit trail for all verification attempts."""
 
@@ -250,6 +368,7 @@ class NationalListSubstance(models.Model):
     """
 
     CFR_SECTION_CHOICES = [
+        ("205.105", "§205.105 — Excluded substances & methods (prohibited)"),
         ("205.601", "§205.601 — Synthetic allowed (crops)"),
         ("205.602", "§205.602 — Nonsynthetic prohibited (crops)"),
         ("205.603", "§205.603 — Synthetic allowed (livestock)"),
@@ -1120,3 +1239,283 @@ class ApprovedInputChangeLog(models.Model):
 
     def __str__(self):
         return f"{self.action} {self.target_name_at_change} on OSP v{self.osp.version_number}"
+
+
+class OSPChangeNotification(models.Model):
+    """
+    Notification-of-Changes record — 7 CFR 205.400(f) / NOP 2615 §3.4.
+
+    A certified operation must notify its certifier PRIOR to (or, for a
+    prohibited-substance application, IMMEDIATELY after) any change that may
+    affect its compliance. NOP 2615 §3.4 enumerates six change categories; the
+    ApprovedInputChangeLog only captures ONE of them (input add/remove =
+    § 205.400(f)(2)). This model captures the full set — including the
+    § 205.400(f)(1) IMMEDIATE prohibited-substance-application notification that
+    was previously unmodelled — so the audit export can show the complete
+    change-notification trail, not just input changes.
+
+    Append-only from the API perspective; edited only to record the certifier's
+    acknowledgment.
+    """
+
+    # NOP 2615 §3.4 change categories. (f)(1) = immediate prohibited-substance
+    # application/drift; the remaining categories are (f)(2) practice/operation
+    # changes requiring prior notification.
+    CATEGORY_PROHIBITED_SUBSTANCE = "prohibited_substance_application"
+    CATEGORY_ACREAGE_FIELD_ADDITION = "acreage_field_addition"
+    CATEGORY_FIELD_REMOVAL = "field_removal"
+    CATEGORY_NEW_RETAIL_LABEL = "new_retail_label"
+    CATEGORY_NEW_PROCESSING_HANDLING = "new_processing_handling"
+    CATEGORY_PRACTICE_INPUT_PROCEDURE = "practice_input_procedure_change"
+    CATEGORY_CHOICES = [
+        (CATEGORY_PROHIBITED_SUBSTANCE, "Prohibited-substance application/drift — § 205.400(f)(1) (IMMEDIATE)"),
+        (CATEGORY_ACREAGE_FIELD_ADDITION, "Added acreage / new field / product line / facility — § 205.400(f)(2)"),
+        (CATEGORY_FIELD_REMOVAL, "Removed a field — § 205.400(f)(2)"),
+        (CATEGORY_NEW_RETAIL_LABEL, "New retail label — § 205.400(f)(2)"),
+        (CATEGORY_NEW_PROCESSING_HANDLING, "New processing / handling — § 205.400(f)(2)"),
+        (CATEGORY_PRACTICE_INPUT_PROCEDURE, "Practice / input / procedure change — § 205.400(f)(2)"),
+    ]
+
+    METHOD_VERBAL = "verbal"
+    METHOD_WRITTEN = "written"
+    METHOD_CHOICES = [
+        (METHOD_VERBAL, "Verbal"),
+        (METHOD_WRITTEN, "Written"),
+    ]
+
+    DOC_AT_NOTIFICATION = "submitted_at_notification"
+    DOC_DEFERRED_ANNUAL = "deferred_to_annual_update"
+    DOCUMENTATION_TIMING_CHOICES = [
+        (DOC_AT_NOTIFICATION, "Supporting documentation submitted at notification"),
+        (DOC_DEFERRED_ANNUAL, "Deferred to the next annual update"),
+    ]
+
+    osp = models.ForeignKey(
+        OrganicSystemPlan,
+        on_delete=models.CASCADE,
+        related_name="change_notifications",
+        help_text="OSP this change notification belongs to",
+    )
+    change_category = models.CharField(
+        max_length=40,
+        choices=CATEGORY_CHOICES,
+        db_index=True,
+        help_text="NOP 2615 §3.4 change category (drives the § 205.400(f)(1) vs (f)(2) citation)",
+    )
+    description = models.TextField(
+        help_text="What changed (e.g., 'Added 12-acre Block C to organic acreage').",
+    )
+    date_notified = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date the certifier was notified.",
+    )
+    method = models.CharField(
+        max_length=10,
+        choices=METHOD_CHOICES,
+        blank=True,
+        null=True,
+        help_text="How the certifier was notified (verbal or written).",
+    )
+    documentation_timing = models.CharField(
+        max_length=30,
+        choices=DOCUMENTATION_TIMING_CHOICES,
+        blank=True,
+        null=True,
+        help_text="Whether supporting documentation was submitted now or deferred to the annual update.",
+    )
+    supporting_document = models.FileField(
+        upload_to="osp_change_notifications/",
+        blank=True,
+        null=True,
+        help_text="Supporting document / certifier acknowledgment letter, if any.",
+    )
+    certifier_acknowledged_at = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date the certifier acknowledged the change (blank until acknowledged).",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        on_delete=models.SET_NULL,
+        help_text="User who recorded the notification (NULLed if user is later deleted).",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = "OSP Change Notification"
+        verbose_name_plural = "OSP Change Notifications"
+        ordering = ["-date_notified", "-created_at"]
+
+    @property
+    def cfr_reference(self):
+        """§ 205.400(f)(1) for prohibited-substance applications, else (f)(2)."""
+        if self.change_category == self.CATEGORY_PROHIBITED_SUBSTANCE:
+            return "7 CFR 205.400(f)(1)"
+        return "7 CFR 205.400(f)(2)"
+
+    @property
+    def is_immediate(self):
+        return self.change_category == self.CATEGORY_PROHIBITED_SUBSTANCE
+
+    def __str__(self):
+        return f"{self.get_change_category_display()} on OSP v{self.osp.version_number}"
+
+
+# ---------------------------------------------------------------------------
+# State Organic Program (SOP) producer registration
+# ---------------------------------------------------------------------------
+
+
+class StateOrganicRegistration(models.Model):
+    """
+    State Organic Program (SOP) PRODUCER registration.
+
+    Distinct from the CDFA OIM (Organic Input Material) registration carried on
+    OMRIProduct / WSDAMaterial — that is an INPUT-material registration. THIS is
+    the producer/operation registration.
+
+    California producers selling more than $5,000/yr of organic product must
+    register annually with the CDFA State Organic Program BEFORE their first
+    organic sale (CA Food & Ag Code §§ 46000-46029; 3 CCR 1380-1394), declaring
+    commodities, operation type, and prior-year organic gross sales, and renew
+    each year. A NOP "$5,000-exempt" producer is still subject to CA state
+    registration. This is a hard inspection item Trazo previously could not
+    record at all.
+
+    Modeled generically (``state`` field) so other state programs reuse it;
+    California (CDFA) is the only one enforced today.
+
+    Scope note — CDFA vs CDPH: this registration is the CDFA producer/raw-ag
+    *handler* registration. On-farm operations that turn a crop into a PROCESSED
+    organic product (roasting, grinding to butter/flour, oil pressing, blanching,
+    adding ingredients) cross into CDPH's "processed product" domain and require a
+    SEPARATE CDPH registration — Trazo's "handler" type here means CDFA raw-ag
+    handling (hull/shell/wash/sort/pack), not CDPH processing.
+    """
+
+    OPERATION_TYPE_CHOICES = [
+        ("producer", "Producer / Grower"),
+        # "handler" = CDFA raw-ag handling (hull/shell/wash/sort/pack). A processed
+        # organic product (roast/grind/press/blanch) needs a separate CDPH registration.
+        ("handler", "Handler (CDFA raw-ag handling)"),
+        ("producer_handler", "Producer & Handler"),
+        ("retailer", "Retailer"),
+    ]
+    STATUS_CHOICES = [
+        ("registered", "Registered"),
+        ("pending", "Pending"),
+        ("expired", "Expired"),
+        ("exempt", "Exempt (< $5,000 organic sales)"),
+    ]
+
+    public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, db_index=True)
+
+    establishment = models.ForeignKey(
+        "company.Establishment",
+        on_delete=models.CASCADE,
+        related_name="state_organic_registrations",
+        help_text="Establishment this state registration belongs to",
+    )
+
+    state = models.CharField(
+        max_length=2,
+        default="CA",
+        help_text="US state two-letter code of the State Organic Program (CA = CDFA SOP)",
+    )
+    program_name = models.CharField(
+        max_length=120,
+        default="CDFA State Organic Program",
+        help_text="State Organic Program name (e.g. 'CDFA State Organic Program')",
+    )
+    operation_type = models.CharField(
+        max_length=20,
+        choices=OPERATION_TYPE_CHOICES,
+        default="producer",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="registered",
+    )
+
+    registration_number = models.CharField(
+        max_length=60,
+        blank=True,
+        null=True,
+        help_text="State / county registration number",
+    )
+    county = models.CharField(
+        max_length=60,
+        blank=True,
+        null=True,
+        help_text="CA county of registration (CDFA SOP registers by county)",
+    )
+
+    commodities = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Organic commodities declared on the registration, e.g. ['Navel orange', 'Lemon']",
+    )
+    prior_year_organic_gross_sales = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        help_text="Prior-year organic gross sales (USD) — sets the CDFA fee tier and the >$5,000 trigger",
+    )
+
+    registration_date = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Date this registration took effect",
+    )
+    renewal_date = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Date the registration must be renewed (annual)",
+    )
+
+    registration_document = models.FileField(
+        upload_to="state_organic_registrations/",
+        blank=True,
+        null=True,
+        help_text="Scanned copy of the state registration certificate",
+    )
+    notes = models.TextField(blank=True, null=True)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_state_organic_registrations",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "State Organic Registration"
+        verbose_name_plural = "State Organic Registrations"
+        ordering = ["-registration_date"]
+        indexes = [
+            models.Index(fields=["establishment", "state"]),
+        ]
+
+    def __str__(self):
+        return f"{self.program_name} — {self.establishment.name} ({self.registration_number or 'unregistered'})"
+
+    @property
+    def is_current(self):
+        """True if the operation is covered today: an exempt operation, or a
+        'registered' record whose renewal_date has not passed. Used by the audit
+        export to decide whether to fire the missing/expired-registration REVIEW
+        flag, and by any first-organic-sale gate."""
+        if self.status == "exempt":
+            return True
+        if self.status != "registered":
+            return False
+        if self.renewal_date is None:
+            return True
+        return self.renewal_date >= timezone.now().date()

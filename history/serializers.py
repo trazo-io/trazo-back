@@ -442,6 +442,7 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
             "nitrogen_percentage",
             "phosphorus_percentage",
             "potassium_percentage",
+            "nitrogen_source",
             "application_method_structured",
             "application_fuel_type",
             "application_fuel_consumed",
@@ -472,6 +473,7 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
             "purchase_invoice",
             "quantity_purchased",
             "quantity_purchased_unit",
+            "chemical_lot_number",
             # P0-3 — CA DPR Restricted Materials Permit (CA state law)
             "ca_dpr_permit_number",
             "ca_dpr_permit_county",
@@ -490,6 +492,7 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
             "mtrs_range",
             "mtrs_base_meridian",
             "ffm_code",
+            "tank_mix_partners",
             # F21 — supervisor review (FSMA 112.161(b)) + GG authorizer (FV-GFS 32.02.01 #10)
             "authorizer_name",
             "reviewed",
@@ -806,6 +809,7 @@ class ChemicalEventSerializer(EventSerializer):
             "nitrogen_percentage",
             "phosphorus_percentage",
             "potassium_percentage",
+            "nitrogen_source",
             "application_method_structured",
             "application_fuel_type",
             "application_fuel_consumed",
@@ -835,6 +839,7 @@ class ChemicalEventSerializer(EventSerializer):
             "purchase_invoice",
             "quantity_purchased",
             "quantity_purchased_unit",
+            "chemical_lot_number",
             # P0-3 — CA DPR Restricted Materials Permit (CA state law)
             "ca_dpr_permit_number",
             "ca_dpr_permit_county",
@@ -853,6 +858,7 @@ class ChemicalEventSerializer(EventSerializer):
             "mtrs_range",
             "mtrs_base_meridian",
             "ffm_code",
+            "tank_mix_partners",
             # F21 — supervisor review (FSMA 112.161(b)) + GG authorizer (FV-GFS 32.02.01 #10)
             "authorizer_name",
             "reviewed",
@@ -1510,6 +1516,9 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
             "dry_matter_percentage",
             "pump_depth_ft",
             "electricity_source",
+            "water_test_date",
+            "water_test_lab",
+            "water_test_results",
             # NOP compliance — seed sourcing & equipment cleaning
             "seed_search_attempts",
             # NOP 7 CFR 205.204 — seed traceability (planting subtype)
@@ -1528,6 +1537,7 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
             # NOP Compliance: Post-Harvest Sanitizer Detail (7 CFR 205.272 + § 205.605)
             "sanitizer_name",
             "sanitizer_ppm",
+            "sanitizer_residual_ppm_at_discharge",
             "rinse_step_documented",
             "sanitizer_nop_reference",
             # Sprint 3.2 — Post-harvest storage (NOP 205.272 / FSMA 204 KDE)
@@ -1774,6 +1784,32 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
         if brix_level is not None and brix_level > 45:
             raise serializers.ValidationError({"brix_level": "Brix level cannot exceed 45."})
 
+        # NOP 5029 / 7 CFR 205.204(a)(1): non-organic seed/planting stock on a planting (PL)
+        # event requires a documented commercial-availability search of >= 3 suppliers. The
+        # planting form now ships the seed-search widget (ProductionTab.jsx, gated on a
+        # non-organic seed certification status), so the farmer CAN satisfy this — enforce it on
+        # the API save path too (DRF does not call the model's clean()). This serializer handles
+        # both create and update; fall back to the instance on partial updates.
+        seed_cert_status = data.get("seed_certification_status")
+        if seed_cert_status is None and self.instance is not None:
+            seed_cert_status = getattr(self.instance, "seed_certification_status", None)
+        pl_type = production_type or (getattr(self.instance, "type", "") if self.instance else "")
+        if pl_type == "PL" and seed_cert_status in ("non_organic_untreated", "non_organic_treated"):
+            attempts = data.get("seed_search_attempts")
+            if attempts is None and self.instance is not None:
+                attempts = getattr(self.instance, "seed_search_attempts", None)
+            attempts = attempts or []
+            if len(attempts) < 3:
+                raise serializers.ValidationError(
+                    {
+                        "seed_search_attempts": [
+                            "NOP 5029 (7 CFR 205.204(a)(1)) requires documentation of at least 3 "
+                            "supplier searches when using non-organic seed or planting stock.",
+                            f"Current search attempts: {len(attempts)}. Add more suppliers before saving.",
+                        ]
+                    }
+                )
+
         return data
 
     def to_representation(self, instance):
@@ -1856,6 +1892,9 @@ class ProductionEventSerializer(CustomFieldsMixin, EventSerializer):
             "dry_matter_percentage",
             "pump_depth_ft",
             "electricity_source",
+            "water_test_date",
+            "water_test_lab",
+            "water_test_results",
             "image",
             "carbon_data",
             "verification_level",
@@ -1877,6 +1916,7 @@ class ProductionEventSerializer(CustomFieldsMixin, EventSerializer):
             # NOP Compliance: Post-Harvest Sanitizer Detail (7 CFR 205.272 + § 205.605)
             "sanitizer_name",
             "sanitizer_ppm",
+            "sanitizer_residual_ppm_at_discharge",
             "rinse_step_documented",
             "sanitizer_nop_reference",
             # Sprint 3.2 — Post-harvest storage
@@ -2381,6 +2421,9 @@ class HistoryWriteSerializer(serializers.ModelSerializer):
             "organic_on_invoice",
             "transport_method",
             "destination",
+            "transport_vehicle_id",
+            "transport_affidavit_on_file",
+            "transport_affidavit_document",
             "retention_until",
         ]
         read_only_fields = ["id", "public_id", "events_status", "retention_until"]
@@ -2456,6 +2499,9 @@ class HistorySerializer(serializers.ModelSerializer):
             "organic_on_invoice",
             "transport_method",
             "destination",
+            "transport_vehicle_id",
+            "transport_affidavit_on_file",
+            "transport_affidavit_document",
             "retention_until",
         ]
         read_only_fields = [
@@ -2786,6 +2832,50 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         "retention_until",
     )
 
+    # NOP-alignment audit (2026-06) — event-level fields that are certifier/audit-only
+    # or self-graded and MUST NOT reach the public consumer payload. Every field here
+    # remains fully available to the certifier through the NOP audit PDF, which reads the
+    # event models directly (audit_export_service), so this strip does not reduce
+    # certifier coverage by one byte.
+    #   • REI / PHI / RUP / EPA-reg / CA-DPR protect FARM WORKERS or are enforcement
+    #     identifiers — on a consumer page they falsely imply a CONSUMER hazard (EPA 2024)
+    #     and carry no consumer meaning.
+    #   • concentration / volume / NPK% / buffer_zone_meters / is_fertigation are agronomic
+    #     audit data with no consumer value.
+    #   • applicator_name is additionally a worker-name privacy exposure (CCPA).
+    # NOTE: verification_level (a documentation-evidence tier) is intentionally NOT in this
+    # set. The consumer card couples it to photo-evidence display (ConsumerEventCard.tsx
+    # ~1093/~1822 gate the photo gallery + photo-count chip on it), and its values
+    # ("Self-Reported"/"Photo-Verified") are honest factual documentation labels, not the
+    # numeric self-graded sustainability score that ECGT/FTC target. Stripping it here would
+    # hide the photos (evidence-first content we must KEEP). The grade-like-badge concern is
+    # deferred to a paired backend+frontend change; transparency_score below is the
+    # unambiguous self-graded metric and IS stripped.
+    _CERTIFIER_ONLY_EVENT_FIELDS = (
+        "rei_hours",
+        "phi_days",
+        "restricted_use_pesticide",
+        "epa_registration_number",
+        "ca_dpr_permit_number",
+        "ca_dpr_permit_county",
+        "ca_dpr_permit_expires",
+        "applicator_name",
+        "applicator_certification",
+        "concentration",
+        "volume",
+        "volume_unit",
+        "nitrogen_percentage",
+        "phosphorus_percentage",
+        "potassium_percentage",
+        "is_fertigation",
+        "buffer_zone_meters",
+    )
+
+    # The transparency SCORE is a PRODUCER-dashboard KPI only. A self-assigned grade on a
+    # consumer surface is the EU ECGT 2024/825 / FTC 16 CFR 260.6 self-created-label risk,
+    # so it is stripped for every non-owner caller (Trazo Test #5).
+    _SELF_GRADED_FIELDS = ("transparency_score",)
+
     def _is_owner(self, obj):
         request = self.context.get("request") if hasattr(self, "context") else None
         if not request or not getattr(request, "user", None):
@@ -2805,6 +2895,26 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         if not self._is_owner(obj):
             for field in self._OWNER_ONLY_FIELDS:
                 data.pop(field, None)
+            # B0 — strip the self-graded production-level score for anonymous consumers.
+            for field in self._SELF_GRADED_FIELDS:
+                data.pop(field, None)
+            # B0/B1 — strip certifier/audit-only and self-graded fields from every event
+            # dict. pop() is no-op when a key is absent, so this applies uniformly across
+            # all event types without per-type branching.
+            events = data.get("events")
+            if isinstance(events, list):
+                for event in events:
+                    if isinstance(event, dict):
+                        for field in self._CERTIFIER_ONLY_EVENT_FIELDS:
+                            event.pop(field, None)
+                        # Defense-in-depth: the same certifier/worker-safety keys can also ride
+                        # inside event["extra_data"] (the V2 templates write REI/PHI there).
+                        # get_events already routes extra_data through the allow-list sanitizer,
+                        # but scrub here too so any event-dict path is covered.
+                        nested = event.get("extra_data")
+                        if isinstance(nested, dict):
+                            for field in self._CERTIFIER_ONLY_EVENT_FIELDS:
+                                nested.pop(field, None)
         return data
 
     def get_events_count(self, obj):
@@ -3357,6 +3467,13 @@ class PublicHistorySerializer(serializers.ModelSerializer):
 
         def is_safe(key):
             if key not in self.ALLOWED_EXTRA_DATA_KEYS:
+                return False
+            # Certifier/worker-safety keys (REI/PHI/RUP/buffer_zone_meters/volume/etc.) are
+            # stripped at the top level of each event dict, but some are ALSO allow-listed for
+            # extra_data (and the standard V2 templates write rei_hours/phi_days into
+            # extra_data). Subtract the certifier-only set here so the nested path can never
+            # leak a worker-safety field to an anonymous consumer (EPA 2024 / ECGT / FTC).
+            if key in self._CERTIFIER_ONLY_EVENT_FIELDS:
                 return False
             lk = str(key).lower()
             return not any(sub in lk for sub in self.EXTRA_DATA_SENSITIVE_SUBSTRINGS)
@@ -5014,6 +5131,8 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "organic_matter_percentage",
             "amendment_type",
             "amendment_amount",
+            "amendment_product_name",
+            "amendment_manufacturer",
             "test_results",
             "carbon_sequestration_potential",
             "extra_data",
@@ -5051,6 +5170,10 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "compost_temperature_log",
             "manure_harvest_interval",
             "manure_application_date",
+            # NOP 5006 — processed animal manure (interval-exempt when documented)
+            "manure_treatment",
+            "processed_manure_temp_f",
+            "processed_manure_attestation",
             # Biodiversity / habitat (HD / NS subtypes)
             "habitat_type",
             "habitat_structure_count",
@@ -5091,6 +5214,7 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "compost_peak_temp_f",
             "amendment_amount_numeric",
             "compost_initial_cn_ratio",
+            "processed_manure_temp_f",
             "area_covered",
         ]
         for field_name in decimal_null_fields:
@@ -5111,8 +5235,15 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
 
         # Extract fields that don't have model columns into extra_data
         # Biodiversity / habitat (HD / NS): species_planted / wildlife_observed / structure_notes are
-        # free-text with no model column — route them into extra_data (mirrors cover_crop_species).
-        extra_data_only_fields = ["amendment_unit", "species_planted", "wildlife_observed", "structure_notes"]
+        # free-text with no model column — route them into extra_data. cover_crop_species (CC subtype,
+        # NOP §205.203) is the same shape: no model column, read back by the audit export from extra_data.
+        extra_data_only_fields = [
+            "amendment_unit",
+            "species_planted",
+            "wildlife_observed",
+            "structure_notes",
+            "cover_crop_species",
+        ]
         for field_name in extra_data_only_fields:
             if field_name in data:
                 value = data.pop(field_name)
@@ -5158,6 +5289,7 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "amendment_amount_numeric",
             "compost_peak_temp_f",
             "compost_initial_cn_ratio",
+            "processed_manure_temp_f",
         ]
 
         for field_name in decimal_fields:
@@ -5297,6 +5429,8 @@ class SoilManagementEventSerializer(EventSerializer):
             "organic_matter_percentage",
             "amendment_type",
             "amendment_amount",
+            "amendment_product_name",
+            "amendment_manufacturer",
             "test_results",
             "carbon_sequestration_potential",
             "extra_data",

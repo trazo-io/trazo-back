@@ -13,6 +13,7 @@ into PublicHistorySerializer.get_events(). See AUDIT_INSTRUCTIONS Standard Fix #
 """
 
 from datetime import date
+from decimal import Decimal
 
 from django.test import TestCase
 from django.utils import timezone
@@ -47,6 +48,37 @@ SENSITIVE_PRODUCTION_KEYS = frozenset(
         "seed_purchase_date",
         "seed_purchase_invoice",
         "seed_search_attempts",
+    ]
+)
+
+# NOP-technical / worker-safety / self-graded event fields that are certifier-only and
+# MUST NOT appear on the public consumer payload (2026-06 NOP-alignment audit, B0/B1).
+# REI/PHI/RUP/EPA-reg/CA-DPR protect FARM WORKERS or are enforcement identifiers that
+# falsely imply a CONSUMER hazard; concentration/volume/NPK/buffer/is_fertigation are
+# agronomic audit data; applicator_name is also a worker-name PII exposure.
+# (verification_level is deliberately NOT here — it is a factual documentation tier coupled
+# to the photo-evidence display; only the numeric self-graded transparency_score is stripped.)
+# Every one of these remains in the certifier-facing NOP PDF (audit_export_service reads
+# the event models directly), so stripping them here costs zero certifier coverage.
+NOP_TECHNICAL_EVENT_KEYS = frozenset(
+    [
+        "rei_hours",
+        "phi_days",
+        "restricted_use_pesticide",
+        "epa_registration_number",
+        "ca_dpr_permit_number",
+        "ca_dpr_permit_county",
+        "ca_dpr_permit_expires",
+        "applicator_name",
+        "applicator_certification",
+        "concentration",
+        "volume",
+        "volume_unit",
+        "nitrogen_percentage",
+        "phosphorus_percentage",
+        "potassium_percentage",
+        "is_fertigation",
+        "buffer_zone_meters",
     ]
 )
 
@@ -715,3 +747,130 @@ class PublicTransparencyContactLeakageTests(TestCase):
         resp = self.client.get(f"/api/transparency/{self.history.public_id}/")
         self.assertEqual(resp.status_code, 200)
         self.assertIn("Contact Leak Estate", resp.content.decode("utf-8"))
+
+
+class PublicSerializerNopTechnicalLeakageTests(TestCase):
+    """B0/B1 (2026-06 NOP-alignment audit): worker-safety, agronomic-audit, and
+    self-graded fields must not reach the anonymous consumer QR payload, while
+    legitimate consumer-transparency fields (what was applied + third-party organic
+    status + the practice story) survive untouched."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(email="noptech@test.com", password="x")
+        self.company = Company.objects.create(name="NopTech Farm")
+        self.establishment = Establishment.objects.create(name="NT1", company=self.company)
+        self.parcel = Parcel.objects.create(name="NTP1", establishment=self.establishment, area=5.0)
+        self.product = Product.objects.create(name="Navel Orange")
+        self.history = History.objects.create(
+            name="NopTech Production",
+            start_date=timezone.now(),
+            product=self.product,
+            parcel=self.parcel,
+            operator=self.user,
+            earning=0.0,
+            production_amount=0.0,
+            reputation=0.0,
+            confidence_score=0.0,
+            transparency_score=88.0,  # self-graded KPI — must be stripped for anonymous
+            public_views=0,
+            unique_visitors=0,
+            is_outdoor=True,
+            published=True,
+        )
+        ChemicalEvent.objects.create(
+            history=self.history,
+            type=ChemicalEvent.PESTICIDE,
+            commercial_name="Entrust SC",
+            concentration="22.5%",
+            volume=2.5,
+            nitrogen_percentage=10,
+            phosphorus_percentage=5,
+            potassium_percentage=5,
+            restricted_use_pesticide=False,
+            applicator_name="Ana Torres",
+            applicator_certification="CA QAL-4287",
+            epa_registration_number="62719-621",
+            rei_hours=Decimal("4.0"),
+            phi_days=Decimal("1.0"),
+            buffer_zone_meters=Decimal("8.0"),
+            is_fertigation=False,
+            ca_dpr_permit_number="DPR-2026-001",
+            organic_approved="omri_listed",
+            date=timezone.now(),
+        )
+
+    def _anon_payload(self):
+        # No request context => _is_owner() is False => anonymous consumer view.
+        return PublicHistorySerializer(self.history).data
+
+    def _chem_event(self, data):
+        chem = [e for e in (data.get("events") or []) if e.get("type") == "chemical"]
+        self.assertEqual(len(chem), 1, "expected exactly one chemical event in public payload")
+        return chem[0]
+
+    def test_nop_technical_event_fields_stripped(self):
+        """Worker-safety / agronomic-audit / self-graded keys must be absent from the event dict."""
+        event = self._chem_event(self._anon_payload())
+        leaked = NOP_TECHNICAL_EVENT_KEYS.intersection(event.keys())
+        self.assertEqual(
+            leaked,
+            set(),
+            f"NOP-technical / worker-safety / self-graded fields leaked to the consumer payload: "
+            f"{sorted(leaked)}. These belong only on the certifier-facing NOP PDF.",
+        )
+
+    def test_worker_name_and_reg_values_not_in_blob(self):
+        """Defense in depth: applicator PII + enforcement identifiers must not appear anywhere."""
+        import json
+
+        blob = json.dumps(self._anon_payload(), default=str)
+        self.assertNotIn("CA QAL-4287", blob, "applicator certification leaked into public payload")
+        self.assertNotIn("62719-621", blob, "EPA registration number leaked into public payload")
+        self.assertNotIn("DPR-2026-001", blob, "CA DPR permit number leaked into public payload")
+
+    def test_transparency_score_stripped_for_anonymous(self):
+        """The self-graded production score is a producer KPI; it must not ship to consumers."""
+        self.assertNotIn(
+            "transparency_score",
+            self._anon_payload(),
+            "self-graded transparency_score must not ship on the anonymous consumer payload (ECGT/FTC)",
+        )
+
+    def test_worker_safety_keys_in_extra_data_are_stripped(self):
+        """
+        Regression for the nested-extra_data leak: REI/PHI/RUP/buffer_zone_meters are stripped
+        at the top level of the event dict, but the standard V2 templates ALSO write REI/PHI
+        into extra_data — and those keys were allow-listed, so the nested path leaked them to
+        anonymous consumers. The sanitizer now subtracts the certifier-only set.
+        """
+        import json
+
+        chem = ChemicalEvent.objects.filter(history=self.history).first()
+        chem.extra_data = {
+            "rei_hours": 4,
+            "phi_days": 1,
+            "restricted_use_pesticide": True,
+            "buffer_zone_meters": 15,
+            "volume_unit": "L",
+            "organic_approved": "omri_listed",  # a benign key must still survive
+        }
+        chem.save(update_fields=["extra_data"])
+
+        event = self._chem_event(self._anon_payload())
+        nested = event.get("extra_data") or {}
+        for leaked in ("rei_hours", "phi_days", "restricted_use_pesticide", "buffer_zone_meters", "volume_unit"):
+            self.assertNotIn(
+                leaked,
+                nested,
+                f"worker-safety/certifier key '{leaked}' leaked to consumers via event.extra_data",
+            )
+        blob = json.dumps(self._anon_payload(), default=str)
+        self.assertNotIn('"rei_hours"', blob)
+        self.assertNotIn('"buffer_zone_meters"', blob)
+
+    def test_consumer_transparency_fields_survive(self):
+        """The strip must not regress legitimate consumer content (what + third-party status + story)."""
+        event = self._chem_event(self._anon_payload())
+        self.assertEqual(event.get("commercial_name"), "Entrust SC")
+        self.assertEqual(event.get("organic_approved"), "omri_listed")
+        self.assertIn("input_status", event)

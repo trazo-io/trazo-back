@@ -8,7 +8,57 @@ from .models import (
     LandownerAffidavit,
     OrganicSystemPlan,
     OSPAnnualUpdate,
+    OSPChangeNotification,
+    PostHarvestFacility,
+    StateOrganicRegistration,
 )
+
+
+class PostHarvestFacilitySerializer(serializers.ModelSerializer):
+    """Producer-dashboard CRUD for off-farm post-harvest handlers (CCOF G6.1)."""
+
+    facility_type_display = serializers.CharField(source="get_facility_type_display", read_only=True)
+    verification_status_display = serializers.CharField(source="get_verification_status_display", read_only=True)
+    is_verified = serializers.BooleanField(read_only=True)
+    cert_is_current = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = PostHarvestFacility
+        fields = [
+            "id",
+            "public_id",
+            "establishment",
+            "name",
+            "facility_type",
+            "facility_type_display",
+            "address",
+            "city",
+            "state",
+            "certification_number",
+            "certifier_name",
+            "effective_date",
+            "expiry_date",
+            "cert_document",
+            "verification_status",
+            "verification_status_display",
+            "is_verified",
+            "cert_is_current",
+            "last_verified_at",
+            "verification_source",
+            "notes",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "public_id",
+            "verification_status",
+            "last_verified_at",
+            "verification_source",
+            "raw_api_response",
+            "created_at",
+            "updated_at",
+        ]
 
 
 class CertificationVerificationLogSerializer(serializers.ModelSerializer):
@@ -332,8 +382,47 @@ class OSPAnnualUpdateSerializer(serializers.ModelSerializer):
         ]
 
 
+class OSPChangeNotificationSerializer(serializers.ModelSerializer):
+    """Notification-of-Changes record — 7 CFR 205.400(f) / NOP 2615 §3.4."""
+
+    change_category_display = serializers.CharField(source="get_change_category_display", read_only=True)
+    method_display = serializers.CharField(source="get_method_display", read_only=True)
+    documentation_timing_display = serializers.CharField(
+        source="get_documentation_timing_display", read_only=True
+    )
+    cfr_reference = serializers.CharField(read_only=True)
+    is_immediate = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = OSPChangeNotification
+        fields = [
+            "id",
+            "osp",
+            "change_category",
+            "change_category_display",
+            "description",
+            "date_notified",
+            "method",
+            "method_display",
+            "documentation_timing",
+            "documentation_timing_display",
+            "supporting_document",
+            "certifier_acknowledged_at",
+            "cfr_reference",
+            "is_immediate",
+            "created_at",
+        ]
+        read_only_fields = ["id", "osp", "created_at"]
+
+
 class LandownerAffidavitSerializer(serializers.ModelSerializer):
     attestation_default = serializers.SerializerMethodField()
+    # The form hint says "leave blank to use the standard wording". The model TextField has
+    # default="" but no blank=True, so DRF's mapped field rejects an explicit "" with
+    # "This field may not be blank" (a silent 400 for a farmer following the hint). Allow
+    # blank here and fill the canonical MOFGA attestation in validate() so the stored/exported
+    # attestation is never empty.
+    attestation_text = serializers.CharField(required=False, allow_blank=True, default="")
 
     class Meta:
         model = LandownerAffidavit
@@ -370,3 +459,54 @@ class LandownerAffidavitSerializer(serializers.ModelSerializer):
         so the form can pre-fill while still allowing the operator to review/edit.
         """
         return LandownerAffidavit.ATTESTATION_TEXT
+
+    def validate(self, attrs):
+        """Blank attestation → the canonical MOFGA wording (honors the form's own hint).
+
+        Only fills when attestation_text is actually being written (present in attrs). On a
+        partial PATCH that omits the field entirely (e.g. editing just a phone number), we must
+        NOT inject the default — that would overwrite a previously-saved custom attestation.
+        On create, DRF applies the field default ("") so the key is present and gets filled.
+        """
+        if "attestation_text" in attrs and not (attrs.get("attestation_text") or "").strip():
+            attrs["attestation_text"] = LandownerAffidavit.ATTESTATION_TEXT
+        return attrs
+
+
+class StateOrganicRegistrationSerializer(serializers.ModelSerializer):
+    """Producer-dashboard CRUD for State Organic Program registration (CDFA SOP).
+
+    Distinct from CDFA OIM (input-material) registration — this is the
+    producer/operation registration CA wholesale (> $5,000 organic) operations
+    must hold before their first organic sale (CA Food & Ag Code §§ 46000-46029).
+    """
+
+    operation_type_display = serializers.CharField(source="get_operation_type_display", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    is_current = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = StateOrganicRegistration
+        fields = [
+            "id",
+            "public_id",
+            "establishment",
+            "state",
+            "program_name",
+            "operation_type",
+            "operation_type_display",
+            "status",
+            "status_display",
+            "registration_number",
+            "county",
+            "commodities",
+            "prior_year_organic_gross_sales",
+            "registration_date",
+            "renewal_date",
+            "registration_document",
+            "notes",
+            "is_current",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "public_id", "created_at", "updated_at"]

@@ -204,16 +204,17 @@ def _classify_seed_event(event, osp) -> Optional[Dict[str, Any]]:
     label = variety or supplier or "planting event"
     aosca_url = _aosca_seed_search_url(variety or supplier)
 
-    # Case 1: non-organic treated seed. § 205.204(a)(5) prohibits treatment
-    # with synthetic substances unless listed on § 205.601. We can't verify
+    # Case 1: non-organic treated seed. § 205.204(a)(2) allows treated seed only
+    # when the treatment substance is listed on § 205.601. We can't verify
     # the specific treatment here — we flag for reconciliation.
     if cert_status == "non_organic_treated":
         return _build_drift_warning(
             osp=osp,
             reason=(
-                "Non-organic TREATED seed declared. § 205.204(a)(5) prohibits "
-                "prohibited-substance treatments. Confirm seed treatment with "
-                "certifier before harvest to avoid disqualification."
+                "Non-organic TREATED seed declared. § 205.204(a)(2) allows treated "
+                "seed only if the treatment is on the National List (§ 205.601). "
+                "Confirm seed treatment with certifier before harvest to avoid "
+                "disqualification."
             ),
             input_label=label,
             resolved_via="seed_treated_prohibited",

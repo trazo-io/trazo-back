@@ -14,11 +14,13 @@ Field requirements: 3 CCR 6624(b)/(c). See documentation/audits/.work/research-c
 
 Scope notes / known limitations (surfaced, not hidden):
 - Fertilizers (FE) are EXCLUDED — box 23 instructions say nutrients/fertilizers
-  are not reported. Adjuvants/spreader-stickers ARE reportable in CA but Trazo
-  does not yet track them as separate inputs (documented gap).
+  are not reported. Adjuvants/spreader-stickers ARE reportable in CA; a logged
+  tank-mix (extra_data["tank_mix"]) is surfaced in the row notes so the omission
+  is not silent, but each partner still needs its own PUR line (not auto-split).
 - Aggregate ("is_summary") chemical events are emitted as a single line; the PUR
   wants one line per application. Flagged in the row's notes.
-- County is reported by NAME; box 10 wants the CAC county NUMBER (not stored).
+- County (box 10) is emitted as the CAC 2-digit code + name (e.g. "37 (San Diego)");
+  a county name that is not a recognized CA county is left blank and flagged.
 - Datetimes are stored/displayed as entered (see F20 tz note); times render in
   24-hour (military) form per boxes 17-18.
 """
@@ -64,6 +66,85 @@ REQUIRED_KEYS = [key for key, _header, required in PUR_COLUMNS if required]
 # Reportable to the PUR: pesticides, fungicides, herbicides. Fertilizers (FE) are
 # explicitly NOT reported (DPR-PML-017C box 23 instructions).
 REPORTABLE_TYPES = ("PE", "FU", "HE")
+
+# DPR/CACASA county codes (box 10). CalAgPermits validates the county on the
+# 2-digit code (01–58, CA counties in alphabetical order), NOT the county name —
+# a PUR carrying only the name fails electronic import. Map the county name the
+# farmer already logged to its code so the export is file-ready.
+_CA_COUNTY_CODES = {
+    "alameda": "01",
+    "alpine": "02",
+    "amador": "03",
+    "butte": "04",
+    "calaveras": "05",
+    "colusa": "06",
+    "contra costa": "07",
+    "del norte": "08",
+    "el dorado": "09",
+    "fresno": "10",
+    "glenn": "11",
+    "humboldt": "12",
+    "imperial": "13",
+    "inyo": "14",
+    "kern": "15",
+    "kings": "16",
+    "lake": "17",
+    "lassen": "18",
+    "los angeles": "19",
+    "madera": "20",
+    "marin": "21",
+    "mariposa": "22",
+    "mendocino": "23",
+    "merced": "24",
+    "modoc": "25",
+    "mono": "26",
+    "monterey": "27",
+    "napa": "28",
+    "nevada": "29",
+    "orange": "30",
+    "placer": "31",
+    "plumas": "32",
+    "riverside": "33",
+    "sacramento": "34",
+    "san benito": "35",
+    "san bernardino": "36",
+    "san diego": "37",
+    "san francisco": "38",
+    "san joaquin": "39",
+    "san luis obispo": "40",
+    "san mateo": "41",
+    "santa barbara": "42",
+    "santa clara": "43",
+    "santa cruz": "44",
+    "shasta": "45",
+    "sierra": "46",
+    "siskiyou": "47",
+    "solano": "48",
+    "sonoma": "49",
+    "stanislaus": "50",
+    "sutter": "51",
+    "tehama": "52",
+    "trinity": "53",
+    "tulare": "54",
+    "tuolumne": "55",
+    "ventura": "56",
+    "yolo": "57",
+    "yuba": "58",
+}
+
+
+def _normalize_county(name):
+    """Casefold, strip a trailing 'County', and collapse whitespace for lookup."""
+    norm = " ".join(_s(name).lower().split())
+    if norm.endswith(" county"):
+        norm = norm[: -len(" county")].strip()
+    return norm
+
+
+def _county_code(name):
+    """Return the 2-digit DPR county code for a CA county name, or '' if unknown."""
+    return _CA_COUNTY_CODES.get(_normalize_county(name), "")
+
 
 # Map Trazo application methods → DPR box-21 categories (Ground / Air / Fume / Other).
 _METHOD_TO_DPR = {
@@ -155,17 +236,29 @@ class PURExportService:
         operator_id = _s(event.operator_id) or _s(event.ca_dpr_permit_number)
 
         # Total product used (box 24): formulated product + unit (NOT diluted mix).
+        # Only build the "value unit" string when the VALUE is present — the units
+        # default to "gal"/"acres" on the model, so a unit-only string ("gal") is a
+        # phantom that would let a blank box 24/19/9 pass the completeness check
+        # (the PUR's most important numeric boxes). Blank when no number → flagged missing.
         volume = _s(event.volume) or _s(getattr(event, "volume_numeric", None))
         volume_unit = _s(getattr(event, "volume_unit", None))
-        total_product = f"{volume} {volume_unit}".strip()
+        total_product = f"{volume} {volume_unit}".strip() if volume else ""
 
         planted = _s(event.planted_area)
         planted_unit = _s(event.planted_area_unit)
-        planted_display = f"{planted} {planted_unit}".strip()
+        planted_display = f"{planted} {planted_unit}".strip() if planted else ""
 
         area_treated = _s(event.area) or _s(getattr(event, "area_numeric", None))
         area_unit = _s(getattr(event, "area_unit", None))
-        area_display = f"{area_treated} {area_unit}".strip()
+        area_display = f"{area_treated} {area_unit}".strip() if area_treated else ""
+
+        # County (box 10): CalAgPermits validates on the 2-digit CAC county code, not
+        # the name. Resolve the logged county name to its code and emit "37 (San Diego)".
+        # If the name doesn't resolve to a CA county, leave box 10 BLANK (so the
+        # completeness check flags it) rather than emit an unvalidatable name.
+        county_name = _s(event.application_county) or _s(event.ca_dpr_permit_county)
+        county_code = _county_code(county_name)
+        county_display = f"{county_code} ({county_name})" if county_code else ""
 
         # F-PUR (2026-06): box 26 (Rate Per Acre) was hard-coded blank. Compute it from the product
         # volume and treated area the farmer already logged — no new input. e.g. 10 gal / 15 acres
@@ -199,7 +292,7 @@ class PURExportService:
             "zip_code": header["zip_code"],
             "site_id": _s(event.site_id),
             "planted_area": planted_display,
-            "county": _s(event.application_county) or _s(event.ca_dpr_permit_county),
+            "county": county_display,
             "section": _s(event.mtrs_section),
             "township": _s(event.mtrs_township),
             "range": _s(event.mtrs_range),
@@ -231,15 +324,98 @@ class PURExportService:
         if missing:
             headers = {k: h for k, h, _r in PUR_COLUMNS}
             notes.append("Missing required: " + ", ".join(headers.get(m, m) for m in missing))
+        # Distinguish "no county logged" from "county logged but not a CA county" —
+        # the latter can't map to a CAC code and box 10 was blanked above.
+        if county_name and not county_code:
+            notes.append(f"County '{county_name}' is not a recognized CA county — box 10 needs the CAC county number.")
+        # Structured tank_mix_partners are exported as their own PUR rows (see
+        # _adjuvant_rows). Only fall back to the free-text extra_data["tank_mix"]
+        # note when there is NO structured list, so a legacy free-text tank mix
+        # isn't silently dropped.
+        structured_partners = getattr(event, "tank_mix_partners", None) or []
+        tank_mix = _s(ed.get("tank_mix"))
+        if tank_mix and not structured_partners:
+            notes.append(
+                f"Tank-mix partner(s) logged ({tank_mix}) — each CA-registered adjuvant/"
+                "spreader-sticker needs its own PUR line (boxes 23/24); not auto-exported."
+            )
         if (ed.get("is_summary") is True) or _s(event.time_period):
             notes.append("Aggregate/summary event — PUR wants one line per application.")
         row["notes"] = " | ".join(notes)
         row["_missing_required"] = missing
         return row
 
+    def _adjuvant_rows(self, event, primary_row):
+        """One PUR line per structured tank-mix partner (adjuvant/spreader-sticker).
+
+        Each CA-registered adjuvant is reportable on its own DPR-PML-017C line with
+        its own EPA/State reg (box 23), total product (box 24) and product/mfr (box
+        28). The application context (site, county, MTRS, dates, method, treated
+        acreage) is shared with the primary product, so it is copied from the
+        already-built primary row and only the product-specific boxes are overridden.
+        """
+        partners = getattr(event, "tank_mix_partners", None) or []
+        area_unit = _s(getattr(event, "area_unit", None))
+        primary_name = _s(event.commercial_name) or "primary product"
+        rows = []
+        for p in partners:
+            if not isinstance(p, dict):
+                continue
+            name = _s(p.get("commercial_name"))
+            mfr = _s(p.get("manufacturer"))
+            epa = _s(p.get("epa_registration_number"))
+            vol = _s(p.get("volume"))
+            vol_unit = _s(p.get("volume_unit"))
+            # Skip empty partner entries (blank UI rows) — nothing to report.
+            if not (name or epa or vol):
+                continue
+
+            product_mfr = f"{name} / {mfr}".strip(" /") if mfr else name
+            total_product = f"{vol} {vol_unit}".strip() if vol else ""
+
+            rate_display = ""
+            try:
+                vnum = float(vol) if vol else None
+                anum = float(event.area) if event.area not in (None, "") else None
+                if vnum is not None and anum and vol_unit and area_unit:
+                    area_singular = area_unit[:-1] if area_unit.endswith("s") else area_unit
+                    rate_display = f"{vnum / anum:.2f} {vol_unit}/{area_singular}"
+            except (TypeError, ValueError, ZeroDivisionError):
+                rate_display = ""
+
+            row = dict(primary_row)
+            row.update(
+                {
+                    "epa_registration_number": epa,
+                    "total_product_used": total_product,
+                    "rate_per_acre": rate_display,
+                    "dilution": "",
+                    "product_and_manufacturer": product_mfr,
+                }
+            )
+
+            missing = [key for key in REQUIRED_KEYS if not _s(row.get(key))]
+            if row.get("application_method") == "Fume" and not row.get("ffm_code"):
+                missing.append("ffm_code")
+
+            notes = []
+            if missing:
+                headers = {k: h for k, h, _r in PUR_COLUMNS}
+                notes.append("Missing required: " + ", ".join(headers.get(m, m) for m in missing))
+            notes.append(f"Tank-mix adjuvant applied with {primary_name} — separate PUR line per 3 CCR 6624.")
+            row["notes"] = " | ".join(notes)
+            row["_missing_required"] = missing
+            rows.append(row)
+        return rows
+
     def build_rows(self):
         header = self._operator_header()
-        return [self._row(event, header) for event in self._applications()]
+        rows = []
+        for event in self._applications():
+            primary = self._row(event, header)
+            rows.append(primary)
+            rows.extend(self._adjuvant_rows(event, primary))
+        return rows
 
     def summary(self):
         rows = self.build_rows()

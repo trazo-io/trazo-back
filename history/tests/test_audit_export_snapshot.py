@@ -54,7 +54,8 @@ class ComplianceSnapshotTests(TestCase):
         table = next((f for f in flowables if isinstance(f, Table)), None)
         assert table is not None, "Snapshot must emit a Table"
         # Each row is [label-Paragraph, status-Paragraph, detail-Paragraph].
-        # Status is wrapped in <b><font color=...>PASS</font></b> — strip tags.
+        # Status is the documentation mark wrapped in <b><font color=...>DOCUMENTED
+        # </font></b> (DOCUMENTED / REVIEW / GAP) — strip tags to get the bare word.
         out = {}
         for row in table._cellvalues[1:]:  # skip header row
             req = row[0].text if hasattr(row[0], "text") else str(row[0])
@@ -69,7 +70,7 @@ class ComplianceSnapshotTests(TestCase):
     def test_input_traceability_no_chemicals_is_pass(self):
         rows = self._rows_by_requirement()
         status, detail = rows["Input traceability (§ 205.103)"]
-        self.assertEqual(status, "PASS")
+        self.assertEqual(status, "DOCUMENTED")
         self.assertIn("No chemical inputs", detail)
 
     def test_input_traceability_missing_supplier_is_fail(self):
@@ -82,7 +83,7 @@ class ComplianceSnapshotTests(TestCase):
         )
         rows = self._rows_by_requirement()
         status, _ = rows["Input traceability (§ 205.103)"]
-        self.assertEqual(status, "FAIL")
+        self.assertEqual(status, "GAP")
 
     def test_input_traceability_supplier_variants_is_review(self):
         # Three chemical events, two supplier names that normalize to the same key.
@@ -130,7 +131,7 @@ class ComplianceSnapshotTests(TestCase):
         )
         rows = self._rows_by_requirement()
         status, _ = rows["Input traceability (§ 205.103)"]
-        self.assertEqual(status, "PASS")
+        self.assertEqual(status, "DOCUMENTED")
 
     # ---- § 205.272 contamination prevention ----
 
@@ -144,7 +145,7 @@ class ComplianceSnapshotTests(TestCase):
         )
         rows = self._rows_by_requirement()
         status, detail = rows["Contamination prevention (§ 205.272)"]
-        self.assertEqual(status, "PASS")
+        self.assertEqual(status, "DOCUMENTED")
         self.assertIn("No equipment shared", detail)
 
     def test_contamination_prevention_shared_but_no_em_is_fail(self):
@@ -157,7 +158,7 @@ class ComplianceSnapshotTests(TestCase):
         )
         rows = self._rows_by_requirement()
         status, _ = rows["Contamination prevention (§ 205.272)"]
-        self.assertEqual(status, "FAIL")
+        self.assertEqual(status, "GAP")
 
     def test_contamination_prevention_empty_em_event_is_review(self):
         # Regression: EM events exist but have no cleaning data.
@@ -201,7 +202,7 @@ class ComplianceSnapshotTests(TestCase):
         )
         rows = self._rows_by_requirement()
         status, _ = rows["Contamination prevention (§ 205.272)"]
-        self.assertEqual(status, "PASS")
+        self.assertEqual(status, "DOCUMENTED")
 
     def test_contamination_prevention_partial_em_is_review(self):
         ProductionEvent.objects.create(

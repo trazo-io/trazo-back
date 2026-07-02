@@ -16,6 +16,7 @@ import io
 import logging
 import os
 from datetime import date, timedelta
+from decimal import Decimal, InvalidOperation
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
@@ -47,6 +48,18 @@ PRODUCTION_TYPE_LABELS = {
     "PO": "Pollination",
     "PH": "Post-Harvest Processing",
     "CM": "Canopy Management",
+    "FP": "Frost Protection",
+    "MO": "Mowing",
+}
+
+# Frost-protection technique labels. The FP subtype persists its technique under
+# extra_data.protection_method (NOT extra_data.method), so the production-events
+# Method cell must translate it explicitly or it renders blank for every frost row.
+PROTECTION_METHOD_LABELS = {
+    "wind_machine": "Wind machine",
+    "orchard_heater": "Orchard heater",
+    "under_tree_sprinkler": "Under-tree sprinkler",
+    "other": "Other",
 }
 
 CHEMICAL_TYPE_LABELS = {
@@ -178,6 +191,42 @@ def _fmt_float(value, decimals=2):
         return f"{float(value):.{decimals}f}"
     except (TypeError, ValueError):
         return str(value)
+
+
+def _fmt_mass(value, unit):
+    """
+    Format a harvest / sales mass for a US audit reader. US growers, CCOF, and
+    wholesale buyers think in pounds (and tons), so pounds are the primary figure
+    \u2014 with short tons added when the quantity is large, and the recorded metric
+    value kept in brackets so the source record stays auditable. Pounds pass
+    through unchanged; an unrecognized / non-mass unit is shown as recorded
+    (never guessed).
+    """
+    if value is None:
+        return "\u2014"
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return _val(value)
+    u = (unit or "").strip().lower()
+    if u in ("kg", "kgs", "kilogram", "kilograms"):
+        lbs = v * 2.20462
+    elif u in ("lb", "lbs", "pound", "pounds"):
+        lbs = v
+    else:
+        # Unknown / non-mass unit (boxes, cartons, units\u2026): show as recorded.
+        return f"{_fmt_float(v)} {unit}".strip() if unit else _fmt_float(v)
+    if abs(lbs) >= 4000:  # >= ~2 short tons: tons aid readability
+        primary = f"{lbs:,.0f} lb ({lbs / 2000.0:,.1f} short tons)"
+    else:
+        primary = f"{lbs:,.0f} lb"
+    # Keep the recorded metric value visible for audit fidelity when source was kg.
+    # The ".2f" guarantees a decimal point, so stripping trailing zeros is safe and
+    # preserves real fractional values (2.5 -> "2.5", 180000.00 -> "180,000").
+    if u in ("kg", "kgs", "kilogram", "kilograms"):
+        kg_str = f"{v:,.2f}".rstrip("0").rstrip(".")
+        return f"{primary} [{kg_str} kg]"
+    return primary
 
 
 def _val(value, fallback="\u2014"):
@@ -346,15 +395,17 @@ class AuditExportService:
             "producer_attestation",
             "regulatory_scope",
             "farm",
+            "field_map",
+            "buffer_zones",
             "production",
             "chemicals",
             "production_events",
+            "post_harvest",
             "seed_stock",
             "soil",
             "pest",
             "equipment",
             "weather",
-            "carbon",
             "traceability",
             "photos",
             "custom_data",
@@ -365,16 +416,20 @@ class AuditExportService:
             "general_events",
             "soe_compliance",
             "change_history",
+            "carbon",  # appendix — informational only, not an NOP requirement; placed last
         ],
         "organic": [
             "osp_reference",  # 7 CFR 205.201 — OSP header (Sprint 5A)
             "drift_findings",  # Sprint 5.1 — OSP ↔ events drift (§ 205.400(f)(2) operation change)
-            "producer_attestation",  # 7 CFR 205.401(d) — signed attestation
+            "producer_attestation",  # 7 CFR 205.401 / 205.400(a) — signed attestation
             "regulatory_scope",  # FSMA 204 + PSR + ICS scoping statements
             "farm",
+            "field_map",  # CCOF Parcel Application — schematic boundary + adjoining land
+            "buffer_zones",  # 7 CFR 205.202(c) buffer / drift-prevention record
             "production",
             "chemicals",
             "production_events",  # 7 CFR 205.272 water mgmt + 205.270 post-harvest
+            "post_harvest",  # 7 CFR 205.272 / 205.270 — hulling/drying/storage + handler cert
             "seed_stock",
             "soil",
             "pest",  # NOP 7 CFR 205.206(e) requires pest mgmt + threshold rationale docs
@@ -387,6 +442,7 @@ class AuditExportService:
             "photos",
             "custom_data",
             "certifications",
+            "state_organic_registration",  # CDFA SOP producer registration (CA Food & Ag Code §§ 46000-46029)
             "business_events",
             "mass_balance",
             "field_history",
@@ -407,23 +463,26 @@ class AuditExportService:
         ],
         "roc": [
             "farm",
+            "field_map",
+            "buffer_zones",
             "production",
             "chemicals",
             "production_events",
+            "post_harvest",
             "seed_stock",
             "soil",
             "pest",
             "weather",
-            "carbon",
             "photos",
             "custom_data",
             "certifications",
             "business_events",
             "mass_balance",
             "field_history",
+            "carbon",  # appendix — informational only, placed last
         ],
         "fsma204": ["farm", "production", "traceability", "photos", "custom_data"],
-        "scs": ["farm", "production", "chemicals", "soil", "pest", "carbon", "photos", "custom_data"],
+        "scs": ["farm", "production", "chemicals", "soil", "pest", "photos", "custom_data", "carbon"],
     }
 
     CERTIFICATION_LABELS = {
@@ -670,6 +729,41 @@ class AuditExportService:
     # PDF generation — public entry point
     # ------------------------------------------------------------------
 
+    def _section_builders(self):
+        """Map section-key → builder method. Exposed as a method (not an inline dict) so the
+        operation-wide export (OperationAuditExportService) can reuse individual per-production
+        section builders when assembling one combined dossier across many productions."""
+        return {
+            "osp_reference": self._build_osp_reference_section,
+            "drift_findings": self._build_drift_findings_section,
+            "producer_attestation": self._build_producer_attestation_section,
+            "regulatory_scope": self._build_regulatory_scope_section,
+            "farm": self._build_farm_overview,
+            "field_map": self._build_field_map_section,
+            "buffer_zones": self._build_buffer_zone_section,
+            "post_harvest": self._build_post_harvest_section,
+            "production": self._build_production_summary,
+            "chemicals": self._build_chemical_log,
+            "production_events": self._build_production_events,
+            "seed_stock": self._build_seed_stock_section,
+            "soil": self._build_soil_section,
+            "pest": self._build_pest_section,
+            "equipment": self._build_equipment_section,
+            "weather": self._build_weather_section,
+            "carbon": self._build_carbon_section,
+            "traceability": self._build_traceability_section,
+            "photos": self._build_photos_section,
+            "custom_data": self._build_custom_data_section,
+            "certifications": self._build_certifications_section,
+            "state_organic_registration": self._build_state_organic_registration_section,
+            "business_events": self._build_business_events_section,
+            "mass_balance": self._build_mass_balance_section,
+            "field_history": self._build_field_history_section,
+            "general_events": self._build_general_events_section,
+            "soe_compliance": self._build_soe_compliance_section,
+            "change_history": self._build_change_history_section,
+        }
+
     def generate_pdf(
         self,
         strict_photos: bool = True,
@@ -795,32 +889,7 @@ class AuditExportService:
         story += self._build_cover_page()
         story.append(PageBreak())
 
-        section_builders = {
-            "osp_reference": self._build_osp_reference_section,
-            "drift_findings": self._build_drift_findings_section,
-            "producer_attestation": self._build_producer_attestation_section,
-            "regulatory_scope": self._build_regulatory_scope_section,
-            "farm": self._build_farm_overview,
-            "production": self._build_production_summary,
-            "chemicals": self._build_chemical_log,
-            "production_events": self._build_production_events,
-            "seed_stock": self._build_seed_stock_section,
-            "soil": self._build_soil_section,
-            "pest": self._build_pest_section,
-            "equipment": self._build_equipment_section,
-            "weather": self._build_weather_section,
-            "carbon": self._build_carbon_section,
-            "traceability": self._build_traceability_section,
-            "photos": self._build_photos_section,
-            "custom_data": self._build_custom_data_section,
-            "certifications": self._build_certifications_section,
-            "business_events": self._build_business_events_section,
-            "mass_balance": self._build_mass_balance_section,
-            "field_history": self._build_field_history_section,
-            "general_events": self._build_general_events_section,
-            "soe_compliance": self._build_soe_compliance_section,
-            "change_history": self._build_change_history_section,
-        }
+        section_builders = self._section_builders()
 
         for section_key in self.sections:
             builder = section_builders.get(section_key)
@@ -1172,7 +1241,16 @@ class AuditExportService:
             return pathway_str
 
         # Manure interval — every raw-manure event must have an interval set.
-        manure_events = [ev for ev in soils if ev.manure_application_date or ev.manure_harvest_interval]
+        # NOP 5006 processed manure and (c)(2) composted manure are interval-
+        # exempt, so they are counted separately and excluded from the raw row.
+        all_manure_events = [ev for ev in soils if ev.manure_application_date or ev.manure_harvest_interval]
+        processed_5006_events = [ev for ev in soils if ev.manure_treatment == "processed_5006"]
+        processed_5006_documented = sum(
+            1
+            for ev in processed_5006_events
+            if ev.processed_manure_temp_f is not None or (ev.processed_manure_attestation or "").strip()
+        )
+        manure_events = [ev for ev in all_manure_events if ev.manure_treatment not in ("processed_5006", "composted")]
         manure_with_interval = sum(1 for ev in manure_events if ev.manure_harvest_interval)
         # Classification-mismatch count: farmer selected an interval that
         # doesn't match the crop's soil-contact rule. The timing may still
@@ -1240,10 +1318,15 @@ class AuditExportService:
             if ev.corrective_action_taken and ev.corrective_action_taken.strip() and ev.certifier_notified
         )
 
-        # Helper to render PASS/REVIEW/FAIL with color coding.
+        # Render the internal PASS/REVIEW/FAIL signal as a DOCUMENTATION-STATUS
+        # mark, not a self-assigned compliance verdict — the certifying agent makes
+        # the compliance determination, so the operation only attests to whether the
+        # supporting record is on file. Colors are kept; only the displayed word and
+        # the legend change. Internal status codes stay PASS/REVIEW/FAIL so all the
+        # row-building logic below is untouched.
         def status_paragraph(status):
             color = {"PASS": "#2E7D32", "REVIEW": "#E65100", "FAIL": "#B71C1C"}.get(status, "#555555")
-            mark = {"PASS": "PASS", "REVIEW": "REVIEW", "FAIL": "FAIL"}.get(status, status)
+            mark = {"PASS": "DOCUMENTED", "REVIEW": "REVIEW", "FAIL": "GAP"}.get(status, status)
             return Paragraph(
                 f'<b><font color="{color}">{mark}</font></b>',
                 ParagraphStyle("snap_status", parent=self._styles["body"], fontSize=8, alignment=TA_CENTER),
@@ -1483,6 +1566,37 @@ class AuditExportService:
                     ),
                 )
             )
+
+        # Processed manure — NOP 5006. Processed (pathogen-reduced) manure is
+        # exempt from the (c)(1) raw interval, but only when the processing is
+        # DOCUMENTED (peak temperature and/or an OMRI/supplier attestation).
+        # Undocumented processed manure reverts to raw and is flagged REVIEW.
+        if processed_5006_events:
+            if processed_5006_documented == len(processed_5006_events):
+                snapshot_rows.append(
+                    (
+                        "Processed manure (NOP 5006 / § 205.203)",
+                        "PASS",
+                        (
+                            f"{processed_5006_documented}/{len(processed_5006_events)} processed-manure "
+                            "event(s) documented (temperature and/or OMRI/supplier attestation) — "
+                            "exempt from the raw-manure pre-harvest interval per NOP 5006"
+                        ),
+                    )
+                )
+            else:
+                snapshot_rows.append(
+                    (
+                        "Processed manure (NOP 5006 / § 205.203)",
+                        "REVIEW",
+                        (
+                            f"{processed_5006_documented}/{len(processed_5006_events)} processed-manure "
+                            "event(s) carry the NOP 5006 processing basis (temperature or "
+                            "OMRI/supplier attestation); undocumented events revert to the raw "
+                            "§ 205.203(c)(1) interval"
+                        ),
+                    )
+                )
 
         # § 205.272 contamination prevention — cleaning-log evidence when any
         # equipment is shared with conventional operations. Distinguish:
@@ -1740,7 +1854,7 @@ class AuditExportService:
                 ParagraphStyle("snap_h1", parent=self._styles["body"], fontSize=8, fontName="Helvetica-Bold"),
             ),
             Paragraph(
-                "<b>Status</b>",
+                "<b>Documentation</b>",
                 ParagraphStyle(
                     "snap_h2", parent=self._styles["body"], fontSize=8, fontName="Helvetica-Bold", alignment=TA_CENTER
                 ),
@@ -1788,7 +1902,8 @@ class AuditExportService:
                 ]
             )
 
-        col_widths = [2.6 * inch, 0.7 * inch, 3.7 * inch]
+        # Documentation column is wide enough for the "DOCUMENTED" mark on one line.
+        col_widths = [2.6 * inch, 0.95 * inch, 3.45 * inch]
         snap_table = Table(table_data, colWidths=col_widths, repeatRows=1)
         snap_table.setStyle(
             TableStyle(
@@ -1815,7 +1930,7 @@ class AuditExportService:
 
         return [
             Paragraph(
-                "<b>Compliance Snapshot</b> — auditor pre-read",
+                "<b>Documentation Snapshot</b> — auditor pre-read",
                 ParagraphStyle(
                     "snap_title",
                     parent=self._styles["section_header"],
@@ -1826,8 +1941,13 @@ class AuditExportService:
             ),
             snap_table,
             Paragraph(
-                "PASS = compliant. REVIEW = needs inspector attention. FAIL = blocking finding likely. "
-                "Each row links to its source section in the body of this report.",
+                "DOCUMENTED = the supporting record is on file in Trazo. REVIEW = the record "
+                "is present but needs inspector attention or is incomplete. GAP = a required "
+                "record appears to be missing. These marks reflect documentation status in "
+                "Trazo, not a compliance determination — the certifying agent makes the "
+                "compliance decision. Each row links to its source section in the body of "
+                "this report. Section headers cross-reference the corresponding CCOF Grower "
+                "OSP form numbers (G3.0–G8.0) for inspector navigation.",
                 self._styles["footer_note"],
             ),
         ]
@@ -2431,7 +2551,7 @@ class AuditExportService:
         optional_rows = [
             (
                 "GPS Coordinates",
-                f"{est.latitude}, {est.longitude}" if est.latitude and est.longitude else None,
+                f"{est.latitude:.6f}, {est.longitude:.6f}" if est.latitude and est.longitude else None,
             ),
             ("Total Acreage", f"{est.total_acreage} acres" if est.total_acreage else None),
             ("Farming Method", est.farming_method),
@@ -2488,21 +2608,19 @@ class AuditExportService:
             ("Lot ID", p.lot_id),
             (
                 "Harvest Amount",
-                f"{_fmt_float(p.production_amount)} {_val(p.production_unit, '')}" if p.production_amount else None,
+                _fmt_mass(p.production_amount, p.production_unit) if p.production_amount else None,
             ),
             ("Quality Grade", p.get_quality_grade_display() if p.quality_grade else None),
             ("Harvest Method", p.get_harvest_method_display() if p.harvest_method else None),
             ("Production Method", p.get_production_method_display() if p.production_method else None),
         ]
-        # Transparency Score is a Trazo product metric (self-reported
-        # engagement signal), not a regulatory quantity. Suppress it in the
-        # NOP organic export so a CCOF inspector doesn't read it as a
-        # compliance grade. It still appears in the "all" / consumer-facing
-        # exports where that confusion doesn't apply.
-        if self.certification_type != "organic":
-            rows.append(
-                ("Transparency Score", f"{_fmt_float(p.transparency_score, 1)}%" if p.transparency_score else None)
-            )
+        # Transparency Score is a Trazo product / engagement metric (self-
+        # reported), NOT a regulatory quantity. It is deliberately omitted from
+        # EVERY audit export (organic / roc / scs / all): a self-assigned score
+        # on a certifier- or buyer-facing document reads as a self-created
+        # sustainability grade (ECGT 2024/825 / FTC 16 CFR 260.6 risk) and a
+        # reviewer may misread it as a compliance verdict. The score lives on
+        # the producer dashboard only.
 
         for label, value in rows:
             elements.append(self._label_value(label, value))
@@ -2574,6 +2692,13 @@ class AuditExportService:
                 area = f"{_fmt_float(ev.area_numeric)} {_val(ev.area_unit, '')}"
             elif ev.area:
                 area = _val(ev.area)
+            # The Input Application Log Table 1 is already at the 7.0" portrait width budget
+            # (organic packs Date…RUP), so Block can't be a separate column. Fold the block /
+            # section ID into the Area cell — a spatial qualifier — so the spray still ties to a
+            # block for lot traceability (it also rides the Production/Pest/Irrigation tables and
+            # the CA PUR export). Wraps to a second line in the narrow column.
+            if ev.block_id:
+                area = f"{area} · Blk {ev.block_id}".strip(" ·") if area else f"Blk {ev.block_id}"
 
             # Use structured application method with fallback to legacy field
             method = ev.application_method_structured or ev.way_of_application
@@ -2646,6 +2771,7 @@ class AuditExportService:
                 "Supplier",
                 "Purchase Date",
                 "Invoice #",
+                "Lot #",
                 "Qty Purchased",
                 "Applicator",
                 "Cert #",
@@ -2669,13 +2795,27 @@ class AuditExportService:
                     if ev.ca_dpr_permit_expires:
                         dpr_permit += f" exp {ev.ca_dpr_permit_expires:%Y-%m-%d}"
 
+                # NOP input identity: the traceability record must identify the MATERIAL, not
+                # just the brand. active_ingredient lives in extra_data; manufacturer is a model
+                # column. Fold both under the product name here (word-wraps in the cell) so the
+                # inspector sees "Entrust SC (a.i. spinosad) [mfr: Corteva]" rather than a bare
+                # brand. _cell escapes markup, so this is a plain compound string, not <br/>.
+                product_bits = [ev.commercial_name or ""]
+                _ai = ev.extra_data.get("active_ingredient") if isinstance(ev.extra_data, dict) else None
+                if _ai:
+                    product_bits.append(f"(a.i. {_ai})")
+                if ev.manufacturer:
+                    product_bits.append(f"[mfr: {ev.manufacturer}]")
+                product_txt = " ".join(b for b in product_bits if b).strip()
+
                 trace_data.append(
                     [
                         self._cell(_fmt_date(ev.date)),
-                        self._cell(ev.commercial_name, 35),
+                        self._cell(product_txt or None, 70),
                         self._cell(ev.supplier_name, 35),
                         self._cell(_fmt_date(ev.purchase_date) if ev.purchase_date else None),
                         self._cell(ev.purchase_invoice, 25),
+                        self._cell(ev.chemical_lot_number, 20),
                         self._cell(qty_purchased or None),
                         self._cell(ev.applicator_name or ev.performed_by, 25),
                         self._cell(ev.applicator_certification, 20),
@@ -2693,14 +2833,15 @@ class AuditExportService:
             # two clean lines; total stays inside the 7.0" budget.
             trace_widths = [
                 0.55 * inch,  # Date Applied
-                0.85 * inch,  # Product
-                1.05 * inch,  # Supplier
+                0.75 * inch,  # Product
+                0.85 * inch,  # Supplier
                 0.75 * inch,  # Purchase Date
                 0.70 * inch,  # Invoice #
+                0.55 * inch,  # Lot #
                 0.65 * inch,  # Qty Purchased
                 0.70 * inch,  # Applicator
                 0.45 * inch,  # Cert #
-                0.95 * inch,  # CA DPR Permit
+                0.85 * inch,  # CA DPR Permit
             ]
             t2 = Table(trace_data, colWidths=trace_widths, repeatRows=1)
             t2.setStyle(self._base_table_style())
@@ -2726,10 +2867,48 @@ class AuditExportService:
             elements.append(self._body("<b>OMRI / National List Verification (7 CFR 205.601 / 205.602)</b>"))
             elements.append(self._spacer(0.05))
 
-            ver_headers = ["Date", "Product", "OMRI ID", "National List Match", "Status"]
+            # Cross-check each input against the active OSP's approved-materials
+            # sets — CCOF requires inputs be approved on the OSP Material List
+            # before use. Reuses the same M2Ms the drift detector reads.
+            approved_omri_ids = set()
+            approved_nl_ids = set()
+            osp_loaded = False
+            try:
+                from certifications.models import OrganicSystemPlan
+
+                est = self.production.parcel.establishment
+                _osp = (
+                    OrganicSystemPlan.objects.filter(establishment=est, status="active")
+                    .order_by("-version_number")
+                    .first()
+                    or OrganicSystemPlan.objects.filter(establishment=est).order_by("-version_number").first()
+                )
+                if _osp:
+                    osp_loaded = True
+                    approved_omri_ids = set(_osp.approved_omri_products.values_list("id", flat=True))
+                    approved_nl_ids = set(_osp.approved_national_list_substances.values_list("id", flat=True))
+            except Exception:  # noqa: BLE001 — OSP cross-check is best-effort
+                pass
+
+            ver_headers = ["Date", "Product", "OMRI ID", "National List Match", "Status", "OSP Approval (CCOF)"]
             ver_data = [[self._hdr(h) for h in ver_headers]]
             prohibited_hits = 0
             self_reported_count = 0
+            not_on_osp_count = 0
+            # NOP 5012 — liquid-fertilizer nitrogen source. Count fertilizer events
+            # whose N source is synthetic (prohibited) or unverified.
+            unverified_n_count = sum(
+                1
+                for ev in events
+                if getattr(ev, "nitrogen_percentage", None)
+                and getattr(ev, "nitrogen_source", None) in ("synthetic_prohibited", "unknown", None)
+            )
+            synthetic_n_count = sum(
+                1 for ev in events if getattr(ev, "nitrogen_source", None) == "synthetic_prohibited"
+            )
+            documented_n_count = sum(
+                1 for ev in events if getattr(ev, "nitrogen_source", None) in ("organic", "mined_natural")
+            )
 
             for ev in events:
                 omri = getattr(ev, "omri_product", None)
@@ -2748,17 +2927,26 @@ class AuditExportService:
                 if not omri and not nl:
                     self_reported_count += 1
 
+                if (omri and omri.id in approved_omri_ids) or (nl and nl.id in approved_nl_ids):
+                    osp_approval = "OSP-approved"
+                elif osp_loaded and (omri or nl):
+                    osp_approval = "Listed — not on OSP"
+                    not_on_osp_count += 1
+                else:
+                    osp_approval = "—"
+
                 ver_data.append(
                     [
                         self._cell(_fmt_date(ev.date)),
                         self._cell(ev.commercial_name, 30),
                         self._cell(omri_display, 15),
-                        self._cell(nl_display, 35),
-                        self._cell(status_display, 18),
+                        self._cell(nl_display, 30),
+                        self._cell(status_display, 16),
+                        self._cell(osp_approval, 20),
                     ]
                 )
 
-            ver_widths = [0.65 * inch, 1.3 * inch, 0.9 * inch, 2.3 * inch, 1.0 * inch]
+            ver_widths = [0.6 * inch, 1.2 * inch, 0.8 * inch, 1.95 * inch, 0.95 * inch, 1.3 * inch]
             t3 = Table(ver_data, colWidths=ver_widths, repeatRows=1)
             t3.setStyle(self._base_table_style())
             elements.append(t3)
@@ -2767,9 +2955,11 @@ class AuditExportService:
                 elements.append(self._spacer(0.05))
                 elements.append(
                     Paragraph(
-                        f"<b>[WARNING] 7 CFR 205.602: {prohibited_hits} input(s) match a PROHIBITED "
-                        f"substance on the National List. Use of these inputs disqualifies the "
-                        f"crop from organic sale. Review with certifier immediately.</b>",
+                        f"<b>[WARNING] 7 CFR 205.105 / 205.602: {prohibited_hits} input(s) match a "
+                        f"PROHIBITED substance (a synthetic not on § 205.601, a nonsynthetic on "
+                        f"§ 205.602, or an excluded substance/method under § 205.105). Use of these "
+                        f"inputs disqualifies the crop from organic sale. Review with certifier "
+                        f"immediately.</b>",
                         self._warning_style(),
                     )
                 )
@@ -2778,9 +2968,56 @@ class AuditExportService:
                 elements.append(self._spacer(0.05))
                 elements.append(
                     Paragraph(
-                        f"Note: {self_reported_count} input(s) are self-reported only "
-                        f"(no OMRI ID and no National List match). Inspector should verify each "
-                        f"against omri.org or 7 CFR 205.601 directly.",
+                        f"Note: {self_reported_count} input(s) are self-reported only (no OMRI ID and "
+                        f"no National List match) and remain UNCLASSIFIED. Per NOP 5033 (Classification "
+                        f"of Materials), each must be resolved through the synthetic/non-synthetic and "
+                        f"agricultural/non-agricultural decision trees before use — verify each against "
+                        f"omri.org or 7 CFR 205.601/205.602 directly rather than treating an unmatched "
+                        f"input as allowed by default.",
+                        self._styles["footer_note"],
+                    )
+                )
+
+            if osp_loaded and not_on_osp_count > 0:
+                elements.append(self._spacer(0.05))
+                elements.append(
+                    Paragraph(
+                        f"<b>[REVIEW] CCOF material approval:</b> {not_on_osp_count} input(s) are OMRI / "
+                        "National-List recognized but are NOT on this operation's active OSP Material List. "
+                        "CCOF requires every input be approved on the OSP before use — add them to the OSP "
+                        "Material List or confirm approval with the certifier.",
+                        self._warning_style(),
+                    )
+                )
+
+            # NOP 5012 — liquid/soluble fertilizer nitrogen-source verification.
+            if synthetic_n_count > 0:
+                elements.append(self._spacer(0.05))
+                elements.append(
+                    Paragraph(
+                        f"<b>[WARNING] NOP 5012 / § 205.105(a): {synthetic_n_count} fertilizer event(s) "
+                        f"declare a SYNTHETIC nitrogen source. Synthetic N is prohibited in organic crop "
+                        f"production — review with certifier immediately.</b>",
+                        self._warning_style(),
+                    )
+                )
+            elif unverified_n_count > 0:
+                elements.append(self._spacer(0.05))
+                elements.append(
+                    Paragraph(
+                        f"[REVIEW] NOP 5012: {unverified_n_count} fertilizer event(s) with a nitrogen "
+                        f"content have no verified nitrogen source on file. Liquid/soluble fertilizers must "
+                        f"be confirmed free of prohibited synthetic N (sodium nitrate is capped at 20% of "
+                        f"the crop's N requirement) — record the N source for each.",
+                        self._styles["footer_note"],
+                    )
+                )
+            elif documented_n_count > 0:
+                elements.append(self._spacer(0.05))
+                elements.append(
+                    Paragraph(
+                        f"NOP 5012: nitrogen source documented (organic / mined-natural) for "
+                        f"{documented_n_count} fertilizer event(s) — no prohibited synthetic nitrogen.",
                         self._styles["footer_note"],
                     )
                 )
@@ -2795,7 +3032,7 @@ class AuditExportService:
     # ------------------------------------------------------------------
 
     def _build_production_events(self):
-        elements = [self._section_header("Production Events")]
+        elements = [self._section_header("Production Events (CCOF OSP G6.0 / G6.1)")]
 
         # Method (operation technique — e.g. "Hand thinning", "Mechanical harvester")
         # and Block/Section ID are required for NOP lot traceability and practice
@@ -2826,6 +3063,18 @@ class AuditExportService:
             fuel = f"{_fmt_float(ev.fuel_consumed)} {_val(ev.fuel_unit, '')}" if ev.fuel_consumed else None
             extra = ev.extra_data or {}
             method = extra.get("method") if isinstance(extra, dict) else None
+            # Frost-protection (FP) persists its technique under extra_data.protection_method
+            # (not .method) and its trigger temperature under low_temperature. Surface both so
+            # the Method cell isn't blank and the certifier sees wind-machine vs sprinkler.
+            if not method and ev.type == "FP" and isinstance(extra, dict):
+                technique = PROTECTION_METHOD_LABELS.get(extra.get("protection_method"), extra.get("protection_method"))
+                low_temp = extra.get("low_temperature")
+                if technique and low_temp not in (None, ""):
+                    method = f"{technique} (to {_val(low_temp)}°C)"
+                elif technique:
+                    method = technique
+                elif low_temp not in (None, ""):
+                    method = f"Frost protection (to {_val(low_temp)}°C)"
             data.append(
                 [
                     self._cell(_fmt_date(ev.date)),
@@ -2879,6 +3128,7 @@ class AuditExportService:
                 "Pump Depth (ft)",
                 "Power Source",
                 "Area",
+                "Block",
             ]
             ir_header_row = [self._hdr(h) for h in ir_headers]
             ir_data = [ir_header_row]
@@ -2901,13 +3151,78 @@ class AuditExportService:
                         self._cell(_fmt_float(ev.pump_depth_ft) if ev.pump_depth_ft else None),
                         self._cell(elec_src, 20),
                         self._cell(ir_area),
+                        self._cell(ev.block_id, 15),
                     ]
                 )
 
-            ir_widths = [0.75 * inch, 1.2 * inch, 1.1 * inch, 0.75 * inch, 0.85 * inch, 1.0 * inch, 0.65 * inch]
+            ir_widths = [
+                0.7 * inch,
+                1.0 * inch,
+                1.0 * inch,
+                0.75 * inch,
+                0.85 * inch,
+                1.0 * inch,
+                0.6 * inch,
+                0.5 * inch,
+            ]
             ir_table = Table(ir_data, colWidths=ir_widths, repeatRows=1)
             ir_table.setStyle(self._base_table_style())
             elements.append(ir_table)
+
+            # --- Irrigation/Well Water Quality Test (7 CFR 205.272 / 205.671) ---
+            # CCOF requires an annual water-source analysis showing no prohibited
+            # substances / contamination. Surfaced from the IR water-test fields; if
+            # irrigation is logged but no test is on file, flag it for the inspector.
+            water_test_events = [
+                ev for ev in ir_events if ev.water_test_date or ev.water_test_lab or ev.water_test_results
+            ]
+            elements.append(self._spacer(0.12))
+            elements.append(self._body("<b>Irrigation Water Quality Test (7 CFR 205.272 / 205.671)</b>"))
+            elements.append(self._spacer(0.05))
+            if water_test_events:
+                wt_data = [[self._hdr(h) for h in ["Date", "Laboratory", "Results", "Block"]]]
+                for ev in water_test_events:
+                    results = ev.water_test_results if isinstance(ev.water_test_results, list) else []
+                    parts = []
+                    for r in results:
+                        if not isinstance(r, dict):
+                            continue
+                        param = str(r.get("parameter") or "").strip()
+                        measure = " ".join(
+                            v for v in [str(r.get("value") or "").strip(), str(r.get("unit") or "").strip()] if v
+                        )
+                        seg = ": ".join(p for p in [param, measure] if p)
+                        outcome = str(r.get("result") or "").strip()
+                        if outcome:
+                            seg = f"{seg} ({outcome})" if seg else outcome
+                        if seg:
+                            parts.append(seg)
+                    wt_data.append(
+                        [
+                            self._cell(_fmt_date(ev.water_test_date) if ev.water_test_date else None),
+                            self._cell(ev.water_test_lab, 30),
+                            self._cell("; ".join(parts) or None, 80),
+                            self._cell(ev.block_id, 15),
+                        ]
+                    )
+                wt_table = Table(wt_data, colWidths=[0.8 * inch, 1.6 * inch, 3.6 * inch, 0.6 * inch], repeatRows=1)
+                wt_table.setStyle(self._base_table_style())
+                elements.append(wt_table)
+            else:
+                elements.append(
+                    self._body(
+                        "No irrigation/well water analysis is on file for this operation. Where "
+                        "required (e.g. CCOF), the operation must maintain an annual water-source "
+                        "test demonstrating the absence of prohibited substances."
+                    )
+                )
+                elements.append(
+                    Paragraph(
+                        "<b>[REVIEW] 7 CFR 205.272:</b> add the irrigation/well water test (date, "
+                        "laboratory, results) so the inspector can verify water-source compliance.",
+                        self._warning_style(),
+                    )
+                )
 
         # --- Post-Harvest Processing Records (7 CFR 205.270-272) ---
         # Handlers of organic product must document cleaning/sanitation, processing
@@ -3022,9 +3337,7 @@ class AuditExportService:
 
             for ev in ha_events:
                 extra = ev.extra_data or {}
-                yield_display = (
-                    f"{_fmt_float(ev.yield_quantity)} {_val(ev.yield_unit, '')}" if ev.yield_quantity else None
-                )
+                yield_display = _fmt_mass(ev.yield_quantity, ev.yield_unit) if ev.yield_quantity else None
                 quality_raw = ev.harvest_quality_grade or None
                 quality_display = quality_raw.replace("_", " ").title() if quality_raw else None
 
@@ -3154,7 +3467,7 @@ class AuditExportService:
 
         This is a common non-conformance finding per CCOF inspection checklists.
         """
-        elements = [self._section_header("Seed & Planting Stock Records")]
+        elements = [self._section_header("Seed & Planting Stock Records (CCOF OSP G3.0)")]
 
         # Seed source data lives on ProductionEvent (PL subtype), NOT on History.
         # Query all planting events for seed info.
@@ -3368,14 +3681,15 @@ class AuditExportService:
                 tt.setStyle(self._base_table_style())
                 elements.append(tt)
 
-                # Warning for non-organic treated seed (disqualifying per 7 CFR 205.204(a)(5))
+                # Warning for non-organic treated seed (disqualifying per 7 CFR 205.204(a)(2))
                 treated = [ev for ev in traceable if ev.seed_certification_status == "non_organic_treated"]
                 if treated:
                     elements.append(self._spacer(0.05))
                     elements.append(
                         Paragraph(
-                            "<b>[WARNING] NOP 7 CFR 205.204(a)(5):</b> Non-organic seed treated "
-                            "with prohibited substances disqualifies the crop from organic sale. "
+                            "<b>[WARNING] NOP 7 CFR 205.204(a)(2):</b> Non-organic seed treated "
+                            "with substances not on the National List disqualifies the crop from "
+                            "organic sale. "
                             "Review the highlighted planting events with your certifier before harvest.",
                             self._warning_style(),
                         )
@@ -3388,7 +3702,7 @@ class AuditExportService:
     # ------------------------------------------------------------------
 
     def _build_soil_section(self):
-        elements = [self._section_header("Soil & Water Management")]
+        elements = [self._section_header("Soil & Water Management (CCOF OSP G4.0)")]
 
         headers = [
             "Date",
@@ -3439,7 +3753,16 @@ class AuditExportService:
             # cover-crop row otherwise showed a blank "Amendment" cell — the planted mix (the whole
             # point of the record) was dropped from the dossier. Surface it in the Amendment column.
             amendment_display = _amendment_type_label(ev.amendment_type)
-            if not ev.amendment_type and ev.type == "CC":
+            # Specific product identity (NOP/CCOF input record) takes precedence over the
+            # generic category; the category is appended in parens for context.
+            _product = (getattr(ev, "amendment_product_name", "") or "").strip()
+            _maker = (getattr(ev, "amendment_manufacturer", "") or "").strip()
+            if _product:
+                _label = f"{_product} — {_maker}" if _maker else _product
+                if amendment_display and amendment_display != "—":
+                    _label = f"{_label} ({amendment_display})"
+                amendment_display = _label
+            if not ev.amendment_type and not _product and ev.type == "CC":
                 _ed = ev.extra_data if isinstance(ev.extra_data, dict) else {}
                 _species = _ed.get("cover_crop_species")
                 if _species:
@@ -3507,7 +3830,7 @@ class AuditExportService:
             elements.append(Spacer(1, 10))
             elements.append(
                 Paragraph(
-                    "<b>Compost Temperature Records (7 CFR 205.203(c)(2))</b>",
+                    "<b>Compost Temperature Records (7 CFR 205.203(c)(2) · CCOF OSP G4.1)</b>",
                     self._sub_header_style(),
                 )
             )
@@ -3641,6 +3964,48 @@ class AuditExportService:
             gt.setStyle(self._base_table_style())
             elements.append(gt)
 
+        # --- Natural Resources & Biodiversity Conservation narrative (7 CFR 205.200 / NOP 5020) ---
+        # § 205.200 requires practices that "maintain or improve the natural resources of the
+        # operation, including soil and water quality." NOP 5020 is the guidance inspectors read
+        # when assessing it. Rather than a score, assemble the FACTUAL practice counts already in
+        # this dossier (cover crops, soil-building amendments, habitat, buffers) into one framing
+        # paragraph so the conservation story is explicit, not scattered.
+        cover_crop_events = [e for e in events if e.type == "CC"]
+        soil_building_events = [
+            e for e in events if e.type in ("OM", "CO", "PA") and (e.amendment_type or e.type == "CO")
+        ]
+        _conservation_parts = []
+        if cover_crop_events:
+            _conservation_parts.append(f"{len(cover_crop_events)} cover-crop / living-ground-cover event(s)")
+        if soil_building_events:
+            _conservation_parts.append(f"{len(soil_building_events)} soil-building amendment / compost event(s)")
+        if habitat_events:
+            _conservation_parts.append(f"{len(habitat_events)} biodiversity / habitat practice(s)")
+        try:
+            _parcel = self.production.parcel
+            _buffers = getattr(_parcel, "buffer_zones", None) if _parcel else None
+            if _buffers:
+                _conservation_parts.append("documented buffer / adjoining-land record(s)")
+        except Exception:  # noqa: BLE001 — buffer data is best-effort
+            pass
+        if _conservation_parts:
+            elements.append(Spacer(1, 10))
+            elements.append(
+                Paragraph(
+                    "<b>Natural Resources &amp; Biodiversity Conservation (7 CFR 205.200)</b>",
+                    self._sub_header_style(),
+                )
+            )
+            elements.append(
+                self._body(
+                    "Per 7 CFR 205.200 the operation must maintain or improve its natural resources "
+                    "(soil, water, wetlands, woodlands, wildlife). Documented conservation practices in "
+                    "this record: " + "; ".join(_conservation_parts) + ". Detail rows appear in the "
+                    "soil-amendment table above, the Biodiversity &amp; Habitat Records below, and the "
+                    "Buffer Zone section. (NOP 5020 — factual practice record, not a self-assigned score.)"
+                )
+            )
+
         # --- Biodiversity & Habitat Records ---
         # Documented habitat PRACTICES (HD: hedgerows, insectary, riparian, living groundcover) and
         # nesting/shelter structures (NS: owl/raptor/bee/bat boxes, insect hotels) — facts a ROC /
@@ -3650,7 +4015,7 @@ class AuditExportService:
             elements.append(Spacer(1, 10))
             elements.append(
                 Paragraph(
-                    "<b>Biodiversity &amp; Habitat Records</b>",
+                    "<b>Biodiversity &amp; Habitat Records (CCOF OSP G4.2)</b>",
                     self._sub_header_style(),
                 )
             )
@@ -3896,7 +4261,7 @@ class AuditExportService:
     # ------------------------------------------------------------------
 
     def _build_pest_section(self):
-        elements = [self._section_header("Pest Management")]
+        elements = [self._section_header("Pest Management (CCOF OSP G5.0)")]
 
         headers = [
             "Date",
@@ -3906,6 +4271,7 @@ class AuditExportService:
             "Pressure",
             "Damage %",
             "Area",
+            "Block",
             "Threshold Met",
             "IPM Strategy",
             "Beneficial / Qty",
@@ -3935,6 +4301,10 @@ class AuditExportService:
                 beneficial_display = (
                     f"{beneficial_display} ({ev.release_quantity})" if beneficial_display else str(ev.release_quantity)
                 )
+            # Surface natural-enemy use/conservation status even when no species was named
+            # (beneficial_insects_used was previously dropped from the export entirely).
+            if not beneficial_display and getattr(ev, "beneficial_insects_used", "") in ("yes", "planning"):
+                beneficial_display = f"Natural enemies: {ev.beneficial_insects_used}"
 
             damage_display = f"{_fmt_float(ev.damage_percentage)}%" if ev.damage_percentage is not None else None
             area_display = (
@@ -3965,6 +4335,7 @@ class AuditExportService:
                     self._cell(pressure_display),
                     self._cell(damage_display),
                     self._cell(area_display),
+                    self._cell(ev.block_id, 15),
                     self._cell(
                         "Not assessed"
                         if ev.action_threshold_met is None
@@ -3977,14 +4348,15 @@ class AuditExportService:
 
         col_widths = [
             0.55 * inch,  # Date
-            0.55 * inch,  # Type
-            0.85 * inch,  # Pest Species
-            0.75 * inch,  # Identified By
+            0.5 * inch,  # Type
+            0.8 * inch,  # Pest Species
+            0.65 * inch,  # Identified By
             0.45 * inch,  # Pressure
             0.45 * inch,  # Damage %
-            0.55 * inch,  # Area
+            0.5 * inch,  # Area
+            0.45 * inch,  # Block
             0.5 * inch,  # Threshold Met
-            1.0 * inch,  # IPM Strategy
+            0.85 * inch,  # IPM Strategy
             0.8 * inch,  # Beneficial / Qty
         ]
         t = Table(data, colWidths=col_widths, repeatRows=1)
@@ -4201,6 +4573,7 @@ class AuditExportService:
                     "Method",
                     "Materials Used",
                     "Cleaned By",
+                    "Rinse",
                     "Shared w/ Conv.",
                     "Protocol Ref",
                 ]
@@ -4234,6 +4607,7 @@ class AuditExportService:
                             self._cell(ev.cleaning_method, 40),
                             self._cell(ev.cleaning_materials_used, 40),
                             self._cell(ev.cleaned_by),
+                            self._cell("Yes" if ev.rinse_step_documented else "No"),
                             self._cell("Yes" if ev.shared_with_conventional else "No"),
                             self._cell(ev.cleaning_protocol_reference, 50),
                         ]
@@ -4243,9 +4617,10 @@ class AuditExportService:
                     0.9 * inch,
                     0.75 * inch,
                     0.6 * inch,
-                    0.9 * inch,
-                    0.9 * inch,
+                    0.8 * inch,
+                    0.8 * inch,
                     0.7 * inch,
+                    0.5 * inch,
                     0.6 * inch,
                     0.8 * inch,
                 ]
@@ -4254,43 +4629,85 @@ class AuditExportService:
                 elements.append(t2)
 
                 # --- Post-Harvest Sanitation subsection (7 CFR 205.272 + § 205.605) ---
-                # Only render when at least one cleaning event has sanitizer detail;
-                # no need to surface an empty table when sanitation isn't in scope.
+                # Only render when at least one cleaning event has actual SANITIZER detail.
+                # rinse_step_documented is deliberately NOT a trigger: a water-only purge
+                # (rinse=Yes, no sanitizer) is a compliant record, not a sanitation event —
+                # including it here would false-flag it as "missing sanitizer name/ppm/§205.605".
+                # Its rinse confirmation now surfaces in the Equipment Cleaning Logs "Rinse" column.
                 sanitizer_events = [
                     ev
                     for ev in cleaning_events
-                    if ev.sanitizer_name
-                    or ev.sanitizer_ppm is not None
-                    or ev.sanitizer_nop_reference
-                    or ev.rinse_step_documented
+                    if ev.sanitizer_name or ev.sanitizer_ppm is not None or ev.sanitizer_nop_reference
                 ]
                 if sanitizer_events:
                     elements.append(self._spacer(0.2))
                     elements.append(self._body("<b>Post-Harvest Sanitation (7 CFR 205.272 + § 205.605)</b>"))
                     elements.append(self._spacer(0.05))
 
-                    san_headers = ["Date", "Sanitizer", "ppm", "Rinse Step", "NOP / § 205.605 Ref"]
+                    # NOP 5026 — the SDWA MRDL for residual chlorine at discharge:
+                    # 0.8 mg/L for chlorine dioxide, 4.0 mg/L for free chlorine / chloramine.
+                    def _mrdl_for(ev):
+                        name = (ev.sanitizer_name or "").lower()
+                        return 0.8 if "dioxide" in name else 4.0
+
+                    def _residual_cell(ev):
+                        residual = getattr(ev, "sanitizer_residual_ppm_at_discharge", None)
+                        if residual is None:
+                            return None
+                        limit = _mrdl_for(ev)
+                        verdict = "PASS" if float(residual) <= limit else "REVIEW"
+                        return f"{residual} ({verdict} vs {limit})"
+
+                    san_headers = [
+                        "Date",
+                        "Sanitizer",
+                        "Applied ppm",
+                        "Residual @ Discharge",
+                        "Rinse Step",
+                        "NOP / § 205.605 Ref",
+                    ]
                     san_data = [[self._hdr(h) for h in san_headers]]
                     for ev in sanitizer_events:
                         san_data.append(
                             [
                                 self._cell(_fmt_date(ev.cleaning_date) if ev.cleaning_date else None),
-                                self._cell(ev.sanitizer_name, 35),
+                                self._cell(ev.sanitizer_name, 30),
                                 self._cell(str(ev.sanitizer_ppm) if ev.sanitizer_ppm is not None else None),
+                                self._cell(_residual_cell(ev), 20),
                                 self._cell("Yes" if ev.rinse_step_documented else "No"),
-                                self._cell(ev.sanitizer_nop_reference, 45),
+                                self._cell(ev.sanitizer_nop_reference, 40),
                             ]
                         )
                     san_widths = [
-                        0.8 * inch,
-                        1.5 * inch,
+                        0.75 * inch,
+                        1.25 * inch,
                         0.6 * inch,
-                        0.8 * inch,
-                        1.7 * inch,
+                        1.15 * inch,
+                        0.65 * inch,
+                        1.5 * inch,
                     ]
                     t_san = Table(san_data, colWidths=san_widths, repeatRows=1)
                     t_san.setStyle(self._base_table_style())
                     elements.append(t_san)
+
+                    # NOP 5026: flag any discharge residual that exceeds its material MRDL.
+                    over_mrdl = [
+                        ev
+                        for ev in sanitizer_events
+                        if getattr(ev, "sanitizer_residual_ppm_at_discharge", None) is not None
+                        and float(ev.sanitizer_residual_ppm_at_discharge) > _mrdl_for(ev)
+                    ]
+                    if over_mrdl:
+                        elements.append(self._spacer(0.05))
+                        elements.append(
+                            Paragraph(
+                                f"<b>[REVIEW] NOP 5026 / § 205.605(b): {len(over_mrdl)} sanitation "
+                                f"event(s) recorded a residual chlorine at discharge above the SDWA "
+                                f"MRDL. Residual at last crop contact must not exceed 4 mg/L free "
+                                f"chlorine/chloramine (0.8 mg/L chlorine dioxide).</b>",
+                                self._warning_style(),
+                            )
+                        )
 
                     # Per-event attestation gaps: missing name / ppm / rinse step / ref → inspector flag.
                     gap_notes = []
@@ -4313,8 +4730,8 @@ class AuditExportService:
                             self._body(
                                 "<b>Inspector flag:</b> "
                                 + "; ".join(gap_notes)
-                                + ". § 205.272(b) requires rinse step after sanitizer contact; "
-                                "§ 205.605 lists allowed synthetic sanitizers."
+                                + ". § 205.605(b) requires a potable-water rinse step after "
+                                "sanitizer contact; § 205.605 lists allowed synthetic sanitizers."
                             )
                         )
                     else:
@@ -4427,7 +4844,7 @@ class AuditExportService:
     # ------------------------------------------------------------------
 
     def _build_carbon_section(self):
-        elements = [self._section_header("Environmental Impact")]
+        elements = [self._section_header("Appendix — Environmental Impact (informational; not a USDA NOP requirement)")]
 
         try:
             from carbon.models import CarbonEntry
@@ -4448,12 +4865,12 @@ class AuditExportService:
         elements.append(
             self._label_value("Methodology", "Direct Operational Emissions \u2014 EPA/USDA-sourced factors")
         )
-        elements.append(
-            self._label_value(
-                "Transparency Score",
-                f"{_fmt_float(self.production.transparency_score, 1)}%" if self.production.transparency_score else None,
-            )
-        )
+        # NOTE: the Transparency Score is a Trazo product / engagement metric, NOT a
+        # compliance measure. It is deliberately NOT printed on any certifier-facing
+        # audit export (organic / roc / scs / all) \u2014 a self-assigned score on a
+        # regulatory document reads as a self-created sustainability grade and a
+        # certifier may misread it as a compliance verdict. It lives on the producer
+        # dashboard only.
 
         elements.append(self._spacer(0.15))
 
@@ -4504,7 +4921,7 @@ class AuditExportService:
         except AttributeError:
             pass
 
-        gps_display = f"{lat}, {lon}" if lat and lon else None
+        gps_display = f"{lat:.6f}, {lon:.6f}" if lat and lon else None
 
         rows = [
             ("Lot ID", p.lot_id),
@@ -4512,7 +4929,7 @@ class AuditExportService:
             ("Harvest Location (GPS)", gps_display),
             (
                 "Quantity Harvested",
-                f"{_fmt_float(p.production_amount)} {_val(p.production_unit, '')}" if p.production_amount else None,
+                _fmt_mass(p.production_amount, p.production_unit) if p.production_amount else None,
             ),
             ("Quality Grade", p.get_quality_grade_display() if p.quality_grade else None),
             ("Harvest Method", p.get_harvest_method_display() if p.harvest_method else None),
@@ -5308,6 +5725,32 @@ class AuditExportService:
         elements.append(self._section_header("Active Certification Summary"))
         if active_certs:
             elements.append(_build_table(active_certs))
+            # NOP 2603 element 5/7 — the USDA-registered operation name and the
+            # products covered by each certificate. Rendered as a scope sub-line
+            # (not a table column) to avoid crowding the summary grid.
+            scope_lines = []
+            for cert in active_certs:
+                items = cert.certified_items or []
+                if isinstance(items, dict):
+                    items = list(items.values())
+                item_names = [str(i) for i in items if i]
+                op_name = (cert.usda_operation_name or "").strip()
+                if not op_name and not item_names:
+                    continue
+                parts = []
+                if op_name:
+                    parts.append(f"Operation: {op_name}")
+                if item_names:
+                    parts.append("Certified products: " + ", ".join(item_names))
+                scope_lines.append(
+                    f"<b>{self._safe_narrative(cert.certifier_name or 'Certificate')}:</b> "
+                    + " · ".join(self._safe_narrative(p) for p in parts)
+                )
+            if scope_lines:
+                elements.append(self._spacer(0.05))
+                elements.append(self._body("<b>Certificate Scope (NOP 2603)</b>"))
+                for line in scope_lines:
+                    elements.append(self._body(line))
         else:
             elements.append(
                 Paragraph(
@@ -5687,6 +6130,7 @@ class AuditExportService:
                         self._cell(CHEMICAL_TYPE_LABELS.get(ev.type, _val(ev.type))),
                         self._cell(ev.supplier_name, 30),
                         self._cell(ev.purchase_invoice, 20),
+                        self._cell(ev.chemical_lot_number, 20),
                         self._cell(_fmt_float(ev.quantity_purchased)),
                         self._cell(unit),
                     ]
@@ -5695,17 +6139,36 @@ class AuditExportService:
                 missing_purchase_count += 1
 
         # --- Output side: harvest yield + quantity sold ---
+        # SOE (§ 205.307(a)) supports multiple itemized sales per production. When
+        # dedicated SalesRecord rows exist, aggregate them for the output side and
+        # itemize them below; fall back to the single legacy sold_to/quantity_sold
+        # fields only when no SalesRecord rows are on file.
         harvest_amount = p.production_amount
         harvest_unit = _val(p.production_unit, "")
-        quantity_sold = p.quantity_sold
-        sold_unit = _val(p.quantity_sold_unit, harvest_unit)
+        try:
+            sales = list(p.sales_records.all())
+        except Exception:  # noqa: BLE001 — relation always present in practice
+            sales = []
+        if sales:
+            sold_unit = _val(sales[0].quantity_unit, harvest_unit)
+            same_sold_unit = all(_val(s.quantity_unit, sold_unit) == sold_unit for s in sales)
+            quantity_sold = sum(float(s.quantity) for s in sales) if same_sold_unit else None
+            sold_to_display = ", ".join(sorted({(s.buyer_name or "").strip() for s in sales if s.buyer_name}))
+            sale_date_display = max((s.sale_date for s in sales if s.sale_date), default=None)
+            organic_on_invoice_display = bool(sales) and all(s.organic_on_invoice for s in sales)
+        else:
+            quantity_sold = p.quantity_sold
+            sold_unit = _val(p.quantity_sold_unit, harvest_unit)
+            sold_to_display = p.sold_to
+            sale_date_display = p.sale_date
+            organic_on_invoice_display = p.organic_on_invoice
 
         # --- Render input table ---
         elements.append(self._body("<b>Inputs Purchased (Chemical Events)</b>"))
         elements.append(self._spacer(0.05))
 
         if purchased_rows:
-            input_headers = ["Date", "Product", "Type", "Supplier", "Invoice #", "Qty Purchased", "Unit"]
+            input_headers = ["Date", "Product", "Type", "Supplier", "Invoice #", "Lot #", "Qty Purchased", "Unit"]
             input_header_row = [self._hdr(h) for h in input_headers]
             input_data = [input_header_row] + purchased_rows
             col_widths = [
@@ -5714,6 +6177,7 @@ class AuditExportService:
                 0.65 * inch,
                 1.00 * inch,
                 0.75 * inch,
+                0.70 * inch,
                 0.80 * inch,
                 0.60 * inch,
             ]
@@ -5745,19 +6209,23 @@ class AuditExportService:
         output_rows = [
             (
                 "Harvest Yield",
-                f"{_fmt_float(harvest_amount)} {harvest_unit}".strip() if harvest_amount else None,
+                _fmt_mass(harvest_amount, harvest_unit) if harvest_amount else None,
             ),
             (
                 "Quantity Sold",
-                f"{_fmt_float(quantity_sold)} {sold_unit}".strip() if quantity_sold else None,
+                _fmt_mass(quantity_sold, sold_unit) if quantity_sold else None,
             ),
-            ("Sold To", p.sold_to),
-            ("Sale Date", _fmt_date(p.sale_date) if p.sale_date else None),
+            ("Sold To", sold_to_display),
+            ("Sale Date", _fmt_date(sale_date_display) if sale_date_display else None),
             (
                 "Organic Identified on Invoice",
-                "Yes" if p.organic_on_invoice else "No",
+                "Yes" if organic_on_invoice_display else "No",
             ),
         ]
+        if sales:
+            output_rows.insert(
+                2, ("Sales Records on File (§ 205.307(a))", str(len(sales)))
+            )
 
         # Direct same-unit comparison only when it is actually meaningful —
         # not for boxes-vs-pounds where the units are explicitly incomparable
@@ -5767,12 +6235,59 @@ class AuditExportService:
             output_rows.append(
                 (
                     "Balance (Yield \u2212 Sold, same unit)",
-                    f"{_fmt_float(balance)} {harvest_unit}".strip(),
+                    _fmt_mass(balance, harvest_unit),
                 )
             )
 
         for label, value in output_rows:
             elements.append(self._label_value(label, value))
+
+        # Itemized SOE sales records (§ 205.307(a)) — buyer, date, quantity, invoice.
+        if sales:
+            elements.append(self._spacer(0.08))
+            elements.append(self._body("<b>Itemized Sales Records (7 CFR 205.307(a))</b>"))
+            sales_headers = ["Sale Date", "Buyer", "Quantity", "Unit", "Invoice #", "Organic on Invoice"]
+            sales_data = [[self._hdr(h) for h in sales_headers]]
+            for s in sorted(sales, key=lambda r: (r.sale_date is None, r.sale_date or date.min)):
+                sales_data.append(
+                    [
+                        self._cell(_fmt_date(s.sale_date) if s.sale_date else None),
+                        self._cell(s.buyer_name, 28),
+                        self._cell(_fmt_float(s.quantity) if s.quantity is not None else None),
+                        self._cell(s.quantity_unit or sold_unit, 8),
+                        self._cell(s.invoice_number or None, 14),
+                        self._cell("Yes" if s.organic_on_invoice else "No", 6),
+                    ]
+                )
+            sales_widths = [0.85 * inch, 1.7 * inch, 0.9 * inch, 0.55 * inch, 1.0 * inch, 1.1 * inch]
+            st = Table(sales_data, colWidths=sales_widths, repeatRows=1)
+            st.setStyle(self._base_table_style())
+            elements.append(st)
+
+        # --- Off-farm transport / clean-transport record (CCOF G6.1 / § 205.272 / 205.307) ---
+        # transport_method + destination are farmer-entered but were previously never
+        # rendered, so the truck identity + receiving destination never reached the
+        # certifier. Surface them, plus the clean-transport affidavit status, and flag a
+        # transfer that has no affidavit on file.
+        if any([p.destination, p.transport_method, p.transport_vehicle_id]):
+            elements.append(self._spacer(0.1))
+            elements.append(self._body("<b>Off-Farm Transport (CCOF G6.1 / 7 CFR 205.272 / 205.307)</b>"))
+            for label, value in [
+                ("Destination", p.destination),
+                ("Transport Method", p.transport_method),
+                ("Vehicle / Container ID", p.transport_vehicle_id),
+                ("Clean-Transport Affidavit on File", "Yes" if p.transport_affidavit_on_file else "No"),
+            ]:
+                elements.append(self._label_value(label, value))
+            if not p.transport_affidavit_on_file:
+                elements.append(
+                    Paragraph(
+                        "<b>[REVIEW] 7 CFR 205.272 / CCOF G6.1:</b> organic product was moved off-farm "
+                        "but no clean-transport affidavit is recorded. Attach the affidavit confirming "
+                        "the shared vehicle/container carried no prohibited substances.",
+                        self._warning_style(),
+                    )
+                )
 
         # --- Harvest reconciliation (§ 205.103(b)(2) / § 205.2 one-step audit) ---
         # Convert boxes → pounds using box_weight_lb (or the crop-default
@@ -5911,6 +6426,612 @@ class AuditExportService:
             )
         )
 
+        return elements
+
+    # ------------------------------------------------------------------
+    # Section: Field Map — schematic parcel boundary + adjoining land
+    # ------------------------------------------------------------------
+
+    def _build_field_map_section(self):
+        """
+        Schematic parcel-boundary map drawn from the stored GeoJSON polygon, with
+        compass-direction labels carrying adjoining land use (from Parcel.buffer_zones).
+        Every real CCOF inspection packet includes a field map; this is a not-to-scale
+        schematic, not a survey. Degrades to a REVIEW note when geometry is absent and
+        never crashes PDF generation.
+        """
+        from reportlab.graphics.shapes import Drawing, Line, Polygon, String
+
+        elements = [self._section_header("Field Map — Parcel Boundary & Adjoining Land")]
+
+        try:
+            parcel = self.production.parcel
+        except AttributeError:
+            parcel = None
+
+        # Parcel identity (CCOF Parcel Application keys records to APN + S-T-R) and the
+        # treated-lumber contamination source (7 CFR 205.272).
+        if parcel is not None:
+            id_rows = [
+                ("Assessor's Parcel Number (APN)", getattr(parcel, "apn", None)),
+                ("Section-Township-Range", getattr(parcel, "section_township_range", None)),
+                (
+                    "Date Began Managing",
+                    parcel.date_began_managing.isoformat() if getattr(parcel, "date_began_managing", None) else None,
+                ),
+            ]
+            if any(v for _, v in id_rows):
+                id_data = [[self._hdr("Field"), self._hdr("Value")]]
+                for label, value in id_rows:
+                    id_data.append([self._cell(label, 32), self._cell(_val(value), 60)])
+                t_id = Table(id_data, colWidths=[2.4 * inch, 3.6 * inch], repeatRows=1)
+                t_id.setStyle(self._base_table_style())
+                elements.append(t_id)
+                elements.append(self._spacer(0.1))
+            if getattr(parcel, "treated_lumber_present", False):
+                _desc = (getattr(parcel, "treated_lumber_description", "") or "").strip()
+                _installed = (
+                    parcel.treated_lumber_install_date.isoformat()
+                    if getattr(parcel, "treated_lumber_install_date", None)
+                    else None
+                )
+                elements.append(
+                    Paragraph(
+                        "<b>[REVIEW] 7 CFR 205.272 — Treated lumber present:</b> "
+                        + (_desc or "treated lumber recorded on parcel")
+                        + (f" (installed {_installed})" if _installed else "")
+                        + ". Confirm it does not contact the organic crop or soil.",
+                        self._warning_style(),
+                    )
+                )
+                elements.append(self._spacer(0.1))
+
+        polygon = getattr(parcel, "polygon", None) if parcel else None
+        ring = None
+        if isinstance(polygon, dict):
+            coords = polygon.get("coordinates") or []
+            if coords and isinstance(coords[0], list):
+                ring = coords[0]
+
+        # Adjoining-land labels keyed by compass direction (from buffer_zones).
+        buffers = getattr(parcel, "buffer_zones", None) if parcel else None
+        adj_by_dir = {}
+        if isinstance(buffers, list):
+            for b in buffers:
+                if isinstance(b, dict) and b.get("direction"):
+                    adj_by_dir[str(b["direction"]).strip().lower()] = b.get("adjoining_land_use") or ""
+
+        valid_ring = (
+            isinstance(ring, list)
+            and len(ring) >= 3
+            and all(isinstance(pt, (list, tuple)) and len(pt) >= 2 for pt in ring)
+        )
+        if not valid_ring:
+            elements.append(
+                self._body(
+                    "No field-boundary geometry is on file for this parcel. A parcel map "
+                    "showing field boundaries, buffer zones, and adjoining land use is a "
+                    "standard certifier expectation (the CCOF Parcel Application). Add the "
+                    "parcel polygon in the producer dashboard so this map renders."
+                )
+            )
+            elements.append(
+                Paragraph(
+                    "<b>[REVIEW] Field map:</b> parcel boundary geometry missing.",
+                    self._warning_style(),
+                )
+            )
+            return elements
+
+        try:
+            lngs = [float(pt[0]) for pt in ring]
+            lats = [float(pt[1]) for pt in ring]
+        except (TypeError, ValueError):
+            elements.append(self._body("Parcel geometry is present but not numeric; field map skipped."))
+            return elements
+
+        min_lng, max_lng = min(lngs), max(lngs)
+        min_lat, max_lat = min(lats), max(lats)
+        geo_w = max_lng - min_lng
+        geo_h = max_lat - min_lat
+        if geo_w <= 0 or geo_h <= 0:
+            elements.append(self._body("Parcel geometry is degenerate (zero width or height); field map skipped."))
+            return elements
+
+        # Drawing canvas. Reserve margins for the compass-direction labels.
+        draw_w = 4.9 * inch
+        draw_h = 3.1 * inch
+        margin_x = 70.0
+        margin_y = 26.0
+        box_x1, box_x2 = margin_x, draw_w - margin_x
+        box_y1, box_y2 = margin_y, draw_h - margin_y
+        box_w = box_x2 - box_x1
+        box_h = box_y2 - box_y1
+
+        # Preserve aspect ratio so the schematic is not distorted; center in box.
+        scale = min(box_w / geo_w, box_h / geo_h)
+        used_w = geo_w * scale
+        used_h = geo_h * scale
+        off_x = box_x1 + (box_w - used_w) / 2.0
+        off_y = box_y1 + (box_h - used_h) / 2.0
+
+        # Higher latitude = north = higher y, so no vertical flip is needed.
+        pts = []
+        for lng, lat in zip(lngs, lats):
+            pts.extend([off_x + (lng - min_lng) * scale, off_y + (lat - min_lat) * scale])
+
+        d = Drawing(draw_w, draw_h)
+        d.hAlign = "CENTER"
+        d.add(
+            Polygon(
+                points=pts,
+                fillColor=colors.HexColor("#E8F5E9"),
+                strokeColor=TRAZO_GREEN,
+                strokeWidth=1.4,
+            )
+        )
+
+        cx = (box_x1 + box_x2) / 2.0
+        cy = (box_y1 + box_y2) / 2.0
+
+        def dir_label(direction, x, y, anchor):
+            land = adj_by_dir.get(direction.lower(), "")
+            text = f"{direction.upper()} · {_truncate(land, 32)}" if land else direction.upper()
+            d.add(String(x, y, text, fontSize=6.5, fillColor=colors.HexColor("#555555"), textAnchor=anchor))
+
+        dir_label("North", cx, draw_h - 12, "middle")
+        dir_label("South", cx, 6, "middle")
+        dir_label("East", draw_w - 4, cy, "end")
+        dir_label("West", 4, cy, "start")
+
+        # North arrow (top-right corner of the canvas).
+        ax = draw_w - 16
+        ay = draw_h - 44
+        d.add(Line(ax, ay, ax, ay + 16, strokeColor=colors.HexColor("#333333"), strokeWidth=1))
+        d.add(String(ax, ay + 18, "N", fontSize=7, fillColor=colors.HexColor("#333333"), textAnchor="middle"))
+
+        elements.append(d)
+
+        # Bounding-box center — robust to the repeated GeoJSON closing vertex and to
+        # uneven vertex spacing (a plain vertex-average would be biased by both).
+        cen_lng = (min_lng + max_lng) / 2.0
+        cen_lat = (min_lat + max_lat) / 2.0
+        area_txt = f"{_fmt_float(parcel.area, 2)} ha" if getattr(parcel, "area", None) else "—"
+        elements.append(
+            self._label_value(
+                "Parcel",
+                f"{_val(getattr(parcel, 'name', None))} · {area_txt} · " f"center {cen_lat:.6f}, {cen_lng:.6f}",
+            )
+        )
+        elements.append(
+            Paragraph(
+                "Schematic parcel boundary drawn from the recorded field geometry — "
+                "not a surveyed plat and not to scale. Compass labels show adjoining land "
+                "use per boundary (detail in the Buffer Zones section). Provide the "
+                "certifier's official parcel map / plat at the on-site inspection.",
+                self._styles["footer_note"],
+            )
+        )
+        return elements
+
+    # ------------------------------------------------------------------
+    # Section: Buffer Zones & Adjoining Land Use (7 CFR 205.202(c))
+    # ------------------------------------------------------------------
+
+    def _build_buffer_zone_section(self):
+        """
+        Structured buffer-zone / adjoining-land-use / drift-prevention record per
+        parcel boundary (7 CFR 205.202(c)). Orchards in intensive-ag counties sit
+        beside conventional aerially-sprayed blocks, so buffers are the primary
+        contamination control an inspector probes. Empty record -> REVIEW flag.
+        """
+        elements = [self._section_header("Buffer Zones & Adjoining Land Use (7 CFR 205.202(c))")]
+
+        try:
+            parcel = self.production.parcel
+        except AttributeError:
+            parcel = None
+
+        buffers = getattr(parcel, "buffer_zones", None) if parcel else None
+        rows = [b for b in buffers if isinstance(b, dict)] if isinstance(buffers, list) else []
+
+        if not rows:
+            elements.append(
+                self._body(
+                    "No structured buffer-zone or adjoining-land-use record is on file for "
+                    "this parcel. Under 7 CFR 205.202(c) the operation must maintain buffer "
+                    "zones sufficient to prevent contact with prohibited substances applied "
+                    "to adjoining land, and document drift-prevention measures."
+                )
+            )
+            elements.append(
+                Paragraph(
+                    "<b>[REVIEW] 7 CFR 205.202(c):</b> add a buffer-zone / adjoining-land-use "
+                    "record per parcel boundary (land use, buffer width, drift risk, prevention "
+                    "measure) so the inspector has a concrete drift-control record to verify.",
+                    self._warning_style(),
+                )
+            )
+            return elements
+
+        headers = ["Boundary", "Adjoining Land Use", "Buffer Width", "Drift Risk", "Prevention Measure"]
+        data = [[self._hdr(h) for h in headers]]
+        for b in rows:
+            width_raw = b.get("buffer_width_m")
+            width_txt = f"{_fmt_float(width_raw, 1)} m" if isinstance(width_raw, (int, float)) else _val(width_raw)
+            data.append(
+                [
+                    self._cell(_val(b.get("direction")), 18),
+                    self._cell(_val(b.get("adjoining_land_use")), 48),
+                    self._cell(width_txt, 16),
+                    self._cell(_val(b.get("drift_risk")), 16),
+                    self._cell(_val(b.get("prevention")), 70),
+                ]
+            )
+        widths = [0.8 * inch, 1.85 * inch, 0.85 * inch, 0.7 * inch, 2.2 * inch]
+        t = Table(data, colWidths=widths, repeatRows=1)
+        t.setStyle(self._base_table_style())
+        elements.append(t)
+
+        # CCOF OSP Sections D & E supplementary descriptors. Rendered as per-boundary
+        # detail lines (not extra table columns) to keep the main table inside the page
+        # width. Only boundaries that carry any D&E data appear here.
+        de_lines = []
+        for b in rows:
+            adjacent_organic = bool(b.get("adjacent_organic"))
+            buffer_type = _val(b.get("buffer_type"))
+            crop_in_buffer = _val(b.get("crop_in_buffer"))
+            neighbor_notified = bool(b.get("neighbor_notified"))
+            notify_date = _val(b.get("neighbor_notification_date"))
+            if not (adjacent_organic or buffer_type or crop_in_buffer or neighbor_notified):
+                continue
+            parts = []
+            if buffer_type:
+                parts.append(f"buffer type: {buffer_type}")
+            if crop_in_buffer:
+                parts.append(f"crop in buffer (not sold as organic): {crop_in_buffer}")
+            if adjacent_organic:
+                parts.append("adjoining land is also certified organic — no buffer required")
+            if neighbor_notified:
+                notify_txt = "drift-notification letter on file (§ 205.400(f)(1))"
+                if notify_date:
+                    notify_txt += f", dated {notify_date}"
+                parts.append(notify_txt)
+            de_lines.append(f"<b>{_val(b.get('direction'))}:</b> " + "; ".join(parts))
+        if de_lines:
+            elements.append(self._spacer(0.08))
+            elements.append(self._body("Adjoining-land &amp; buffer detail (CCOF OSP Sections D &amp; E):"))
+            for line in de_lines:
+                elements.append(Paragraph("&bull; " + line, self._styles["footer_note"]))
+
+        elements.append(self._spacer(0.1))
+        elements.append(
+            Paragraph(
+                "7 CFR 205.202(c): certified land must have distinct, defined boundaries and "
+                "buffer zones to prevent unintended contact with prohibited substances from "
+                "adjoining land. Drift exceeding 5% of the EPA tolerance can cause loss of "
+                "organic status. Operator maintains the drift-prevention measures above and, "
+                "where a neighbor applies prohibited substances, an annual neighbor-"
+                "notification letter on file (§ 205.400(f)(1) drift-notification readiness).",
+                self._styles["footer_note"],
+            )
+        )
+        return elements
+
+    # ------------------------------------------------------------------
+    # Section: State Organic Program Registration (CDFA SOP producer registration)
+    # ------------------------------------------------------------------
+
+    def _build_state_organic_registration_section(self):
+        """State Organic Program (CDFA SOP) producer-registration record.
+
+        CA producers selling > $5,000/yr organic must register annually with the
+        CDFA State Organic Program before their first organic sale (CA Food & Ag
+        Code §§ 46000-46029) — distinct from CDFA OIM input-material registration.
+        A missing or expired registration for the operation is a REVIEW item.
+        """
+        from certifications.models import StateOrganicRegistration
+
+        elements = [self._section_header("State Organic Program Registration")]
+
+        try:
+            est = self.production.parcel.establishment
+        except AttributeError:
+            est = None
+
+        reg = None
+        if est is not None:
+            reg = StateOrganicRegistration.objects.filter(establishment=est).order_by("-registration_date").first()
+
+        # The producer-registration requirement is California state law (CA Food & Ag
+        # Code §§ 46000-46029). Only fire the missing-registration REVIEW flag for a CA
+        # operation (or when the operation's state is unrecorded — better to prompt than
+        # silently miss it); for a known non-CA operation a CDFA registration does not
+        # apply, so surface an informational note instead of a false-positive inspector flag.
+        state_norm = ((getattr(est, "state", "") or "").strip().lower()) if est is not None else ""
+        ca_requirement_applies = state_norm in ("", "ca", "calif", "california") or "california" in state_norm
+
+        if reg is None:
+            if ca_requirement_applies:
+                elements.append(
+                    self._body(
+                        "No State Organic Program registration is on file for this operation. "
+                        "Under California Food & Agricultural Code §§ 46000-46029, a producer "
+                        "selling more than $5,000/yr of organic product must register with the "
+                        "CDFA State Organic Program before the first organic sale and renew "
+                        "annually (this is separate from CDFA OIM input-material registration)."
+                    )
+                )
+                elements.append(
+                    Paragraph(
+                        "<b>[REVIEW] CDFA State Organic Program:</b> add the operation's state "
+                        "registration (registration number, county, operation type, prior-year "
+                        "organic gross sales, registration and renewal dates) so the inspector "
+                        "can confirm the CA pre-sale registration requirement is met.",
+                        self._warning_style(),
+                    )
+                )
+            else:
+                elements.append(
+                    self._body(
+                        "No State Organic Program registration is on file. The CDFA State "
+                        "Organic Program producer-registration requirement is California state "
+                        f"law; this operation is recorded in {_val(getattr(est, 'state', None))}, "
+                        "where a state organic program may not apply. Verify the operation's "
+                        "state requirements with the certifier."
+                    )
+                )
+            return elements
+
+        commodities = reg.commodities if isinstance(reg.commodities, list) else []
+        gross = reg.prior_year_organic_gross_sales
+        rows = [
+            ("Program", reg.program_name),
+            ("State", reg.state),
+            ("Operation Type", reg.get_operation_type_display()),
+            ("Status", reg.get_status_display()),
+            ("Registration #", reg.registration_number),
+            ("County", reg.county),
+            ("Registration Date", reg.registration_date.isoformat() if reg.registration_date else None),
+            ("Renewal Date", reg.renewal_date.isoformat() if reg.renewal_date else None),
+            ("Prior-Year Organic Gross Sales", f"${gross:,.2f}" if gross is not None else None),
+            ("Commodities", ", ".join(str(c) for c in commodities) if commodities else None),
+        ]
+        data = [[self._hdr("Field"), self._hdr("Value")]]
+        for label, value in rows:
+            data.append([self._cell(label, 32), self._cell(_val(value), 70)])
+        t = Table(data, colWidths=[2.0 * inch, 4.0 * inch], repeatRows=1)
+        t.setStyle(self._base_table_style())
+        elements.append(t)
+
+        if not reg.is_current:
+            elements.append(self._spacer(0.1))
+            elements.append(
+                Paragraph(
+                    "<b>[REVIEW] CDFA State Organic Program:</b> the registration on file is "
+                    "not current (status is not 'registered', or the renewal date has passed). "
+                    "Confirm the operation renewed before its first organic sale of the cycle.",
+                    self._warning_style(),
+                )
+            )
+
+        # $5,000 threshold: the "exempt" status only holds below $5,000/yr organic
+        # sales. If the recorded prior-year organic gross sales exceed $5,000 while the
+        # operation is still marked exempt, the exemption no longer applies — the
+        # operation must register with the CDFA SOP and be certified (7 CFR 205.101 /
+        # CA Food & Ag Code §§ 46000-46029). Passive audit flag, not a reminder system.
+        try:
+            over_threshold = gross is not None and gross > Decimal("5000")
+        except (TypeError, InvalidOperation):
+            over_threshold = False
+        if reg.status == "exempt" and over_threshold:
+            elements.append(self._spacer(0.1))
+            elements.append(
+                Paragraph(
+                    "<b>[REVIEW] $5,000 exemption exceeded:</b> prior-year organic gross sales "
+                    f"of ${gross:,.2f} are above the $5,000 exemption, but the registration is "
+                    "still marked 'Exempt (&lt; $5,000 organic sales)'. Above $5,000 the operation "
+                    "must hold a current CDFA State Organic Program registration and USDA organic "
+                    "certification. Update the registration status.",
+                    self._warning_style(),
+                )
+            )
+        return elements
+
+    # ------------------------------------------------------------------
+    # Section: Post-Harvest Handling & Storage (7 CFR 205.272 / 205.270)
+    # ------------------------------------------------------------------
+
+    def _facility_cert_block(self, facility):
+        """
+        Off-farm handler / facility organic-certificate block (CCOF G6.1 / 7 CFR
+        205.272). Renders the handler's identity + organic certificate and flags
+        the 15-month freshness rule as DOCUMENTED / GAP / REVIEW. This is the
+        load-bearing tree-nut record: a wholesale nut grower ships in-shell to a
+        shared huller, the classic commingling point.
+        """
+        elements = [self._body("<b>Off-Farm Handler / Facility Certificate (7 CFR 205.272 · CCOF G6.1)</b>")]
+        elements.append(self._spacer(0.04))
+
+        vstatus = (facility.verification_status or "").lower()
+        if vstatus == "verified":
+            verif = "Verified via USDA Organic Integrity Database"
+        elif vstatus == "self_reported":
+            verif = "Self-reported (operator-provided; not independently verified)"
+        else:
+            verif = facility.get_verification_status_display() if facility.verification_status else "Not verified"
+
+        location = ", ".join([x for x in [facility.city, facility.state] if x]) or None
+        rows = [
+            ("Handler / Facility", facility.name),
+            ("Facility Type", facility.get_facility_type_display() if facility.facility_type else None),
+            ("Location", location),
+            ("Organic Certificate #", facility.certification_number),
+            ("Certifier", facility.certifier_name),
+            ("Cert Effective", _fmt_date(facility.effective_date) if facility.effective_date else None),
+            ("Cert Expiry", _fmt_date(facility.expiry_date) if facility.expiry_date else None),
+            ("Verification", verif),
+        ]
+        for label, value in rows:
+            elements.append(self._label_value(label, value))
+
+        current = facility.cert_is_current
+        if current is True:
+            elements.append(
+                self._body(
+                    '<b><font color="#2E7D32">DOCUMENTED</font></b> — handler organic certificate on file and '
+                    "current (issued within ~15 months per CCOF G6.1 / 7 CFR 205.272)."
+                )
+            )
+        elif current is False:
+            elements.append(
+                Paragraph(
+                    "<b>[GAP] 7 CFR 205.272 / CCOF G6.1:</b> the handler's organic certificate is expired or older "
+                    "than 15 months. Obtain a current certificate before shipping organic lots to this handler.",
+                    self._warning_style(),
+                )
+            )
+        else:
+            elements.append(
+                Paragraph(
+                    "<b>[REVIEW] CCOF G6.1:</b> no certificate effective date on file for this handler — confirm "
+                    "the handler's current organic certificate (issued within 15 months) is attached to the lot records.",
+                    self._warning_style(),
+                )
+            )
+
+        if not facility.cert_document:
+            elements.append(
+                Paragraph(
+                    "Attach a copy of the handler's organic certificate to the lot records (7 CFR 205.272); a "
+                    "certificate document is not embedded in this export.",
+                    self._styles["footer_note"],
+                )
+            )
+        elements.append(self._spacer(0.12))
+        return elements
+
+    def _build_post_harvest_section(self):
+        """
+        Post-harvest handling & storage. Surfaces Post-Harvest Processing (PH) events
+        — hulling, shelling, washing, sorting, packing — plus storage location /
+        temperature recorded on harvest or PH events. For tree nuts this is where
+        organic integrity is most at risk (often a shared off-farm huller / dryer),
+        so the section also states the off-farm-handler certificate expectation.
+        """
+        elements = [
+            self._section_header("Post-Harvest Handling & Storage (7 CFR 205.272 / 205.270 · CCOF OSP G6.2 / G6.4)")
+        ]
+
+        facility = getattr(self.production, "post_harvest_facility", None)
+
+        try:
+            all_events = list(self.production.history_productionevent_events.all())
+        except AttributeError:
+            all_events = []
+
+        ph_events = [ev for ev in all_events if ev.type == "PH"]
+        storage_events = [
+            ev
+            for ev in all_events
+            if ev.type != "PH"
+            and (getattr(ev, "storage_location", None) or getattr(ev, "storage_temperature_f", None) is not None)
+        ]
+
+        # The off-farm handler certificate is the load-bearing record — render it
+        # first, whether or not on-farm PH/storage events exist.
+        if facility is not None:
+            elements += self._facility_cert_block(facility)
+
+        if not ph_events and not storage_events:
+            if facility is None:
+                elements.append(
+                    self._body(
+                        "No post-harvest processing or storage events are recorded for this "
+                        "production. Tree-nut crops are typically hulled, dried, and cold-stored "
+                        "after harvest. If any of these steps occur off-farm (custom huller / "
+                        "dryer / cold storage), that facility must be a certified organic handler "
+                        "and its organic certificate must accompany the lot (7 CFR 205.272 "
+                        "commingling prevention). Record post-harvest handling events and storage "
+                        "locations so the audit trail is unbroken from field to sale."
+                    )
+                )
+            return elements
+
+        if ph_events:
+            elements.append(self._body("<b>Post-Harvest Processing Events</b>"))
+            elements.append(self._spacer(0.04))
+            headers = ["Date", "Activity", "Description", "Storage Location", "Storage Temp", "Operator"]
+            data = [[self._hdr(h) for h in headers]]
+            for ev in sorted(ph_events, key=lambda e: (e.date or date.min)):
+                temp = f"{_fmt_float(ev.storage_temperature_f)}°F" if ev.storage_temperature_f is not None else None
+                data.append(
+                    [
+                        self._cell(_fmt_date(ev.date)),
+                        self._cell(PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type)), 22),
+                        self._cell(ev.description, 62),
+                        # Storage location carries the bin / lot ID — the traceback key —
+                        # so it must not be truncated short of the identifier.
+                        self._cell(ev.storage_location, 60),
+                        self._cell(temp, 12),
+                        self._cell(ev.performed_by, 22),
+                    ]
+                )
+            widths = [0.7 * inch, 1.0 * inch, 1.95 * inch, 1.6 * inch, 0.6 * inch, 0.85 * inch]
+            t = Table(data, colWidths=widths, repeatRows=1)
+            t.setStyle(self._base_table_style())
+            elements.append(t)
+
+        if storage_events:
+            elements.append(self._spacer(0.12))
+            elements.append(self._body("<b>Storage Records (lot traceback — § 205.272 / FSMA 204 KDE)</b>"))
+            elements.append(self._spacer(0.04))
+            headers = ["Date", "Event", "Storage Location", "Storage Temp", "Operator"]
+            data = [[self._hdr(h) for h in headers]]
+            for ev in sorted(storage_events, key=lambda e: (e.date or date.min)):
+                temp = f"{_fmt_float(ev.storage_temperature_f)}°F" if ev.storage_temperature_f is not None else None
+                data.append(
+                    [
+                        self._cell(_fmt_date(ev.date)),
+                        self._cell(PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type)), 24),
+                        self._cell(ev.storage_location, 30),
+                        self._cell(temp, 12),
+                        self._cell(ev.performed_by, 22),
+                    ]
+                )
+            widths = [0.75 * inch, 1.2 * inch, 2.4 * inch, 0.85 * inch, 1.0 * inch]
+            t = Table(data, colWidths=widths, repeatRows=1)
+            t.setStyle(self._base_table_style())
+            elements.append(t)
+
+        elements.append(self._spacer(0.1))
+        elements.append(
+            Paragraph(
+                "Off-farm post-harvest handling (custom hulling, drying, cold storage) must "
+                "be performed by a certified organic handler; that facility's organic "
+                "certificate is retained with the lot records and provided at inspection "
+                "(7 CFR 205.272). Dedicated organic equipment / bins or documented clean-out "
+                "between conventional and organic lots prevents commingling.",
+                self._styles["footer_note"],
+            )
+        )
+        # CDFA vs CDPH scope: the PH events above (hull/shell/wash/sort/pack) keep the
+        # crop a RAW agricultural commodity under CDFA. Turning it into a PROCESSED
+        # organic product (roasting, grinding to butter/flour, oil pressing, blanching,
+        # adding ingredients) crosses into the California Department of Public Health
+        # (CDPH) "processed product" domain and requires a SEPARATE CDPH organic
+        # registration in addition to the CDFA producer/handler registration.
+        elements.append(self._spacer(0.06))
+        elements.append(
+            Paragraph(
+                "<b>Scope note (CDFA vs CDPH):</b> the post-harvest steps above are raw-ag "
+                "handling under CDFA. If this operation instead makes a <i>processed</i> organic "
+                "product on-farm (roasting, grinding to butter/flour, oil pressing, blanching, or "
+                "adding ingredients), that product requires a separate CDPH organic registration "
+                "distinct from the CDFA producer/handler registration Trazo records.",
+                self._styles["footer_note"],
+            )
+        )
         return elements
 
     # ------------------------------------------------------------------
@@ -6776,6 +7897,104 @@ class AuditExportService:
             )
             elements.append(tbl)
 
+        # --- Notification of Changes (7 CFR 205.400(f) / NOP 2615 §3.4) ---
+        # The ApprovedInputChangeLog above covers only input add/remove ((f)(2)).
+        # NOP 2615 §3.4 requires notifying the certifier of six change categories,
+        # including the (f)(1) IMMEDIATE prohibited-substance application. Surface
+        # the full notification trail here so the certifier sees every reported change.
+        change_notifications = list(osp.change_notifications.all().select_related("created_by"))
+        elements.append(self._spacer(0.15))
+        elements.append(self._body("<b>Notification of Changes (7 CFR 205.400(f) / NOP 2615)</b>"))
+        elements.append(self._spacer(0.05))
+        if not change_notifications:
+            elements.append(
+                self._body(
+                    "No change notifications on file. If the operation added/removed acreage, changed "
+                    "a practice/input, applied or was contacted by a prohibited substance, or added a "
+                    "new label/handling step, § 205.400(f) requires prior (or, for a prohibited-substance "
+                    "application, immediate) notification to the certifier."
+                )
+            )
+        else:
+            cn_headers = ["Date", "Category", "CFR", "Description", "Method", "Certifier Ack."]
+            cn_data = [[self._hdr(h) for h in cn_headers]]
+            for cn in change_notifications:
+                cn_data.append(
+                    [
+                        self._cell(_fmt_date(cn.date_notified) if cn.date_notified else None),
+                        self._cell(cn.get_change_category_display(), 30),
+                        self._cell(cn.cfr_reference, 14),
+                        self._cell(cn.description, 40),
+                        self._cell(cn.get_method_display() if cn.method else None, 10),
+                        self._cell(_fmt_date(cn.certifier_acknowledged_at) if cn.certifier_acknowledged_at else "Pending"),
+                    ]
+                )
+            cn_widths = [0.7 * inch, 1.5 * inch, 0.85 * inch, 1.9 * inch, 0.6 * inch, 0.85 * inch]
+            cn_tbl = Table(cn_data, colWidths=cn_widths, repeatRows=1)
+            cn_tbl.setStyle(self._base_table_style())
+            elements.append(cn_tbl)
+            # Flag any (f)(1) prohibited-substance notification — the immediate-report category.
+            immediate = [cn for cn in change_notifications if cn.is_immediate]
+            if immediate:
+                elements.append(self._spacer(0.05))
+                elements.append(
+                    Paragraph(
+                        f"<b>[REVIEW] 7 CFR 205.400(f)(1): {len(immediate)} prohibited-substance "
+                        f"application/drift notification(s) on file. These require IMMEDIATE certifier "
+                        f"notification and may trigger a loss of organic status for the affected product.</b>",
+                        self._warning_style(),
+                    )
+                )
+
+        # --- Annual Continuation / Update (7 CFR 205.406) ---
+        # The annual update is a record distinct from the OSP version. Surface the most
+        # recent one for this establishment so the certifier sees it was filed (previously
+        # the OSP section queried OrganicSystemPlan only and never showed the update).
+        from certifications.models import OSPAnnualUpdate
+
+        annual = (
+            OSPAnnualUpdate.objects.filter(prior_osp__establishment=establishment)
+            .order_by("-reporting_year", "-submitted_at")
+            .first()
+        )
+        elements.append(self._spacer(0.15))
+        elements.append(self._body("<b>Annual Continuation / Update (7 CFR 205.406)</b>"))
+        elements.append(self._spacer(0.05))
+        if annual is None:
+            elements.append(
+                self._body(
+                    "No annual OSP update (§ 205.406) is on file. A certified operation must "
+                    "submit an annual update each year reaffirming the OSP or describing changes."
+                )
+            )
+            elements.append(
+                Paragraph(
+                    "<b>[REVIEW] 7 CFR 205.406:</b> file the annual update / continuation so the "
+                    "certifier can confirm the OSP was reviewed for the reporting year.",
+                    self._warning_style(),
+                )
+            )
+        else:
+            additions = annual.additions if isinstance(annual.additions, list) else []
+            deletions = annual.deletions if isinstance(annual.deletions, list) else []
+            annual_rows = [
+                ("Reporting Year", str(annual.reporting_year) if annual.reporting_year else None),
+                ("Changes Summary", annual.changes_summary or "No changes — OSP reaffirmed"),
+                ("Additions", "; ".join(str(a) for a in additions) if additions else None),
+                ("Deletions", "; ".join(str(d) for d in deletions) if deletions else None),
+                ("Submitted", annual.submitted_at.isoformat() if annual.submitted_at else None),
+                (
+                    "Certifier Acknowledged",
+                    annual.certifier_acknowledged_at.isoformat() if annual.certifier_acknowledged_at else None,
+                ),
+            ]
+            annual_data = [[self._hdr("Field"), self._hdr("Value")]]
+            for label, value in annual_rows:
+                annual_data.append([self._cell(label, 28), self._cell(_val(value), 80)])
+            annual_tbl = Table(annual_data, colWidths=[1.8 * inch, 4.2 * inch], repeatRows=1)
+            annual_tbl.setStyle(self._base_table_style())
+            elements.append(annual_tbl)
+
         elements.append(self._spacer(0.1))
         elements.append(
             Paragraph(
@@ -7106,16 +8325,16 @@ class AuditExportService:
 
     def _build_producer_attestation_section(self):
         """
-        Signed producer attestation — 7 CFR 205.401(d).
+        Signed producer attestation — 7 CFR 205.401 / 205.400(a).
 
         A certifier-acceptable submission requires a dated statement from the
         producer affirming the truth of the submitted information. Trazo can't
         produce a wet signature from a PDF generator, but we CAN surface a
         typed attestation + attribution. The statement language mirrors the
-        canonical § 205.401(d) certification used by CCOF, Oregon Tilth, and
+        canonical § 205.401 certification used by CCOF, Oregon Tilth, and
         MOFGA.
         """
-        elements = [self._section_header("Producer Attestation (7 CFR 205.401(d))")]
+        elements = [self._section_header("Producer Attestation (7 CFR 205.401 / 205.400(a))")]
 
         try:
             establishment = self.production.parcel.establishment
@@ -7132,8 +8351,11 @@ class AuditExportService:
         operator_name = operator_name or (operator.email if operator and operator.email else "(operator not set)")
         farm_name = establishment.name if establishment else "(farm not set)"
 
-        # Canonical § 205.401(d) attestation wording — do NOT alter without
-        # regulatory review; this is the language every major certifier accepts.
+        # Canonical producer attestation wording (7 CFR 205.401 application +
+        # 205.400(a) duty to comply; 205.400(f) change-notification) — do NOT alter
+        # without regulatory review; this is the language every major certifier
+        # accepts. (§ 205.401(d) is a catch-all "other information" subsection and
+        # is NOT itself an attestation mandate, so it is not cited in the body.)
         attestation_text = (
             "I, the undersigned, hereby certify under penalty of law that the "
             "information contained in this document is true, complete, and "
@@ -7150,14 +8372,18 @@ class AuditExportService:
 
         # Attribution block — operator, farm, date. In a real signed submission
         # the producer signs below; this PDF records the equivalent digital
-        # attribution (consistent with 21 CFR Part 11 electronic-records).
+        # attribution. Legal validity of the electronic attestation rests on the
+        # federal ESIGN Act (15 U.S.C. 7001) and state UETA, not on FDA's
+        # 21 CFR Part 11 (which governs FDA-regulated records, not USDA NOP
+        # 7 CFR 205 organic records).
         elements.append(self._label_value("Farm / Operation", farm_name))
         elements.append(self._label_value("Producer / Operator", operator_name))
         elements.append(self._label_value("Export Date", date.today().isoformat()))
         elements.append(
             self._label_value(
                 "Submission basis",
-                "Trazo digital export — electronic attestation per 21 CFR Part 11",
+                "Trazo digital export — typed electronic attestation (ESIGN Act / "
+                "UETA); certifier may require an additional wet or digital signature",
             )
         )
         elements.append(self._spacer(0.1))
@@ -7208,6 +8434,12 @@ class AuditExportService:
         # include leafy greens, tomatoes, peppers, cucumbers, herbs, tropical
         # tree fruits (but NOT avocados), melons, sprouts. Do not claim coverage
         # we can't verify — only apply the exemption if we recognize the crop.
+        # NOTE on tree nuts: raw/in-shell and shelled tree nuts (walnut, almond,
+        # pecan, pistachio, hazelnut) are NOT on the FTL — only nut BUTTERS are.
+        # A raw-nut orchard is therefore NOT COVERED; treat it like the other
+        # exempt crops rather than leaving it "STATUS UNKNOWN". (Substring matching
+        # is a stopgap; FTL membership should ultimately be a flag on the crop
+        # catalog rather than keyword matching.)
         ftl_covered_keywords = (
             "leafy green",
             "spinach",
@@ -7231,8 +8463,20 @@ class AuditExportService:
             "stone fruit",
             "cherry",
             "peach",
+            "walnut",
+            "almond",
+            "pecan",
+            "pistachio",
+            "hazelnut",
+            "tree nut",
         )
-        if any(kw in crop_type_name for kw in ftl_covered_keywords):
+        # Nut BUTTERS are on the FTL even though the raw nut is not. Detect the
+        # processed butter explicitly (e.g. "almond butter", "walnut butter") so a
+        # raw-nut crop stays exempt while a butter is flagged covered. Requires a
+        # specific nut name so "butternut squash" is not misread as a nut butter.
+        nut_names = ("walnut", "almond", "pecan", "pistachio", "hazelnut", "cashew", "peanut", "macadamia")
+        is_nut_butter = "butter" in crop_type_name and any(n in crop_type_name for n in nut_names)
+        if is_nut_butter or any(kw in crop_type_name for kw in ftl_covered_keywords):
             fsma_204_status = (
                 "COVERED. Crop is on the FDA Food Traceability List. FSMA 204 "
                 "KDEs/CTEs required at harvest, cooling, packing, and shipping "
@@ -7263,7 +8507,12 @@ class AuditExportService:
                     "Agricultural water testing records (if required for this "
                     "operation's size and crop classification) are maintained "
                     "outside the NOP scope of this export. Operator to provide "
-                    "annual water test results to the certifier on request."
+                    "annual water test results to the certifier on request. If the "
+                    "crop receives a commercial processing step that adequately "
+                    "reduces pathogens (e.g., off-farm hulling/drying/pasteurization), "
+                    "the operation may qualify for the 21 CFR 112.2(b) eligible-"
+                    "exemption with the required disclosure and records — operator "
+                    "confirms applicability with the certifier."
                 ),
             )
         )
@@ -7340,17 +8589,20 @@ class AuditExportService:
             )
         )
 
-        # --- Residue testing (§ 205.670(e)) --------------------------------
+        # --- Residue testing (§ 205.670(c)-(d)) ----------------------------
         # Certifier-directed sampling. The farm does not proactively log residue
         # tests; attachments are added to the production record when sampled.
         elements.append(
             self._label_value(
-                "Residue testing (§ 205.670(e))",
+                "Residue testing (§ 205.670(c)-(d))",
                 (
-                    "Residue testing is certifier-directed sampling under "
-                    "§ 205.670 (risk-based, ~5% pool). The producer attaches "
-                    "lab results to the Trazo production record when sampling "
-                    "occurs. Absent sampling, this section is intentionally empty."
+                    "Periodic residue testing is certifier-directed sampling under "
+                    "§ 205.670(c)-(d) (risk-based, minimum ~5% of operations "
+                    "annually). The producer-side duty is limited to making the "
+                    "product, site, and records accessible for sampling "
+                    "(§ 205.670(a)); the producer attaches lab results to the Trazo "
+                    "production record when sampling occurs. Absent sampling, this "
+                    "section is intentionally empty."
                 ),
             )
         )
@@ -7498,6 +8750,48 @@ class AuditExportService:
             result["filename_suspicious"] = any(p in lowered for p in self._OFPP_SUSPICIOUS_FILENAME_PATTERNS)
         return result
 
+    def _label_images_block(self):
+        """
+        Container Labeling figure block (CCOF G7.0 / NOPB34 / 7 CFR 205.307).
+        Embeds the actual nonretail / retail label artifacts the operation submits
+        for CCOF pre-approval, with the lot/traceback element each carries. Reuses
+        the photo-embed helper (_fetch_image_for_pdf, incl. its dev-skip behavior).
+        Renders nothing when no labels are on file.
+        """
+        try:
+            labels = list(self.production.label_images.select_related("gallery_image").all())
+        except Exception:  # noqa: BLE001 — never break the PDF over labels
+            labels = []
+        labels = [lb for lb in labels if getattr(lb, "gallery_image_id", None)]
+        if not labels:
+            return []
+
+        elements = [self._spacer(0.08)]
+        elements.append(self._body("<b>Container Labeling — label artifacts (CCOF G7.0 / 7 CFR 205.307)</b>"))
+        elements.append(self._spacer(0.04))
+        for lb in labels:
+            ltype = lb.get_label_type_display() if lb.label_type else "Label"
+            ctype = lb.get_container_type_display() if lb.container_type else ""
+            caption = f"{ltype}{(' · ' + ctype) if ctype else ''}"
+            if lb.lot_link_note:
+                caption += f" — {_truncate(lb.lot_link_note, 120)}"
+            elements.append(self._body(caption))
+            buf = self._fetch_image_for_pdf(lb.gallery_image)
+            if buf is not None:
+                img = RLImage(buf, width=2.7 * inch, height=2.1 * inch, kind="proportional")
+                img.hAlign = "LEFT"
+                elements.append(img)
+            else:
+                elements.append(
+                    Paragraph(
+                        "[Label image on file; not embedded in this environment — "
+                        "originals retained in the producer dashboard.]",
+                        self._styles["footer_note"],
+                    )
+                )
+            elements.append(self._spacer(0.06))
+        return elements
+
     def _build_soe_compliance_section(self):
         """SOE compliance status: OFPP, record retention, traceability."""
         elements = [self._section_header("SOE Compliance Status")]
@@ -7558,6 +8852,21 @@ class AuditExportService:
             def P(text):
                 return Paragraph(self._safe_narrative(str(text)), cell_style)
 
+            # SOE (§ 205.307(a)) itemized sales — prefer the dedicated SalesRecord
+            # rows over the single legacy sold_to/organic_on_invoice fields.
+            try:
+                _soe_sales = list(self.production.sales_records.all())
+            except Exception:  # noqa: BLE001 — relation always present in practice
+                _soe_sales = []
+            _soe_sales_buyers = ", ".join(
+                sorted({(s.buyer_name or "").strip() for s in _soe_sales if s.buyer_name})
+            )
+            _soe_organic_on_invoice = (
+                all(s.organic_on_invoice for s in _soe_sales)
+                if _soe_sales
+                else bool(self.production.organic_on_invoice)
+            )
+
             rows = [
                 [Paragraph(h, header_style) for h in ("Requirement", "Status", "Details")],
                 [
@@ -7590,16 +8899,25 @@ class AuditExportService:
                 ],
                 [
                     P("Post-Harvest Sales Record"),
-                    P("Recorded" if self.production.sold_to else "Not recorded"),
                     P(
-                        f"Sold to: {self.production.sold_to}"
-                        if self.production.sold_to
-                        else "Add sales data after harvest"
+                        "Recorded"
+                        if (_soe_sales or self.production.sold_to)
+                        else "Not recorded"
+                    ),
+                    P(
+                        f"{len(_soe_sales)} itemized sales record(s) on file (§ 205.307(a)); "
+                        f"buyers: {_soe_sales_buyers}"
+                        if _soe_sales
+                        else (
+                            f"Sold to: {self.production.sold_to}"
+                            if self.production.sold_to
+                            else "Add sales data after harvest"
+                        )
                     ),
                 ],
                 [
                     P("Organic on Invoice"),
-                    P("Yes" if self.production.organic_on_invoice else "No / Not set"),
+                    P("Yes" if _soe_organic_on_invoice else "No / Not set"),
                     P("SOE requires organic identification on sales documents"),
                 ],
                 [
@@ -7753,10 +9071,14 @@ class AuditExportService:
         )
 
         # 3. Unannounced inspection — describe the data availability Trazo provides
-        # rather than asserting staff are trained.
+        # rather than asserting staff are trained. CFR cite is § 205.403 (On-site
+        # inspections); subsection (b) requires certifying agents to conduct
+        # unannounced on-site inspections of at least 5% of certified operations
+        # annually. § 205.661 ("Investigation") was the prior cite and is WRONG —
+        # it governs complaint-of-noncompliance investigations, not inspections.
         elements.append(
             Paragraph(
-                "<b>Unannounced inspection readiness (7 CFR 205.661):</b> "
+                "<b>Unannounced inspection readiness (7 CFR 205.403(b)):</b> "
                 "All event logs, OSP narratives, input purchases, and sales records "
                 "for this production are maintained in real time and can be exported "
                 "(this report) within minutes of a certifier or USDA request — no "
@@ -7803,6 +9125,10 @@ class AuditExportService:
                 "recorded in this report."
             )
         elements.append(Paragraph(label_text, self._styles["body"]))
+
+        # Embed the actual label artifacts (G7.0) right after the non-retail
+        # container labeling discussion they support.
+        elements += self._label_images_block()
 
         # 5. Import certificate — neutral statement; we don't track imports yet.
         elements.append(
@@ -7864,13 +9190,13 @@ class AuditExportService:
         """
         Per-record edit log from django-auditlog.
 
-        Inspector uses this to verify trustworthy-records principles (21 CFR Part 11):
-        every modification has a user, timestamp, and field-level diff. Records edited
-        after production finish_date are flagged.
+        Inspector uses this to verify NOP digital-recordkeeping trustworthiness
+        (7 CFR 205.103; ALCOA+ principles): every modification has a user, timestamp,
+        and field-level diff. Records edited after production finish_date are flagged.
         """
         from auditlog.models import LogEntry
 
-        elements = [self._section_header("Record Change History")]
+        elements = [self._section_header("Record Change History (CCOF OSP G8.0)")]
         elements.append(
             self._body(
                 "Edit attribution and field-level diffs for this production and its events. "
@@ -7946,7 +9272,7 @@ class AuditExportService:
         data = [[self._hdr(h) for h in headers]]
 
         for le in all_entries[:200]:  # cap to avoid runaway PDFs
-            # Actor attribution, per 21 CFR Part 11 / ALCOA+: prefer the logged-in
+            # Actor attribution, per ALCOA+ recordkeeping principles: prefer the logged-in
             # user recorded by AuditlogMiddleware; fall back to the underlying
             # record's created_by; last-resort is an explicit "system (background
             # task)" label so an inspector can distinguish a signal/migration
@@ -8463,6 +9789,68 @@ class AuditExportService:
             except Exception as exc:
                 logger.warning("CSV certifications section error: %s", exc)
                 writer.writerow(["Error loading certification data"])
+
+        # --- State Organic Program Registration section ---
+        # Mirrors the PDF _build_state_organic_registration_section so a CSV-only
+        # certifier handoff also carries the CDFA SOP producer-registration status
+        # (CA Food & Ag Code §§ 46000-46029), not just the OSP + events.
+        if "state_organic_registration" in self.sections:
+            writer.writerow([])
+            writer.writerow(["=== STATE ORGANIC PROGRAM REGISTRATION ==="])
+            try:
+                from certifications.models import StateOrganicRegistration
+
+                establishment = self.production.parcel.establishment
+                reg = (
+                    StateOrganicRegistration.objects.filter(establishment=establishment)
+                    .order_by("-registration_date")
+                    .first()
+                )
+                if reg is None:
+                    writer.writerow(["Field", "Value"])
+                    writer.writerow(
+                        [
+                            "Registration on file",
+                            "None — CA producers selling > $5,000/yr organic must register with the "
+                            "CDFA State Organic Program before first sale (CA Food & Ag Code §§ 46000-46029). [REVIEW]",
+                        ]
+                    )
+                else:
+                    gross = reg.prior_year_organic_gross_sales
+                    commodities = reg.commodities if isinstance(reg.commodities, list) else []
+                    writer.writerow(["Field", "Value"])
+                    for label, value in [
+                        ("Program", reg.program_name),
+                        ("State", reg.state),
+                        ("Operation Type", reg.get_operation_type_display()),
+                        ("Status", reg.get_status_display()),
+                        ("Registration #", reg.registration_number),
+                        ("County", reg.county),
+                        ("Registration Date", _fmt_date(reg.registration_date)),
+                        ("Renewal Date", _fmt_date(reg.renewal_date)),
+                        ("Prior-Year Organic Gross Sales", f"${gross:,.2f}" if gross is not None else ""),
+                        ("Commodities", ", ".join(str(c) for c in commodities) if commodities else ""),
+                    ]:
+                        writer.writerow([label, _val(value)])
+                    if not reg.is_current:
+                        writer.writerow(
+                            ["[REVIEW]", "Registration not current (status not 'registered' or renewal date passed)."]
+                        )
+                    try:
+                        over_threshold = gross is not None and gross > Decimal("5000")
+                    except (TypeError, InvalidOperation):
+                        over_threshold = False
+                    if reg.status == "exempt" and over_threshold:
+                        writer.writerow(
+                            [
+                                "[REVIEW]",
+                                f"$5,000 exemption exceeded (${gross:,.2f}) but status still 'exempt' — "
+                                "operation must register with CDFA SOP and be certified.",
+                            ]
+                        )
+            except Exception as exc:
+                logger.warning("CSV state organic registration section error: %s", exc)
+                writer.writerow(["Error loading state organic registration data"])
 
         # --- Inspection & Compliance Event History section ---
         # Mirrors the PDF _build_business_events_section so CSV consumers (auditors

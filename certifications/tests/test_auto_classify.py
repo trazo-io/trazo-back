@@ -121,6 +121,31 @@ class ChemicalEventAutoClassificationTests(TestCase):
         # Should still be rotenone, not auto-reclassified to copper hydroxide.
         self.assertEqual(event.national_list_substance, rotenone)
 
+    def test_nop_5034_2_prohibited_synthetic_auto_classifies(self):
+        # NOP 5034-2 Appendix: a common prohibited synthetic (glyphosate) seeded
+        # under § 205.105 must classify as prohibited so the audit export fires
+        # the hard-disqualification path instead of leaving it "unresolved".
+        NationalListSubstance.objects.create(
+            substance_name="Glyphosate",
+            substance_name_normalized="glyphosate",
+            cfr_section="205.105",
+            subsection="a",
+            category="herbicide",
+            status="prohibited",
+            restriction_notes="Synthetic herbicide; not on § 205.601 (NOP 5034-2).",
+        )
+        event = ChemicalEvent.objects.create(
+            history=self.history,
+            created_by=self.user,
+            description="Applied glyphosate",
+            date=timezone.now(),
+            chemical_subtype="synthetic_pesticide",
+            commercial_name="Glyphosate",
+        )
+        self.assertIsNotNone(event.national_list_substance)
+        self.assertEqual(event.national_list_substance.status, "prohibited")
+        self.assertEqual(event.national_list_substance.cfr_section, "205.105")
+
     def test_false_positive_guard_on_generic_word(self):
         # Farmer applies sodium hydroxide (prohibited conventional, NOT on allowed list).
         # Signal must NOT falsely classify it as "Copper hydroxide".

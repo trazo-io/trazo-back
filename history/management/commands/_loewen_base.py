@@ -25,9 +25,16 @@ from datetime import timezone as dt_tz
 from decimal import Decimal
 
 from carbon.models import CropType
-from certifications.models import OSP_SECTION_KEYS, Certification, OrganicSystemPlan
+from certifications.models import (
+    OSP_SECTION_KEYS,
+    Certification,
+    OMRIProduct,
+    OrganicSystemPlan,
+    PostHarvestFacility,
+)
+from common.models import Gallery, GalleryImage
 from company.models import Company, Establishment
-from history.models import History
+from history.models import History, LabelImage
 from product.models import Parcel, ParcelCropHistory, Product
 from subscriptions.models import Plan, Subscription
 from users.models import User, WorksIn
@@ -40,14 +47,30 @@ ESTABLISHMENT_NAME = "Loewen Family Farm"
 # (page still renders; just no photo for that event). image_url accepts any
 # public URL, no S3 upload needed.
 LOEWEN_IMAGES = {
-    "hero": ["https://plus.unsplash.com/premium_photo-1661848408966-ff1e956a5168?q=80&w=1287&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"],          # sheep grazing under walnut trees (cover_image_url)
-    "grazing": ["https://images.unsplash.com/photo-1731761087961-5a1f1e00dd4b?q=80&w=1287&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"],       # sheep in the orchard
-    "cover_crop": ["https://images.unsplash.com/photo-1634842833794-20e708360622?q=80&w=2340&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"],    # flowering cover crop / tall grass between rows
-    "habitat": ["https://images.unsplash.com/photo-1774343837058-01115f35eb81?q=80&w=1294&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"],       # owl box / hedgerow / birds
-    "wildlife": ["https://images.unsplash.com/photo-1727860623632-b044a28d84e8?q=80&w=2342&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"],      # owl in box / ladybugs on leaf / songbird close-up
-    "harvest": ["https://images.unsplash.com/photo-1664632808272-8a7d1366e4b2?q=80&w=1335&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"],       # walnut harvest / walnuts in-shell
-    "soil_test": ["https://plus.unsplash.com/premium_photo-1729087867383-7987cb3a10d6?q=80&w=2148&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"],     # hands in healthy soil
-    "orchard": ["https://images.unsplash.com/photo-1591025274565-15f8a5b5171b?q=80&w=2340&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"],       # walnut orchard rows (album / general)
+    "hero": [
+        "https://plus.unsplash.com/premium_photo-1661848408966-ff1e956a5168?q=80&w=1287&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+    ],  # sheep grazing under walnut trees (cover_image_url)
+    "grazing": [
+        "https://images.unsplash.com/photo-1731761087961-5a1f1e00dd4b?q=80&w=1287&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+    ],  # sheep in the orchard
+    "cover_crop": [
+        "https://images.unsplash.com/photo-1634842833794-20e708360622?q=80&w=2340&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+    ],  # flowering cover crop / tall grass between rows
+    "habitat": [
+        "https://images.unsplash.com/photo-1774343837058-01115f35eb81?q=80&w=1294&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+    ],  # owl box / hedgerow / birds
+    "wildlife": [
+        "https://images.unsplash.com/photo-1727860623632-b044a28d84e8?q=80&w=2342&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+    ],  # owl in box / ladybugs on leaf / songbird close-up
+    "harvest": [
+        "https://images.unsplash.com/photo-1664632808272-8a7d1366e4b2?q=80&w=1335&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+    ],  # walnut harvest / walnuts in-shell
+    "soil_test": [
+        "https://plus.unsplash.com/premium_photo-1729087867383-7987cb3a10d6?q=80&w=2148&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+    ],  # hands in healthy soil
+    "orchard": [
+        "https://images.unsplash.com/photo-1591025274565-15f8a5b5171b?q=80&w=2340&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+    ],  # walnut orchard rows (album / general)
 }
 
 
@@ -269,6 +292,7 @@ def create_loewen_base(user):
         certification_type="USDA Organic (CCOF) + Real Organic Project",
         contact_person="Leonard Loewen",
         address="1890 State Highway 45, Glenn, CA",
+        location_disclosure_level="exact",
         polygon={
             "type": "Polygon",
             "coordinates": [
@@ -281,6 +305,41 @@ def create_loewen_base(user):
                 ]
             ],
         },
+        buffer_zones=[
+            {
+                "direction": "North",
+                "adjoining_land_use": "Neighboring conventional almond orchard (occasional aerial application)",
+                "buffer_width_m": 9,
+                "drift_risk": "Medium",
+                "prevention": "9 m mature hedgerow + flowering insectary strip along the boundary; "
+                "annual neighbor-notification letter on file; no harvest from the buffer rows during "
+                "adjacent spray windows.",
+            },
+            {
+                "direction": "East",
+                "adjoining_land_use": "State Highway 45 right-of-way (county-maintained, no ag spraying)",
+                "buffer_width_m": 6,
+                "drift_risk": "Low",
+                "prevention": "Road right-of-way plus a vegetative edge; no adjoining cropland, so "
+                "prohibited-substance drift risk is minimal.",
+            },
+            {
+                "direction": "South",
+                "adjoining_land_use": "Loewen Family Farm organic sheep pasture (same operation)",
+                "buffer_width_m": 0,
+                "drift_risk": "None",
+                "prevention": "Internal boundary to the operation's own certified-organic pasture; "
+                "no prohibited substances applied on either side.",
+            },
+            {
+                "direction": "West",
+                "adjoining_land_use": "Neighboring conventional flood-irrigated row crop",
+                "buffer_width_m": 12,
+                "drift_risk": "Medium",
+                "prevention": "12 m grassed vegetative buffer + drainage berm to prevent tail-water "
+                "carry; neighbor-notification letter on file; boundary rows monitored for drift.",
+            },
+        ],
         agricultural_details={
             "primary_crop": "Organic Walnuts",
             "tree_age": "established since 2013",
@@ -357,6 +416,51 @@ def create_loewen_base(user):
     production_finished.save()
 
     # ------------------------------------------------------------------ #
+    # Off-farm post-harvest handler (CCOF G6.1) + nonretail bin label     #
+    # (G7.0) — both surface in the audit export for the finished season.  #
+    # ------------------------------------------------------------------ #
+    huller = PostHarvestFacility.objects.create(
+        establishment=establishment,
+        name="Sacramento Valley Organic Hulling & Drying, Inc.",
+        facility_type="huller",
+        address="4120 County Road 99W",
+        city="Orland",
+        state="California",
+        certification_number="CCOF-H-2294",
+        certifier_name="CCOF Certification Services, LLC",
+        effective_date=date(2025, 12, 1),
+        expiry_date=date(2026, 11, 30),
+        verification_status="self_reported",
+        verification_source="operator_provided",
+        notes=(
+            "Custom CCOF-certified organic huller/dryer that processes Loewen's "
+            "in-shell walnut crop. Dedicated organic run; handler certificate "
+            "retained with the lot records."
+        ),
+        created_by=user,
+    )
+    production_finished.post_harvest_facility = huller
+    production_finished.save(update_fields=["post_harvest_facility"])
+
+    # Nonretail bin label — reuses the Gallery/GalleryImage S3 + public-URL infra.
+    label_gallery = Gallery.objects.create()
+    label_img = GalleryImage.objects.create(
+        gallery=label_gallery,
+        image_url=(LOEWEN_IMAGES.get("label") or LOEWEN_IMAGES.get("harvest") or [""])[0],
+    )
+    LabelImage.objects.create(
+        history=production_finished,
+        label_type="nonretail",
+        container_type="bin",
+        gallery_image=label_img,
+        lot_link_note=(
+            "Bin tag prints 'ORGANIC' + lot LOEWEN-2025-WAL-001, linking each "
+            "non-retail container to the harvest events in this report "
+            "(post-SOE § 205.307(a))."
+        ),
+    )
+
+    # ------------------------------------------------------------------ #
     # Current production — 2025-26 season (in progress, unpublished)      #
     # ------------------------------------------------------------------ #
     production_current = History(
@@ -431,7 +535,7 @@ def _seed_loewen_osp(establishment, ccof_cert, user):
             "Records are maintained digitally in Trazo and retained for 5 years per 7 CFR "
             "205.103: production events (grazing, cover crop, irrigation, harvest), soil and "
             "pest-management events, harvest yields, sales invoices (with 'organic' on invoice "
-            "per § 205.301(f), including Korean Organic export sales), input lists with National "
+            "per § 205.103(b)(3) audit-trail documentation, including Korean Organic export sales), input lists with National "
             "List classification, certifications (CCOF + Real Organic Project + Korean Organic), "
             "OSP versions, and 3-year ParcelCropHistory. Change history is captured per-field "
             "with user attribution and UTC timestamps; records export on demand as an audit PDF."
@@ -455,7 +559,7 @@ def _seed_loewen_osp(establishment, ccof_cert, user):
     }
     sections = {key: {"narrative": narratives[key], "last_updated": last_updated} for key in OSP_SECTION_KEYS}
 
-    OrganicSystemPlan.objects.create(
+    osp = OrganicSystemPlan.objects.create(
         establishment=establishment,
         certification=ccof_cert,
         version_number=1,
@@ -466,3 +570,11 @@ def _seed_loewen_osp(establishment, ccof_cert, user):
         sections=sections,
         created_by=user,
     )
+
+    # Wire the OMRI-listed fish/seaweed fertilizer onto the OSP Material List so the
+    # audit export's "OSP Approval (CCOF)" stamp resolves to OSP-approved for it.
+    neptune = (
+        OMRIProduct.objects.filter(product_name__icontains="neptune").filter(product_name__icontains="fish").first()
+    )
+    if neptune:
+        osp.approved_omri_products.add(neptune)

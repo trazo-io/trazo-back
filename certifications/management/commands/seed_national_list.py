@@ -198,8 +198,46 @@ SECTION_602_PROHIBITED = [
 ]
 
 
+# 7 CFR 205.105 — Substances & methods EXCLUDED from organic crop production, plus
+# the curated NOP 5034-2 "Appendix of Prohibited Materials" of common synthetic
+# crop inputs that are prohibited because they are synthetic and NOT listed on
+# § 205.601 (§ 205.105(a)). Seeding these as positive "prohibited" rows lets the
+# audit export fire the hard-disqualification path when a farmer logs one, instead
+# of treating a known-prohibited synthetic as merely "unresolved / no match".
+# Each entry: (subsection of § 205.105, category, substance_name, notes)
+SECTION_105_PROHIBITED = [
+    # (a) synthetic substances not on § 205.601 — common prohibited crop pesticides
+    ("a", "herbicide", "Glyphosate", "Synthetic herbicide; not on § 205.601 (NOP 5034-2)."),
+    ("a", "herbicide", "2,4-D", "Synthetic herbicide; not on § 205.601 (NOP 5034-2)."),
+    ("a", "herbicide", "Atrazine", "Synthetic herbicide; not on § 205.601 (NOP 5034-2)."),
+    ("a", "herbicide", "Paraquat", "Synthetic herbicide; not on § 205.601 (NOP 5034-2)."),
+    ("a", "herbicide", "Dicamba", "Synthetic herbicide; not on § 205.601 (NOP 5034-2)."),
+    ("a", "insecticide", "Chlorpyrifos", "Synthetic insecticide; not on § 205.601 (NOP 5034-2)."),
+    ("a", "insecticide", "Carbaryl", "Synthetic insecticide; not on § 205.601 (NOP 5034-2)."),
+    ("a", "insecticide", "Imidacloprid", "Neonicotinoid; not on § 205.601 (NOP 5034-2)."),
+    ("a", "insecticide", "Malathion", "Synthetic insecticide; not on § 205.601 (NOP 5034-2)."),
+    ("a", "fungicide", "Captan", "Synthetic fungicide; not on § 205.601 (NOP 5034-2)."),
+    ("a", "fungicide", "Mancozeb", "Synthetic fungicide; not on § 205.601 (NOP 5034-2)."),
+    ("a", "fungicide", "Chlorothalonil", "Synthetic fungicide; not on § 205.601 (NOP 5034-2)."),
+    ("a", "fumigant", "Methyl bromide", "Synthetic fumigant; not on § 205.601 (NOP 5034-2)."),
+    ("a", "fumigant", "Metam sodium", "Synthetic fumigant; not on § 205.601 (NOP 5034-2)."),
+    ("a", "fumigant", "Chloropicrin", "Synthetic fumigant; not on § 205.601 (NOP 5034-2)."),
+    ("a", "fumigant", "1,3-Dichloropropene", "Synthetic fumigant (Telone); not on § 205.601 (NOP 5034-2)."),
+    ("a", "fertilizer", "Urea (synthetic)", "Synthetic nitrogen fertilizer; not on § 205.601."),
+    ("a", "fertilizer", "Ammonium nitrate", "Synthetic nitrogen fertilizer; not on § 205.601."),
+    ("a", "fertilizer", "Anhydrous ammonia", "Synthetic nitrogen fertilizer; not on § 205.601."),
+    ("a", "fertilizer", "Diammonium phosphate", "Synthetic fertilizer (DAP); not on § 205.601."),
+    # (d) excluded methods — genetic engineering
+    ("d", "prohibited_method", "Genetically engineered / excluded-method inputs", "Prohibited under § 205.105(d)."),
+    # (e) ionizing radiation
+    ("e", "prohibited_method", "Ionizing radiation (irradiation)", "Prohibited under § 205.105(e)."),
+    # (f) sewage sludge
+    ("f", "amendment", "Sewage sludge (biosolids)", "Prohibited under § 205.105(f)."),
+]
+
+
 class Command(BaseCommand):
-    help = "Seed the National List of Allowed and Prohibited Substances (7 CFR 205.601/205.602)."
+    help = "Seed the National List of Allowed and Prohibited Substances (7 CFR 205.601/205.602/205.105)."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -236,6 +274,22 @@ class Command(BaseCommand):
             _, was_created = NationalListSubstance.objects.update_or_create(
                 substance_name_normalized=_normalize(name),
                 cfr_section="205.602",
+                defaults=dict(
+                    substance_name=name,
+                    subsection=subsection,
+                    category=category,
+                    status="prohibited",
+                    restriction_notes=notes,
+                ),
+            )
+            created += 1 if was_created else 0
+            updated += 0 if was_created else 1
+
+        # § 205.105 excluded substances/methods + NOP 5034-2 Appendix of Prohibited Materials
+        for subsection, category, name, notes in SECTION_105_PROHIBITED:
+            _, was_created = NationalListSubstance.objects.update_or_create(
+                substance_name_normalized=_normalize(name),
+                cfr_section="205.105",
                 defaults=dict(
                     substance_name=name,
                     subsection=subsection,

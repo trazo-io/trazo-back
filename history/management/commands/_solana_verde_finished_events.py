@@ -4,7 +4,7 @@ Solana Verde Organic Ranch — 24 finished-production events.
 Covers the 2026-01-15 -> 2026-04-14 Hass Avocado season on Hillside Grove A.
 Events map to Phase 7 of E2E_ORGANIC_FARM_TESTING_GUIDE.md (Events 1-21 + 8b = 22)
 plus one PL replant event for seed_search_attempts (NOP 5029) coverage and one
-post-finish OGC delivery BusinessEvent (§ 205.501(a)(21) + § 205.301(f) +
+post-finish OGC delivery BusinessEvent (§ 205.501(a)(21) + § 205.103(b)(3) +
 FSMA 204 shipping CTE) = 24 total.
 
 NOP fields covered:
@@ -1103,7 +1103,7 @@ def create_finished_events(production, user, demo_images=None):
 
     # ------------------------------------------------------------------ #
     # Event 24: Sale & Delivery to OGC (Business - CM) — 2026-04-15      #
-    # § 205.501(a)(21) traceability + § 205.301(f) "organic on invoice"  #
+    # § 205.501(a)(21) traceability + § 205.103(b)(3) "organic on invoice"  #
     # + FSMA 204 Critical Tracking Event (shipping). Documents the full  #
     # downstream chain so an inspector can trace lot SVR-2026-HA-001     #
     # from this farm to OGC's Portland distribution hub.                  #
@@ -1121,7 +1121,7 @@ def create_finished_events(production, user, demo_images=None):
             "Elena Gutierrez. Pre-loading: trailer interior swept and inspected — no "
             "non-organic residue. All 448 cartons bear lot SVR-2026-HA-001 sticker + Trazo "
             "QR code. PO #OGC-PO-2026-0412 from OGC Procurement. Invoice #SVR-INV-2026-041 "
-            "marks each line item ORGANIC per 7 CFR 205.301(f). Departed Fallbrook 06:30 PT, "
+            "marks each line item ORGANIC per 7 CFR 205.103(b)(3) audit-trail documentation. Departed Fallbrook 06:30 PT, "
             "ETA OGC Portland Distribution Hub 2026-04-16 18:00 PT (1,030 mi, ~26 hrs "
             "transit, fixed cold-chain). § 205.501(a)(21) downstream attestation: OGC has "
             "filed signed receipt of organic certification copy CCOF-2012-4287 on file at "
@@ -1137,7 +1137,7 @@ def create_finished_events(production, user, demo_images=None):
         verified_certifier_name="CCOF (California Certified Organic Farmers)",
         certificate_number="CCOF-2012-4287",
         observation=(
-            "Sale and delivery record per § 205.501(a)(21) and § 205.301(f). "
+            "Sale and delivery record per § 205.501(a)(21) and § 205.103(b)(3). "
             "FSMA 204 Critical Tracking Event (shipping) populated. All 448 cartons "
             "labelled 'Organic' with farm lot ID, traceable end-to-end."
         ),

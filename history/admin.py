@@ -13,10 +13,21 @@ from .models import (
     GeneralEvent,
     History,
     HistoryScan,
+    LabelImage,
     ProductionEvent,
     SoilManagementEvent,
     WeatherEvent,
 )
+
+
+class LabelImageInline(admin.TabularInline):
+    """Container-label artifacts (CCOF G7.0). Add labels even after a production is
+    finished — labels are post-harvest records. Create the image as a GalleryImage
+    first (Common > Gallery images, paste a public URL or upload), then link it."""
+
+    model = LabelImage
+    extra = 0
+    raw_id_fields = ("gallery_image",)
 
 
 class FinishedProductionReadOnlyInlineMixin:
@@ -141,7 +152,9 @@ class HistoryAdmin(admin.ModelAdmin):
         GeneralEventInline,
         ProductionEventInline,
         SoilManagementEventInline,
+        LabelImageInline,
     ]
+    raw_id_fields = ("post_harvest_facility",)
 
     # Trust metrics and analytics in readonly fields
     readonly_fields = (
@@ -159,6 +172,19 @@ class HistoryAdmin(admin.ModelAdmin):
         ("Basic Information", {"fields": ("name", "public_id", "type", "description", "published")}),
         ("Timeline", {"fields": ("start_date", "finish_date")}),
         ("Production Details", {"fields": ("product", "parcel", "production_amount", "earning")}),
+        (
+            "Audit Records (CCOF)",
+            {
+                "fields": ("post_harvest_facility",),
+                "description": (
+                    "Off-farm post-harvest handler (huller / dryer / cold storage) this lot was "
+                    "sent to (CCOF G6.1). Create the facility first under "
+                    "Certifications &gt; Post-harvest facilities, then link it here. Surfaces in "
+                    "the audit export's Post-Harvest section. Container labels (G7.0) are added "
+                    "in the inline below."
+                ),
+            },
+        ),
         (
             "Trust Metrics & Analytics",
             {
@@ -354,3 +380,14 @@ admin.site.register(GeneralEvent, EventAdmin)
 admin.site.register(ProductionEvent, EventAdmin)
 admin.site.register(History, HistoryAdmin)
 admin.site.register(HistoryScan, HistoryScanAdmin)
+
+
+@admin.register(LabelImage)
+class LabelImageAdmin(admin.ModelAdmin):
+    """Standalone view of container labels (CCOF G7.0). Usually managed via the
+    inline on a production; this is for cross-production review."""
+
+    list_display = ["history", "label_type", "container_type", "gallery_image", "created_at"]
+    list_filter = ["label_type", "container_type"]
+    search_fields = ["history__name", "history__lot_id", "lot_link_note"]
+    raw_id_fields = ("history", "gallery_image")

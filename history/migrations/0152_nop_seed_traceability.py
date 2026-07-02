@@ -106,7 +106,7 @@ class Migration(migrations.Migration):
             name="seed_treatment",
             field=models.CharField(
                 blank=True,
-                help_text="Seed coatings, inoculants, or pelleting materials applied (NOP 7 CFR 205.204(a)(5))",
+                help_text="Seed coatings, inoculants, or pelleting materials applied (NOP 7 CFR 205.204(a)(2))",
                 max_length=200,
                 null=True,
             ),

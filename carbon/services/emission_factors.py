@@ -552,6 +552,32 @@ class EmissionFactorsRegistry:
             "Enteric methane from livestock is excluded (beyond farmer control per Trazo methodology).",
             "impact_type": "low_emissions",
         },
+        "habitat": {
+            "value": 0.0,  # kg CO2e per hectare — no combustion / no direct operational emissions
+            "unit": "kg CO2e per hectare",
+            "source": "Trazo methodology: direct operational emissions only",
+            "reference": "Planting hedgerows / insectary strips and other habitat development "
+            "is manual, with no fuel combustion. Any tractor/ATV fuel is captured separately "
+            "via the fuel_consumed field.",
+            "confidence": "high",
+            "last_verified": "2026-06-26",
+            "notes": "Zero area-based emissions. Biodiversity/habitat practices must not be "
+            "billed a moderate-emissions default — they are the regenerative practices the "
+            "platform exists to reward, not an operational emission source.",
+            "impact_type": "zero_direct_emissions",
+        },
+        "nesting": {
+            "value": 0.0,  # kg CO2e per hectare — no combustion / no direct operational emissions
+            "unit": "kg CO2e per hectare",
+            "source": "Trazo methodology: direct operational emissions only",
+            "reference": "Installing owl / songbird nest boxes and shelter structures involves "
+            "no combustion. Any vehicle fuel is captured separately via the fuel_consumed field.",
+            "confidence": "high",
+            "last_verified": "2026-06-26",
+            "notes": "Zero area-based emissions. Nesting / shelter habitat is a beneficial "
+            "biodiversity practice, not an operational emission source.",
+            "impact_type": "zero_direct_emissions",
+        },
         "general": {
             "value": 1.0,  # kg CO2e per hectare (moderate impact)
             "unit": "kg CO2e per hectare",

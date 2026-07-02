@@ -72,6 +72,70 @@ class OSPAnnualUpdateTests(TestCase):
         OSPAnnualUpdate.objects.create(prior_osp=self.osp, reporting_year=2026)
         self.assertEqual(OSPAnnualUpdate.objects.count(), 2)
 
+    def test_serializer_accepts_annual_update_form_payload(self):
+        # The exact shape the new farmer form (OSPAnnualUpdateCard) POSTs.
+        from certifications.serializers import OSPAnnualUpdateSerializer
+
+        payload = {
+            "prior_osp": self.osp.id,
+            "reporting_year": 2026,
+            "changes_summary": "Added a new walnut block; new OMRI compost supplier.",
+            "additions": ["New 2-acre block", "Malibu Compost supplier"],
+            "deletions": ["Discontinued sulfur dust"],
+            "submitted_at": timezone.now().isoformat(),
+        }
+        ser = OSPAnnualUpdateSerializer(data=payload)
+        self.assertTrue(ser.is_valid(), ser.errors)
+        obj = ser.save()
+        self.assertEqual(obj.reporting_year, 2026)
+        self.assertEqual(obj.additions, ["New 2-acre block", "Malibu Compost supplier"])
+        self.assertIsNotNone(obj.submitted_at)
+
+    def test_annual_update_renders_in_audit_export(self):
+        from history.models import History
+        from history.services.audit_export_service import AuditExportService
+        from product.models import Product
+
+        OSPAnnualUpdate.objects.create(
+            prior_osp=self.osp,
+            reporting_year=2026,
+            changes_summary="Reaffirmed OSP; added cover-crop block.",
+        )
+        parcel = Parcel.objects.create(name="P", establishment=self.establishment, area=10.0)
+        product = Product.objects.create(name="Walnut")
+        user = User.objects.create_user(email="au@test.com", password="x")
+        history = History.objects.create(
+            name="Prod",
+            start_date=timezone.now(),
+            product=product,
+            parcel=parcel,
+            operator=user,
+            earning=0.0,
+            production_amount=0.0,
+            reputation=0.0,
+            confidence_score=0.0,
+            transparency_score=0.0,
+            public_views=0,
+            unique_visitors=0,
+            is_outdoor=True,
+            published=True,
+        )
+        svc = AuditExportService(history, certification_type="organic")
+        elements = svc._build_osp_reference_section()
+        text_parts = []
+        for el in elements:
+            t = getattr(el, "text", None)
+            if t:
+                text_parts.append(t)
+            for row in getattr(el, "_cellvalues", None) or []:
+                for cell in row:
+                    ct = getattr(cell, "text", None)
+                    if ct:
+                        text_parts.append(ct)
+        text = " ".join(text_parts)
+        self.assertIn("2026", text)
+        self.assertIn("cover-crop block", text)
+
 
 class LandownerAffidavitTests(TestCase):
     def setUp(self):

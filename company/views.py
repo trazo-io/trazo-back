@@ -511,6 +511,60 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             status=status.HTTP_200_OK,
         )
 
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="operation-audit-export",
+    )
+    def operation_audit_export(self, request, pk=None, company_pk=None):
+        """
+        Operation-wide NOP audit PDF: one combined dossier across every parcel × production
+        for this establishment, instead of one PDF per production.
+
+        Query params:
+          certification  one of: all, organic, globalgap, roc, fsma204, scs  (default: organic)
+          start, end     optional YYYY-MM-DD window (productions active in the window)
+        """
+        from django.http import FileResponse
+
+        from history.services.operation_audit_export_service import OperationAuditExportService
+
+        # Tenant isolation: only the user's own company establishments (same scoping as
+        # dashboard_metrics — self.company is set by CompanyNestedViewSet.initial).
+        establishment = get_object_or_404(self.company.establishment_set.all(), pk=pk)
+
+        cert_type = request.query_params.get("certification", "organic").lower()
+        valid_certifications = {"all", "organic", "globalgap", "roc", "fsma204", "scs"}
+        if cert_type not in valid_certifications:
+            return Response(
+                {"error": f"Invalid certification type '{cert_type}'.", "valid_options": sorted(valid_certifications)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        def _parse_date(raw):
+            if not raw:
+                return None
+            try:
+                return datetime.strptime(raw, "%Y-%m-%d").date()
+            except ValueError:
+                return "invalid"
+
+        start = _parse_date(request.query_params.get("start"))
+        end = _parse_date(request.query_params.get("end"))
+        if start == "invalid" or end == "invalid":
+            return Response(
+                {"error": "start/end must be YYYY-MM-DD dates."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        service = OperationAuditExportService(
+            establishment, certification_type=cert_type, start_date=start, end_date=end
+        )
+        buffer = service.generate_pdf()
+        response = FileResponse(buffer, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="trazo-operation-audit-{establishment.id}.pdf"'
+        return response
+
     @action(detail=True, methods=["get"])
     def dashboard_metrics(self, request, pk=None, company_pk=None) -> Response:
         """

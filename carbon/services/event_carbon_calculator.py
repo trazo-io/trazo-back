@@ -2169,6 +2169,8 @@ class EventCarbonCalculator:
                 "ST": "soil_test",  # Soil Test
                 "PA": "ph_adjustment",  # pH Adjustment
                 "GR": "grazing",  # Grazing Management
+                "HD": "habitat",  # Habitat Development (hedgerows / insectary) — zero direct emissions
+                "NS": "nesting",  # Nesting / Shelter Structures (nest boxes) — zero direct emissions
             }
 
             # Get the appropriate emission factor for area-based calculation
@@ -2358,6 +2360,8 @@ class EventCarbonCalculator:
                 "TI": "tillage",
                 "CO": "composting",
                 "GR": "grazing",
+                "HD": "habitat_development",
+                "NS": "nesting_shelter",
             }
             soil_label = soil_type_labels.get(event.type, event.type)
 

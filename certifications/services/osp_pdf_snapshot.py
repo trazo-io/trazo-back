@@ -43,6 +43,59 @@ def _escape(text: str) -> str:
     return xml.sax.saxutils.escape(text).replace("\n", "<br/>")
 
 
+def _record_inventory(establishment):
+    """Auto-generated inventory of the LIVE records backing the (a)(4) narrative.
+
+    § 205.201(a)(4) requires the OSP to describe how records are maintained. A free-
+    text description is compliant, but pairing it with the actual record counts and
+    date ranges turns the claim into verifiable evidence for the certifier. Returns a
+    list of (label, count, date-range-string); empty items are dropped by the caller.
+    """
+    from django.db.models import Count, Max, Min
+
+    from history.models import (
+        ChemicalEvent,
+        GeneralEvent,
+        History,
+        PestManagementEvent,
+        ProductionEvent,
+        SoilManagementEvent,
+    )
+
+    est = establishment
+
+    def _agg(qs, field="date"):
+        r = qs.aggregate(n=Count("id"), lo=Min(field), hi=Max(field))
+        n = r["n"] or 0
+        if not n:
+            return None
+        lo, hi = r["lo"], r["hi"]
+
+        def _d(v):
+            try:
+                return v.date().isoformat()
+            except AttributeError:
+                return v.isoformat() if v else "—"
+
+        span = f"{_d(lo)} → {_d(hi)}" if lo and hi else "—"
+        return (n, span)
+
+    specs = [
+        ("Production records", History.objects.filter(parcel__establishment=est), "start_date"),
+        ("Chemical / spray records", ChemicalEvent.objects.filter(history__parcel__establishment=est), "date"),
+        ("Field / production events", ProductionEvent.objects.filter(history__parcel__establishment=est), "date"),
+        ("Soil management events", SoilManagementEvent.objects.filter(history__parcel__establishment=est), "date"),
+        ("Pest management events", PestManagementEvent.objects.filter(history__parcel__establishment=est), "date"),
+        ("General / compliance events", GeneralEvent.objects.filter(history__parcel__establishment=est), "date"),
+    ]
+    out = []
+    for label, qs, field in specs:
+        agg = _agg(qs, field)
+        if agg:
+            out.append((label, agg[0], agg[1]))
+    return out
+
+
 def _styles():
     base = getSampleStyleSheet()
     return {
@@ -143,6 +196,18 @@ def generate_osp_snapshot_pdf(osp) -> bytes:
     # Per-section content.
     story.append(PageBreak())
     story.append(Paragraph("OSP Sections — § 205.201(a)(1)-(6)", styles["header"]))
+    # Certifier crosswalk: this snapshot follows the six-part § 205.201(a)(1)-(6)
+    # structure that CCOF, Oregon Tilth, and other USDA-accredited certifiers use
+    # for their Organic System Plan forms, so a reviewer can map each section to the
+    # equivalent field on their own OSP application.
+    story.append(
+        Paragraph(
+            "<i>Structured per 7 CFR 205.201(a)(1)-(6) — the same six-part Organic System "
+            "Plan structure used by CCOF, Oregon Tilth and other USDA-accredited certifiers; "
+            "each section below maps to the corresponding field on the certifier's OSP form.</i>",
+            styles["meta"],
+        )
+    )
 
     sections = osp.sections or {}
     for key in OSP_SECTION_KEYS:
@@ -157,6 +222,24 @@ def generate_osp_snapshot_pdf(osp) -> bytes:
             story.append(Paragraph(_escape(narrative), styles["body"]))
         else:
             story.append(Paragraph("<i>(Section empty at submission time.)</i>", styles["meta"]))
+
+        # (a)(4) Recordkeeping: append the live record inventory so the narrative
+        # claim ("records are maintained in Trazo…") is backed by verifiable counts.
+        if key == "recordkeeping_description":
+            try:
+                inventory = _record_inventory(osp.establishment)
+            except Exception:
+                inventory = []
+            if inventory:
+                story.append(Spacer(1, 0.05 * inch))
+                story.append(
+                    Paragraph(
+                        "<b>Record inventory (auto-generated from live records):</b>",
+                        styles["meta"],
+                    )
+                )
+                for label_i, count_i, span_i in inventory:
+                    story.append(Paragraph(f"• {_escape(label_i)}: {count_i} ({_escape(span_i)})", styles["body"]))
         story.append(Spacer(1, 0.1 * inch))
 
     # Approved Inputs — structured list of substances/products the producer is

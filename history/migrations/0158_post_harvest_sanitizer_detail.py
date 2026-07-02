@@ -15,7 +15,7 @@ class Migration(migrations.Migration):
             name="rinse_step_documented",
             field=models.BooleanField(
                 default=False,
-                help_text="Potable-water rinse step performed after sanitizer contact (required under § 205.272(b))",
+                help_text="Potable-water rinse step performed after sanitizer contact (required under § 205.605(b))",
             ),
         ),
         migrations.AddField(

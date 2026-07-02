@@ -529,7 +529,7 @@ def _seed_solana_verde_osp(establishment, ccof_cert, user):
         "events (planting, irrigation, harvest, post-harvest), chemical / soil / "
         "pest management events with supplier name + purchase date + invoice "
         "number, harvest yield logs, sales invoices to Organically Grown "
-        "Company (OGC) with 'organic' on invoice per § 205.301(f), input / "
+        "Company (OGC) with 'organic' on invoice per § 205.103(b)(3) audit-trail documentation, input / "
         "material lists with OMRI / WSDA / CDFA-OIM / National List "
         "classification, certifications (CCOF + Bee Better), OSP versions, "
         "annual updates, ParcelCropHistory (3-year crop rotation history per "

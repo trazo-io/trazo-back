@@ -31,6 +31,50 @@ class Parcel(models.Model):
     )
     polygon = models.JSONField(blank=True, null=True)
     map_metadata = models.JSONField(blank=True, null=True)
+    # Structured buffer-zone / adjoining-land-use / drift-prevention records per
+    # parcel boundary (USDA NOP 7 CFR 205.202(c) buffer requirement; 205.400(f)(1)
+    # drift notification). A list of dicts, one per boundary, e.g.:
+    #   [{"direction": "North", "adjoining_land_use": "Conventional almond orchard",
+    #     "buffer_width_m": 8, "drift_risk": "Medium",
+    #     "prevention": "8 m vegetative hedgerow buffer + annual neighbor-notification letter"}]
+    # Surfaced in the audit export's Field Map and Buffer Zone sections; empty/None
+    # triggers a REVIEW flag for the inspector.
+    buffer_zones = models.JSONField(blank=True, null=True)
+    # CCOF Parcel Application identity — every parcel record keys to APN + S-T-R.
+    apn = models.CharField(
+        max_length=40,
+        blank=True,
+        null=True,
+        help_text="Assessor's Parcel Number (APN) — CCOF Parcel Application identifier.",
+    )
+    section_township_range = models.CharField(
+        max_length=60,
+        blank=True,
+        null=True,
+        help_text="PLSS Section-Township-Range (e.g. S12 T14S R22E) — CCOF Parcel Application.",
+    )
+    date_began_managing = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Date the operator began managing this parcel (CCOF Affidavit of Land History).",
+    )
+    # Prohibited treated-lumber contamination source (7 CFR 205.272) — e.g. arsenate-treated
+    # trellis end-posts adjacent to the organic crop.
+    treated_lumber_present = models.BooleanField(
+        default=False,
+        help_text="Whether prohibited treated lumber (e.g. arsenate end-posts) is present on the parcel.",
+    )
+    treated_lumber_description = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="Description / location of the treated lumber and the mitigation in place.",
+    )
+    treated_lumber_install_date = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Date the treated lumber was installed (if known).",
+    )
     # crop_type removed - now stored in History model for per-production tracking
     soil_type = models.CharField(max_length=50, blank=True, null=True)
     unique_code = models.CharField(max_length=50, blank=True, null=True)

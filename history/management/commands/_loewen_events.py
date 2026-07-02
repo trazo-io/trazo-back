@@ -15,17 +15,98 @@ from datetime import date, datetime
 from datetime import timezone as dt_tz
 from decimal import Decimal
 
+from certifications.models import OMRIProduct
 from common.models import Gallery, GalleryImage
 from history.models import (
     BusinessEvent,
     ChemicalEvent,
     PestManagementEvent,
     ProductionEvent,
+    SalesRecord,
     SoilManagementEvent,
     WeatherEvent,
 )
 
 from ._loewen_base import LOEWEN_IMAGES
+
+# Authentic wholesale sales for the finished 2024–25 walnut season. Keyed by
+# invoice_number so apply_loewen_audit_fields is idempotent.
+LOEWEN_SALES = [
+    {
+        "buyer_name": "Braga Organic Farms",
+        "sale_date": date(2025, 11, 12),
+        "quantity": Decimal("800.00"),
+        "quantity_unit": "lb",
+        "invoice_number": "LOEWEN-INV-2025-041",
+        "organic_on_invoice": True,
+    },
+    {
+        "buyer_name": "Whole Foods Market — NorCal DC",
+        "sale_date": date(2025, 11, 20),
+        "quantity": Decimal("1200.00"),
+        "quantity_unit": "lb",
+        "invoice_number": "LOEWEN-INV-2025-055",
+        "organic_on_invoice": True,
+    },
+]
+
+
+def apply_loewen_audit_fields(prod):
+    """
+    Add the AUTHENTIC certifier-facing audit data the new export sections read,
+    onto an existing finished Loewen production. Idempotent — safe to re-run and
+    shared by both the seed command and backfill_loewen_audit_fields.
+
+    Authentic to a regenerative organic walnut operation only:
+      * NOP 5012 nitrogen_source = "organic" on fertilizer events
+      * SOE (§ 205.307(a)) itemized SalesRecords (real wholesale channel)
+      * one benign § 205.400(f)(2) OSP change notification (NOP 2615)
+
+    Intentionally omits processed manure (5006) and chlorine sanitizer (5026) —
+    those practices don't fit his operation and would fabricate his audit record.
+    """
+    # NOP 5012 — nitrogen source on fertilizer events (fill only when blank).
+    for ev in prod.history_chemicalevent_events.filter(type=ChemicalEvent.FERTILIZER):
+        if not ev.nitrogen_source:
+            ev.nitrogen_source = "organic"
+            ev.save(update_fields=["nitrogen_source"])
+
+    # SOE — itemized sales records (idempotent on production + invoice_number).
+    for s in LOEWEN_SALES:
+        SalesRecord.objects.get_or_create(
+            production=prod,
+            invoice_number=s["invoice_number"],
+            defaults=dict(
+                buyer_name=s["buyer_name"],
+                sale_date=s["sale_date"],
+                quantity=s["quantity"],
+                quantity_unit=s["quantity_unit"],
+                organic_on_invoice=s["organic_on_invoice"],
+            ),
+        )
+
+    # NOP 2615 — one benign § 205.400(f)(2) change notification on the active OSP.
+    try:
+        from certifications.models import OrganicSystemPlan, OSPChangeNotification
+
+        osp = (
+            OrganicSystemPlan.objects.filter(establishment=prod.parcel.establishment)
+            .order_by("-version_number")
+            .first()
+        )
+        if osp is not None:
+            OSPChangeNotification.objects.get_or_create(
+                osp=osp,
+                change_category=OSPChangeNotification.CATEGORY_ACREAGE_FIELD_ADDITION,
+                description="Added 12-acre Block C to the certified organic walnut acreage.",
+                defaults=dict(
+                    date_notified=date(2025, 3, 1),
+                    method=OSPChangeNotification.METHOD_WRITTEN,
+                    documentation_timing=OSPChangeNotification.DOC_AT_NOTIFICATION,
+                ),
+            )
+    except Exception:  # noqa: BLE001 — non-fatal enrichment
+        pass
 
 
 def _dt(year, month, day, hour=8):
@@ -290,7 +371,36 @@ def create_loewen_finished_events(prod, user):
         album=_album("harvest"),
     )
 
+    # 9b: Post-harvest processing — on-farm hulling/drying + dedicated organic cold
+    # storage (NOP 7 CFR 205.272 commingling prevention; storage = FSMA-style KDE).
+    ProductionEvent.objects.create(
+        history=prod,
+        index=11,
+        date=_dt(2025, 10, 5),
+        description=(
+            "On-farm hulling and drying of the walnut harvest, then transfer to "
+            "dedicated organic cold storage. Walnuts dried to ~8% kernel moisture; "
+            "the lot is kept on labelled organic bins with no commingling with any "
+            "conventional crop. All handling equipment is dedicated organic."
+        ),
+        created_by=user,
+        performed_by=by,
+        type=ProductionEvent.POST_HARVEST_PROCESSING,
+        name="Hulling, Drying & Storage",
+        area_covered=Decimal("44.52"),
+        area_unit="ha",
+        storage_location="On-farm dryer → Organic Cooler 2 (Bin OR-WAL-2025)",
+        storage_temperature_f=Decimal("38.0"),
+        album=_album("harvest"),
+    )
+
     # 10: Organic-approved fertility input (NO synthetic) — supplier chain for clean audit
+    # Link the OMRI-listed fish/seaweed input to its catalog record so the audit
+    # export's OMRI verification + OSP-approval cross-check resolve it (not just
+    # "self-reported"). The OSP approval is wired in _loewen_base.create_loewen_base.
+    neptune_omri = (
+        OMRIProduct.objects.filter(product_name__icontains="neptune").filter(product_name__icontains="fish").first()
+    )
     ChemicalEvent.objects.create(
         history=prod,
         index=10,
@@ -314,6 +424,7 @@ def create_loewen_finished_events(prod, user):
         way_of_application="foliar",
         application_method_structured="foliar",
         organic_approved="omri_listed",
+        omri_product=neptune_omri,
         supplier_name="Cal-West Ag Supply",
         purchase_date=date(2025, 4, 2),
         purchase_invoice="CWAS-2025-0417",
@@ -448,6 +559,10 @@ def create_loewen_finished_events(prod, user):
         },
         album=_album("orchard"),
     )
+
+    # Authentic certifier-facing audit data for the new export sections
+    # (nitrogen source, wholesale sales, benign OSP change notification).
+    apply_loewen_audit_fields(prod)
 
     return 16
 

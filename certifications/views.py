@@ -19,6 +19,8 @@ from .models import (
     OMRIProduct,
     OrganicSystemPlan,
     OSPAnnualUpdate,
+    OSPChangeNotification,
+    StateOrganicRegistration,
 )
 from .serializers import (
     CertificationSerializer,
@@ -26,6 +28,8 @@ from .serializers import (
     OrganicSystemPlanListSerializer,
     OrganicSystemPlanSerializer,
     OSPAnnualUpdateSerializer,
+    OSPChangeNotificationSerializer,
+    StateOrganicRegistrationSerializer,
 )
 from .services.omri_verifier import OMRIProductVerifier
 
@@ -345,18 +349,33 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         from .services.osp_pdf_snapshot import generate_osp_snapshot_pdf
 
-        with transaction.atomic():
-            osp.status = "submitted"
-            osp.submitted_at = dj_tz.now()
-            # Save FIRST so submitted_at is in the PDF.
-            osp.save(update_fields=["status", "submitted_at", "updated_at"])
+        # Submission is atomic: a 'submitted' OSP MUST carry its immutable snapshot
+        # PDF (the exact artifact the certifier receives). If snapshot generation
+        # fails, roll the status change back and fail loudly rather than leave a
+        # 'submitted' OSP with no snapshot — a silent gap the inspector can't detect.
+        try:
+            with transaction.atomic():
+                osp.status = "submitted"
+                osp.submitted_at = dj_tz.now()
+                # Save FIRST so submitted_at is in the PDF.
+                osp.save(update_fields=["status", "submitted_at", "updated_at"])
 
-            try:
                 pdf_bytes = generate_osp_snapshot_pdf(osp)
                 filename = f"osp_v{osp.version_number}_{osp.public_id}_" f"{osp.submitted_at.date().isoformat()}.pdf"
                 osp.submission_pdf.save(filename, ContentFile(pdf_bytes), save=True)
-            except Exception as e:  # pragma: no cover — PDF gen failure is non-fatal
-                logger.error(f"OSP snapshot PDF generation failed for OSP {osp.id}: {e}")
+        except Exception as e:
+            logger.error(f"OSP snapshot PDF generation failed for OSP {osp.id}: {e}")
+            return Response(
+                {
+                    "error": "OSP submission failed",
+                    "detail": (
+                        "Could not generate the immutable OSP snapshot PDF, so the submission was "
+                        "rolled back (the OSP is still 'draft'). Please try again; if it persists, "
+                        "contact support."
+                    ),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
         return Response(OrganicSystemPlanSerializer(osp).data)
 
@@ -576,6 +595,30 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         osp.refresh_from_db()
         return Response(OrganicSystemPlanSerializer(osp).data)
 
+    @action(detail=True, methods=["get", "post"], url_path="change-notifications")
+    def change_notifications(self, request, **kwargs):
+        """
+        List (GET) or record (POST) OSP Notification-of-Changes entries —
+        7 CFR 205.400(f) / NOP 2615 §3.4.
+
+        POST payload: { "change_category": <enum>, "description": "...",
+        "date_notified": "YYYY-MM-DD" (optional), "method": "verbal"|"written"
+        (optional), "documentation_timing": <enum> (optional) }.
+        supporting_document may be included as multipart.
+        """
+        osp = self.get_object()
+        if request.method == "GET":
+            qs = osp.change_notifications.all()
+            return Response(OSPChangeNotificationSerializer(qs, many=True).data)
+
+        serializer = OSPChangeNotificationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(
+            osp=osp,
+            created_by=request.user if request.user.is_authenticated else None,
+        )
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
     @action(detail=True, methods=["post"], url_path="remove-approved-input")
     def remove_approved_input(self, request, **kwargs):
         """
@@ -721,6 +764,32 @@ class LandownerAffidavitViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         if parcel_id:
             qs = qs.filter(parcel_id=parcel_id)
         return qs
+
+    def get_permissions(self):
+        if self.action in ["list", "retrieve"]:
+            return super().get_permissions()
+        return [IsAuthenticated()]
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+
+class StateOrganicRegistrationViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
+    """
+    CRUD for State Organic Program (CDFA SOP) producer registrations.
+
+    Nested under
+    /companies/{company_pk}/establishments/{establishment_pk}/state-organic-registrations/.
+    """
+
+    serializer_class = StateOrganicRegistrationSerializer
+    lookup_field = "pk"
+
+    def get_queryset(self):
+        return StateOrganicRegistration.objects.filter(
+            establishment_id=self.kwargs.get("establishment_pk"),
+            establishment__company=self.company,
+        ).select_related("establishment")
 
     def get_permissions(self):
         if self.action in ["list", "retrieve"]:

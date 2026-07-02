@@ -7,7 +7,7 @@ compost temp/duration/turnings, manure interval, pest ID + threshold rationale,
 contamination incident chain, equipment cleaning, OFPP, split operation,
 ParcelCropHistory, seed organic search log, 5-year retention, sales/delivery)
 plus an active Organic System Plan v1 (six § 205.201(a) narrative sections) and
-an OGC delivery BusinessEvent (BOL/PO/invoice + § 205.301(f) organic-on-invoice).
+an OGC delivery BusinessEvent (BOL/PO/invoice + § 205.103(b)(3) organic-on-invoice).
 
 Source of truth for every literal value:
   documentation/testing/E2E_ORGANIC_FARM_TESTING_GUIDE.md
@@ -150,7 +150,7 @@ class Command(BaseCommand):
         self.stdout.write("    manure 120-day, pest ID + threshold rationale, equipment cleaning,")
         self.stdout.write("    contamination incident chain, seed organic search log, sales record,")
         self.stdout.write("    active OSP v1 (six § 205.201 sections fully populated, linked to")
-        self.stdout.write("    CCOF cert), OGC delivery BusinessEvent (BOL/PO/invoice + § 205.301(f)).")
+        self.stdout.write("    CCOF cert), OGC delivery BusinessEvent (BOL/PO/invoice + § 205.103(b)(3)).")
 
     def _cascade_delete(self, company):
         """
@@ -286,7 +286,7 @@ class Command(BaseCommand):
                     f"({len(narrative)}). Audit PDF flags any short section as incomplete."
                 )
 
-        # 9. OGC delivery BusinessEvent (§ 205.501(a)(21) + § 205.301(f))
+        # 9. OGC delivery BusinessEvent (§ 205.501(a)(21) + § 205.103(b)(3))
         ogc_delivery = BusinessEvent.objects.filter(
             history=finished_production,
             type=BusinessEvent.COMPLIANCE,

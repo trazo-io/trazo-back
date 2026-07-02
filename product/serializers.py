@@ -178,6 +178,12 @@ class CreateParcelSerializer(ModelSerializer):
     # ✅ AGRICULTURAL DATA FIELDS - Accept all advanced fields
     agricultural_details = serializers.JSONField(required=False)
 
+    # Per-boundary buffer-zone / adjoining-land / drift-prevention records
+    # (7 CFR 205.202(c); 205.400(f)(1)). Writable so a real pilot farmer can record
+    # buffers — previously buffer_zones was a model JSONField with no write path, so
+    # the audit export fired the empty-state REVIEW flag on every non-seeded parcel.
+    buffer_zones = serializers.JSONField(required=False, allow_null=True)
+
     # Individual agricultural fields for backward compatibility and easy access
     soil_ph = serializers.FloatField(required=False, write_only=True)
     soil_organic_matter = serializers.FloatField(required=False, write_only=True)
@@ -220,6 +226,13 @@ class CreateParcelSerializer(ModelSerializer):
             "current_history",
             "polygon",
             "map_metadata",
+            "buffer_zones",
+            "apn",
+            "section_township_range",
+            "date_began_managing",
+            "treated_lumber_present",
+            "treated_lumber_description",
+            "treated_lumber_install_date",
             "soil_type",
             "unique_code",
             "certification_type",
@@ -255,6 +268,68 @@ class CreateParcelSerializer(ModelSerializer):
 
     def get_product(self, parcel):
         return None
+
+    def validate_buffer_zones(self, value):
+        """Validate + normalize the per-boundary buffer-zone records (7 CFR 205.202(c)).
+
+        The audit export's Field Map + Buffer Zone sections consume a list of dicts,
+        one per boundary, each with: direction, adjoining_land_use, buffer_width_m
+        (numeric, rendered as "X m"), drift_risk, prevention. We require the two
+        identifying keys (direction + adjoining_land_use) so a record can't be a blank
+        row, coerce buffer_width_m to a number, and normalize to exactly the export's
+        keys so a malformed blob can't produce an illegible inspector record.
+
+        CCOF OSP Sections D (Adjoining Land Use) & E (Buffer Zones) add three optional
+        descriptors per boundary: adjacent_organic (the neighbor is also certified, so
+        no buffer is required), buffer_type (hedgerow / road / fallow strip / windbreak),
+        and crop_in_buffer (what, if anything, grows in the strip — flagged so it is never
+        sold as organic). § 205.400(f)(1) adds drift-notification readiness per boundary
+        (neighbor_notified + neighbor_notification_date — the annual letter to a neighbor
+        who applies prohibited substances). All ride alongside the core keys in the same
+        JSON record.
+        """
+        if value is None:
+            return value
+        if not isinstance(value, list):
+            raise serializers.ValidationError("buffer_zones must be a list of boundary records.")
+        cleaned = []
+        for i, row in enumerate(value):
+            if not isinstance(row, dict):
+                raise serializers.ValidationError(f"buffer_zones[{i}] must be an object.")
+            direction = str(row.get("direction") or "").strip()
+            adjoining = str(row.get("adjoining_land_use") or "").strip()
+            if not direction or not adjoining:
+                raise serializers.ValidationError(
+                    f"buffer_zones[{i}] requires both 'direction' and 'adjoining_land_use'."
+                )
+            width = row.get("buffer_width_m")
+            if width in (None, ""):
+                width = None
+            else:
+                try:
+                    width = float(width)
+                except (TypeError, ValueError):
+                    raise serializers.ValidationError(f"buffer_zones[{i}].buffer_width_m must be a number (meters).")
+                if width < 0:
+                    raise serializers.ValidationError(f"buffer_zones[{i}].buffer_width_m cannot be negative.")
+            cleaned.append(
+                {
+                    "direction": direction,
+                    "adjoining_land_use": adjoining,
+                    "buffer_width_m": width,
+                    "drift_risk": str(row.get("drift_risk") or "").strip() or None,
+                    "prevention": str(row.get("prevention") or "").strip() or None,
+                    # CCOF OSP Sections D & E
+                    "adjacent_organic": bool(row.get("adjacent_organic")),
+                    "buffer_type": str(row.get("buffer_type") or "").strip() or None,
+                    "crop_in_buffer": str(row.get("crop_in_buffer") or "").strip() or None,
+                    # § 205.400(f)(1) drift-notification readiness — the annual letter to a
+                    # neighbor who applies prohibited substances on this boundary.
+                    "neighbor_notified": bool(row.get("neighbor_notified")),
+                    "neighbor_notification_date": str(row.get("neighbor_notification_date") or "").strip() or None,
+                }
+            )
+        return cleaned
 
     def _handle_agricultural_data(self, instance, validated_data):
         """Handle agricultural data fields and store in agricultural_details JSONField"""

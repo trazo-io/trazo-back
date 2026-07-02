@@ -96,7 +96,8 @@ class PURExportServiceTests(TestCase):
         self.assertEqual(row["operator_name"], "Salinas Citrus Co")
         self.assertEqual(row["city"], "Fresno")
         self.assertEqual(row["site_id"], "0001")
-        self.assertEqual(row["county"], "Fresno")
+        # Box 10 carries the CAC 2-digit county code + name (CalAgPermits validates on the code).
+        self.assertEqual(row["county"], "10 (Fresno)")
         self.assertEqual(row["section"], "12")
         self.assertEqual(row["base_meridian"], "M")
         self.assertEqual(row["commodity"], "Navel Orange")
@@ -165,3 +166,57 @@ class PURExportServiceTests(TestCase):
         self.assertEqual(summary["incomplete_count"], 1)
         self.assertEqual(summary["filing_deadline"], "2026-07-10")
         self.assertEqual(summary["form"], "DPR-PML-017C")
+
+    def test_county_code_resolution(self):
+        # San Diego -> code 37; case/suffix-insensitive.
+        row = self._make_row(application_county="San Diego County")
+        self.assertEqual(row["county"], "37 (San Diego County)")
+
+    def test_unrecognized_county_blanked_and_flagged(self):
+        # A county name that is not a CA county must NOT emit an unvalidatable box 10.
+        row = self._make_row(application_county="Springfield")
+        self.assertEqual(row["county"], "")
+        self.assertIn("county", row["_missing_required"])
+        self.assertIn("not a recognized CA county", row["notes"])
+
+    def test_blank_quantity_flags_box_24_and_19(self):
+        # Units default to gal/acres on the model; a blank VALUE must still flag the
+        # numeric boxes (24 total product, 19 acreage treated) as missing.
+        row = self._make_row(volume="", volume_numeric=None, area="", area_numeric=None)
+        self.assertEqual(row["total_product_used"], "")
+        self.assertEqual(row["acreage_treated"], "")
+        missing = set(row["_missing_required"])
+        self.assertIn("total_product_used", missing)
+        self.assertIn("acreage_treated", missing)
+
+    def test_adjuvant_emits_separate_pur_row(self):
+        self._full_pesticide(
+            tank_mix_partners=[
+                {
+                    "commercial_name": "Dyne-Amic",
+                    "manufacturer": "Helena",
+                    "epa_registration_number": "5905-501",
+                    "volume": "1",
+                    "volume_unit": "gal",
+                    "organic_approved": True,
+                }
+            ]
+        )
+        rows = PURExportService(self.establishment, 6, 2026).build_rows()
+        self.assertEqual(len(rows), 2, "adjuvant must emit its own PUR line")
+        adj = rows[1]
+        self.assertEqual(adj["epa_registration_number"], "5905-501")
+        self.assertEqual(adj["total_product_used"], "1 gal")
+        self.assertEqual(adj["product_and_manufacturer"], "Dyne-Amic / Helena")
+        # shared context copied from the primary row
+        self.assertEqual(adj["county"], "10 (Fresno)")
+        self.assertIn("Tank-mix adjuvant", adj["notes"])
+
+    def test_empty_adjuvant_entries_skipped(self):
+        self._full_pesticide(tank_mix_partners=[{"commercial_name": "", "epa_registration_number": ""}])
+        rows = PURExportService(self.establishment, 6, 2026).build_rows()
+        self.assertEqual(len(rows), 1, "blank adjuvant rows must be skipped")
+
+    def _make_row(self, **overrides):
+        self._full_pesticide(**overrides)
+        return PURExportService(self.establishment, 6, 2026).build_rows()[0]

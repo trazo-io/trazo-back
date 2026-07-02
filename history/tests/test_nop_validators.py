@@ -231,6 +231,55 @@ class NOPManureHarvestIntervalTests(TestCase):
         with self.assertRaises(ValidationError):
             event.full_clean()
 
+    def test_documented_processed_5006_manure_bypasses_the_block(self):
+        # NOP 5006: manure processed to reduce pathogens is interval-exempt when
+        # documented. 60 days ago (inside the 120-day raw window) but processed
+        # with a recorded processing temperature → harvest must NOT be blocked.
+        SoilManagementEvent.objects.create(
+            history=self.history,
+            created_by=self.user,
+            description="Processed poultry pellets",
+            date=timezone.now() - timedelta(days=60),
+            type="CO",
+            manure_application_date=(timezone.now() - timedelta(days=60)).date(),
+            manure_treatment="processed_5006",
+            processed_manure_temp_f=150,
+        )
+        event = self._harvest_event(days_from_now=0)
+        event.full_clean()  # should not raise — NOP 5006 exemption
+
+    def test_processed_5006_manure_bypasses_via_attestation(self):
+        # Exemption is also granted when only an OMRI/supplier attestation is on file.
+        SoilManagementEvent.objects.create(
+            history=self.history,
+            created_by=self.user,
+            description="Processed manure via attestation",
+            date=timezone.now() - timedelta(days=60),
+            type="CO",
+            manure_application_date=(timezone.now() - timedelta(days=60)).date(),
+            manure_treatment="processed_5006",
+            processed_manure_attestation="OMRI-listed heat-processed poultry pellets, PFRP",
+        )
+        event = self._harvest_event(days_from_now=0)
+        event.full_clean()  # should not raise
+
+    def test_undocumented_processed_5006_manure_does_not_bypass(self):
+        # Classified processed_5006 but NO temperature and NO attestation → the
+        # exemption is not earned; the event reverts to the raw (c)(1) interval.
+        SoilManagementEvent.objects.create(
+            history=self.history,
+            created_by=self.user,
+            description="Undocumented 'processed' manure",
+            date=timezone.now() - timedelta(days=60),
+            type="CO",
+            manure_application_date=(timezone.now() - timedelta(days=60)).date(),
+            manure_harvest_interval="120",
+            manure_treatment="processed_5006",
+        )
+        event = self._harvest_event(days_from_now=0)
+        with self.assertRaises(ValidationError):
+            event.full_clean()
+
     def test_compost_missing_method_does_not_bypass(self):
         # Temp + duration + C:N present but no method — cannot assert (c)(2) path.
         from history.models import SoilManagementEvent

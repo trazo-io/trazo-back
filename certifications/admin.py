@@ -6,8 +6,64 @@ from .models import (
     CertificationVerificationLog,
     IngestionRun,
     NationalListRevision,
+    OSPChangeNotification,
+    PostHarvestFacility,
     WSDAMaterial,
 )
+
+
+@admin.register(OSPChangeNotification)
+class OSPChangeNotificationAdmin(admin.ModelAdmin):
+    list_display = [
+        "osp",
+        "change_category",
+        "date_notified",
+        "method",
+        "certifier_acknowledged_at",
+        "created_by",
+    ]
+    list_filter = ["change_category", "method", "documentation_timing"]
+    search_fields = ["description", "osp__establishment__name"]
+
+
+@admin.register(PostHarvestFacility)
+class PostHarvestFacilityAdmin(admin.ModelAdmin):
+    """
+    White-glove entry for off-farm post-harvest handlers (CCOF G6.1). Operator
+    records the handler's identity + organic certificate; the audit export reads
+    it. Use the 'Verify handler cert against USDA OID' action to attempt
+    automated verification.
+    """
+
+    list_display = [
+        "name",
+        "facility_type",
+        "establishment",
+        "verification_status",
+        "effective_date",
+        "expiry_date",
+    ]
+    list_filter = ["facility_type", "verification_status"]
+    search_fields = ["name", "establishment__name", "certification_number", "certifier_name"]
+    autocomplete_fields = ["establishment"]
+    readonly_fields = [
+        "public_id",
+        "last_verified_at",
+        "verification_source",
+        "raw_api_response",
+        "created_at",
+        "updated_at",
+    ]
+    actions = ["verify_against_oid"]
+
+    @admin.action(description="Verify handler cert against USDA Organic Integrity Database")
+    def verify_against_oid(self, request, queryset):
+        n = 0
+        for facility in queryset:
+            facility.verify()
+            facility.save()
+            n += 1
+        self.message_user(request, f"Ran USDA-OID verification on {n} facility cert(s).")
 
 
 @admin.register(WSDAMaterial)

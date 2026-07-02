@@ -7,6 +7,7 @@ from certifications.views import (
     LandownerAffidavitViewSet,
     OrganicSystemPlanViewSet,
     OSPAnnualUpdateViewSet,
+    StateOrganicRegistrationViewSet,
 )
 from history.views import EventViewSet, HistoryScanViewSet, HistoryViewSet
 from product.views import ParcelViewSet, ProductsViewSet
@@ -35,6 +36,11 @@ establishment_router.register(
     r"osp-annual-updates", OSPAnnualUpdateViewSet, basename="establishment-osp-annual-updates"
 )
 establishment_router.register(r"affidavits", LandownerAffidavitViewSet, basename="establishment-affidavits")
+establishment_router.register(
+    r"state-organic-registrations",
+    StateOrganicRegistrationViewSet,
+    basename="establishment-state-organic-registrations",
+)
 establishment_router.register(r"scans", HistoryScanViewSet, basename="establishment-scans")
 establishment_router.register(r"events", EventViewSet, basename="establishment-events")
 establishment_router.register(r"parcels", ParcelViewSet, basename="establishment-parcels")
