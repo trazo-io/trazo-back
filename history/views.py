@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 
 from django.core.cache import cache
 from django.db import connections, transaction
-from django.db.models import Prefetch
+from django.db.models import Prefetch, Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
@@ -196,8 +196,19 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         Optimized queryset with proper database optimizations to prevent N+1 queries.
         """
         if self.action == "public_history":
+            # Published productions are visible to anyone; a producer previewing
+            # their OWN unpublished (draft/in-progress) production is also allowed
+            # so the ProfileProduction page loads before publishing. The per-object
+            # owner check below (owns_it) still gates integer-id lookups.
+            _user = getattr(self.request, "user", None)
+            if _user is not None and _user.is_authenticated:
+                _visibility = Q(published=True) | Q(
+                    parcel__establishment__company__in=_user.companies.all()
+                )
+            else:
+                _visibility = Q(published=True)
             return (
-                History.objects.filter(published=True)
+                History.objects.filter(_visibility)
                 .select_related(
                     "product",
                     "parcel__establishment__company",

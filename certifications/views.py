@@ -151,11 +151,6 @@ class CertificationViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             establishment__company=self.company,
         ).select_related("establishment")
 
-    def get_permissions(self):
-        if self.action in ["list", "retrieve"]:
-            return super().get_permissions()
-        return [IsAuthenticated()]
-
     def perform_create(self, serializer):
         certification = serializer.save(
             establishment_id=self.kwargs["establishment_pk"],
@@ -239,11 +234,6 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 "approved_input_changes__changed_by",
             )
         )
-
-    def get_permissions(self):
-        if self.action in ["list", "retrieve"]:
-            return super().get_permissions()
-        return [IsAuthenticated()]
 
     def perform_create(self, serializer):
         establishment_id = self.kwargs["establishment_pk"]
@@ -735,10 +725,16 @@ class OSPAnnualUpdateViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             prior_osp__establishment__company=self.company,
         ).select_related("prior_osp", "new_osp")
 
-    def get_permissions(self):
-        if self.action in ["list", "retrieve"]:
-            return super().get_permissions()
-        return [IsAuthenticated()]
+    def get_serializer(self, *args, **kwargs):
+        serializer = super().get_serializer(*args, **kwargs)
+        # Cross-tenant FK guard: prior_osp must belong to THIS establishment. get_queryset only
+        # scopes reads; without this a write could reference another operation's OSP. Scoping the
+        # field queryset makes a foreign prior_osp fail validation on both create and update.
+        est_pk = self.kwargs.get("establishment_pk")
+        fields = getattr(serializer, "fields", None)
+        if est_pk and fields and "prior_osp" in fields and hasattr(fields["prior_osp"], "queryset"):
+            fields["prior_osp"].queryset = OrganicSystemPlan.objects.filter(establishment_id=est_pk)
+        return serializer
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
@@ -765,10 +761,16 @@ class LandownerAffidavitViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             qs = qs.filter(parcel_id=parcel_id)
         return qs
 
-    def get_permissions(self):
-        if self.action in ["list", "retrieve"]:
-            return super().get_permissions()
-        return [IsAuthenticated()]
+    def get_serializer(self, *args, **kwargs):
+        serializer = super().get_serializer(*args, **kwargs)
+        # Cross-tenant FK guard: the affidavit's parcel must belong to THIS establishment.
+        est_pk = self.kwargs.get("establishment_pk")
+        fields = getattr(serializer, "fields", None)
+        if est_pk and fields and "parcel" in fields and hasattr(fields["parcel"], "queryset"):
+            from product.models import Parcel
+
+            fields["parcel"].queryset = Parcel.objects.filter(establishment_id=est_pk)
+        return serializer
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
@@ -791,10 +793,18 @@ class StateOrganicRegistrationViewSet(CompanyNestedViewSet, viewsets.ModelViewSe
             establishment__company=self.company,
         ).select_related("establishment")
 
-    def get_permissions(self):
-        if self.action in ["list", "retrieve"]:
-            return super().get_permissions()
-        return [IsAuthenticated()]
+    def get_serializer(self, *args, **kwargs):
+        serializer = super().get_serializer(*args, **kwargs)
+        # Cross-tenant FK guard: the registration's establishment must be THIS one (the URL
+        # establishment). Scoping the field queryset blocks a payload that points at another
+        # company's establishment on both create and update.
+        est_pk = self.kwargs.get("establishment_pk")
+        fields = getattr(serializer, "fields", None)
+        if est_pk and fields and "establishment" in fields and hasattr(fields["establishment"], "queryset"):
+            from company.models import Establishment
+
+            fields["establishment"].queryset = Establishment.objects.filter(pk=est_pk)
+        return serializer
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)

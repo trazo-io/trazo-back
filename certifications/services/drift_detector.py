@@ -882,18 +882,26 @@ def attach_signals():
     def _seed(sender, instance, **kwargs):
         transaction.on_commit(lambda: evaluate_seed_event(instance))
 
+    # weak=False is REQUIRED: these receivers are module-local closures with no other
+    # strong reference once attach_signals() returns. With Django's default weak=True the
+    # signal keeps only a weak ref, so the next GC cycle collects them and drift detection
+    # silently stops firing on save. (This is why the drift never stamped in tests and would
+    # intermittently die in a long-running server.)
     post_save.connect(
         _chemical,
         sender=ChemicalEvent,
         dispatch_uid="drift_detector.chemical_event",
+        weak=False,
     )
     post_save.connect(
         _soil,
         sender=SoilManagementEvent,
         dispatch_uid="drift_detector.soil_event",
+        weak=False,
     )
     post_save.connect(
         _seed,
         sender=ProductionEvent,
         dispatch_uid="drift_detector.production_event",
+        weak=False,
     )

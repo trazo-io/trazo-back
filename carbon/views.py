@@ -6085,29 +6085,45 @@ class PublicProductionViewSet(viewsets.ViewSet):
             from history.models import History
 
             # Support both UUID (public_id) and integer (legacy) lookups
-            lookup_kwargs = {"published": True}
+            lookup_kwargs = {}
             try:
                 public_uuid = uuid_module.UUID(str(pk))
                 lookup_kwargs["public_id"] = public_uuid
             except (ValueError, AttributeError):
                 lookup_kwargs["id"] = pk
 
+            # Published productions are public; a producer previewing their OWN
+            # unpublished (draft) production is also allowed so ProfileProduction
+            # loads before publishing. Anonymous/other users stay published-only.
+            user = getattr(request, "user", None)
+            if user is not None and user.is_authenticated:
+                visibility = Q(published=True) | Q(parcel__establishment__company__in=user.companies.all())
+            else:
+                visibility = Q(published=True)
+
             # Get the production object
-            production = (
-                History.objects.select_related("product", "parcel__establishment__company", "album")
-                .prefetch_related(
-                    "carbonentry_set__source",
-                    "album__images",
-                    "history_weatherevent_events",
-                    "history_chemicalevent_events",
-                    "history_productionevent_events",
-                    "history_generalevent_events",
-                    "history_equipmentevent_events",
-                    "history_soilmanagementevent_events",
-                    "history_pestmanagementevent_events",
+            try:
+                production = (
+                    History.objects.select_related("product", "parcel__establishment__company", "album")
+                    .prefetch_related(
+                        "carbonentry_set__source",
+                        "album__images",
+                        "history_weatherevent_events",
+                        "history_chemicalevent_events",
+                        "history_productionevent_events",
+                        "history_generalevent_events",
+                        "history_equipmentevent_events",
+                        "history_soilmanagementevent_events",
+                        "history_pestmanagementevent_events",
+                    )
+                    .filter(visibility, **lookup_kwargs)
+                    .get()
                 )
-                .get(**lookup_kwargs)
-            )
+            except History.DoesNotExist:
+                return Response(
+                    {"error": "Production not found or not accessible."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
 
             # Use PublicHistorySerializer (same as working transparency endpoint)
             from history.serializers import PublicHistorySerializer

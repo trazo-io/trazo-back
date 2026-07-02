@@ -1033,8 +1033,8 @@ def create_finished_events(production, user, demo_images=None):
         duration="4",
         people_involved=3,
         observation=(
-            "Successful organic season. 22 documented events across all 7 categories. "
-            "Transparency score target: 95%+."
+            "Successful organic season. 22 documented events across all 7 categories; "
+            "records compiled into the OGC buyer package and organic documentation export."
         ),
     )
 

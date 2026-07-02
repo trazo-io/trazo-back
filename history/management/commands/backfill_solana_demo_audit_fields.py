@@ -178,6 +178,19 @@ class Command(BaseCommand):
         except Exception as e:  # noqa: BLE001 — non-fatal enrichment
             self.stdout.write(self.style.WARNING(f"  NOP 2615 notifications skipped: {e}"))
 
+        # Scrub the legacy "Transparency score target: 95%+" phrase from any event
+        # note — an engagement metric is irrelevant to a certifier audit and reads
+        # oddly in the export. Idempotent; safe on already-clean data.
+        scrubbed = 0
+        for ev in prod.history_generalevent_events.filter(observation__icontains="Transparency score target"):
+            ev.observation = (
+                "Successful organic season. 22 documented events across all 7 categories; "
+                "records compiled into the OGC buyer package and organic documentation export."
+            )
+            ev.save(update_fields=["observation"])
+            scrubbed += 1
+        self.stdout.write(f"  Scrubbed transparency-score note from {scrubbed} event(s).")
+
         try:
             prod.update_trust_metrics()
         except Exception as e:  # noqa: BLE001 — non-fatal
