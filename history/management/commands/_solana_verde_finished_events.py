@@ -52,7 +52,7 @@ AVOCADO_IMAGES = {
     ],
     "avocado_packed": [
         # Crates of harvested avocados
-        "https://images.unsplash.com/photo-1541519227354-08fa5d50c820?w=800&q=80",
+        "https://images.unsplash.com/photo-1573566291259-fd494a326b60?q=800&w=80",
     ],
 }
 
