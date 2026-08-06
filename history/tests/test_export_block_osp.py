@@ -97,10 +97,64 @@ class OspAnnualUpdateTests(_Base):
         self.assertIn("[REVIEW] 7 CFR 205.406", text)
 
     def test_annual_update_renders(self):
+        # Year must match the production's own year — the exporter selects the filing that
+        # covers the period under review, not simply the newest one on file.
+        year = self.history.start_date.year
         osp = OrganicSystemPlan.objects.create(establishment=self.establishment, version_number=1, status="active")
-        OSPAnnualUpdate.objects.create(prior_osp=osp, reporting_year=2026, changes_summary="Added new foliar input")
+        OSPAnnualUpdate.objects.create(prior_osp=osp, reporting_year=year, changes_summary="Added new foliar input")
         text = _section_text(self._svc()._build_osp_reference_section())
         self.assertIn("Annual Continuation", text)
-        self.assertIn("2026", text)
+        self.assertIn(str(year), text)
         self.assertIn("Added new foliar input", text)
         self.assertNotIn("[REVIEW] 7 CFR 205.406", text)
+
+    def test_annual_update_for_wrong_year_is_flagged_not_passed_off(self):
+        """
+        A filing from another year must not silently stand in for the year under review.
+        It renders for reference but still fires the § 205.406 REVIEW flag.
+        """
+        year = self.history.start_date.year
+        osp = OrganicSystemPlan.objects.create(establishment=self.establishment, version_number=1, status="active")
+        OSPAnnualUpdate.objects.create(prior_osp=osp, reporting_year=year - 2, changes_summary="Two seasons ago")
+        text = _section_text(self._svc()._build_osp_reference_section())
+        self.assertIn(str(year - 2), text)
+        self.assertIn("[REVIEW] 7 CFR 205.406", text)
+        self.assertIn("does not reaffirm the OSP for the year under review", text)
+
+    def test_sections_unchanged_attestation_renders(self):
+        """Per-section attestation must reach the PDF — it was captured but never rendered."""
+        year = self.history.start_date.year
+        osp = OrganicSystemPlan.objects.create(establishment=self.establishment, version_number=1, status="active")
+        OSPAnnualUpdate.objects.create(
+            prior_osp=osp,
+            reporting_year=year,
+            sections_unchanged_attestation={
+                "practices_procedures": True,
+                "monitoring_plan": True,
+            },
+        )
+        text = _section_text(self._svc()._build_osp_reference_section())
+        self.assertIn("Sections Attested Unchanged", text)
+        self.assertIn("Practices Procedures", text)
+        self.assertIn("Monitoring Plan", text)
+        # Sections the operator did not affirm are reported as NOT ATTESTED, never as
+        # "changed" — the data cannot distinguish "it changed" from "never answered",
+        # and only the weaker claim is defensible on a compliance document.
+        self.assertIn("Sections Not Attested", text)
+        self.assertIn("Inputs List", text)
+        self.assertNotIn("Sections With Changes", text)
+
+    def test_no_attestation_does_not_claim_all_sections_changed(self):
+        """
+        A farmer who never touches the attestation widget must not have every section
+        reported to the certifier — the row is suppressed entirely.
+        """
+        year = self.history.start_date.year
+        osp = OrganicSystemPlan.objects.create(establishment=self.establishment, version_number=1, status="active")
+        OSPAnnualUpdate.objects.create(
+            prior_osp=osp, reporting_year=year, changes_summary="Narrative only", sections_unchanged_attestation={}
+        )
+        text = _section_text(self._svc()._build_osp_reference_section())
+        self.assertIn("Narrative only", text)
+        self.assertNotIn("Sections Not Attested", text)
+        self.assertNotIn("Sections With Changes", text)

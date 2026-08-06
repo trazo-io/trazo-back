@@ -565,6 +565,91 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         response["Content-Disposition"] = f'attachment; filename="trazo-operation-audit-{establishment.id}.pdf"'
         return response
 
+    @action(detail=True, methods=["get"], url_path="certifier-readiness")
+    def certifier_readiness(self, request, pk=None, company_pk=None) -> Response:
+        """Outstanding items a certifier would query, for the farm's most recent season.
+
+        Reads the SAME rows that page 1 of the NOP audit PDF prints
+        (`AuditExportService.compliance_snapshot_rows`), so the dashboard and the certifier
+        packet can never disagree. Nothing is recomputed here and no new compliance logic
+        exists — a second implementation would inevitably drift from the export.
+
+        Scoped to ONE production (the most recent finished season, else the most recent
+        started) because the service is per-production. A whole-farm rollup would multiply the
+        cost by the number of seasons for a card that answers "what is outstanding now".
+
+        Read-only: any WorksIn role may view. Deliberately NOT gated on write permission —
+        the per-production audit-export action uses `check_write_permission`, which would hide
+        this card from read-only members who have every reason to see it.
+        """
+        # Local import: audit_export_service pulls in reportlab, which is heavy and not needed
+        # by the rest of this module. (History is already imported at module level.)
+        from history.services.audit_export_service import AuditExportService
+
+        establishment = get_object_or_404(self.company.establishment_set.all(), pk=pk)
+
+        production = (
+            History.objects.filter(parcel__establishment=establishment, published=True, finish_date__isnull=False)
+            .order_by("-finish_date")
+            .first()
+            or History.objects.filter(parcel__establishment=establishment).order_by("-start_date").first()
+        )
+
+        if production is None:
+            return Response(
+                {
+                    "establishment_id": establishment.id,
+                    "production": None,
+                    "findings": [],
+                    "outstanding_count": 0,
+                    "checked_count": 0,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        # NOT CACHED, deliberately.
+        #
+        # This was cached for 15 minutes keyed on `production.updated_at`, with a comment
+        # claiming "logging an event invalidates it naturally". That was wrong twice over:
+        #   * `History.update_trust_metrics()` saves with
+        #     `update_fields=["confidence_score", "transparency_score"]`, so the `auto_now`
+        #     `updated_at` is never written — verified: creating an event leaves it unchanged.
+        #     The key was effectively frozen for the life of the production.
+        #   * The rows also depend on the OSP, certifications and establishment OFPP fields,
+        #     none of which touch `production.updated_at` at all.
+        # So the farmer's most likely path — read "Organic System Plan: Missing", follow this
+        # card's own link to /osp, file it, come back — would still show it missing.
+        #
+        # Measured cost is ~18 ms / 17 queries with no network I/O (`compute_hash=False`
+        # keeps the OFPP document out of it), and RTK Query caches on the client. A stale
+        # headline is worse than 18 ms.
+        service = AuditExportService(production, certification_type="organic")
+        rows = service.compliance_snapshot_rows()
+        payload = {
+            "establishment_id": establishment.id,
+            "production": {
+                "id": production.id,
+                "name": production.name,
+                "finish_date": production.finish_date,
+                "is_finished": production.finish_date is not None,
+            },
+            # Only rows needing attention. A PASS row is not an action item.
+            "findings": [
+                {
+                    "label": r["label"],
+                    "status": r["status"],
+                    "detail": r["detail"],
+                    "section_hint": r["section_hint"],
+                }
+                for r in rows
+                if r["status"] != "PASS"
+            ],
+            "checked_count": len(rows),
+        }
+        payload["outstanding_count"] = len(payload["findings"])
+
+        return Response(payload, status=status.HTTP_200_OK)
+
     @action(detail=True, methods=["get"])
     def dashboard_metrics(self, request, pk=None, company_pk=None) -> Response:
         """
@@ -629,8 +714,12 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             # Calculate comprehensive metrics in single pass
             dashboard_data = self._calculate_comprehensive_metrics(establishment)
 
-            # Calculate transparency analytics based on actual data
-            transparency_score = dashboard_data.get("transparency_percentage", 0) / 100
+            # Calculate transparency analytics based on actual data.
+            # `transparency_percentage` is None when no season has finished, so coerce here:
+            # this local feeds scan-telemetry analytics that need a number, and `None / 100`
+            # raises. The reported `overall_transparency_score` below stays None on purpose —
+            # only this analytics input is floored to 0.
+            transparency_score = (dashboard_data.get("transparency_percentage") or 0) / 100
             total_productions = dashboard_data.get("total_productions", 0)
             total_events = dashboard_data.get("total_events", 0)
 
@@ -1031,11 +1120,13 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
                 metrics["total_verified_events"] += verified_count
 
-                # Calculate transparency score for this production
-                total_events = activity_data["total_events"]
-                expected_events = 15  # Based on crop type, could be dynamic
-                transparency_percentage = min(100, (total_events / expected_events) * 100)
-                activity_data["transparency_score"] = transparency_percentage
+                # `activity_data["transparency_score"]` removed 2026-08-02.
+                #
+                # It was a second, incompatible transparency formula — min(100, events/15*100)
+                # — with no category weighting, no photo penalties and no <3-event cap, so the
+                # same production could carry two different "transparency scores" in one
+                # payload depending on which key a client read. Nothing consumes
+                # activity_breakdown, and TransparencyCalculator is the single source of truth.
 
         # Calculate carbon intensity per hectare (sum areas from all parcels)
         total_area_hectares = sum(parcel.area for parcel in establishment.parcels.all() if parcel.area)
@@ -1053,7 +1144,12 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             all_category_breakdowns = []
 
             for parcel in establishment.parcels.all():
-                for history in parcel.histories.all():
+                # Only FINISHED, published seasons carry a verdict. An in-progress season has
+                # few or no events yet, so averaging it in as a zero halved the farm headline
+                # the moment a grower started a new production — punishing the exact action the
+                # product exists to encourage. Drafts and internal test productions counted too.
+                # Kept in sync with CompanySerializer.get_metrics_for_establishment.
+                for history in parcel.histories.filter(published=True, finish_date__isnull=False):
                     try:
                         result = transparency_calculator.calculate_transparency_score(history)
                         score = result.get("transparency_percentage", 0)
@@ -1067,17 +1163,20 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                         logger.warning(f"Failed to calculate transparency for history {history.id}: {e}")
                         continue
 
-            # Average the transparency scores across all productions
+            # Average across FINISHED seasons only. None (not 0.0) when none have finished:
+            # a farm mid-season has no verdict yet, and rendering that as 0% reads as a
+            # failing grade for work that is simply still underway.
+            metrics["scored_productions"] = len(production_scores)
             if production_scores:
                 metrics["transparency_percentage"] = round(sum(production_scores) / len(production_scores), 1)
             else:
-                metrics["transparency_percentage"] = 0.0
+                metrics["transparency_percentage"] = None
 
             # Completeness score (weighted, accounts for photo verification penalties)
             if completeness_scores:
                 metrics["completeness_score"] = round(sum(completeness_scores) / len(completeness_scores), 1)
             else:
-                metrics["completeness_score"] = 0.0
+                metrics["completeness_score"] = None
 
             # Aggregate category breakdowns across all productions
             aggregated_categories = {}
@@ -1092,6 +1191,8 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     total_photo_verified = 0
                     completeness_values = []
 
+                    records_values = []
+
                     for breakdown in all_category_breakdowns:
                         if key in breakdown:
                             cat_data = breakdown[key]
@@ -1099,10 +1200,19 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                             total_expected += cat_data.get("expected_count", 0)
                             total_photo_verified += cat_data.get("photo_verified_count", 0)
                             completeness_values.append(cat_data.get("completeness_percentage", 0))
+                            # Pre-photo-penalty coverage. Falls back to the penalized value so a
+                            # cached breakdown from before 2026-08-04 still aggregates.
+                            records_values.append(
+                                cat_data.get(
+                                    "records_completeness_percentage",
+                                    cat_data.get("completeness_percentage", 0),
+                                )
+                            )
 
                     avg_completeness = (
                         round(sum(completeness_values) / len(completeness_values), 1) if completeness_values else 0
                     )
+                    avg_records = round(sum(records_values) / len(records_values), 1) if records_values else 0
 
                     # Build aggregated category with consumer-friendly fields preserved
                     sample = next((b[key] for b in all_category_breakdowns if key in b), {})
@@ -1110,6 +1220,12 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                         "actual_count": total_actual,
                         "expected_count": total_expected,
                         "photo_verified_count": total_photo_verified,
+                        # Both readings travel together. The producer category rows display
+                        # `records_completeness_percentage` (what the grower actually logged) and
+                        # report photos as a separate count; `completeness_percentage` keeps the
+                        # photo penalty because it is what feeds the score. Dropping the new key
+                        # here silently sent the UI back to the penalized number.
+                        "records_completeness_percentage": avg_records,
                         "completeness_percentage": avg_completeness,
                         "consumer_name": sample.get("consumer_name", key.title()),
                         "consumer_description": sample.get("consumer_description", ""),
@@ -1122,9 +1238,10 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
             metrics["transparency_breakdown"] = aggregated_categories
         else:
-            # No productions = 0% transparency
-            metrics["transparency_percentage"] = 0.0
-            metrics["completeness_score"] = 0.0
+            # No productions at all — no verdict, not a zero. See the note above.
+            metrics["transparency_percentage"] = None
+            metrics["completeness_score"] = None
+            metrics["scored_productions"] = 0
             metrics["transparency_breakdown"] = {}
 
         # Calculate overall data completeness

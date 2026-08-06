@@ -81,6 +81,75 @@ class RegistrySyncDiffHelperTests(TestCase):
         self.assertTrue(diff["registry_entries"][0]["in_narrative"])
 
 
+class BrandHeadMatchTests(TestCase):
+    """Registry entries carry the full OMRI listing title; farmers write the
+    brand name. Matching only on the full title reported 5 of 7 correctly-named
+    inputs as absent during the 2026-08-04 farmer walkthrough — which pinned a
+    correct OSP at 83% forever and taught the farmer to ignore the warning.
+    """
+
+    def _in_narrative(self, product_name, narrative):
+        diff = _compute_registry_sync_diff(
+            inputs_narrative=narrative,
+            omri_products=[OMRIProduct(omri_id="X", product_name=product_name)],
+            wsda_materials=[],
+            nl_substances=[],
+        )
+        return diff["registry_entries"][0]["in_narrative"]
+
+    def test_brand_name_matches_full_omri_listing_title(self):
+        # The three real false positives from the walkthrough.
+        self.assertTrue(
+            self._in_narrative(
+                "Kocide 3000-O Fungicide Bactericide Dry Flowable",
+                "Disease materials: Kocide 3000 and Badge X2, both copper hydroxide based.",
+            )
+        )
+        self.assertTrue(
+            self._in_narrative(
+                "Surround WP Agricultural Crop Protectant",
+                "Surround WP kaolin clay as a particle film for avocado thrips.",
+            )
+        )
+        self.assertTrue(
+            self._in_narrative(
+                "Entrust SC Naturalyte Insect Control",
+                "Entrust SC spinosad for navel orangeworm and thrips.",
+            )
+        )
+
+    def test_first_token_alone_matches_when_distinctive(self):
+        self.assertTrue(self._in_narrative("PyGanic Crop Protection EC 1.4 II", "We spray PyGanic at petal fall."))
+
+    def test_two_token_substance_names_still_require_the_full_name(self):
+        # "Elemental sulfur" / "Copper oxychloride" have no descriptor tail —
+        # the whole name IS the distinctive name. A narrative saying only
+        # "micronized sulfur" genuinely does not name the registered substance,
+        # and that flag is a true positive worth keeping.
+        self.assertFalse(self._in_narrative("Elemental sulfur", "Microthiol Disperss micronized sulfur for mildew."))
+        self.assertFalse(
+            self._in_narrative("Copper oxychloride", "Kocide 3000 and Badge X2, both copper hydroxide based.")
+        )
+        self.assertTrue(self._in_narrative("Copper hydroxide", "Badge X2 is copper hydroxide based."))
+
+    def test_generic_leading_tokens_do_not_produce_a_short_key(self):
+        # "Down To" would otherwise match any narrative containing "down to".
+        self.assertFalse(
+            self._in_narrative(
+                "Down To Earth All Natural Fertilizer Crab Meal 4-3-0",
+                "We walk down to the pump house each morning to check pressure.",
+            )
+        )
+
+    def test_unrelated_narrative_still_flags(self):
+        self.assertFalse(
+            self._in_narrative(
+                "Regalia Maxx Biofungicide Concentrate",
+                "We apply compost in the fall and mow the row middles in March.",
+            )
+        )
+
+
 class OrganicSystemPlanSerializerSyncDiffTests(TestCase):
     def setUp(self):
         self.company = Company.objects.create(name="Sync Farm")

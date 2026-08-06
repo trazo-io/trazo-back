@@ -1,4 +1,6 @@
+import secrets
 import uuid
+from datetime import timedelta
 
 from django.conf import settings
 from django.db import models
@@ -161,11 +163,29 @@ class Certification(models.Model):
     def is_verified(self):
         return self.verification_status == "verified"
 
+    # The only source that substantiates the consumer-facing "Verified via USDA Organic
+    # Integrity Database" claim. Stamped by VerificationManager.verify_certification from
+    # USDAOrganicVerifier.source_identifier; test_consumer_display_status_substantiation pins
+    # the two to the same string, since a drift there silently downgrades every real badge.
+    DATABASE_VERIFICATION_SOURCE = "usda_organic_integrity_db"
+
     @property
     def consumer_display_status(self):
-        """FTC-compliant status for consumer display."""
+        """FTC-compliant status for consumer display.
+
+        `verified_via_database` renders as the literal claim "Verified via USDA Organic
+        Integrity Database" on the public QR page. That claim was previously derived from
+        `verification_status == "verified"` alone, with no reference to where the
+        verification actually came from — so a row marked verified by a manual admin edit, a
+        data import, or a fixture asserted a database match that never happened. Gate the
+        claim on the source that substantiates it (16 CFR 260.6); anything else falls back to
+        the honest `self_reported` label rather than silently upgrading a farmer attestation
+        into a third-party verification.
+        """
         if self.verification_status == "verified":
-            return "verified_via_database"
+            if self.verification_source == self.DATABASE_VERIFICATION_SOURCE:
+                return "verified_via_database"
+            return "self_reported"
         elif self.verification_status == "self_reported":
             return "self_reported"
         elif self.verification_status in ("expired", "revoked", "suspended"):
@@ -1519,3 +1539,144 @@ class StateOrganicRegistration(models.Model):
         if self.renewal_date is None:
             return True
         return self.renewal_date >= timezone.now().date()
+
+
+class CertifierAccessLink(models.Model):
+    """A no-account, read-only link that lets a certifier open an operation's audit dossier.
+
+    Closes the one capability COG Pro advertises that Trazo lacked: "your
+    certification provider can even inspect your records online, with your
+    permission." Trazo's answer is strictly better for the certifier — COG Pro
+    makes them log in; this needs nothing but the URL.
+
+    The dossier itself is NOT new: `OperationAuditExportService` already builds a
+    whole-operation NOP packet for a certification window, and it is
+    user-independent, carries no self-graded transparency score and no
+    subscription coupling. This model only solves DELIVERY, and it beats emailing
+    a PDF because the dossier is regenerated on open (never a stale attachment),
+    can be revoked, and every open is logged back to the farmer.
+
+    SECURITY. This exposes far more than the consumer QR page — supplier names and
+    invoices, purchase prices, applicator names, and open drift/nonconformance
+    findings. Controls: a 32-byte urlsafe token, a default 90-day expiry, farmer
+    revocation at any time, an access log, and scoping to exactly one
+    establishment. The token is deliberately NOT hashed at rest: the same database
+    already holds every underlying record, so hashing buys nothing against a DB
+    compromise while making the link impossible to re-copy. Expiry, revocation and
+    logging are the controls that actually matter.
+    """
+
+    DEFAULT_VALIDITY_DAYS = 90
+
+    establishment = models.ForeignKey(
+        "company.Establishment",
+        on_delete=models.CASCADE,
+        related_name="certifier_access_links",
+        help_text="The single operation this link exposes. Never company-wide.",
+    )
+    token = models.CharField(
+        max_length=64,
+        unique=True,
+        db_index=True,
+        help_text="Unguessable URL secret (secrets.token_urlsafe(32)).",
+    )
+    label = models.CharField(
+        max_length=120,
+        blank=True,
+        help_text='Farmer-facing note, e.g. "CCOF 2026 renewal".',
+    )
+    certification_type = models.CharField(
+        max_length=20,
+        default="organic",
+        help_text="Dossier profile passed to OperationAuditExportService.",
+    )
+    period_start = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Optional start of the certification window the dossier covers.",
+    )
+    period_end = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Optional end of the certification window the dossier covers.",
+    )
+    expires_at = models.DateTimeField(help_text="After this instant the link stops resolving.")
+    revoked_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Set when the farmer revokes; revocation is immediate and permanent.",
+    )
+    created_by = models.ForeignKey(
+        "users.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_certifier_links",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["establishment", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return f"Certifier link for {self.establishment.name} ({self.label or 'unlabelled'})"
+
+    @staticmethod
+    def generate_token() -> str:
+        return secrets.token_urlsafe(32)
+
+    @staticmethod
+    def default_expiry():
+        return timezone.now() + timedelta(days=CertifierAccessLink.DEFAULT_VALIDITY_DAYS)
+
+    @property
+    def is_revoked(self) -> bool:
+        return self.revoked_at is not None
+
+    @property
+    def is_expired(self) -> bool:
+        return self.expires_at <= timezone.now()
+
+    @property
+    def is_active(self) -> bool:
+        """Only an active link resolves. Callers must check this, not just existence."""
+        return not self.is_revoked and not self.is_expired
+
+    def revoke(self):
+        if self.revoked_at is None:
+            self.revoked_at = timezone.now()
+            self.save(update_fields=["revoked_at"])
+
+
+class CertifierAccessLog(models.Model):
+    """One row per open of a CertifierAccessLink.
+
+    Surfaced back to the farmer so "did my certifier actually look at this?" is a
+    fact rather than a guess — the thing a mailed PDF can never tell them. Kept on
+    delete of the link's establishment only (CASCADE via the link).
+    """
+
+    ACTION_CHOICES = [
+        ("metadata", "Opened link"),
+        ("readiness", "Viewed readiness findings"),
+        ("dossier", "Downloaded dossier"),
+    ]
+
+    link = models.ForeignKey(
+        CertifierAccessLink,
+        on_delete=models.CASCADE,
+        related_name="accesses",
+    )
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES, default="metadata")
+    accessed_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=300, blank=True)
+
+    class Meta:
+        ordering = ["-accessed_at"]
+
+    def __str__(self):
+        return f"{self.get_action_display()} at {self.accessed_at:%Y-%m-%d %H:%M}"

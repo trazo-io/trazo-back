@@ -25,13 +25,7 @@ from datetime import timezone as dt_tz
 from decimal import Decimal
 
 from carbon.models import CropType
-from certifications.models import (
-    OSP_SECTION_KEYS,
-    Certification,
-    OMRIProduct,
-    OrganicSystemPlan,
-    PostHarvestFacility,
-)
+from certifications.models import OSP_SECTION_KEYS, Certification, OMRIProduct, OrganicSystemPlan
 from common.models import Gallery, GalleryImage
 from company.models import Company, Establishment
 from history.models import History, LabelImage
@@ -415,32 +409,12 @@ def create_loewen_base(user):
     )
     production_finished.save()
 
-    # ------------------------------------------------------------------ #
-    # Off-farm post-harvest handler (CCOF G6.1) + nonretail bin label     #
-    # (G7.0) — both surface in the audit export for the finished season.  #
-    # ------------------------------------------------------------------ #
-    huller = PostHarvestFacility.objects.create(
-        establishment=establishment,
-        name="Sacramento Valley Organic Hulling & Drying, Inc.",
-        facility_type="huller",
-        address="4120 County Road 99W",
-        city="Orland",
-        state="California",
-        certification_number="CCOF-H-2294",
-        certifier_name="CCOF Certification Services, LLC",
-        effective_date=date(2025, 12, 1),
-        expiry_date=date(2026, 11, 30),
-        verification_status="self_reported",
-        verification_source="operator_provided",
-        notes=(
-            "Custom CCOF-certified organic huller/dryer that processes Loewen's "
-            "in-shell walnut crop. Dedicated organic run; handler certificate "
-            "retained with the lot records."
-        ),
-        created_by=user,
-    )
-    production_finished.post_harvest_facility = huller
-    production_finished.save(update_fields=["post_harvest_facility"])
+    # No off-farm post-harvest handler is seeded for Loewen. Hulling/drying is
+    # handled on-farm in the event stream, and we must not attach a fabricated
+    # off-farm handler with an invented CCOF handler-certificate number — a
+    # certifier can look that number up against CCOF's client database in seconds
+    # and find it does not exist. Attach a real handler record only once Leonard
+    # provides his actual huller's certificate.
 
     # Nonretail bin label — reuses the Gallery/GalleryImage S3 + public-URL infra.
     label_gallery = Gallery.objects.create()

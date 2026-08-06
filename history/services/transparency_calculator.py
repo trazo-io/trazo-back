@@ -14,7 +14,6 @@ from django.db.models import Q
 from django.utils import timezone
 
 from carbon.models import CropType
-from product.models import Establishment, Parcel
 
 from ..models import (
     BusinessEvent,
@@ -26,6 +25,10 @@ from ..models import (
     SoilManagementEvent,
     WeatherEvent,
 )
+
+# Establishment / Parcel imports dropped 2026-08-02 — their only uses were the type hints of
+# the deleted calculate_establishment_transparency() cluster.
+
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +92,12 @@ class TransparencyCalculator:
         "SC",
         "TM",
         "IP",  # Scouting, Trap Monitoring, IPM
+        "LA",  # §E-2 Lab Analysis — the typed results are the record, a photo of the report
+        #        corroborates it. Same weight as ST (Soil Test) above.
+        # NOTE on "CU" above: these sets are keyed by the raw subtype CODE across every event
+        # model, so "CU" now covers BOTH production Cultivation and the §E-4 pest Cultural /
+        # Sanitation Control. Both are visible field work where a photo helps but the operation
+        # is documented without one, so the shared tier is correct rather than merely tolerable.
     }
 
     # Tier 3 (implicit — everything else): No photo penalty
@@ -193,13 +202,18 @@ class TransparencyCalculator:
     def _get_expected_event_count(self, history: History) -> int:
         """Determine expected event count based on crop type and farming approach"""
 
-        # Try to get crop type from parcel or other sources
-        crop_category = "other"  # Default fallback
-
-        if hasattr(history, "parcel") and history.parcel:
-            # Try to infer from parcel data or linked crop info
-            if hasattr(history.parcel, "crop_type"):
-                crop_category = history.parcel.crop_type.category
+        # Crop type lives on the History (per-production), NOT on the Parcel.
+        #
+        # This read was `history.parcel.crop_type.category`, but Parcel.crop_type was removed
+        # (see product/models.py: "crop_type removed - now stored in History model for
+        # per-production tracking"). `hasattr` on the missing attribute returned False, so the
+        # branch never ran and EVERY production silently fell back to the "other" row — making
+        # the whole crop-specific EXPECTED_EVENTS table unreachable. A walnut block scored
+        # against the generic baseline (organic 12) instead of tree_nut (organic 13).
+        crop_category = "other"  # Fallback when a production has no crop type set
+        crop_type = getattr(history, "crop_type", None)
+        if crop_type is not None and getattr(crop_type, "category", None):
+            crop_category = crop_type.category
 
         # Use single source of truth for farming approach detection
         farming_approach = self._get_farming_approach(history)
@@ -301,6 +315,24 @@ class TransparencyCalculator:
                 "photo_verified_count": photo_verified_count,
                 "photo_verification_rate": round(photo_verification_rate * 100, 1),
                 "expected_count": expected_for_category,
+                # Event coverage BEFORE the photo multiplier (added 2026-08-04).
+                #
+                # `completeness_percentage` below is this value multiplied by the photo penalty, and
+                # the producer UI was presenting that product as "documented". A grower with 20
+                # complete spray records and no photos saw 50% and an orange bar — while NOP 205.103
+                # asks for auditable records, not photographs. Photos serve the CONSUMER page; they
+                # are not a certifier requirement, so the two readings have to be separable.
+                #
+                # The penalty itself is unchanged and still drives the score: it is deliberate
+                # anti-gaming, and photo evidence is what makes the QR page worth scanning. Only the
+                # ability to say "records: 20 logged / photos: 0 of 20" separately is new.
+                #
+                # NB this is coverage against `expected_count`, which is `expected_total / 7` split
+                # evenly across categories — it means "did you log about as many events as expected
+                # for this crop", NOT "are the fields on these events complete for a certifier".
+                # That question is answered by `AuditExportService.compliance_snapshot_rows()`,
+                # which cites the actual CFR sections. Do not relabel this as certifier-readiness.
+                "records_completeness_percentage": round(base_completeness, 1),
                 "completeness_percentage": round(completeness, 1),
                 "status": self._get_category_status(completeness),
                 "requires_photos": category_name in photo_required_categories,
@@ -674,19 +706,18 @@ class TransparencyCalculator:
                         organic_production = True
 
         if has_zero_chemical_events and organic_production:
-            # Redistribute Chemical weight (0.20) proportionally among remaining categories.
-            # This ensures organic farms are not penalized for not using synthetic chemicals.
-            # The Chemical category is awarded full credit (100%) since zero chemical use
-            # on a certified-organic farm IS the transparent documentation of that practice.
-            chemical_credit = 100.0  # Full credit: documented absence of chemicals = transparency
-            redistributed_weights = {k: v for k, v in category_weights.items() if k != "chemical"}
-            non_chemical_total = sum(redistributed_weights.values())
-            effective_weights = {}
-            for cat, w in category_weights.items():
-                if cat == "chemical":
-                    effective_weights[cat] = w  # Keep weight but award full credit
-                else:
-                    effective_weights[cat] = w
+            # The Chemical category keeps its 0.20 weight and is awarded full credit: zero
+            # synthetic chemical use on a certified-organic farm IS the documentation of that
+            # practice, so the farm is not penalised for the absence of spray records.
+            #
+            # NB the previous comment here claimed the weight was "redistributed proportionally
+            # among remaining categories". It never was: the code built `redistributed_weights`
+            # and `non_chemical_total`, then assigned `effective_weights[cat] = w` on BOTH
+            # branches of the loop, making the result identical to `category_weights`. The two
+            # locals were never read. Only the 100% chemical credit was ever real, and that is
+            # what this branch now says.
+            chemical_credit = 100.0
+            effective_weights = category_weights
         else:
             effective_weights = category_weights
             chemical_credit = None  # Use actual completeness
@@ -978,359 +1009,84 @@ class TransparencyCalculator:
 
         return suggestions.get(category, "Add relevant events for this category")
 
-    def compare_with_benchmarks(self, history: History, transparency_data: Dict = None) -> Dict:
-        """
-        Compare transparency with industry benchmarks (NOT competitive ranking)
-        Uses absolute standards, not relative farm comparisons
+    def compare_with_own_history(self, history: History, transparency_data: Dict = None) -> Dict:
+        """Compare this season against the FARM'S OWN previous finished seasons.
+
+        Replaces the former `compare_with_benchmarks` (removed 2026-08-02), which graded the
+        farm against four hardcoded thresholds — industry_minimum 60, good_practice 80,
+        certification_standard 90, excellent_practice 95 — and told the farmer things like
+        "Meets organic certification transparency standards" and "Exceeds industry
+        transparency standards".
+
+        No such industry standard exists and no certifier requires any Trazo score. Those were
+        unsourced benchmark claims presented to a paying customer, i.e. exactly the fabricated
+        attribution `compliance.md` forbids and an FTC 16 CFR 260.6 general-benefit risk. The
+        "certification_standard" rung was worse: it implied a regulatory threshold that is
+        entirely our invention.
+
+        A farm's own prior seasons are a real, verifiable reference point, so progress is
+        measured against them and against nothing else.
         """
 
         if transparency_data is None:
             transparency_data = self.calculate_transparency_score(history)
-        transparency_percentage = transparency_data["transparency_percentage"]
+        current_score = transparency_data["transparency_percentage"]
 
-        # Industry transparency benchmarks (absolute standards)
-        benchmarks = {
-            "industry_minimum": 60,
-            "good_practice": 80,
-            "excellent_practice": 95,
-            "certification_standard": 90,
-        }
-
-        # Determine benchmark level
-        if transparency_percentage >= benchmarks["excellent_practice"]:
-            benchmark_level = "excellent"
-            message = "Exceeds industry transparency standards"
-        elif transparency_percentage >= benchmarks["certification_standard"]:
-            benchmark_level = "certification"
-            message = "Meets organic certification transparency standards"
-        elif transparency_percentage >= benchmarks["good_practice"]:
-            benchmark_level = "good"
-            message = "Meets good transparency practices"
-        elif transparency_percentage >= benchmarks["industry_minimum"]:
-            benchmark_level = "minimum"
-            message = "Meets minimum transparency requirements"
-        else:
-            benchmark_level = "below_minimum"
-            message = "Below recommended transparency levels"
-
-        return {
-            "benchmark_level": benchmark_level,
-            "message": message,
-            "benchmarks": benchmarks,
-            "current_score": transparency_percentage,
-            "next_target": self._get_next_target(transparency_percentage, benchmarks),
-        }
-
-    def _get_next_target(self, current_score: float, benchmarks: Dict) -> Dict:
-        """Get next transparency target for farmer motivation"""
-
-        if current_score < benchmarks["industry_minimum"]:
-            return {
-                "target_score": benchmarks["industry_minimum"],
-                "target_name": "Industry Minimum",
-                "points_needed": benchmarks["industry_minimum"] - current_score,
-            }
-        elif current_score < benchmarks["good_practice"]:
-            return {
-                "target_score": benchmarks["good_practice"],
-                "target_name": "Good Practice",
-                "points_needed": benchmarks["good_practice"] - current_score,
-            }
-        elif current_score < benchmarks["certification_standard"]:
-            return {
-                "target_score": benchmarks["certification_standard"],
-                "target_name": "Certification Standard",
-                "points_needed": benchmarks["certification_standard"] - current_score,
-            }
-        elif current_score < benchmarks["excellent_practice"]:
-            return {
-                "target_score": benchmarks["excellent_practice"],
-                "target_name": "Excellence",
-                "points_needed": benchmarks["excellent_practice"] - current_score,
-            }
-        else:
-            return {"target_score": 100, "target_name": "Perfect Transparency", "points_needed": 100 - current_score}
-
-    def calculate_establishment_transparency(self, establishment: Establishment) -> Dict:
-        """
-        ENHANCED: Calculate comprehensive transparency metrics for entire establishment
-        Returns detailed breakdown including unused database opportunities
-        """
-
-        establishment_metrics = {
-            "overall_transparency_score": 0,
-            "total_productions": 0,
-            "total_documented_events": 0,
-            "verification_breakdown": {
-                "usda_factors_used": 0,
-                "blockchain_verified": 0,
-                "photo_verified": 0,
-                "third_party_verified": 0,
-            },
-            "category_breakdown": {
-                "planting": {"events": 0, "verified": 0, "photos": 0},
-                "fertilization": {"events": 0, "verified": 0, "photos": 0},
-                "irrigation": {"events": 0, "verified": 0, "photos": 0},
-                "harvest": {"events": 0, "verified": 0, "photos": 0},
-            },
-            "data_richness": {
-                "parcels_with_data": 0,
-                "productions_with_events": 0,
-                "events_with_photos": 0,
-                "events_with_verification": 0,
-                "total_data_points": 0,
-                "unused_data_points": 0,
-            },
-            "trust_indicators": {
-                "company_verified": establishment.company is not None,
-                "location_verified": bool(establishment.city and establishment.state),
-                "area_documented": sum(parcel.area for parcel in establishment.parcels.all() if parcel.area) > 0,
-                "sustainability_commitments": bool(
-                    establishment.company and getattr(establishment.company, "sustainability_commitments", None)
-                ),
-                "blockchain_enabled": False,  # Will be calculated based on events
-                "continuous_monitoring": False,  # Based on event frequency
-            },
-            "enhancement_opportunities": [],
-            "benchmark_comparison": {},
-            "seasonal_patterns": {},
-            "farmer_profile": {},
-        }
-
-        total_transparency_points = 0
-        total_possible_points = 0
-
-        # Analyze all parcels and productions (using optimized queries from indexes)
-        parcels = establishment.parcels.prefetch_related(
-            "histories__history_productionevent_events",
-            "histories__history_chemicalevent_events",
-            "histories__history_businessevent_events",
-            "histories__album__images",  # Correct album relationship
-        ).all()
-
-        for parcel in parcels:
-            establishment_metrics["data_richness"]["parcels_with_data"] += 1
-
-            for history in parcel.histories.filter(published=True):
-                establishment_metrics["total_productions"] += 1
-
-                # Get production transparency data
-                production_transparency = self.calculate_transparency_score(history)
-
-                establishment_metrics["total_documented_events"] += production_transparency["actual_event_count"]
-                total_transparency_points += production_transparency["transparency_percentage"]
-                total_possible_points += 100
-
-                if production_transparency["actual_event_count"] > 0:
-                    establishment_metrics["data_richness"]["productions_with_events"] += 1
-
-                # Analyze event categories and verification
-                self._analyze_establishment_production_categories(history, establishment_metrics)
-
-                # Check for blockchain verification indicators
-                if self._has_blockchain_verification(history):
-                    establishment_metrics["trust_indicators"]["blockchain_enabled"] = True
-                    establishment_metrics["verification_breakdown"]["blockchain_verified"] += 1
-
-        # Calculate overall transparency score
-        if total_possible_points > 0:
-            establishment_metrics["overall_transparency_score"] = total_transparency_points / total_possible_points
-
-        # Calculate data richness percentage
-        establishment_metrics["data_richness"]["total_data_points"] = (
-            establishment_metrics["total_documented_events"]
-            + establishment_metrics["data_richness"]["parcels_with_data"]
-            + establishment_metrics["total_productions"]
-        )
-
-        # Estimate unused data points (database fields not displayed)
-        establishment_metrics["data_richness"]["unused_data_points"] = int(
-            establishment_metrics["data_richness"]["total_data_points"] * 0.65  # 65% not displayed
-        )
-
-        # Generate enhancement opportunities
-        establishment_metrics["enhancement_opportunities"] = self._generate_enhancement_opportunities(
-            establishment, establishment_metrics
-        )
-
-        # Benchmark comparison
-        establishment_metrics["benchmark_comparison"] = self._calculate_establishment_benchmarks(establishment_metrics)
-
-        # Analyze seasonal patterns
-        establishment_metrics["seasonal_patterns"] = self._analyze_seasonal_patterns(establishment)
-
-        # Generate farmer profile insights
-        establishment_metrics["farmer_profile"] = self._generate_farmer_profile(establishment)
-
-        return establishment_metrics
-
-    def _analyze_establishment_production_categories(self, history: History, metrics: Dict):
-        """Analyze event categories for comprehensive establishment breakdown"""
-
-        # Get all event types for this production (optimized with indexes)
-        category_mapping = {
-            "planting": ProductionEvent.objects.filter(history=history, type__in=["PL"]),  # Planting events
-            "fertilization": ChemicalEvent.objects.filter(history=history, type__in=["FE"]),  # Fertilizer events
-            "irrigation": ProductionEvent.objects.filter(history=history, type__in=["IR"]),  # Irrigation events
-            "harvest": ProductionEvent.objects.filter(history=history, type__in=["HA"]),  # Harvesting events
-        }
-
-        for category, events in category_mapping.items():
-            event_count = events.count()
-            verified_count = 0
-            photo_count = 0
-
-            # Count verified events (if verification field exists)
-            for event in events:
-                if hasattr(event, "verified") and getattr(event, "verified", False):
-                    verified_count += 1
-                # Count photos for events in this category
-                if hasattr(event, "photos") and event.photos.exists():
-                    photo_count += event.photos.count()
-                elif hasattr(event, "gallery") and event.gallery.exists():
-                    # Alternative photo relationship
-                    for gallery in event.gallery.all():
-                        photo_count += gallery.images.count() if hasattr(gallery, "images") else 0
-
-            metrics["category_breakdown"][category]["events"] += event_count
-            metrics["category_breakdown"][category]["verified"] += verified_count
-            metrics["category_breakdown"][category]["photos"] += photo_count
-
-            if photo_count > 0:
-                metrics["data_richness"]["events_with_photos"] += 1
-            if verified_count > 0:
-                metrics["data_richness"]["events_with_verification"] += 1
-                metrics["verification_breakdown"]["usda_factors_used"] += verified_count
-
-    def _has_blockchain_verification(self, history: History) -> bool:
-        """Check if production has blockchain verification"""
-        # BUGFIX: Check that extra_data is a dict before calling .get()
-        if history.extra_data and isinstance(history.extra_data, dict):
-            return (
-                history.extra_data.get("blockchain_verified", False)
-                or history.extra_data.get("blockchain_hash") is not None
-                or history.extra_data.get("smart_contract_address") is not None
-            )
-        return False
-
-    def _generate_enhancement_opportunities(self, establishment: Establishment, metrics: Dict) -> list:
-        """Generate specific enhancement opportunities based on analysis"""
-        opportunities = []
-
-        # Data completeness opportunities
-        unused_percentage = (
-            metrics["data_richness"]["unused_data_points"] / max(metrics["data_richness"]["total_data_points"], 1)
-        ) * 100
-
-        if unused_percentage > 50:
-            opportunities.append(
-                {
-                    "type": "data_completeness",
-                    "priority": "high",
-                    "title": "Display More Database Information",
-                    "description": f"Currently showing only {100-unused_percentage:.0f}% of available data",
-                    "potential_improvement": f"Could display {unused_percentage:.0f}% more transparency information",
-                }
-            )
-
-        # Category-specific opportunities
-        for category, data in metrics["category_breakdown"].items():
-            if data["events"] > 0 and (data["verified"] / data["events"]) < 0.5:
-                opportunities.append(
-                    {
-                        "type": "verification",
-                        "priority": "medium",
-                        "title": f"Increase {category.title()} Verification",
-                        "description": f"Only {data['verified']}/{data['events']} {category} events verified",
-                        "potential_improvement": f"Verify remaining {data['events'] - data['verified']} events",
-                    }
+        previous_best = None
+        previous_scores = []
+        establishment = history.parcel.establishment if history.parcel else None
+        if establishment:
+            previous = (
+                History.objects.filter(
+                    parcel__establishment=establishment,
+                    published=True,
+                    finish_date__isnull=False,
                 )
-
-        # Trust indicator opportunities
-        trust_score = sum(metrics["trust_indicators"].values()) / len(metrics["trust_indicators"]) * 100
-        if trust_score < 80:
-            opportunities.append(
-                {
-                    "type": "trust_building",
-                    "priority": "high",
-                    "title": "Enhance Trust Indicators",
-                    "description": f"Trust indicators at {trust_score:.0f}%",
-                    "potential_improvement": "Enable blockchain, add certifications, improve verification",
-                }
+                .exclude(pk=history.pk)
+                .prefetch_related(
+                    "history_productionevent_events__album__images",
+                    "history_chemicalevent_events__album__images",
+                    "history_soilmanagementevent_events__album__images",
+                    "history_pestmanagementevent_events__album__images",
+                    "history_weatherevent_events",
+                    "history_businessevent_events",
+                    "history_generalevent_events",
+                    "history_equipmentevent_events__album__images",
+                )
             )
+            # Recalculate rather than read the stored `History.transparency_score` column.
+            # That column is only refreshed by update_trust_metrics() on event CRUD and drifts:
+            # production 543 in dev holds 75.0 while the calculator returns 74. Comparing a
+            # freshly-calculated current_score against stale stored values would report a
+            # personal best (or miss one) purely from that drift.
+            for prior in previous:
+                score = self.calculate_transparency_score(prior).get("transparency_percentage")
+                if score is not None:
+                    previous_scores.append(score)
+            if previous_scores:
+                previous_best = round(max(previous_scores), 1)
 
-        # Photo documentation opportunities
-        total_events = metrics["total_documented_events"]
-        events_with_photos = metrics["data_richness"]["events_with_photos"]
-        if total_events > 0 and (events_with_photos / total_events) < 0.6:
-            opportunities.append(
-                {
-                    "type": "visual_evidence",
-                    "priority": "medium",
-                    "title": "Increase Photo Documentation",
-                    "description": f"Only {events_with_photos}/{total_events} events have photos",
-                    "potential_improvement": f"Add photos to {total_events - events_with_photos} more events",
-                }
-            )
-
-        return opportunities
-
-    def _calculate_establishment_benchmarks(self, metrics: Dict) -> Dict:
-        """Score-tier label derived from this farm's own transparency score.
-
-        No cross-farm percentile or regional comparison is produced — no cohort
-        data exists to support those claims, and unsubstantiated comparative
-        claims risk FTC Green Guides (16 CFR 260) violations.
-        """
-        score = metrics["overall_transparency_score"]
-        if score >= 90:
-            tier = "excellent"
-        elif score >= 80:
-            tier = "strong"
-        elif score >= 70:
-            tier = "good"
-        elif score >= 60:
-            tier = "solid"
-        else:
-            tier = "developing"
         return {
-            "transparency_tier": tier,
-            "improvement_potential": 100 - score,
-            "next_milestone": {
-                "target_score": min(100, score + 10),
-                "required_actions": metrics["enhancement_opportunities"][:3],
-            },
+            "current_score": current_score,
+            "previous_best": previous_best,
+            "previous_seasons_scored": len(previous_scores),
+            # Positive = this season is better documented than the farm's best previous one.
+            # None on a first season: there is nothing to compare against yet, and inventing a
+            # target is what this method exists to avoid.
+            "delta_vs_previous_best": (round(current_score - previous_best, 1) if previous_best is not None else None),
+            "is_personal_best": (previous_best is None or current_score >= previous_best),
         }
 
-    def _analyze_seasonal_patterns(self, establishment: Establishment) -> Dict:
-        """Analyze seasonal patterns in transparency data"""
-        seasonal_data = {
-            "spring_events": 0,
-            "summer_events": 0,
-            "fall_events": 0,
-            "winter_events": 0,
-            "peak_transparency_season": "unknown",
-            "transparency_consistency": "stable",
-        }
-
-        # This would analyze event timing patterns across productions
-        # For now, returning basic structure for future enhancement
-        return seasonal_data
-
-    def _generate_farmer_profile(self, establishment: Establishment) -> Dict:
-        """Generate farmer profile based on establishment data"""
-        profile = {
-            "experience_level": "intermediate",  # Based on documentation quality
-            "farming_approach_primary": "conventional",
-            "specializations": [],
-            "transparency_commitment_level": "good",
-            "continuous_improvement_indicator": True,
-        }
-
-        # Company information for farmer profile
-        if establishment.company:
-            profile["company_name"] = establishment.company.name
-            if hasattr(establishment.company, "sustainability_commitments"):
-                profile["sustainability_focus"] = bool(establishment.company.sustainability_commitments)
-
-        return profile
+    # calculate_establishment_transparency() and its six exclusive helpers
+    # (_analyze_establishment_production_categories, _has_blockchain_verification,
+    # _generate_enhancement_opportunities, _calculate_establishment_benchmarks,
+    # _analyze_seasonal_patterns, _generate_farmer_profile) were deleted 2026-08-02.
+    #
+    # The entry point had no callers anywhere in the codebase, and each helper was called
+    # only from it. It was also broken: overall_transparency_score was a 0-1 FRACTION
+    # (total_points / total_possible, denominator += 100 per production) which
+    # _calculate_establishment_benchmarks then compared against 90/80/70/60 — so every
+    # farm would have graded "developing" had it ever been wired up.
+    #
+    # Farm-level aggregation lives in EstablishmentDashboardMetricsSerializer
+    # (company/serializers.py), which averages FINISHED seasons only.

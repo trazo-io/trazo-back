@@ -336,42 +336,72 @@ class EnhancedUSDAFactors:
             "peanuts": "peanuts",
             "hay_alfalfa": "hay_alfalfa",
             "stone_fruit": "stone_fruit",
+            # Crops added for non-California regions (OR hazelnuts, TX/GA pecans,
+            # MI/OR/NJ blueberries, WA hops, AZ/TX spinach).
+            "pecans": "pecans",
+            "pecan": "pecans",
+            "hazelnuts": "hazelnuts",
+            "hazelnut": "hazelnuts",
+            "filberts": "hazelnuts",
+            "blueberries": "blueberries",
+            "blueberry": "blueberries",
+            "hops": "hops",
+            "hop": "hops",
+            "spinach": "spinach",
         }
         if crop_lower in exact_map:
             return exact_map[crop_lower]
 
-        # Substring matches for varieties
-        if any(w in crop_lower for w in ["orange", "navel", "valencia", "lemon", "lime", "grapefruit"]):
-            return "citrus"
-        elif any(w in crop_lower for w in ["peach", "plum", "cherry", "apricot", "nectarine"]):
-            return "stone_fruit"
-        elif any(w in crop_lower for w in ["apple", "pear"]):
-            return "apples"
-        elif "grape" in crop_lower or "vine" in crop_lower:
-            return "grapes"
-        elif "nut" in crop_lower or "walnut" in crop_lower or "pecan" in crop_lower:
-            return "walnuts"
-        elif "soy" in crop_lower or "bean" in crop_lower:
-            return "soybeans"
-        elif "corn" in crop_lower or "maize" in crop_lower:
-            return "corn"
-        elif "avocado" in crop_lower:
-            return "avocados"
-        elif "strawberr" in crop_lower or "berr" in crop_lower:
-            return "strawberries"
-        elif "lettuce" in crop_lower or "salad" in crop_lower:
-            return "lettuce"
-        elif "tomato" in crop_lower:
-            return "tomatoes"
-        elif "potato" in crop_lower:
-            return "potatoes"
-        elif "onion" in crop_lower:
-            return "onions"
-        elif "peanut" in crop_lower:
-            return "peanuts"
-        elif "hay" in crop_lower or "alfalfa" in crop_lower:
-            return "hay_alfalfa"
+        # Ordered substring matches. ORDER IS LOAD-BEARING: every rule below is
+        # checked in sequence, so a specific crop must precede any generic rule
+        # whose substring it contains. The previous ordering silently mapped
+        # "peanut" -> walnuts (because "nut" was tested first), every cane and
+        # bush berry -> strawberries (via a bare "berr"), every edible bean ->
+        # soybeans, and "pineapple" -> apples. Each of those is a wrong emission
+        # factor reported with full confidence, not a missing one.
+        substring_rules = [
+            # --- specific nuts before the generic "nut" ---
+            (["peanut", "ground nut", "groundnut"], "peanuts"),
+            (["pecan"], "pecans"),
+            (["hazelnut", "filbert"], "hazelnuts"),
+            (["walnut"], "walnuts"),
+            (["almond"], "almonds"),
+            # --- specific berries before the generic "berr" ---
+            (["blueberr", "huckleberr"], "blueberries"),
+            (["strawberr"], "strawberries"),
+            # --- fruit ---
+            (["orange", "navel", "valencia", "lemon", "lime", "grapefruit", "mandarin", "tangerine"], "citrus"),
+            (["peach", "plum", "cherry", "apricot", "nectarine", "prune"], "stone_fruit"),
+            (["avocado"], "avocados"),
+            (["grape", "vineyard"], "grapes"),
+            (["hops"], "hops"),
+            # --- vegetables ---
+            (["spinach"], "spinach"),
+            (["lettuce", "romaine", "salad"], "lettuce"),
+            (["tomato"], "tomatoes"),
+            (["potato"], "potatoes"),
+            (["onion"], "onions"),
+            (["carrot"], "carrots"),
+            # --- row crops ---
+            (["soybean", "soya"], "soybeans"),
+            (["corn", "maize"], "corn"),
+            (["wheat"], "wheat"),
+            (["cotton"], "cotton"),
+            (["hay", "alfalfa"], "hay_alfalfa"),
+        ]
+        for needles, normalized in substring_rules:
+            if any(needle in crop_lower for needle in needles):
+                return normalized
 
+        # "apple" is checked last and explicitly excludes pineapple, which
+        # contains it as a substring but is an entirely different crop.
+        if ("apple" in crop_lower and "pineapple" not in crop_lower) or "pear" in crop_lower:
+            return "apples"
+
+        # Deliberately NO generic "nut"/"berr"/"bean" catch-alls. An unrecognised
+        # crop returns itself and gets national factors with a lowered confidence
+        # score, which is the honest outcome — better than borrowing walnut,
+        # strawberry or soybean numbers from a crop that merely shares a syllable.
         return crop_lower
 
     def get_usda_benchmark_comparison(self, farm_carbon_intensity: float, crop_type: str, state: str) -> Dict[str, Any]:

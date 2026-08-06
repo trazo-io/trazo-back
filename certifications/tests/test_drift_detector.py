@@ -476,13 +476,36 @@ class DriftFindingsPDFSectionTests(TransactionTestCase):
 
         return AuditExportService(self.history, certification_type="organic")
 
-    def test_drift_section_clean_state(self):
-        """No events → section renders 'No drift findings' body."""
+    def _rendered(self):
         els = self._service()._build_drift_findings_section()
-        # ReportLab flowables are opaque; verify count > 0 and that at least
-        # one paragraph's text includes the clean-state phrase.
         self.assertTrue(len(els) >= 2)
-        texts = " ".join(getattr(e, "text", "") for e in els if hasattr(e, "text"))
+        return " ".join(getattr(e, "text", "") for e in els if hasattr(e, "text"))
+
+    def test_no_events_and_no_approved_inputs_is_not_a_clean_result(self):
+        """An empty approved-inputs set clears nothing.
+
+        This previously asserted "No drift findings" for an operation whose OSP had
+        no material list at all — every comparison passed vacuously and the dossier
+        printed it as a clean bill of health. Absence of evidence is not evidence of
+        conformance (2026-08-03 dossier review).
+        """
+        texts = self._rendered()
+
+        self.assertNotIn("No drift findings", texts)
+        self.assertIn("could not be evaluated", texts)
+
+    def test_no_events_with_an_approved_input_on_file_is_a_clean_result(self):
+        """With a real material list to check against, a clean verdict is earned."""
+        from certifications.models import NationalListSubstance
+
+        substance = NationalListSubstance.objects.create(
+            substance_name="Copper hydroxide",
+            cfr_section="205.601",
+        )
+        self.osp.approved_national_list_substances.add(substance)
+
+        texts = self._rendered()
+
         self.assertIn("No drift findings", texts)
 
     def test_drift_section_with_findings(self):

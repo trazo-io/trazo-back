@@ -2,18 +2,24 @@ import logging
 import threading
 
 from django.db import connections, transaction
+from django.http import Http404
+from django.shortcuts import get_object_or_404
+from django.utils.text import slugify
 
 from rest_framework import status, viewsets
-from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.decorators import action, api_view, permission_classes, throttle_classes
 from rest_framework.exceptions import ValidationError
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle
 
 from backend.permissions import CompanyNestedViewSet
 
 from .models import (
     ApprovedInputChangeLog,
     Certification,
+    CertifierAccessLink,
+    CertifierAccessLog,
     LandownerAffidavit,
     NationalListSubstance,
     OMRIProduct,
@@ -24,6 +30,7 @@ from .models import (
 )
 from .serializers import (
     CertificationSerializer,
+    CertifierAccessLinkSerializer,
     LandownerAffidavitSerializer,
     OrganicSystemPlanListSerializer,
     OrganicSystemPlanSerializer,
@@ -283,14 +290,23 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     OSP_NARRATIVE_MATERIAL_FLOOR = 400
 
     def _missing_osp_sections(self, osp):
-        """Return the list of § 205.201(a)(1)-(6) section keys that are blank or too brief."""
+        """Return the list of § 205.201(a)(1)-(6) section keys that are blank,
+        too brief, or padded.
+
+        Length alone was gameable: "Test " repeated to 602 characters cleared
+        the floor here and let a padded OSP reach 'submitted' and 'active',
+        while the audit dossier — which does check padding — kept stamping it
+        DRAFT / DO-NOT-SUBMIT. The farmer got a green submit and a red PDF with
+        nothing explaining the difference. Same detector, same answer.
+        """
         from certifications.models import OSP_SECTION_KEYS
+        from history.services.audit_export_service import looks_like_padding
 
         missing = []
         for key in OSP_SECTION_KEYS:
             section = (osp.sections or {}).get(key, {}) or {}
             narrative = (section.get("narrative") or "").strip()
-            if len(narrative) < self.OSP_NARRATIVE_MATERIAL_FLOOR:
+            if len(narrative) < self.OSP_NARRATIVE_MATERIAL_FLOOR or looks_like_padding(narrative):
                 missing.append(key)
         return missing
 
@@ -609,6 +625,46 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         )
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
+    @action(
+        detail=True,
+        methods=["delete"],
+        url_path=r"change-notifications/(?P<notification_id>\d+)",
+    )
+    def delete_change_notification(self, request, notification_id=None, **kwargs):
+        """
+        Withdraw a Notification-of-Changes entry that the certifier has NOT yet
+        acknowledged — 7 CFR 205.400(f).
+
+        The panel was append-only with no edit and no delete, so a mistyped
+        entry ("tetretertertertrtret" on the demo farm) rode into the certifier
+        dossier permanently with no way to correct it. Approved inputs are
+        removable; change notifications were not, for no stated reason.
+
+        Once `certifier_acknowledged_at` is set the entry is a record of what
+        was communicated to a third party and stays frozen — correcting THAT is
+        a new notification, not an edit of the old one.
+        """
+        osp = self.get_object()
+        notification = osp.change_notifications.filter(pk=notification_id).first()
+        if notification is None:
+            return Response(
+                {"error": "Change notification not found on this OSP."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if notification.certifier_acknowledged_at is not None:
+            return Response(
+                {
+                    "error": (
+                        "This notification was already acknowledged by the certifier on "
+                        f"{notification.certifier_acknowledged_at}. It cannot be withdrawn — "
+                        "record a new notification describing the correction instead."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        notification.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     @action(detail=True, methods=["post"], url_path="remove-approved-input")
     def remove_approved_input(self, request, **kwargs):
         """
@@ -808,3 +864,233 @@ class StateOrganicRegistrationViewSet(CompanyNestedViewSet, viewsets.ModelViewSe
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
+
+
+# ---------------------------------------------------------------------------
+# Certifier review links — anonymous, read-only, revocable
+# ---------------------------------------------------------------------------
+
+
+def _client_ip(request):
+    forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.META.get("REMOTE_ADDR")
+
+
+def _resolve_link_or_404(token):
+    """Resolve an ACTIVE link, or raise 404.
+
+    Expired and revoked links deliberately return 404 rather than 410/403: a
+    distinct status would confirm to an unauthenticated caller that the token was
+    once real, which is information they should not get. The farmer sees the true
+    state (expired vs revoked) on their own authenticated dashboard.
+    """
+    link = CertifierAccessLink.objects.filter(token=token).select_related("establishment").first()
+    if link is None or not link.is_active:
+        raise Http404("No active certifier review link for this address.")
+    return link
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+@throttle_classes([AnonRateThrottle])
+def certifier_review_metadata(request, token):
+    """Context for the certifier landing page — no records, just what this link is.
+
+    Kept separate from the dossier download so the certifier sees whose operation
+    and which window they are about to open, rather than an unexplained file.
+    """
+    link = _resolve_link_or_404(token)
+
+    CertifierAccessLog.objects.create(
+        link=link,
+        action="metadata",
+        ip_address=_client_ip(request),
+        user_agent=(request.META.get("HTTP_USER_AGENT") or "")[:300],
+    )
+
+    return Response(
+        {
+            "operation_name": link.establishment.name,
+            "operation_city": link.establishment.city,
+            "operation_state": link.establishment.state,
+            "certification_type": link.certification_type,
+            "period_start": link.period_start,
+            "period_end": link.period_end,
+            "expires_at": link.expires_at,
+            "label": link.label,
+        }
+    )
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+@throttle_classes([AnonRateThrottle])
+def certifier_review_readiness(request, token):
+    """The readiness findings for this link's operation + window, readable without a download.
+
+    Added 2026-08-04. Until now this page's only offer was a PDF — a certifier had to download
+    a file to learn anything, which is the download-only experience the "top-tier recordkeeping"
+    review flagged: COG Pro's pitch is "your certification provider can inspect your records
+    online, with your permission." The token link itself already worked (anonymous, revocable,
+    logged); this is what was missing from the PAGE it opens.
+
+    Delegates entirely to `OperationAuditExportService.readiness_rows()`, which walks the exact
+    same production set the PDF dossier covers — the page and the PDF cannot disagree about what
+    is in scope, because both read the same method.
+    """
+    from history.services.operation_audit_export_service import OperationAuditExportService
+
+    link = _resolve_link_or_404(token)
+
+    CertifierAccessLog.objects.create(
+        link=link,
+        action="readiness",
+        ip_address=_client_ip(request),
+        user_agent=(request.META.get("HTTP_USER_AGENT") or "")[:300],
+    )
+
+    service = OperationAuditExportService(
+        link.establishment,
+        certification_type=link.certification_type,
+        start_date=link.period_start,
+        end_date=link.period_end,
+    )
+    try:
+        productions = service.readiness_rows()
+    except Exception:
+        # Same posture as the dossier view: a reviewer reading this must never see a raw 500
+        # that reads as "this grower's records are broken". Log the real cause for us.
+        logger.exception("Certifier readiness rows failed for establishment %s", link.establishment_id)
+        return Response(
+            {"error": "Readiness details could not be loaded right now. Please try again shortly."},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+    total_findings = sum(len(p["findings"]) for p in productions)
+
+    return Response(
+        {
+            "productions": productions,
+            "total_findings": total_findings,
+            "total_productions": len(productions),
+        }
+    )
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+@throttle_classes([AnonRateThrottle])
+def certifier_review_dossier(request, token):
+    """Stream the operation audit dossier for this link.
+
+    Regenerated on every open, which is the point: a certifier following this link
+    always sees current records, where an emailed PDF is stale the moment the
+    farmer logs the next event.
+    """
+    from django.http import FileResponse
+
+    from history.services.operation_audit_export_service import OperationAuditExportService
+
+    link = _resolve_link_or_404(token)
+
+    CertifierAccessLog.objects.create(
+        link=link,
+        action="dossier",
+        ip_address=_client_ip(request),
+        user_agent=(request.META.get("HTTP_USER_AGENT") or "")[:300],
+    )
+
+    service = OperationAuditExportService(
+        link.establishment,
+        certification_type=link.certification_type,
+        start_date=link.period_start,
+        end_date=link.period_end,
+    )
+    try:
+        pdf = service.generate_pdf()
+    except Exception:
+        # This page is read by a certification reviewer judging the farmer's
+        # operation. A raw 500 there reads as "this grower's records are broken",
+        # so fail with a neutral message and log the real cause for us.
+        logger.exception("Certifier dossier generation failed for establishment %s", link.establishment_id)
+        return Response(
+            {"error": "The dossier could not be generated right now. Please try again shortly."},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+    filename = f"{slugify(link.establishment.name)}-audit-dossier.pdf"
+    return FileResponse(pdf, as_attachment=True, filename=filename, content_type="application/pdf")
+
+
+class CertifierAccessLinkViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
+    """Farmer-side management of certifier review links.
+
+    Nested under the establishment so tenant isolation comes from
+    CompanyNestedViewSet rather than being re-implemented here. Links are created
+    and revoked, never edited: changing the window or profile of a link a
+    certifier already holds would silently change what they see.
+    """
+
+    serializer_class = CertifierAccessLinkSerializer
+    # Deliberately does NOT override permission_classes. The inherited
+    # CompanyNestedViewSet default is `IsSuperUser | (ReadOnlyForViewers &
+    # AuthPermission)`, which checks company membership AND restricts writes to
+    # CA/FM — so a VIEWER cannot mint a link that exposes supplier invoices and
+    # applicator names. An earlier draft here narrowed this to `IsAuthenticated`
+    # and, in doing so, let any authenticated grower read and mint links for
+    # somebody else's operation.
+    http_method_names = ["get", "post", "delete"]
+
+    def get_queryset(self):
+        # `self.establishment` is resolved and tenant-checked by
+        # CompanyNestedViewSet.initial — do not re-derive it from kwargs here, or
+        # the isolation guarantee moves out of one audited place into many.
+        return (
+            CertifierAccessLink.objects.filter(establishment=self.establishment)
+            .prefetch_related("accesses")
+            .order_by("-created_at")
+        )
+
+    def perform_create(self, serializer):
+        # Refuse to mint a link over a submission blocker. The dossier already
+        # stamps DO-NOT-SUBMIT, but by then the farmer has sent the URL and the
+        # reviewer has read it — the moment to stop them is BEFORE sharing, not
+        # inside the PDF the certifier also opens.
+        from history.services.operation_readiness_service import OperationReadinessService
+
+        certification_type = serializer.validated_data.get("certification_type", "organic")
+        readiness = OperationReadinessService(self.establishment, certification_type).evaluate()
+        if not readiness["ready"]:
+            raise ValidationError(
+                {
+                    "readiness": "This operation is not ready to share with a certifier.",
+                    "blockers": readiness["blockers"],
+                }
+            )
+
+        serializer.save(
+            establishment=self.establishment,
+            token=CertifierAccessLink.generate_token(),
+            created_by=self.request.user,
+        )
+
+    @action(detail=False, methods=["get"], url_path="readiness")
+    def readiness(self, request, **kwargs):
+        """What a certifier would reject this operation over, before anything is shared.
+
+        Powers both the pre-share warning on the sharing card and the
+        pre-inspection checklist on the dashboard, so the two can never disagree.
+        """
+        from history.services.operation_readiness_service import OperationReadinessService
+
+        certification_type = request.query_params.get("certification_type", "organic")
+        return Response(OperationReadinessService(self.establishment, certification_type).evaluate())
+
+    def destroy(self, request, *args, **kwargs):
+        """DELETE revokes rather than deletes — the access log is evidence of who
+        looked at the operation's records and must survive revocation."""
+        link = self.get_object()
+        link.revoke()
+        return Response(self.get_serializer(link).data, status=status.HTTP_200_OK)

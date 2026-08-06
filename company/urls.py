@@ -4,6 +4,7 @@ from rest_framework_nested import routers
 
 from certifications.views import (
     CertificationViewSet,
+    CertifierAccessLinkViewSet,
     LandownerAffidavitViewSet,
     OrganicSystemPlanViewSet,
     OSPAnnualUpdateViewSet,
@@ -40,6 +41,11 @@ establishment_router.register(
     r"state-organic-registrations",
     StateOrganicRegistrationViewSet,
     basename="establishment-state-organic-registrations",
+)
+establishment_router.register(
+    r"certifier-links",
+    CertifierAccessLinkViewSet,
+    basename="establishment-certifier-links",
 )
 establishment_router.register(r"scans", HistoryScanViewSet, basename="establishment-scans")
 establishment_router.register(r"events", EventViewSet, basename="establishment-events")

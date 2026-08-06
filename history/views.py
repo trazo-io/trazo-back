@@ -9,18 +9,22 @@ from django.db import connections, transaction
 from django.db.models import Prefetch, Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
+from django.utils.decorators import method_decorator
+from django.views.decorators.gzip import gzip_page
 
 from dateutil import parser as date_parser
 from drf_spectacular.utils import OpenApiParameter, PolymorphicProxySerializer, extend_schema, extend_schema_view
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action, api_view
 from rest_framework.decorators import permission_classes as permission_classes_decorator
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from backend.permissions import CompanyNestedViewSet
+from common.us_states import resolve_establishment_state
 from notifications.services import notification_service
 from product.models import Parcel, Product
 from reviews.models import Review
@@ -202,9 +206,7 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             # owner check below (owns_it) still gates integer-id lookups.
             _user = getattr(self.request, "user", None)
             if _user is not None and _user.is_authenticated:
-                _visibility = Q(published=True) | Q(
-                    parcel__establishment__company__in=_user.companies.all()
-                )
+                _visibility = Q(published=True) | Q(parcel__establishment__company__in=_user.companies.all())
             else:
                 _visibility = Q(published=True)
             return (
@@ -437,33 +439,68 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         return response
 
-    def create(self, request):
+    def create(self, request, *args, **kwargs):
+        """
+        Create a production on the nested route.
+
+        *args/**kwargs are required: this viewset is mounted under
+        /companies/{company_pk}/establishments/{establishment_pk}/parcels/{parcel_pk}/,
+        so the router always passes those as keyword arguments. Without them every POST
+        raised `create() got an unexpected keyword argument 'company_pk'` — a 500 on the
+        whole endpoint. (The UI creates productions through the flat
+        `histories/start-production/` action, which is why this went unnoticed.)
+
+        Missing fields are answered with 400 rather than a KeyError 500.
+        """
         data = request.data
-        parcel = Parcel.objects.get(id=data["parcel"])
+
+        required = ["parcel", "product", "start_date"]
+        missing = [f for f in required if not data.get(f)]
+        if missing:
+            return Response(
+                {f: ["This field is required."] for f in missing},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        parcel = get_object_or_404(Parcel, id=data["parcel"])
+        # Scope the parcel to the caller's company — the URL is nested, but this method
+        # previously trusted the body's parcel id outright.
+        if not request.user.companies.filter(id=parcel.establishment.company_id).exists():
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
         product = data["product"]
-        obj, created = Product.objects.get_or_create(name=product["name"])
-        type = data["type"]
-        age_of_plants = data["age_of_plants"]
-        number_of_plants = data["number_of_plants"]
-        soil_ph = data["soil_ph"]
-        is_outdoor = data["is_outdoor"]
+        product_name = product.get("name") if isinstance(product, dict) else product
+        if not product_name:
+            return Response({"product": ["A product name is required."]}, status=status.HTTP_400_BAD_REQUEST)
+        obj, _created = Product.objects.get_or_create(name=product_name)
+
+        # Parse the timestamp before create(): Django leaves whatever was passed on the
+        # in-memory instance, so a raw ISO string survives into History.__str__ /
+        # HistorySerializer and blows up there on .strftime().
+        start_date = parse_datetime(data["start_date"]) if isinstance(data["start_date"], str) else data["start_date"]
+        if start_date is None:
+            return Response(
+                {"start_date": ["Enter a valid ISO-8601 datetime."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         extra_data = {
-            "age_of_plants": age_of_plants,
-            "number_of_plants": number_of_plants,
-            "soil_ph": soil_ph,
-            "is_outdoor": is_outdoor,
+            "age_of_plants": data.get("age_of_plants"),
+            "number_of_plants": data.get("number_of_plants"),
+            "soil_ph": data.get("soil_ph"),
+            "is_outdoor": data.get("is_outdoor"),
         }
         history = History.objects.create(
-            start_date=data["start_date"],
+            start_date=start_date,
             parcel=parcel,
             product=obj,
             extra_data=extra_data,
-            type=type,
+            type=data.get("type"),
         )
         parcel.current_history = history
         parcel.save()
         serializer = HistorySerializer(history)
-        return Response(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @action(
         detail=False,
@@ -548,8 +585,20 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 "blockchain_enabled": bool(company.blockchain_subscription_status),
             }
 
-            # Add optional fields to extra_data
-            optional_fields = ["age_of_plants", "number_of_plants", "soil_ph", "is_outdoor", "notes"]
+            # Add optional fields to extra_data.
+            # `production_method` MUST be here: the start-production form submits it, and
+            # HistorySerializer reads extra_data["production_method"] with a "conventional"
+            # default. Omitting it meant a grower could select "Organic" on the form and
+            # have it silently discarded, so every production fell back to conventional —
+            # which is what surfaced on the consumer page.
+            optional_fields = [
+                "age_of_plants",
+                "number_of_plants",
+                "soil_ph",
+                "is_outdoor",
+                "notes",
+                "production_method",
+            ]
             for field in optional_fields:
                 if data.get(field):
                     extra_data[field] = data[field]
@@ -1108,6 +1157,22 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # Default fallback to production
         return {"category": "production", "sub_type": ProductionEvent.IRRIGATION}
 
+    # gzip: the QR page is the most mobile-critical surface in the product (<500 ms budget,
+    # opened on a phone in a shop or a field on cell data) and this payload grows with the
+    # season. Measured on a realistic 258-event CA walnut year: 179.7 KB -> 6.1 KB (97%).
+    #
+    # Scoped deliberately to the ANONYMOUS consumer endpoints rather than enabling
+    # GZipMiddleware globally. Django's docs warn that compressing responses can expose
+    # BREACH; that attack needs a secret in the response body alongside attacker-controlled
+    # reflected input. This endpoint is unauthenticated, carries no secret, and its only
+    # input is a UUID lookup — so it is provably outside that surface. Turning gzip on for
+    # authenticated endpoints is a larger decision that deserves its own BREACH review, not
+    # a side effect of a performance fix.
+    #
+    # Belt-and-braces at the edge is fine but not relied on: prod sits behind Cloudflare,
+    # which compressed some responses and not others when checked, and dev/staging have no
+    # edge compression at all.
+    @method_decorator(gzip_page)
     @action(detail=True, methods=["get"], permission_classes=[AllowAny])
     def public_history(self, request, pk=None):
         import uuid as uuid_module
@@ -1690,8 +1755,21 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             establishment = Establishment.objects.select_related("company").get(id=establishment_id)
         except (Establishment.DoesNotExist, ValueError):
             return Response({"error": "Establishment not found"}, status=status.HTTP_404_NOT_FOUND)
+        # NB: "CA"/"FM" here are WorksIn ROLE codes (company admin / farm manager),
+        # not the state — this endpoint had no state check at all.
         if not WorksIn.objects.filter(user=request.user, company=establishment.company, role__in=["CA", "FM"]).exists():
             return Response({"error": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
+
+        # The PUR is a California filing (3 CCR 6626) and the CSV embeds CA county
+        # codes. Serving it to an out-of-state farm produced a document titled
+        # "California Pesticide Use Report" naming a county that does not exist in
+        # California — misleading on a regulator-facing artifact. 404, not 403:
+        # the report does not exist for this farm, it is not a permission failure.
+        if resolve_establishment_state(establishment) != "CA":
+            return Response(
+                {"error": "The Pesticide Use Report is a California filing and is not available for this farm."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         try:
             month = int(request.query_params.get("month", ""))
@@ -3020,14 +3098,37 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         parcels = parcels_data if parcels_data else parcels_post
 
         if event_type is None:
-            raise Exception("Event type is required")
-        if parcels is None or parcels is []:
-            raise Exception("Parcel is required")
+            raise ValidationError({"event_type": ["Event type is required."]})
+
+        # `parcels is []` was an identity comparison against a fresh list literal, so it
+        # was ALWAYS False. An absent/empty `parcels` therefore slipped past the guard,
+        # `Parcel.objects.filter(id__in=[])` matched nothing, the loop below never ran,
+        # and DRF still returned 201 with the (unsaved) serializer data — a silent
+        # data-loss contract for any caller that isn't the web UI.
+        #
+        # When only `history` is supplied — which this endpoint accepts and echoes back —
+        # derive the parcel from it rather than discarding the event.
+        if not parcels and explicit_history_id:
+            history_parcel_id = (
+                History.objects.filter(id=explicit_history_id).values_list("parcel_id", flat=True).first()
+            )
+            if history_parcel_id:
+                parcels = [history_parcel_id]
+
+        if not parcels:
+            raise ValidationError({"parcels": ["A parcel (or a history to derive it from) is required."]})
 
         # Enhanced validation for structured fields
         self._validate_structured_fields(int(event_type), serializer.validated_data)
 
         parcels = Parcel.objects.filter(id__in=[int(parcel) for parcel in parcels]).select_related("current_history")
+        if not parcels:
+            raise ValidationError({"parcels": ["No matching parcel found."]})
+
+        # Tracks whether anything was actually written. A parcel with no current_history
+        # skips the body below, and without this the request would still answer 201 while
+        # persisting nothing.
+        created_event = None
 
         for parcel in parcels:
             if parcel.current_history is not None:
@@ -3072,6 +3173,7 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     created_by=self.request.user,
                     **validated_data,
                 )
+                created_event = event
 
                 # Handle album images from S3 URLs
                 album_images = self.request.data.get("album_images", [])
@@ -3181,6 +3283,17 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     history.update_trust_metrics()
                 except Exception:
                     pass  # Non-fatal: score will update on next calculation
+
+        if created_event is None:
+            # Every parcel matched but none had an active production. Answering 201 here
+            # would tell the grower their record was saved when nothing was written.
+            raise ValidationError(
+                {"detail": ["No active production found for the selected parcel. Start a production first."]}
+            )
+
+        # Bind the created row to the serializer so the 201 body carries the real id.
+        # Without this the response serialises an unsaved instance and returns "id": null.
+        serializer.instance = created_event
 
     def update(self, request, *args, **kwargs):
         """
@@ -3476,12 +3589,21 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             if investment is not None and investment < 0:
                 raise ValidationError("Investment amount cannot be negative")
 
-            # Validate business type
+            # Validate business type.
+            #
+            # This list used to be hardcoded here and had drifted from the model: it omitted
+            # `verification`, `compliance` and `transparency`, which are three of the six options
+            # BusinessTab actually offers and are all present in
+            # BusinessEvent.BUSINESS_ACTIVITY_CHOICES. A farmer choosing "Third-Party
+            # Verification Completed", "Regulatory Compliance Achieved" or "Transparency
+            # Initiative Launched" got a 400 and could not save at all — half the business event
+            # types were unusable through the UI, while seed commands writing the model directly
+            # bypassed this check and produced rows the form could never have created.
+            #
+            # Derive from the model so the two cannot drift again, and keep the extra legacy
+            # values this endpoint has always accepted so any other client stays working.
             business_type = validated_data.get("business_type")
-            valid_business_types = [
-                "certification",
-                "carbon_credits",
-                "sustainability_audit",
+            _LEGACY_BUSINESS_TYPES = [
                 "green_investment",
                 "supply_chain",
                 "consumer_engagement",
@@ -3490,6 +3612,9 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 "sustainability_training",
                 "eco_certification",
             ]
+            valid_business_types = [
+                code for code, _label in BusinessEvent.BUSINESS_ACTIVITY_CHOICES
+            ] + _LEGACY_BUSINESS_TYPES
             if business_type and business_type not in valid_business_types:
                 raise ValidationError(
                     f"Invalid business type: {business_type}. Must be one of: {', '.join(valid_business_types)}"

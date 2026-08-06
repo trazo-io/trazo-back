@@ -3,6 +3,7 @@ from rest_framework.serializers import ModelSerializer
 
 from common.models import Gallery
 from common.serializers import GallerySerializer
+from common.validators import USContactFieldsMixin
 from users.models import User
 from users.serializers import BasicUserSerializer
 
@@ -25,6 +26,12 @@ class ParcelBasicSerializer(ModelSerializer):
             "image",
             "has_current_production",
             "members",
+            # Hectares (see Parcel.area help_text). Served so the OSP editor can show
+            # the farmer their own acreage while they write the § 205.201(a) narrative,
+            # instead of leaving them to describe their operation from memory.
+            # NOT public: `parcels` is absent from the public_fields allow-list in
+            # company/views.py's anonymous establishment endpoint.
+            "area",
             "soil_type",
             "unique_code",
             "certification_type",
@@ -168,7 +175,9 @@ class RetrieveParcelSerializer(ModelSerializer):
         return parcel.is_transparency_ready()
 
 
-class CreateParcelSerializer(ModelSerializer):
+class CreateParcelSerializer(USContactFieldsMixin, ModelSerializer):
+    US_PHONE_FIELDS = ("contact_phone",)
+
     product = serializers.SerializerMethodField()
     album = GallerySerializer(required=False)
     image = serializers.SerializerMethodField()
@@ -183,6 +192,15 @@ class CreateParcelSerializer(ModelSerializer):
     # buffers — previously buffer_zones was a model JSONField with no write path, so
     # the audit export fired the empty-state REVIEW flag on every non-seeded parcel.
     buffer_zones = serializers.JSONField(required=False, allow_null=True)
+
+    # §E-6 irrigation pumping plant. Declared explicitly with allow_null so a STALE pump test
+    # can be cleared: the parcel-compliance card PATCHes multipart/form-data, which cannot
+    # carry a real null, so it sends "" — and DRF's DecimalField/DateField reject "" by
+    # default. `_BLANKABLE_PUMP_FIELDS` in to_internal_value coerces "" -> None. Being able to
+    # clear matters because an out-of-date efficiency is weaker evidence than none.
+    pump_efficiency_pct = serializers.DecimalField(max_digits=4, decimal_places=1, required=False, allow_null=True)
+    system_pressure_psi = serializers.DecimalField(max_digits=5, decimal_places=1, required=False, allow_null=True)
+    pump_test_date = serializers.DateField(required=False, allow_null=True)
 
     # Individual agricultural fields for backward compatibility and easy access
     soil_ph = serializers.FloatField(required=False, write_only=True)
@@ -233,6 +251,11 @@ class CreateParcelSerializer(ModelSerializer):
             "treated_lumber_present",
             "treated_lumber_description",
             "treated_lumber_install_date",
+            # §E-6 irrigation pumping plant — feeds the irrigation carbon calculation.
+            "pump_efficiency_pct",
+            "system_pressure_psi",
+            "pump_test_date",
+            "pump_test_provider",
             "soil_type",
             "unique_code",
             "certification_type",
@@ -268,6 +291,23 @@ class CreateParcelSerializer(ModelSerializer):
 
     def get_product(self, parcel):
         return None
+
+    # Nullable non-string fields that the multipart parcel-compliance PATCH may send as "".
+    _BLANKABLE_PUMP_FIELDS = ("pump_efficiency_pct", "system_pressure_psi", "pump_test_date")
+
+    def to_internal_value(self, data):
+        """Coerce "" -> None for nullable numeric/date fields sent over multipart form data.
+
+        Mirrors coerce_blank_nullable_dates() in history/serializers.py. Without this a farmer
+        could set a pump test but never clear one, because the only way multipart can express
+        "empty" is an empty string, which DRF rejects for Decimal and Date fields.
+        """
+        if hasattr(data, "copy"):
+            data = data.copy()
+            for field in self._BLANKABLE_PUMP_FIELDS:
+                if field in data and data.get(field) in ("", "null", None):
+                    data[field] = None
+        return super().to_internal_value(data)
 
     def validate_buffer_zones(self, value):
         """Validate + normalize the per-boundary buffer-zone records (7 CFR 205.202(c)).

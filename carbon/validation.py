@@ -254,29 +254,31 @@ class TimelineDataValidator:
             "certified": bool(event.get("certified", False)),
         }
 
-        # Validate chemical-specific fields if present
+        # Validate chemical-specific fields if present.
+        #
+        # `volume` / `volume_unit` and the NPK percentages are DELIBERATELY ABSENT (2026-08-02).
+        # They are stripped from the other two anonymous payloads by
+        # PublicHistorySerializer._CERTIFIER_ONLY_EVENT_FIELDS as agronomic-audit detail, and
+        # this endpoint — a third anonymous surface with its own allow-list — was publishing
+        # them: live values of {"volume": "2250", "volume_unit": "gal"} and
+        # npk_n_percentage on the same productions the main serializer redacts.
+        #
+        # One rule, three endpoints. Anything added here must be checked against that tuple
+        # first; an allow-list that disagrees with the other two is a leak by construction.
         chemical_fields = [
             "commercial_name",
             "chemical_name",
-            "volume",
             "area",
-            "volume_unit",
             "area_unit",
             "application_method",
         ]
 
         for field in chemical_fields:
             if field in event:
-                if field in ["volume", "area"]:
+                if field == "area":
                     validated_event[field] = sanitizer.sanitize_text_field(event[field], 50)
                 else:
                     validated_event[field] = sanitizer.sanitize_text_field(event[field], 200)
-
-        # Validate NPK percentages
-        npk_fields = ["npk_n_percentage", "npk_p_percentage", "npk_k_percentage"]
-        for field in npk_fields:
-            if field in event:
-                validated_event[field] = sanitizer.sanitize_numeric_field(event[field], field)
 
         # Validate albums data
         if "albums" in event and isinstance(event["albums"], list):

@@ -134,27 +134,15 @@ class PublicQRPermission(permissions.BasePermission):
         return has_suspicious and not has_legitimate
 
 
-class SecurePublicDataPermission(PublicQRPermission):
-    """
-    Enhanced permission for public endpoints that expose production data.
-    Adds additional validation for production ID access patterns.
-    """
-
-    def has_object_permission(self, request, view, obj):
-        """
-        Validate that the production object can be publicly accessed.
-        """
-        # Only allow access to published/public productions
-        if hasattr(obj, "is_public") and not obj.is_public:
-            logger.warning(f"🚨 SecurePublicDataPermission: Attempted access to private production {obj.id}")
-            return False
-
-        # Additional validation for production access patterns
-        if hasattr(obj, "company") and hasattr(obj.company, "is_active"):
-            if not obj.company.is_active:
-                logger.warning(
-                    f"🚨 SecurePublicDataPermission: Attempted access to inactive company production {obj.id}"
-                )
-                return False
-
-        return True
+# SecurePublicDataPermission was removed (2026-08-02).
+#
+# It guarded `obj.is_public` and `obj.company`, but its only consumer served `History`
+# objects, which carry NEITHER attribute (the fields are `published` and
+# `parcel.establishment.company`). Both `hasattr` checks were therefore always False and
+# the method returned True unconditionally. DRF also never calls `has_object_permission`
+# for list actions, so the list route had no object-level protection at all.
+#
+# The result: `GET /api/carbon/productions-flat/` served every tenant's productions —
+# including unpublished drafts — plus their self-graded `transparency_score`, to
+# unauthenticated callers. That endpoint is now `IsAuthenticated` and company-scoped
+# (see `CarbonProductionViewSet` in carbon/views.py).

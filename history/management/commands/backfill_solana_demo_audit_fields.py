@@ -30,20 +30,25 @@ from users.models import User
 
 from ._solana_verde_base import COMPANY_NAME
 
+# Internally consistent with the fixture: harvest yield is ~5,080 kg to
+# Pacific Organic Distributors (POD) — the buyer named in the OSP/transport
+# narrative. Two post-harvest deliveries totaling ≤ yield, dated AFTER the
+# 2026-04-10 harvest, in the SAME unit (kg) as the yield so the mass-balance
+# reconciles cleanly.
 SOLANA_SALES = [
     {
-        "buyer_name": "Del Rey Avocado Co.",
-        "sale_date": date(2026, 3, 14),
-        "quantity": Decimal("18000.00"),
-        "quantity_unit": "lb",
+        "buyer_name": "Pacific Organic Distributors (POD)",
+        "sale_date": date(2026, 4, 16),
+        "quantity": Decimal("3000.00"),
+        "quantity_unit": "kg",
         "invoice_number": "SV-INV-2026-0112",
         "organic_on_invoice": True,
     },
     {
-        "buyer_name": "Mission Produce (organic line)",
-        "sale_date": date(2026, 3, 28),
-        "quantity": Decimal("12500.00"),
-        "quantity_unit": "lb",
+        "buyer_name": "Pacific Organic Distributors (POD)",
+        "sale_date": date(2026, 4, 22),
+        "quantity": Decimal("1800.00"),
+        "quantity_unit": "kg",
         "invoice_number": "SV-INV-2026-0145",
         "organic_on_invoice": True,
     },
@@ -63,7 +68,9 @@ class Command(BaseCommand):
             company_qs = company_qs.filter(company_workers__user__email=options["email"])
         company = company_qs.first()
         if company is None:
-            self.stderr.write(self.style.ERROR(f"No '{COMPANY_NAME}' company found. Run create_organic_pilot_farm first."))
+            self.stderr.write(
+                self.style.ERROR(f"No '{COMPANY_NAME}' company found. Run create_organic_pilot_farm first.")
+            )
             return
 
         prod = (
@@ -79,26 +86,84 @@ class Command(BaseCommand):
         user = prod.operator
         establishment = prod.parcel.establishment
 
-        # 1) NOP 5006 — a documented processed-manure soil event (reuse an OM event, else create one).
-        soil = (
-            prod.history_soilmanagementevent_events.filter(type=SoilManagementEvent.ORGANIC_MATTER).first()
-            or prod.history_soilmanagementevent_events.filter(type=SoilManagementEvent.COMPOSTING).first()
-        )
-        if soil is None:
-            soil = SoilManagementEvent(
-                history=prod,
+        # 0) REPAIR prior inconsistent demo data (idempotent):
+        #    (a) A raw manure event wrongly reclassified processed_5006 while still
+        #        carrying a raw 90/120 interval — revert it to raw.
+        reverted = 0
+        for ev in prod.history_soilmanagementevent_events.filter(
+            manure_treatment="processed_5006", manure_harvest_interval__in=["90", "120"]
+        ):
+            ev.manure_treatment = None
+            ev.processed_manure_temp_f = None
+            ev.processed_manure_attestation = None
+            ev.save(update_fields=["manure_treatment", "processed_manure_temp_f", "processed_manure_attestation"])
+            reverted += 1
+        #    (b) Raw manure falsely labeled "OMRI-listed" — manure is an allowed
+        #        input with the interval, not an OMRI product.
+        relabeled = 0
+        for ev in prod.history_soilmanagementevent_events.filter(
+            amendment_type__icontains="manure", amendment_organic_approved="omri_listed"
+        ):
+            ev.amendment_organic_approved = "yes"
+            ev.save(update_fields=["amendment_organic_approved"])
+            relabeled += 1
+        if reverted or relabeled:
+            self.stdout.write(f"  Repaired: {reverted} manure reclassification(s), {relabeled} false OMRI label(s).")
+
+        #    (c) Stale citation: "organic on invoice" is the audit-trail disclosure
+        #        provision § 205.103(b)(2), NOT § 205.301(f) (product composition).
+        #        Scrub existing event notes + OSP narrative seeded before the source fix.
+        def _scrub(obj):
+            if isinstance(obj, str):
+                return obj.replace("§ 205.301(f)", "§ 205.103(b)(2)").replace("205.301(f)", "205.103(b)(2)")
+            if isinstance(obj, dict):
+                return {k: _scrub(v) for k, v in obj.items()}
+            if isinstance(obj, list):
+                return [_scrub(v) for v in obj]
+            return obj
+
+        cite_fixed = 0
+        from history.models import BusinessEvent, GeneralEvent
+
+        for model in (BusinessEvent, GeneralEvent):
+            for ev in model.objects.filter(history=prod, observation__contains="205.301(f)"):
+                ev.observation = _scrub(ev.observation)
+                ev.save(update_fields=["observation"])
+                cite_fixed += 1
+        try:
+            from certifications.models import OrganicSystemPlan
+
+            osp0 = OrganicSystemPlan.objects.filter(establishment=establishment).order_by("-version_number").first()
+            if osp0 and isinstance(osp0.sections, dict) and "205.301(f)" in str(osp0.sections):
+                osp0.sections = _scrub(osp0.sections)
+                osp0.save(update_fields=["sections"])
+                cite_fixed += 1
+        except Exception:  # noqa: BLE001 — non-fatal
+            pass
+        if cite_fixed:
+            self.stdout.write(f"  Fixed {cite_fixed} stale § 205.301(f) citation(s).")
+
+        # 1) NOP 5006 — add a SEPARATE, documented processed-manure event.
+        # IMPORTANT: never reclassify an existing RAW manure event (e.g., the
+        # fixture's aged horse manure) as processed — that produces a
+        # self-contradictory record (raw-interval flag AND processed-exempt) that
+        # reads to a certifier as reclassifying to dodge a flag. Create a distinct,
+        # authentic event (OMRI heat-processed poultry pellets) with NO raw interval.
+        soil, _created = SoilManagementEvent.objects.get_or_create(
+            history=prod,
+            type=SoilManagementEvent.ORGANIC_MATTER,
+            manure_treatment="processed_5006",
+            defaults=dict(
                 created_by=user,
-                description="Processed poultry-manure pellets applied to tree rows (pathogen-reduced).",
+                description="OMRI-listed heat-processed poultry-manure pellets applied to tree rows (pathogen-reduced).",
                 date=timezone.now(),
-                type=SoilManagementEvent.ORGANIC_MATTER,
-            )
-        soil.manure_application_date = soil.manure_application_date or date(2025, 12, 1)
-        soil.manure_treatment = "processed_5006"
-        soil.processed_manure_temp_f = Decimal("155.0")
-        soil.processed_manure_attestation = "OMRI-listed heat-processed poultry pellets (PFRP), supplier COA on file"
-        soil.skip_manure_validation = True
-        soil.save()
-        self.stdout.write(f"  NOP 5006 processed manure set on soil event #{soil.id}.")
+                manure_application_date=date(2025, 12, 1),
+                manure_harvest_interval="na",  # interval-exempt; NOT a raw 90/120 event
+                processed_manure_temp_f=Decimal("155.0"),
+                processed_manure_attestation="OMRI-listed heat-processed poultry pellets (PFRP), supplier COA on file",
+            ),
+        )
+        self.stdout.write(f"  NOP 5006 processed-manure event #{soil.id} ({'created' if _created else 'present'}).")
 
         # 2) NOP 5012 — nitrogen source on fertilizer events.
         n = 0
@@ -130,9 +195,14 @@ class Command(BaseCommand):
         wash.save()
         self.stdout.write(f"  NOP 5026 residual chlorine set on production event #{wash.id}.")
 
-        # 4) SOE — itemized sales records.
+        # 4) SOE — itemized sales records. update_or_create so a prior run's
+        # inconsistent rows (wrong buyer/unit/quantity) are CORRECTED, not left.
+        keep_invoices = {s["invoice_number"] for s in SOLANA_SALES}
+        # Drop any earlier demo sales that no longer belong (e.g., the old
+        # Del Rey / Mission rows in lb that exceeded yield).
+        prod.sales_records.exclude(invoice_number__in=keep_invoices).delete()
         for s in SOLANA_SALES:
-            SalesRecord.objects.get_or_create(
+            SalesRecord.objects.update_or_create(
                 production=prod,
                 invoice_number=s["invoice_number"],
                 defaults=dict(
@@ -149,9 +219,7 @@ class Command(BaseCommand):
         try:
             from certifications.models import OrganicSystemPlan, OSPChangeNotification
 
-            osp = (
-                OrganicSystemPlan.objects.filter(establishment=establishment).order_by("-version_number").first()
-            )
+            osp = OrganicSystemPlan.objects.filter(establishment=establishment).order_by("-version_number").first()
             if osp is not None:
                 OSPChangeNotification.objects.get_or_create(
                     osp=osp,
@@ -172,7 +240,9 @@ class Command(BaseCommand):
                         method=OSPChangeNotification.METHOD_VERBAL,
                     ),
                 )
-                self.stdout.write(f"  NOP 2615 change notifications on OSP #{osp.id}: {osp.change_notifications.count()} total.")
+                self.stdout.write(
+                    f"  NOP 2615 change notifications on OSP #{osp.id}: {osp.change_notifications.count()} total."
+                )
             else:
                 self.stdout.write(self.style.WARNING("  No OSP found — skipped NOP 2615 change notifications."))
         except Exception as e:  # noqa: BLE001 — non-fatal enrichment
@@ -184,8 +254,8 @@ class Command(BaseCommand):
         scrubbed = 0
         for ev in prod.history_generalevent_events.filter(observation__icontains="Transparency score target"):
             ev.observation = (
-                "Successful organic season. 22 documented events across all 7 categories; "
-                "records compiled into the OGC buyer package and organic documentation export."
+                "Successful organic season. Events documented across all 7 categories; "
+                "records compiled into the POD buyer package and organic documentation export."
             )
             ev.save(update_fields=["observation"])
             scrubbed += 1

@@ -16,7 +16,7 @@ from rest_framework.response import Response
 
 logger = logging.getLogger(__name__)
 
-from backend.constants import EngagementMilestones, get_carbon_score_from_co2e
+from backend.constants import EngagementMilestones, format_carbon_amount
 
 from .models import (
     BusinessEvent,
@@ -143,7 +143,9 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
         # Get query parameters for filtering
         date_from = request.query_params.get("date_from")
         date_to = request.query_params.get("date_to")
-        carbon_score = request.query_params.get("carbon_score")  # A+, A, B, etc.
+        # A `carbon_score` filter ("A+, A, B, ...") was read here and never applied to the
+        # queryset — dead since it was written. Removed 2026-08-04 with the letter grade itself
+        # (see backend/constants.py); there is no grade left to filter on.
         is_favorite = request.query_params.get("is_favorite", "").lower() == "true"
 
         # Base queryset
@@ -213,9 +215,16 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
 
         product_ids = serializer.validated_data["products"]
 
-        # Get products with carbon data and optimized event queries
+        # Get products with carbon data and optimized event queries.
+        #
+        # Filter on `public_id`, not `id` (fixed 2026-08-04). `ProductComparisonSerializer`
+        # validates the incoming values as UUIDs against `public_id__in`, then this queryset
+        # matched them against the integer primary key — so a request that passed validation
+        # always selected ZERO rows and the endpoint returned an empty comparison to everyone.
+        # Pre-existing; surfaced when the carbon letter grade was removed and the path was
+        # finally exercised end to end.
         products = (
-            History.objects.filter(id__in=product_ids)
+            History.objects.filter(public_id__in=product_ids)
             .select_related("parcel__establishment")
             .prefetch_related(
                 "carbonentry_set",
@@ -271,8 +280,9 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
                 if establishment.city and establishment.state:
                     location = f"{establishment.city}, {establishment.state}"
 
-            # Calculate carbon score using same logic as serializers
-            carbon_score = "Not Available"
+            # The measured amount, not a grade. `carbon_kg` is the number the comparison ranks
+            # on; `carbon_footprint` is the same value formatted for display.
+            carbon_kg = None
             carbon_footprint = "Data unavailable"
 
             if carbon_entry:
@@ -283,9 +293,8 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
                     else carbon_entry.amount
                 )
                 if co2e and co2e > 0:
-                    co2e = float(co2e)
-                    carbon_footprint = f"{co2e:.2f} kg CO₂e/kg"
-                    carbon_score = get_carbon_score_from_co2e(co2e)
+                    carbon_kg = float(co2e)
+                    carbon_footprint = format_carbon_amount(carbon_kg)
 
             # Get certifications from establishment-level verified data
             certifications = []
@@ -303,7 +312,18 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
                         if cert.verification_status == "verified":
                             label += " (verified)"
                         certifications.append(label)
-                    if est_certs.filter(certification_type="usda_organic").exists():
+                    # Only a DATABASE-VERIFIED organic certificate may flatten into the
+                    # bare word "Organic" here. The queryset above deliberately includes
+                    # self_reported certs so they can appear in `certifications` — but
+                    # there they carry their own label ("(verified)" is appended only when
+                    # earned). This line had no such distinction, so a farmer who typed in
+                    # an unverified USDA Organic certificate got "Farming Method: Organic"
+                    # asserted to shoppers as flat fact, in the same payload that was
+                    # careful to label the certificate itself.
+                    if est_certs.filter(
+                        certification_type="usda_organic",
+                        verification_status="verified",
+                    ).exists():
                         farming_method = "Organic"
                 except Exception:
                     pass
@@ -312,36 +332,48 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
 
             comparison_results.append(
                 {
-                    "id": product.id,
-                    "name": product.product or "Unknown Product",
+                    "public_id": str(product.public_id),
+                    # `History.product` is a FK to Product, not a string — this put a model
+                    # INSTANCE into the response dict and into the `comparison_data` JSONField,
+                    # so the endpoint 500'd on json.dumps as soon as it actually found products.
+                    "name": product.product.name if product.product else "Unknown Product",
                     "farm": (
                         product.parcel.establishment.name
                         if product.parcel and product.parcel.establishment
                         else "Unknown Farm"
                     ),
                     "location": location,
-                    "carbon_score": carbon_score,
                     "carbon_footprint": carbon_footprint,
+                    "carbon_kg_co2e": carbon_kg,
                     "farming_method": farming_method,
                     "certifications": certifications,
                 }
             )
 
-        # Save comparison for analytics
+        # Save comparison for analytics.
+        #
+        # `product_ids` are UUID objects out of `validated_data`, and `comparison_data` is a
+        # JSONField — `json.dumps` raises "Object of type UUID is not JSON serializable", so this
+        # endpoint returned a 500 for every authenticated caller, which is every caller
+        # (permission_classes = IsAuthenticated). Pre-existing; found 2026-08-04 when the carbon
+        # letter grade was removed from this response and the path was exercised end to end.
         if request.user.is_authenticated:
             comparison = UserProductComparison.objects.create(
                 user=request.user,
                 comparison_data={
-                    "product_ids": product_ids,
+                    "product_ids": [str(pid) for pid in product_ids],
                     "results": comparison_results,
                     "timestamp": timezone.now().isoformat(),
                 },
             )
             comparison.products.set(products)
 
-        # Calculate comparison summary with only real data
-        valid_scores = [
-            result["carbon_score"] for result in comparison_results if result["carbon_score"] != "Not Available"
+        # Rank on the MEASURED intensity. This previously did `min()` over letter-grade strings,
+        # which compares them alphabetically: "A" sorts before "A+", and the ordering only
+        # resembled a ranking because the alphabet happens to run A, B, C, D, F. The grade is gone
+        # (see backend/constants.py) and the comparison now uses the number it was derived from.
+        valid_intensities = [
+            result["carbon_kg_co2e"] for result in comparison_results if result["carbon_kg_co2e"] is not None
         ]
 
         return Response(
@@ -349,7 +381,10 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
                 "comparison_id": comparison.id if request.user.is_authenticated else None,
                 "products": comparison_results,
                 "comparison_summary": {
-                    "best_carbon_score": min(valid_scores) if valid_scores else "Not Available",
+                    "lowest_carbon_kg_co2e": (min(valid_intensities) if valid_intensities else None),
+                    "lowest_carbon_footprint": (
+                        format_carbon_amount(min(valid_intensities)) if valid_intensities else None
+                    ),
                     "total_products": len(comparison_results),
                     "epa_usda_sourced_products": len(
                         [r for r in comparison_results if "EPA/USDA-Sourced Data" in r.get("certifications", [])]

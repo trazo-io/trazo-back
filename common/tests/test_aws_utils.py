@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from django.conf import settings
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from botocore.exceptions import ClientError, NoCredentialsError
 
@@ -30,65 +30,69 @@ class TestSecureAWSClient(TestCase):
         for attr, value in self.original_aws_settings.items():
             setattr(settings, attr, value)
 
+    # `get_s3_client` forces a regional endpoint and a SigV4 Config so presigned
+    # URLs work for buckets outside us-east-1 (common/aws_utils.py:36-39). The
+    # assertions below check the credential-routing decision, not object identity:
+    # botocore's Config has no __eq__, so assert_called_once_with can never match it.
+
+    @override_settings(
+        AWS_ACCESS_KEY_ID="test_key",
+        AWS_SECRET_ACCESS_KEY="test_secret",
+        AWS_S3_REGION_NAME="us-east-1",
+    )
+    @patch("common.aws_utils.SecureAWSClient._is_running_on_aws", return_value=False)
     @patch("common.aws_utils.boto3.client")
-    def test_get_s3_client_with_explicit_credentials(self, mock_boto3_client):
+    def test_get_s3_client_with_explicit_credentials(self, mock_boto3_client, _mock_on_aws):
         """Test S3 client creation with explicit credentials"""
-        # Mock settings
-        settings.AWS_ACCESS_KEY_ID = "test_key"
-        settings.AWS_SECRET_ACCESS_KEY = "test_secret"
-        settings.AWS_S3_REGION_NAME = "us-east-1"
-
-        # Mock the client
         mock_client = MagicMock()
         mock_boto3_client.return_value = mock_client
 
-        # Test the method
         client = SecureAWSClient.get_s3_client()
 
-        # Verify the client was created with correct parameters
         self.assertEqual(client, mock_client)
-        mock_boto3_client.assert_called_once_with(
-            "s3", region_name="us-east-1", aws_access_key_id="test_key", aws_secret_access_key="test_secret"
-        )
+        args, kwargs = mock_boto3_client.call_args
+        self.assertEqual(args, ("s3",))
+        self.assertEqual(kwargs["region_name"], "us-east-1")
+        self.assertEqual(kwargs["aws_access_key_id"], "test_key")
+        self.assertEqual(kwargs["aws_secret_access_key"], "test_secret")
+        self.assertEqual(kwargs["endpoint_url"], "https://s3.us-east-1.amazonaws.com")
 
+    @override_settings(
+        AWS_ACCESS_KEY_ID="",
+        AWS_SECRET_ACCESS_KEY="",
+        AWS_S3_REGION_NAME="us-west-2",
+    )
+    @patch("common.aws_utils.SecureAWSClient._is_running_on_aws", return_value=False)
     @patch("common.aws_utils.boto3.client")
-    def test_get_s3_client_with_default_credentials(self, mock_boto3_client):
-        """Test S3 client creation with default credential chain"""
-        # Remove explicit credentials
-        if hasattr(settings, "AWS_ACCESS_KEY_ID"):
-            delattr(settings, "AWS_ACCESS_KEY_ID")
-        if hasattr(settings, "AWS_SECRET_ACCESS_KEY"):
-            delattr(settings, "AWS_SECRET_ACCESS_KEY")
-
-        settings.AWS_S3_REGION_NAME = "us-west-2"
-
-        # Mock the client
+    def test_get_s3_client_with_default_credentials(self, mock_boto3_client, _mock_on_aws):
+        """Test S3 client creation falls through to the default credential chain"""
         mock_client = MagicMock()
         mock_boto3_client.return_value = mock_client
 
-        # Test the method
         client = SecureAWSClient.get_s3_client()
 
-        # Verify the client was created with region only
         self.assertEqual(client, mock_client)
-        mock_boto3_client.assert_called_once_with("s3", region_name="us-west-2")
+        args, kwargs = mock_boto3_client.call_args
+        self.assertEqual(args, ("s3",))
+        self.assertEqual(kwargs["region_name"], "us-west-2")
+        self.assertEqual(kwargs["endpoint_url"], "https://s3.us-west-2.amazonaws.com")
+        # No explicit credentials must be forwarded on this path.
+        self.assertNotIn("aws_access_key_id", kwargs)
+        self.assertNotIn("aws_secret_access_key", kwargs)
 
-    def test_get_s3_client_no_credentials_error(self):
+    @override_settings(AWS_S3_REGION_NAME="us-east-1")
+    @patch("common.aws_utils.SecureAWSClient._is_running_on_aws", return_value=False)
+    def test_get_s3_client_no_credentials_error(self, _mock_on_aws):
         """Test S3 client creation when no credentials are available"""
-        # Remove all AWS settings
-        for attr in ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_S3_REGION_NAME"]:
-            if hasattr(settings, attr):
-                delattr(settings, attr)
-
-        # Test that NoCredentialsError is raised
-        with self.assertRaises(NoCredentialsError):
-            with patch("common.aws_utils.boto3.client", side_effect=NoCredentialsError("No credentials")):
+        with patch("common.aws_utils.boto3.client", side_effect=NoCredentialsError()):
+            with self.assertRaises(NoCredentialsError):
                 SecureAWSClient.get_s3_client()
 
-    @patch("common.aws_utils.requests.get")
+    # `requests` is imported inside _is_running_on_aws (common/aws_utils.py:91),
+    # so it is not a module attribute of common.aws_utils — patch it at source.
+    @patch("requests.get")
     def test_is_running_on_aws_true(self, mock_requests_get):
         """Test AWS environment detection - running on AWS"""
-        # Mock successful metadata response
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_requests_get.return_value = mock_response
@@ -96,13 +100,11 @@ class TestSecureAWSClient(TestCase):
         result = SecureAWSClient._is_running_on_aws()
         self.assertTrue(result)
 
-        # Verify the request was made to metadata endpoint
         mock_requests_get.assert_called_once_with("http://169.254.169.254/latest/meta-data/instance-id", timeout=1)
 
-    @patch("common.aws_utils.requests.get")
+    @patch("requests.get")
     def test_is_running_on_aws_false(self, mock_requests_get):
         """Test AWS environment detection - not running on AWS"""
-        # Mock failed metadata response
         mock_requests_get.side_effect = Exception("Connection failed")
 
         result = SecureAWSClient._is_running_on_aws()

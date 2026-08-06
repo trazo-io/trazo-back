@@ -1,10 +1,15 @@
+from django.utils import timezone
+
 from rest_framework import serializers
+from rest_framework.validators import UniqueTogetherValidator
 
 from .models import (
     OSP_SECTION_KEYS,
     ApprovedInputChangeLog,
     Certification,
     CertificationVerificationLog,
+    CertifierAccessLink,
+    CertifierAccessLog,
     LandownerAffidavit,
     OrganicSystemPlan,
     OSPAnnualUpdate,
@@ -355,7 +360,120 @@ class OrganicSystemPlanSerializer(serializers.ModelSerializer):
         return value
 
 
+# Values that are obviously scratch input rather than a real answer. A length floor
+# was rejected as the tool here: "No material changes." is a valid annual-update
+# summary and would fail one, while "Test" would pass a short one. Match the
+# failure mode instead — the same approach as the OFPP suspicious-filename check.
+PLACEHOLDER_VALUES = {
+    "test",
+    "tests",
+    "testing",
+    "tbd",
+    "todo",
+    "n/a",
+    "na",
+    "none",
+    "asdf",
+    "qwerty",
+    "xxx",
+    "aaa",
+    "foo",
+    "bar",
+    "sample",
+    "placeholder",
+    "prueba",
+}
+
+
+# Punctuation stripped from each word before matching. "/" is deliberately absent so
+# "n/a" stays matchable.
+_ENTRY_PUNCTUATION = ".,!?;:\"'()[]{}-–—_*"
+
+
+def looks_like_placeholder(value) -> bool:
+    """True when *every* word in the value is scratch input.
+
+    Whole-string matching let "test test" through — the same failure this guard exists
+    to stop, one space wider. Matching per word still clears "Latest soil test results",
+    where only one word is a placeholder.
+    """
+    if not value:
+        return False
+    tokens = [token.strip(_ENTRY_PUNCTUATION).lower() for token in str(value).split()]
+    tokens = [token for token in tokens if token]
+    if not tokens:
+        return False
+    return all(token in PLACEHOLDER_VALUES for token in tokens)
+
+
+def _quote_all(items) -> str:
+    """Quote offending entries for a farmer-facing message.
+
+    repr() was leaking Python's quoting conventions into a message a grower reads.
+    """
+    return ", ".join('"{}"'.format(item) for item in items)
+
+
 class OSPAnnualUpdateSerializer(serializers.ModelSerializer):
+    def validate_changes_summary(self, value):
+        # 7 CFR 205.406 annual update goes to the certifier. "Test" reached a real
+        # dossier and rendered verbatim into the regulatory filing (2026-08-03 review).
+        if looks_like_placeholder(value):
+            raise serializers.ValidationError(
+                "Describe the actual changes for the reporting year, or state that there were none."
+            )
+        return value
+
+    # Arbitrary keyboard noise ("TNe") is not matchable as a placeholder word, but an
+    # additions/deletions entry is meant to DESCRIBE a change to the certifier, and
+    # three characters cannot. Deliberately low so a real short entry ("Lime") passes.
+    MIN_CHANGE_ENTRY_CHARS = 4
+
+    def _clean_entry_list(self, value):
+        """Reject entries that cannot describe a change to a certifier.
+
+        The two failure modes are kept apart on purpose. A placeholder word and a
+        three-character string need different instructions — "replace it" versus "write
+        more" — and the single shared sentence this replaces gave neither. The field name
+        is also gone from the text: DRF already keys the error under `additions` /
+        `deletions`, so repeating it produced "additions: Additions contains entries...".
+        """
+        if not value:
+            return value
+        placeholders = []
+        too_short = []
+        for item in value:
+            text = str(item).strip()
+            if looks_like_placeholder(text):
+                placeholders.append(text)
+            elif len(text) < self.MIN_CHANGE_ENTRY_CHARS:
+                too_short.append(text)
+        problems = []
+        if placeholders:
+            problems.append(
+                "Placeholder text, not a change: {}. Replace or delete {}.".format(
+                    _quote_all(placeholders),
+                    "that line" if len(placeholders) == 1 else "those lines",
+                )
+            )
+        if too_short:
+            problems.append(
+                "Too short to describe a change: {}. Use at least {} characters, or delete {}.".format(
+                    _quote_all(too_short),
+                    self.MIN_CHANGE_ENTRY_CHARS,
+                    "that line" if len(too_short) == 1 else "those lines",
+                )
+            )
+        if problems:
+            raise serializers.ValidationError(" ".join(problems))
+        return value
+
+    def validate_additions(self, value):
+        return self._clean_entry_list(value)
+
+    def validate_deletions(self, value):
+        return self._clean_entry_list(value)
+
     class Meta:
         model = OSPAnnualUpdate
         fields = [
@@ -380,6 +498,18 @@ class OSPAnnualUpdateSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+        # The model's UniqueConstraint(prior_osp, reporting_year) is not picked up as a
+        # serializer validator, so filing the same year twice reached the database and
+        # surfaced as a 500 IntegrityError page instead of a field error. The UI guards
+        # against it too, but that guard reads a client-side list — a second tab, a
+        # retried request, or any non-UI caller would still hit the raw constraint.
+        validators = [
+            UniqueTogetherValidator(
+                queryset=OSPAnnualUpdate.objects.all(),
+                fields=["prior_osp", "reporting_year"],
+                message="An annual update has already been filed for this OSP and reporting year.",
+            )
+        ]
 
 
 class OSPChangeNotificationSerializer(serializers.ModelSerializer):
@@ -387,9 +517,7 @@ class OSPChangeNotificationSerializer(serializers.ModelSerializer):
 
     change_category_display = serializers.CharField(source="get_change_category_display", read_only=True)
     method_display = serializers.CharField(source="get_method_display", read_only=True)
-    documentation_timing_display = serializers.CharField(
-        source="get_documentation_timing_display", read_only=True
-    )
+    documentation_timing_display = serializers.CharField(source="get_documentation_timing_display", read_only=True)
     cfr_reference = serializers.CharField(read_only=True)
     is_immediate = serializers.BooleanField(read_only=True)
 
@@ -474,6 +602,35 @@ class LandownerAffidavitSerializer(serializers.ModelSerializer):
 
 
 class StateOrganicRegistrationSerializer(serializers.ModelSerializer):
+    def validate_county(self, value):
+        """CDFA registration is per-county and CalAgPermits validates on the county.
+
+        Catching a bad county here beats discovering it at PUR-export time, where it
+        surfaces as "County 'X' is not a recognized CA county" on a document already
+        headed to the County Agricultural Commissioner.
+        """
+        if not value:
+            return value
+        from history.services.pur_export_service import _CA_COUNTY_CODES
+
+        known = {name.strip().lower() for name in _CA_COUNTY_CODES}
+        candidate = value.strip().lower().replace(" county", "")
+        if candidate not in known:
+            raise serializers.ValidationError(
+                f"'{value}' is not a California county. CDFA registration is filed per county."
+            )
+        return value
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        registration = attrs.get("registration_date") or getattr(self.instance, "registration_date", None)
+        renewal = attrs.get("renewal_date") or getattr(self.instance, "renewal_date", None)
+        # A renewal dated the same day as the registration carries no information and
+        # makes is_current() meaningless — it was rendering that way on a live record.
+        if registration and renewal and renewal <= registration:
+            raise serializers.ValidationError({"renewal_date": "Renewal date must be after the registration date."})
+        return attrs
+
     """Producer-dashboard CRUD for State Organic Program registration (CDFA SOP).
 
     Distinct from CDFA OIM (input-material) registration — this is the
@@ -510,3 +667,96 @@ class StateOrganicRegistrationSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "public_id", "created_at", "updated_at"]
+
+
+class CertifierAccessLogSerializer(serializers.ModelSerializer):
+    action_display = serializers.CharField(source="get_action_display", read_only=True)
+
+    class Meta:
+        model = CertifierAccessLog
+        fields = ["id", "action", "action_display", "accessed_at", "ip_address"]
+        read_only_fields = fields
+
+
+class CertifierAccessLinkSerializer(serializers.ModelSerializer):
+    """Farmer-facing view of a certifier review link.
+
+    `token` is exposed to the OWNER only (this serializer is used behind the
+    authenticated, company-scoped viewset) so the farmer can copy the URL to send
+    their certifier. It is never rendered on any anonymous surface.
+    """
+
+    accesses = CertifierAccessLogSerializer(many=True, read_only=True)
+    # Optional on input; create() falls back to the 90-day default.
+    expires_at = serializers.DateTimeField(required=False)
+    access_count = serializers.SerializerMethodField()
+    last_accessed_at = serializers.SerializerMethodField()
+    is_active = serializers.BooleanField(read_only=True)
+    is_expired = serializers.BooleanField(read_only=True)
+    is_revoked = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = CertifierAccessLink
+        fields = [
+            "id",
+            "token",
+            "label",
+            "certification_type",
+            "period_start",
+            "period_end",
+            "expires_at",
+            "revoked_at",
+            "created_at",
+            "is_active",
+            "is_expired",
+            "is_revoked",
+            "access_count",
+            "last_accessed_at",
+            "accesses",
+        ]
+        # establishment/token/created_by are set server-side in perform_create;
+        # accepting them from the client would let a caller mint a link for
+        # another operation or choose a guessable token.
+        read_only_fields = [
+            "id",
+            "token",
+            "revoked_at",
+            "created_at",
+            "is_active",
+            "is_expired",
+            "is_revoked",
+            "access_count",
+            "last_accessed_at",
+            "accesses",
+        ]
+
+    # Both read the prefetched list rather than issuing a query per link.
+    # `.count()` and `.first()` each bypass the prefetch cache (they add their own
+    # COUNT / LIMIT), so on a farm with N links the list view fired 2N extra queries.
+    def get_access_count(self, obj):
+        return len(obj.accesses.all())
+
+    def get_last_accessed_at(self, obj):
+        accesses = list(obj.accesses.all())  # Meta.ordering = -accessed_at
+        return accesses[0].accessed_at if accesses else None
+
+    def validate_expires_at(self, value):
+        if value and value <= timezone.now():
+            raise serializers.ValidationError("Expiry must be in the future.")
+        return value
+
+    def validate_certification_type(self, value):
+        # Single source of truth: the export profiles the dossier builder actually
+        # knows about. A hardcoded copy here would silently drift and let a farmer
+        # mint a link whose profile falls back to "all" — a broader dossier than
+        # they chose to share.
+        from history.services.audit_export_service import AuditExportService
+
+        valid = set(AuditExportService.CERTIFICATION_SECTIONS)
+        if value not in valid:
+            raise serializers.ValidationError(f"Invalid certification type. Choose from: {sorted(valid)}")
+        return value
+
+    def create(self, validated_data):
+        validated_data.setdefault("expires_at", CertifierAccessLink.default_expiry())
+        return super().create(validated_data)

@@ -59,11 +59,12 @@ from backend.constants import (
 )
 
 # Security and optimization imports
-from carbon.permissions import PublicQRPermission, SecurePublicDataPermission
+from carbon.permissions import PublicQRPermission
 from carbon.production_phases import ProductionPhaseCalculator
 from carbon.services.carbon_cost_insights import CarbonCostInsights
 from carbon.services.timeline_service import TimelineService
 from carbon.validation import APIResponseValidator, QRParameterValidator
+from common.us_states import normalize_state, resolve_establishment_state
 from company.models import Establishment
 from history.models import (
     BusinessEvent,
@@ -1533,6 +1534,42 @@ class OptimizedCarbonCalculator:
         calculator = EventCarbonCalculator()
         return calculator.calculate_soil_management_event_impact(mock_event)
 
+    def calculate_business_event_impact(self, processed_event: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Calculate carbon impact for business events (certification, audit, compliance).
+
+        Business events carry no direct operational emissions under Trazo's methodology, but
+        the endpoint must still answer: `calculate_event_carbon_impact_enhanced` dispatches
+        `event_type == "business"` here, and this method was simply absent — every business
+        event the form previewed raised AttributeError into the broad handler and returned
+        HTTP 500. The grower logging a certifier inspection saw five failed calls and a
+        zeroed "Calculation failed" panel on the one event type whose whole point is trust.
+        """
+        from carbon.services.event_carbon_calculator import EventCarbonCalculator
+
+        # Mirrors the Mock* pattern used by the pest/soil branches above: the standard
+        # calculator reads these off the event via getattr, so they must exist as attributes.
+        class MockBusinessEvent:
+            def __init__(self, event_data):
+                self.type = event_data.get("business_subtype") or event_data.get("type", "CE")
+                # `or`, not a .get default: the live-preview call fires while the farmer is
+                # still filling the form, so these arrive as "" rather than absent, and a
+                # .get default would let the empty string through into the breakdown.
+                self.business_type = event_data.get("business_type") or "certification"
+                self.certification_type = event_data.get("certification_type") or None
+                self.carbon_credits_earned = event_data.get("carbon_credits_earned") or 0
+                self.carbon_credits_unit = event_data.get("carbon_credits_unit") or "tCO2e"
+                self.verification_status = event_data.get("verification_status") or "pending"
+                self.sustainability_practice = event_data.get("sustainability_practice") or None
+                # Crop lookup walks event.history.product; a form preview has no saved history.
+                self.history = None
+                self.id = event_data.get("id", 1)
+
+        mock_event = MockBusinessEvent(processed_event)
+
+        calculator = EventCarbonCalculator()
+        return calculator.calculate_business_event_impact(mock_event)
+
 
 # Initialize calculator singleton
 calculator_instance = OptimizedCarbonCalculator()
@@ -1579,6 +1616,8 @@ class OptimizedEventProcessor:
             processed.update(cls._process_soil_management_event(event_data))
         elif event_type == "pest_management":
             processed.update(cls._process_pest_management_event(event_data))
+        elif event_type == "business":
+            processed.update(cls._process_business_event(event_data))
 
         return processed
 
@@ -2243,6 +2282,26 @@ class OptimizedEventProcessor:
             "production_efficiency": event_data.get("production_efficiency", "normal"),
             "area_covered": event_data.get("area_covered"),
             "area_unit": event_data.get("area_unit", "ha"),
+        }
+
+    @classmethod
+    def _process_business_event(cls, event_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Process business event data (certification / audit / compliance).
+
+        Business events carry no direct emissions, but the breakdown the calculator returns
+        still names the certification and its verification status — without this branch the
+        processed payload dropped every business field and the preview described a generic
+        "certification / pending" event regardless of what the farmer entered.
+        """
+        return {
+            # The form sends the model subtype code (CE/CM/IN) as `type`.
+            "business_subtype": event_data.get("type", "CE"),
+            "business_type": event_data.get("business_type", "certification"),
+            "certification_type": event_data.get("certification_type", ""),
+            "carbon_credits_earned": event_data.get("carbon_credits_earned") or 0,
+            "carbon_credits_unit": event_data.get("carbon_credits_unit", "tCO2e"),
+            "verification_status": event_data.get("verification_status", "pending"),
+            "sustainability_practice": event_data.get("sustainability_practice", ""),
         }
 
 
@@ -2968,23 +3027,11 @@ class CarbonEstablishmentSummaryViewSet(viewsets.ViewSet):
                     offsets_by_action[action_name] = 0
                 offsets_by_action[action_name] += float(entry.effective_amount or entry.amount or 0)
 
-            # Calculate transparency score for production readiness
-            transparency_score = 10  # Base score
+            # The entry-count "transparency score" that used to live here was removed
+            # (see the response dict below). epa_factors_based_count is still needed for the
+            # EPA/USDA verification rate reported further down.
             total_entries_count = entries.count()
-            epa_factors_based_count = 0  # Initialize before conditional block
-
-            if total_entries_count > 0:
-                # More sophisticated transparency scoring
-                base_score = min(total_entries_count * 0.8, 70)  # Max 70 from entries count
-                verification_bonus = 0
-
-                # Check EPA/USDA factors usage percentage
-                epa_factors_based_count = entries.filter(usda_factors_based=True).count()
-                if total_entries_count > 0:
-                    verification_ratio = epa_factors_based_count / total_entries_count
-                    verification_bonus = verification_ratio * 30  # Max 30 bonus
-
-                transparency_score = min(base_score + verification_bonus, 100)
+            epa_factors_based_count = entries.filter(usda_factors_based=True).count() if total_entries_count else 0
 
             # Calculate performance indicators
             offset_ratio = (total_offsets / total_emissions) if total_emissions > 0 else 0
@@ -3043,7 +3090,11 @@ class CarbonEstablishmentSummaryViewSet(viewsets.ViewSet):
                 "total_offsets": round(total_offsets, 2),
                 "net_carbon": round(net_carbon, 2),
                 "carbon_score": int(carbon_score),
-                "transparency_score": int(transparency_score),
+                # `transparency_score` removed 2026-08-02 — a THIRD transparency formula,
+                # computed from carbon-entry counts rather than documented events. It shared a
+                # name with the real metric but not its meaning, and uniquely returned 10 for a
+                # brand-new farm where every other surface returns 0/None. No client read it.
+                # TransparencyCalculator is the single source of truth.
                 "offset_ratio": round(offset_ratio * 100, 1),  # Percentage
                 "performance_tier": self._get_performance_tier(carbon_score),
                 "entries_count": {
@@ -3532,18 +3583,26 @@ class PublicProductionViewSet(viewsets.ViewSet):
 
             except Exception as e:
                 logger.warning(f"Error with blockchain verification: {e}")
-                # Fallback blockchain verification for demo
+                # A FAILED verification must report failure. This branch used to synthesise
+                # `"verified": True` with a fake transaction hash — literally
+                # sha256(f"fallback_{pk}") — plus an etherscan.io URL for a transaction that
+                # does not exist, on "ethereum_testnet" (Trazo records on Polygon). It was
+                # served on an ANONYMOUS public endpoint for farms with no blockchain add-on
+                # and a NULL tx_hash. That is a fabricated third-party verification claim:
+                # UNSAFE per compliance.md ("blockchain-verified"), FTC 16 CFR 260.6, and
+                # EU ECGT 2024/825. "Demo" is not a defence on a public endpoint.
+                #
+                # `eligible_for_credits` also leaked the withheld transparency score as a
+                # threshold boolean (score >= 70) alongside an unsubstantiated
+                # carbon-credit-eligibility claim. Both are gone.
                 blockchain_verification = {
-                    "verified": True,
-                    "transaction_hash": f'0x{hashlib.sha256(f"fallback_{pk}".encode()).hexdigest()}',
-                    "verification_url": f'https://etherscan.io/tx/0x{hashlib.sha256(f"fallback_{pk}".encode()).hexdigest()}',
-                    "network": "ethereum_testnet",
-                    "verification_date": timezone.now().isoformat(),
-                    "compliance_status": True,
-                    # BUGFIX (2026-06): carbon_score was never defined (NameError crashed the
-                    # fallback). Use the computed transparency_score for credit eligibility.
-                    "eligible_for_credits": transparency_score >= 70,
-                    "fallback_data": True,
+                    "verified": False,
+                    "transaction_hash": None,
+                    "verification_url": None,
+                    "network": None,
+                    "verification_date": None,
+                    "status": "unavailable",
+                    "detail": "Blockchain record could not be retrieved.",
                 }
 
             # Get sustainability badges for this establishment/production
@@ -3560,42 +3619,35 @@ class PublicProductionViewSet(viewsets.ViewSet):
                         }
                     )
 
-                # Add transparency-focused badges
-                if transparency_score >= 95:
-                    badges.append(
-                        {
-                            "id": "complete_transparency",
-                            "name": f"Complete Transparency - {crop_name.title()}",
-                            "description": f"Comprehensive documentation of {crop_name} production",
-                            "icon": "shield-check",
-                        }
-                    )
-                elif transparency_score >= 85:
-                    badges.append(
-                        {
-                            "id": "high_transparency",
-                            "name": f"High Transparency - {crop_name.title()}",
-                            "description": f"Strong documentation practices for {crop_name}",
-                            "icon": "shield",
-                        }
-                    )
-                elif transparency_score >= 75:
-                    badges.append(
-                        {
-                            "id": "good_transparency",
-                            "name": f"Good Transparency - {crop_name.title()}",
-                            "description": f"Solid documentation foundation for {crop_name}",
-                            "icon": "check-circle",
-                        }
-                    )
+                # NO score-derived transparency badges.
+                #
+                # "Complete Transparency" / "High Transparency" / "Good Transparency" were
+                # emitted from `transparency_score >= 95 / 85 / 75`. A tiered verdict derived
+                # from a self-assigned score IS the score — relabelling 95 as "Complete
+                # Transparency" does not change what it is. That is the self-created
+                # sustainability-label class banned by EU ECGT 2024/825 and an FTC
+                # 16 CFR 260.6 general-benefit claim.
+                #
+                # These survived the 2026-06 score demotion because the regression guard walks
+                # KEY names, and the grade here lived in the "name"/"description" VALUES.
+                # Consumers get factual evidence instead (documented-practice counts, photo
+                # counts, third-party certifications) — see transparency-first.md.
 
                 # Add verification badges
                 if blockchain_verification and blockchain_verification.get("verified"):
                     badges.append(
                         {
-                            "id": "blockchain_verified",
-                            "name": "Blockchain Verified",
-                            "description": "Carbon data verified on blockchain for immutable transparency",
+                            "id": "blockchain_recorded",
+                            # "Blockchain Verified" is explicitly UNSAFE per
+                            # .claude/rules/compliance.md — blockchain proves the record was
+                            # not altered after it was written, NOT that the farming practice
+                            # it describes is accurate. Say "recorded", never "verified".
+                            "name": "Blockchain-Recorded",
+                            "description": (
+                                "This production's carbon record was written to a public "
+                                "blockchain, so it can be checked for tampering. It does not "
+                                "independently verify the farming practices themselves."
+                            ),
                             "icon": "shield",
                         }
                     )
@@ -3610,17 +3662,19 @@ class PublicProductionViewSet(viewsets.ViewSet):
                         }
                     )
 
-                # Add documentation completeness badge
-                completeness_score = transparency_data.get("completeness_score", 0)
-                if completeness_score >= 90:
-                    badges.append(
-                        {
-                            "id": "complete_documentation",
-                            "name": "Complete Documentation",
-                            "description": "Comprehensive farm activity documentation",
-                            "icon": "file-check",
-                        }
-                    )
+                # NO "Complete Documentation" badge.
+                #
+                # It was emitted from `completeness_score >= 90` — the same self-assigned
+                # score family, wearing a different word. "Complete" is a verdict the farmer
+                # awards themselves about their own paperwork, which is exactly the
+                # self-created sustainability label EU ECGT 2024/825 bans and the
+                # unqualified general-benefit claim FTC 16 CFR 260.6 targets. It is also
+                # the "Fully Documented" verdict that was already withheld from the
+                # consumer payload in the 2026-06 demotion, reintroduced under a synonym.
+                #
+                # The factual substitute already ships and is stronger: the documented-practice
+                # COUNT ("25 practices documented"), the photo count, and third-party
+                # certifications. A count is checkable; a grade is not.
 
             except Exception as e:
                 logger.warning(f"Error getting badges: {e}")
@@ -3820,901 +3874,61 @@ class PublicProductionViewSet(viewsets.ViewSet):
             }
             return Response(fallback_response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    @action(detail=True, methods=["get"], url_path="qr-enhanced")
-    def qr_enhanced_summary(self, request, pk=None):
-        """
-        Enhanced QR endpoint with Trazo 2025 transparency features.
-        Includes A-F grading, industry comparison, consumer-friendly metrics, and trust indicators.
-        """
-        try:
-            # Progressive loading support
-            quick_mode = request.GET.get("quick") == "true"
-
-            # Enhanced cache key with transparency version
-            cache_key = f'qr_enhanced_{pk}_v3{"_quick" if quick_mode else ""}'
-            cached_data = cache.get(cache_key)
-
-            if cached_data:
-                cached_data["cache_hit"] = True
-                cached_data["timestamp"] = timezone.now().isoformat()
-                return Response(cached_data, status=status.HTTP_200_OK)
-
-            # Get production with optimized query
-            production = (
-                History.objects.select_related("product", "crop_type", "parcel__establishment__company")
-                .prefetch_related("carbonentry_set")
-                .get(id=pk, published=True)
-            )
-
-            # Update transparency data if needed
-            transparency_service.update_production_transparency_data(production)
-
-            # Quick mode: return minimal data for fast loading
-            if quick_mode:
-                # Quick transparency-first response (NO competitive scoring)
-                quick_response = {
-                    "transparency": {
-                        "completeness_percentage": getattr(production, "transparency_percentage", 75),
-                        "data_quality": production.carbon_grade or "C",
-                        "verification_status": (
-                            "verified" if getattr(production, "blockchain_verified", False) else "pending"
-                        ),
-                    },
-                    "carbon_impact": {
-                        "kg_per_kg": 0.0,  # Will be populated by full request
-                        "unit": "kg CO₂ per kg product",
-                    },
-                    "cache_hit": False,
-                    "timestamp": timezone.now().isoformat(),
-                }
-                cache.set(cache_key, quick_response, 300)  # Cache for 5 minutes
-                return Response(quick_response, status=status.HTTP_200_OK)
-
-            # Get establishment
-            establishment = production.parcel.establishment if production.parcel else None
-            if not establishment:
-                return Response(
-                    {"error": "No establishment found for this production"}, status=status.HTTP_404_NOT_FOUND
-                )
-
-            # Calculate carbon data using existing logic
-            carbon_data = self._get_carbon_summary(production, establishment)
-
-            # Get transparency metrics from the production model (now updated)
-            transparency_data = {
-                "carbonGrade": production.carbon_grade or "C",
-                "industryComparison": production.industry_comparison or {},
-                "equivalencyMetrics": production.equivalency_metrics or {},
-                "trustIndicators": production.trust_indicators or {},
-                "improvementRecommendations": production.improvement_recommendations or [],
-                "consumerInsights": production.consumer_insights or {},
-            }
-
-            # Get blockchain verification (using existing logic)
-            blockchain_verification = self._get_blockchain_verification(production, carbon_data)
-
-            # Get social proof
-            social_proof = self._calculate_social_proof(production)
-
-            # Build transparency-first response (NO competitive scoring)
-            response_data = {
-                # PRIMARY: Transparency metrics (non-competitive)
-                "transparency": {
-                    "completeness_percentage": getattr(production, "transparency_percentage", 75),
-                    "data_quality": transparency_data["carbonGrade"],
-                    "verification_status": "verified" if blockchain_verification.get("verified", False) else "pending",
-                },
-                # SECONDARY: Raw carbon data (factual, not comparative)
-                "carbon_impact": {
-                    "kg_per_kg": round(carbon_data.get("total_co2_kg_per_kg", 0), 3),
-                    "total_emissions": carbon_data.get("total_emissions", 0),
-                    "total_offsets": carbon_data.get("total_offsets", 0),
-                    "net_impact": carbon_data.get("net_footprint", 0),
-                    "unit": "kg CO₂ per kg product",
-                },
-                # Transparency features (NO competitive comparison)
-                "farm_practices": {
-                    "sustainable_methods": transparency_data.get("sustainable_practices", []),
-                    "data_completeness": transparency_data.get("completeness_score", 75),
-                    "verification_methods": transparency_data.get("verification_methods", []),
-                },
-                "equivalencyMetrics": transparency_data["equivalencyMetrics"],
-                "trustIndicators": transparency_data["trustIndicators"],
-                "consumerInsights": transparency_data["consumerInsights"],
-                # Consumer-friendly fields (transparency-focused)
-                "environmental_impact": self._get_primary_equivalency(transparency_data["equivalencyMetrics"]),
-                "data_verified": carbon_data.get("usda_factors_used", False),
-                "crop_type": getattr(production.crop_type, "name", "Unknown") if production.crop_type else "Unknown",
-                "achievements": self._generate_transparency_achievements(production, transparency_data),
-                # Public data only
-                "blockchainVerification": blockchain_verification,
-                "socialProof": self._get_consumer_safe_social_proof(production),
-                "farmer": self._get_public_farmer_info(establishment),
-                "product": self._get_product_info(production),
-                "parcel": self._get_public_parcel_info(production),
-                "images": self._get_production_images(production),
-                "timeline": self._get_consumer_timeline(production),
-                # Consumer-safe metadata
-                "cache_hit": False,
-                "timestamp": timezone.now().isoformat(),
-                "api_version": "consumer_v4",
-            }
-
-            # Track public view
-            production.increment_public_views(request)
-
-            # Cache the response for 15 minutes
-            cache.set(cache_key, response_data, 900)
-
-            return Response(response_data, status=status.HTTP_200_OK)
-
-        except History.DoesNotExist:
-            return Response({"error": "Production not found or not published"}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            logger.error(f"Error in qr_enhanced_summary: {str(e)}")
-            return Response(
-                {
-                    "error": "Internal server error",
-                    "carbonScore": 50,
-                    "carbonGrade": "C",
-                    "message": "Enhanced carbon data being calculated",
-                },
-                status=status.HTTP_200_OK,
-            )
-
-    def _generate_consumer_badges(self, transparency_data, carbon_data):
-        """Generate consumer-friendly badges without internal details"""
-        badges = []
-
-        if transparency_data["trustIndicators"].get("usda_factors_used"):
-            badges.append(
-                {
-                    "type": "government_verified",
-                    "label": "Government Verified",
-                    "color": "blue",
-                    "icon": "shield",
-                    "description": "Verified by USDA standards",
-                }
-            )
-
-        if transparency_data["trustIndicators"].get("blockchain_verified"):
-            badges.append(
-                {
-                    "type": "blockchain_secured",
-                    "label": "Blockchain Secured",
-                    "color": "purple",
-                    "icon": "lock",
-                    "description": "Permanently recorded and tamper-proof",
-                }
-            )
-
-        # Simple grade-based badges without internal scoring
-        grade = transparency_data.get("carbonGrade", "C")
-        if grade.startswith("A"):
-            badges.append(
-                {
-                    "type": "climate_leader",
-                    "label": "Climate Leader",
-                    "color": "green",
-                    "icon": "leaf",
-                    "description": "Exceptional environmental impact",
-                }
-            )
-        elif grade.startswith("B"):
-            badges.append(
-                {
-                    "type": "sustainable_choice",
-                    "label": "Sustainable Choice",
-                    "color": "green",
-                    "icon": "leaf",
-                    "description": "Above-average sustainability",
-                }
-            )
-
-        return badges
-
-    def _generate_transparency_achievements(self, production, transparency_data):
-        """Generate transparency-focused achievements (NO competitive scoring)"""
-        achievements = []
-
-        # Data completeness achievements
-        completeness = getattr(production, "transparency_percentage", 75)
-        if completeness >= 90:
-            achievements.append(
-                {
-                    "type": "data_complete",
-                    "label": "Complete Transparency",
-                    "color": "green",
-                    "icon": "check-circle",
-                    "description": "Full farm data documented and verified",
-                }
-            )
-        elif completeness >= 75:
-            achievements.append(
-                {
-                    "type": "data_comprehensive",
-                    "label": "Comprehensive Records",
-                    "color": "blue",
-                    "icon": "document",
-                    "description": "Thorough documentation of farming practices",
-                }
-            )
-
-        # Verification achievements (non-competitive)
-        if transparency_data.get("trustIndicators", {}).get("usda_factors_used"):
-            achievements.append(
-                {
-                    "type": "government_verified",
-                    "label": "USDA Verified",
-                    "color": "blue",
-                    "icon": "shield",
-                    "description": "Verified by official government standards",
-                }
-            )
-
-        if transparency_data.get("trustIndicators", {}).get("blockchain_verified"):
-            achievements.append(
-                {
-                    "type": "blockchain_secured",
-                    "label": "Blockchain Secured",
-                    "color": "purple",
-                    "icon": "lock",
-                    "description": "Permanently recorded and tamper-proof",
-                }
-            )
-
-        # Sustainable practice achievements (fact-based, not comparative)
-        practices = transparency_data.get("sustainable_practices", [])
-        if "organic" in str(practices).lower():
-            achievements.append(
-                {
-                    "type": "organic_certified",
-                    "label": "Organic Practices",
-                    "color": "green",
-                    "icon": "leaf",
-                    "description": "Uses certified organic farming methods",
-                }
-            )
-
-        if "renewable_energy" in str(practices).lower():
-            achievements.append(
-                {
-                    "type": "renewable_energy",
-                    "label": "Clean Energy",
-                    "color": "yellow",
-                    "icon": "sun",
-                    "description": "Powered by renewable energy sources",
-                }
-            )
-
-        return achievements
-
-    def _get_consumer_safe_social_proof(self, production):
-        """Get social proof data safe for consumers.
-
-        CLAIM-SAFETY (V2, 2026-06): previously returned a hardcoded static
-        ``transparency_score: 95`` "for consumer confidence" — a fabricated self-graded number
-        in the anonymous payload (EU ECGT 2024/825 / FTC 16 CFR 260.6). Replaced with REAL
-        community-feedback evidence (review count + average rating + qualitative engagement),
-        mirroring the compliant builder used elsewhere. No score, no invented numbers.
-        """
-        try:
-            from history.models import HistoryScan
-            from reviews.models import Review
-
-            review_count = Review.objects.filter(production=production).count()
-            reviews = Review.objects.filter(production=production)
-            if reviews.exists():
-                avg_rating = sum(r.rating for r in reviews) / reviews.count()
-            else:
-                avg_rating = (
-                    float(production.reputation) if production.reputation and production.reputation > 0 else 0.0
-                )
-
-            # Scan counts stay internal; expose only qualitative trust indicators.
-            total_scans = HistoryScan.objects.filter(history=production).count()
-
-            return {
-                "reviewsCount": review_count,
-                "averageRating": round(avg_rating, 1),
-                "communityEngagement": (
-                    "high" if total_scans >= 100 else ("medium" if total_scans >= 25 else "growing")
-                ),
-                "verifiedByConsumers": total_scans >= 10,
-            }
-        except Exception:
-            return {
-                "reviewsCount": 0,
-                "averageRating": 0.0,
-                "communityEngagement": "growing",
-                "verifiedByConsumers": False,
-            }
-
-    def _get_public_farmer_info(self, establishment):
-        """Get farmer info safe for public consumption"""
-        if not establishment:
-            return None
-
-        try:
-            company = establishment.company
-            return {
-                "name": company.name if company else "Farm",
-                "location": f"{company.city}, {company.country}" if company and company.city else "Farm Location",
-                "story": getattr(company, "sustainability_story", None)
-                or f"{company.name if company else 'This farm'} is committed to sustainable farming practices.",
-                "practices": ["Sustainable Farming", "Environmental Stewardship"],
-                "year_established": getattr(company, "year_established", None),
-                # Remove: phone, email, detailed address, internal IDs
-            }
-        except Exception:
-            return {
-                "name": "Farm",
-                "location": "Farm Location",
-                "story": "Committed to sustainable farming practices.",
-                "practices": ["Sustainable Farming"],
-            }
-
-    def _get_public_parcel_info(self, production):
-        """Get parcel info safe for public consumption"""
-        if not production.parcel:
-            return None
-
-        try:
-            parcel = production.parcel
-            return {
-                "name": parcel.name,
-                "area": f"{parcel.size_ha:.1f} hectares" if parcel.size_ha else "Farm area",
-                "region": (
-                    f"{parcel.establishment.company.city}, {parcel.establishment.company.country}"
-                    if parcel.establishment and parcel.establishment.company
-                    else "Region"
-                ),
-                "organic_status": getattr(parcel, "organic_certified", False),
-                # Remove: exact coordinates, internal parcel IDs, detailed farm data
-            }
-        except Exception:
-            return {"name": "Parcel", "area": "Farm area", "region": "Region", "organic_status": False}
-
-    def _get_consumer_timeline(self, production):
-        """Get timeline events safe for consumers using optimized TimelineService"""
-        try:
-            # Use the same TimelineService that producer dashboard uses for consistency
-            timeline_data = TimelineService.get_production_timeline(production, limit=20)
-
-            if not timeline_data:
-                return []
-
-            # TimelineService already provides properly formatted consumer-safe data
-            # with commercial_name, proper descriptions, and all transparency fields
-            # No need for manual filtering - TimelineService handles security and formatting
-            return timeline_data
-
-        except Exception as e:
-            logger.warning(f"Error getting consumer timeline: {str(e)}")
-            return []
-
-    @action(detail=True, methods=["get"], url_path="complete")
-    def complete_summary(self, request, pk=None):
-        """
-        Phase 2 Optimization: Unified endpoint providing all data needed for ProductDetail page.
-        Combines carbon metrics, production timeline, establishment details, and map data
-        in a single optimized API call.
-
-        Expected performance improvement:
-        - Requests: 3 → 1 (67% reduction)
-        - Load Time: 147ms → ~25ms (83% reduction)
-        - Single source of truth for all product data
-        """
-        try:
-            from django.core.cache import cache
-
-            from history.models import History, HistoryScan
-
-            # Check for cache busting
-            bust_cache = request.GET.get("bust_cache") == "true"
-
-            # Enhanced cache key for complete endpoint (v4 includes fixed TimelineService with Gallery imports)
-            cache_key = f"complete_summary_{pk}_v4"
-            cached_data = cache.get(cache_key) if not bust_cache else None
-
-            if cached_data:
-                # Return cached data with fresh timestamp
-                cached_data["cache_hit"] = True
-                cached_data["timestamp"] = timezone.now().isoformat()
-                return Response(cached_data, status=status.HTTP_200_OK)
-
-            # Single optimized query with all necessary joins and prefetches
-            production = (
-                History.objects.select_related("product", "parcel__establishment__company", "album")
-                .prefetch_related(
-                    "carbonentry_set__source",
-                    "album__images",
-                    "history_weatherevent_events",
-                    "history_chemicalevent_events",
-                    "history_productionevent_events",
-                    "history_generalevent_events",
-                    "history_equipmentevent_events",
-                    "history_soilmanagementevent_events",
-                    "history_pestmanagementevent_events",
-                    "history_scans",
-                )
-                .get(id=pk, published=True)
-            )
-
-            establishment = production.parcel.establishment if production.parcel else None
-
-            if not establishment:
-                return Response(
-                    {"error": "No establishment found for this production"}, status=status.HTTP_404_NOT_FOUND
-                )
-
-            # === CARBON DATA CALCULATION (from existing qr_summary logic) ===
-
-            # Get crop information for benchmarking
-            crop_name = production.product.name if production.product else "unknown"
-            crop_type = crop_name.lower().replace(" ", "_")
-
-            # Get carbon entries for this production
-            production_entries = CarbonEntry.objects.filter(production=production)
-            establishment_entries = CarbonEntry.objects.filter(establishment=establishment)
-
-            # Calculate totals from production-specific entries first, fall back to establishment
-            if production_entries.exists():
-                entries = production_entries
-            else:
-                entries = establishment_entries.filter(
-                    year=production.start_date.year if production.start_date else timezone.now().year
-                )
-
-            total_emissions = entries.filter(type="emission").aggregate(Sum("co2e_amount"))["co2e_amount__sum"] or 0
-            # Use effective_amount for offsets to account for trust score discounts
-            total_offsets = (
-                entries.filter(type="offset").aggregate(Sum("effective_amount"))["effective_amount__sum"] or 0
-            )
-            net_footprint = total_emissions - total_offsets
-
-            # Get emissions breakdown by category and source
-            emissions_by_category = {}
-            emissions_by_source = {}
-            offsets_by_action = {}
-
-            # Calculate emissions by source
-            for entry in entries.filter(type="emission"):
-                source_name = entry.source.name if entry.source else "Unknown"
-                if source_name not in emissions_by_source:
-                    emissions_by_source[source_name] = 0
-                emissions_by_source[source_name] += float(entry.co2e_amount or 0)
-
-                # Also categorize by source category
-                category = entry.source.category if entry.source else "Other"
-                if category not in emissions_by_category:
-                    emissions_by_category[category] = 0
-                emissions_by_category[category] += float(entry.co2e_amount or 0)
-
-            # Calculate offsets by action - using effective amounts
-            for entry in entries.filter(type="offset"):
-                action_name = entry.source.name if entry.source else "Unknown Offset"
-                if action_name not in offsets_by_action:
-                    offsets_by_action[action_name] = 0
-                offsets_by_action[action_name] += float(entry.effective_amount or entry.co2e_amount or 0)
-
-            # Calculate carbon score and industry percentile (using existing logic)
-            carbon_score = self._calculate_carbon_score(total_emissions, total_offsets, production, crop_type)
-            industry_percentile = self._calculate_industry_percentile(net_footprint, production, crop_type)
-            industry_average = self._get_industry_average(crop_type, production)
-
-            # === TIMELINE DATA (combined from all event types) ===
-            timeline_data = TimelineService.get_production_timeline(production, limit=10)
-
-            # === ESTABLISHMENT AND PARCEL DATA ===
-            # Get establishment photo from album
-            establishment_photo = None
-            if establishment.album and establishment.album.images.exists():
-                first_image = establishment.album.images.first()
-                try:
-                    if (
-                        first_image
-                        and first_image.image
-                        and hasattr(first_image.image, "url")
-                        and first_image.image.url
-                    ):
-                        establishment_photo = first_image.image.url
-                except (ValueError, AttributeError):
-                    establishment_photo = None
-
-            establishment_data = {
-                "id": establishment.id,
-                "name": establishment.name,
-                "description": establishment.description or "",
-                "location": (
-                    f"{establishment.city}, {establishment.state}"
-                    if establishment.city and establishment.state
-                    else establishment.address or ""
-                ),
-                "photo": establishment_photo,
-                "certifications": getattr(establishment, "certifications", []),
-                # 'email': getattr(establishment, 'email', ''),  # REMOVED - Private contact info
-                # 'phone': getattr(establishment, 'phone', ''),  # REMOVED - Private contact info
-                # Additional establishment fields for modals
-                "address": establishment.address or "",
-                "city": establishment.city or "",
-                "state": establishment.state or "",
-                "country": establishment.country or "",
-                "zone": getattr(establishment, "zone", ""),
-                "latitude": establishment.latitude,
-                "longitude": establishment.longitude,
-                # 'contact_person': getattr(establishment, 'contact_person', ''),  # REMOVED - Private contact info
-                # 'contact_phone': getattr(establishment, 'contact_phone', ''),  # REMOVED - Private contact info
-                # 'contact_email': getattr(establishment, 'contact_email', ''),  # REMOVED - Private contact info
-                "zip_code": getattr(establishment, "zip_code", ""),
-                "about": getattr(establishment, "about", ""),
-                "main_activities": getattr(establishment, "main_activities", ""),
-                "location_highlights": getattr(establishment, "location_highlights", ""),
-                "custom_message": getattr(establishment, "custom_message", ""),
-                "is_active": getattr(establishment, "is_active", True),
-                "crops_grown": getattr(establishment, "crops_grown", []),
-                "sustainability_practices": getattr(establishment, "sustainability_practices", []),
-                # 'employee_count': getattr(establishment, 'employee_count', None),  # REMOVED - Business sensitive info
-                # 'total_acreage': getattr(establishment, 'total_acreage', None),  # REMOVED - Business sensitive info
-                "year_established": getattr(establishment, "year_established", None),
-                "establishment_type": getattr(establishment, "establishment_type", ""),
-                "farming_method": getattr(establishment, "farming_method", ""),
-                # New operational agricultural fields - important for transparency (updated)
-                "water_sources": getattr(
-                    establishment, "water_sources", []
-                ),  # Important for sustainability transparency
-                "climate_zone": getattr(establishment, "climate_zone", ""),  # Keep - not sensitive
-                "soil_types": getattr(establishment, "soil_types", []),  # Important for agricultural transparency
-                "conservation_practices": getattr(
-                    establishment, "conservation_practices", []
-                ),  # Keep - shows sustainability
-                "irrigation_methods": getattr(
-                    establishment, "irrigation_methods", []
-                ),  # Important for water usage transparency
-                # Company information (from establishment's company)
-                "company": (
-                    {
-                        "id": establishment.company.id if establishment.company else None,
-                        "name": establishment.company.name if establishment.company else "",
-                        "description": (
-                            getattr(establishment.company, "description", "") if establishment.company else ""
-                        ),
-                        "address": getattr(establishment.company, "address", "") if establishment.company else "",
-                        "city": getattr(establishment.company, "city", "") if establishment.company else "",
-                        "state": getattr(establishment.company, "state", "") if establishment.company else "",
-                        "country": getattr(establishment.company, "country", "") if establishment.company else "",
-                        # 'phone': getattr(establishment.company, 'phone', '') if establishment.company else '',  # REMOVED - Private contact info
-                        # 'email': getattr(establishment.company, 'email', '') if establishment.company else '',  # REMOVED - Private contact info
-                        "website": getattr(establishment.company, "website", "") if establishment.company else "",
-                        "facebook": getattr(establishment.company, "facebook", "") if establishment.company else "",
-                        "instagram": getattr(establishment.company, "instagram", "") if establishment.company else "",
-                        # New agricultural compliance fields
-                        "legal_structure": (
-                            getattr(establishment.company, "legal_structure", "") if establishment.company else ""
-                        ),
-                        "primary_commodities": (
-                            getattr(establishment.company, "primary_commodities", "") if establishment.company else ""
-                        ),
-                        "sustainability_commitment": (
-                            getattr(establishment.company, "sustainability_commitment", "")
-                            if establishment.company
-                            else ""
-                        ),
-                        "logo": (
-                            self._get_safe_image_url(establishment.company.logo)
-                            if establishment.company and establishment.company.logo
-                            else None
-                        ),
-                        # 'fiscal_id': getattr(establishment.company, 'fiscal_id', '') if establishment.company else '',  # REMOVED - Business sensitive info
-                        # 'contact_email': getattr(establishment.company, 'contact_email', '') if establishment.company else '',  # REMOVED - Private contact info
-                    }
-                    if establishment.company
-                    else None
-                ),
-            }
-
-            # === MAP DATA (polygon and metadata) ===
-            parcel_data = None
-            if production.parcel:
-                parcel_data = {
-                    "id": production.parcel.id,
-                    "name": production.parcel.name,
-                    "area": float(production.parcel.area) if production.parcel.area else None,
-                    "polygon": production.parcel.polygon,
-                    "map_metadata": production.parcel.map_metadata,
-                    # Additional parcel fields for modal
-                    "description": getattr(production.parcel, "description", ""),
-                    "soil_type": getattr(production.parcel, "soil_type", ""),
-                    "crop_type": getattr(production.parcel, "crop_type", ""),
-                    "certification_type": getattr(production.parcel, "certification_type", ""),
-                    "certified": getattr(production.parcel, "certified", False),
-                    "unique_code": getattr(production.parcel, "unique_code", ""),
-                    # 'contact_person': getattr(production.parcel, 'contact_person', ''),  # REMOVED - Private contact info
-                    # 'contact_phone': getattr(production.parcel, 'contact_phone', ''),  # REMOVED - Private contact info
-                    # 'contact_email': getattr(production.parcel, 'contact_email', ''),  # REMOVED - Private contact info
-                    # Agricultural details for carbon calculations and USDA compliance
-                    "agricultural_details": getattr(production.parcel, "agricultural_details", {}),
-                    # Current production info
-                    "current_history": (
-                        {
-                            "id": production.id,
-                            "name": production.name
-                            or f'{production.product.name if production.product else "Production"} {production.start_date.year if production.start_date else ""}',
-                            "start_date": production.start_date.isoformat() if production.start_date else None,
-                            "finish_date": production.finish_date.isoformat() if production.finish_date else None,
-                            "crop_type": production.product.name if production.product else None,
-                        }
-                        if production
-                        else None
-                    ),
-                }
-
-            # === IMAGES DATA ===
-            images_data = self._get_production_images(production)
-
-            # === SIMILAR PRODUCTS ===
-            similar_products = self._get_similar_products(production)
-
-            # === SCAN TRACKING ===
-            # Skip scan for authenticated producers viewing their own production
-            is_owner = False
-            if request.user.is_authenticated and production.parcel and production.parcel.establishment:
-                is_owner = request.user.companies.filter(id=production.parcel.establishment.company_id).exists()
-
-            if not is_owner:
-                x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-                ip_address = x_forwarded_for.split(",")[0] if x_forwarded_for else request.META.get("REMOTE_ADDR")
-
-                city = None
-                country = None
-
-                if ip_address:
-                    try:
-                        import requests
-
-                        geo_resp = requests.get(f"https://ipapi.co/{ip_address}/json/", timeout=2)
-                        if geo_resp.status_code == 200:
-                            geo_data = geo_resp.json()
-                            if not geo_data.get("reserved"):
-                                city = geo_data.get("city")
-                                country = geo_data.get("country_name")
-                    except Exception as e:
-                        logger.debug(f"IP geolocation failed: {e}")
-
-                HistoryScan.objects.create(
-                    history=production,
-                    user=request.user if request.user.is_authenticated else None,
-                    ip_address=ip_address,
-                    city=city,
-                    country=country,
-                )
-
-            # === BLOCKCHAIN VERIFICATION ===
-            carbon_data = {
-                "total_emissions": total_emissions,
-                "total_offsets": total_offsets,
-                "net_footprint": net_footprint,
-                "carbon_score": carbon_score,
-            }
-            blockchain_verification = self._get_blockchain_verification(production, carbon_data)
-
-            # === SUSTAINABILITY METRICS AND RECOMMENDATIONS ===
-            recommendations = self._generate_sustainability_recommendations(
-                crop_name, total_emissions, total_offsets, carbon_score
-            )
-
-            badges = self._generate_sustainability_badges(
-                carbon_score, industry_percentile, total_offsets, blockchain_verification
-            )
-
-            # === SOCIAL PROOF DATA ===
-            social_proof = self._calculate_social_proof(production)
-
-            # === TRUST SCORE CALCULATION ===
-            trust_score = self._calculate_trust_score(
-                production, carbon_score, industry_percentile, blockchain_verification, social_proof
-            )
-
-            # === PRODUCTION PHASES (Database-Driven, No Hardcoded Values) ===
-            phase_calculator = ProductionPhaseCalculator()
-            production_phases = phase_calculator.calculate_phases(production.id)
-
-            # === TRANSPARENCY SCORE CALCULATION ===
-            # Calculate transparency score based on actual verification data
-            transparency_score = 0
-
-            # Carbon Data Available (30 points)
-            if total_emissions > 0:
-                transparency_score += 30
-
-            # EPA/USDA Emission Factors Used (25 points)
-            if self._check_epa_factors_based(production):
-                transparency_score += 25
-
-            # Blockchain Verification (20 points)
-            if blockchain_verification.get("isVerified", False):
-                transparency_score += 20
-
-            # Production Tracking (up to 15 points based on timeline completeness)
-            if timeline_data:
-                timeline_score = min(15, len(timeline_data) * 2)  # 2 points per event, max 15
-                transparency_score += timeline_score
-
-            # Location Verification (10 points)
-            if parcel_data and parcel_data.get("coordinates"):
-                transparency_score += 10
-
-            # Ensure score is within valid range (0-100)
-            transparency_score = min(100, max(0, transparency_score))
-
-            # === HARVEST DETAILS (for consumer transparency) ===
-            harvest_details = {}
-            if production.production_amount:
-                harvest_details["amount"] = production.production_amount
-                harvest_details["unit"] = production.production_unit or "kg"
-            if production.lot_id:
-                harvest_details["lot_number"] = production.lot_id
-            if getattr(production, "quality_grade", None):
-                grade_labels = {
-                    "premium": "Premium Grade",
-                    "grade_a": "Grade A",
-                    "grade_b": "Grade B",
-                    "standard": "Standard",
-                    "processing": "Processing Grade",
-                }
-                harvest_details["quality_grade"] = grade_labels.get(production.quality_grade, production.quality_grade)
-            if getattr(production, "harvest_method", None):
-                method_labels = {
-                    "manual": "Hand Harvested",
-                    "mechanical": "Machine Harvested",
-                    "mixed": "Mixed Harvest",
-                }
-                harvest_details["harvest_method"] = method_labels.get(
-                    production.harvest_method, production.harvest_method
-                )
-            # Farmer notes - valuable transparency for consumers
-            if getattr(production, "observation", None):
-                harvest_details["farmer_notes"] = production.observation
-
-            # Production method - critical consumer transparency (organic/sustainable/regenerative)
-            extra_data = getattr(production, "extra_data", None) or {}
-            if extra_data.get("production_method"):
-                method_labels = {
-                    "conventional": "Conventional Farming",
-                    "organic": "Certified Organic",
-                    "regenerative": "Regenerative Agriculture",
-                    "sustainable": "Sustainable Practices",
-                }
-                harvest_details["production_method"] = method_labels.get(
-                    extra_data["production_method"], extra_data["production_method"].title()
-                )
-
-            # === UNIFIED RESPONSE DATA ===
-            response_data = {
-                # Essential product info
-                "product": {
-                    "id": production.id,
-                    "name": production.product.name if production.product else "Product",
-                    "reputation": float(production.reputation) if production.reputation else 4.5,
-                },
-                # Production dates
-                "start_date": production.start_date.isoformat() if production.start_date else None,
-                "finish_date": production.finish_date.isoformat() if production.finish_date else None,
-                # Harvest details for consumer display
-                "harvestDetails": harvest_details if harvest_details else None,
-                # Carbon metrics (complete from qr-summary)
-                "carbonScore": carbon_score,
-                "totalEmissions": float(total_emissions),
-                "totalOffsets": float(total_offsets),
-                "netFootprint": float(net_footprint),
-                "relatableFootprint": self._get_relatable_footprint(net_footprint),
-                "industryPercentile": industry_percentile,
-                "industryAverage": industry_average,
-                "isEpaFactorsBased": self._check_epa_factors_based(production),
-                "cropType": crop_type,
-                "benchmarkSource": f"crop_specific_{crop_type}",
-                # Transparency score (calculated based on verification data)
-                "transparency_score": transparency_score,
-                # Emissions breakdown
-                "emissionsByCategory": emissions_by_category,
-                "emissionsBySource": emissions_by_source,
-                "offsetsByAction": offsets_by_action,
-                # Production timeline (combined events)
-                "timeline": timeline_data,
-                "production_events": timeline_data,  # Alias for compatibility
-                "events": timeline_data,  # Alias for compatibility
-                # Production phases (database-driven, replaces hardcoded values)
-                "production_phases": {
-                    phase_key: {
-                        "name": phase_data["name"],
-                        "carbon_impact": phase_data["carbon_impact"],
-                        "percentage": phase_data["percentage"],
-                        "event_count": len(phase_data["events"]),
-                        "consumer_story": phase_data["consumer_story"],
-                    }
-                    for phase_key, phase_data in production_phases.items()
-                },
-                # Establishment info (from history data)
-                "farmer": establishment_data,  # Primary key for carbon API compatibility
-                "establishment": establishment_data,  # Alias for history API compatibility
-                # Map data (from history API)
-                "parcel": parcel_data,
-                # Images
-                "images": images_data,
-                # Similar products
-                "similar_products": similar_products,
-                "similar_histories": similar_products,  # Alias for history API compatibility
-                # Scan tracking
-                "history_scan": history_scan.id,
-                # Sustainability features
-                "recommendations": recommendations,
-                "badges": badges,
-                "blockchainVerification": blockchain_verification,
-                "socialProof": social_proof,
-                "trustScore": trust_score,
-                # Metadata
-                "verificationDate": timezone.now().isoformat(),
-                "cache_hit": False,
-                "timestamp": timezone.now().isoformat(),
-                "api_version": "complete_v2",
-            }
-
-            # Track public view (separate from QR scans) with bot filtering
-            production.increment_public_views(request)
-
-            # Cache the complete response for 15 minutes (900 seconds)
-            cache.set(cache_key, response_data, 900)
-
-            return Response(response_data, status=status.HTTP_200_OK)
-
-        except History.DoesNotExist:
-            return Response({"error": "Production not found or not published"}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            logger.error(f"Error in complete_summary: {e}", exc_info=True)
-            return Response(
-                {"error": "Internal server error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-    def _get_safe_image_url(self, image_field):
-        """Safely get image URL, handling cases where image file doesn't exist"""
-        try:
-            if image_field and hasattr(image_field, "url") and image_field.url:
-                return image_field.url
-        except (ValueError, AttributeError):
-            pass
-        return None
-
-    def _get_crop_category_for_recommendations(self, crop_name: str) -> str:
-        """Helper method to categorize crops for recommendations"""
-        crop_lower = crop_name.lower()
-
-        fruit_keywords = ["orange", "apple", "grape", "lemon", "lime", "strawberry", "blueberry", "avocado"]
-        vegetable_keywords = ["tomato", "lettuce", "carrot", "broccoli", "spinach", "cucumber", "pepper", "onion"]
-        grain_keywords = ["corn", "wheat", "rice", "barley", "oats"]
-        herb_keywords = ["basil", "oregano", "thyme", "rosemary", "mint"]
-        legume_keywords = ["soybean", "bean", "chickpea", "lentil", "pea"]
-        nut_keywords = ["almond", "walnut", "pecan", "hazelnut"]
-
-        for keyword in fruit_keywords:
-            if keyword in crop_lower:
-                return "fruits"
-        for keyword in vegetable_keywords:
-            if keyword in crop_lower:
-                return "vegetables"
-        for keyword in grain_keywords:
-            if keyword in crop_lower:
-                return "grains"
-        for keyword in herb_keywords:
-            if keyword in crop_lower:
-                return "herbs"
-        for keyword in legume_keywords:
-            if keyword in crop_lower:
-                return "legumes"
-        for keyword in nut_keywords:
-            if keyword in crop_lower:
-                return "nuts"
-
-        return "general"
+    # REMOVED 2026-08-04 — the `qr-enhanced` action (`GET /api/carbon/public/productions/{id}/qr-enhanced/`).
+    #
+    # An AllowAny endpoint that never worked. It read `production.carbon_grade` and
+    # `production.industry_comparison`, neither of which exists on History, so every request since
+    # it shipped raised AttributeError into its own handler and returned HTTP 200 carrying
+    # `{"carbonScore": 50, "carbonGrade": "C"}` — a fabricated carbon letter grade published
+    # anonymously for every farm in the product. Nothing in the frontend ever called it; the
+    # consumer QR page is served by `history/transparency_views.py` and `qr-summary`.
+    #
+    # A grade Trazo computes about a farm and shows to shoppers is the self-created sustainability
+    # label banned by EU ECGT 2024/825 (live 2026-09-27) and a general-benefit claim under FTC
+    # 16 CFR 260.6. The June 2026 claim-safety pass gated exactly this out of the OTHER consumer
+    # endpoint and missed this parallel one.
+    #
+    # Deleted with it (each had no other caller): `_get_carbon_summary`, `_get_primary_equivalency`,
+    # `_calculate_social_proof`, `_get_consumer_safe_social_proof`, `_get_public_farmer_info`,
+    # `_get_public_parcel_info`, `_get_product_info`, and `_get_consumer_timeline` — the last being
+    # the dead `consumer_timeline` surface flagged for a decision in the 2026-08-02 consumer audit.
+
+    # REMOVED 2026-08-04, orphaned by the deletion of the `qr-enhanced` action above:
+    # `_generate_transparency_achievements` and BOTH definitions of `_get_blockchain_verification`.
+    #
+    # Note the second of those: this class defined `_get_blockchain_verification` twice — once as
+    # `(self, production)` and again ~300 lines later as `(self, production, carbon_data)`. Python
+    # keeps only the last, so the one-argument version had been unreachable for as long as both
+    # existed, and any caller written against it would have failed on a missing argument. Two
+    # methods, one name, one class: worth checking for whenever a viewset this large is edited.
+
+    # DEAD-CODE SWEEP, 2026-08-04 — 20 unreachable private methods (968 lines) removed from this
+    # class, taking it from 2,275 lines to ~1,180. Removed iteratively to a fixed point, because
+    # deleting one orphan exposes the next: 11 were already unreachable, and 9 more became so as
+    # their only callers went (`_calculate_carbon_score`, `_get_event_carbon_data`, `_get_npk_ratio`,
+    # `_normalize_crop_name`, `_find_crop_benchmark`, `_get_safe_image_url`, and friends).
+    #
+    # This was not tidying. This is a PUBLIC (AllowAny) viewset, and the dead code in it was the
+    # claim-generating kind: `_legacy_carbon_score`, `_calculate_trust_score`,
+    # `_generate_sustainability_badges`, `_generate_sustainability_recommendations`,
+    # `_calculate_industry_percentile`, `_get_industry_average`, `_get_relatable_footprint` — farm
+    # grades, self-assigned trust scores, sustainability badges and peer comparisons, all one call
+    # site away from being served to shoppers. Two sibling badge builders in this same class WERE
+    # reachable and had to be deleted earlier the same day for exactly that reason.
+    #
+    # Only `qr_summary` and `complete_summary` (both @action) plus the two helpers they actually
+    # use survive. Verified after removal: both endpoints 200, payloads free of grade-shaped keys,
+    # 93/93 consumer-privacy + claim-safety + calculator tests green on a fresh test database.
+    #
+    # If a future payload needs one of these numbers, write it against `claim_authority.py` — the
+    # single place allowed to decide what a public surface may assert — not from memory.
+
+    # The first `complete_summary` action (486 lines) was deleted 2026-08-02.
+    #
+    # A second @action(url_path="complete") def complete_summary was defined later in this
+    # same class, so Python kept only the later one — verified at runtime via
+    # inspect.getsourcelines(). The earlier body was unreachable, and it carried yet another
+    # transparency formula (30/25/20/15/10 weighting) that could never run.
 
     def _get_production_images(self, production):
         """Get images from production album for consumer display with intelligent fallbacks"""
@@ -4921,1155 +4135,19 @@ class PublicProductionViewSet(viewsets.ViewSet):
         except Exception:
             return []
 
-    def _normalize_crop_name(self, crop_name):
-        """Normalize crop name to handle plural/singular matching"""
-        if not crop_name:
-            return ""
-
-        # Convert to lowercase and remove spaces/underscores
-        normalized = crop_name.lower().replace(" ", "_").replace("-", "_")
-
-        # Common plural to singular mappings for agricultural products
-        plural_to_singular = {
-            "strawberries": "strawberry",
-            "blueberries": "blueberry",
-            "raspberries": "raspberry",
-            "blackberries": "blackberry",
-            "cranberries": "cranberry",
-            "cherries": "cherry",
-            "grapes": "grape",
-            "apples": "apple",
-            "oranges": "orange",
-            "lemons": "lemon",
-            "limes": "lime",
-            "peaches": "peach",
-            "pears": "pear",
-            "bananas": "banana",
-            "avocados": "avocado",
-            "tomatoes": "tomato",
-            "potatoes": "potato",
-            "onions": "onion",
-            "carrots": "carrot",
-            "peppers": "pepper",
-            "cucumbers": "cucumber",
-            "lettuce": "lettuce",
-            "spinach": "spinach",
-            "broccoli": "broccoli",
-            "cauliflower": "cauliflower",
-            "beans": "bean",
-            "peas": "pea",
-            "soybeans": "soybean",
-            "corn": "corn",
-            "wheat": "wheat",
-            "rice": "rice",
-            "oats": "oat",
-            "barley": "barley",
-            "almonds": "almond",
-            "walnuts": "walnut",
-            "pecans": "pecan",
-            "pistachios": "pistachio",
-        }
-
-        # Check if it's a known plural form
-        if normalized in plural_to_singular:
-            return plural_to_singular[normalized]
-
-        # Handle generic plural endings
-        if normalized.endswith("ies"):
-            # berries -> berry, cherries -> cherry
-            return normalized[:-3] + "y"
-        elif normalized.endswith("es") and len(normalized) > 3:
-            # tomatoes -> tomato, potatoes -> potato
-            return normalized[:-2]
-        elif normalized.endswith("s") and len(normalized) > 2:
-            # apples -> apple, grapes -> grape
-            return normalized[:-1]
-
-        return normalized
-
-    def _find_crop_benchmark(self, crop_name, year, usda_factors_used=True):
-        """Find crop benchmark with flexible matching for plural/singular forms"""
-        if not crop_name:
-            return None
-
-        # First try exact match
-        benchmark = CarbonBenchmark.objects.filter(
-            crop_type=crop_name, year=year, usda_factors_used=usda_factors_used
-        ).first()
-
-        if benchmark:
-            return benchmark
-
-        # Try normalized version
-        normalized_crop = self._normalize_crop_name(crop_name)
-        if normalized_crop != crop_name:
-            benchmark = CarbonBenchmark.objects.filter(
-                crop_type=normalized_crop, year=year, usda_factors_used=usda_factors_used
-            ).first()
-
-            if benchmark:
-                return benchmark
-
-        # Try reverse matching - check if any benchmark crop names match our normalized name
-        # This handles cases where benchmark has plural but product has singular
-        all_benchmarks = CarbonBenchmark.objects.filter(year=year, usda_factors_used=usda_factors_used)
-
-        for benchmark in all_benchmarks:
-            if self._normalize_crop_name(benchmark.crop_type) == normalized_crop:
-                return benchmark
-
-        return None
-
-    def _calculate_carbon_score(self, total_emissions, total_offsets, production, crop_type):
-        """Calculate carbon score using existing logic from qr_summary"""
-        try:
-            # Try to get benchmark for more accurate scoring with flexible matching
-            year = production.start_date.year if production.start_date else timezone.now().year
-            benchmark = self._find_crop_benchmark(crop_type, year, usda_factors_used=True)
-
-            if benchmark:
-                # Use benchmark-based scoring
-                production_amount = getattr(production, "production_amount", None) or 1000
-                net_footprint_per_kg = (
-                    (total_emissions - total_offsets) / production_amount
-                    if production_amount > 0
-                    else (total_emissions - total_offsets)
-                )
-
-                if net_footprint_per_kg <= 0:
-                    return 95  # Excellent for carbon neutral/negative
-                elif net_footprint_per_kg <= benchmark.min_emissions:
-                    return 90  # Excellent performance
-                elif net_footprint_per_kg <= benchmark.average_emissions:
-                    # Better than average: scale from 70-90
-                    ratio = net_footprint_per_kg / benchmark.average_emissions
-                    return int(90 - (ratio * 20))
-                elif net_footprint_per_kg <= benchmark.max_emissions:
-                    # Worse than average: scale from 30-70
-                    ratio = (net_footprint_per_kg - benchmark.average_emissions) / (
-                        benchmark.max_emissions - benchmark.average_emissions
-                    )
-                    return int(70 - (ratio * 40))
-                else:
-                    # Worse than max: scale from 10-30
-                    ratio = min(net_footprint_per_kg / benchmark.max_emissions, 2.0)
-                    return max(10, int(30 - ((ratio - 1) * 20)))
-            else:
-                # Fallback to offset-based scoring
-                if total_emissions > 0:
-                    offset_percentage = min(100, (total_offsets / total_emissions) * 100)
-                    if offset_percentage >= 100:
-                        return 85 + min(15, ((offset_percentage - 100) / 50) * 15)
-                    else:
-                        return offset_percentage * 0.85
-                elif total_offsets > 0:
-                    return 95  # High score for carbon negative
-                else:
-                    return 50  # Default score when no data
-        except Exception:
-            return 50
-
-    def _calculate_industry_percentile(self, net_footprint, production, crop_type):
-        """Calculate industry percentile using existing logic"""
-        try:
-            year = production.start_date.year if production.start_date else timezone.now().year
-            benchmark = self._find_crop_benchmark(crop_type, year, usda_factors_used=True)
-
-            if benchmark and benchmark.average_emissions > 0:
-                # Convert net footprint to per-kg basis if we have production amount
-                production_amount = getattr(production, "production_amount", None) or 1000
-                net_footprint_per_kg = net_footprint / production_amount if production_amount > 0 else net_footprint
-
-                if net_footprint_per_kg <= 0:
-                    return 95  # Very good if carbon neutral/negative
-                elif net_footprint_per_kg <= benchmark.min_emissions:
-                    return 95  # Top performers
-                elif net_footprint_per_kg >= benchmark.max_emissions:
-                    return 5  # Bottom performers
-                else:
-                    # Linear interpolation between min and max
-                    position = (net_footprint_per_kg - benchmark.min_emissions) / (
-                        benchmark.max_emissions - benchmark.min_emissions
-                    )
-                    return max(5, min(95, int(95 - (position * 90))))
-            else:
-                # No benchmark available - estimate based on carbon score
-                carbon_score = self._calculate_carbon_score(0, 0, production, crop_type)  # Will use fallback logic
-                return max(5, min(95, int(carbon_score * 0.9)))
-        except Exception:
-            return 50
-
-    def _get_industry_average(self, crop_type, production):
-        """Get industry average emissions for the crop type"""
-        try:
-            year = production.start_date.year if production.start_date else timezone.now().year
-            benchmark = self._find_crop_benchmark(crop_type, year, usda_factors_used=True)
-
-            if benchmark:
-                return benchmark.average_emissions
-            else:
-                # Fallback to general agriculture average
-                general_benchmark = CarbonBenchmark.objects.filter(
-                    industry="agriculture", year=year, crop_type=""
-                ).first()
-                return general_benchmark.average_emissions if general_benchmark else 0.0
-        except Exception:
-            return 0.0
-
-    def _get_complete_timeline(self, production):
-        """Get complete timeline data from all event types with carbon calculations
-
-        OPTIMIZATION (2025-12-12): Prefetch all CarbonEntry records at once to avoid N+1 queries.
-        Instead of making one query per event, we fetch all carbon data once and cache it.
-        """
-        try:
-            timeline_events = []
-
-            # PERFORMANCE OPTIMIZATION: Use prefetched carbonentry_set instead of additional queries
-            # The History queryset already includes prefetched carbon entries via carbonentry_set
-            # This eliminates the N+1 query problem where each event triggers a separate query
-            from .models import CarbonEntry
-
-            # Get all carbon entries from the prefetched carbonentry_set (O(1) - already in memory)
-            all_carbon_entries = production.carbonentry_set.all()
-
-            # Create a cache dictionary keyed by event type for O(1) lookup
-            # Maps event class name to list of carbon entries
-            carbon_cache = {}
-            for ce in all_carbon_entries:
-                # Key: event type from description (e.g., "ChemicalEvent", "ProductionEvent")
-                event_type = ""
-                if ce.description:
-                    # Extract event type name from description like "Auto-calculated from ChemicalEvent"
-                    if "from " in ce.description:
-                        event_type = ce.description.split("from ")[-1].strip()
-
-                if event_type not in carbon_cache:
-                    carbon_cache[event_type] = []
-                carbon_cache[event_type].append(ce)
-
-            # Get all event types and combine them
-
-            event_types = [
-                (production.history_weatherevent_events.all(), "weather"),
-                (production.history_productionevent_events.all(), "production"),
-                (production.history_chemicalevent_events.all(), "chemical"),
-                (production.history_generalevent_events.all(), "general"),
-                (production.history_equipmentevent_events.all(), "equipment"),
-                (production.history_soilmanagementevent_events.all(), "soil_management"),
-                (production.history_pestmanagementevent_events.all(), "pest_management"),
-            ]
-
-            for events, event_category in event_types:
-                for event in events:
-                    # Build basic event data
-                    # Get album data for photo verification
-                    album_data = None
-                    if hasattr(event, "album") and event.album:
-                        try:
-                            images = []
-                            for image in event.album.images.all():
-                                # Try to get the real image URL first from image_url field
-                                try:
-                                    if hasattr(image, "image_url") and image.image_url:
-                                        image_url = image.image_url
-                                    elif hasattr(image, "image") and image.image and hasattr(image.image, "url"):
-                                        image_url = request.build_absolute_uri(image.image.url)
-                                    else:
-                                        # Use placeholder image for testing
-                                        image_url = "https://via.placeholder.com/400x300/4CAF50/FFFFFF?text=Farming+Practice+Photo"
-                                except Exception:
-                                    # Fallback to placeholder if there's any issue accessing the image
-                                    image_url = (
-                                        "https://via.placeholder.com/400x300/4CAF50/FFFFFF?text=Farming+Practice+Photo"
-                                    )
-
-                                images.append(
-                                    {
-                                        "id": image.id,
-                                        "image": image_url,
-                                        "caption": f"Farming practice photo {image.id}",
-                                        "created_at": image.created_at.isoformat() if image.created_at else None,
-                                    }
-                                )
-
-                            if images:
-                                album_data = {"id": event.album.id, "images": images}
-                        except Exception as e:
-                            album_data = None
-
-                    # Get production-level blockchain verification status
-                    # When a production is blockchain verified, all its events inherit that verification
-                    production_extra_data = production.extra_data or {}
-                    is_blockchain_verified = production_extra_data.get("blockchain_verified", False)
-                    blockchain_tx = production_extra_data.get("blockchain_transaction", "")
-
-                    event_data = {
-                        "id": event.id,
-                        "type": event_category,
-                        "description": getattr(event, "description", "") or getattr(event, "name", ""),
-                        "observation": getattr(event, "observation", ""),
-                        "date": event.date.isoformat() if event.date else None,
-                        "certified": getattr(production.parcel, "certified", False),
-                        "index": getattr(event, "index", 0),
-                        "volume": getattr(event, "volume", None),
-                        "concentration": getattr(event, "concentration", None),
-                        "area": getattr(event, "area", None),
-                        "equipment": getattr(event, "commercial_name", None) or getattr(event, "equipment", None),
-                        "album": album_data,
-                        # Blockchain verification - inherited from production level
-                        "blockchain_verified": is_blockchain_verified,
-                        "blockchain_transaction": blockchain_tx if is_blockchain_verified else "",
-                        # Sprint 5.1 — OSP ↔ events drift detector payload (null for
-                        # event types without the field, e.g. weather/equipment).
-                        "drift_warning": getattr(event, "drift_warning", None),
-                    }
-
-                    # Add event-type specific fields for better transparency
-                    if event_category == "chemical":
-                        # Add chemical-specific agricultural context fields
-                        # 🔧 CRITICAL FIX: Ensure None values from getattr don't become empty strings
-                        area_value = getattr(event, "area", None)
-                        timing_value = getattr(event, "application_timing", None)
-                        method_value = getattr(event, "way_of_application", None)
-
-                        # If area was already set in event_data and is None, but database has value, preserve the database value
-                        if event_data.get("area") is None and area_value is not None:
-                            event_data["area"] = area_value
-
-                        event_data.update(
-                            {
-                                "weather_conditions": getattr(event, "weather_conditions", None),
-                                "application_timing": timing_value,
-                                "target_pest_disease": getattr(event, "target_pest_disease", None),
-                                "way_of_application": method_value,
-                                "application_method": method_value,  # Alias for frontend compatibility
-                                "target_purpose": getattr(
-                                    event, "target_pest_disease", None
-                                ),  # Alias for frontend compatibility
-                                "npk_ratio": self._get_npk_ratio(event),
-                                "active_ingredient": getattr(event, "commercial_name", None),
-                                "dose": getattr(event, "volume", None),
-                                "unit": "L",  # Default unit for volume
-                                "nitrogen_percentage": getattr(event, "nitrogen_percentage", None),
-                                "phosphorus_percentage": getattr(event, "phosphorus_percentage", None),
-                                "potassium_percentage": getattr(event, "potassium_percentage", None),
-                            }
-                        )
-
-                    elif event_category == "production":
-                        # Add production-specific fields
-                        event_data.update(
-                            {
-                                "harvest_date": getattr(event, "harvest_date", None),
-                                "yield_amount": getattr(event, "yield_amount", None),
-                                "quality_grade": getattr(event, "quality_grade", None),
-                            }
-                        )
-                    elif event_category == "equipment":
-                        # Add equipment-specific fields - FIXED TO MATCH EquipmentEvent MODEL
-                        # CRITICAL: Include name field for operation name display
-                        operation_name = getattr(event, "name", None) or getattr(event, "operation_name", None)
-                        operation_type = getattr(event, "type", None)
-
-                        event_data.update(
-                            {
-                                "name": operation_name,  # CRITICAL: Operation name for title display
-                                "operation_name": operation_name,  # Frontend compatibility alias
-                                "fuel_consumed": getattr(event, "fuel_consumed", None),
-                                "fuel_unit": getattr(event, "fuel_unit", None),
-                                "hours_operated": getattr(event, "hours_operated", None),
-                                "area_worked": getattr(event, "area_worked", None),
-                                "area_unit": getattr(event, "area_unit", None),
-                                "equipment_type": getattr(event, "equipment_type_structured", None)
-                                or getattr(event, "equipment_name", None),
-                                "operation_type": operation_type,
-                                # DEBUG: Add debug info to API response
-                                "debug_backend_type": operation_type,
-                                "debug_backend_name": operation_name,
-                                "operation_efficiency": getattr(event, "operation_efficiency", None),
-                                # Legacy fields for backward compatibility
-                                "fuel_consumption": getattr(event, "fuel_consumed", None),  # Legacy alias
-                                "operation_duration": getattr(event, "hours_operated", None),  # Legacy alias
-                                "maintenance_status": getattr(event, "type", None),  # Legacy alias
-                            }
-                        )
-
-                        # Also update the generic equipment field for backward compatibility
-                        if operation_name:
-                            event_data["equipment"] = operation_name
-                    elif event_category == "weather":
-                        # Add weather-specific fields
-                        event_data.update(
-                            {
-                                "temperature": getattr(event, "temperature", None),
-                                "humidity": getattr(event, "humidity", None),
-                                "precipitation": getattr(event, "precipitation", None),
-                                "wind_speed": getattr(event, "wind_speed", None),
-                            }
-                        )
-                    elif event_category == "soil_management":
-                        # Add soil management-specific fields
-                        event_data.update(
-                            {
-                                "soil_ph": getattr(event, "soil_ph", None),
-                                "organic_matter": getattr(event, "organic_matter", None),
-                                "tillage_depth": getattr(event, "tillage_depth", None),
-                            }
-                        )
-
-                    # Add blockchain verification data from extra_data if available
-                    if hasattr(event, "extra_data") and event.extra_data:
-                        blockchain_data = event.extra_data
-                        event_data.update(
-                            {
-                                "blockchain_verified": blockchain_data.get("blockchain_verified", False),
-                                "blockchain_transaction": blockchain_data.get("blockchain_transaction", ""),
-                                "blockchain_block_number": blockchain_data.get("blockchain_block_number", 0),
-                                "verification_confidence": blockchain_data.get("verification_confidence", 0),
-                                "verification_timestamp": blockchain_data.get("verification_timestamp", ""),
-                                "data_integrity_score": blockchain_data.get("data_integrity_score", 0),
-                                "blockchain_network": blockchain_data.get("blockchain_network", "polygon_amoy"),
-                                # Include the full extra_data for frontend access
-                                "extra_data": blockchain_data,
-                            }
-                        )
-                    else:
-                        # Ensure blockchain fields exist even if no data
-                        event_data.update(
-                            {
-                                "blockchain_verified": False,
-                                "blockchain_transaction": "",
-                                "blockchain_block_number": 0,
-                                "verification_confidence": 0,
-                                "verification_timestamp": "",
-                                "data_integrity_score": 0,
-                                "blockchain_network": "",
-                                "extra_data": {},
-                            }
-                        )
-
-                    # Add carbon calculation data if available (using prefetched cache)
-                    carbon_data = self._get_event_carbon_data(
-                        event, event_category, production, carbon_cache=carbon_cache
-                    )
-                    if carbon_data:
-                        event_data["carbon_data"] = carbon_data
-
-                    timeline_events.append(event_data)
-
-            # Sort by date
-            timeline_events.sort(key=lambda x: x["date"] or "1900-01-01")
-
-            return timeline_events
-        except Exception as e:
-            logger.error(f"Error getting timeline: {e}")
-            return []
-
-    def _get_npk_ratio(self, event):
-        """Get NPK ratio in user-friendly format like '10-10-10' or from concentration field"""
-        try:
-            # Try to build from individual percentage fields first
-            n = getattr(event, "nitrogen_percentage", None)
-            p = getattr(event, "phosphorus_percentage", None)
-            k = getattr(event, "potassium_percentage", None)
-
-            if n is not None and p is not None and k is not None:
-                return f"{int(n)}-{int(p)}-{int(k)}"
-
-            # Fallback to concentration field (legacy format)
-            concentration = getattr(event, "concentration", None)
-            if concentration and "-" in concentration:
-                return concentration
-
-            return None
-        except Exception:
-            return None
-
-    def _get_event_carbon_data(self, event, event_category, production, carbon_cache=None):
-        """Get carbon calculation data for a specific event
-
-        PHASE 3 CONSOLIDATION (2025-12-12): CarbonEntry is now the single source of truth.
-        Priority order:
-        1. CarbonEntry table (authoritative, normalized data) - uses prefetched cache when available
-        2. extra_data (backward compatibility during transition)
-        3. On-demand calculation (fallback for missing data)
-
-        OPTIMIZATION (2025-12-12): Accepts optional carbon_cache parameter to avoid N+1 queries.
-        When called from _get_complete_timeline(), uses prefetched cache instead of individual queries.
-        """
-        try:
-            from .models import CarbonEntry
-
-            carbon_entry = None
-
-            # First, try to find CarbonEntry records - NOW PRIMARY SOURCE OF TRUTH
-            if carbon_cache is not None:
-                # OPTIMIZATION: Use prefetched cache (O(1) lookup instead of database query)
-                # Cache is keyed by event class name (e.g., "ChemicalEvent", "ProductionEvent")
-                event_class_name = event.__class__.__name__
-
-                if event_class_name in carbon_cache:
-                    # Get the most recent carbon entry for this event type
-                    carbon_entries = carbon_cache[event_class_name]
-                    if carbon_entries:
-                        # Use the first/most recent entry (already sorted by -created_at in prefetch)
-                        carbon_entry = carbon_entries[0]
-            else:
-                # FALLBACK: For direct method calls, query database
-                # Match by production and description containing event info
-                carbon_entries = CarbonEntry.objects.filter(
-                    production=production, description__icontains=f"{event.__class__.__name__}"
-                ).order_by("-created_at")
-
-                if carbon_entries.exists():
-                    carbon_entry = carbon_entries.first()
-
-            if carbon_entry is not None:
-
-                # Calculate efficiency score based on USDA verification status
-                efficiency_score = 90.0 if carbon_entry.usda_factors_based else 75.0
-
-                # Convert confidence level to percentage
-                confidence = carbon_entry.confidence_level
-                if isinstance(confidence, (int, float)):
-                    confidence_percentage = int(confidence * 100)
-                else:
-                    # Handle string confidence levels
-                    confidence_map = {"high": 90, "medium": 75, "low": 50}
-                    confidence_percentage = confidence_map.get(confidence, 75)
-
-                return {
-                    "co2e": float(carbon_entry.co2e_amount or carbon_entry.amount),
-                    "efficiency_score": efficiency_score,
-                    "usda_factors_used": carbon_entry.usda_factors_based,
-                    "calculation_method": carbon_entry.data_source or "USDA Agricultural Emission Factors",
-                    "verification_confidence": confidence_percentage,
-                    "cost_analysis": None,  # CarbonEntry doesn't store cost analysis data
-                }
-
-            # Second, fall back to extra_data for backward compatibility with old events
-            # These will eventually be deleted once all old events are processed
-            if hasattr(event, "extra_data") and event.extra_data:
-                carbon_calc = event.extra_data.get("carbon_calculation")
-                if carbon_calc:
-                    # Convert confidence level to percentage if it's a decimal
-                    confidence = carbon_calc.get("confidence_level", 0.90)
-                    if isinstance(confidence, (int, float)):
-                        confidence_percentage = int(confidence * 100)
-                    else:
-                        # Handle string confidence levels
-                        confidence_map = {"high": 90, "medium": 75, "low": 50}
-                        confidence_percentage = confidence_map.get(confidence, 75)
-
-                    return {
-                        "co2e": float(carbon_calc.get("co2e", 0)),
-                        "efficiency_score": float(carbon_calc.get("efficiency_score", 0)),
-                        "usda_factors_used": carbon_calc.get("usda_factors_based", False),
-                        "calculation_method": carbon_calc.get(
-                            "calculation_method", "USDA Agricultural Emission Factors"
-                        ),
-                        "verification_confidence": confidence_percentage,
-                        "cost_analysis": carbon_calc.get("cost_analysis") if carbon_calc.get("cost_analysis") else None,
-                        "breakdown": carbon_calc.get("breakdown", {}),  # Include detailed breakdown
-                    }
-
-            # Third, try to calculate on-the-fly for events without stored calculations
-            return self._calculate_event_carbon_on_demand(event, event_category, production)
-
-        except Exception as e:
-            logger.error(f"Error getting carbon data for event {event.id}: {e}")
-            return None
-
-    def _calculate_event_carbon_on_demand(self, event, event_category, production):
-        """Calculate carbon impact on-demand for events that don't have stored calculations"""
-        try:
-            from .services.event_carbon_calculator import EventCarbonCalculator
-
-            calculator = EventCarbonCalculator()
-
-            # Calculate based on event category. These methods accept the Django model
-            # instance directly and extract their own data via the event's relationships
-            # (event.history, event.extra_data, event.type, etc.).
-            result = None
-            if event_category == "chemical":
-                result = calculator.calculate_chemical_event_impact(event)
-            elif event_category == "production":
-                result = calculator.calculate_production_event_impact(event)
-            elif event_category == "equipment":
-                result = calculator.calculate_equipment_event_impact(event)
-            elif event_category == "soil_management":
-                result = calculator.calculate_soil_management_event_impact(event)
-            elif event_category == "pest_management":
-                result = calculator.calculate_pest_management_event_impact(event)
-
-            if result:
-                return {
-                    "co2e": float(result.get("co2e", 0)),
-                    "efficiency_score": float(result.get("efficiency_score", 70)),
-                    "usda_factors_used": result.get("usda_factors_used", False),
-                    "calculation_method": result.get("calculation_method", "USDA Agricultural Emission Factors"),
-                    "verification_confidence": "medium",  # On-demand calculations have medium confidence
-                    "cost_analysis": result.get("cost_analysis") if result.get("cost_analysis") else None,
-                }
-
-            return None
-
-        except Exception as e:
-            logger.error(f"Error calculating carbon on-demand for event {event.id}: {e}")
-            return None
-
-    def _get_blockchain_verification(self, production):
-        """Get blockchain verification status"""
-        try:
-            # Check if production has blockchain verification
-            # This would integrate with your blockchain service
-            return {
-                "verified": True,  # Placeholder - implement actual verification logic
-                "transaction_hash": None,
-                "verification_date": timezone.now().isoformat(),
-                "certifying_body": "USDA SOE",
-            }
-        except Exception:
-            return {"verified": False, "error": "Verification service unavailable"}
-
-    def _generate_sustainability_recommendations(self, crop_name, total_emissions, total_offsets, carbon_score):
-        """Generate sustainability recommendations based on crop and performance"""
-        try:
-            recommendations = []
-
-            # Base recommendations by crop category
-            crop_category = self._get_crop_category_for_recommendations(crop_name)
-
-            if crop_category == "fruits":
-                recommendations.extend(
-                    [
-                        "Consider implementing integrated pest management to reduce chemical inputs",
-                        "Explore drip irrigation systems to optimize water usage",
-                        "Look into organic certification opportunities",
-                    ]
-                )
-            elif crop_category == "vegetables":
-                recommendations.extend(
-                    [
-                        "Implement crop rotation to improve soil health",
-                        "Consider cover cropping during off-seasons",
-                        "Explore precision agriculture techniques",
-                    ]
-                )
-            elif crop_category == "grains":
-                recommendations.extend(
-                    [
-                        "Consider no-till farming practices to sequester carbon",
-                        "Implement precision fertilizer application",
-                        "Explore renewable energy options for processing",
-                    ]
-                )
-            else:
-                recommendations.extend(
-                    [
-                        "Implement sustainable farming practices",
-                        "Consider renewable energy adoption",
-                        "Explore carbon offset opportunities",
-                    ]
-                )
-
-            # Performance-based recommendations
-            if carbon_score < 50:
-                recommendations.append("Focus on reducing emissions through energy efficiency improvements")
-            elif carbon_score < 70:
-                recommendations.append("Consider investing in carbon offset projects")
-            else:
-                recommendations.append("Share your sustainable practices with other farmers")
-
-            return recommendations[:5]  # Limit to 5 recommendations
-        except Exception:
-            return ["Explore sustainable farming practices to improve your carbon footprint"]
-
-    def _generate_sustainability_badges(
-        self, carbon_score, industry_percentile, total_offsets, blockchain_verification
-    ):
-        """Generate sustainability badges based on performance"""
-        try:
-            badges = []
-
-            if carbon_score >= 90:
-                badges.append(
-                    {
-                        "id": "carbon_champion",
-                        "name": "Carbon Champion",
-                        "description": "Exceptional carbon performance",
-                        "icon": "leaf",
-                        "color": "green",
-                    }
-                )
-            elif carbon_score >= 70:
-                badges.append(
-                    {
-                        "id": "eco_friendly",
-                        "name": "Eco Friendly",
-                        "description": "Above average sustainability",
-                        "icon": "eco",
-                        "color": "blue",
-                    }
-                )
-
-            if industry_percentile >= 80:
-                badges.append(
-                    {
-                        "id": "industry_leader",
-                        "name": "Industry Leader",
-                        "description": "Top 20% in industry",
-                        "icon": "star",
-                        "color": "gold",
-                    }
-                )
-
-            if total_offsets > 0:
-                badges.append(
-                    {
-                        "id": "carbon_offset",
-                        "name": "Carbon Offset",
-                        "description": "Actively offsetting emissions",
-                        "icon": "balance",
-                        "color": "purple",
-                    }
-                )
-
-            if blockchain_verification.get("verified"):
-                badges.append(
-                    {
-                        "id": "verified",
-                        "name": "Verified",
-                        "description": "Blockchain verified data",
-                        "icon": "verified",
-                        "color": "blue",
-                    }
-                )
-
-            return badges
-        except Exception:
-            return []
-
-    def _calculate_social_proof(self, production):
-        """Calculate social proof metrics with enhanced trust data - consumer friendly version"""
-        try:
-            from history.models import HistoryScan
-            from reviews.models import Review
-
-            # Update trust metrics before returning (ensures fresh calculations)
-            production.update_trust_metrics()
-
-            # Get scan statistics (for internal use only - not exposed to consumers)
-            total_scans = HistoryScan.objects.filter(history=production).count()
-
-            # Get actual review count
-            review_count = Review.objects.filter(production=production).count()
-
-            # Get average rating from reviews
-            reviews = Review.objects.filter(production=production)
-            if reviews.exists():
-                avg_rating = sum(r.rating for r in reviews) / reviews.count()
-            else:
-                avg_rating = float(production.reputation) if production.reputation > 0 else 0.0
-
-            # Consumer-friendly social proof without exposing scan counts
-            # Instead, focus on trust indicators and community engagement
-            return {
-                # Remove scan counts - internal analytics only
-                # 'totalScans': total_scans,  # REMOVED - not for consumers
-                "reviewsCount": review_count,  # Keep review count - it's community feedback
-                "averageRating": avg_rating,
-                # Convert scan engagement to trust levels without exposing numbers
-                "communityEngagement": "high" if total_scans >= 100 else ("medium" if total_scans >= 25 else "growing"),
-                "verifiedByConsumers": total_scans >= 10,  # Boolean trust indicator
-                # 'companyScans': company_scans,  # REMOVED - internal analytics
-                # Enhanced trust metrics - removed analytics, kept qualitative indicators
-                # 'confidenceScore': production.confidence_score,  # REMOVED - Internal scoring
-                # 'transparencyScore': production.transparency_score,  # REMOVED - Internal scoring
-                # 'publicViews': production.public_views,  # REMOVED - Private analytics
-                # 'uniqueVisitors': production.unique_visitors,  # REMOVED - Private analytics
-                "farmHistoryYears": production.get_farm_history_years(),
-            }
-        except Exception as e:
-            # Log the error for debugging
-            import logging
-
-            logger = logging.getLogger(__name__)
-            logger.error(f"Error calculating social proof for production {production.id}: {str(e)}")
-
-            return {
-                # 'totalScans': 0,  # REMOVED - Private analytics
-                "reviewsCount": 0,  # Actual review count - OK for consumers
-                # 'totalOffsets': 0.0,  # Keep this - it's transparency data
-                # 'totalUsers': 0,  # REMOVED - Private analytics
-                "averageRating": 0.0,  # Community feedback - OK for consumers
-                # 'companyScans': 0,  # REMOVED - Private analytics
-                # 'confidenceScore': 0.0,  # REMOVED - Internal scoring
-                # 'transparencyScore': 0.0,  # REMOVED - Internal scoring
-                # 'publicViews': 0,  # REMOVED - Private analytics
-                # 'uniqueVisitors': 0,  # REMOVED - Private analytics
-                "communityEngagement": "growing",  # Qualitative trust indicator
-                "verifiedByConsumers": False,  # Boolean trust indicator
-                "farmHistoryYears": 0,
-            }
-
-    def _get_relatable_footprint(self, net_footprint):
-        """Convert net footprint to relatable comparison"""
-        try:
-            if net_footprint <= 0:
-                return "Carbon neutral or negative - excellent!"
-            elif net_footprint < 10:
-                return f"Equivalent to {net_footprint:.1f} kg CO2 - like driving {net_footprint * 2.3:.0f} miles"
-            elif net_footprint < 100:
-                return f"Equivalent to {net_footprint:.0f} kg CO2 - like {net_footprint / 8.9:.1f} gallons of gasoline"
-            else:
-                return f"Equivalent to {net_footprint:.0f} kg CO2 - significant environmental impact"
-        except Exception:
-            return "Carbon footprint data being calculated"
-
-    def _check_epa_factors_based(self, production):
-        """Check if production has carbon data using EPA/USDA emission factors"""
-        try:
-            from carbon.models import CarbonEntry
-
-            return CarbonEntry.objects.filter(production=production, usda_factors_based=True).exists()
-        except Exception:
-            return False
-
-    def _calculate_trust_score(
-        self, production, carbon_score, industry_percentile, blockchain_verification, social_proof
-    ):
-        """Calculate comprehensive trust score based on multiple factors"""
-        try:
-            from history.models import HistoryScan
-
-            trust_score = 40  # Base score
-
-            # EPA/USDA Emission Factors Used (25 points)
-            if self._check_epa_factors_based(production):
-                trust_score += 25
-
-            # Blockchain Verification (20 points)
-            if blockchain_verification and blockchain_verification.get("verified"):
-                trust_score += 20
-
-            # Reputation/Rating (10 points)
-            reputation = float(production.reputation) if production.reputation else 4.5
-            if reputation >= 4.0:
-                trust_score += 10
-            elif reputation >= 3.5:
-                trust_score += 7
-            elif reputation >= 3.0:
-                trust_score += 4
-
-            # Carbon Performance (15 points)
-            if carbon_score >= 80:
-                trust_score += 15
-            elif carbon_score >= 70:
-                trust_score += 12
-            elif carbon_score >= 60:
-                trust_score += 8
-            elif carbon_score >= 50:
-                trust_score += 5
-
-            # Industry Performance (10 points)
-            if industry_percentile >= 80:
-                trust_score += 10
-            elif industry_percentile >= 60:
-                trust_score += 7
-            elif industry_percentile >= 40:
-                trust_score += 4
-
-            # Social Proof/Community Trust (10 points)
-            # Get scan count internally for trust calculation (not exposed to consumers)
-            total_scans = HistoryScan.objects.filter(history=production).count()
-            if total_scans >= 100:
-                trust_score += 10
-            elif total_scans >= 50:
-                trust_score += 7
-            elif total_scans >= 25:
-                trust_score += 5
-            elif total_scans >= 10:
-                trust_score += 3
-
-            # Data Completeness Bonus (5 points)
-            # Award points for complete data transparency
-            data_completeness = 0
-            if production.start_date and production.finish_date:
-                data_completeness += 1
-            if hasattr(production, "timeline") or hasattr(production, "events"):
-                events = getattr(production, "timeline", getattr(production, "events", []))
-                if events and len(events) > 5:
-                    data_completeness += 1
-            if production.parcel and production.parcel.polygon:
-                data_completeness += 1
-            if production.parcel and production.parcel.establishment:
-                establishment = production.parcel.establishment
-                if establishment.latitude and establishment.longitude:
-                    data_completeness += 1
-                if establishment.description or establishment.about:
-                    data_completeness += 1
-
-            trust_score += data_completeness  # Up to 5 bonus points
-
-            # Cap at 100%
-            trust_score = min(trust_score, 100)
-
-            return {
-                "overall": trust_score,
-                "breakdown": {
-                    "epa_factors_based": 25 if self._check_epa_factors_based(production) else 0,
-                    "blockchain_verification": (
-                        20 if blockchain_verification and blockchain_verification.get("verified") else 0
-                    ),
-                    "reputation": (
-                        10 if reputation >= 4.0 else (7 if reputation >= 3.5 else (4 if reputation >= 3.0 else 0))
-                    ),
-                    "carbon_performance": (
-                        15
-                        if carbon_score >= 80
-                        else (
-                            12
-                            if carbon_score >= 70
-                            else (8 if carbon_score >= 60 else (5 if carbon_score >= 50 else 0))
-                        )
-                    ),
-                    "industry_performance": (
-                        10
-                        if industry_percentile >= 80
-                        else (7 if industry_percentile >= 60 else (4 if industry_percentile >= 40 else 0))
-                    ),
-                    "social_proof": (
-                        10
-                        if total_scans >= 100
-                        else (7 if total_scans >= 50 else (5 if total_scans >= 25 else (3 if total_scans >= 10 else 0)))
-                    ),
-                    "data_completeness": data_completeness,
-                },
-                "factors": {
-                    "usda_factors_used": self._check_epa_factors_based(production),
-                    "blockchain_verified": blockchain_verification and blockchain_verification.get("verified"),
-                    "reputation_score": reputation,
-                    "carbon_score": carbon_score,
-                    "industry_percentile": industry_percentile,
-                    # 'total_scans': total_scans,  # REMOVED - internal analytics
-                    "community_engagement": (
-                        "high" if total_scans >= 100 else ("medium" if total_scans >= 25 else "growing")
-                    ),
-                    "data_completeness_score": data_completeness,
-                },
-            }
-        except Exception as e:
-            logger.error(f"Error calculating trust score: {e}")
-            return {
-                "overall": 50,  # Default safe score
-                "breakdown": {},
-                "factors": {},
-                "error": "Trust score calculation failed",
-            }
-
     # Helper methods for enhanced QR endpoint
 
-    def _legacy_carbon_score(self, production):
-        """Calculate legacy carbon score for backward compatibility."""
-        try:
-            # Use existing carbon entry calculation
-            carbon_entries = CarbonEntry.objects.filter(production=production)
-            if not carbon_entries.exists():
-                return 50
-
-            total_emissions = carbon_entries.filter(type="emission").aggregate(Sum("amount"))["amount__sum"] or 0
-            total_offsets = (
-                carbon_entries.filter(type="offset").aggregate(Sum("effective_amount"))["effective_amount__sum"] or 0
-            )
-
-            return CarbonEntry.calculate_carbon_score(total_emissions, total_offsets)
-        except:
-            return 50
-
-    def _get_carbon_summary(self, production, establishment):
-        """Get carbon data summary for production."""
-        try:
-            carbon_entries = CarbonEntry.objects.filter(production=production)
-
-            total_emissions = carbon_entries.filter(type="emission").aggregate(Sum("amount"))["amount__sum"] or 0
-            total_offsets = (
-                carbon_entries.filter(type="offset").aggregate(Sum("effective_amount"))["effective_amount__sum"] or 0
-            )
-            net_footprint = total_emissions - total_offsets
-
-            carbon_score = CarbonEntry.calculate_carbon_score(total_emissions, total_offsets)
-            usda_factors_used = carbon_entries.filter(usda_factors_based=True).exists()
-
-            return {
-                "carbon_score": carbon_score,
-                "total_emissions": float(total_emissions),
-                "total_offsets": float(total_offsets),
-                "net_footprint": float(net_footprint),
-                "usda_factors_used": usda_factors_used,
-            }
-        except:
-            return {
-                "carbon_score": 50,
-                "total_emissions": 0.0,
-                "total_offsets": 0.0,
-                "net_footprint": 0.0,
-                "usda_factors_used": False,
-            }
-
-    def _get_blockchain_verification(self, production, carbon_data):
-        """Get blockchain verification data."""
-        try:
-            from .services.blockchain import blockchain_service
-
-            verification_result = blockchain_service.verify_carbon_record(production.id)
-
-            if verification_result.get("verified", False):
-                return {
-                    "verified": True,
-                    "record_hash": verification_result.get("record_hash"),
-                    "verification_url": f"https://etherscan.io/tx/{verification_result.get('transaction_hash', '')}",
-                    "network": "ethereum",
-                    "verification_date": timezone.now().isoformat(),
-                }
-            else:
-                # Fallback verification for demo
-                import hashlib
-
-                return {
-                    "verified": True,
-                    "transaction_hash": f'0x{hashlib.sha256(f"fallback_{production.id}".encode()).hexdigest()}',
-                    "verification_url": f'https://etherscan.io/tx/0x{hashlib.sha256(f"fallback_{production.id}".encode()).hexdigest()}',
-                    "network": "ethereum_testnet",
-                    "verification_date": timezone.now().isoformat(),
-                    "fallback_data": True,
-                }
-        except:
-            return {"verified": False, "error": "Blockchain verification unavailable"}
-
-    def _get_primary_equivalency(self, equivalency_metrics):
-        """Get primary equivalency for legacy relatableFootprint field."""
-        try:
-            primary_metric = equivalency_metrics.get("primary_metric", {})
-            if primary_metric:
-                value = primary_metric.get("value", 0)
-                description = primary_metric.get("description", "Unknown equivalency")
-                return f"{value} {description}"
-            return "Carbon neutral production"
-        except:
-            return "Data being calculated"
-
-    def _generate_enhanced_badges(self, transparency_data, carbon_data):
-        """Generate badges based on transparency and carbon data."""
-        badges = []
-
-        # Carbon grade badges
-        grade = transparency_data.get("carbonGrade", "C")
-        if grade in ["A+", "A", "A-"]:
-            badges.append(
-                {
-                    "id": "excellence",
-                    "name": f"Carbon Excellence ({grade})",
-                    "description": "Exceptional carbon performance",
-                    "icon": "star",
-                }
-            )
-        elif grade in ["B+", "B"]:
-            badges.append(
-                {
-                    "id": "sustainable",
-                    "name": f"Sustainable Producer ({grade})",
-                    "description": "Above average sustainability",
-                    "icon": "leaf",
-                }
-            )
-
-        # Trust badges
-        trust_indicators = transparency_data.get("trustIndicators", {})
-        if trust_indicators.get("overall_score", 0) >= 80:
-            badges.append(
-                {
-                    "id": "verified_transparent",
-                    "name": "Verified & Transparent",
-                    "description": "High standards of verification and transparency",
-                    "icon": "shield",
-                }
-            )
-
-        # EPA/USDA emission factors badge
-        if carbon_data.get("usda_factors_used", False):
-            badges.append(
-                {
-                    "id": "epa_factors_based",
-                    "name": "EPA/USDA-Sourced",
-                    "description": "Carbon calculations use EPA/USDA-published emission factors",
-                    "icon": "certificate",
-                }
-            )
-
-        return badges
-
-    def _get_farmer_info(self, establishment):
-        """Get farmer/establishment information."""
-        if not establishment:
-            return {"name": "Unknown Farm", "location": "Location not available"}
-
-        return {
-            "name": establishment.name,
-            "location": (
-                f"{establishment.city}, {establishment.state}" if establishment.city else "Location not available"
-            ),
-            "description": establishment.about[:200] if establishment.about else None,
-            "id": establishment.id,
-        }
-
-    def _get_product_info(self, production):
-        """Get product information."""
-        return {
-            "id": production.id,
-            "name": production.product.name if production.product else "Product",
-            "reputation": float(production.reputation) if production.reputation else 4.5,
-        }
-
-    def _get_parcel_info(self, production):
-        """Get parcel information."""
-        if not production.parcel:
-            return None
-
-        establishment = production.parcel.establishment
-        return {
-            "name": production.parcel.name,
-            "location": (
-                f"{establishment.city}, {establishment.state}" if establishment and establishment.city else None
-            ),
-            "area": float(production.parcel.area) if production.parcel.area else None,
-        }
-
-    def _get_carbon_timeline(self, production):
-        """Get carbon timeline data for visualization."""
-        try:
-            # Get carbon events from production
-            carbon_entries = CarbonEntry.objects.filter(production=production).order_by("timestamp")
-            timeline = []
-
-            for idx, entry in enumerate(carbon_entries[:10]):  # Limit to 10 entries
-                timeline.append(
-                    {
-                        "id": f"carbon_{idx}_{entry.id}",
-                        "type": "carbon.emission" if entry.type == "emission" else "carbon.offset",
-                        "date": entry.timestamp.isoformat(),
-                        "description": entry.description or f"{entry.type.title()} entry",
-                        "amount": float(entry.amount),
-                        "source": entry.source.name if entry.source else "Unknown source",
-                        "verified": entry.usda_factors_based,
-                        "index": idx,
-                    }
-                )
-
-            return timeline
-        except:
-            return []
+    # `_generate_enhanced_badges()` was deleted 2026-08-04. It had ZERO callers and minted
+    # consumer-facing sustainability labels out of self-computed scores: "Carbon Excellence (A)"
+    # and "Sustainable Producer (B)" keyed off `carbonGrade` (an A+-to-F ladder from thresholds
+    # named USDAGrading, which implies a USDA grading scheme that does not exist), plus
+    # "Verified & Transparent" awarded whenever Trazo's own trust score cleared 80.
+    #
+    # A badge Trazo invents, grades itself against, and shows to a shopper is the self-created
+    # sustainability label banned by EU ECGT 2024/825 (live 2026-09-27) and a general-benefit
+    # claim under FTC 16 CFR 260.6 -- and "Verified" on farmer-reported data is precisely the
+    # word the compliance rules reserve for USDA Organic Integrity Database matches.
+    # Dead code one call site away from being live. Do not reintroduce.
 
     @action(detail=True, methods=["get"], url_path="complete")
     def complete_summary(self, request, pk=None):
@@ -6310,7 +4388,17 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     "sustainability_practices": parcel.get_sustainability_practices(),
                     "consumer_story": parcel.get_consumer_story(),
                     "primary_crop": parcel.get_primary_crop(),
-                    "transparency_score": parcel.get_transparency_score(),
+                    # `transparency_score` is deliberately NOT exposed here. It is a
+                    # self-assigned 0-100 grade and a PRODUCER-dashboard KPI. Publishing it
+                    # on an anonymous consumer endpoint is the self-created
+                    # sustainability-label class banned by EU ECGT 2024/825 (live
+                    # 2026-09-27) and an FTC 16 CFR 260.6 general-benefit risk.
+                    # The transparency endpoint already strips it
+                    # (transparency_views.py) — this endpoint was the surviving hole, and
+                    # it is anonymous AND integer-pk enumerable. See
+                    # .claude/rules/transparency-first.md: the score lives on the producer
+                    # dashboard, consumers get factual EVIDENCE (documented-practice counts,
+                    # photos, third-party certs) instead.
                     "transparency_ready": parcel.is_transparency_ready(),
                     # Location and address
                     "address": getattr(parcel, "address", ""),
@@ -6758,6 +4846,7 @@ class CarbonOffsetViewSet(viewsets.ViewSet):
 class ProductionSerializer(serializers.ModelSerializer):
     transparency_score = serializers.SerializerMethodField()
     carbon_footprint = serializers.SerializerMethodField()
+    events_count = serializers.SerializerMethodField()
 
     class Meta:
         model = History
@@ -6770,7 +4859,34 @@ class ProductionSerializer(serializers.ModelSerializer):
             "published",
             "transparency_score",
             "carbon_footprint",
+            "events_count",
         ]
+
+    # Single source of truth for the event relations: CarbonProductionViewSet.get_queryset
+    # prefetches exactly this tuple, so counting below reads the prefetch cache instead of
+    # issuing a query per production. Keeping one list means the prefetch cannot silently
+    # drift out of sync with what is counted.
+    EVENT_RELATIONS = (
+        "history_productionevent_events",
+        "history_chemicalevent_events",
+        "history_soilmanagementevent_events",
+        "history_pestmanagementevent_events",
+        "history_weatherevent_events",
+        "history_generalevent_events",
+        "history_equipmentevent_events",
+        "history_businessevent_events",
+    )
+
+    def get_events_count(self, obj):
+        """How many events have been logged, regardless of score.
+
+        An in-progress season has no transparency score yet — this is what the dashboard
+        shows instead, so a season underway reads as "3 events logged" rather than "0%".
+
+        Uses getattr with no default on purpose: a renamed relation should raise here rather
+        than silently undercount a farmer's season.
+        """
+        return sum(len(getattr(obj, relation).all()) for relation in self.EVENT_RELATIONS)
 
     def get_transparency_score(self, obj):
         """Calculate transparency score using the same system as consumer pages"""
@@ -6823,20 +4939,31 @@ class ProductionSerializer(serializers.ModelSerializer):
 
 
 class CarbonProductionViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = History.objects.all()
-    permission_classes = [SecurePublicDataPermission]
+    """Producer-only flat production list.
+
+    This endpoint exposes ``transparency_score`` — a SELF-GRADED metric that is a
+    producer-dashboard KPI only. It must never be readable anonymously: a self-assigned
+    sustainability grade shown outside the farm's own dashboard is the self-created
+    sustainability-label class banned by EU ECGT 2024/825 and an FTC 16 CFR 260.6 risk.
+    It previously ran under an anonymous permission whose object check was a no-op, which
+    served every tenant's productions (including unpublished drafts) to unauthenticated
+    callers. Keep this authenticated and company-scoped.
+    """
+
+    queryset = History.objects.none()
+    permission_classes = [IsAuthenticated]
     serializer_class = ProductionSerializer
 
     def get_queryset(self):
-        """Filter productions by establishment"""
-        queryset = History.objects.select_related("parcel__establishment").prefetch_related(
-            "history_chemicalevent_events",
-            "history_productionevent_events",
-            "history_generalevent_events",
-            "history_weatherevent_events",
-            "history_equipmentevent_events",
-            "history_soilmanagementevent_events",
-            "history_pestmanagementevent_events",
+        """Return only productions belonging to the requesting user's companies."""
+        user = self.request.user
+        if not user.is_authenticated:
+            return History.objects.none()
+
+        queryset = (
+            History.objects.select_related("parcel__establishment")
+            .prefetch_related(*ProductionSerializer.EVENT_RELATIONS)
+            .filter(parcel__establishment__company__in=user.companies.all())
         )
 
         establishment_id = self.request.query_params.get("establishment")
@@ -6848,7 +4975,7 @@ class CarbonProductionViewSet(viewsets.ReadOnlyModelViewSet):
             except (ValueError, TypeError):
                 pass
 
-        return queryset
+        return queryset.distinct()
 
 
 # IoT Integration and Automation Endpoints
@@ -9253,55 +7380,15 @@ def get_regional_benchmark(request, establishment_id):
         farm_carbon_intensity = float(request.GET.get("carbon_intensity", 1.0))
         crop_type = request.GET.get("crop_type", "tree_fruit")
 
-        # Extract state from establishment location
-        location = getattr(establishment, "location", "")
-        state = "CA"  # Default to California
+        # Read the state directly. The previous code parsed `establishment.location`
+        # — a field that does not exist on the model — so it was always "" and the
+        # whole parser below it was unreachable, leaving every farm in the country
+        # benchmarked as California. Its city heuristic also matched the substring
+        # "SAN", which would have mapped San Antonio TX and Sanford FL to CA.
+        state = resolve_establishment_state(establishment)
 
-        if location:
-            location_upper = location.upper()
-            # Common state mappings
-            state_mappings = {
-                "CALIFORNIA": "CA",
-                "CA": "CA",
-                "IOWA": "IA",
-                "IA": "IA",
-                "ILLINOIS": "IL",
-                "IL": "IL",
-                "FLORIDA": "FL",
-                "FL": "FL",
-                "TEXAS": "TX",
-                "TX": "TX",
-                "NEBRASKA": "NE",
-                "NE": "NE",
-                "KANSAS": "KS",
-                "KS": "KS",
-            }
-
-            # Check for state names or codes in the location string
-            for state_name, state_code in state_mappings.items():
-                if state_name in location_upper:
-                    state = state_code
-                    break
-
-            # Check for common California cities/regions if no state found
-            if state == "CA":  # Still default
-                ca_indicators = [
-                    "FRESNO",
-                    "SACRAMENTO",
-                    "BAKERSFIELD",
-                    "MODESTO",
-                    "STOCKTON",
-                    "SALINAS",
-                    "SANTA",
-                    "SAN",
-                    "LOS ANGELES",
-                    "RIVERSIDE",
-                    "CENTRAL VALLEY",
-                ]
-                if any(indicator in location_upper for indicator in ca_indicators):
-                    state = "CA"
-
-        # Get benchmark comparison
+        # Get benchmark comparison. `state=None` falls through to the "unknown"
+        # benchmark rather than borrowing California's.
         benchmark = enhanced_usda.get_usda_benchmark_comparison(farm_carbon_intensity, crop_type, state)
 
         # Add context
@@ -9310,7 +7397,8 @@ def get_regional_benchmark(request, establishment_id):
                 "establishment_name": establishment.name,
                 "crop_type": crop_type,
                 "state": state,
-                "location": location,
+                "regional_data_available": state is not None and benchmark.get("level") != "unknown",
+                "location": establishment.get_location(),
                 "carbon_intensity": farm_carbon_intensity,
             }
         )
@@ -9557,11 +7645,19 @@ def get_usda_benchmark_comparison(request):
     try:
         farm_carbon_intensity = float(request.query_params.get("carbon_intensity", 0))
         crop_type = request.query_params.get("crop_type", "corn")
-        state = request.query_params.get("state", "CA")
+        # No "CA" default: benchmarking an unspecified farm against California
+        # returns a confident number for the wrong region.
+        state = normalize_state(request.query_params.get("state"))
 
         if farm_carbon_intensity <= 0:
             return Response(
                 {"error": "carbon_intensity parameter is required and must be greater than 0"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if state is None:
+            return Response(
+                {"error": "state parameter is required and must be a US state, for example CA"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

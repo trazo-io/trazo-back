@@ -227,8 +227,20 @@ class OSPActionPreconditionTests(TestCase):
         )
 
     def _full_sections(self):
-        # 500 chars > 400 material floor — passes submit gate.
-        text = "Real OSP narrative content. " * 20
+        # Must clear BOTH submit-gate bars: ≥ 400 chars and not padding.
+        # The old fixture was "Real OSP narrative content. " * 20 — four words
+        # repeated twenty times, which is exactly what looks_like_padding
+        # rejects. A fixture that could not itself be submitted was asserting
+        # that submission succeeds.
+        text = (
+            "Sixty acres of certified organic tree crops on three blocks: Hass avocado, "
+            "Valencia orange, and Nonpareil almond. Fertility comes from composted green "
+            "waste banded under the canopy each autumn plus fish emulsion through the drip "
+            "at bloom. Winter cover crops of triticale and crimson clover are drilled into "
+            "the row middles in October and mowed flat in March. Pest pressure is scouted "
+            "weekly against UC IPM thresholds before any material is applied, and a "
+            "thirty-foot mowed buffer separates us from the conventional lemon block."
+        )
         return {k: {"narrative": text, "last_updated": "2026-04-14"} for k in OSP_SECTION_KEYS}
 
     def test_submit_rejects_empty_osp(self):
@@ -262,6 +274,31 @@ class OSPActionPreconditionTests(TestCase):
         self.assertEqual(res.status_code, 200, res.content)
         osp.refresh_from_db()
         self.assertEqual(osp.status, "submitted")
+
+    def test_submit_rejects_padded_narratives_that_clear_the_char_floor(self):
+        """A 602-char wall of "Test Test Test…" cleared the length floor, reached
+        status='submitted', and could then be activated — while the audit
+        dossier, which DOES check padding, kept stamping the same plan
+        DRAFT / DO-NOT-SUBMIT. Both gates now use one detector.
+        """
+        padded = "Test " * 120  # 600 chars — comfortably over the 400 floor
+        self.assertGreaterEqual(len(padded), 400)
+        sections = {k: {"narrative": padded, "last_updated": None} for k in OSP_SECTION_KEYS}
+        osp = self._make_osp(sections=sections)
+        res = self.client.post(self._submit_url(osp.id))
+        self.assertEqual(res.status_code, 400, res.content)
+        self.assertEqual(len(res.json()["missing_sections"]), 6)
+        osp.refresh_from_db()
+        self.assertEqual(osp.status, "draft")
+
+    def test_submit_accepts_a_terse_but_varied_narrative_over_the_floor(self):
+        """Guard the other direction: the padding check must not reject real
+        prose that happens to reuse a domain term. Only lexical monotony fails.
+        """
+        sections = self._full_sections()
+        osp = self._make_osp(sections=sections)
+        res = self.client.post(self._submit_url(osp.id))
+        self.assertEqual(res.status_code, 200, res.content)
 
     def test_activate_requires_submitted_status(self):
         osp = self._make_osp(sections=self._full_sections(), status="draft")

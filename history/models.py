@@ -4,7 +4,7 @@ import uuid
 from io import BytesIO
 
 from django.conf import settings
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.core.files.base import ContentFile
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
@@ -305,7 +305,7 @@ class History(models.Model):
         help_text="Scanned clean-transport affidavit for the off-farm transfer",
     )
 
-    # NOP Compliance: Record Retention (7 CFR 205.103(b)(4))
+    # NOP Compliance: Record Retention (7 CFR 205.103(b)(3))
     # Auto-set to finish_date + 5 years. Prevents deletion within retention period.
     retention_until = models.DateField(
         blank=True,
@@ -322,7 +322,7 @@ class History(models.Model):
 
             raise ValidationError(
                 f"Cannot delete: NOP requires record retention until {self.retention_until}. "
-                f"Records must be maintained for 5 years per 7 CFR 205.103(b)(4)."
+                f"Records must be maintained for 5 years per 7 CFR 205.103(b)(3)."
             )
         super().delete(*args, **kwargs)
 
@@ -728,7 +728,7 @@ class History(models.Model):
         self.quality_grade = history_data.get("quality_grade")
         self.harvest_method = history_data.get("harvest_method")
 
-        # NOP 7 CFR 205.103(b)(4): 5-year record retention
+        # NOP 7 CFR 205.103(b)(3): 5-year record retention
         from datetime import timedelta
 
         if self.finish_date:
@@ -874,12 +874,23 @@ class CommonEvent(models.Model):
         abstract = True
 
     def __str__(self) -> str:
-        if self.history is None:
+        # django-auditlog's post_delete receiver calls smart_str(instance) — i.e. this
+        # method — while a cascade delete is already in flight, at which point the parent
+        # History (or its Parcel/Establishment) row can be gone while this instance is
+        # still in memory. The FK descriptor then raises History.DoesNotExist instead of
+        # returning None, and because it fires inside a signal handler the exception
+        # aborts the entire delete. That is what broke `--reset` on the demo seeders.
+        # __str__ must never raise.
+        try:
+            history = self.history
+            if history is None:
+                return "-"
+            parcel = history.parcel
+            if parcel is not None:
+                return parcel.name + " - " + parcel.establishment.name
+            return history.name
+        except ObjectDoesNotExist:
             return "-"
-        if self.history.parcel is not None:
-            return self.history.parcel.name + " - " + self.history.parcel.establishment.name
-        else:
-            return self.history.name
 
 
 class WeatherEvent(CommonEvent):
@@ -1098,6 +1109,48 @@ class ChemicalEvent(CommonEvent):
             "N requirement (§ 205.602 annotation)."
         ),
     )
+    # §E-3 — Micronutrients (FE subtype). NOP § 205.601(j)(6) allows synthetic micronutrients
+    # ONLY where a documented soil/plant-tissue deficiency exists, and prohibits their use as a
+    # defoliant, herbicide or desiccant. Recording WHICH micronutrient and at what rate is what
+    # lets the audit export pair the application with its deficiency record (a soil `ST` or
+    # lab-analysis `LA` event) — without both halves the application reads as unsupported at
+    # inspection. UC Davis 2024 organic-almond study: zinc sulfate 10 lb/ac and 20% boron at
+    # 2 lb/ac foliar post-harvest, plus fertigated boron.
+    MICRONUTRIENT_CHOICES = [
+        ("zinc", "Zinc (Zn)"),
+        ("boron", "Boron (B)"),
+        ("manganese", "Manganese (Mn)"),
+        ("iron", "Iron (Fe)"),
+        ("copper", "Copper (Cu)"),
+        ("calcium", "Calcium (Ca)"),
+        ("magnesium", "Magnesium (Mg)"),
+        ("sulfur", "Sulfur (S)"),
+        ("other", "Other"),
+    ]
+    micronutrient_type = models.CharField(
+        max_length=20,
+        choices=MICRONUTRIENT_CHOICES,
+        blank=True,
+        null=True,
+        help_text=(
+            "Micronutrient applied (FE subtype). Permitted under § 205.601(j)(6) only with a "
+            "documented deficiency — log the soil test or lab analysis that shows it."
+        ),
+    )
+    micronutrient_rate = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        null=True,
+        blank=True,
+        help_text="Rate of the micronutrient applied, in micronutrient_rate_unit.",
+    )
+    micronutrient_rate_unit = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        help_text="Unit for micronutrient_rate, e.g. lb/ac, kg/ha, gal/ac, ppm.",
+    )
+
     application_method_structured = models.CharField(
         max_length=20,
         choices=APPLICATION_METHOD,
@@ -1854,6 +1907,36 @@ class ProductionEvent(CommonEvent):
         help_text="Reference to cleaning SOP or protocol used (e.g., SOP-CLEAN-001)",
     )
 
+    # §E-5 — Custom operators and the cleaning event that covers a shared-equipment operation.
+    #
+    # In the UC Davis 2024 organic-almond study, cover-crop seeding, flame weeding, brush
+    # shredding, winter sanitation, harvest and hulling are all custom-hired, and custom harvest
+    # equipment moves between conventional and organic orchards on the same day. That is exactly
+    # the § 205.272 commingling exposure — but the operation had no way to say "this pass was run
+    # by a contractor" or "this is the cleaning that preceded it".
+    #
+    # Deliberately NOT a Custom Operator entity: the operator's NAME already has a home in
+    # `performed_by`, and a contact/rate/scheduling record would be farm-management drift.
+    operator_is_custom = models.BooleanField(
+        default=False,
+        help_text=(
+            "Whether a custom operator (contractor) performed this operation with their own "
+            "equipment. Their name goes in performed_by."
+        ),
+    )
+    equipment_cleaning_event = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="operations_covered",
+        help_text=(
+            "The Equipment Maintenance (EM) cleaning event that covers this operation "
+            "(7 CFR 205.272). Linking it turns the page-1 contamination-prevention row from an "
+            "aggregate count into per-operation evidence."
+        ),
+    )
+
     # NOP Compliance: Post-Harvest Sanitizer Detail (7 CFR 205.272 + § 205.605)
     # Chlorine/peracetic/hydrogen peroxide etc. used in post-harvest brush
     # wash require concentration + rinse-step documentation + a § 205.605
@@ -1936,6 +2019,28 @@ class ProductionEvent(CommonEvent):
         # Validate equipment_hours - cannot be negative
         if self.equipment_hours is not None and self.equipment_hours < 0:
             errors["equipment_hours"] = "Equipment hours cannot be negative"
+
+        # §E-5 — the cleaning link must be capable of being evidence.
+        # A cleaning performed AFTER the organic pass does not protect that pass (§ 205.272), and
+        # a link to a non-cleaning event or to another production's record is not a record of
+        # this one. Better to refuse the link than to print a page-1 PASS that rests on it.
+        cleaning = self.equipment_cleaning_event
+        if cleaning is not None:
+            if cleaning.pk == self.pk:
+                errors["equipment_cleaning_event"] = "An operation cannot be its own cleaning record."
+            elif cleaning.type != self.EQUIPMENT_MAINTENANCE:
+                errors["equipment_cleaning_event"] = (
+                    "The linked event must be an Equipment Maintenance (EM) cleaning event."
+                )
+            elif self.history_id and cleaning.history_id != self.history_id:
+                errors["equipment_cleaning_event"] = (
+                    "The cleaning event must belong to the same production as this operation."
+                )
+            elif self.date and cleaning.date and cleaning.date > self.date:
+                errors["equipment_cleaning_event"] = (
+                    "The cleaning event is dated after this operation, so it cannot be the "
+                    "cleaning that protected it (§ 205.272). Link the cleaning that preceded it."
+                )
 
         # Business logic validation: reasonable area coverage
         if self.area_covered and self.area_covered > 1000:  # More than 1000 hectares
@@ -2458,6 +2563,12 @@ class SoilManagementEvent(CommonEvent):
     # Biodiversity / habitat (GTM-v3): documented habitat PRACTICES — facts only, never a score.
     HABITAT_DEVELOPMENT = "HD"  # planted/established habitat (hedgerow, insectary, riparian, living floor)
     NESTING_SHELTER = "NS"  # installed wildlife structures (owl/raptor/bee/bat boxes, insect hotel)
+    # §E-2 — Lab analysis of any sampled matrix. ONE subtype with a `sample_matrix` enum rather
+    # than one subtype per matrix: the record a certifier reads is identical (lab, sample id,
+    # report date, results); only what was sampled differs. UC Davis 2024 organic-almond study:
+    # leaf samples in July at 1/20 ac, hull samples at harvest at 1/40 ac, four compost samples
+    # per delivery, soil every other year at three depths.
+    LAB_ANALYSIS = "LA"
 
     SOIL_TYPE_CHOICES = [
         (SOIL_TEST, "Soil Test"),
@@ -2469,6 +2580,16 @@ class SoilManagementEvent(CommonEvent):
         (GRAZING, "Grazing Management"),
         (HABITAT_DEVELOPMENT, "Habitat Development"),
         (NESTING_SHELTER, "Nesting / Shelter Structures"),
+        (LAB_ANALYSIS, "Lab Analysis"),
+    ]
+
+    SAMPLE_MATRIX_CHOICES = [
+        ("soil", "Soil"),
+        ("leaf", "Leaf tissue"),
+        ("petiole", "Petiole"),
+        ("hull", "Hull"),
+        ("compost", "Compost"),
+        ("water", "Irrigation water"),
     ]
 
     type = models.CharField(max_length=2, choices=SOIL_TYPE_CHOICES, default=SOIL_TEST)
@@ -2492,7 +2613,22 @@ class SoilManagementEvent(CommonEvent):
         help_text="Manufacturer / supplier of the amendment product.",
     )
     test_results = models.JSONField(null=True, blank=True)  # Store complex test data
+    # §E-2 — WHAT was sampled. The results themselves stay in `test_results` (where the soil-test
+    # form has always written them, so historical ST rows keep working); the read serializer
+    # flattens that JSON into named fields so the display registry and the PDF can reach them.
+    sample_matrix = models.CharField(
+        max_length=20,
+        choices=SAMPLE_MATRIX_CHOICES,
+        blank=True,
+        null=True,
+        help_text="Material submitted to the lab (LA subtype): soil, leaf, petiole, hull, compost or water.",
+    )
     carbon_sequestration_potential = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
+    # The farmer's own words, kept apart from `description`. `description` is NOT NULL and is
+    # written by the 328+ AI templates as well as by hand, so it cannot be quoted to shoppers as
+    # a grower's voice. Five of the seven event models already had this column; soil and pest did
+    # not, which is why a cover-crop or trap-monitoring note could never reach the consumer card.
+    observation = models.TextField(blank=True, null=True)
     extra_data = models.JSONField(blank=True, null=True)
 
     # Biodiversity / habitat fields (for HD / NS subtypes). Facts only — free-text species/notes
@@ -2687,6 +2823,46 @@ class SoilManagementEvent(CommonEvent):
         blank=True,
         null=True,
         help_text="Whether this amendment/input is approved for organic farming (7 CFR 205.203(b))",
+    )
+
+    # Nitrogen content of the amendment, % by weight AS APPLIED.
+    #
+    # Two things depend on this and both were silently incomplete without it:
+    #
+    #  1. CARBON. Post-application field N2O depends on the nitrogen applied, whatever
+    #     carried it. ChemicalEvent fertilisers declare N via nitrogen_percentage, but soil
+    #     amendments had no N field at all — so on an organic orchard, where compost is
+    #     usually the LARGEST nitrogen source, the biggest contributor to field N2O was
+    #     counted as zero. (Pilot: 170 t of compost at ~1% N is ~1,540 kg N, roughly 25x
+    #     the nitrogen in the season's fertigation.)
+    #
+    #  2. CALIFORNIA ILRP. Every irrigated CA grower files an Irrigation & Nitrogen
+    #     Management Plan summary reporting total nitrogen APPLIED from all sources and
+    #     nitrogen REMOVED in the harvested crop. "All sources" includes compost and
+    #     manure, so a total built only from ChemicalEvent under-reports the filing.
+    #
+    # BASIS MATTERS — read this before changing the help text.
+    #
+    # Compost analyses report N on BOTH an "as-is / as-received" basis and a "dry weight"
+    # basis, and compost is typically 30-50% moisture, so the two differ by roughly 2x.
+    # The amendment_amount a grower enters is the delivered (wet) tonnage off the weigh
+    # ticket, so the N% must be on the SAME as-received basis or the computed kg of N is
+    # out by that factor. The UI says so explicitly rather than leaving it to be guessed.
+    #
+    # Typical DRY-weight values (WSU Tree Fruit, "Compost Considerations"): green/yard
+    # waste 0.8-2.0%, manure-based 1-3% (avg ~1.5%). At ~40% moisture those correspond to
+    # roughly 0.5-1.2% and 0.6-1.8% AS RECEIVED, which is what the help text quotes.
+    amendment_nitrogen_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=(
+            "Nitrogen content of the amendment, % by weight ON THE SAME AS-RECEIVED (wet) "
+            "BASIS as the tonnage entered above — use the 'as is' column of the supplier's "
+            "analysis, not the 'dry weight' column (they differ by ~2x). Drives field N2O "
+            "and the CA ILRP total-nitrogen-applied figure."
+        ),
     )
 
     # NOP Compliance: Compost Temperature Tracking (7 CFR 205.203(c)(2))
@@ -2901,6 +3077,17 @@ class SoilManagementEvent(CommonEvent):
                     f"Grazing duration ({self.grazing_duration_days} days) exceeds one year. Please verify."
                 )
 
+        # §E-2 — Lab analysis validation. A lab record whose matrix is unknown cannot support
+        # anything: a certifier reading a micronutrient application needs to know the deficiency
+        # was shown in LEAF tissue or in SOIL, and the two are not interchangeable. The results
+        # themselves are not forced — a farmer may log the sample on the day it ships and fill in
+        # the numbers when the report arrives.
+        if self.type == self.LAB_ANALYSIS and not self.sample_matrix:
+            errors["sample_matrix"] = (
+                "Select what was sampled (soil, leaf, petiole, hull, compost or water). "
+                "A lab analysis without its matrix cannot support a deficiency claim."
+            )
+
         # Transportation efficiency check
         if self.transportation_distance and self.transportation_distance > 500:
             errors["transportation_distance"] = (
@@ -2918,6 +3105,31 @@ class SoilManagementEvent(CommonEvent):
         ):
             errors["manure_harvest_interval"] = (
                 "Harvest interval (90 or 120 days) is required when a raw manure application date is specified."
+            )
+
+        # NOP 5006 — processed-manure consistency. An interval-exempt class
+        # (processed / composted) must NOT also carry a raw 90/120-day interval:
+        # an event cannot be both raw-with-interval AND processed-exempt, and that
+        # contradiction reads to a certifier as reclassifying to dodge a flag.
+        if self.manure_treatment in ("processed_5006", "composted") and self.manure_harvest_interval in (
+            "90",
+            "120",
+        ):
+            errors["manure_harvest_interval"] = (
+                "A processed (NOP 5006) or composted (§ 205.203(c)(2)) manure event is "
+                "interval-exempt and cannot also carry a raw 90/120-day interval. Set the "
+                "interval to N/A, or classify the event as raw manure."
+            )
+        # Claiming the NOP 5006 exemption requires documenting the processing.
+        if (
+            self.manure_treatment == "processed_5006"
+            and self.processed_manure_temp_f is None
+            and not (self.processed_manure_attestation or "").strip()
+        ):
+            errors["manure_treatment"] = (
+                "NOP 5006 processed manure requires a processing temperature or an "
+                "OMRI/supplier attestation to claim the raw-interval exemption. Without "
+                "documentation, classify the event as raw manure."
             )
 
         # NOP Manure interval vs crop soil-contact classification.
@@ -3004,6 +3216,13 @@ class PestManagementEvent(CommonEvent):
     PEST_IDENTIFICATION = "PI"
     THRESHOLD_ASSESSMENT = "TA"
     IPM_IMPLEMENTATION = "IP"
+    # §E-4 — Cultural / sanitation control. 7 CFR 205.206(a) requires PREVENTIVE practices first,
+    # and § 205.206(e) allows a substance only after those practices prove insufficient. Winter
+    # sanitation is the preventive practice for navel orangeworm in a California orchard — and it
+    # had no home in the model, so the single most common non-spray control an organic grower
+    # performs was invisible to both the certifier and the consumer. UC Davis 2024 organic-almond
+    # study: December mummy shake, blow and shred, custom-hired except the shredding.
+    CULTURAL_CONTROL = "CU"
 
     PEST_TYPE_CHOICES = [
         (SCOUTING, "Scouting"),
@@ -3012,9 +3231,29 @@ class PestManagementEvent(CommonEvent):
         (PEST_IDENTIFICATION, "Pest Identification"),
         (THRESHOLD_ASSESSMENT, "Threshold Assessment"),
         (IPM_IMPLEMENTATION, "IPM Implementation"),
+        (CULTURAL_CONTROL, "Cultural / Sanitation Control"),
+    ]
+
+    CULTURAL_PRACTICE_CHOICES = [
+        ("mummy_removal", "Mummy nut removal (hand poling)"),
+        ("sanitation_shake", "Sanitation shake"),
+        ("brush_shred", "Brush / mummy shredding"),
+        ("pruning_removal", "Pruning removal and destruction"),
+        ("field_sanitation", "Field sanitation / debris removal"),
+        ("trap_crop", "Trap crop"),
     ]
 
     type = models.CharField(max_length=2, choices=PEST_TYPE_CHOICES, default=SCOUTING)
+    cultural_practice = models.CharField(
+        max_length=30,
+        choices=CULTURAL_PRACTICE_CHOICES,
+        blank=True,
+        null=True,
+        help_text=(
+            "Preventive cultural practice performed (CU subtype). Evidence for § 205.206(a); "
+            "documenting it is what lets § 205.206(e) justify any later substance application."
+        ),
+    )
     pest_species = models.CharField(max_length=200, blank=True)
     pest_pressure_level = models.CharField(max_length=50, blank=True)  # Low, Medium, High
     # F44 (2026-06): quantitative UC-IPM monitoring count — the actual data behind a scouting/trap
@@ -3050,6 +3289,10 @@ class PestManagementEvent(CommonEvent):
     # "below threshold" record on the audit export.
     action_threshold_met = models.BooleanField(null=True, blank=True, default=None)
     ipm_strategy = models.TextField(blank=True)
+    # The farmer's own words, kept apart from `description` — see the matching note on
+    # SoilManagementEvent. Without this column a grower's trap-monitoring or beneficial-release
+    # note had nowhere to live and never reached the consumer card.
+    observation = models.TextField(blank=True, null=True)
     extra_data = models.JSONField(blank=True, null=True)
 
     # Sprint 3 Epic 3.2: Consumer Trust Fields
@@ -3091,6 +3334,13 @@ class PestManagementEvent(CommonEvent):
             ("pheromone", "Pheromone lure"),
             ("delta", "Delta trap"),
             ("bucket_funnel", "Bucket / funnel"),
+            # Vertebrate trapping (§E-7, 2026-07). The option list was insect-only, but the
+            # UC Davis 2024 organic-almond cost study budgets gopher traps twice a year and
+            # ground-squirrel traps six times (March-October) — routine orchard work with
+            # nowhere to be recorded. Vertebrate control is also the practice most likely to
+            # be questioned at inspection, since the alternative is a rodenticide.
+            ("gopher_trap", "Gopher trap"),
+            ("ground_squirrel_trap", "Ground squirrel trap"),
             ("other", "Other"),
         ],
         blank=True,
@@ -3185,6 +3435,27 @@ class PestManagementEvent(CommonEvent):
             "Required per 7 CFR 205.206(e) before applying any pest control material."
         ),
     )
+
+    def clean(self):
+        """§E-4 — a cultural-control event must name the practice it performed.
+
+        § 205.206(a) is satisfied by the SPECIFIC preventive practice, not by the category. "We
+        did cultural control" supports nothing at inspection; "December mummy shake" is the
+        record that later justifies, under § 205.206(e), applying a substance when it proved
+        insufficient. Anything else about the event (area, crew, fuel) is optional as before.
+        """
+        from django.core.exceptions import ValidationError
+
+        if self.type == self.CULTURAL_CONTROL and not self.cultural_practice:
+            raise ValidationError(
+                {
+                    "cultural_practice": (
+                        "Select the preventive practice performed (mummy removal, sanitation "
+                        "shake, shredding, pruning removal, field sanitation or trap crop). "
+                        "§ 205.206(a) is documented by the specific practice, not the category."
+                    )
+                }
+            )
 
     class Meta:
         verbose_name = "Pest Management Event"

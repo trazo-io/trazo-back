@@ -299,9 +299,6 @@ class TimelineService:
         # Safe field access with validation
         try:
             # Volume field already contains formatted value with units (e.g., "50000 kg")
-            volume_raw = getattr(event, "volume", "")
-            volume_formatted = str(volume_raw) if volume_raw else ""
-
             # Area formatting
             area = TimelineService._safe_get_numeric(event, "area")
             area_formatted = TimelineService._format_area(area)
@@ -316,13 +313,14 @@ class TimelineService:
                 # Chemical-specific fields
                 "commercial_name": escape(commercial_name),
                 "chemical_name": escape(getattr(event, "chemical_name", "") or ""),
-                "volume": volume_formatted,
+                # volume / volume_unit / NPK percentages are NOT emitted (2026-08-02): they are
+                # certifier-only on the other two anonymous payloads
+                # (PublicHistorySerializer._CERTIFIER_ONLY_EVENT_FIELDS) and this endpoint was
+                # the one surface still publishing them. Defence in depth — the validator's
+                # allow-list drops them too; neither layer should be the only thing standing
+                # between an agronomic-audit field and a shopper.
                 "area": area_formatted,
-                "volume_unit": escape(getattr(event, "volume_unit", "") or ""),
                 "area_unit": escape(getattr(event, "area_unit", "") or ""),
-                "npk_n_percentage": TimelineService._safe_get_numeric(event, "npk_n_percentage"),
-                "npk_p_percentage": TimelineService._safe_get_numeric(event, "npk_p_percentage"),
-                "npk_k_percentage": TimelineService._safe_get_numeric(event, "npk_k_percentage"),
                 # Transparency fields for consumer understanding
                 "weather_conditions": escape(getattr(event, "weather_conditions", "") or ""),
                 "application_timing": escape(getattr(event, "time_period", "") or ""),

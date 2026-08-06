@@ -193,13 +193,15 @@ def demonstrate_old_vs_new_approach():
     )
     print(f"   ✅ SOLUTION: Honest farmer gets rewarded for complete documentation!")
 
-    # Demonstrate benchmarks (absolute, not competitive)
-    honest_benchmarks = transparency_calc.compare_with_benchmarks(history_honest)
-    gaming_benchmarks = transparency_calc.compare_with_benchmarks(history_gaming)
+    # Compare each farm against its OWN previous finished seasons. The former
+    # compare_with_benchmarks() graded against invented "industry"/"certification"
+    # thresholds and was removed 2026-08-02.
+    honest_history = transparency_calc.compare_with_own_history(history_honest)
+    gaming_history = transparency_calc.compare_with_own_history(history_gaming)
 
-    print(f"\n🎯 ABSOLUTE BENCHMARKS (Not Competitive Rankings):")
-    print(f"   Honest Farmer: {honest_benchmarks['message']}")
-    print(f"   Gaming Farmer: {gaming_benchmarks['message']}")
+    print(f"\n🎯 PROGRESS VS THE FARM'S OWN PREVIOUS SEASONS:")
+    print(f"   Honest Farmer: {honest_history['current_score']}% (previous best: {honest_history['previous_best']})")
+    print(f"   Gaming Farmer: {gaming_history['current_score']}% (previous best: {gaming_history['previous_best']})")
 
     # Show improvement suggestions
     honest_insights = transparency_calc.get_transparency_insights(history_honest)

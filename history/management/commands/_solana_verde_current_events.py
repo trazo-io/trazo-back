@@ -220,7 +220,7 @@ def create_current_events(production, user, demo_images=None):
             "fertigation schedule (5 applications), Kocide 3000 preventive "
             "fungicide (3 applications), Entrust SC on-demand for thrips. "
             "Beneficial release scheduled for February 2027. Water budget: "
-            "40 inches via drip with CIMIS ET0 scheduling. CCOF annual "
+            "40 inches via drip with CIMIS ET0 scheduling. PSOC annual "
             "inspection scheduled for March 2027."
         ),
     )

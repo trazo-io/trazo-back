@@ -24,13 +24,21 @@ from typing import List, Optional
 
 from django.utils import timezone
 
+from common.field_registry import ORGANIC_APPROVED_OK_VALUES
+
 # ChemicalEvent.organic_approved values that mark an input as explicitly
 # prohibited for organic production. Null/blank means "farmer didn't classify"
 # — that is an unknown, not a violation, and must not strip the claim.
+#
+# Deliberately NARROWER than field_registry.ORGANIC_PROHIBITED_VALUES, which the
+# transition clock uses: "transitional" is not organic-approved and so resets a
+# § 205.202(b) clock, but it is also not a consumer-facing claim violation.
 PROHIBITED_INPUT_VALUES = {"not_organic", "no"}
 
-# Values that affirmatively clear an input for organic use.
-ORGANIC_APPROVED_VALUES = {"omri_listed", "usda_nop_approved", "organic_equivalent", "yes"}
+# Values that affirmatively clear an input for organic use. Shared with the
+# transition clock — a locally-maintained copy of this list is how an OMRI-listed
+# fungicide came to be counted as a prohibited substance (see field_registry).
+ORGANIC_APPROVED_VALUES = ORGANIC_APPROVED_OK_VALUES
 
 
 def event_organic_classification(event) -> str:
@@ -240,9 +248,17 @@ def resolve_input_status(chemical_event) -> dict:
     # evidence than the farmer's dropdown pick — treat it as OMRI Listed.
     has_omri_match = bool(getattr(chemical_event, "omri_product_id", None))
 
-    if restricted:
-        status = "restricted_use"
-        label = "Restricted use — licensed applicator"
+    # NOTE (2026-08-02): `restricted_use` is intentionally NOT a public chip status.
+    # `restricted_use_pesticide` is stripped from the consumer payload
+    # (PublicHistorySerializer._CERTIFIER_ONLY_EVENT_FIELDS) precisely because RUP is an
+    # APPLICATOR-licensing category under 40 CFR 152.175 — it says who may buy and apply the
+    # product, not that residue reaches a shopper. Re-publishing it here as
+    # "Restricted use — licensed applicator" put that same implication back in words, which is
+    # worse than the field it replaced. A restricted-use product that is not organic-approved
+    # is a conventional input, and the chip says so; the certifier PDF carries the RUP flag.
+    if restricted and not (organic == "omri_listed" or has_omri_match):
+        status = "conventional_documented"
+        label = "Conventional input · documented"
     elif organic == "omri_listed" or has_omri_match:
         status = "omri_listed"
         label = "OMRI Listed"

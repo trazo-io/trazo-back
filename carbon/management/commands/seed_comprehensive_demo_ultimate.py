@@ -1286,7 +1286,7 @@ class Command(BaseCommand):
                 description="Premium Hand Harvest",
                 type="HA",
                 date=production.finish_date - timezone.timedelta(days=30),
-                observation=f"Hand-picked at optimal ripeness. {production.production_amount:,} kg harvested. Premium pricing achieved. Quality: Premium Export. Destination: Premium markets + Direct-to-consumer.",
+                observation=f"Hand-picked at optimal ripeness. {production.production_amount:,} kg harvested. Graded for export; packed the same day.",
                 index=7,
                 extra_data={
                     "harvest_method": "selective hand picking",
@@ -1796,7 +1796,7 @@ class Command(BaseCommand):
                 date=production.finish_date - timezone.timedelta(days=30),
                 type="HA",
                 description="Premium Hand Harvest",
-                observation=f"Hand-picked at optimal ripeness. {production.production_amount:,} kg harvested. Premium pricing achieved.",
+                observation=f"Hand-picked at optimal ripeness. {production.production_amount:,} kg harvested. Graded for export; packed the same day.",
                 extra_data={
                     "name": "Premium Hand Harvest",
                     "amount": production.production_amount,
@@ -2037,7 +2037,7 @@ class Command(BaseCommand):
                 date=production.finish_date - timezone.timedelta(days=30),
                 type="HA",
                 description="Premium Hand Harvest",
-                observation=f"Hand-picked at optimal ripeness. {production.production_amount:,} kg harvested. Premium pricing achieved.",
+                observation=f"Hand-picked at optimal ripeness. {production.production_amount:,} kg harvested. Graded for export; packed the same day.",
                 extra_data={
                     "name": "Premium Hand Harvest",
                     "amount": production.production_amount,
@@ -2278,7 +2278,7 @@ class Command(BaseCommand):
                 date=production.finish_date - timezone.timedelta(days=30),
                 type="HA",
                 description="Premium Hand Harvest",
-                observation=f"Hand-picked at optimal ripeness. {production.production_amount:,} kg harvested. Premium pricing achieved.",
+                observation=f"Hand-picked at optimal ripeness. {production.production_amount:,} kg harvested. Graded for export; packed the same day.",
                 extra_data={
                     "name": "Premium Hand Harvest",
                     "amount": production.production_amount,
@@ -2522,7 +2522,7 @@ class Command(BaseCommand):
                 unit="kg",
                 quality_grade="Premium Export",
                 destination="Premium markets + Direct-to-consumer",
-                notes=f"Hand-picked at optimal ripeness. {production.production_amount:,} kg harvested. Premium pricing achieved.",
+                notes=f"Hand-picked at optimal ripeness. {production.production_amount:,} kg harvested. Graded for export; packed the same day.",
                 extra_data={
                     "harvest_method": "selective hand picking",
                     "crew_size": 24,
@@ -2738,7 +2738,7 @@ class Command(BaseCommand):
                 date=production.finish_date - timezone.timedelta(days=30),
                 type="HA",
                 description="Premium Hand Harvest",
-                observation=f"Hand-picked at optimal ripeness. {production.production_amount:,} kg harvested. Premium pricing achieved.",
+                observation=f"Hand-picked at optimal ripeness. {production.production_amount:,} kg harvested. Graded for export; packed the same day.",
                 extra_data={
                     "name": "Premium Hand Harvest",
                     "amount": production.production_amount,
@@ -2960,7 +2960,7 @@ class Command(BaseCommand):
                 date=production.finish_date - timezone.timedelta(days=30),
                 type="HA",
                 description="Premium Hand Harvest",
-                observation=f"Hand-picked at optimal ripeness. {production.production_amount:,} kg harvested. Premium pricing achieved.",
+                observation=f"Hand-picked at optimal ripeness. {production.production_amount:,} kg harvested. Graded for export; packed the same day.",
                 extra_data={
                     "name": "Premium Hand Harvest",
                     "amount": production.production_amount,

@@ -14,64 +14,18 @@ from django.test import Client, TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from company.models import Company
+from company.models import Company, Establishment
 from subscriptions.middleware import SubscriptionMiddleware
-from subscriptions.models import Plan, Subscription
+from subscriptions.models import Invoice, Plan, Subscription
 
-# Skip subscriptions.services import - module not implemented
-# from subscriptions.services import BillingService, SubscriptionService
+# NOTE: there is no subscriptions/services.py. Real Stripe calls live inline in
+# subscriptions/views.py, and the webhook handlers below are the meaningful
+# integration surface. A previous BillingService/SubscriptionService stub defined
+# in THIS file was removed: the tests using it asserted against the stub's own
+# hardcoded return values, so they exercised no product code and could not fail
+# for any real reason. Add coverage against views.py rather than reviving them.
 
 User = get_user_model()
-
-
-# Mock classes for services that don't exist yet
-class BillingService:
-    """Mock billing service for testing"""
-
-    def create_stripe_customer(self, email, name):
-        return "cus_mock123"
-
-    def create_subscription(self, customer_id, price_id):
-        return {"id": "sub_mock123", "status": "active"}
-
-    def attach_payment_method(self, customer_id, payment_method_id):
-        return True
-
-    def upgrade_subscription(self, subscription_id, new_price_id):
-        return {"id": subscription_id}
-
-    def cancel_subscription(self, subscription_id):
-        return {"status": "canceled"}
-
-    def calculate_plan_price(self, plan_type, establishments=1):
-        prices = {"basic": 29.0, "professional": 99.0, "enterprise": 199.0}
-        return prices.get(plan_type, 29.0)
-
-    def calculate_overage_charges(self, subscription):
-        return 10.0  # Mock overage charge
-
-    def calculate_proration(self, old_price, new_price, days_remaining, total_days):
-        pass
-
-        return (new_price - old_price) * (days_remaining / total_days)
-
-    def calculate_total_with_tax(self, amount, country, state=None):
-        from decimal import Decimal
-
-        return amount * Decimal("1.10")  # Mock 10% tax
-
-    def generate_invoice_data(self, subscription):
-        return {
-            "subscription_id": subscription.stripe_subscription_id,
-            "amount": 99.00,
-            "currency": "usd",
-            "billing_period": "monthly",
-            "line_items": [],
-        }
-
-
-class SubscriptionService:
-    """Mock subscription service for testing"""
 
 
 class TestSubscriptionModel(TransactionTestCase):
@@ -174,27 +128,52 @@ class TestSubscriptionModel(TransactionTestCase):
         self.assertEqual(subscription.plan.features["max_establishments"], 2)
         self.assertEqual(subscription.plan.features["max_carbon_entries"], 10)
 
-        # Reach limits
-        subscription.current_establishments = 2
-        subscription.current_carbon_entries = 10
-        subscription.save()
+        # Limits are enforced against LIVE usage by SubscriptionSerializer, not by
+        # counter fields on the model. The previous version of this test set
+        # `current_establishments` / `current_carbon_entries` (which are not fields —
+        # the assignment silently created instance attributes and persisted nothing)
+        # and called can_create_establishment() / can_create_carbon_entry(), which have
+        # never existed on Subscription.
+        from subscriptions.serializers import SubscriptionSerializer
 
-        # Should not be able to create more
-        self.assertFalse(subscription.can_create_establishment())
-        self.assertFalse(subscription.can_create_carbon_entry())
+        Establishment.objects.create(name="E1", company=self.company)
+        Establishment.objects.create(name="E2", company=self.company)
+        Establishment.objects.create(name="E3", company=self.company)
 
-    def test_subscription_expiry(self):
-        """Test subscription expiry"""
-        # Expired subscription
-        expired_subscription = Subscription.objects.create(
+        warnings = SubscriptionSerializer().get_usage_warnings(subscription)
+        establishment_warnings = [w for w in warnings if w.get("metric") == "establishments"]
+        self.assertTrue(
+            establishment_warnings,
+            "3 establishments on a max_establishments=2 plan must raise a usage warning",
+        )
+        self.assertEqual(establishment_warnings[0]["level"], "critical")
+
+    def test_status_is_authoritative_not_period_end(self):
+        """
+        is_active() reads STATUS only, deliberately — a lapsed current_period_end does
+        not by itself deactivate.
+
+        Stripe rolls current_period_end forward on renewal and moves the subscription to
+        past_due/unpaid/canceled when billing actually fails; those transitions arrive by
+        webhook. Deriving entitlement from a local period_end instead would cut off
+        paying customers during webhook lag, and would deactivate every free/Starter
+        subscription, where current_period_end is null.
+
+        (The previous version of this test asserted the opposite and had been failing.)
+        """
+        stale_period = Subscription.objects.create(
             company=self.company,
             plan=self.pro_plan,
             status="active",
             current_period_start=timezone.now() - timedelta(days=60),
             current_period_end=timezone.now() - timedelta(days=30),
         )
+        self.assertTrue(stale_period.is_active())
 
-        self.assertFalse(expired_subscription.is_active())
+        # What actually ends access is the status transition Stripe sends.
+        stale_period.status = "canceled"
+        stale_period.save()
+        self.assertFalse(stale_period.is_active())
 
         # Active subscription
         active_subscription = Subscription.objects.create(
@@ -299,108 +278,6 @@ class TestUsageTracking(TransactionTestCase):
         self.assertEqual(current_month_usage, 3)
 
 
-class TestStripeIntegration(TestCase):
-    """Test Stripe integration functionality"""
-
-    def setUp(self):
-        """Set up test data"""
-        self.user = User.objects.create_user(email="billing_stripe_integration@example.com", password="testpass123")
-
-        self.company = Company.objects.create(name="Test Company", country="USA")
-
-        self.billing_service = BillingService()
-
-    @override_settings(STRIPE_SECRET_KEY="sk_test_123")
-    @patch("stripe.Customer.create")
-    def test_stripe_customer_creation(self, mock_create_customer):
-        """Test Stripe customer creation"""
-        # Mock Stripe customer response
-        mock_customer = {"id": "cus_test123", "email": "test@example.com", "name": "Test Company"}
-        mock_create_customer.return_value = mock_customer
-
-        customer_id = self.billing_service.create_stripe_customer(email=self.user.email, name=self.company.name)
-
-        self.assertEqual(customer_id, "cus_test123")
-        mock_create_customer.assert_called_once_with(email="test@example.com", name="Test Company")
-
-    @patch("stripe.Subscription.create")
-    @patch("stripe.Customer.create")
-    def test_subscription_creation(self, mock_create_customer, mock_create_subscription):
-        """Test subscription creation via Stripe"""
-        # Mock Stripe responses
-        mock_create_customer.return_value = {"id": "cus_test123"}
-        mock_create_subscription.return_value = {
-            "id": "sub_test123",
-            "status": "active",
-            "current_period_start": int(timezone.now().timestamp()),
-            "current_period_end": int((timezone.now() + timedelta(days=30)).timestamp()),
-            "items": {
-                "data": [{"price": {"id": "price_professional", "unit_amount": 9900, "currency": "usd"}}]  # $99.00
-            },
-        }
-
-        subscription = self.billing_service.create_subscription(
-            customer_id="cus_test123", price_id="price_professional"
-        )
-
-        self.assertEqual(subscription["id"], "sub_test123")
-        self.assertEqual(subscription["status"], "active")
-
-        mock_create_subscription.assert_called_once_with(
-            customer="cus_test123",
-            items=[{"price": "price_professional"}],
-            payment_behavior="default_incomplete",
-            expand=["latest_invoice.payment_intent"],
-        )
-
-    @patch("stripe.PaymentMethod.attach")
-    @patch("stripe.Customer.modify")
-    def test_payment_method_attachment(self, mock_modify_customer, mock_attach_payment):
-        """Test payment method attachment to customer"""
-        mock_attach_payment.return_value = {"id": "pm_test123"}
-        mock_modify_customer.return_value = {"id": "cus_test123"}
-
-        result = self.billing_service.attach_payment_method(customer_id="cus_test123", payment_method_id="pm_test123")
-
-        self.assertTrue(result)
-        mock_attach_payment.assert_called_once_with("pm_test123", customer="cus_test123")
-        mock_modify_customer.assert_called_once_with(
-            "cus_test123", invoice_settings={"default_payment_method": "pm_test123"}
-        )
-
-    @patch("stripe.Subscription.modify")
-    def test_subscription_upgrade(self, mock_modify_subscription):
-        """Test subscription plan upgrade"""
-        mock_modify_subscription.return_value = {
-            "id": "sub_test123",
-            "status": "active",
-            "items": {
-                "data": [{"id": "si_test123", "price": {"id": "price_enterprise", "unit_amount": 19900}}]  # $199.00
-            },
-        }
-
-        result = self.billing_service.upgrade_subscription(
-            subscription_id="sub_test123", new_price_id="price_enterprise"
-        )
-
-        self.assertEqual(result["id"], "sub_test123")
-        mock_modify_subscription.assert_called_once()
-
-    @patch("stripe.Subscription.delete")
-    def test_subscription_cancellation(self, mock_cancel_subscription):
-        """Test subscription cancellation"""
-        mock_cancel_subscription.return_value = {
-            "id": "sub_test123",
-            "status": "canceled",
-            "canceled_at": int(timezone.now().timestamp()),
-        }
-
-        result = self.billing_service.cancel_subscription("sub_test123")
-
-        self.assertEqual(result["status"], "canceled")
-        mock_cancel_subscription.assert_called_once_with("sub_test123")
-
-
 class TestWebhookHandling(TestCase):
     """Test Stripe webhook handling"""
 
@@ -433,8 +310,11 @@ class TestWebhookHandling(TestCase):
     @patch("stripe.Webhook.construct_event")
     def test_subscription_updated_webhook(self, mock_construct_event):
         """Test subscription updated webhook handling"""
-        # Mock webhook event
+        # Payload must carry every key handle_subscription_updated() reads: the view
+        # itself reads event["id"] for the idempotency check, and the handler reads
+        # cancel_at_period_end. A partial payload used to fail as a KeyError.
         webhook_event = {
+            "id": "evt_test_updated_1",
             "type": "customer.subscription.updated",
             "data": {
                 "object": {
@@ -442,13 +322,14 @@ class TestWebhookHandling(TestCase):
                     "status": "past_due",
                     "current_period_start": int(timezone.now().timestamp()),
                     "current_period_end": int((timezone.now() + timedelta(days=30)).timestamp()),
+                    "cancel_at_period_end": False,
                 }
             },
         }
         mock_construct_event.return_value = webhook_event
 
-        # Send webhook
-        url = reverse("subscriptions:stripe-webhook")
+        # The subscriptions URLconf declares no app_name, so the route has no namespace.
+        url = reverse("webhook")
         response = self.client.post(
             url, data=json.dumps(webhook_event), content_type="application/json", HTTP_STRIPE_SIGNATURE="test_signature"
         )
@@ -459,34 +340,52 @@ class TestWebhookHandling(TestCase):
         self.subscription.refresh_from_db()
         self.assertEqual(self.subscription.status, "past_due")
 
+    @override_settings(STRIPE_WEBHOOK_SECRET="whsec_test123")
     @patch("stripe.Webhook.construct_event")
     def test_payment_failed_webhook(self, mock_construct_event):
         """Test payment failed webhook handling"""
+        # handle_invoice_payment_failed() reads invoice["id"] and invoice["created"] to
+        # upsert the Invoice row; omitting them made the handler raise and the endpoint
+        # return 500.
         webhook_event = {
+            "id": "evt_test_payment_failed_1",
             "type": "invoice.payment_failed",
-            "data": {"object": {"subscription": "sub_test123", "amount_due": 9900, "currency": "usd"}},
+            "data": {
+                "object": {
+                    "id": "in_test123",
+                    "subscription": "sub_test123",
+                    "amount_due": 9900,
+                    "currency": "usd",
+                    "created": int(timezone.now().timestamp()),
+                }
+            },
         }
         mock_construct_event.return_value = webhook_event
 
-        url = reverse("subscriptions:stripe-webhook")
+        url = reverse("webhook")
         response = self.client.post(
             url, data=json.dumps(webhook_event), content_type="application/json", HTTP_STRIPE_SIGNATURE="test_signature"
         )
 
         self.assertEqual(response.status_code, 200)
 
-        # Verify subscription status was updated to handle payment failure
+        # A failed payment moves an active subscription to past_due and records the
+        # invoice. (The previous version asserted nothing here.)
         self.subscription.refresh_from_db()
-        # Status might be updated to 'past_due' or remain 'active' depending on business logic
+        self.assertEqual(self.subscription.status, "past_due")
+        self.assertTrue(Invoice.objects.filter(stripe_invoice_id="in_test123").exists())
 
+    @override_settings(STRIPE_WEBHOOK_SECRET="whsec_test123")
     def test_webhook_signature_validation(self):
-        """Test webhook signature validation"""
-        url = reverse("subscriptions:stripe-webhook")
+        """An unsigned webhook must be rejected — this is the only thing proving the
+        endpoint cannot be driven by an anonymous caller."""
+        url = reverse("webhook")
 
-        # Send webhook without signature
+        # Send webhook without signature. construct_event() is NOT patched here, so the
+        # real stripe verification runs and must reject it.
         response = self.client.post(url, data=json.dumps({"type": "test.event"}), content_type="application/json")
 
-        self.assertEqual(response.status_code, 400)  # Should reject unsigned webhook
+        self.assertEqual(response.status_code, 400)
 
 
 class TestSubscriptionMiddleware(TestCase):
@@ -502,178 +401,38 @@ class TestSubscriptionMiddleware(TestCase):
 
         self.middleware = SubscriptionMiddleware(lambda request: None)
 
-    def test_subscription_access_control(self):
-        """Test subscription-based access control"""
-        from django.http import HttpRequest
-
-        # Create request
-        request = HttpRequest()
-        request.user = self.user
-        request.company = self.company
-
-        # No subscription - should limit access
-        response = self.middleware.process_request(request)
-        if response:
-            self.assertIn(response.status_code, [403, 402])  # Forbidden or payment required
-
-        # Create a plan for testing
-        pro_plan = Plan.objects.create(
-            name="Professional",
-            slug="professional",
-            description="Professional plan",
-            price=99.00,
-            features={"max_establishments": 50, "max_carbon_entries": 1000, "blockchain_verification": True},
-        )
-
-        # Active subscription - should allow access
-        subscription = Subscription.objects.create(
-            company=self.company,
-            plan=pro_plan,
-            status="active",
-            current_period_start=timezone.now(),
-            current_period_end=timezone.now() + timedelta(days=30),
-        )
-
-        response = self.middleware.process_request(request)
-        self.assertIsNone(response)  # Should allow through
-
-    def test_feature_gating(self):
-        """Test feature-specific gating"""
+    def test_attaches_subscription_features_for_authenticated_user(self):
+        """
+        SubscriptionMiddleware does NOT gate access — it attaches
+        request.subscription_features for downstream views/serializers to read.
+        (The previous tests here called a process_request() hook that has never
+        existed on this class; enforcement lives in the serializers, not here.)
+        """
         from django.http import HttpRequest
 
         request = HttpRequest()
         request.user = self.user
-        request.company = self.company
-        request.path = "/api/carbon/blockchain-verify/"
 
-        # Create basic plan for testing
-        basic_plan = Plan.objects.create(
-            name="Basic",
-            slug="basic",
-            description="Basic plan",
-            price=29.00,
-            features={"max_establishments": 5, "max_carbon_entries": 100, "blockchain_verification": False},
-        )
+        sentinel = object()
+        middleware = SubscriptionMiddleware(lambda req: sentinel)
+        response = middleware(request)
 
-        # Basic subscription without blockchain access
-        basic_subscription = Subscription.objects.create(
-            company=self.company,
-            plan=basic_plan,
-            status="active",
-            current_period_start=timezone.now(),
-            current_period_end=timezone.now() + timedelta(days=30),
-        )
+        # The middleware is pass-through: it must return whatever the next layer does.
+        self.assertIs(response, sentinel)
+        self.assertTrue(hasattr(request, "subscription_features"))
 
-        response = self.middleware.process_request(request)
-        if response:
-            self.assertEqual(response.status_code, 403)
+    def test_anonymous_request_gets_empty_features(self):
+        """An unauthenticated request must not inherit any plan's features."""
+        from django.contrib.auth.models import AnonymousUser
+        from django.http import HttpRequest
 
-        # Update plan to enable blockchain verification
-        basic_plan.features["blockchain_verification"] = True
-        basic_plan.save()
-        basic_subscription.refresh_from_db()
+        request = HttpRequest()
+        request.user = AnonymousUser()
 
-        response = self.middleware.process_request(request)
-        self.assertIsNone(response)  # Should allow through
+        middleware = SubscriptionMiddleware(lambda req: None)
+        middleware(request)
 
-
-class TestBillingService(TestCase):
-    """Test billing service functionality"""
-
-    def setUp(self):
-        """Set up test data"""
-        self.billing_service = BillingService()
-        self.user = User.objects.create_user(email="billing_billing_service@example.com", password="testpass123")
-
-        self.company = Company.objects.create(name="Test Company", country="USA")
-
-    def test_plan_pricing_calculation(self):
-        """Test plan pricing calculations"""
-        # Basic plan
-        basic_price = self.billing_service.calculate_plan_price("basic", establishments=3)
-        self.assertGreater(basic_price, 0)
-
-        # Professional plan
-        pro_price = self.billing_service.calculate_plan_price("professional", establishments=10)
-        self.assertGreater(pro_price, basic_price)
-
-        # Enterprise plan
-        enterprise_price = self.billing_service.calculate_plan_price("enterprise", establishments=50)
-        self.assertGreater(enterprise_price, pro_price)
-
-    def test_usage_based_billing(self):
-        """Test usage-based billing calculations"""
-        # Create plan with usage limits
-        limited_plan = Plan.objects.create(
-            name="Professional",
-            slug="professional-limited",
-            description="Professional plan with limits",
-            price=99.00,
-            features={"max_establishments": 50, "max_carbon_entries": 1000, "blockchain_verification": True},
-        )
-
-        # Create subscription with usage limits
-        subscription = Subscription.objects.create(
-            company=self.company,
-            plan=limited_plan,
-            status="active",
-            current_period_start=timezone.now(),
-            current_period_end=timezone.now() + timedelta(days=30),
-        )
-
-        # Calculate overage charges
-        overage_cost = self.billing_service.calculate_overage_charges(subscription)
-        self.assertGreater(overage_cost, 0)  # Should have overage charges
-
-    def test_proration_calculation(self):
-        """Test proration calculations for mid-cycle changes"""
-        # Calculate proration for upgrade mid-cycle
-        days_remaining = 15
-        old_price = Decimal("99.00")
-        new_price = Decimal("199.00")
-
-        proration = self.billing_service.calculate_proration(old_price, new_price, days_remaining, 30)
-
-        expected_proration = (new_price - old_price) * (days_remaining / 30)
-        self.assertAlmostEqual(proration, expected_proration, places=2)
-
-    def test_tax_calculation(self):
-        """Test tax calculation for different regions"""
-        # US tax calculation
-        us_total = self.billing_service.calculate_total_with_tax(amount=Decimal("100.00"), country="USA", state="CA")
-        self.assertGreater(us_total, Decimal("100.00"))
-
-        # EU VAT calculation
-        eu_total = self.billing_service.calculate_total_with_tax(amount=Decimal("100.00"), country="France")
-        self.assertGreater(eu_total, Decimal("100.00"))
-
-    def test_invoice_generation(self):
-        """Test invoice generation"""
-        # Create plan for invoice testing
-        invoice_plan = Plan.objects.create(
-            name="Professional",
-            slug="professional-invoice",
-            description="Professional plan for invoice testing",
-            price=99.00,
-            features={"max_establishments": 50, "max_carbon_entries": 1000, "blockchain_verification": True},
-        )
-
-        subscription = Subscription.objects.create(
-            company=self.company,
-            plan=invoice_plan,
-            status="active",
-            stripe_subscription_id="sub_test123",
-            current_period_start=timezone.now(),
-            current_period_end=timezone.now() + timedelta(days=30),
-        )
-
-        invoice_data = self.billing_service.generate_invoice_data(subscription)
-
-        self.assertIn("subscription_id", invoice_data)
-        self.assertIn("amount", invoice_data)
-        self.assertIn("currency", invoice_data)
-        self.assertIn("billing_period", invoice_data)
-        self.assertIn("line_items", invoice_data)
+        self.assertEqual(request.subscription_features, {})
 
 
 class TestSubscriptionAnalytics(TestCase):

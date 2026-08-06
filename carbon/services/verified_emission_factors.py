@@ -128,6 +128,79 @@ class VerifiedEmissionFactors:
         ),
     }
 
+    # Conversions into STANDARD CUBIC FEET for gaseous fuels. The EPA natural-gas
+    # factor above is per scf (0.001026 mmBtu/scf), so any gas quantity a farmer
+    # reports has to be resolved to scf before the factor is applied.
+    # 1 therm = 100,000 Btu; at 1,026 Btu/scf that is 97.466 scf.
+    GAS_UNIT_TO_SCF = {
+        "scf": 1.0,
+        "cf": 1.0,
+        "ft3": 1.0,
+        "ccf": 100.0,  # 100 cubic feet — the unit on most US gas bills
+        "mcf": 1000.0,
+        "therm": 97.466,
+        "therms": 97.466,
+        "mmbtu": 974.659,
+        "m3": 35.3147,
+        "cubic_meters": 35.3147,
+    }
+    # Liquid-volume and mass units cannot describe a gas billed by volume or energy.
+    # Reporting "310 L of natural gas" against a per-scf factor produced 1.18 kg CO2e for
+    # drying 153,000 lb of walnuts. Refuse rather than under-report by ~2 orders of magnitude.
+    NON_GAS_UNITS = {"l", "liter", "liters", "litre", "litres", "gal", "gallon", "gallons", "kg", "kwh"}
+
+    @classmethod
+    def gas_quantity_to_scf(cls, quantity, unit):
+        """Convert a reported natural-gas quantity to standard cubic feet.
+
+        Returns (scf, None) on success, or (None, reason) when the unit cannot
+        describe a gas volume — callers must surface `reason` as a limitation
+        instead of emitting a fabricated number.
+        """
+        try:
+            qty = float(quantity)
+        except (TypeError, ValueError):
+            return None, "natural gas quantity is not numeric"
+        if qty <= 0:
+            return 0.0, None
+        key = str(unit or "").strip().lower()
+        if key in cls.GAS_UNIT_TO_SCF:
+            return qty * cls.GAS_UNIT_TO_SCF[key], None
+        if key in cls.NON_GAS_UNITS:
+            return None, (
+                f"natural gas reported in '{unit}', which cannot describe a gas volume; "
+                "report gas in therms, ccf, scf, m3 or MMBtu for EPA factors to apply"
+            )
+        return None, f"unrecognised natural gas unit '{unit}'"
+
+    @classmethod
+    def fuel_co2e(cls, fuel_quantity, fuel_type: str, fuel_unit=None):
+        """Emissions for a measured fuel quantity, resolved against the FACTOR'S OWN basis.
+
+        Every liquid-fuel factor in EPA_FUEL_FACTORS is per US GALLON, and callers
+        normalise litres/kg to gallons before arriving here. Natural gas is per STANDARD
+        CUBIC FOOT — so multiplying a gallon count by it under-reports by roughly two
+        orders of magnitude. That mistake was replicated at eight independent call sites
+        (harvesting, planting, transplanting, general, thinning, manual, cultivation,
+        post-harvest, plus the aggregate/summary path), each doing the same
+        `co2e = fuel_consumed * fuel_factor.value` line.
+
+        This is the single choke point. Gaseous fuels resolve to their own basis; a
+        liquid/mass unit for a gas is REFUSED (0.0 + reason) rather than silently
+        producing a plausible-looking near-zero.
+
+        Returns (co2e_kg, factor, error_or_None).
+        """
+        factor, _basis = cls._get_fuel_factor_for_type(fuel_type)
+        if fuel_quantity in (None, ""):
+            return 0.0, factor, None
+        if str(fuel_type or "").lower() == "natural_gas":
+            scf, reason = cls.gas_quantity_to_scf(fuel_quantity, fuel_unit)
+            if scf is None:
+                return 0.0, factor, reason
+            return scf * factor.value, factor, None
+        return float(fuel_quantity) * factor.value, factor, None
+
     @classmethod
     def _get_fuel_factor_for_type(cls, fuel_type: str):
         """Get emission factor and calculation basis for a given fuel type.
@@ -373,6 +446,54 @@ class VerifiedEmissionFactors:
             last_updated="2025-01-21",
             notes="Biological pesticides (Bt, Spinosad) - lower emissions from fermentation-based production",
         ),
+        # Field N2O from APPLIED NITROGEN, independent of where the N came from.
+        # Once nitrogen is in the soil, nitrification/denitrification does not care whether
+        # it arrived via Haber-Bosch or a fish hydrolysate — so this component applies to
+        # organic fertilisers exactly as it does to synthetic ones. It is already baked into
+        # `nitrogen_fertilizer` (10.5 = ~4.4 manufacturing + this); organic fertiliser was
+        # previously charged ONLY a per-kg-of-product processing rate and therefore omitted
+        # field N2O entirely (found 2026-07-31, CA organic walnut pilot QA).
+        #
+        # Derivation from the 2019 Refinement to the 2006 IPCC Guidelines, Vol. 4 Ch. 11,
+        # using the AGGREGATED (climate-agnostic) defaults, consistent with the EF1=0.01
+        # already used by `nitrogen_fertilizer`:
+        #   direct              EF1                      = 0.010   kg N2O-N / kg N   (Table 11.1)
+        #   indirect, volatilised  FracGASM 0.21 x EF4 0.010 = 0.0021                (Table 11.3)
+        #   indirect, leached      FracLEACH 0.24 x EF5 0.011 = 0.00264              (Table 11.3)
+        #   total                                        = 0.01474 kg N2O-N / kg N
+        #   x 44/28 -> 0.023163 kg N2O / kg N;  x 265 GWP100 (AR5) = 6.14 kg CO2e / kg N
+        #
+        # FracGASM is IPCC's organic-specific volatilisation fraction ("all organic N
+        # fertilisers applied, and dung and urine deposited by grazing animals"), so this
+        # factor is, if anything, tuned to organic inputs rather than borrowed from synthetic.
+        # Cross-check: 10.5 - 6.14 = 4.36 kg CO2e/kg N of manufacturing, which sits at the
+        # high end of the documented 1-5 range for urea/ammonia — the decomposition is coherent.
+        #
+        # Deliberately conservative in TWO ways, both of which over-report rather than
+        # under-report — the safe direction for a transparency claim:
+        #
+        #  1. IPCC disaggregates EF1 DOWN for organic amendments (0.006 wet, 0.005 dry vs
+        #     0.016 synthetic-wet). Applying the 0.010 aggregate slightly over-states an
+        #     organic grower. Revisit if per-event climate zone becomes available.
+        #  2. EF1 is applied to TOTAL nitrogen applied, which is the IPCC Tier 1 convention.
+        #     For composted amendments only ~15% of that nitrogen mineralises in the year of
+        #     application (WSU Tree Fruit, "Compost Considerations"), so a Tier 2 treatment
+        #     would attribute less to year one and spread the remainder forward. Tier 1 is
+        #     the defensible default for a farmer-reported system with no multi-year model.
+        #
+        # NOTE on asymmetry: this charges the N2O from compost but takes NO credit for the
+        # soil carbon compost builds, because carbon-methodology.md scopes Trazo to direct
+        # operational emissions. That is internally consistent, but it does mean an organic
+        # grower's number carries a cost without its paired benefit — worth saying plainly
+        # wherever this figure is presented rather than letting it read as a full verdict.
+        "nitrogen_field_n2o": EmissionFactor(
+            value=6.14,  # kg CO2e per kg N applied (direct + indirect N2O, no manufacturing)
+            unit="kg_CO2e_per_kg_N",
+            source="IPCC 2019 Refinement Vol.4 Ch.11 Tables 11.1 & 11.3 (EF1 0.010, EF4 0.010, EF5 0.011, FracGASM 0.21, FracLEACH-(H) 0.24); GWP100 265 (IPCC AR5)",
+            confidence_level=0.85,
+            last_updated="2026-07-31",
+            notes="Post-application field N2O (direct + indirect) per kg of nitrogen applied, independent of N source. Applies to organic and synthetic N alike; already included inside the 10.5 nitrogen_fertilizer factor, so do NOT add both.",
+        ),
         "organic_fertilizer_manufacturing": EmissionFactor(
             value=0.5,  # kg CO2 per kg (composting/manure processing)
             unit="kg_CO2_per_kg",
@@ -431,13 +552,29 @@ class VerifiedEmissionFactors:
     # Pump energy varies significantly by water source due to lift depth and pressure requirements.
     # Sources: USDA NRCS NEH Chapter 8, agricultural engineering pumping studies
     IRRIGATION_PUMP_FACTORS = {
+        # CORRECTED 2026-07 (was 3.5 kWh/1000 gal = 1,140 kWh/acre-foot, nearly double the
+        # top of California's published 170-600 kWh/AF range, and ~2.6x what this factor's
+        # own "200-300 ft lift" description implies). Groundwater is the most common source
+        # for a California orchard, so this was the single most frequently applied wrong
+        # number in the carbon model.
+        #
+        # Now derived from the same pumping-energy equation used for measured pump depths
+        # (kWh/AF = 1.0241 × TDH / OPE), at a 200 ft lift + 20 psi system pressure and 70%
+        # plant efficiency = 360 kWh/AF. Brackets CPUC's California groundwater figures
+        # (120 ft well ~175 kWh/AF, 200 ft ~292 kWh/AF, lift only) once pressurization is
+        # added. Deeper wells should record `pump_depth_ft` rather than rely on this.
         "well_groundwater": EmissionFactor(
-            value=3.5,
+            value=1.11,
             unit="kWh_per_1000_gallons",
-            source="USDA NRCS Irrigation Energy Guidelines - Deep Well Pumping",
-            confidence_level=0.85,
-            last_updated="2026-02-19",
-            notes="Deep well pumping (200-300 ft lift). Literature range: 3-5 kWh/1000 gal for wells >200 ft.",
+            source="Irrigation pumping-energy equation (kWh/AF = 1.0241 × TDH / OPE) at 200 ft lift, 20 psi, 70% OPE",
+            confidence_level=0.75,
+            last_updated="2026-07-30",
+            notes=(
+                "Representative California agricultural well: 200 ft lift + 20 psi = 246 ft TDH "
+                "at 70% pumping-plant efficiency = 360 kWh/acre-foot. Record pump_depth_ft for a "
+                "well-specific figure; confidence lowered from 0.85 because this stands in for an "
+                "unmeasured lift."
+            ),
         ),
         "municipal": EmissionFactor(
             value=0.20,
@@ -489,14 +626,27 @@ class VerifiedEmissionFactors:
         ),
     }
 
-    # Default pump factor when water_source is unknown or 'other'
+    # Default pump factor when water_source is unknown or 'other'.
+    #
+    # CORRECTED 2026-07 (was 2.0 kWh/1000 gal = 652 kWh/acre-foot, above the top of
+    # California's published 170-600 range). Its "midpoint of 0.5-3.5" derivation was
+    # anchored on the well_groundwater value that was itself wrong, so the error compounded.
+    #
+    # Now a mid-range agricultural lift through the same equation: 150 ft + 20 psi at 70%
+    # OPE = 287 kWh/acre-foot. This is the figure a farmer gets for recording NOTHING, so it
+    # must not be punitive — the previous value meant almost any measured input improved the
+    # number, which is the mirror image of the pump-depth bug fixed alongside it.
     IRRIGATION_PUMP_DEFAULT = EmissionFactor(
-        value=2.0,
+        value=0.88,
         unit="kWh_per_1000_gallons",
-        source="USDA NRCS Irrigation Energy Guidelines - US Agricultural Average",
-        confidence_level=0.70,
-        last_updated="2026-02-19",
-        notes="US average for mixed agricultural pumping. Midpoint of 0.5-3.5 kWh/1000 gal range.",
+        source="Irrigation pumping-energy equation (kWh/AF = 1.0241 × TDH / OPE) at 150 ft lift, 20 psi, 70% OPE",
+        confidence_level=0.60,
+        last_updated="2026-07-30",
+        notes=(
+            "Stand-in for an unrecorded water source: mid-range 150 ft lift + 20 psi = 196 ft TDH "
+            "at 70% pumping-plant efficiency = 287 kWh/acre-foot. Lowest confidence of any pump "
+            "factor because neither the source nor the lift is known."
+        ),
     )
 
     # Human-readable labels for water source types
@@ -774,6 +924,88 @@ class VerifiedEmissionFactors:
         "mixed": 0.20,  # Blended renewable + grid assumption
     }
 
+    # Energy required to lift one acre-foot of water one foot, at 100% efficiency.
+    # Physics, not an emission factor: 1 ac-ft = 1233.5 m³ = 1.2335e6 kg; lifting it 1 ft
+    # (0.3048 m) takes m·g·h = 3.688e6 J = 1.0241 kWh. This is the constant in the standard
+    # irrigation pumping-energy equation used by USBR/NRCS and the CPUC groundwater studies:
+    #     kWh per acre-foot = 1.0241 × TDH_ft / OPE
+    KWH_PER_ACRE_FOOT_PER_FOOT_OF_LIFT = 1.0241
+
+    GALLONS_PER_ACRE_FOOT = 325_851.0
+
+    # Overall pumping-plant efficiency (wire-to-water): motor × pump × drive losses.
+    # 0.70 is a reasonable mid-range for a maintained agricultural plant; well-maintained
+    # plants reach ~0.75 and neglected ones fall below 0.50. Conservative in the sense that
+    # a LOWER efficiency yields HIGHER emissions, so this does not understate impact.
+    DEFAULT_PUMPING_PLANT_EFFICIENCY = 0.70
+
+    # Pressure the system must add on top of the lift, by irrigation method (psi).
+    # Converted to feet of head at 2.31 ft/psi. Without this the depth-only figure
+    # understates a pressurized drip or sprinkler system, which does real work pushing
+    # water through emitters, not just raising it.
+    SYSTEM_PRESSURE_PSI_BY_METHOD = {
+        "drip": 15.0,
+        "drip_irrigation": 15.0,
+        "micro_sprinkler": 30.0,
+        "microsprinkler": 30.0,
+        "sprinkler": 50.0,
+        "center_pivot": 50.0,
+        "flood": 5.0,
+        "furrow": 5.0,
+        "surface": 5.0,
+    }
+    DEFAULT_SYSTEM_PRESSURE_PSI = 20.0
+    FEET_OF_HEAD_PER_PSI = 2.31
+
+    @classmethod
+    def _pump_energy_kwh_per_1000gal(
+        cls,
+        pump_depth_ft: float,
+        irrigation_method: str = None,
+        pump_efficiency: float = None,
+        system_pressure_psi: float = None,
+    ) -> Dict[str, Any]:
+        """Pump energy from total dynamic head, via the standard pumping-energy equation.
+
+        Replaces a previous `pump_depth_ft * 0.0175` shortcut that was labelled a
+        "USDA NRCS standard pump curve". That label was fabricated — NRCS publishes no such
+        curve — and the coefficient was roughly 3.9x too high: at a 120 ft lift it produced
+        684 kWh/acre-foot, where CPUC's California groundwater study reports about 175
+        kWh/acre-foot for a 120 ft well. Irrigation is the largest energy line in a
+        California orchard, and a grower can check kWh/acre-foot against their own utility
+        bill, so the error was both large and falsifiable.
+
+        Note what the old shortcut did to incentives: the no-depth default
+        (0.85 kWh/1000 gal ≈ 277 kWh/acre-foot) sat inside the real 170–600 range, so a
+        farmer who supplied MORE information — their actual pump depth — got a WORSE number.
+        That inverts the transparency-first premise. See the regression test in
+        carbon/tests/test_irrigation_pump_energy.py.
+        """
+        efficiency = (
+            pump_efficiency if pump_efficiency and pump_efficiency > 0 else cls.DEFAULT_PUMPING_PLANT_EFFICIENCY
+        )
+        # Guard against a bad parcel attribute making emissions implausibly small/large.
+        efficiency = min(max(efficiency, 0.30), 0.85)
+
+        if system_pressure_psi is None:
+            system_pressure_psi = cls.SYSTEM_PRESSURE_PSI_BY_METHOD.get(
+                (irrigation_method or "").lower(), cls.DEFAULT_SYSTEM_PRESSURE_PSI
+            )
+
+        pressure_head_ft = system_pressure_psi * cls.FEET_OF_HEAD_PER_PSI
+        total_dynamic_head_ft = pump_depth_ft + pressure_head_ft
+
+        kwh_per_acre_foot = cls.KWH_PER_ACRE_FOOT_PER_FOOT_OF_LIFT * total_dynamic_head_ft / efficiency
+        kwh_per_1000gal = kwh_per_acre_foot / (cls.GALLONS_PER_ACRE_FOOT / 1000.0)
+
+        return {
+            "kwh_per_1000gal": kwh_per_1000gal,
+            "kwh_per_acre_foot": kwh_per_acre_foot,
+            "total_dynamic_head_ft": total_dynamic_head_ft,
+            "pump_efficiency": efficiency,
+            "system_pressure_psi": system_pressure_psi,
+        }
+
     @classmethod
     def calculate_drought_irrigation_emissions(
         cls,
@@ -781,12 +1013,16 @@ class VerifiedEmissionFactors:
         water_source: str = None,
         pump_depth_ft: float = None,
         electricity_source: str = None,
+        irrigation_method: str = None,
+        pump_efficiency: float = None,
+        system_pressure_psi: float = None,
     ) -> Dict[str, Any]:
         """Calculate irrigation emissions using verified factors.
 
         Pump energy factor resolution order (Item #13):
-        1. pump_depth_ft — if provided, calculate from standard pump curve:
-               kWh/1000gal = depth_ft * 0.0175  (USDA NRCS standard pump efficiency)
+        1. pump_depth_ft — if provided, compute from total dynamic head:
+               kWh/acre-foot = 1.0241 × TDH / OPE,  TDH = depth + pressure head
+           (see _pump_energy_kwh_per_1000gal)
         2. water_source lookup (USDA NRCS guidelines):
            - well_groundwater: 3.5 kWh/1000 gal (deep well, 200-300 ft)
            - municipal: 0.20 kWh/1000 gal (pre-pressurized)
@@ -813,12 +1049,27 @@ class VerifiedEmissionFactors:
             electricity_source_label = "Grid (EPA eGRID 2023)"
 
         # Item #13: Override pump factor if pump_depth_ft is provided.
-        # Standard pump curve: kWh/1000gal = depth_ft * 0.0175 (USDA NRCS)
+        pump_head_detail = None
         if pump_depth_ft is not None and pump_depth_ft > 0:
-            pump_kwh_per_1000gal = pump_depth_ft * 0.0175
-            pump_source = f"USDA NRCS standard pump curve ({pump_depth_ft} ft depth)"
+            pump_head_detail = cls._pump_energy_kwh_per_1000gal(
+                pump_depth_ft=pump_depth_ft,
+                irrigation_method=irrigation_method,
+                pump_efficiency=pump_efficiency,
+                system_pressure_psi=system_pressure_psi,
+            )
+            pump_kwh_per_1000gal = pump_head_detail["kwh_per_1000gal"]
+            pump_source = (
+                "Irrigation pumping-energy equation (kWh/AF = 1.0241 × TDH / OPE); "
+                "constant is the physical work to lift 1 acre-foot 1 foot"
+            )
             pump_confidence = 0.85
-            pump_notes = f"Pump energy calculated from depth ({pump_depth_ft} ft) using USDA NRCS pump curve"
+            pump_notes = (
+                f"Pump energy from total dynamic head: {pump_depth_ft} ft lift + "
+                f"{pump_head_detail['system_pressure_psi']} psi system pressure "
+                f"= {pump_head_detail['total_dynamic_head_ft']:.0f} ft TDH at "
+                f"{pump_head_detail['pump_efficiency']:.0%} pumping-plant efficiency "
+                f"({pump_head_detail['kwh_per_acre_foot']:.0f} kWh/acre-foot)"
+            )
         elif water_source and water_source in cls.IRRIGATION_PUMP_FACTORS:
             pump_consumption = cls.IRRIGATION_PUMP_FACTORS[water_source]
             pump_kwh_per_1000gal = pump_consumption.value
@@ -850,6 +1101,16 @@ class VerifiedEmissionFactors:
             "water_source_label": water_source_label,
             "confidence_level": min(electricity_factor.confidence_level, pump_confidence),
         }
+
+        # Surface the head build-up when it drove the calculation, so a grower (or an
+        # inspector) can reconcile kWh/acre-foot against their own pump test and utility bill
+        # instead of taking a single opaque coefficient on trust.
+        if pump_head_detail:
+            breakdown["kwh_per_acre_foot"] = round(pump_head_detail["kwh_per_acre_foot"], 1)
+            breakdown["total_dynamic_head_ft"] = round(pump_head_detail["total_dynamic_head_ft"], 1)
+            breakdown["pumping_plant_efficiency"] = pump_head_detail["pump_efficiency"]
+            breakdown["system_pressure_psi"] = pump_head_detail["system_pressure_psi"]
+            breakdown["irrigation_method"] = irrigation_method
 
         return {
             "co2e_kg": round(co2e_kg, 3),
@@ -1064,6 +1325,9 @@ class VerifiedEmissionFactors:
             # fuel_consumed; falls back to a light area-based estimate) like EM.
             "FP": cls._calculate_general_production_emissions,
             "MO": cls._calculate_general_production_emissions,
+            # A7 (2026-07): post-harvest is facility energy, not field fuel — it had no entry
+            # here and was silently charged the general per-hectare diesel estimate.
+            "PH": cls._calculate_postharvest_emissions,
             # Full name aliases (safety net for any code path that passes descriptive names)
             "PLANTING": cls._calculate_planting_emissions,
             "HARVESTING": cls._calculate_harvesting_emissions,
@@ -1276,6 +1540,14 @@ class VerifiedEmissionFactors:
                     water_source=kwargs.get("water_source"),
                     pump_depth_ft=pump_depth_ft,
                     electricity_source=electricity_source,
+                    # Threaded so the pressure component of total dynamic head matches the
+                    # system: a drip line needs ~15 psi, a sprinkler ~50. pump_efficiency /
+                    # system_pressure_psi come from the parcel's pump test when recorded
+                    # (falling back to defaults), so a farmer who measures gets a figure
+                    # matching their own plant rather than a generic one.
+                    irrigation_method=kwargs.get("irrigation_method"),
+                    pump_efficiency=kwargs.get("pump_efficiency"),
+                    system_pressure_psi=kwargs.get("system_pressure_psi"),
                 )
 
                 # Record the pump-only emissions as a first-class breakdown field so
@@ -1359,8 +1631,12 @@ class VerifiedEmissionFactors:
                 area_hectares = area_covered * 0.404686
             else:
                 # Non-electric fuel — use correct factor for fuel type (gasoline, diesel, propane, etc.)
+                # fuel_co2e resolves gaseous fuels against their own (per-scf) basis instead
+                # of multiplying a gallon count by a per-cubic-foot factor.
                 fuel_factor, calculation_basis = cls._get_fuel_factor_for_type(fuel_type)
-                co2e_kg = fuel_consumed * fuel_factor.value
+                co2e_kg, fuel_factor, _fuel_unit_error = cls.fuel_co2e(
+                    fuel_consumed, fuel_type, kwargs.get("fuel_unit")
+                )
                 area_hectares = area_covered * 0.404686
             # Skip validation for actual fuel consumption - farmers provide measured values
             skip_validation = True
@@ -1457,8 +1733,12 @@ class VerifiedEmissionFactors:
                 area_hectares = area_covered * 0.404686
             else:
                 # Non-electric fuel — use correct factor for fuel type (gasoline, diesel, propane, etc.)
+                # fuel_co2e resolves gaseous fuels against their own (per-scf) basis instead
+                # of multiplying a gallon count by a per-cubic-foot factor.
                 fuel_factor, calculation_basis = cls._get_fuel_factor_for_type(fuel_type)
-                co2e_kg = fuel_consumed * fuel_factor.value
+                co2e_kg, fuel_factor, _fuel_unit_error = cls.fuel_co2e(
+                    fuel_consumed, fuel_type, kwargs.get("fuel_unit")
+                )
                 area_hectares = area_covered * 0.404686
             # Skip validation for actual fuel consumption - farmers provide measured values
             skip_validation = True
@@ -1555,8 +1835,12 @@ class VerifiedEmissionFactors:
                 area_hectares = area_covered * 0.404686
             else:
                 # Non-electric fuel — use correct factor for fuel type (gasoline, diesel, propane, etc.)
+                # fuel_co2e resolves gaseous fuels against their own (per-scf) basis instead
+                # of multiplying a gallon count by a per-cubic-foot factor.
                 fuel_factor, calculation_basis = cls._get_fuel_factor_for_type(fuel_type)
-                co2e_kg = fuel_consumed * fuel_factor.value
+                co2e_kg, fuel_factor, _fuel_unit_error = cls.fuel_co2e(
+                    fuel_consumed, fuel_type, kwargs.get("fuel_unit")
+                )
                 area_hectares = area_covered * 0.404686
             # SPRINT 6 FIX (2025-12-25): Skip validation for actual fuel consumption
             # Farmers provide real measured values that should be trusted, not capped
@@ -1623,6 +1907,170 @@ class VerifiedEmissionFactors:
             "validation_warnings": validated_result.get("warnings", []),
         }
 
+    # Farm-to-first-receiver hauling. Derived from the EPA mobile-combustion diesel factor
+    # (10.21 kg CO2/gal) at a loaded heavy-duty fuel economy of 6 mpg = 1.70 kg CO2e/mile.
+    # The ton-mile figure is used when a load weight is known, which is the more accurate
+    # basis for a part-full truck.
+    TRANSPORT_KG_CO2E_PER_MILE = 1.70
+    TRANSPORT_KG_CO2E_PER_TON_MILE = 0.209
+    MILES_PER_KM = 0.621371
+
+    @classmethod
+    def calculate_transport_emissions(
+        cls, distance: float, distance_unit: str = "miles", load_tons: float = None
+    ) -> Dict[str, Any]:
+        """Emissions from hauling harvested crop off the farm.
+
+        A4 fix (2026-07). `transportation_distance` has been collected on ProductionEvent and
+        SoilManagementEvent, validated in clean() (>500 raises a warning), surfaced on the
+        consumer card and packed into the structured production data — and consumed by no
+        formula at all. A farmer could record a 40-mile haul to the huller and it contributed
+        nothing.
+
+        This is in scope under carbon-methodology.md: hauling the crop from the farm to the
+        first receiver is farmer-controlled and operational. It is NOT full-chain freight
+        (distribution to retail, consumer travel), which remains excluded.
+        """
+        if not distance or float(distance) <= 0:
+            return {"co2e_kg": 0.0, "breakdown": {"transport_distance": 0}, "data_sources": []}
+
+        distance = float(distance)
+        unit = (distance_unit or "miles").lower()
+        miles = distance * cls.MILES_PER_KM if unit in ("km", "kilometer", "kilometers", "kilometre") else distance
+
+        if load_tons and float(load_tons) > 0:
+            co2e_kg = miles * float(load_tons) * cls.TRANSPORT_KG_CO2E_PER_TON_MILE
+            basis = "ton_miles"
+        else:
+            co2e_kg = miles * cls.TRANSPORT_KG_CO2E_PER_MILE
+            basis = "vehicle_miles"
+
+        return {
+            "co2e_kg": round(co2e_kg, 3),
+            "breakdown": {
+                "transport_distance": distance,
+                "transport_distance_unit": unit,
+                "transport_miles": round(miles, 2),
+                "transport_load_tons": float(load_tons) if load_tons else None,
+                "transport_basis": basis,
+                "transport_emission_factor": (
+                    cls.TRANSPORT_KG_CO2E_PER_TON_MILE if basis == "ton_miles" else cls.TRANSPORT_KG_CO2E_PER_MILE
+                ),
+                "transport_emissions_kg_co2e": round(co2e_kg, 3),
+            },
+            "data_sources": ["EPA 40 CFR Part 98 Table C-1 diesel (10.21 kg CO2/gal) at 6 mpg loaded heavy-duty"],
+            "limitations": (
+                "Farm to first receiver only. Onward distribution, retail and consumer travel are "
+                "outside Trazo's direct-operational-emissions scope."
+            ),
+        }
+
+    @classmethod
+    def _calculate_postharvest_emissions(
+        cls, area_covered: float, fuel_consumed: float = None, equipment_hours: float = None, **kwargs
+    ) -> Dict[str, Any]:
+        """Post-harvest processing (PH): hulling, drying, cooling — a FACILITY operation.
+
+        A7 fix (2026-07). PH had no entry in PRODUCTION_TYPE_MAPPING, so it fell through to
+        the general-production calculator and was charged a field-tillage-scale area estimate
+        (~2.5 gal diesel/ha). That is the wrong physical model twice over:
+
+          * ProductionEvent.clean() explicitly ALLOWS area_covered = 0 for PH because the work
+            happens in a huller or drying shed, not across a block. Any area recorded on a PH
+            event describes the block the crop came FROM, so multiplying it by a per-hectare
+            field-fuel rate invents diesel nobody burned.
+          * The real input is electricity (and sometimes propane for drying), which the form
+            already collects as `processing_energy_kwh` in extra_data — read by nothing until
+            now.
+
+        Order of preference: measured energy, then reported fuel, then nothing. There is no
+        area fallback on purpose — a fabricated figure is worse than an absent one, and this
+        is the same judgement applied to general events in A2.
+        """
+        electricity_factor = cls.get_country_electricity_factor()
+        processing_kwh = kwargs.get("processing_energy_kwh")
+        energy_source = kwargs.get("energy_source") or "grid"
+        fuel_type = kwargs.get("fuel_type") or "diesel"
+
+        components = {}
+        co2e_kg = 0.0
+
+        if processing_kwh:
+            kwh = float(processing_kwh)
+            factor = cls.ELECTRICITY_SOURCE_FACTORS.get(energy_source, electricity_factor.value)
+            electricity_emissions = kwh * factor
+            co2e_kg += electricity_emissions
+            components["processing_electricity_kwh"] = kwh
+            components["processing_electricity_kg_co2e"] = round(electricity_emissions, 3)
+            components["electricity_emission_factor_kg_per_kwh"] = factor
+
+        if fuel_consumed:
+            fuel_unit = (kwargs.get("fuel_unit") or "L").lower()
+            fuel_factor = cls.EPA_FUEL_FACTORS.get(fuel_type, cls.EPA_FUEL_FACTORS["diesel"])
+
+            if fuel_type == "natural_gas":
+                # UNIT-BASIS FIX (2026-07-31): the natural-gas factor is per STANDARD
+                # CUBIC FOOT (see EPA_FUEL_FACTORS). It was previously multiplied by a
+                # gallon count, so a dryer run reported as 310 L produced 1.18 kg CO2e
+                # for hulling 153,000 lb of walnuts. Shares the fuel_co2e choke point with
+                # the seven per-event paths so the two cannot drift apart.
+                fuel_emissions, fuel_factor, reason = cls.fuel_co2e(fuel_consumed, fuel_type, kwargs.get("fuel_unit"))
+                components["fuel_type"] = fuel_type
+                if reason:
+                    components["fuel_quantity_reported"] = f"{fuel_consumed} {kwargs.get('fuel_unit')}"
+                    components["fuel_kg_co2e"] = 0.0
+                    components["fuel_unit_error"] = reason
+                else:
+                    co2e_kg += fuel_emissions
+                    scf, _ = cls.gas_quantity_to_scf(fuel_consumed, kwargs.get("fuel_unit"))
+                    components["fuel_scf"] = round(scf, 3)
+                    components["fuel_emission_factor_kg_per_scf"] = fuel_factor.value
+                    components["fuel_kg_co2e"] = round(fuel_emissions, 3)
+            else:
+                # Litres are the form default; gallons is what the EPA factors are per.
+                gallons = (
+                    float(fuel_consumed) / 3.78541
+                    if fuel_unit in ("l", "liter", "liters", "litre", "litres")
+                    else float(fuel_consumed)
+                )
+                fuel_emissions = gallons * fuel_factor.value
+                co2e_kg += fuel_emissions
+                components["fuel_gallons"] = round(gallons, 3)
+                components["fuel_type"] = fuel_type
+                components["fuel_emission_factor_kg_per_gallon"] = fuel_factor.value
+                components["fuel_kg_co2e"] = round(fuel_emissions, 3)
+
+        has_inputs = bool(components)
+        breakdown = {
+            "production_activity": "post_harvest_processing",
+            "processing_type": kwargs.get("processing_type"),
+            "area_covered_acres": area_covered,
+            "calculation_basis": ("measured_facility_energy" if has_inputs else "no_energy_reported"),
+            "confidence_level": electricity_factor.confidence_level if has_inputs else 0.0,
+            **components,
+        }
+
+        return {
+            "co2e_kg": round(co2e_kg, 3),
+            "calculation_method": ("verified_epa_postharvest" if has_inputs else "postharvest_no_data"),
+            "breakdown": breakdown,
+            "data_sources": [electricity_factor.source] if has_inputs else [],
+            "limitations": (
+                (
+                    "Facility energy for hulling/drying/cooling. Direct operational emissions only."
+                    + (
+                        " Fuel NOT counted: " + components["fuel_unit_error"] + "."
+                        if components.get("fuel_unit_error")
+                        else ""
+                    )
+                )
+                if has_inputs
+                else "No processing energy or fuel reported — record processing_energy_kwh for a "
+                "calculated figure. No area-based estimate is applied: post-harvest work is "
+                "facility-based, so a per-hectare field rate would fabricate diesel."
+            ),
+        }
+
     @classmethod
     def _calculate_general_production_emissions(
         cls, area_covered: float, fuel_consumed: float = None, equipment_hours: float = None, **kwargs
@@ -1663,8 +2111,12 @@ class VerifiedEmissionFactors:
                 area_hectares = area_covered * 0.404686
             else:
                 # Non-electric fuel — use correct factor for fuel type (gasoline, diesel, propane, etc.)
+                # fuel_co2e resolves gaseous fuels against their own (per-scf) basis instead
+                # of multiplying a gallon count by a per-cubic-foot factor.
                 fuel_factor, calculation_basis = cls._get_fuel_factor_for_type(fuel_type)
-                co2e_kg = fuel_consumed * fuel_factor.value
+                co2e_kg, fuel_factor, _fuel_unit_error = cls.fuel_co2e(
+                    fuel_consumed, fuel_type, kwargs.get("fuel_unit")
+                )
                 area_hectares = area_covered * 0.404686
             # Skip validation for actual fuel consumption - farmers provide measured values
             skip_validation = True
@@ -1782,8 +2234,12 @@ class VerifiedEmissionFactors:
                 area_hectares = area_covered * 0.404686
             else:
                 # Non-electric fuel — use correct factor for fuel type (gasoline, diesel, propane, etc.)
+                # fuel_co2e resolves gaseous fuels against their own (per-scf) basis instead
+                # of multiplying a gallon count by a per-cubic-foot factor.
                 fuel_factor, calculation_basis = cls._get_fuel_factor_for_type(fuel_type)
-                co2e_kg = fuel_consumed * fuel_factor.value
+                co2e_kg, fuel_factor, _fuel_unit_error = cls.fuel_co2e(
+                    fuel_consumed, fuel_type, kwargs.get("fuel_unit")
+                )
                 area_hectares = area_covered * 0.404686
             # Skip validation for actual fuel consumption - farmers provide measured values
             # (BUG FIX: was missing — validation cap silently lowered actual farmer data)
@@ -1888,8 +2344,12 @@ class VerifiedEmissionFactors:
                     calculation_basis = "actual_electric_consumption_grid"
             else:
                 # Non-electric fuel — use correct factor for fuel type (gasoline, diesel, propane, etc.)
+                # fuel_co2e resolves gaseous fuels against their own (per-scf) basis instead
+                # of multiplying a gallon count by a per-cubic-foot factor.
                 fuel_factor, calculation_basis = cls._get_fuel_factor_for_type(fuel_type)
-                co2e_kg = fuel_consumed * fuel_factor.value
+                co2e_kg, fuel_factor, _fuel_unit_error = cls.fuel_co2e(
+                    fuel_consumed, fuel_type, kwargs.get("fuel_unit")
+                )
         elif equipment_hours:
             # Estimate minimal fuel for manual operations with light equipment
             estimated_fuel = equipment_hours * 0.5  # 0.5 gal/hour for light equipment
@@ -1962,6 +2422,14 @@ class VerifiedEmissionFactors:
         if fuel_consumed is not None:
             # Use actual fuel consumption
             fuel_consumed = float(fuel_consumed)  # Convert Decimal to float for calculation
+            # 2026-07-31: cultivation was the ONLY production path that did not set this,
+            # so `_validate_production_emissions` silently rewrote a grower's MEASURED fuel
+            # down to a per-hectare "realistic range" — 100 measured gallons was reported as
+            # 859.96 kg instead of 1021 kg ("Exceeded realistic cultivation emissions range").
+            # Every sibling branch already carries the same guard with the same rationale:
+            # farmers provide measured values, which are trusted, not capped. A deep-ripping
+            # or heavy-disc pass legitimately exceeds the per-hectare average.
+            skip_validation = True
             if fuel_type == "electric":
                 # Electric equipment - fuel_consumed is in kWh
                 if energy_source in ["solar", "wind"]:
@@ -1975,13 +2443,18 @@ class VerifiedEmissionFactors:
                 area_hectares = area_covered * 0.404686
             else:
                 # Non-electric fuel — use correct factor for fuel type (gasoline, diesel, propane, etc.)
+                # fuel_co2e resolves gaseous fuels against their own (per-scf) basis instead
+                # of multiplying a gallon count by a per-cubic-foot factor.
                 fuel_factor, calculation_basis = cls._get_fuel_factor_for_type(fuel_type)
-                co2e_kg = fuel_consumed * fuel_factor.value
+                co2e_kg, fuel_factor, _fuel_unit_error = cls.fuel_co2e(
+                    fuel_consumed, fuel_type, kwargs.get("fuel_unit")
+                )
                 area_hectares = area_covered * 0.404686
         else:
             # Use USDA standard for cultivation (fixed: removed equipment_hours multiplier)
             # USDA factors are designed for area-based calculations, not time-based
             # Equipment hours are informational but should not scale the USDA factor
+            skip_validation = False
             area_hectares = area_covered * 0.404686
             fuel_gallons = area_hectares * cultivation_factor.value
             co2e_kg = fuel_gallons * diesel_factor.value
@@ -2020,7 +2493,10 @@ class VerifiedEmissionFactors:
             breakdown["equipment_hours"] = equipment_hours
 
         # Add validation for unrealistic results
-        validated_result = cls._validate_production_emissions(co2e_kg, area_covered, "cultivation", breakdown)
+        if skip_validation:
+            validated_result = {"co2e_kg": co2e_kg, "breakdown": breakdown, "warnings": [], "limitations": []}
+        else:
+            validated_result = cls._validate_production_emissions(co2e_kg, area_covered, "cultivation", breakdown)
 
         return {
             "co2e_kg": round(validated_result["co2e_kg"], 3),
@@ -2354,6 +2830,16 @@ class VerifiedEmissionFactors:
                 organic_fertilizer_factor = cls.EPA_CHEMICAL_FACTORS["organic_fertilizer_manufacturing"]
                 # Organic fertilizers have much lower manufacturing emissions
                 manufacturing_emissions = total_fertilizer_kg * organic_fertilizer_factor.value
+                # 2026-07-31: field N2O was missing entirely. `n_kg` was computed further up
+                # and then discarded for this branch, so an organic grower's applied nitrogen
+                # produced ZERO soil emissions while the synthetic and slow-release branches
+                # both carried it (inside nitrogen_factor's 10.5). Field N2O is a real,
+                # farmer-controlled, in-scope emission — it depends on the nitrogen, not on
+                # how the nitrogen was made.
+                n_kg = total_fertilizer_kg * n_percentage
+                field_n2o_factor = cls.EPA_CHEMICAL_FACTORS["nitrogen_field_n2o"]
+                organic_field_n2o_emissions = n_kg * field_n2o_factor.value
+                manufacturing_emissions += organic_field_n2o_emissions
             elif is_slow_release_fertilizer:
                 # Slow-release fertilizers have similar manufacturing to synthetic but better efficiency
                 # Use standard NPK calculation with a small premium for coating
@@ -2547,7 +3033,14 @@ class VerifiedEmissionFactors:
             # Only report density when it was actually used (volume→mass conversion).
             # When chemical_mass_kg was provided directly, density is not applicable.
             "formulation_density_kg_per_l": (round(density_applied, 3) if density_applied is not None else None),
+            # Historically this was purely manufacturing. Since 2026-07-31 the organic
+            # fertiliser branch also folds in post-application field N2O, so the honest
+            # label for the aggregate is "product" emissions (everything except the
+            # application fuel below). The organic breakdown splits it into
+            # processing_emissions_kg_co2e + field_n2o_emissions_kg_co2e; the key below is
+            # retained under its old name for backward compatibility with existing readers.
             "manufacturing_emissions_kg_co2e": round(manufacturing_emissions, 3),
+            "product_emissions_kg_co2e": round(manufacturing_emissions, 3),
             "application_fuel_liters": total_fuel_liters,
             "application_fuel_gallons": round(total_fuel_gallons, 3),
             "application_fuel_type": application_fuel_type or "diesel",  # Include fuel type for transparency
@@ -2740,13 +3233,28 @@ class VerifiedEmissionFactors:
 
             if is_organic_fertilizer:
                 organic_fertilizer_factor = cls.EPA_CHEMICAL_FACTORS["organic_fertilizer_manufacturing"]
+                field_n2o_factor = cls.EPA_CHEMICAL_FACTORS["nitrogen_field_n2o"]
                 breakdown.update(
                     {
                         "fertilizer_subtype": "organic",
                         "emission_factor_kg_co2_per_kg": organic_fertilizer_factor.value,
-                        "note": "Organic fertilizer (compost, manure) has minimal manufacturing emissions",
+                        # Show the nitrogen basis. Previously the organic branch reported only a
+                        # per-kg-of-PRODUCT rate, so a dilute liquid was charged for its water
+                        # and the applied N was invisible in the audit trail.
+                        "nitrogen_kg": round(n_kg, 3),
+                        "processing_emissions_kg_co2e": round(total_fertilizer_kg * organic_fertilizer_factor.value, 3),
+                        "field_n2o_factor_kg_co2e_per_kg_n": field_n2o_factor.value,
+                        "field_n2o_emissions_kg_co2e": round(n_kg * field_n2o_factor.value, 3),
+                        "note": (
+                            "Organic fertilizer: minimal manufacturing/processing emissions, plus "
+                            "post-application field N2O on the nitrogen applied (IPCC 2019 "
+                            "Refinement direct + indirect). Field N2O depends on the nitrogen, "
+                            "not on how it was made."
+                        ),
                         "confidence_level": min(
-                            organic_fertilizer_factor.confidence_level, fuel_factor.confidence_level
+                            organic_fertilizer_factor.confidence_level,
+                            field_n2o_factor.confidence_level,
+                            fuel_factor.confidence_level,
                         ),
                     }
                 )

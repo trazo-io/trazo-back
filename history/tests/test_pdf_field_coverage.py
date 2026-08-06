@@ -1,0 +1,292 @@
+"""
+Phase 1 / B3 — fields the farmer fills in must reach the certifier PDF.
+
+Every field below was collected by a form, stored on the model, and rendered in NO export
+section. That is the worst failure mode this document has: the farmer did the work, the
+record looks complete, and the evidence is silently absent when an inspector asks.
+
+This is a COVERAGE test, not a layout test. It asserts the value string appears somewhere
+in the rendered flowables for its section. It deliberately does not assert which column —
+the point is that the data reaches the page at all, so a future layout change that moves a
+field is fine and one that drops it is not.
+"""
+
+from datetime import timedelta
+
+from django.test import TestCase
+from django.utils import timezone
+
+from company.models import Company, Establishment
+from history.models import ChemicalEvent, History, PestManagementEvent, ProductionEvent, SoilManagementEvent
+from history.services.audit_export_service import AuditExportService
+from product.models import Parcel, Product
+from users.models import User
+
+
+def flowable_text(elements):
+    """Flatten rendered flowables (tables + paragraphs) into one searchable string."""
+    out = []
+    for el in elements:
+        for row in getattr(el, "_cellvalues", None) or []:
+            for cell in row:
+                text = getattr(cell, "text", None)
+                if text:
+                    out.append(text)
+        paragraph_text = getattr(el, "text", None)
+        if paragraph_text:
+            out.append(paragraph_text)
+    return " ".join(out)
+
+
+class PdfFieldCoverageTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email="coverage@test.com", password="x")
+        self.company = Company.objects.create(name="Coverage Farm")
+        self.establishment = Establishment.objects.create(name="CE1", company=self.company, state="CA")
+        self.parcel = Parcel.objects.create(name="C-parcel", establishment=self.establishment, area=10.0)
+        self.product = Product.objects.create(name="Almond")
+        self.now = timezone.now()
+        self.history = History.objects.create(
+            name="Coverage Production",
+            start_date=self.now - timedelta(days=200),
+            product=self.product,
+            parcel=self.parcel,
+            operator=self.user,
+            earning=0.0,
+            production_amount=0.0,
+            reputation=0.0,
+            confidence_score=0.0,
+            transparency_score=0.0,
+            public_views=0,
+            unique_visitors=0,
+            is_outdoor=True,
+        )
+
+    def _service(self):
+        return AuditExportService(self.history, certification_type="organic")
+
+    # ---- Chemical section -------------------------------------------------
+
+    def test_authorizer_name_reaches_the_input_traceability_table(self):
+        """GLOBALG.A.P. FV-GFS 32.02.01 #10 — who approved the application."""
+        ChemicalEvent.objects.create(
+            history=self.history,
+            type="PE",
+            date=self.now,
+            description="Spinosad for NOW",
+            commercial_name="Entrust SC",
+            supplier_name="Wilbur-Ellis",
+            applicator_name="Ana Torres",
+            authorizer_name="Jordan Blake PCA",
+        )
+        text = flowable_text(self._service()._build_chemical_log())
+        self.assertIn("Jordan Blake PCA", text)
+        self.assertIn("Ana Torres", text)
+        self.assertIn("Application Context", text)
+
+    def test_fertigation_flag_reaches_the_application_table(self):
+        ChemicalEvent.objects.create(
+            history=self.history,
+            type="FE",
+            date=self.now,
+            description="Fish hydrolysate through drip",
+            commercial_name="Fish Hydrolysate 2-4-1",
+            is_fertigation=True,
+            way_of_application="drip",
+        )
+        self.assertIn("Fertigated", flowable_text(self._service()._build_chemical_log()))
+
+    def test_growth_stage_reaches_the_application_table(self):
+        ChemicalEvent.objects.create(
+            history=self.history,
+            type="FU",
+            date=self.now,
+            description="Sulfur at bloom",
+            commercial_name="Kumulus DF",
+            target_pest_disease="Brown rot",
+            growth_stage="bloom",
+        )
+        text = flowable_text(self._service()._build_chemical_log())
+        self.assertIn("Brown rot", text)
+        self.assertIn("Bloom/Flowering", text)
+
+    def test_application_context_subtable_absent_when_nothing_recorded(self):
+        # A plain spray with no stage, no fertigation and no authoriser must not add an
+        # empty context table to the packet.
+        ChemicalEvent.objects.create(
+            history=self.history,
+            type="PE",
+            date=self.now,
+            description="Routine spray",
+            commercial_name="Entrust SC",
+        )
+        self.assertNotIn("Application Context", flowable_text(self._service()._build_chemical_log()))
+
+    # ---- Soil section -----------------------------------------------------
+
+    def test_working_depth_texture_and_moisture_reach_the_soil_section(self):
+        SoilManagementEvent.objects.create(
+            history=self.history,
+            type="TI",
+            date=self.now,
+            description="Shallow incorporation",
+            area_covered=5.0,
+            working_depth=6.0,
+            depth_unit="in",
+            soil_texture="sandy_loam",
+            soil_moisture="field_capacity",
+        )
+        text = flowable_text(self._service()._build_soil_section())
+        self.assertIn("6.00 in", text)
+        self.assertIn("sandy_loam", text)
+        self.assertIn("field_capacity", text)
+
+    def test_soil_condition_subtable_absent_when_nothing_recorded(self):
+        SoilManagementEvent.objects.create(
+            history=self.history,
+            type="CC",
+            date=self.now,
+            description="Cover crop seeded",
+            area_covered=5.0,
+        )
+        self.assertNotIn("Soil Condition", flowable_text(self._service()._build_soil_section()))
+
+    # ---- Pest section -----------------------------------------------------
+
+    def test_chemical_free_period_reaches_the_pest_section(self):
+        PestManagementEvent.objects.create(
+            history=self.history,
+            type="SC",
+            date=self.now,
+            description="Scouting pass",
+            pest_species="Navel orangeworm",
+            chemical_free_period_days=145,
+        )
+        self.assertIn("145", flowable_text(self._service()._build_pest_section()))
+
+    def test_growth_stage_reaches_the_pest_section(self):
+        PestManagementEvent.objects.create(
+            history=self.history,
+            type="SC",
+            date=self.now,
+            description="Scouting pass",
+            pest_species="Navel orangeworm",
+            extra_data={"crop_growth_stage": "hull split"},
+        )
+        text = flowable_text(self._service()._build_pest_section())
+        self.assertIn("Navel orangeworm", text)
+        self.assertIn("hull split", text)
+
+    # ---- Production + traceability ---------------------------------------
+
+    def test_growth_stage_reaches_the_production_events_table(self):
+        ProductionEvent.objects.create(
+            history=self.history,
+            type="TH",
+            date=self.now,
+            description="Thinning pass",
+            area_covered=5.0,
+            growth_stage="fruit_set",
+        )
+        self.assertIn("Fruit Set", flowable_text(self._service()._build_production_events()))
+
+    def test_transport_distance_reaches_the_traceability_section(self):
+        ProductionEvent.objects.create(
+            history=self.history,
+            type="HA",
+            date=self.now,
+            description="Harvest and haul to huller",
+            area_covered=5.0,
+            transportation_distance=42.5,
+            transportation_unit="miles",
+        )
+        text = flowable_text(self._service()._build_traceability_section())
+        self.assertIn("42.50 miles", text)
+
+    def test_traceability_omits_transport_row_when_no_haul_recorded(self):
+        ProductionEvent.objects.create(
+            history=self.history,
+            type="HA",
+            date=self.now,
+            description="Harvest, no haul recorded",
+            area_covered=5.0,
+        )
+        self.assertNotIn("Transport Distance", flowable_text(self._service()._build_traceability_section()))
+
+    # ---- Supervisor sign-off (attestation) -------------------------------
+
+    def test_supervisor_signoff_reaches_the_attestation_section(self):
+        ProductionEvent.objects.create(
+            history=self.history,
+            type="IR",
+            date=self.now,
+            description="Irrigation set",
+            area_covered=5.0,
+            reviewed=True,
+            reviewer_name="Marta Ruiz",
+            review_date=self.now.date(),
+        )
+        text = flowable_text(self._service()._build_producer_attestation_section())
+        self.assertIn("Supervisor Record Review", text)
+        self.assertIn("Marta Ruiz", text)
+
+    def test_equipment_signoffs_are_scanned_too(self):
+        """§ 112.161(b) names "equipment and tool cleaning" as a review-required record.
+
+        EquipmentEvent inherits reviewed/reviewer_name/review_date from CommonEvent like
+        every other event model, so omitting it from the scan would drop exactly the
+        sign-offs the regulation asks about.
+        """
+        from history.models import EquipmentEvent
+
+        EquipmentEvent.objects.create(
+            history=self.history,
+            type="CL",
+            date=self.now,
+            description="Harvester cleaned before organic block",
+            reviewed=True,
+            reviewer_name="Dana Okonkwo",
+            review_date=self.now.date(),
+        )
+        text = flowable_text(self._service()._build_producer_attestation_section())
+        self.assertIn("Dana Okonkwo", text)
+        self.assertIn("Equipment", text)
+
+    def test_attestation_has_no_signoff_table_when_nothing_reviewed(self):
+        ProductionEvent.objects.create(
+            history=self.history,
+            type="IR",
+            date=self.now,
+            description="Irrigation set",
+            area_covered=5.0,
+        )
+        self.assertNotIn(
+            "Supervisor Record Review",
+            flowable_text(self._service()._build_producer_attestation_section()),
+        )
+
+    # ---- Application fuel stays out of the organic packet -----------------
+
+    def test_application_fuel_renders_in_the_carbon_appendix(self):
+        ChemicalEvent.objects.create(
+            history=self.history,
+            type="PE",
+            date=self.now,
+            description="Spinosad",
+            commercial_name="Entrust SC",
+            application_fuel_type="diesel",
+            application_fuel_consumed=3.5,
+            application_fuel_unit="gal",
+        )
+        self.assertIn("3.50 gal", flowable_text(self._service()._build_carbon_section()))
+
+    def test_carbon_appendix_is_not_part_of_the_organic_export(self):
+        """Energy figures on a certifier document invite greenwashing-by-association.
+
+        The application-fuel table is only reachable through the carbon appendix, so this
+        assertion is what keeps it out of the organic packet.
+        """
+        from history.services.audit_export_service import AuditExportService as Svc
+
+        self.assertNotIn("carbon", Svc.CERTIFICATION_SECTIONS["organic"])
+        self.assertIn("carbon", Svc.CERTIFICATION_SECTIONS["all"])

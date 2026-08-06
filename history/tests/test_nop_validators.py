@@ -280,6 +280,38 @@ class NOPManureHarvestIntervalTests(TestCase):
         with self.assertRaises(ValidationError):
             event.full_clean()
 
+    def test_processed_5006_with_raw_interval_is_rejected_at_clean(self):
+        # An event cannot be both processed-exempt AND carry a raw 90/120 interval.
+        ev = SoilManagementEvent(
+            history=self.history,
+            created_by=self.user,
+            description="Contradictory manure classification",
+            date=timezone.now(),
+            type="OM",
+            manure_application_date=timezone.now().date(),
+            manure_treatment="processed_5006",
+            processed_manure_temp_f=150,
+            manure_harvest_interval="120",  # raw interval — contradiction
+        )
+        with self.assertRaises(ValidationError) as ctx:
+            ev.full_clean()
+        self.assertIn("manure_harvest_interval", ctx.exception.message_dict)
+
+    def test_processed_5006_without_documentation_is_rejected_at_clean(self):
+        # Claiming the NOP 5006 exemption requires temperature or attestation.
+        ev = SoilManagementEvent(
+            history=self.history,
+            created_by=self.user,
+            description="Undocumented processed manure",
+            date=timezone.now(),
+            type="OM",
+            manure_application_date=timezone.now().date(),
+            manure_treatment="processed_5006",  # no temp, no attestation
+        )
+        with self.assertRaises(ValidationError) as ctx:
+            ev.full_clean()
+        self.assertIn("manure_treatment", ctx.exception.message_dict)
+
     def test_compost_missing_method_does_not_bypass(self):
         # Temp + duration + C:N present but no method — cannot assert (c)(2) path.
         from history.models import SoilManagementEvent

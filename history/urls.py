@@ -2,11 +2,7 @@ from django.urls import include, path
 
 from rest_framework import routers
 
-from .transparency_views import (
-    production_transparency_detail,
-    transparency_explanation,
-    verify_blockchain,
-)
+from .transparency_views import production_transparency_detail, transparency_explanation, verify_blockchain
 from .views import (
     BuyerDocRequestViewSet,
     EventViewSet,

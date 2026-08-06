@@ -259,10 +259,10 @@ class IntegrationTestRunner:
     def _test_third_party_integrations(self):
         """Test USDA API, Stripe, and blockchain services"""
         try:
-            # USDA API integration removed for MVP — using hardcoded factors
+            # USDA API integration removed for MVP — using hardcoded factors. The
+            # api-key branch that used to guard this was removed with it; the log is
+            # now unconditional.
             self._log_success("USDA", "USDA API removed for MVP (hardcoded EPA/USDA factors)")
-            else:
-                self._log_warning("USDA", "USDA API key not configured - skipping test")
 
             # Test blockchain service initialization
             try:

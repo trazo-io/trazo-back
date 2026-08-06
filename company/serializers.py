@@ -8,6 +8,7 @@ from rest_framework.serializers import ModelSerializer
 
 from common.models import Gallery
 from common.serializers import GallerySerializer
+from common.validators import USContactFieldsMixin, USStateFieldMixin
 from product.serializers import ParcelBasicSerializer
 from subscriptions.serializers import SubscriptionSerializer
 from users.models import WorksIn
@@ -121,7 +122,11 @@ class EstablishmentSerializer(ModelSerializer):
             return []
 
 
-class UpdateEstablishmentSerializer(ModelSerializer):
+class UpdateEstablishmentSerializer(USContactFieldsMixin, USStateFieldMixin, ModelSerializer):
+    US_PHONE_FIELDS = ("contact_phone", "phone")
+    US_ZIP_FIELDS = ("zip_code",)
+    US_STATE_FIELDS = ("state",)
+
     album = GallerySerializer(required=False)
     s3_keys = serializers.ListField(child=serializers.CharField(), required=False, write_only=True)
     uploaded_image_urls = serializers.ListField(child=serializers.URLField(), required=False, write_only=True)
@@ -485,10 +490,21 @@ class BasicEstablishmentSerializer(ModelSerializer):
         fields = (
             "id",
             "name",
+            # `state` decides which state-specific compliance surfaces render (the CA
+            # PUR fields, the CDFA registration card). RetrieveCompanySerializer falls
+            # back to this serializer when there is no request in context, and without
+            # `state` a real California grower would silently lose the PUR fields on
+            # their spray form. Both call sites are authenticated staff-facing, never
+            # the anonymous consumer payload.
+            "state",
         )
 
 
-class RetrieveCompanySerializer(ModelSerializer):
+class RetrieveCompanySerializer(USContactFieldsMixin, USStateFieldMixin, ModelSerializer):
+    US_PHONE_FIELDS = ("contact_phone",)
+    US_ZIP_FIELDS = ("zip_code",)
+    US_STATE_FIELDS = ("state",)
+
     establishments = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
     subscription = SubscriptionSerializer(read_only=True)
@@ -620,7 +636,11 @@ class RetrieveCompanySerializer(ModelSerializer):
         return None
 
 
-class CreateCompanySerializer(ModelSerializer):
+class CreateCompanySerializer(USContactFieldsMixin, USStateFieldMixin, ModelSerializer):
+    US_PHONE_FIELDS = ("contact_phone",)
+    US_ZIP_FIELDS = ("zip_code",)
+    US_STATE_FIELDS = ("state",)
+
     class Meta:
         model = Company
         exclude = ("invitation_code",)
@@ -725,7 +745,20 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
         transparency_calc = TransparencyCalculator()
         transparency_scores = []
 
-        for history in establishment_histories.select_related("crop_type").prefetch_related(
+        # Score only FINISHED, PUBLISHED productions.
+        #
+        # This used to average every History row on the farm. A season that has only just
+        # started necessarily has few or no events, so it scores ~0 and halves the farm's
+        # headline — i.e. starting a new production, the exact action the product exists to
+        # encourage, made the farmer's number collapse. Unpublished drafts and internal test
+        # productions counted too: one real pilot farm whose only finished season scored 74
+        # was displayed as 37 ("D") because a zero-event draft was averaged in.
+        #
+        # An in-progress season is not a badly-documented season — it is a season with no
+        # verdict yet, so it is excluded rather than counted as zero.
+        scored_histories = establishment_histories.filter(published=True, finish_date__isnull=False)
+
+        for history in scored_histories.select_related("crop_type").prefetch_related(
             "history_productionevent_events__album__images",
             "history_chemicalevent_events__album__images",
             "history_soilmanagementevent_events__album__images",
@@ -738,7 +771,13 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
             t_data = transparency_calc.calculate_transparency_score(history)
             transparency_scores.append(t_data.get("transparency_percentage", 0))
 
-        transparency_score = sum(transparency_scores) / len(transparency_scores) if transparency_scores else 0
+        # None (not 0) when nothing has been finished yet, so the UI can say "no finished
+        # seasons yet" instead of rendering a 0% that reads as a failing grade. Callers must
+        # treat None as "no verdict", never coerce it to 0.
+        transparency_score = sum(transparency_scores) / len(transparency_scores) if transparency_scores else None
+        # Literally "no finish date yet". Deliberately NOT `total - scored`: that would also
+        # sweep in a season the farmer finished but has not published, which is not underway.
+        productions_in_progress = establishment_histories.filter(finish_date__isnull=True).count()
 
         # --- 5. BLOCKCHAIN COUNT (bulk, from extra_data JSON) ---
         blockchain_verified_count = 0
@@ -755,7 +794,11 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
         # Does NOT compare against other farms — no cohort data exists to support
         # a real percentile claim. This avoids fabricated "Top X%" badges that
         # would violate FTC Green Guides (16 CFR 260) on unsubstantiated claims.
-        if transparency_score >= 90:
+        # `None` means no finished season yet — that is an absence of a verdict, not a poor
+        # one, so it must not fall through to "developing".
+        if transparency_score is None:
+            transparency_tier = "not_started"
+        elif transparency_score >= 90:
             transparency_tier = "excellent"
         elif transparency_score >= 80:
             transparency_tier = "strong"
@@ -779,11 +822,14 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
             "consumer_reach": consumer_reach,
             "monthly_scans": monthly_scans,
             "scan_growth_percentage": round(scan_growth_percentage, 1),
-            # Transparency (PRIMARY)
-            "transparency_score": round(transparency_score, 1),
+            # Transparency (PRIMARY). None = no finished season yet; clients must render
+            # "not started", never 0%.
+            "transparency_score": round(transparency_score, 1) if transparency_score is not None else None,
+            "scored_productions": len(transparency_scores),
             "total_documented_events": total_documented_events,
             # Production counts
             "total_productions": total_productions,
+            "productions_in_progress": productions_in_progress,
             "blockchain_verified_count": blockchain_verified_count,
             # Score-tier label (non-comparative, derived from farm's own score)
             "transparency_tier": transparency_tier,

@@ -597,6 +597,201 @@ CROP_CUSTOMIZATIONS = {
         "yield_per_ha": 25.0,
         "yield_unit": "tons",
     },
+    # === NON-CALIFORNIA REGIONS ===
+    # Without an entry here a crop silently inherits corn_field's Midwest defaults
+    # (see the `crop_slug not in CROP_CUSTOMIZATIONS` fallback in handle()), which
+    # would have given an Oregon hazelnut grower a corn calendar and corn products.
+    # Regions and timings below are the real production windows, not California's.
+    "pecans": {
+        "npk": "10-10-10",
+        "nitrogen_pct": 10.0,
+        "phosphorus_pct": 10.0,
+        "potassium_pct": 10.0,
+        "commercial_name": "YaraMila Complex 12-11-18",
+        "secondary_fertilizer": "Ammonium Sulfate 21-0-0",
+        "slow_release_fertilizer": "Osmocote Plus 15-9-12",
+        "primary_fungicide": "Absolute Maxx (tebuconazole + trifloxystrobin)",
+        "fungicide_subtype": "synthetic_fungicide",
+        "fungicide_target": "Pecan scab, downy spot",
+        "copper_fungicide": "Kocide 3000 (copper hydroxide)",
+        "primary_pesticide": "Intrepid 2F (methoxyfenozide)",
+        "pesticide_subtype": "synthetic_pesticide",
+        "pesticide_target": "Pecan nut casebearer, pecan weevil",
+        "herbicide": "Roundup PowerMax 3 (glyphosate)",
+        "herbicide_subtype": "synthetic_herbicide",
+        "primary_pest_species": "Pecan nut casebearer, pecan weevil, aphids",
+        "common_pests": "Pecan nut casebearer, pecan weevil, black aphid, mites",
+        "beneficial_insects": "Trichogramma wasps, lady beetles",
+        "beneficial_release_quantity": "per hectare",
+        "certification_type": "global_gap",
+        "certification_standard": "GLOBALG.A.P. IFA v6",
+        "certification_body": "SCS Global Services",
+        "irrigation_method": "micro_sprinkler",
+        "water_source": "well_groundwater",
+        "soil_type": "sandy_loam",
+        "typical_area": 40.0,
+        "region": "Southeast / Texas",
+        "timing_soil": "December - January",
+        "timing_plant": "January - February",
+        "timing_fertilize": "March - June",
+        "timing_irrigate": "May - October",
+        "timing_pest": "April - September",
+        "timing_harvest": "October - December",
+        "yield_per_ha": 2.2,
+        "yield_unit": "tons",
+    },
+    "hazelnuts": {
+        "npk": "16-16-16",
+        "nitrogen_pct": 16.0,
+        "phosphorus_pct": 16.0,
+        "potassium_pct": 16.0,
+        "commercial_name": "YaraMila Complex 12-11-18",
+        "secondary_fertilizer": "Urea 46-0-0",
+        "slow_release_fertilizer": "Osmocote Plus 15-9-12",
+        "primary_fungicide": "Rally 40WSP (myclobutanil)",
+        "fungicide_subtype": "synthetic_fungicide",
+        "fungicide_target": "Eastern Filbert Blight",
+        "copper_fungicide": "Kocide 3000 (copper hydroxide)",
+        "primary_pesticide": "Warrior II (lambda-cyhalothrin)",
+        "pesticide_subtype": "synthetic_pesticide",
+        "pesticide_target": "Filbertworm, filbert aphid",
+        "herbicide": "Roundup PowerMax 3 (glyphosate)",
+        "herbicide_subtype": "synthetic_herbicide",
+        "primary_pest_species": "Filbertworm, filbert aphid, big bud mite",
+        "common_pests": "Filbertworm, filbert aphid, big bud mite",
+        "beneficial_insects": "Trioxys pallidus, lady beetles",
+        "beneficial_release_quantity": "per hectare",
+        "certification_type": "global_gap",
+        "certification_standard": "GLOBALG.A.P. IFA v6",
+        "certification_body": "SCS Global Services",
+        "irrigation_method": "drip",
+        "water_source": "well_groundwater",
+        "soil_type": "silt_loam",
+        "typical_area": 20.0,
+        "region": "Willamette Valley, Oregon",
+        "timing_soil": "November - December",
+        "timing_plant": "December - February",
+        "timing_fertilize": "March - May",
+        "timing_irrigate": "June - September",
+        "timing_pest": "May - August",
+        "timing_harvest": "September - October",
+        "yield_per_ha": 2.8,
+        "yield_unit": "tons",
+    },
+    "blueberries": {
+        "npk": "12-4-8",
+        "nitrogen_pct": 12.0,
+        "phosphorus_pct": 4.0,
+        "potassium_pct": 8.0,
+        "commercial_name": "Ammonium Sulfate 21-0-0 (acidifying)",
+        "secondary_fertilizer": "Sulfur-coated urea",
+        "slow_release_fertilizer": "Osmocote Plus 15-9-12",
+        "primary_fungicide": "Switch 62.5WG (cyprodinil + fludioxonil)",
+        "fungicide_subtype": "synthetic_fungicide",
+        "fungicide_target": "Botrytis, anthracnose, mummy berry",
+        "copper_fungicide": "Kocide 3000 (copper hydroxide)",
+        "primary_pesticide": "Delegate WG (spinetoram)",
+        "pesticide_subtype": "synthetic_pesticide",
+        "pesticide_target": "Spotted wing drosophila",
+        "herbicide": "Roundup PowerMax 3 (glyphosate)",
+        "herbicide_subtype": "synthetic_herbicide",
+        "primary_pest_species": "Spotted wing drosophila, blueberry maggot",
+        "common_pests": "Spotted wing drosophila, blueberry maggot, aphids",
+        "beneficial_insects": "Lady beetles, lacewings",
+        "beneficial_release_quantity": "per hectare",
+        "certification_type": "global_gap",
+        "certification_standard": "GLOBALG.A.P. IFA v6",
+        "certification_body": "SCS Global Services",
+        "irrigation_method": "drip",
+        "water_source": "well_groundwater",
+        "soil_type": "sandy_loam",
+        "typical_area": 10.0,
+        "region": "Michigan / Pacific Northwest",
+        "timing_soil": "March - April",
+        "timing_plant": "April - May",
+        "timing_fertilize": "April - June",
+        "timing_irrigate": "May - September",
+        "timing_pest": "June - August",
+        "timing_harvest": "June - August",
+        "yield_per_ha": 12.0,
+        "yield_unit": "tons",
+    },
+    "hops": {
+        "npk": "20-10-20",
+        "nitrogen_pct": 20.0,
+        "phosphorus_pct": 10.0,
+        "potassium_pct": 20.0,
+        "commercial_name": "YaraMila Complex 12-11-18",
+        "secondary_fertilizer": "Urea 46-0-0",
+        "slow_release_fertilizer": "Osmocote Plus 15-9-12",
+        "primary_fungicide": "Quintec (quinoxyfen)",
+        "fungicide_subtype": "synthetic_fungicide",
+        "fungicide_target": "Powdery mildew, downy mildew",
+        "copper_fungicide": "Kocide 3000 (copper hydroxide)",
+        "primary_pesticide": "Movento (spirotetramat)",
+        "pesticide_subtype": "synthetic_pesticide",
+        "pesticide_target": "Hop aphid, twospotted spider mite",
+        "herbicide": "Roundup PowerMax 3 (glyphosate)",
+        "herbicide_subtype": "synthetic_herbicide",
+        "primary_pest_species": "Hop aphid, twospotted spider mite",
+        "common_pests": "Hop aphid, twospotted spider mite, powdery mildew",
+        "beneficial_insects": "Predatory mites, lady beetles",
+        "beneficial_release_quantity": "per hectare",
+        "certification_type": "global_gap",
+        "certification_standard": "GLOBALG.A.P. IFA v6",
+        "certification_body": "SCS Global Services",
+        "irrigation_method": "drip",
+        "water_source": "surface_water",
+        "soil_type": "silt_loam",
+        "typical_area": 40.0,
+        "region": "Yakima Valley, Washington",
+        "timing_soil": "February - March",
+        "timing_plant": "March - April",
+        "timing_fertilize": "April - June",
+        "timing_irrigate": "May - August",
+        "timing_pest": "May - August",
+        "timing_harvest": "August - September",
+        "yield_per_ha": 2.4,
+        "yield_unit": "tons",
+    },
+    "spinach": {
+        "npk": "15-15-15",
+        "nitrogen_pct": 15.0,
+        "phosphorus_pct": 15.0,
+        "potassium_pct": 15.0,
+        "commercial_name": "YaraMila Complex 12-11-18",
+        "secondary_fertilizer": "Calcium Nitrate 15.5-0-0",
+        "slow_release_fertilizer": "Osmocote Plus 15-9-12",
+        "primary_fungicide": "Ridomil Gold (mefenoxam)",
+        "fungicide_subtype": "synthetic_fungicide",
+        "fungicide_target": "Downy mildew (Peronospora)",
+        "copper_fungicide": "Kocide 3000 (copper hydroxide)",
+        "primary_pesticide": "Radiant SC (spinetoram)",
+        "pesticide_subtype": "synthetic_pesticide",
+        "pesticide_target": "Leafminer, armyworm, aphids",
+        "herbicide": "Dual Magnum (S-metolachlor)",
+        "herbicide_subtype": "synthetic_herbicide",
+        "primary_pest_species": "Leafminer, beet armyworm, green peach aphid",
+        "common_pests": "Leafminer, armyworm, aphids, downy mildew",
+        "beneficial_insects": "Lady beetles, parasitic wasps",
+        "beneficial_release_quantity": "per hectare",
+        "certification_type": "global_gap",
+        "certification_standard": "GLOBALG.A.P. IFA v6",
+        "certification_body": "SCS Global Services",
+        "irrigation_method": "sprinkler",
+        "water_source": "surface_water",
+        "soil_type": "silt_loam",
+        "typical_area": 25.0,
+        "region": "Yuma, Arizona / Texas",
+        "timing_soil": "September - October",
+        "timing_plant": "October - January",
+        "timing_fertilize": "November - February",
+        "timing_irrigate": "November - March",
+        "timing_pest": "December - February",
+        "timing_harvest": "November - March",
+        "yield_per_ha": 18.0,
+        "yield_unit": "tons",
+    },
 }
 
 # Alias: DB has both "avocado" (singular) and "avocados" (plural) slugs
@@ -606,6 +801,262 @@ CROP_CUSTOMIZATIONS["avocado"] = CROP_CUSTOMIZATIONS["avocados"]
 # Only crops listed here get an organic template.  All inputs must be
 # OMRI-listed or NOP-approved (7 CFR Part 205).
 ORGANIC_OVERRIDES = {
+    # Tree nuts are the GTM ICP (mid-size CA wholesale orchards) and had NO organic template
+    # at all — 27 of the 33 shipped templates were conventional, and the 6 organic ones covered
+    # apples, avocados, citrus, lettuce, strawberries and tomatoes. So an organic walnut grower
+    # opening the flagship "Smart Setup" flow was offered "Walnuts - Conventional Production",
+    # whose input list includes glyphosate. Inputs below are drawn from the CA organic walnut
+    # season validated end-to-end on 2026-08-02 (NOP audit export + CA PUR both clean).
+    "walnuts": {
+        "primary_fertilizer": "Neptune's Harvest Fish & Seaweed 2-3-1",
+        "npk": "2-3-1",
+        "nitrogen_pct": 2.0,
+        "phosphorus_pct": 3.0,
+        "potassium_pct": 1.0,
+        "secondary_fertilizer": "Sustane 8-2-4 Organic Granular",
+        "secondary_npk": "8-2-4",
+        "secondary_n": 8.0,
+        "secondary_p": 2.0,
+        "secondary_k": 4.0,
+        "slow_release_fertilizer": "Dr. Earth Organic 9 Fruit Tree 5-5-2",
+        # Walnut blight is THE walnut disease; copper is the backbone of organic control and
+        # Serenade is the OMRI biological used alongside it.
+        "primary_fungicide": "Serenade ASO (Bacillus subtilis)",
+        "fungicide_subtype": "biological_fungicide",
+        "fungicide_target": "Walnut blight (Xanthomonas arboricola pv. juglandis)",
+        "copper_fungicide": "Kocide 3000 (copper hydroxide) — OMRI Listed",
+        "copper_target": "Walnut blight (Xanthomonas arboricola pv. juglandis)",
+        # Spinosad at hullsplit is the one conventional-equivalent spray an organic walnut
+        # grower actually makes; everything before it is monitoring and biological control.
+        "primary_pesticide": "Entrust SC (spinosad) — OMRI Listed",
+        "pesticide_subtype": "organic_pesticide",
+        "pesticide_target": "Navel orangeworm (Amyelois transitella), codling moth",
+        "biological_pesticide": "DiPel DF (Bacillus thuringiensis kurstaki) — OMRI Listed",
+        "herbicide": None,  # No synthetic herbicides in organic
+        "organic_approved_default": "omri_listed",
+        "certification_type": "organic_usda",
+        "certification_standard": "USDA NOP (7 CFR Part 205)",
+        "certification_body": "CCOF (California Certified Organic Farmers)",
+    },
+    "almonds": {
+        "primary_fertilizer": "Neptune's Harvest Fish & Seaweed 2-3-1",
+        "npk": "2-3-1",
+        "nitrogen_pct": 2.0,
+        "phosphorus_pct": 3.0,
+        "potassium_pct": 1.0,
+        "secondary_fertilizer": "Sustane 8-2-4 Organic Granular",
+        "secondary_npk": "8-2-4",
+        "secondary_n": 8.0,
+        "secondary_p": 2.0,
+        "secondary_k": 4.0,
+        "slow_release_fertilizer": "Dr. Earth Organic 9 Fruit Tree 5-5-2",
+        # Almonds swap walnut blight for the bloom-time brown rot / shot hole complex.
+        "primary_fungicide": "Serenade ASO (Bacillus subtilis)",
+        "fungicide_subtype": "biological_fungicide",
+        "fungicide_target": "Brown rot blossom blight (Monilinia laxa), shot hole",
+        "copper_fungicide": "Kocide 3000 (copper hydroxide) — OMRI Listed",
+        "copper_target": "Shot hole (Wilsonomyces carpophilus), bacterial spot (Xanthomonas arboricola pv. pruni)",
+        "primary_pesticide": "Entrust SC (spinosad) — OMRI Listed",
+        "pesticide_subtype": "organic_pesticide",
+        "pesticide_target": "Navel orangeworm (Amyelois transitella), peach twig borer",
+        "biological_pesticide": "DiPel DF (Bacillus thuringiensis kurstaki) — OMRI Listed",
+        "herbicide": None,
+        "organic_approved_default": "omri_listed",
+        "certification_type": "organic_usda",
+        "certification_standard": "USDA NOP (7 CFR Part 205)",
+        "certification_body": "CCOF (California Certified Organic Farmers)",
+    },
+    # Pacific Northwest gap, same defect as the tree nuts above: grapes, blueberries and hops
+    # all had a CONVENTIONAL-only template whose input list includes Roundup PowerMax 3
+    # (glyphosate), a 7 CFR 205.105 prohibited substance. An organic grower in Yakima or the
+    # Willamette Valley opening "Smart Setup" was offered exactly one template, and it was a
+    # prohibited-input one.
+    "grapes": {
+        # Vineyard N demand is low; compost plus a light organic granular is the norm.
+        "primary_fertilizer": "Sustane 8-2-4 Organic Granular",
+        "npk": "8-2-4",
+        "nitrogen_pct": 8.0,
+        "phosphorus_pct": 2.0,
+        "potassium_pct": 4.0,
+        "secondary_fertilizer": "Neptune's Harvest Fish & Seaweed 2-3-1",
+        "secondary_npk": "2-3-1",
+        "secondary_n": 2.0,
+        "secondary_p": 3.0,
+        "secondary_k": 1.0,
+        "slow_release_fertilizer": "Down To Earth Bio-Fish 7-7-2 — OMRI Listed",
+        # Powdery mildew IS the grape disease, and micronized sulfur is the backbone of organic
+        # control — hence `sulfur_fungicide`, which the chemical form already offers as a
+        # subtype (config/events/enums.ts FU list). Do not write a subtype the form lacks.
+        "primary_fungicide": "Microthiol Disperss (micronized sulfur) — OMRI Listed",
+        "fungicide_subtype": "sulfur_fungicide",
+        "fungicide_target": "Powdery mildew (Erysiphe necator)",
+        "copper_fungicide": "Kocide 3000 (copper hydroxide) — OMRI Listed",
+        "copper_target": "Downy mildew (Plasmopara viticola), Botrytis bunch rot",
+        "primary_pesticide": "Entrust SC (spinosad) — OMRI Listed",
+        "pesticide_subtype": "organic_pesticide",
+        "pesticide_target": "Grape leafhopper (Erythroneura elegantula), Western grapeleaf skeletonizer",
+        "biological_pesticide": "DiPel DF (Bacillus thuringiensis kurstaki) — OMRI Listed",
+        "herbicide": None,  # No synthetic herbicides in organic
+        "organic_approved_default": "omri_listed",
+        "certification_type": "organic_usda",
+        "certification_standard": "USDA NOP (7 CFR Part 205)",
+        "certification_body": "CCOF (California Certified Organic Farmers)",
+    },
+    "blueberries": {
+        # Blueberries want an acidic, high-N program; Acid Mix is the OMRI equivalent of the
+        # ammonium-sulfate acidifier the conventional template uses.
+        "primary_fertilizer": "Down To Earth Acid Mix 4-3-6 — OMRI Listed",
+        "npk": "4-3-6",
+        "nitrogen_pct": 4.0,
+        "phosphorus_pct": 3.0,
+        "potassium_pct": 6.0,
+        "secondary_fertilizer": "Neptune's Harvest Fish & Seaweed 2-3-1",
+        "secondary_npk": "2-3-1",
+        "secondary_n": 2.0,
+        "secondary_p": 3.0,
+        "secondary_k": 1.0,
+        "slow_release_fertilizer": "Sustane 8-2-4 Organic Granular",
+        "primary_fungicide": "Serenade ASO (Bacillus subtilis) — OMRI Listed",
+        "fungicide_subtype": "biological_fungicide",
+        "fungicide_target": "Mummy berry (Monilinia vaccinii-corymbosi), Botrytis blossom blight",
+        "copper_fungicide": "Kocide 3000 (copper hydroxide) — OMRI Listed",
+        "copper_target": "Anthracnose fruit rot (Colletotrichum acutatum)",
+        # Spotted wing drosophila is the pest that decides whether an organic blueberry block
+        # is harvestable, and Entrust is the primary organic tool against it.
+        "primary_pesticide": "Entrust SC (spinosad) — OMRI Listed",
+        "pesticide_subtype": "organic_pesticide",
+        "pesticide_target": "Spotted wing drosophila (Drosophila suzukii)",
+        "biological_pesticide": "Grandevo WDG (Chromobacterium subtsugae) — OMRI Listed",
+        "herbicide": None,
+        "organic_approved_default": "omri_listed",
+        "certification_type": "organic_usda",
+        "certification_standard": "USDA NOP (7 CFR Part 205)",
+        "certification_body": "Oregon Tilth Certified Organic (OTCO)",
+    },
+    "hops": {
+        # Hops are heavy N feeders; Nature Safe 13-0-0 is the OMRI feather-meal equivalent of
+        # the urea the conventional template reaches for.
+        "primary_fertilizer": "Nature Safe 13-0-0 Organic",
+        "npk": "13-0-0",
+        "nitrogen_pct": 13.0,
+        "phosphorus_pct": 0.0,
+        "potassium_pct": 0.0,
+        "secondary_fertilizer": "Neptune's Harvest Fish & Seaweed 2-3-1",
+        "secondary_npk": "2-3-1",
+        "secondary_n": 2.0,
+        "secondary_p": 3.0,
+        "secondary_k": 1.0,
+        "slow_release_fertilizer": "Sustane 8-2-4 Organic Granular",
+        "primary_fungicide": "Microthiol Disperss (micronized sulfur) — OMRI Listed",
+        "fungicide_subtype": "sulfur_fungicide",
+        "fungicide_target": "Hop powdery mildew (Podosphaera macularis)",
+        "copper_fungicide": "Kocide 3000 (copper hydroxide) — OMRI Listed",
+        "copper_target": "Hop downy mildew (Pseudoperonospora humuli)",
+        "primary_pesticide": "PyGanic EC 5.0 II (pyrethrins) — OMRI Listed",
+        "pesticide_subtype": "organic_pesticide",
+        "pesticide_target": "Hop aphid (Phorodon humuli)",
+        "biological_pesticide": "Mycotrol ESO (Beauveria bassiana) — OMRI Listed",
+        "herbicide": None,
+        "organic_approved_default": "omri_listed",
+        "certification_type": "organic_usda",
+        "certification_standard": "USDA NOP (7 CFR Part 205)",
+        # Yakima Valley — WSDA runs the state organic program growers here certify under.
+        "certification_body": "Washington State Department of Agriculture (WSDA) Organic Program",
+    },
+    # "Stone Fruit" is the ONLY catalogue entry a cherry, peach, plum or apricot grower can
+    # pick — there is no separate cherries crop type — so a conventional-only Stone Fruit
+    # template left that entire segment (including WA sweet cherries) with Captan, Imidan and
+    # glyphosate as their one offered starting point.
+    "stone_fruit": {
+        "primary_fertilizer": "Neptune's Harvest Fish & Seaweed 2-3-1",
+        "npk": "2-3-1",
+        "nitrogen_pct": 2.0,
+        "phosphorus_pct": 3.0,
+        "potassium_pct": 1.0,
+        "secondary_fertilizer": "Sustane 8-2-4 Organic Granular",
+        "secondary_npk": "8-2-4",
+        "secondary_n": 8.0,
+        "secondary_p": 2.0,
+        "secondary_k": 4.0,
+        "slow_release_fertilizer": "Dr. Earth Organic 9 Fruit Tree 5-5-2",
+        # Brown rot blossom blight is the disease that decides a stone-fruit crop; Serenade at
+        # bloom plus dormant copper is the standard organic program, replacing Captan.
+        "primary_fungicide": "Serenade ASO (Bacillus subtilis) — OMRI Listed",
+        "fungicide_subtype": "biological_fungicide",
+        "fungicide_target": "Brown rot blossom blight (Monilinia fructicola)",
+        "copper_fungicide": "Kocide 3000 (copper hydroxide) — OMRI Listed",
+        "copper_target": "Bacterial canker (Pseudomonas syringae), shot hole (Wilsonomyces carpophilus)",
+        # Replaces Imidan (phosmet). Spinosad covers oriental fruit moth and, on cherries,
+        # spotted wing drosophila — the pest that decides whether the block is packable.
+        "primary_pesticide": "Entrust SC (spinosad) — OMRI Listed",
+        "pesticide_subtype": "organic_pesticide",
+        "pesticide_target": "Oriental fruit moth (Grapholita molesta), spotted wing drosophila (Drosophila suzukii)",
+        "biological_pesticide": "DiPel DF (Bacillus thuringiensis kurstaki) — OMRI Listed",
+        "herbicide": None,
+        "organic_approved_default": "omri_listed",
+        "certification_type": "organic_usda",
+        "certification_standard": "USDA NOP (7 CFR Part 205)",
+        "certification_body": "CCOF (California Certified Organic Farmers)",
+    },
+    "hazelnuts": {
+        # Willamette Valley. Hazelnuts are moderate N feeders on a single annual application.
+        "primary_fertilizer": "Nature Safe 13-0-0 Organic",
+        "npk": "13-0-0",
+        "nitrogen_pct": 13.0,
+        "phosphorus_pct": 0.0,
+        "potassium_pct": 0.0,
+        "secondary_fertilizer": "Neptune's Harvest Fish & Seaweed 2-3-1",
+        "secondary_npk": "2-3-1",
+        "secondary_n": 2.0,
+        "secondary_p": 3.0,
+        "secondary_k": 1.0,
+        "slow_release_fertilizer": "Sustane 8-2-4 Organic Granular",
+        "primary_fungicide": "Serenade ASO (Bacillus subtilis) — OMRI Listed",
+        "fungicide_subtype": "biological_fungicide",
+        "fungicide_target": "Bacterial blight (Xanthomonas arboricola pv. corylina)",
+        # Eastern filbert blight is the disease that ends hazelnut blocks; organic programs
+        # lean on resistant cultivars plus copper timed to bud break.
+        "copper_fungicide": "Kocide 3000 (copper hydroxide) — OMRI Listed",
+        "copper_target": "Eastern filbert blight (Anisogramma anomala)",
+        "primary_pesticide": "Entrust SC (spinosad) — OMRI Listed",
+        "pesticide_subtype": "organic_pesticide",
+        "pesticide_target": "Filbertworm (Cydia latiferreana)",
+        "biological_pesticide": "DiPel DF (Bacillus thuringiensis kurstaki) — OMRI Listed",
+        "herbicide": None,
+        "organic_approved_default": "omri_listed",
+        "certification_type": "organic_usda",
+        "certification_standard": "USDA NOP (7 CFR Part 205)",
+        "certification_body": "Oregon Tilth Certified Organic (OTCO)",
+    },
+    "pecans": {
+        "primary_fertilizer": "Nature Safe 13-0-0 Organic",
+        "npk": "13-0-0",
+        "nitrogen_pct": 13.0,
+        "phosphorus_pct": 0.0,
+        "potassium_pct": 0.0,
+        "secondary_fertilizer": "Neptune's Harvest Fish & Seaweed 2-3-1",
+        "secondary_npk": "2-3-1",
+        "secondary_n": 2.0,
+        "secondary_p": 3.0,
+        "secondary_k": 1.0,
+        "slow_release_fertilizer": "Sustane 8-2-4 Organic Granular",
+        # Pecan scab is the yield-limiting disease across the humid Southeast; sulfur and
+        # copper are the two materials an organic grower actually has for it.
+        "primary_fungicide": "Microthiol Disperss (micronized sulfur) — OMRI Listed",
+        "fungicide_subtype": "sulfur_fungicide",
+        "fungicide_target": "Pecan scab (Venturia effusa)",
+        "copper_fungicide": "Kocide 3000 (copper hydroxide) — OMRI Listed",
+        "copper_target": "Pecan scab (Venturia effusa), bacterial leaf scorch",
+        "primary_pesticide": "Entrust SC (spinosad) — OMRI Listed",
+        "pesticide_subtype": "organic_pesticide",
+        "pesticide_target": "Pecan nut casebearer (Acrobasis nuxvorella)",
+        "biological_pesticide": "DiPel DF (Bacillus thuringiensis kurstaki) — OMRI Listed",
+        "herbicide": None,
+        "organic_approved_default": "omri_listed",
+        "certification_type": "organic_usda",
+        "certification_standard": "USDA NOP (7 CFR Part 205)",
+        "certification_body": "Texas Department of Agriculture (TDA) Organic Program",
+    },
     "avocados": {
         "primary_fertilizer": "Neptune's Harvest Fish & Seaweed 2-3-1",
         "npk": "2-3-1",
@@ -622,6 +1073,7 @@ ORGANIC_OVERRIDES = {
         "fungicide_subtype": "biological_fungicide",
         "fungicide_target": "Phytophthora cinnamomi root rot",
         "copper_fungicide": "Kocide 3000 (copper hydroxide) — OMRI Listed",
+        "copper_target": "Anthracnose (Colletotrichum gloeosporioides), Canker",
         "primary_pesticide": "Entrust SC (spinosad) — OMRI Listed",
         "pesticide_subtype": "organic_pesticide",
         "pesticide_target": "Avocado thrips, Persea mite",
@@ -649,6 +1101,7 @@ ORGANIC_OVERRIDES = {
         "fungicide_subtype": "biological_fungicide",
         "fungicide_target": "Phytophthora brown rot, citrus canker",
         "copper_fungicide": "Kocide 3000 (copper hydroxide) — OMRI Listed",
+        "copper_target": "Melanose (Diaporthe citri), citrus brown rot (Phytophthora spp.)",
         "primary_pesticide": "Entrust SC (spinosad) — OMRI Listed",
         "pesticide_subtype": "organic_pesticide",
         "pesticide_target": "Citrus leafminer, Asian citrus psyllid",
@@ -675,6 +1128,7 @@ ORGANIC_OVERRIDES = {
         "fungicide_subtype": "biological_fungicide",
         "fungicide_target": "Apple scab, fire blight, powdery mildew",
         "copper_fungicide": "Badge X2 (copper hydroxide) — OMRI Listed",
+        "copper_target": "Fire blight (Erwinia amylovora), apple scab (Venturia inaequalis)",
         "primary_pesticide": "Entrust SC (spinosad) — OMRI Listed",
         "pesticide_subtype": "organic_pesticide",
         "pesticide_target": "Codling moth, apple maggot, leafrollers",
@@ -701,6 +1155,7 @@ ORGANIC_OVERRIDES = {
         "fungicide_subtype": "biological_fungicide",
         "fungicide_target": "Botrytis gray mold, powdery mildew",
         "copper_fungicide": "Badge X2 (copper hydroxide) — OMRI Listed",
+        "copper_target": "Angular leaf spot (Xanthomonas fragariae), anthracnose (Colletotrichum acutatum)",
         "primary_pesticide": "Entrust SC (spinosad) — OMRI Listed",
         "pesticide_subtype": "organic_pesticide",
         "pesticide_target": "Spotted wing drosophila, lygus bugs",
@@ -727,6 +1182,7 @@ ORGANIC_OVERRIDES = {
         "fungicide_subtype": "biological_fungicide",
         "fungicide_target": "Downy mildew, lettuce drop (Sclerotinia)",
         "copper_fungicide": "Kocide 3000 (copper hydroxide) — OMRI Listed",
+        "copper_target": "Bacterial leaf spot (Xanthomonas campestris pv. vitians)",
         "primary_pesticide": "PyGanic (pyrethrins) — OMRI Listed",
         "pesticide_subtype": "organic_pesticide",
         "pesticide_target": "Aphids, leafminers, thrips",
@@ -753,6 +1209,7 @@ ORGANIC_OVERRIDES = {
         "fungicide_subtype": "biological_fungicide",
         "fungicide_target": "Early blight, late blight, Septoria leaf spot",
         "copper_fungicide": "Kocide 3000 (copper hydroxide) — OMRI Listed",
+        "copper_target": "Bacterial speck (Pseudomonas syringae pv. tomato), bacterial spot (Xanthomonas spp.)",
         "primary_pesticide": "Entrust SC (spinosad) — OMRI Listed",
         "pesticide_subtype": "organic_pesticide",
         "pesticide_target": "Tomato hornworm, Colorado potato beetle",
@@ -851,6 +1308,12 @@ def build_production_event_fields(
     efficiency="normal",
     observation="Production operation",
     seeds_source="commercial",
+    # NOP 7 CFR 205.204 seed classification. Four call sites already passed this
+    # and every one of them raised TypeError — the parameter was simply never
+    # added. It stayed latent because all 22 shipped templates already exist and
+    # are skipped on re-run, so the berry/tree/grain generators were never
+    # re-entered until a new crop type was introduced.
+    seed_certification_status=None,
     water_source="well_groundwater",
     irrigation_method="drip",
     irrigation_depth=2.0,
@@ -889,6 +1352,8 @@ def build_production_event_fields(
     # Subtype-specific fields
     if subtype == "PL":
         fields["seeds_source"] = seeds_source
+        if seed_certification_status:
+            fields["seed_certification_status"] = seed_certification_status
     elif subtype == "HA":
         fields["yield_quantity"] = yield_quantity
         fields["yield_unit"] = yield_unit
@@ -2692,7 +3157,17 @@ def get_tree_crop_organic_events(crop_slug, crop_data, organic_overrides):
                 concentration="46",
                 volume=area * 2.24,
                 area=area,
-                target_pest_disease="Anthracnose (Colletotrichum gloeosporioides), Canker",
+                # Was hardcoded to "Anthracnose (Colletotrichum gloeosporioides), Canker" — an
+                # AVOCADO disease — for every tree crop, so the organic walnut, grape, stone
+                # fruit, hazelnut and pecan copper sprays all recorded a disease that does not
+                # occur on that crop. A certifier reading a walnut copper application against
+                # avocado anthracnose has a legitimate question about the record.
+                # `copper_target` was already present in the override data; nothing read it.
+                # Fallback is deliberately generic, NOT avocado's anthracnose: a tree crop added
+                # without `copper_target` should read as unspecified, not as a disease that does
+                # not occur on it. Every tree crop in ORGANIC_OVERRIDES now sets one, and a test
+                # keeps it that way.
+                target_pest_disease=oa.get("copper_target", "Fungal and bacterial canker diseases"),
                 fuel_consumed=7.0,
                 fuel_unit="gal",
                 organic_approved="omri_listed",
@@ -3646,7 +4121,10 @@ def get_annual_crop_organic_events(crop_slug, crop_data, organic_overrides):
                 concentration="46",
                 volume=area * 1.8,
                 area=area,
-                target_pest_disease=oa["fungicide_target"],
+                # Copper and the primary fungicide treat different diseases; reusing
+                # `fungicide_target` recorded the biological product's target against a copper
+                # application. Falls back to it only when no copper-specific target is given.
+                target_pest_disease=oa.get("copper_target", oa["fungicide_target"]),
                 fuel_consumed=5.0,
                 fuel_unit="L",
                 organic_approved="omri_listed",
@@ -5665,13 +6143,20 @@ class Command(BaseCommand):
                         defaults=template_data,
                     )
 
+                    conventional_events_needed = True
                     if created:
                         created_templates += 1
                         self.stdout.write(self.style.SUCCESS(f"\n  Created template: {template.name}"))
                     else:
                         skipped_templates += 1
                         self.stdout.write(f"\n  Template exists: {template.name}")
-                        continue
+                        # Skip re-creating this crop's CONVENTIONAL events, but do NOT `continue`
+                        # out of the crop entirely. The organic template is created further down,
+                        # so bailing here meant a crop that already had a conventional template
+                        # could never gain an organic one — the only way to add organic coverage
+                        # was --force, which deletes and rebuilds the conventional template as a
+                        # side effect. Seeding should be additive.
+                        conventional_events_needed = False
 
                 # Get events based on crop category
                 if crop_type.category in ["tree_fruit", "tree_nut"]:
@@ -5686,6 +6171,11 @@ class Command(BaseCommand):
                     events_data = get_fiber_events(crop_slug, crop_data)
                 else:
                     events_data = get_fiber_events(crop_slug, crop_data)
+
+                # Conventional events already exist for this crop — iterate nothing rather than
+                # re-creating them, and fall through to the organic block below.
+                if not conventional_events_needed:
+                    events_data = []
 
                 # Create event templates
                 crop_event_count = 0
@@ -5764,7 +6254,14 @@ class Command(BaseCommand):
                             "usda_compliant": True,
                             "usda_reviewed": True,
                             "projected_emissions_reduction": 15.0,
-                            "premium_pricing_potential": "20-35%",
+                            # NOT "20-35%". `compliance.md` bans stating a price premium
+                            # ("Premium positioning through transparency", never "earn premium
+                            # prices" / "20-40% premium"), and the 20-40% USDA-premium figure
+                            # this echoed is not a real sourced statistic. The field is
+                            # serialized but currently rendered nowhere, so this was a latent
+                            # claim rather than a live one — left at the model default so it
+                            # cannot become one if a surface starts showing it.
+                            "premium_pricing_potential": "0%",
                             "market_demand": "high",
                         },
                     )

@@ -269,6 +269,32 @@ ORGANIC_APPROVED = [
     ("transitional", "Transitional - In certification process"),
 ]
 
+# THE allow-list for "this input is approved for organic production". One list,
+# derived from the enum above, because two hand-maintained copies drifted:
+# `transition_status_service` omitted the legacy "yes" that `claim_resolver`
+# accepted, and NEITHER carried the "organic" value the database actually holds.
+# The result on the audit dossier (2026-08-04): an OMRI-listed copper fungicide
+# the farmer recorded as organic was counted as a PROHIBITED SUBSTANCE and reset
+# the § 205.202(b) 36-month clock, declaring certified land "in transition" for
+# three years on the document that goes to the certifier.
+#
+# Add a value here — never in a caller.
+ORGANIC_APPROVED_OK_VALUES = frozenset(
+    {
+        "omri_listed",
+        "usda_nop_approved",
+        "organic_equivalent",
+        "yes",  # legacy "Yes - Organic Approved", still selectable
+        "organic",  # present in stored data; predates the detailed enum
+    }
+)
+
+# Values that affirmatively state a PROHIBITED substance was applied. Only these
+# may reset a transition clock. Deliberately NOT the complement of the allow-list:
+# "not_applicable" means the question does not apply, and blank means nobody
+# answered — neither is evidence that a prohibited substance was used.
+ORGANIC_PROHIBITED_VALUES = frozenset({"not_organic", "no", "transitional"})
+
 
 # ============================================================================
 # CHEMICAL SUBTYPE ENUMS — For accurate carbon emission factor selection

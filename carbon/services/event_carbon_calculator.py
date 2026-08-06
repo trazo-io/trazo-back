@@ -5,6 +5,8 @@ from typing import Any, Dict, List, Optional
 from django.conf import settings
 from django.utils import timezone
 
+from common.us_states import normalize_state, resolve_establishment_state, resolve_event_state
+
 from ..models import CarbonEntry, CarbonSource, USDACalculationAudit, USDAComplianceRecord
 from .emission_factors import emission_factors
 from .enhanced_emission_factors import EnhancedEmissionFactors
@@ -135,24 +137,13 @@ class EventCarbonCalculator:
         }
 
     def _get_establishment_location(self, event) -> tuple:
-        """Extract establishment location from event"""
-        try:
-            # Correct path: event -> history -> parcel -> establishment
-            if (
-                hasattr(event, "history")
-                and event.history
-                and hasattr(event.history, "parcel")
-                and event.history.parcel
-                and hasattr(event.history.parcel, "establishment")
-                and event.history.parcel.establishment
-            ):
-                establishment = event.history.parcel.establishment
-                state = getattr(establishment, "state", "Unknown")
-                county = getattr(establishment, "county", None)
-                return state, county
-        except Exception as e:
-            logger.error(f"Error getting establishment location: {e}")
-        return "Unknown", None
+        """Return (state_code_or_None, county).
+
+        County is always None: `Establishment` has no `county` field, so the
+        previous `getattr(establishment, "county", None)` could never return a
+        value. It is kept in the tuple because four call sites unpack it.
+        """
+        return resolve_event_state(event), None
 
     def _get_farm_coordinates(self, event) -> tuple:
         """
@@ -174,35 +165,23 @@ class EventCarbonCalculator:
                 # Get coordinates if available
                 latitude = getattr(establishment, "latitude", None)
                 longitude = getattr(establishment, "longitude", None)
-                state = getattr(establishment, "state", None)
+                # None when the farm's state is missing or not a US state. Callers
+                # must fall back to national factors rather than assuming a state —
+                # this used to default to "CA", which costed a Florida farm as
+                # Californian and still recorded regional_adjustments_applied=True.
+                state = resolve_establishment_state(establishment)
 
                 # If coordinates are available, use them
                 if latitude is not None and longitude is not None:
-                    return float(latitude), float(longitude), state or self._default_state()
+                    return float(latitude), float(longitude), state
 
                 # If no coordinates, use state for regional estimates
-                return None, None, state or self._default_state()
+                return None, None, state
 
         except Exception as e:
             logger.error(f"Error getting farm coordinates: {e}")
 
-        return None, None, self._default_state()
-
-    @staticmethod
-    def _default_state():
-        """Return default state when establishment has no state set.
-        WARNING: This affects regional irrigation defaults and USDA factor adjustments.
-        Defaults to CA as it has the most complete regional data coverage.
-        """
-        country = getattr(settings, "TRAZO_OPERATING_COUNTRY", "US")
-        if country == "US":
-            logger.warning(
-                "Establishment has no state set — defaulting to CA. "
-                "This may produce inaccurate regional factors. "
-                "Ensure establishment.state is populated."
-            )
-            return "CA"
-        return "Unknown"
+        return None, None, None
 
     def _get_real_time_usda_factors(self, crop_type: str, state: str) -> Dict[str, float]:
         """Get USDA emission factors using hardcoded EPA/USDA regional factors."""
@@ -290,6 +269,15 @@ class EventCarbonCalculator:
         if fuel_type_lower == "none":
             return 0.0
 
+        # Gaseous fuels are billed per standard cubic foot, not per gallon — hand the raw
+        # quantity and its own unit to fuel_co2e rather than pretending litres of gas
+        # convert to gallons of gas. A summary/aggregate event (e.g. a season of dryer
+        # runs) was under-reporting by ~2 orders of magnitude here, same as the seven
+        # per-event paths.
+        if fuel_type_lower == "natural_gas":
+            co2e, _factor, _err = VerifiedEmissionFactors.fuel_co2e(fuel_total, fuel_type_lower, fuel_unit)
+            return co2e
+
         # Convert to gallons for liquid fuels
         if fuel_unit == "gal":
             fuel_gallons = fuel_total
@@ -297,8 +285,8 @@ class EventCarbonCalculator:
             # Default assumes liters
             fuel_gallons = fuel_total / 3.78541
 
-        fuel_factor, _ = VerifiedEmissionFactors._get_fuel_factor_for_type(fuel_type_lower)
-        return fuel_gallons * fuel_factor.value
+        co2e, _factor, _err = VerifiedEmissionFactors.fuel_co2e(fuel_gallons, fuel_type_lower, "gal")
+        return co2e
 
     def _calculate_aggregate_fertilizer_impact(self, event, extra_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -491,6 +479,86 @@ class EventCarbonCalculator:
 
         except Exception as e:
             logger.error(f"Aggregate fungicide calculation failed: {e}")
+            return {
+                "co2e": 0.0,
+                "efficiency_score": 70.0,
+                "verification_status": "aggregate_calculation_error",
+                "error": str(e),
+            }
+
+    def _calculate_aggregate_herbicide_impact(self, event, extra_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Carbon impact for an aggregate herbicide event (several applications logged as one).
+
+        A6 fix (2026-07). Summary herbicide events had no handler, so the dispatcher's `else`
+        branch sent them to `_calculate_aggregate_fertilizer_impact` — which reads
+        nitrogen/phosphorus/potassium totals and multiplies by fertilizer manufacturing
+        factors. A herbicide summary carries `active_ingredient_total_kg` and no NPK at all,
+        so the fertilizer path found zeros and returned a near-zero figure while logging only
+        a warning. A grower spraying herbicide across a season saw no emissions from it.
+
+        Mirrors _calculate_aggregate_pesticide_impact, with the herbicide manufacturing
+        factors (synthetic 6.3 kg CO2/kg AI, organic 1.2).
+        """
+        try:
+            from .verified_emission_factors import VerifiedEmissionFactors
+
+            active_ingredient_kg = float(extra_data.get("active_ingredient_total_kg", 0) or 0)
+            event_count = int(extra_data.get("event_count", 1) or 1)
+            date_start = extra_data.get("date_start", "")
+            date_end = extra_data.get("date_end", "")
+
+            chemical_subtype = (
+                extra_data.get("chemical_subtype", "") or getattr(event, "chemical_subtype", "") or ""
+            ).lower()
+
+            fuel_total = float(extra_data.get("fuel_consumption_total", 0) or 0)
+            fuel_type = extra_data.get("fuel_type", "diesel") or "diesel"
+            fuel_unit = extra_data.get("fuel_unit", "gal") or "gal"
+
+            if chemical_subtype in ["organic_herbicide", "organic"]:
+                factor = VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["organic_herbicide_manufacturing"]
+                emission_factor_label = "organic herbicide"
+            else:
+                factor = VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["herbicide_manufacturing"]
+                emission_factor_label = "synthetic herbicide"
+            emission_factor = factor.value
+
+            manufacturing_emissions = active_ingredient_kg * emission_factor
+            application_emissions = self._calculate_aggregate_fuel_emissions(fuel_total, fuel_type, fuel_unit)
+            total_emissions = manufacturing_emissions + application_emissions
+
+            breakdown = {
+                "is_aggregate": True,
+                "event_count": event_count,
+                "date_range": f"{date_start} to {date_end}" if date_start and date_end else "Multiple dates",
+                "active_ingredient_total_kg": active_ingredient_kg,
+                "chemical_subtype": chemical_subtype or "synthetic (default)",
+                "manufacturing_emissions_kg_co2e": round(manufacturing_emissions, 3),
+                "application_fuel_total": fuel_total,
+                "application_fuel_type": fuel_type,
+                "application_fuel_unit": fuel_unit,
+                "application_emissions_kg_co2e": round(application_emissions, 3),
+                "emission_factor_used": f"{emission_factor} kg CO2/kg AI ({emission_factor_label})",
+                "confidence_level": 0.90,
+            }
+
+            return {
+                "co2e": round(total_emissions, 3),
+                "efficiency_score": 80.0,
+                "calculation_method": "aggregate_herbicide_epa_usda",
+                "verification_status": "epa_usda_verified_aggregate",
+                "data_sources": [
+                    "EPA 40 CFR Part 98 (fuel combustion)",
+                    factor.source,
+                ],
+                "breakdown": breakdown,
+                "limitations": f"Aggregate calculation for {event_count} herbicide applications",
+                "recommendations": [],
+                "confidence_level": 0.90,
+            }
+
+        except Exception as e:
+            logger.error(f"Aggregate herbicide calculation failed: {e}")
             return {
                 "co2e": 0.0,
                 "efficiency_score": 70.0,
@@ -693,9 +761,10 @@ class EventCarbonCalculator:
             # Log for debugging
             logger.info(f"🌾 USDA Compliance - Crop type extracted: '{crop_type}' for event {event.id}")
 
-            # Ensure state is a valid string and 2-character code (max_length=2 in model)
-            if not state or state == "Unknown" or not isinstance(state, str) or len(state) != 2:
-                state = "CA"  # Default to California for unknown states
+            # Canonicalize to a 2-letter code, or None. Deliberately NOT defaulting
+            # to "CA": an unknown state must fall through to national factors, not
+            # be silently recorded as a California operation.
+            state = normalize_state(state)
 
             # Extract proper area from event
             area_hectares = 1  # Default fallback
@@ -735,7 +804,11 @@ class EventCarbonCalculator:
                 recommendations=validation_result.recommendations,
                 usda_api_used=False,
                 crop_type=crop_type,
-                state=state,
+                # `USDAComplianceRecord.state` is CharField(max_length=2) with no
+                # null=True, so an unknown state must be stored as "" and never None:
+                # the IntegrityError would be swallowed by the except below but would
+                # poison the enclosing atomic block, failing every later query in it.
+                state=state or "",
                 regional_factors_used=state in self.enhanced_usda.regional_adjustments,
                 validated_by=getattr(event, "created_by", None),
             )
@@ -946,9 +1019,30 @@ class EventCarbonCalculator:
                 elif chemical_type == "PE":  # Pesticide
                     logger.info(f"Processing aggregate pesticide event {event.id}")
                     return self._calculate_aggregate_pesticide_impact(event, extra_data)
+                elif chemical_type == "HE":  # Herbicide
+                    logger.info(f"Processing aggregate herbicide event {event.id}")
+                    return self._calculate_aggregate_herbicide_impact(event, extra_data)
                 else:
-                    logger.warning(f"Unknown aggregate chemical type: {chemical_type}, using fertilizer calculator")
-                    return self._calculate_aggregate_fertilizer_impact(event, extra_data)
+                    # A6: do NOT silently fall back to the fertilizer calculator. It reads NPK
+                    # totals, so for any non-fertilizer chemical it finds zeros and returns a
+                    # confident-looking near-zero figure. Returning 0 with an explicit
+                    # limitation is honest; quietly applying the wrong model is not.
+                    logger.error(
+                        "Aggregate chemical type %r has no handler; refusing to guess (event %s)",
+                        chemical_type,
+                        event.id,
+                    )
+                    return {
+                        "co2e": 0.0,
+                        "efficiency_score": 70.0,
+                        "calculation_method": "aggregate_unsupported_chemical_type",
+                        "verification_status": "insufficient_data",
+                        "breakdown": {"is_aggregate": True, "chemical_type": chemical_type},
+                        "limitations": (
+                            f"No aggregate emission model for chemical type {chemical_type!r}; "
+                            "log the applications individually for a calculated figure."
+                        ),
+                    }
 
             # Extract chemical data from event
             chemical_data = self._extract_chemical_event_data(event)
@@ -1407,6 +1501,15 @@ class EventCarbonCalculator:
                     water_volume_gallons=water_volume_gallons,
                     water_source=water_source,
                     pump_depth_ft=float(pump_depth_ft) if pump_depth_ft is not None else None,
+                    # A drip line and a sprinkler do different amounts of work per gallon;
+                    # the method sets the pressure component of total dynamic head.
+                    irrigation_method=(
+                        getattr(event, "irrigation_method", None) or extra_data.get("irrigation_method")
+                    ),
+                    # §E-6: a measured pumping plant overrides the 70% / method-derived
+                    # defaults. Pump tests are annual and parcel-level, so they live on the
+                    # Parcel rather than being re-entered on every irrigation event.
+                    **self._parcel_pump_attributes(event),
                 )
 
                 base_emissions = calculation_result["co2e_kg"]
@@ -1533,6 +1636,28 @@ class EventCarbonCalculator:
             # See: PMC 2024 Avocado LCA, California Almond/Walnut LCA studies.
             # Trazo's "Direct Operational Emissions" philosophy: measure actual inputs, don't apply arbitrary multipliers.
 
+            # A4 (2026-07): add farm-to-first-receiver hauling. `transportation_distance` was
+            # collected, validated and displayed but fed into no formula, so a recorded 40-mile
+            # run to the huller contributed nothing. Added on top of the operation's own
+            # emissions rather than replacing them — the haul is extra work, not a substitute.
+            # Read from the event itself: _extract_production_event_data nests the structured
+            # fields under "structured_data" rather than promoting them, so a top-level lookup
+            # here silently found nothing.
+            structured = production_data.get("structured_data") or {}
+            transport_distance = (
+                getattr(event, "transportation_distance", None) or structured.get("transportation_distance") or 0.0
+            )
+            if transport_distance and float(transport_distance) > 0:
+                transport_result = VerifiedEmissionFactors.calculate_transport_emissions(
+                    distance=transport_distance,
+                    distance_unit=(
+                        getattr(event, "transportation_unit", None) or structured.get("transportation_unit") or "miles"
+                    ),
+                )
+                base_emissions += transport_result["co2e_kg"]
+                breakdown.update(transport_result["breakdown"])
+                data_sources = list(data_sources) + transport_result.get("data_sources", [])
+
             # Generate EPA-based recommendations
             recommendations = self._generate_epa_production_recommendations(event, base_emissions, calculation_method)
 
@@ -1580,35 +1705,56 @@ class EventCarbonCalculator:
         try:
             from .verified_emission_factors import VerifiedEmissionFactors
 
+            extra_data = getattr(event, "extra_data", None) or {}
             area_covered = production_data.get("area_covered", 0.0)
             fuel_consumed = production_data.get("fuel_consumed")
             equipment_hours = production_data.get("equipment_hours")
             fuel_type = getattr(event, "fuel_type", "diesel")
             energy_source = getattr(event, "energy_source", "grid")
 
+            # A7 fix (2026-07): this passed production_type="general production", which routed
+            # PH to the generic per-hectare FIELD estimate (~2.5 gal diesel/ha). Post-harvest
+            # work happens in a huller or drying shed — ProductionEvent.clean() even allows
+            # area_covered = 0 for PH for that reason — so any area on the event describes the
+            # block the crop came FROM, and multiplying it by a field-fuel rate invented diesel
+            # nobody burned. Passing "PH" routes to _calculate_postharvest_emissions, which
+            # prefers the measured facility energy the form already collects.
             calculation_result = VerifiedEmissionFactors.calculate_production_event_emissions(
-                production_type="general production",
+                production_type="PH",
                 area_covered=area_covered,
                 fuel_consumed=fuel_consumed,
                 equipment_hours=equipment_hours,
                 fuel_type=fuel_type,
+                # DOUBLE-CONVERSION FIX (2026-07-31): `production_data["fuel_consumed"]`
+                # comes from _extract_production_event_data, which ALREADY converted the
+                # farmer's litres/kg to gallons but left event.fuel_unit reading "L".
+                # Forwarding that stale unit made calculate_production_event_emissions
+                # divide by 3.78541 a second time, under-reporting post-harvest fuel by
+                # 3.79x (a 310 L dryer run was billed as 21.6 gal, not 81.9 gal).
+                # The quantity handed over here is gallons, so say so.
+                # Gases are exempt: the extractor leaves them in their own unit.
+                fuel_unit=(
+                    (getattr(event, "fuel_unit", None) or extra_data.get("fuel_unit"))
+                    if str(fuel_type).lower() == "natural_gas"
+                    else "gal"
+                ),
                 energy_source=energy_source,
+                # Collected by the PH form section and read by nothing until now.
+                processing_energy_kwh=extra_data.get("processing_energy_kwh"),
+                processing_type=extra_data.get("processing_type"),
             )
 
             base_emissions = calculation_result["co2e_kg"]
             breakdown = calculation_result["breakdown"]
             breakdown["production_type"] = "PH"
-            breakdown["processing_notes"] = (
-                "Post-harvest processing emissions: fuel for hullers, shellers, sorters, and packing equipment. "
-                "Calculated using EPA 40 CFR Part 98 fuel combustion factors."
-            )
             data_sources = calculation_result["data_sources"]
             calculation_method = calculation_result["calculation_method"]
             base_limitations = calculation_result.get("limitations", "")
             if isinstance(base_limitations, list):
                 base_limitations = "; ".join(base_limitations)
             limitations = (
-                "Excludes refrigeration/cold-storage electricity not captured in equipment_hours. " + base_limitations
+                "Excludes refrigeration/cold-storage electricity unless reported as "
+                "processing_energy_kwh. " + base_limitations
             )
 
             recommendations = self._generate_epa_production_recommendations(event, base_emissions, calculation_method)
@@ -1638,6 +1784,57 @@ class EventCarbonCalculator:
                 "limitations": "Calculation failed, using fallback values",
                 "recommendations": [],
             }
+
+    # NOTE: a _parcel_area_hectares() helper briefly lived here, to give the high-temperature
+    # branch an area to work with. It was removed the same day: substituting the whole
+    # orchard's area for an area the farmer never reported is what turned one heat event into
+    # 12,974 kg CO2e. If an event has no area, that is information, not a gap to fill.
+
+    @staticmethod
+    def _parcel_pump_attributes(event):
+        """Measured pumping-plant attributes from the parcel, as calculator kwargs.
+
+        Returns only the keys that are actually recorded, so an unset attribute falls through
+        to the calculator's default instead of overriding it with None.
+        """
+        try:
+            parcel = event.history.parcel
+        except AttributeError:
+            return {}
+
+        attributes = {}
+        efficiency_pct = getattr(parcel, "pump_efficiency_pct", None)
+        if efficiency_pct:
+            # Stored as a percentage for the farmer; the calculator wants a fraction.
+            attributes["pump_efficiency"] = float(efficiency_pct) / 100.0
+        pressure_psi = getattr(parcel, "system_pressure_psi", None)
+        if pressure_psi:
+            attributes["system_pressure_psi"] = float(pressure_psi)
+        return attributes
+
+    @staticmethod
+    def _weather_value(event, *keys):
+        """First present value for `keys`, checking model attributes then extra_data.
+
+        A3 fix (2026-07). WeatherEvent stores everything except `type`, `observation` and
+        `extra_data` inside the JSON blob — there are no model columns for temperature, wind,
+        duration or protection method. The FR and DR branches knew that and checked both
+        places; the HT and HL branches used a bare `hasattr(event, ...)`, which is always
+        False for a JSON-backed value. Result: a documented 42 C heat event and every
+        hailstorm silently computed 0 kg with an "insufficient data" note, while the farmer
+        was looking at the data they had entered.
+
+        `hasattr` was doubly misleading here: HT also read `event.area_covered`, and
+        WeatherEvent has no such column either, so even the area fell back to a default.
+        """
+        extra = event.extra_data if isinstance(getattr(event, "extra_data", None), dict) else {}
+        for key in keys:
+            value = getattr(event, key, None)
+            if value in (None, ""):
+                value = extra.get(key)
+            if value not in (None, ""):
+                return value
+        return None
 
     def calculate_weather_event_impact(self, event) -> Dict[str, Any]:
         """
@@ -1750,12 +1947,25 @@ class EventCarbonCalculator:
 
             elif event.type == "HL":  # Hailstorm - Using verified USDA diesel factors
                 # Extract hailstorm-specific fields
-                weight = self._extract_numeric_value(getattr(event, "weight", "0"), default=0.0)
-                diameter = self._extract_numeric_value(getattr(event, "diameter", "0"), default=0.0)
-                duration = self._extract_numeric_value(getattr(event, "duration", "0"), default=0.0)
+                # A3 fix (2026-07). This read `event.weight` and `event.diameter` — fields
+                # Sprint 2 removed from the hailstorm form as excessive detail, and which were
+                # never model columns. `severity = (weight * diameter) / 10` was therefore
+                # always 0, so equipment_hours was 0 and EVERY hailstorm computed exactly
+                # 0 kg while reporting a confident breakdown. Rebuilt on what the form
+                # actually collects: duration and way_of_protection.
+                #
+                # WeatherTab labels the hailstorm duration input "Duration (minutes)" — the
+                # old code fed it straight in as hours and labelled the output
+                # "duration_hours", a 60x error that only stayed invisible because severity
+                # zeroed the product anyway.
+                duration_minutes = self._extract_numeric_value(self._weather_value(event, "duration"), default=0.0)
+                duration_hours = duration_minutes / 60.0
 
-                # Calculate damage severity index (0-10 scale)
-                severity = min((weight * diameter) / 10, 10.0)
+                # `hail_size` (inches) has a plausibility bound on the model but no writer
+                # today; when present it scales cleanup effort, otherwise a storm counts as
+                # nominal severity rather than zero.
+                hail_size_in = self._extract_numeric_value(self._weather_value(event, "hail_size"), default=0.0)
+                severity = min(max(hail_size_in, 1.0), 10.0) if duration_hours > 0 else 0.0
 
                 # Use USDA verified diesel emission factor for cleanup equipment
                 diesel_factor = VerifiedEmissionFactors.get_emission_factor("diesel", "diesel_fuel_mobile")
@@ -1763,22 +1973,23 @@ class EventCarbonCalculator:
 
                 if diesel_factor and equipment_factor:
                     # Calculate cleanup emissions using verified factors
-                    equipment_hours = severity * duration * 0.5  # Hours of equipment operation
+                    # Cleanup runs for a fraction of the storm duration, scaled by severity.
+                    equipment_hours = severity * duration_hours * 0.5
                     fuel_gallons = equipment_hours * equipment_factor.value
                     cleanup_emissions = fuel_gallons * diesel_factor.value
 
                     # Protection measures (infrastructure/netting damage)
                     protection_emissions = 0.0
-                    if hasattr(event, "way_of_protection") and event.way_of_protection:
+                    if self._weather_value(event, "way_of_protection", "protection_measures"):
                         protection_emissions = 2.0 * diesel_factor.value  # 2 gallons for protection setup/repair
 
                     base_emissions = cleanup_emissions + protection_emissions
 
                     breakdown = {
                         "weather_type": "HL",
-                        "hail_weight_g": weight,
-                        "hail_diameter_mm": diameter,
-                        "duration_hours": duration,
+                        "hail_size_in": hail_size_in or None,
+                        "duration_minutes": duration_minutes,
+                        "duration_hours": duration_hours,
                         "severity_index": severity,
                         "equipment_hours": equipment_hours,
                         "fuel_gallons": fuel_gallons,
@@ -1802,8 +2013,9 @@ class EventCarbonCalculator:
 
             elif event.type == "HT":  # High temperatures - Using verified USDA electricity factors
                 # Extract temperature and duration
-                if hasattr(event, "highest_temperature") and event.highest_temperature:
-                    highest_temp_c = self._extract_numeric_value(event.highest_temperature, default=32)
+                highest_temp_raw = self._weather_value(event, "highest_temperature", "temperature")
+                if highest_temp_raw:
+                    highest_temp_c = self._extract_numeric_value(highest_temp_raw, default=32)
                     # Convert Celsius to Fahrenheit (frontend collects temperature in °C)
                     highest_temp = highest_temp_c * 9 / 5 + 32
 
@@ -1813,18 +2025,33 @@ class EventCarbonCalculator:
                     electricity_factor = VerifiedEmissionFactors.get_country_electricity_factor()
                     misting_factor = VerifiedEmissionFactors.get_emission_factor("equipment", "misting_system")
 
-                    if electricity_factor and misting_factor and highest_temp > 95:
-                        # Extreme heat requiring intervention
-                        # Use duration from event if available, otherwise estimate based on temperature
-                        duration_raw = getattr(event, "duration", None)
-                        if duration_raw:
-                            cooling_hours = self._extract_numeric_value(duration_raw, default=0)
-                        else:
-                            cooling_hours = max(0, (highest_temp - 95) * 2)  # Scale with temp severity
-                        area_acres = (
-                            self._extract_numeric_value(getattr(event, "area_covered", "0"), default=0.0) * 2.47105
-                            or 1.0
-                        )
+                    # A HOT DAY IS NOT AN EMISSION — running cooling equipment is.
+                    #
+                    # This branch used to assume an intervention had happened whenever the
+                    # temperature crossed 95F: it ESTIMATED cooling_hours as
+                    # (temp - 95) * 2 and multiplied by the whole orchard's area at
+                    # 12 kWh/hr/acre for a misting system. On the Loewen walnut sample that
+                    # produced 12,974 kg CO2e from a single recorded heat run — more than
+                    # every other event in the production combined — for an event whose own
+                    # notes read "No crop stress; living floor buffered soil moisture". The
+                    # farmer had recorded that they did NOT intervene, and misting is a
+                    # nursery/greenhouse practice, not an orchard one.
+                    #
+                    # (This only became visible once the extra_data reads were fixed; before
+                    # that the branch silently returned 0 and the fabrication was invisible.)
+                    #
+                    # So: emit only from a REPORTED intervention — cooling hours the farmer
+                    # entered, over an area they entered. No estimate from temperature, and no
+                    # parcel-area fallback: inventing the scale is what made the figure absurd.
+                    cooling_hours = self._extract_numeric_value(
+                        self._weather_value(event, "cooling_hours", "duration"), default=0.0
+                    )
+                    area_acres = self._extract_numeric_value(
+                        self._weather_value(event, "cooling_area_acres", "area_covered"), default=0.0
+                    )
+                    intervention_reported = cooling_hours > 0 and area_acres > 0
+
+                    if electricity_factor and misting_factor and highest_temp > 95 and intervention_reported:
                         kwh_consumed = misting_factor.value * cooling_hours * area_acres
                         base_emissions = kwh_consumed * electricity_factor.value
 
@@ -1855,7 +2082,9 @@ class EventCarbonCalculator:
                             "note": (
                                 "No cooling intervention needed below 95°F"
                                 if highest_temp <= 95
-                                else "Verified emission factors required"
+                                else "No cooling intervention reported for this heat event. Record "
+                                "cooling_hours and the area cooled if equipment was run — heat "
+                                "alone produces no emissions."
                             ),
                         }
                 else:
@@ -1975,14 +2204,15 @@ class EventCarbonCalculator:
                     fuel_gallons = fuel_amount / 3.78541
                     base_emissions = fuel_gallons * emission_factor
 
-                # Apply efficiency modifier based on structured efficiency rating
-                efficiency_modifier = {
-                    "high": 0.85,  # 15% better efficiency
-                    "normal": 1.0,  # Standard emissions
-                    "low": 1.25,  # 25% higher emissions
-                }.get(equipment_data["efficiency"], 1.0)
-
-                base_emissions *= efficiency_modifier
+                # A5 (2026-07): the self-assessed efficiency rating NO LONGER scales
+                # emissions. It is a free choice the farmer makes in a dropdown ("high" /
+                # "normal" / "low"), and selecting "high" used to cut reported fuel
+                # emissions by 15% — a self-declared discount on a measured quantity.
+                # `carbon-methodology.md` lists anti-gaming protections precisely to stop
+                # that; a rating that lowers your own footprint is the clearest example.
+                # The fuel actually burned is already the measurement; efficiency is at most
+                # context for the farmer, so it stays in the breakdown and out of the maths.
+                efficiency_modifier = 1.0
                 cost_estimate = fuel_amount * 1.2  # Approximate fuel cost per liter
                 efficiency_score = 90.0 if equipment_data["efficiency"] == "high" else 70.0
 
@@ -2262,9 +2492,43 @@ class EventCarbonCalculator:
                 )
 
             # ============================================================================
+            # Field N2O from nitrogen applied in the amendment (2026-07-31)
+            # ============================================================================
+            # Post-application N2O depends on the NITROGEN, not on what carried it.
+            # ChemicalEvent fertilisers were charged for it; soil amendments were not — so
+            # on an organic orchard, where compost is normally the largest N source, the
+            # biggest contributor to field N2O was silently counted as zero. Same factor
+            # and same IPCC derivation as the fertiliser path, so the two cannot diverge.
+            amendment_n_kg = 0.0
+            amendment_n2o_emissions = 0.0
+            n_pct = getattr(event, "amendment_nitrogen_percentage", None)
+            amendment_numeric = getattr(event, "amendment_amount_numeric", None)
+            if n_pct and amendment_numeric:
+                amendment_kg = float(amendment_numeric)
+                unit = getattr(event, "amendment_amount_unit", "kg")
+                if unit == "tons":
+                    amendment_kg *= 1000.0  # metric tons, per the form's own label
+                elif unit == "lbs":
+                    amendment_kg *= 0.453592
+                amendment_n_kg = amendment_kg * (float(n_pct) / 100.0)
+                field_n2o_factor = VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["nitrogen_field_n2o"]
+                amendment_n2o_emissions = amendment_n_kg * field_n2o_factor.value
+                logger.info(
+                    f"Amendment field N2O: {amendment_kg:.1f} kg x {n_pct}% N = "
+                    f"{amendment_n_kg:.1f} kg N x {field_n2o_factor.value} = "
+                    f"{amendment_n2o_emissions:.2f} kg CO2e"
+                )
+
+            # ============================================================================
             # Combine all emission components
             # ============================================================================
-            base_emissions = fuel_emissions + area_emissions + lime_dissolution_emissions + soil_flux_emissions
+            base_emissions = (
+                fuel_emissions
+                + area_emissions
+                + lime_dissolution_emissions
+                + soil_flux_emissions
+                + amendment_n2o_emissions
+            )
 
             # Adjust confidence score based on data availability
             if fuel_consumed and fuel_consumed > 0:
@@ -2383,6 +2647,8 @@ class EventCarbonCalculator:
                     "area_emissions": round(area_emissions, 3),
                     "fuel_emissions": round(fuel_emissions, 3),
                     "lime_dissolution_emissions": round(lime_dissolution_emissions, 3),
+                    "amendment_nitrogen_kg": round(amendment_n_kg, 3),
+                    "amendment_field_n2o_emissions": round(amendment_n2o_emissions, 3),
                     "soil_flux_emissions": round(soil_flux_emissions, 3),
                     "total_emissions": round(base_emissions, 3),
                     "emission_factor": emission_factor,
@@ -2402,6 +2668,8 @@ class EventCarbonCalculator:
                     "area_emissions": round(area_emissions, 3),
                     "fuel_emissions": round(fuel_emissions, 3),
                     "lime_dissolution_emissions": round(lime_dissolution_emissions, 3),
+                    "amendment_nitrogen_kg": round(amendment_n_kg, 3),
+                    "amendment_field_n2o_emissions": round(amendment_n2o_emissions, 3),
                     "soil_flux_emissions": round(soil_flux_emissions, 3),
                     "emission_factor": emission_factor,
                     "total_impact": base_emissions,
@@ -2625,16 +2893,10 @@ class EventCarbonCalculator:
             # Total emissions = base + fuel
             total_emissions = base_emissions + fuel_emissions
 
-            # Apply efficiency modifier (Sprint 3 Epic 3.1)
+            # A5 (2026-07): self-assessed efficiency no longer scales emissions — see the
+            # equivalent note in the equipment calculator. Retained in the breakdown as
+            # farmer-supplied context, with no effect on the figure.
             efficiency_modifier = 1.0
-            if production_efficiency == "high":
-                efficiency_modifier = 0.85  # 15% reduction for high efficiency
-                confidence_score = min(95.0, confidence_score + 5)
-            elif production_efficiency == "low":
-                efficiency_modifier = 1.15  # 15% increase for low efficiency
-                confidence_score = max(60.0, confidence_score - 10)
-
-            total_emissions = total_emissions * efficiency_modifier
 
             recommendations = self._generate_pest_recommendations(event, total_emissions)
 
@@ -3038,6 +3300,13 @@ class EventCarbonCalculator:
                     "yield_unit": getattr(event, "yield_unit", "kg"),
                     "fuel_consumed": _fuel_or_none(),
                     "fuel_unit": getattr(event, "fuel_unit", "L"),
+                    # A8 fix (2026-07): _extract_production_event_data reads
+                    # structured_data["fuel_type"] with a "diesel" fallback, but this dict
+                    # never carried the key — so the kg->gallons conversion always used the
+                    # diesel density (0.832 kg/L) regardless of what the farmer selected.
+                    # Wrong for gasoline (0.745) and badly wrong for the propane used in
+                    # flame weeding, now an offered floor-management operation.
+                    "fuel_type": getattr(event, "fuel_type", None) or "diesel",
                     "equipment_hours": float(getattr(event, "equipment_hours", 0) or 0),
                     "transportation_distance": float(getattr(event, "transportation_distance", 0) or 0),
                     "transportation_unit": getattr(event, "transportation_unit", "km"),
@@ -3061,6 +3330,7 @@ class EventCarbonCalculator:
                 "yield_unit": getattr(event, "yield_unit", "kg"),
                 "fuel_consumed": _fuel_or_none(),
                 "fuel_unit": getattr(event, "fuel_unit", "L"),
+                "fuel_type": getattr(event, "fuel_type", None) or "diesel",  # see the A8 note above
                 "equipment_hours": float(getattr(event, "equipment_hours", 0) or 0),
                 "transportation_distance": float(getattr(event, "transportation_distance", 0) or 0),
                 "transportation_unit": getattr(event, "transportation_unit", "km"),
@@ -3131,9 +3401,17 @@ class EventCarbonCalculator:
             fuel_consumed = structured_data["fuel_consumed"]
             equipment_hours = structured_data["equipment_hours"]
 
-            # Convert fuel to gallons if needed
+            # Convert fuel to gallons if needed.
+            # NOTE (2026-07-31): gaseous fuels are deliberately NOT normalised here.
+            # The EPA factor for natural gas is per STANDARD CUBIC FOOT, not per gallon,
+            # so "litres of natural gas" is not a quantity that converts to anything
+            # meaningful. Downstream (calculate_production_event_emissions) resolves gas
+            # quantities against the factor's own basis and refuses nonsensical
+            # liquid-volume units rather than silently emitting a near-zero figure.
             fuel_unit = structured_data["fuel_unit"]
-            if fuel_consumed and fuel_unit == "L":
+            if str(structured_data.get("fuel_type", "")).lower() == "natural_gas":
+                pass
+            elif fuel_consumed and fuel_unit == "L":
                 fuel_consumed = fuel_consumed / 3.78541  # Convert liters to gallons
             elif fuel_consumed and fuel_unit == "kg":
                 # Convert kg to gallons via fuel density (diesel default: 0.832 kg/L)
@@ -3376,18 +3654,44 @@ class EventCarbonCalculator:
             else:
                 return {"N": 10.0, "P": 10.0, "K": 10.0}
 
-    def _extract_numeric_value(self, text: str, default: float = 0.0) -> float:
-        """Extract first numeric value from text with intelligent fallbacks for 'Unknown' values"""
-        try:
-            import re
+    def _extract_numeric_value(self, text, default: float = 0.0) -> float:
+        """Extract the first numeric value from a string, or pass a real number through.
 
-            # Handle "Unknown" values with intelligent defaults
-            if text.lower() in ["unknown", "n/a", "na", "", "none", "null"]:
+        2026-07: this used to go straight to `text.lower()`. Passing an int or a float raised
+        AttributeError, the bare `except:` swallowed it, and the function returned `default`.
+        Since `extra_data` is a JSONField, `{"duration": 8}` round-trips as a real int — so
+        EVERY numeric extra_data value that happened to be stored as a JSON number rather
+        than a quoted string was silently read as 0.
+
+        That was the actual cause of the weather calculators returning 0 for documented heat
+        and hail events: the branches were reading the right keys, and then this discarded the
+        values. The blast radius is wider than weather — this helper is used across the
+        chemical, production and soil paths, so any of them fed a JSON number lost it too.
+        A leading minus sign was also dropped, which matters for sub-zero frost temperatures.
+        """
+        import re
+        from decimal import Decimal
+
+        if text is None:
+            return default
+        # Real numbers (including JSON ints/floats and model Decimals) need no parsing.
+        if isinstance(text, bool):
+            return default
+        if isinstance(text, (int, float, Decimal)):
+            try:
+                return float(text)
+            except (TypeError, ValueError):
                 return default
 
-            numbers = re.findall(r"\d+(?:\.\d+)?", text)
+        try:
+            as_text = str(text).strip()
+            if as_text.lower() in ["unknown", "n/a", "na", "", "none", "null"]:
+                return default
+
+            # Keep the sign: a frost event's "-2 C" must not become 2.
+            numbers = re.findall(r"-?\d+(?:\.\d+)?", as_text)
             return float(numbers[0]) if numbers else default
-        except:
+        except (TypeError, ValueError):
             return default
 
     def _get_intelligent_defaults(self, event, crop_name: str = "default") -> Dict[str, Any]:
@@ -3917,20 +4221,13 @@ class EventCarbonCalculator:
         GALLONS_PER_INCH_PER_ACRE = 27154.0
 
         # Determine regional default from farm state if available
-        state = None
-        try:
-            history = getattr(event, "history", None)
-            if history:
-                parcel = getattr(history, "parcel", None)
-                if parcel:
-                    establishment = getattr(parcel, "establishment", None)
-                    if establishment:
-                        state = getattr(establishment, "state", None)
-        except Exception:
-            pass
+        # Canonical code, or None. Reading the raw field here used to miss on every
+        # farm that stored "California" rather than "CA" — silently applying the
+        # 1.0" humid-East default to a state whose real figure is 2.0".
+        state = resolve_event_state(event)
 
         regional_default = self.REGIONAL_IRRIGATION_DEFAULTS.get(
-            (state or "").upper(), self.REGIONAL_IRRIGATION_DEFAULTS["default"]
+            state or "", self.REGIONAL_IRRIGATION_DEFAULTS["default"]
         )
 
         # Start from regional default; override with text-based intensity signals below

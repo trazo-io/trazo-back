@@ -51,7 +51,13 @@ class _Base(TestCase):
         cache.clear()
         self.user = User.objects.create_user(email="priv@test.com", password="x")
         self.company = Company.objects.create(name="Privacy Farm")
-        self.establishment = Establishment.objects.create(name="P1", company=self.company)
+        # `state` is required downstream, not here: saving an event fires the carbon signal,
+        # which builds a USDAComplianceRecord whose `state` column is NOT NULL with no
+        # default. A stateless establishment raised IntegrityError inside the test's atomic
+        # block, and every later query in the same test then failed with
+        # TransactionManagementError — which is why this suite reported cascading errors and
+        # 500s that had nothing to do with the privacy assertions being made.
+        self.establishment = Establishment.objects.create(name="P1", company=self.company, state="CA")
         self.parcel = Parcel.objects.create(
             name="PP1",
             establishment=self.establishment,
@@ -319,6 +325,187 @@ class TransparencyScoreGatingTests(_Base):
         score = (body.get("quick_view") or {}).get("transparency_score") or {}
         self.assertIn("percentage", score, "owner (producer dashboard) lost its transparency score")
         self.assertIn("detailed_view", body, "owner (producer dashboard) lost its deep-insights block")
+
+
+class ProductionsFlatScoreGatingTests(_Base):
+    """Companion gate to TransparencyScoreGatingTests (2026-08-02).
+
+    `/api/carbon/productions-flat/` served the same self-graded `transparency_score`
+    that the consumer QR payload deliberately withholds — but anonymously, unscoped,
+    and for EVERY tenant, unpublished drafts included. Its permission class guarded
+    `obj.is_public` / `obj.company`, neither of which exists on `History`, so both
+    checks short-circuited to True; DRF never invokes `has_object_permission` on a
+    list route regardless.
+
+    Gating the QR page while leaving a machine-readable score list open defeats the
+    entire 2026-06 demotion, so this endpoint stays authenticated and company-scoped.
+    """
+
+    def _url(self):
+        return "/api/carbon/productions-flat/"
+
+    def _other_tenant_history(self):
+        other_company = Company.objects.create(name="Other Farm")
+        other_est = Establishment.objects.create(name="O1", company=other_company, state="CA")
+        other_parcel = Parcel.objects.create(name="OP1", establishment=other_est, area=3.0)
+        return History.objects.create(
+            name="Other Tenant Production",
+            start_date=timezone.now(),
+            product=self.product,
+            parcel=other_parcel,
+            operator=self.user,
+            earning=0.0,
+            production_amount=0.0,
+            reputation=0.0,
+            confidence_score=0.0,
+            transparency_score=0.0,
+            public_views=0,
+            unique_visitors=0,
+            is_outdoor=True,
+            published=True,
+        )
+
+    def test_anonymous_is_rejected(self):
+        resp = self.client.get(self._url())
+        self.assertIn(
+            resp.status_code,
+            (401, 403),
+            f"anonymous caller reached the self-graded production list (got {resp.status_code})",
+        )
+
+    def test_no_graded_score_in_anonymous_response(self):
+        # Belt-and-suspenders: even if the status code regresses, no score may ship.
+        resp = self.client.get(self._url())
+        self.assertNotIn(
+            "transparency_score",
+            resp.content.decode(),
+            "self-graded transparency score served to an anonymous caller",
+        )
+
+    def test_owner_sees_only_own_company_productions(self):
+        from rest_framework.test import APIClient
+
+        foreign = self._other_tenant_history()
+        self.user.companies.add(self.company)
+        client = APIClient()
+        client.force_authenticate(self.user)
+
+        resp = client.get(self._url())
+        self.assertEqual(resp.status_code, 200, resp.content[:300])
+        returned_ids = {row["id"] for row in resp.json()}
+        self.assertIn(self.history.id, returned_ids, "owner lost their own production")
+        self.assertNotIn(foreign.id, returned_ids, "cross-tenant production leaked to an authenticated user")
+
+    def test_owner_keeps_score_on_own_productions(self):
+        # The producer dashboard and the onboarding checklist both read this field;
+        # locking the endpoint down must not strip the owner's own KPI.
+        from rest_framework.test import APIClient
+
+        self.user.companies.add(self.company)
+        client = APIClient()
+        client.force_authenticate(self.user)
+
+        resp = client.get(self._url())
+        self.assertEqual(resp.status_code, 200, resp.content[:300])
+        rows = [row for row in resp.json() if row["id"] == self.history.id]
+        self.assertTrue(rows, "owner lost their own production")
+        self.assertIn("transparency_score", rows[0], "owner (producer dashboard) lost its transparency score")
+
+    def test_events_count_covers_every_event_relation(self):
+        # events_count is what the dashboard shows for a season with no score yet
+        # ("In progress — N events logged"), so a relation missing from the tuple would
+        # silently undercount a farmer's work rather than fail.
+        from rest_framework.test import APIClient
+
+        from history.models import BusinessEvent, ChemicalEvent, WeatherEvent
+
+        ProductionEvent.objects.create(history=self.history, type="PL", date=timezone.now())
+        ChemicalEvent.objects.create(history=self.history, type="FE", date=timezone.now())
+        SoilManagementEvent.objects.create(history=self.history, type="CC", date=timezone.now())
+        PestManagementEvent.objects.create(history=self.history, type="IP", date=timezone.now())
+        WeatherEvent.objects.create(history=self.history, type="FR", date=timezone.now())
+        BusinessEvent.objects.create(history=self.history, type="HA", date=timezone.now())
+
+        self.user.companies.add(self.company)
+        client = APIClient()
+        client.force_authenticate(self.user)
+
+        resp = client.get(self._url())
+        self.assertEqual(resp.status_code, 200, resp.content[:300])
+        row = next(r for r in resp.json() if r["id"] == self.history.id)
+        self.assertEqual(row["events_count"], 6, "events_count missed a relation")
+
+    def test_establishment_filter_cannot_cross_tenants(self):
+        # The `establishment` query param must narrow within the user's own scope,
+        # never widen it to someone else's farm.
+        from rest_framework.test import APIClient
+
+        foreign = self._other_tenant_history()
+        self.user.companies.add(self.company)
+        client = APIClient()
+        client.force_authenticate(self.user)
+
+        resp = client.get(self._url(), {"establishment": foreign.parcel.establishment_id})
+        self.assertEqual(resp.status_code, 200, resp.content[:300])
+        self.assertEqual(resp.json(), [], "establishment filter widened scope to another tenant's farm")
+
+
+class PhotoContentFlagGatingTests(_Base):
+    """`photo_content_flag` is the INTERNAL Vision anti-gaming verdict.
+
+    Reproduced live on an anonymous payload 2026-08-03: a published production served
+    `timeline[1].photo_content_flag == "not_agricultural"` to unauthenticated callers — Trazo's
+    own moderation verdict about a farmer, published on that farmer's public page. Same class
+    as `drift_warning`, which the serializer already calls "self-incriminating audit data".
+
+    Owner-gated rather than deleted: the producer's EventDetailsModal shows the farmer a
+    "replace this with a real field photo" warning built from exactly this field.
+    """
+
+    def setUp(self):
+        super().setUp()
+        # The flag is derived from the IMAGE's extra_data (via _analyze_event_photos), not the
+        # event's, and is only emitted when the event actually has an album with images.
+        from common.models import Gallery, GalleryImage
+
+        album = Gallery.objects.create()
+        GalleryImage.objects.create(
+            gallery=album,
+            image_url="https://example.test/flagged.jpg",
+            extra_data={"content_validation": "not_agricultural"},
+        )
+        self.event = ProductionEvent.objects.create(
+            history=self.history,
+            type="PL",
+            date=timezone.now(),
+            album=album,
+        )
+
+    def test_flag_absent_for_anonymous(self):
+        blob = json.dumps(PublicHistorySerializer(self.history).data)
+        self.assertNotIn(
+            "photo_content_flag",
+            blob,
+            "internal photo-moderation verdict served to an anonymous consumer",
+        )
+        self.assertNotIn("not_agricultural", blob, "raw moderation value leaked to an anonymous consumer")
+
+    def test_flag_kept_for_owner(self):
+        # The producer must keep it — it drives their own "replace this photo" prompt.
+        from rest_framework.test import APIRequestFactory
+
+        self.user.companies.add(self.company)
+        # A real request object: the serializer's get_qr_code calls build_absolute_uri.
+        request = APIRequestFactory().get("/")
+        request.user = self.user
+        data = PublicHistorySerializer(self.history, context={"request": request}).data
+        events = data.get("events") or []
+        self.assertTrue(events, "no events serialized")
+        self.assertIn(
+            "photo_content_flag",
+            events[0],
+            "owner lost the photo-moderation flag their dashboard prompt depends on",
+        )
 
 
 class PracticeSummaryTests(_Base):
@@ -686,6 +873,99 @@ class CarbonQrSummaryScoreGatingTests(_Base):
         resp = self.client.get(self._url(quick=False), HTTP_USER_AGENT=self._UA)
         self.assertEqual(resp.status_code, 200, resp.content[:300])
         self._assert_no_graded_keys(resp.json())
+
+    # ---- Grades hidden in VALUES, not keys (2026-07-31) -------------------------------
+    # The walker above matches KEY names. Three badges were emitted straight from
+    # `transparency_score >= 95 / 85 / 75` and carried the grade in their "name" and
+    # "description" VALUES ("Complete Transparency - Avocado"), so they sailed past it.
+    # A tiered verdict derived from a self-assigned score IS the score.
+
+    _GRADED_PHRASES = (
+        "complete transparency",
+        "high transparency",
+        "good transparency",
+        "complete documentation",
+        "fully documented",
+        "blockchain verified",  # compliance.md: "recorded", never "verified"
+    )
+
+    def _assert_no_graded_phrases(self, blob):
+        haystack = json.dumps(blob).lower()
+        for phrase in self._GRADED_PHRASES:
+            self.assertNotIn(
+                phrase,
+                haystack,
+                f"self-graded verdict or unsafe claim '{phrase}' reached the anonymous "
+                f"carbon qr-summary payload (EU ECGT 2024/825 / FTC 16 CFR 260.6; "
+                f"see .claude/rules/compliance.md)",
+            )
+
+    def test_quick_mode_has_no_graded_verdict_in_values(self):
+        resp = self.client.get(self._url(quick=True), HTTP_USER_AGENT=self._UA)
+        self.assertEqual(resp.status_code, 200, resp.content[:300])
+        self._assert_no_graded_phrases(resp.json())
+
+    def test_full_mode_has_no_graded_verdict_in_values(self):
+        resp = self.client.get(self._url(quick=False), HTTP_USER_AGENT=self._UA)
+        self.assertEqual(resp.status_code, 200, resp.content[:300])
+        self._assert_no_graded_phrases(resp.json())
+
+    def test_badge_names_are_factual_not_graded(self):
+        """Badges may state facts (EPA/USDA-sourced, blockchain-recorded), never grades."""
+        resp = self.client.get(self._url(quick=False), HTTP_USER_AGENT=self._UA)
+        self.assertEqual(resp.status_code, 200, resp.content[:300])
+        for badge in resp.json().get("badges") or []:
+            name = str(badge.get("name", "")).lower()
+            self.assertNotIn("transparency", name, f"score-derived badge still emitted: {badge}")
+
+
+class CarbonCompleteSummaryScoreGatingTests(_Base):
+    """The `complete/` sibling of qr-summary was never covered by the score gate.
+
+    `carbon/public/productions/<pk>/complete/` is anonymous AND integer-pk enumerable, and
+    the frontend calls it (carbonApi.ts). It served `parcel.transparency_score` — the same
+    self-assigned 0-100 grade the transparency endpoint carefully strips. Found 2026-07-31.
+    """
+
+    _UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1"
+
+    def setUp(self):
+        super().setUp()
+        ProductionEvent.objects.create(history=self.history, type="PL", date=timezone.now())
+
+    def _url(self):
+        return f"/api/carbon/public/productions/{self.history.id}/complete/"
+
+    def test_no_transparency_score_anywhere_in_payload(self):
+        resp = self.client.get(self._url(), HTTP_USER_AGENT=self._UA)
+        self.assertEqual(resp.status_code, 200, resp.content[:300])
+
+        found = []
+
+        def walk(node, path=""):
+            if isinstance(node, dict):
+                for k, v in node.items():
+                    if k in {"transparency_score", "transparencyScore"}:
+                        found.append(f"{path}/{k}")
+                    walk(v, f"{path}/{k}")
+            elif isinstance(node, list):
+                for i, v in enumerate(node):
+                    walk(v, f"{path}[{i}]")
+
+        walk(resp.json())
+        self.assertEqual(
+            found,
+            [],
+            f"self-graded transparency_score leaked on the anonymous complete/ endpoint at: {found}",
+        )
+
+    def test_factual_transparency_flags_still_survive(self):
+        """`transparency_ready` is a boolean readiness flag, not a grade — it may stay."""
+        resp = self.client.get(self._url(), HTTP_USER_AGENT=self._UA)
+        self.assertEqual(resp.status_code, 200, resp.content[:300])
+        parcel = resp.json().get("parcel")
+        if parcel is not None:
+            self.assertIn("transparency_ready", parcel)
 
 
 class ComplianceFieldExposureTests(_Base):

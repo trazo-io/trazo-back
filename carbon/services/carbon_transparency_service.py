@@ -241,65 +241,32 @@ class CarbonTransparencyService:
 
     def calculate_trust_indicators(self, production: History) -> Dict[str, Any]:
         """
-        Calculate trust indicators for consumer confidence.
+        Returns {} — deliberately. See below.
 
-        Args:
-            production: History object
+        This method has ALWAYS returned {} in production: its body called
+        `self._score_to_grade(...)`, which is not defined on this class, so every invocation
+        raised AttributeError into the bare `except` at the end and returned the empty dict.
+        `production.trust_indicators` has therefore been persisted as {} for the lifetime of
+        the feature, and `carbon/views.py` (`"trustIndicators": production.trust_indicators or {}`)
+        has been serving {} to the consumer QR payload.
 
-        Returns:
-            Dict containing trust indicators
+        It was NOT repaired on 2026-08-04, and that is the point. The dict it tried to build was
+        a self-graded trust verdict — `overall_score`, a letter `grade`, sub-scores for
+        completeness/verification/transparency/consistency, and `badges` — computed by Trazo,
+        about Trazo's own customer, and emitted on a CONSUMER-facing payload. Implementing the
+        missing `_score_to_grade` would not have fixed a bug; it would have shipped the exact
+        artefact that EU ECGT 2024/825 (live 2026-09-27) and FTC 16 CFR 260.6 target, and that
+        the June 2026 claim-safety pass removed from every other consumer surface.
+
+        Consumers get facts: documented-practice counts, photos, the timeline, and the
+        certifications their actual certifying agent issued. The transparency score is a
+        producer-dashboard metric. Nothing here grades a farm for a shopper.
+
+        Kept as an explicit no-op rather than deleted because `update_production_transparency_data`
+        and the `trust_indicators` model field / serializer still reference it; removing the
+        field is a migration, not a cleanup.
         """
-        try:
-            cache_key = f"trust_indicators_{production.id}"
-            cached_indicators = cache.get(cache_key)
-            if cached_indicators:
-                return cached_indicators
-
-            # Get or create consumer trust metric
-            trust_metric, created = ConsumerTrustMetric.objects.get_or_create(
-                production=production,
-                defaults={
-                    "overall_trust_score": 0.0,
-                    "data_completeness_score": 0.0,
-                    "verification_score": 0.0,
-                    "transparency_score": 0.0,
-                    "consistency_score": 0.0,
-                },
-            )
-
-            if created or self._should_recalculate_trust(trust_metric):
-                self._calculate_trust_scores(trust_metric, production)
-
-            # Build trust indicators response
-            indicators = {
-                "overall_score": trust_metric.overall_trust_score,
-                "grade": self._score_to_grade(trust_metric.overall_trust_score),
-                "scores": {
-                    "data_completeness": trust_metric.data_completeness_score,
-                    "verification": trust_metric.verification_score,
-                    "transparency": trust_metric.transparency_score,
-                    "consistency": trust_metric.consistency_score,
-                },
-                "badges": self._generate_trust_badges(trust_metric),
-                "indicators": {
-                    "verified_data": trust_metric.verification_score >= 70,
-                    "complete_documentation": trust_metric.data_completeness_score >= 80,
-                    "transparent_process": trust_metric.transparency_score >= 75,
-                    "consistent_reporting": trust_metric.consistency_score >= 70,
-                },
-                "improvement_areas": trust_metric.improvement_areas,
-                "trust_factors": trust_metric.trust_factors,
-                "last_updated": trust_metric.last_calculated.isoformat(),
-            }
-
-            # Cache the result
-            cache.set(cache_key, indicators, self.cache_timeout)
-
-            return indicators
-
-        except Exception as e:
-            logger.error(f"Error calculating trust indicators for production {production.id}: {str(e)}")
-            return {}
+        return {}
 
     def update_production_transparency_data(self, production: History) -> bool:
         """
@@ -594,12 +561,17 @@ class CarbonTransparencyService:
         if not verification_standards.get("blockchain_verified", False):
             recommendations.append(
                 {
-                    "category": "Verification",
+                    # "Blockchain verification" is the UNSAFE phrasing per compliance.md — the
+                    # chain proves a record was not altered after submission, it does not
+                    # verify the farming practice. This block reaches an ANONYMOUS payload, so
+                    # the wording is consumer-facing regardless of it reading as farmer advice.
+                    # Also named as the optional add-on it is.
+                    "category": "Recordkeeping",
                     "priority": "Low",
-                    "title": "Add Blockchain Verification",
-                    "description": "Secure carbon data with blockchain verification",
-                    "action_items": ["Enable blockchain verification for carbon records"],
-                    "potential_improvement": "Immutable verification",
+                    "title": "Add Blockchain Recording (optional add-on)",
+                    "description": "Record carbon data on-chain so entries cannot be altered after submission",
+                    "action_items": ["Enable blockchain recording for carbon records (optional add-on, $15/mo)"],
+                    "potential_improvement": "Tamper-evident records",
                 }
             )
 

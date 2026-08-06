@@ -16,14 +16,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from company.models import Company, Establishment
-from history.models import (
-    ChemicalEvent,
-    GeneralEvent,
-    History,
-    ProductionEvent,
-    SoilManagementEvent,
-    WeatherEvent,
-)
+from history.models import ChemicalEvent, GeneralEvent, History, ProductionEvent, SoilManagementEvent, WeatherEvent
 from history.serializers import ChemicalEventSerializer, UpdateChemicalEventSerializer
 from product.models import Parcel, Product
 from users.models import User

@@ -87,12 +87,25 @@ class CertificationModelTest(TestCase):
         self.assertFalse(cert.is_verified)
 
     def test_consumer_display_status_verified(self):
+        # The "Verified via USDA Organic Integrity Database" claim is gated on the
+        # source that substantiates it (16 CFR 260.6), not on verification_status
+        # alone — a status set by a manual edit or an import must not assert a
+        # database match that never happened.
+        cert = Certification.objects.create(
+            establishment=self.establishment,
+            certification_type="usda_organic",
+            verification_status="verified",
+            verification_source=Certification.DATABASE_VERIFICATION_SOURCE,
+        )
+        self.assertEqual(cert.consumer_display_status, "verified_via_database")
+
+    def test_consumer_display_status_verified_without_a_source_stays_self_reported(self):
         cert = Certification.objects.create(
             establishment=self.establishment,
             certification_type="usda_organic",
             verification_status="verified",
         )
-        self.assertEqual(cert.consumer_display_status, "verified_via_database")
+        self.assertEqual(cert.consumer_display_status, "self_reported")
 
     def test_consumer_display_status_self_reported(self):
         cert = Certification.objects.create(

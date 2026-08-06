@@ -272,73 +272,71 @@ def calculate_weather_event_carbon(sender, instance, created, **kwargs):
 @receiver(post_save, sender=GeneralEvent)
 def calculate_general_event_carbon(sender, instance, created, **kwargs):
     """
-    Automatically calculate minimal carbon impact for general events.
+    General events record no carbon.
 
-    PHASE 2 CONSOLIDATION (2025-12-12): CarbonEntry is now the single source of truth.
+    A general event is administration, planning, training, record-keeping or an inspection —
+    there is no farmer-controlled operational input to measure, and Trazo's methodology is
+    direct operational emissions only (.claude/rules/carbon-methodology.md).
 
-    FIX (2026-03-10): Now triggers on BOTH create AND update to ensure carbon values
-    are recalculated when event fields are modified (was create-only).
+    Until 2026-07 this receiver persisted a fabricated 0.1 kg CO2e, gated on a keyword match
+    over the event name and notes. See the note below and the tests in
+    history/tests/test_general_event_no_carbon.py.
+
+    The receiver is kept (rather than deleted) so that saving a general event actively
+    REMOVES any legacy fabricated entry still attached to it.
     """
     try:
         from carbon.models import CarbonEntry
 
-        calculator = _get_calculator()
-
-        # For updates, delete the existing CarbonEntry first to avoid duplicates
-        if not created:
-            event_id_pattern = f"GeneralEvent(ID={instance.id})"
-            existing_entries = CarbonEntry.objects.filter(
+        # Sweep any CarbonEntry attached to this event. This runs on create as well as
+        # update on purpose: rows written by the pre-2026-07 fabricated-value path are still
+        # in the database, and touching the event is the natural moment to purge one. Both
+        # lookup shapes are tried because entries were keyed inconsistently over time.
+        stale_entries = CarbonEntry.objects.filter(
+            production=instance.history,
+            description__icontains=f"GeneralEvent(ID={instance.id})",
+        )
+        if not stale_entries.exists():
+            stale_entries = CarbonEntry.objects.filter(
                 production=instance.history,
-                description__icontains=event_id_pattern,
+                registry_verification_id=f"REG-GeneralEvent-{instance.id}",
             )
-            deleted_count = existing_entries.count()
-
-            if deleted_count == 0:
-                existing_entries = CarbonEntry.objects.filter(
-                    production=instance.history,
-                    registry_verification_id=f"REG-GeneralEvent-{instance.id}",
-                )
-                deleted_count = existing_entries.count()
-
-            if deleted_count > 0:
-                existing_entries.delete()
-                print(f"🔄 Deleted {deleted_count} existing carbon entries for GeneralEvent {instance.id} (update)")
-
-        # General events have minimal standard carbon impact
-        calculation_result = {
-            "co2e": 0.1,  # Minimal impact
-            "efficiency_score": 50.0,
-            "usda_factors_based": False,
-            "verification_status": "estimated",
-            "calculation_method": "general_event_standard",
-            "data_source": "Industry Standards",
-            "recommendations": [],
-            "event_type": "general",
-            "timestamp": instance.date.isoformat() if instance.date else None,
-        }
-
-        # Only create carbon entry if the event might have actual impact
-        impact_keywords = ["fuel", "energy", "transport", "machinery", "equipment"]
-
-        # Safe string concatenation - handle None values
-        name_text = instance.name or ""
-        observation_text = instance.observation or ""
-        combined_text = (name_text + " " + observation_text).lower()
-
-        if any(keyword in combined_text for keyword in impact_keywords):
-            calculator.create_carbon_entry_from_event(instance, calculation_result)
-
-            action = "created" if created else "updated"
-            print(
-                f"✅ Carbon calculation {action} for General Event {instance.id}: {calculation_result['co2e']} kg CO2e"
+        removed = stale_entries.count()
+        if removed:
+            stale_entries.delete()
+            logger.info(
+                "Removed %s carbon entr%s for GeneralEvent %s (general events record no carbon)",
+                removed,
+                "y" if removed == 1 else "ies",
+                instance.id,
             )
-        else:
-            print(
-                f"✅ General Event {instance.id} processed with minimal carbon impact: {calculation_result['co2e']} kg CO2e"
-            )
+
+        # A2 fix (2026-07): general events no longer get a fabricated carbon figure.
+        #
+        # This used to persist a literal {"co2e": 0.1, "calculation_method":
+        # "general_event_standard", "data_source": "Industry Standards"} — a number with no
+        # derivation, attributed to an unnamed standard, written into a table that feeds an
+        # audit-adjacent export. Worse, it was gated on a substring match over the event's
+        # name and notes for ["fuel", "energy", "transport", "machinery", "equipment"], so
+        # "Diesel delivery" logged 0.1 kg while "Tractor top-up" logged nothing. The keyword
+        # gate made the output depend on the farmer's choice of words, not on any activity.
+        #
+        # A general event is administration, planning, training or record-keeping. Trazo's
+        # methodology is direct operational emissions (see .claude/rules/carbon-methodology.md);
+        # there is no farmer-controlled operational input here to measure. Recording nothing
+        # is the honest answer, and an absent entry is easier to reason about than an
+        # unverifiable 0.1.
+        #
+        # The context-aware `calculate_general_event_impact` in event_carbon_calculator was
+        # never reachable from this signal and remains unused — if general-event energy is
+        # ever worth modelling, it needs real duration/participant inputs, not a constant.
+        logger.debug(
+            "General Event %s: no CarbonEntry created (no direct operational emissions to attribute)",
+            instance.id,
+        )
 
     except Exception as e:
-        logger.error("Error calculating carbon for General Event %s: %s", instance.id, e, exc_info=True)
+        logger.error("Error handling carbon for General Event %s: %s", instance.id, e, exc_info=True)
 
 
 @receiver(post_save, sender=BusinessEvent)

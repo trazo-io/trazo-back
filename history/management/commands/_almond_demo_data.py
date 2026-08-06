@@ -1059,7 +1059,7 @@ def create_almond_finished_events(prod, user, demo_images=None):
         date=_dt(2025, 9, 15),
         description=(
             "Annual GLOBALG.A.P. IFA v6 certification audit for almond "
-            "orchard conducted by SCS Global Services. All control points "
+            "orchard conducted by Coast Range Assurance Services (DEMO). All control points "
             "reviewed: food safety, traceability, IPM records, worker "
             "welfare, and environmental management. Certified with "
             "one minor observation."
@@ -1072,8 +1072,8 @@ def create_almond_finished_events(prod, user, demo_images=None):
         certification_type="global_gap",
         verification_status="verified",
         sustainability_practice="integrated_pest",
-        verified_certifier_name="SCS Global Services",
-        certificate_number="GGN-4052852100014-ALM-2025",
+        verified_certifier_name="DEMO — Coast Range Assurance Services (sample data, not an accredited agent)",
+        certificate_number="DEMO-GGP-0003",
         observation=(
             "One minor observation: update chemical storage signage. "
             "Corrected within 48 hours. Strong IPM and mating "
@@ -1081,7 +1081,7 @@ def create_almond_finished_events(prod, user, demo_images=None):
         ),
         extra_data={
             "audit_date": "2025-09-15",
-            "auditor": "SCS Global Services",
+            "auditor": "Coast Range Assurance Services (DEMO)",
             "standard": "GLOBALG.A.P. IFA v6",
             "control_points": 217,
             "major_nc": 0,

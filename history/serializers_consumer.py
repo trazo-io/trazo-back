@@ -7,7 +7,7 @@ from django.db.models import Count
 
 from rest_framework import serializers
 
-from backend.constants import get_carbon_score_from_co2e
+from backend.constants import format_carbon_amount
 from carbon.models import CarbonEntry
 
 from .models import (
@@ -98,7 +98,8 @@ class UserFavoriteSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source="production.product", read_only=True)
     farm_name = serializers.CharField(source="production.parcel.establishment.name", read_only=True)
     location = serializers.SerializerMethodField()
-    carbon_score = serializers.SerializerMethodField()
+    # `carbon_score` (an A+-to-F letter grade) was removed 2026-08-04 — see backend/constants.py.
+    # `carbon_footprint` carries the measured figure and is what consumers see.
     carbon_footprint = serializers.SerializerMethodField()
     production_public_id = serializers.UUIDField(source="production.public_id", read_only=True)
 
@@ -110,7 +111,6 @@ class UserFavoriteSerializer(serializers.ModelSerializer):
             "product_name",
             "farm_name",
             "location",
-            "carbon_score",
             "carbon_footprint",
             "created_at",
         ]
@@ -125,23 +125,6 @@ class UserFavoriteSerializer(serializers.ModelSerializer):
             )
         return "Location unavailable"
 
-    def get_carbon_score(self, obj):
-        """Calculate carbon score (A+ to F scale)"""
-        # Get latest carbon entry for this production
-        carbon_entry = CarbonEntry.objects.filter(production=obj.production).order_by("-created_at").first()
-
-        if carbon_entry:
-            # Use co2e_amount if available and non-zero, otherwise fall back to amount
-            co2e = (
-                carbon_entry.co2e_amount
-                if carbon_entry.co2e_amount and carbon_entry.co2e_amount > 0
-                else carbon_entry.amount
-            )
-            if co2e and co2e > 0:
-                co2e = float(co2e)
-                return get_carbon_score_from_co2e(co2e)
-        return "Not Available"
-
     def get_carbon_footprint(self, obj):
         """Get formatted carbon footprint"""
         carbon_entry = CarbonEntry.objects.filter(production=obj.production).order_by("-created_at").first()
@@ -154,8 +137,8 @@ class UserFavoriteSerializer(serializers.ModelSerializer):
                 else carbon_entry.amount
             )
             if co2e and co2e > 0:
-                co2e = float(co2e)
-                return f"{co2e:.2f} kg CO₂e/kg"
+                # Shared formatter so the consumer wording cannot drift between surfaces.
+                return format_carbon_amount(co2e)
         return "Data unavailable"
 
 
@@ -294,7 +277,7 @@ class EnhancedHistoryScanSerializer(serializers.ModelSerializer):
     transparency_score = serializers.SerializerMethodField()
     events_viewed = serializers.SerializerMethodField()
     # Carbon fields (secondary - available but not primary)
-    carbon_score = serializers.SerializerMethodField()
+    # `carbon_score` (A+-to-F letter grade) removed 2026-08-04 — see backend/constants.py.
     carbon_footprint = serializers.SerializerMethodField()
     carbon_saved = serializers.SerializerMethodField()
     sustainability_practices = serializers.SerializerMethodField()
@@ -313,7 +296,6 @@ class EnhancedHistoryScanSerializer(serializers.ModelSerializer):
             "transparency_score",
             "events_viewed",
             # Carbon fields (secondary)
-            "carbon_score",
             "carbon_footprint",
             "carbon_saved",
             "sustainability_practices",
@@ -411,22 +393,6 @@ class EnhancedHistoryScanSerializer(serializers.ModelSerializer):
         """
         return self._count_events_prefetched(obj.history)
 
-    def get_carbon_score(self, obj):
-        """Calculate carbon score grade"""
-        carbon_entry = self._get_carbon_entry(obj.history)
-
-        if carbon_entry:
-            # Use co2e_amount if available and non-zero, otherwise fall back to amount
-            co2e = (
-                carbon_entry.co2e_amount
-                if carbon_entry.co2e_amount and carbon_entry.co2e_amount > 0
-                else carbon_entry.amount
-            )
-            if co2e and co2e > 0:
-                co2e = float(co2e)
-                return get_carbon_score_from_co2e(co2e)
-        return "Not Available"
-
     def get_carbon_footprint(self, obj):
         """Get formatted carbon footprint"""
         carbon_entry = self._get_carbon_entry(obj.history)
@@ -439,8 +405,8 @@ class EnhancedHistoryScanSerializer(serializers.ModelSerializer):
                 else carbon_entry.amount
             )
             if co2e and co2e > 0:
-                co2e = float(co2e)
-                return f"{co2e:.2f} kg CO₂e/kg"
+                # Shared formatter so the consumer wording cannot drift between surfaces.
+                return format_carbon_amount(co2e)
         return "Data unavailable"
 
     def get_carbon_saved(self, obj):
@@ -537,8 +503,10 @@ class ProductComparisonResultSerializer(serializers.Serializer):
     name = serializers.CharField()
     farm = serializers.CharField()
     location = serializers.CharField()
-    carbon_score = serializers.CharField()
+    # `carbon_score` (A+-to-F) removed 2026-08-04 — see backend/constants.py. Comparison is on the
+    # measured figure: `carbon_footprint` for display, `carbon_kg_co2e` for ranking.
     carbon_footprint = serializers.CharField()
+    carbon_kg_co2e = serializers.FloatField(allow_null=True, required=False)
     farming_method = serializers.CharField()
     certifications = serializers.ListField()
     # Removed: price, distance, sustainability_rating (no real data available)

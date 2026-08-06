@@ -16,18 +16,33 @@ class USDAConversions:
     KG_CO2_PER_TREE_ANNUAL = 21.8
 
 
-# USDA-verified carbon score grading thresholds
-class USDAGrading:
-    """USDA-based carbon footprint grading system (kg CO₂e/kg product)"""
-
-    CARBON_SCORE_THRESHOLDS = {
-        "A_PLUS": 0.5,
-        "A": 1.0,
-        "B": 2.0,
-        "C": 3.0,
-        "D": 5.0,
-        # Above 5.0 = F grade
-    }
+# REMOVED 2026-08-04 — `USDAGrading` and `get_carbon_score_from_co2e()`.
+#
+# They turned a production's kg CO₂e/kg into a letter grade, A+ through F, from thresholds
+# hardcoded here (0.5 / 1.0 / 2.0 / 3.0 / 5.0) and served it to shoppers on the consumer
+# dashboard, favorites list and product comparison.
+#
+# Two separate problems, either one disqualifying:
+#
+# 1. THE NAME WAS THE CLAIM. A class called `USDAGrading`, documented as a "USDA-based carbon
+#    footprint grading system", attributes the scheme to a federal agency. There is no USDA
+#    carbon letter-grade programme; these five numbers were chosen in this repository. That is
+#    the "USDA Verified / USDA Certified" wording `compliance.md` forbids outright, and an
+#    unsourced attribution under FTC 16 CFR 260.6.
+#
+# 2. A GRADE IS A LABEL. Trazo assigning a farm an "A" or a "D" and showing it to a consumer is
+#    the self-created sustainability label banned by EU ECGT 2024/825 (live 2026-09-27) — the
+#    same artefact removed from the QR page in June 2026 and from the producer dashboard on
+#    2026-08-04. It survived here because the consumer *dashboard* is authenticated, so it sat
+#    outside the anonymous-endpoint sweep that polices the public surfaces.
+#
+# What consumers get instead is what they got alongside the grade all along: the measured figure,
+# `carbon_footprint` ("1.23 kg CO₂e"), which is a fact and needs no defence. Comparison now ranks
+# on that number rather than on the alphabet. See `format_carbon_amount` below for the unit
+# correction that came with it — the "/kg" this used to carry was never true.
+#
+# Do not reintroduce a grade, band, tier or letter for a consumer surface. If a number needs a
+# verdict attached, it belongs on the producer dashboard, where the farmer can act on it.
 
 
 # User engagement milestones for achievements
@@ -42,28 +57,25 @@ class EngagementMilestones:
     }
 
 
-def get_carbon_score_from_co2e(co2e_value):
-    """
-    Calculate carbon score grade from CO₂e value using USDA thresholds
+def format_carbon_amount(co2e_value):
+    """Format a recorded CO₂e amount for display. A measurement, not a verdict.
 
-    Args:
-        co2e_value (float): Carbon footprint in kg CO₂e/kg product
+    Replaces `get_carbon_score_from_co2e()` (see the note above): same input, but it returns the
+    figure rather than a letter grade Trazo invented and attributed to the USDA.
 
-    Returns:
-        str: Grade from A+ to F
+    UNITS (corrected 2026-08-04): the value comes from `CarbonEntry.amount`, whose own help_text
+    is "Amount in kg CO2e" — a TOTAL for that entry. The consumer surfaces rendered it as
+    "kg CO₂e/kg", i.e. an intensity per kilogram of product, which it has never been; there is no
+    yield denominator anywhere in that code path.
+
+    That mislabel also silently broke the grade this replaces: its thresholds (0.5 / 1.0 / 2.0 /
+    3.0 / 5.0 kg CO₂e per kg) were compared against totals in the hundreds or thousands, so every
+    production fell through to the final branch. Shoppers were being shown an "F" for every farm
+    on the platform. A wrong unit is not cosmetic.
     """
-    if co2e_value <= USDAGrading.CARBON_SCORE_THRESHOLDS["A_PLUS"]:
-        return "A+"
-    elif co2e_value <= USDAGrading.CARBON_SCORE_THRESHOLDS["A"]:
-        return "A"
-    elif co2e_value <= USDAGrading.CARBON_SCORE_THRESHOLDS["B"]:
-        return "B"
-    elif co2e_value <= USDAGrading.CARBON_SCORE_THRESHOLDS["C"]:
-        return "C"
-    elif co2e_value <= USDAGrading.CARBON_SCORE_THRESHOLDS["D"]:
-        return "D"
-    else:
-        return "F"
+    if co2e_value is None:
+        return None
+    return f"{float(co2e_value):.2f} kg CO₂e"
 
 
 def calculate_miles_equivalent(kg_co2e):

@@ -40,7 +40,71 @@ from .models import (
     WeatherEvent,
 )
 from .services.claim_resolver import resolve_input_status
-from .services.privacy import public_parcel_geo
+from .services.privacy import public_free_text, public_parcel_geo
+
+
+def _drop_unset(event_dict):
+    """Strip keys the farmer never filled from a CONSUMER event payload.
+
+    Each consumer event dict is hand-built per event category and carries the UNION of
+    every field any subtype in that category might use, so an irrigation set shipped
+    `sanitizer_nop_reference`, `cleaning_materials_used`, `seed_certification_status`,
+    `equipment_operation_type` … all null. Measured on a realistic 258-event season
+    (24 irrigation sets logged individually, 6 sprays, 12 trap checks, 3 shakes):
+
+        events block = 100% of the payload; 105 keys null on every event = 316 KB
+        payload 493 KB -> 194 KB (61% smaller) with ZERO information removed
+
+    That matters because this is the QR page — the most mobile-critical surface in the
+    product, with a <500 ms budget, opened on a phone in a shop or a field on cell data.
+    Trimming empty keys is strictly better than paginating or capping the timeline:
+    capping would drop documented practices, and the documented-practice COUNT is the
+    consumer claim (see transparency-first rules), so evidence must not be silently lost.
+
+    Only ``None`` and ``""`` are dropped. ``False`` and ``0`` are REAL ANSWERS —
+    "no photos", "not shared with conventional", "zero catch" — and are preserved.
+
+    Safe for the frontend: the event registry reads values as
+    ``event[field.name] ?? extraData[field.name]``, and ``??`` treats a missing key
+    exactly like a null one. No consumer component branches on key presence
+    (no ``hasOwnProperty`` / ``Object.keys(event)`` over event objects).
+    """
+    if not isinstance(event_dict, dict):
+        return event_dict
+    out = {}
+    for key, value in event_dict.items():
+        if value is None or value == "":
+            continue
+        out[key] = _drop_unset(value) if isinstance(value, dict) else value
+    return out
+
+
+def _public_unit(event, field_name):
+    """Resolve a unit of measure for the CONSUMER payload. Model column wins.
+
+    ``volume_unit`` / ``area_unit`` are real columns on ChemicalEvent; ``extra_data``
+    retains a legacy mirror written by older clients. Reading the mirror first — and
+    falling back to a hardcoded ``"ha"`` / ``"L"`` when it was absent — mislabelled the
+    basis on rows created after the columns landed. Because the consumer card converts
+    hectares to acres for US shoppers, a value entered in acres and served as ``"ha"``
+    was displayed at 2.47x the real treated area.
+
+    Returns ``None`` when no unit is recorded. That is deliberate: the registry
+    formatters emit a bare number when the unit field is empty, which is honest, whereas
+    a guessed unit is an unverifiable claim about how much was applied to food. See
+    ``_drop_unset`` — a ``None`` here is dropped from the payload entirely.
+    """
+    column_value = getattr(event, field_name, None)
+    if isinstance(column_value, str) and column_value.strip():
+        return column_value.strip()
+
+    extra = getattr(event, "extra_data", None)
+    if isinstance(extra, dict):
+        mirrored = extra.get(field_name)
+        if isinstance(mirrored, str) and mirrored.strip():
+            return mirrored.strip()
+
+    return None
 
 
 def ensure_event_description(data, default_label):
@@ -443,6 +507,10 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
             "phosphorus_percentage",
             "potassium_percentage",
             "nitrogen_source",
+            # §E-3 — micronutrients (FE), § 205.601(j)(6)
+            "micronutrient_type",
+            "micronutrient_rate",
+            "micronutrient_rate_unit",
             "application_method_structured",
             "application_fuel_type",
             "application_fuel_consumed",
@@ -581,6 +649,19 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
                 # Use empty string to allow clearing (not just truthy values)
                 frontend_extra_data[field_name] = value if value is not None else ""
 
+        # Promote model-column fields that arrived NESTED inside extra_data.
+        # The event form posts target_pest_disease (and friends) inside its extra_data
+        # blob rather than at the top level, so the block above never saw them and the
+        # real DB column stayed NULL — while a copy sat in extra_data. Read paths fall
+        # back to extra_data so the UI looked correct, but the audit-export PDF reads the
+        # column directly (audit_export_service: `ev.target_pest_disease`), so the
+        # certifier packet showed a blank "target pest" for every event logged in the UI.
+        for field_name in ("weather_conditions", "application_timing", "target_pest_disease"):
+            if field_name not in data and field_name in frontend_extra_data:
+                nested_value = frontend_extra_data.get(field_name)
+                if nested_value not in (None, ""):
+                    data[field_name] = nested_value
+
         # Handle custom fields (user-defined additional information)
         custom_fields = self.handle_custom_fields_input(data)
 
@@ -618,9 +699,14 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
         if area_unit is not None:
             internal_value["extra_data"]["area_unit"] = area_unit
 
-        # Auto-detect fertigation from application method text
+        # Auto-detect fertigation from application method text.
+        # `is None`, NOT falsiness: `not False` is True, so a farmer who explicitly answered
+        # "no" was indistinguishable from one who left it blank, and the answer was overwritten
+        # to True. Only infer when the caller said nothing. (Same defect class as the
+        # action_threshold_met promotion.) The flag suppresses application emissions in the
+        # carbon calculation, so a wrong True also understates the event's footprint.
         way_of_app = internal_value.get("way_of_application", "") or ""
-        if "fertigation" in way_of_app.lower() and not internal_value.get("is_fertigation"):
+        if "fertigation" in way_of_app.lower() and internal_value.get("is_fertigation") is None:
             internal_value["is_fertigation"] = True
 
         return internal_value
@@ -810,6 +896,10 @@ class ChemicalEventSerializer(EventSerializer):
             "phosphorus_percentage",
             "potassium_percentage",
             "nitrogen_source",
+            # §E-3 — micronutrients (FE), § 205.601(j)(6)
+            "micronutrient_type",
+            "micronutrient_rate",
+            "micronutrient_rate_unit",
             "application_method_structured",
             "application_fuel_type",
             "application_fuel_consumed",
@@ -1022,45 +1112,58 @@ class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
 
         extra_data = {}
 
+        # WeatherEvent has NO meteorological columns — `extra_data` IS the record. The merge
+        # below is `{**instance.extra_data, **extra_data}`, so this dict WINS. Writing a key
+        # unconditionally therefore DESTROYS the stored value whenever the payload omits it:
+        # a description-only edit turned `highest_temperature: 111` into `null` and, because
+        # `temperature_unit` carried a literal default, silently rewrote a recorded "F" to "C".
+        # Only touch keys the caller actually sent.
+        def take(key, create_default=None):
+            if key in data:
+                extra_data[key] = data.pop(key)
+            elif create_default is not None and not getattr(self, "instance", None):
+                # Defaults belong to creation only. On update, absence means "unchanged",
+                # and the existing stored value must survive the merge.
+                extra_data[key] = create_default
+
         # Preserve custom event name if provided by the frontend
         event_name = data.pop("name", None)
         if event_name:
             extra_data["event_name"] = event_name
 
         if event_type == WeatherEvent.FROST:
-            extra_data["lower_temperature"] = data.pop("lower_temperature", None)
-            extra_data["temperature_unit"] = data.pop("temperature_unit", "C")
-            extra_data["way_of_protection"] = data.pop("way_of_protection", None)
+            take("lower_temperature")
+            take("temperature_unit", "C")
+            take("way_of_protection")
         elif event_type == WeatherEvent.DROUGHT:
-            water_deficit_value = data.pop("water_deficit", None)
-            extra_data["water_deficit"] = water_deficit_value
+            take("water_deficit")
         elif event_type == WeatherEvent.HAILSTORM:
             # Sprint 2 Epic 2.1.3: Removed weight and diameter fields (excessive detail)
             # Only keep duration and way_of_protection
-            extra_data["duration"] = data.pop("duration", None)
-            extra_data["way_of_protection"] = data.pop("way_of_protection", None)
+            take("duration")
+            take("way_of_protection")
         elif event_type == WeatherEvent.HIGH_TEMPERATURE:
-            extra_data["highest_temperature"] = data.pop("highest_temperature", None)
-            extra_data["temperature_unit"] = data.pop("temperature_unit", "C")
-            extra_data["start_date"] = data.pop("start_date", None)
-            extra_data["end_date"] = data.pop("end_date", None)
+            take("highest_temperature")
+            take("temperature_unit", "C")
+            take("start_date")
+            take("end_date")
         elif event_type == WeatherEvent.TROPICAL_STORM:
-            extra_data["wind_speed"] = data.pop("wind_speed", None)
-            extra_data["precipitation_amount"] = data.pop("precipitation_amount", None)
-            extra_data["duration"] = data.pop("duration", None)
-            extra_data["damage_assessment"] = data.pop("damage_assessment", None)
+            take("wind_speed")
+            take("precipitation_amount")
+            take("duration")
+            take("damage_assessment")
         elif event_type == WeatherEvent.HIGH_WINDS:
-            extra_data["wind_speed"] = data.pop("wind_speed", None)
-            extra_data["duration"] = data.pop("duration", None)
-            extra_data["protection_measures"] = data.pop("protection_measures", None)
+            take("wind_speed")
+            take("duration")
+            take("protection_measures")
         elif event_type == WeatherEvent.HIGH_HUMIDITY:
-            extra_data["humidity_level"] = data.pop("humidity_level", None)
-            extra_data["duration"] = data.pop("duration", None)
-            extra_data["crop_impact"] = data.pop("crop_impact", None)
+            take("humidity_level")
+            take("duration")
+            take("crop_impact")
         elif event_type == WeatherEvent.LOW_HUMIDITY:
-            extra_data["humidity_level"] = data.pop("humidity_level", None)
-            extra_data["duration"] = data.pop("duration", None)
-            extra_data["crop_impact"] = data.pop("crop_impact", None)
+            take("humidity_level")
+            take("duration")
+            take("crop_impact")
 
         internal_value = super().to_internal_value(data)
 
@@ -1534,6 +1637,9 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
             "cleaned_by",
             "shared_with_conventional",
             "cleaning_protocol_reference",
+            # §E-5 — custom operator + the cleaning that covers this operation (§ 205.272)
+            "operator_is_custom",
+            "equipment_cleaning_event",
             # NOP Compliance: Post-Harvest Sanitizer Detail (7 CFR 205.272 + § 205.605)
             "sanitizer_name",
             "sanitizer_ppm",
@@ -1571,7 +1677,16 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
         # no model columns. Fuel/equipment/area use existing ProductionEvent columns.
         "protection_method",  # FP: wind_machine / orchard_heater / under_tree_sprinkler
         "low_temperature",  # FP: low temp that triggered protection
-        "floor_management_type",  # MO: mow / mulch / cover_crop / herbicide_strip
+        "floor_management_type",  # MO: mow / mulch / cover_crop_mgmt / flame_weed
+        # A9 fix (2026-07): `method` was in the READ serializer's EXTRA_DATA_FIELDS but
+        # missing here, so a flat `method=` POST was silently discarded and only a nested
+        # extra_data.method survived. That single omission disabled the manual-operation
+        # carbon short-circuit (_is_manual_method in event_carbon_calculator): a hand
+        # harvest, hand thinning or hand pruning was billed the USDA MECHANICAL average
+        # (0.7 gal/ha for HA) instead of the ~0.1 kg/acre manual figure. Hand work is
+        # standard practice in a California organic orchard, so the labour-intensive
+        # grower was over-charged for the operation precisely because it was manual.
+        "method",
     ]
 
     def to_internal_value(self, data):
@@ -1913,6 +2028,9 @@ class ProductionEventSerializer(CustomFieldsMixin, EventSerializer):
             "cleaned_by",
             "shared_with_conventional",
             "cleaning_protocol_reference",
+            # §E-5 — custom operator + the cleaning that covers this operation (§ 205.272)
+            "operator_is_custom",
+            "equipment_cleaning_event",
             # NOP Compliance: Post-Harvest Sanitizer Detail (7 CFR 205.272 + § 205.605)
             "sanitizer_name",
             "sanitizer_ppm",
@@ -2715,10 +2833,16 @@ class PublicProductSerializer(serializers.ModelSerializer):
 class PublicEstablishmentSerializer(serializers.ModelSerializer):
     location = serializers.SerializerMethodField()
     company_name = serializers.CharField(source="company.name", read_only=True)
+    # Same redaction the transparency endpoint applies — this is the second public payload
+    # shape, and it was publishing "45% premium pricing" from the same free-text field.
+    description = serializers.SerializerMethodField()
 
     class Meta:
         model = Establishment
         fields = ["id", "name", "description", "location", "company_name"]
+
+    def get_description(self, establishment):
+        return public_free_text(establishment.description)
 
     def get_location(self, establishment):
         return establishment.get_location()
@@ -2821,6 +2945,14 @@ class PublicHistorySerializer(serializers.ModelSerializer):
     # response. Any consumer hitting /public_history/ via QR code is NOT the
     # owner, so these get stripped before serialization returns.
     _OWNER_ONLY_FIELDS = (
+        # operator is a BasicUserSerializer — it carries the grower's email, phone,
+        # is_superuser, user_type, and worksin_set (EVERY other company and
+        # establishment that user runs). On an anonymous QR payload that is a direct
+        # PII exposure plus a cross-farm disclosure: scanning one product would reveal
+        # the grower's contact details and their unrelated operations. The consumer
+        # page never reads it — farm identity comes from parcel.establishment (and
+        # transparency_views' own farmer block) — so stripping costs no consumer content.
+        "operator",
         "sold_to",
         "sale_date",
         "quantity_sold",
@@ -2867,8 +2999,54 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         "nitrogen_percentage",
         "phosphorus_percentage",
         "potassium_percentage",
+        # §E-3 — an application RATE is a certifier detail (same class as the NPK percentages);
+        # micronutrient_type stays consumer-visible because "zinc" is plain language.
+        "micronutrient_rate",
+        "micronutrient_rate_unit",
         "is_fertigation",
         "buffer_zone_meters",
+        # --- Added 2026-07-31 (consumer editorial review) -------------------------------
+        # These were briefly DELETED from get_events() outright, which silently broke the
+        # producer's own dashboard: PublicHistorySerializer also feeds the ProfileProduction
+        # timeline (via carbon complete_summary, which passes request context), and
+        # DriftFindingsBanner reads `drift_warning` from exactly that data. Owner-gating is
+        # the correct mechanism — it keeps the producer whole and the consumer clean.
+        #
+        # `drift_warning`: internal OSP nonconformance narrative + osp_id/osp_version + CFR
+        # citation; also nests an optional ca_dpr_permit_status.permit_number.
+        "drift_warning",
+        # `cleaned_by`: free-text worker name — the same class `_public_performer()` masks
+        # and `applicator_name` strips.
+        "cleaned_by",
+        # Internal operator document references / raw regulatory citations.
+        "cleaning_protocol_reference",
+        "sanitizer_nop_reference",
+        # Raw soil-lab JSONField (whole panel + lab identity). The curated §E-2 facts
+        # (sample_matrix / lab_name / lab_report_date) are separate keys and stay public.
+        "test_results",
+        # --- Added 2026-08-01 (consumer editorial review, round 2) ----------------------
+        # `verification_status` is FARMER-ENTERED on a business/certification event. It
+        # rendered on the public card as a Key Detail reading "Verification Status: Verified"
+        # — directly above the card's own "Self Reported" chip. A self-attested "Verified"
+        # on a consumer surface is the EU ECGT 2024/825 self-created-label risk and an FTC
+        # 16 CFR 260.6 problem; the certificate number and certifier name (which a buyer can
+        # actually check) stay public, so nothing checkable is lost.
+        #
+        # NOT the same field as Certification.verification_status on the FARM, which backs
+        # the "Verified via USDA Organic Integrity Database" badge — that one is a database
+        # cross-reference Trazo performs, not a claim the farmer types.
+        "verification_status",
+        # --- Added 2026-08-03 -----------------------------------------------------------
+        # `photo_content_flag` is the INTERNAL anti-gaming verdict from the Vision check
+        # (`not_agricultural` / `ai_generated` / `stock_photo`). Reproduced live on an
+        # anonymous payload: timeline[1].photo_content_flag == "not_agricultural".
+        #
+        # It is moderation state about the FARMER, published to shoppers — the same
+        # "self-incriminating audit data" class as `drift_warning` above, and arguably worse
+        # because it reads as Trazo accusing its own customer on the customer's public page.
+        # The transparency calculator already consumes it internally to withhold photo credit;
+        # nothing consumer-facing needs it.
+        "photo_content_flag",
     )
 
     # The transparency SCORE is a PRODUCER-dashboard KPI only. A self-assigned grade on a
@@ -2877,7 +3055,16 @@ class PublicHistorySerializer(serializers.ModelSerializer):
     _SELF_GRADED_FIELDS = ("transparency_score",)
 
     def _is_owner(self, obj):
-        request = self.context.get("request") if hasattr(self, "context") else None
+        # `force_public_view` makes the owner exemption inapplicable. Set it on any surface
+        # that IS the consumer page, so the producer sees exactly what a shopper sees.
+        # Without it, a logged-in grower scanning their own QR link got the UNSTRIPPED
+        # payload — REI, PHI, applicator name, EPA registration number rendered on their
+        # own product page — and had no way to tell that the public version differs.
+        # Pairs with EventPreviewModal's `toConsumerVisibleEvent` on the frontend.
+        context = getattr(self, "context", None) or {}
+        if context.get("force_public_view"):
+            return False
+        request = context.get("request")
         if not request or not getattr(request, "user", None):
             return False
         user = request.user
@@ -3436,6 +3623,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
     # adding a sensitive key to the allow-list). Deliberately narrow — none of these match
     # any current allow-listed agronomic key.
     EXTRA_DATA_SENSITIVE_SUBSTRINGS = (
+        # --- Commercial ---------------------------------------------------------------
         "invoice",
         "purchase_order",
         "bill_of_lading",
@@ -3449,6 +3637,34 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         "trailer_",
         "original_",
         "ui_",
+        # --- Self-graded / unsubstantiated claim shapes (added 2026-08-03) ------------
+        # ALLOWED_EXTRA_DATA_KEYS had grown to 447 entries and had explicitly admitted
+        # `traceability_score` (live on 14 published productions), `pesticide_reduction`
+        # ("90%"), `biodiversity_score_improvement` ("+35%"), `pest_reduction_percentage`,
+        # `max_score` and `data_integrity_score` onto the ANONYMOUS consumer payload.
+        #
+        # Two separate problems, both P0:
+        #   * a self-assigned SCORE on a consumer surface is the exact thing the 2026-06
+        #     demotion removed and Trazo Test #5 forbids — the producer dashboard owns the
+        #     score, shoppers get facts;
+        #   * "90% pesticide reduction" / "+35% biodiversity improvement" are quantified
+        #     comparative benefit claims with no stated baseline and no third-party
+        #     verification — FTC 16 CFR 260.6, and the self-created-label class EU ECGT
+        #     2024/825 bans from 2026-09-27.
+        #
+        # Shape-matching rather than key-listing on purpose: an allow-list this large cannot
+        # be audited by eye, and seed/template data keeps inventing new claim-shaped keys.
+        # `test_consumer_extra_data_claim_shapes.py` fails the build if any of these ever
+        # reaches an anonymous payload again.
+        "score",
+        "_reduction",
+        "reduction_",
+        "_improvement",
+        "_rating",
+        "yield_vs_",
+        "revenue",
+        "_roi",
+        "roi_",
     )
 
     def _sanitize_extra_data_for_public(self, event):
@@ -3478,9 +3694,35 @@ class PublicHistorySerializer(serializers.ModelSerializer):
             lk = str(key).lower()
             return not any(sub in lk for sub in self.EXTRA_DATA_SENSITIVE_SUBSTRINGS)
 
-        sanitized = {k: v for k, v in raw.items() if is_safe(k)}
+        def scrub_nested(value, depth=0):
+            """Apply the substring guard INSIDE nested dicts/lists.
 
-        # Filter custom_fields to consumer visibility only
+            The allow-list only ever gated TOP-LEVEL keys, so once a key like
+            `quality_grade_distribution` was allowed its whole sub-object shipped verbatim.
+            That is benign for a grade split ({"Premium": 85}) — nested keys are data values,
+            not field names, which is why the allow-list is deliberately NOT applied here — but
+            it meant a seed or template writing {"impact": {"pesticide_reduction": "90%"}} would
+            publish the claim untouched. Shape-guard every level instead.
+            """
+            if depth > 4:  # runaway/self-referential JSON guard
+                return None
+            if isinstance(value, dict):
+                out = {}
+                for k, v in value.items():
+                    if any(sub in str(k).lower() for sub in self.EXTRA_DATA_SENSITIVE_SUBSTRINGS):
+                        continue
+                    if k in self._CERTIFIER_ONLY_EVENT_FIELDS:
+                        continue
+                    out[k] = scrub_nested(v, depth + 1)
+                return out
+            if isinstance(value, list):
+                return [scrub_nested(v, depth + 1) for v in value]
+            return value
+
+        sanitized = {k: scrub_nested(v) for k, v in raw.items() if is_safe(k)}
+
+        # Filter custom_fields to consumer visibility only. Runs AFTER the scrub so the
+        # visibility filter sees the original structure it expects.
         if "custom_fields" in sanitized:
             sanitized["custom_fields"] = extract_custom_fields_for_display(raw, visibility_filter="consumer")
 
@@ -3722,10 +3964,16 @@ class PublicHistorySerializer(serializers.ModelSerializer):
 
             # Extract blockchain verification data from production extra_data
             # BUGFIX: Check that extra_data is a dict before calling .get()
-            blockchain_verified = False
+            # Ask the claim authority instead of trusting a flag stored in extra_data.
+            # `blockchain_verified` was whatever had been written into the blob — it did not
+            # require an actual transaction hash or an active add-on, and "verified" is the
+            # word compliance.md marks UNSAFE regardless. See history/services/claim_authority.
+            from history.services.claim_authority import may_claim_blockchain, public_certifier_name
+
+            blockchain_decision = may_claim_blockchain(history)
+            blockchain_verified = blockchain_decision.allowed
             blockchain_transaction = None
-            if history.extra_data and isinstance(history.extra_data, dict):
-                blockchain_verified = history.extra_data.get("blockchain_verified", False)
+            if blockchain_decision.allowed and isinstance(history.extra_data, dict):
                 blockchain_transaction = history.extra_data.get("blockchain_transaction")
 
             # ⚡ OPTIMIZATION: Use prefetched event data directly instead of creating new querysets
@@ -3776,18 +4024,22 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "certified": getattr(event, "certified", False),
                         "index": getattr(event, "index", 0),
                         "volume": event.volume,
-                        "volume_unit": (
-                            event.extra_data.get("volume_unit", "L")
-                            if isinstance(getattr(event, "extra_data", None), dict)
-                            else "L"
-                        ),
+                        # Unit fields: the MODEL COLUMN is canonical (see the note at
+                        # to_internal_value — volume_unit/area_unit became real columns on
+                        # ChemicalEvent; extra_data only keeps a legacy mirror for old rows).
+                        #
+                        # This block previously read extra_data first and fell back to a
+                        # hardcoded "L"/"ha". Rows written after the columns landed have no
+                        # extra_data mirror, so 141 of 215 chemical events served area_unit
+                        # "ha" for values the farmer entered in ACRES — the consumer page then
+                        # ran its ha->acres conversion and displayed 2.47x the treated area
+                        # (an 85-acre copper application rendered as "210 acres"). Never fall
+                        # back to a literal unit: an unknown unit must stay unknown so the
+                        # frontend renders a bare number instead of inventing a basis.
+                        "volume_unit": _public_unit(event, "volume_unit"),
                         "concentration": event.concentration,
                         "area": getattr(event, "area", None),
-                        "area_unit": (
-                            event.extra_data.get("area_unit", "ha")
-                            if isinstance(getattr(event, "extra_data", None), dict)
-                            else "ha"
-                        ),
+                        "area_unit": _public_unit(event, "area_unit"),
                         "equipment": event.commercial_name,
                         "photo_count": photo_count,
                         "commercial_name": event.commercial_name,
@@ -3826,6 +4078,17 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                             if getattr(event, "potassium_percentage", None) is not None
                             else None
                         ),
+                        # §E-3 — micronutrients (§ 205.601(j)(6)). WHICH nutrient is plain
+                        # language a consumer follows ("zinc"); the RATE is the same
+                        # application-detail class as the NPK percentages above and is stripped
+                        # for non-owners by _CERTIFIER_ONLY_EVENT_FIELDS.
+                        "micronutrient_type": getattr(event, "micronutrient_type", None),
+                        "micronutrient_rate": (
+                            str(event.micronutrient_rate)
+                            if getattr(event, "micronutrient_rate", None) is not None
+                            else None
+                        ),
+                        "micronutrient_rate_unit": getattr(event, "micronutrient_rate_unit", None),
                         # EPA compliance fields
                         "applicator_name": getattr(event, "applicator_name", None),
                         "applicator_certification": getattr(event, "applicator_certification", None),
@@ -3899,8 +4162,17 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "verification_level": self._get_verification_level_for_event(
                             event, photo_count > 0, blockchain_verified
                         ),
-                        # Sprint 5.1 — OSP ↔ events drift detector finding. Shape
-                        # documented in certifications.services.drift_detector.
+                        # Sprint 5.1 — OSP ↔ events drift detector finding. Shape documented in
+                        # certifications.services.drift_detector.
+                        # OWNER-ONLY: listed in _CERTIFIER_ONLY_EVENT_FIELDS, so to_representation
+                        # strips it for every non-owner (and for the owner on the consumer page,
+                        # via force_public_view). It is an internal nonconformance narrative
+                        # ("<input> not in active OSP approved inputs") with osp_id/osp_version and
+                        # a 7 CFR citation — self-incriminating audit data that shipped on the
+                        # anonymous QR payload until 2026-07-31.
+                        # It must stay HERE (not be deleted) because this serializer also feeds the
+                        # producer's ProfileProduction timeline, where DriftFindingsBanner renders
+                        # it — that banner is the whole reason it is safe to withhold from shoppers.
                         "drift_warning": getattr(event, "drift_warning", None),
                     }
                 )
@@ -3991,6 +4263,11 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                             str(event.sanitizer_ppm) if getattr(event, "sanitizer_ppm", None) is not None else None
                         ),
                         "rinse_step_documented": getattr(event, "rinse_step_documented", None),
+                        # OWNER-ONLY (_CERTIFIER_ONLY_EVENT_FIELDS): the value is a raw CFR
+                        # citation ("§ 205.605(b) - Sodium hypochlorite"). transparency-first.md
+                        # bans raw regulatory citations on consumer surfaces — certifier
+                        # vocabulary, not a shopper's. sanitizer_name/sanitizer_ppm still ship
+                        # to consumers, so the substance used on the food is still disclosed.
                         "sanitizer_nop_reference": getattr(event, "sanitizer_nop_reference", None),
                         # Harvest fields (model field + extra_data for consumer trust)
                         "harvest_quality_grade": getattr(event, "harvest_quality_grade", None),
@@ -4073,6 +4350,23 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         ),
                         "cleaning_method": getattr(event, "cleaning_method", None),
                         "cleaning_materials_used": getattr(event, "cleaning_materials_used", None),
+                        # OWNER-ONLY (both in _CERTIFIER_ONLY_EVENT_FIELDS).
+                        #
+                        # `cleaned_by` is free text for "person who performed or verified the
+                        # cleaning" and holds real worker names ("Miguel Ramirez (Farm Manager)"
+                        # in live data). It rendered on the consumer card until 2026-07-31, which
+                        # contradicted the two protections already in place for exactly this
+                        # class: `performed_by` is masked to initials by `_public_performer()`
+                        # and `applicator_name` is stripped as certifier-only. A worker did not
+                        # consent to being named on a public product page.
+                        #
+                        # `cleaning_protocol_reference` is an internal SOP identifier
+                        # ("SOP-CLEAN-001 (NOP 205.272 Compliance)") — an operator document
+                        # reference, meaningless to a shopper.
+                        #
+                        # Kept in the payload (not deleted) because this serializer also feeds the
+                        # producer's ProfileProduction timeline; the owner gate is what makes them
+                        # consumer-safe.
                         "cleaned_by": getattr(event, "cleaned_by", None),
                         "cleaning_protocol_reference": getattr(event, "cleaning_protocol_reference", None),
                         "shared_with_conventional": getattr(event, "shared_with_conventional", False),
@@ -4323,7 +4617,32 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "organic_matter_percentage": getattr(
                             event, "organic_matter_percentage", None
                         ),  # Organic matter %
-                        "test_results": getattr(event, "test_results", None),  # JSONField test data
+                        # OWNER-ONLY (_CERTIFIER_ONLY_EVENT_FIELDS). A free-form blob written by
+                        # the producer soil-test form (SoilManagementTab.jsx is its only writer),
+                        # it carried the whole lab panel plus the lab's identity to consumers —
+                        # contradicting the §E-2 policy stated immediately below and inconsistent
+                        # with `water_test_results`, which is withheld and regression-tested.
+                        # An unfiltered JSON blob on a public endpoint is the same structural
+                        # mistake as the old extra_data deny-list: whatever the form adds next
+                        # ships automatically. The producer keeps the blob (their own data); the
+                        # three consumer-relevant facts are extracted explicitly below.
+                        "test_results": getattr(event, "test_results", None),
+                        # §E-2 — the consumer-facing FACTS of a lab analysis: what was sampled,
+                        # which independent lab tested it, and when. An outside lab is real
+                        # third-party evidence, so it belongs on the consumer surface; the
+                        # numeric results (N/P/K, CEC, ppm) stay on the producer/certifier
+                        # surfaces — they are the jargon class transparency-first.md excludes.
+                        "sample_matrix": getattr(event, "sample_matrix", None),
+                        "lab_name": (
+                            (event.test_results or {}).get("lab_name")
+                            if isinstance(getattr(event, "test_results", None), dict)
+                            else None
+                        ),
+                        "lab_report_date": (
+                            (event.test_results or {}).get("report_date")
+                            if isinstance(getattr(event, "test_results", None), dict)
+                            else None
+                        ),
                         "carbon_sequestration_potential": (
                             float(event.carbon_sequestration_potential)
                             if getattr(event, "carbon_sequestration_potential", None) is not None
@@ -4406,7 +4725,8 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "verification_level": self._get_verification_level_for_event(
                             event, photo_count > 0, blockchain_verified
                         ),
-                        # Sprint 5.1 — OSP ↔ events drift detector finding.
+                        # OSP drift finding — OWNER-ONLY via _CERTIFIER_ONLY_EVENT_FIELDS.
+                        # See the note in the chemical block above.
                         "drift_warning": getattr(event, "drift_warning", None),
                     }
                 )
@@ -4453,6 +4773,13 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "block_id": getattr(event, "block_id", None),
                         "growth_stage": getattr(event, "growth_stage", None),
                         "pest_management_type": getattr(event, "type", None),
+                        # §E-4 — the preventive practice (7 CFR 205.206(a)). Removing overwintering
+                        # pest sites INSTEAD of spraying is the most legible organic practice on
+                        # the page and a plain fact about work done, not a claim about outcomes.
+                        # Missing here, a winter-sanitation event reached the consumer as a
+                        # generic pest record with nothing to say — which is the opposite of why
+                        # the subtype exists.
+                        "cultural_practice": getattr(event, "cultural_practice", None),
                         "pest_species": getattr(event, "pest_species", None),
                         "pest_pressure_level": getattr(event, "pest_pressure_level", None),
                         # F44: quantitative monitoring count (e.g. 5 mites/leaf) — consumer-visible
@@ -4575,16 +4902,30 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "contamination_affected_area": (
                             float(getattr(event, "contamination_affected_area", None) or 0) or None
                         ),
-                        "corrective_action_taken": getattr(event, "corrective_action_taken", None),
+                        # `corrective_action_taken` is the operator's narrative and routinely
+                        # names third parties — the certifier ("Notified CCOF inspector"), the
+                        # lab, and the neighbouring farm the drift came from. Owner-gated: the
+                        # producer and the certifier PDF keep it; the public page does not
+                        # publish a nonconformance filing about someone else's operation.
+                        "corrective_action_taken": (
+                            getattr(event, "corrective_action_taken", None) if self._is_owner(history) else None
+                        ),
                         "corrective_action_date": (
                             event.corrective_action_date.isoformat()
                             if getattr(event, "corrective_action_date", None)
                             else None
                         ),
-                        "certifier_notified": getattr(event, "certifier_notified", False),
+                        # Whether and when a CERTIFIER was notified is the regulator-facing
+                        # half of the filing (7 CFR 205.201(b)) and identifies the certifying
+                        # body. Same owner gate. What stays public is the fact that an incident
+                        # was recorded, its source and area, and the date it was resolved — the
+                        # disclosure a shopper is entitled to, without the paperwork.
+                        "certifier_notified": (
+                            getattr(event, "certifier_notified", False) if self._is_owner(history) else None
+                        ),
                         "certifier_notification_date": (
                             event.certifier_notification_date.isoformat()
-                            if getattr(event, "certifier_notification_date", None)
+                            if self._is_owner(history) and getattr(event, "certifier_notification_date", None)
                             else None
                         ),
                         # Blockchain verification fields from production
@@ -4671,7 +5012,15 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                             if (getattr(event, "carbon_credits_earned", None) or 0)
                             else None
                         ),
-                        "verified_certifier_name": getattr(event, "verified_certifier_name", None),
+                        # FARMER-TYPED free text — the `verified_` prefix is a naming lie.
+                        # Published beside a certificate number it reads as third-party
+                        # attestation. Withheld unless a USDA Organic Integrity Database match
+                        # backs it (ECGT 2024/825, FTC 16 CFR 260.6).
+                        "verified_certifier_name": public_certifier_name(
+                            getattr(event, "verified_certifier_name", None),
+                            getattr(getattr(history, "parcel", None), "establishment", None),
+                            getattr(event, "certification_type", None),
+                        ),
                         "extra_data": self._sanitize_extra_data_for_public(event),
                         # Blockchain verification fields from production
                         "blockchain_verified": blockchain_verified,
@@ -4690,7 +5039,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
 
             self._annotate_consumer_highlights(events_data)
 
-            return events_data
+            return [_drop_unset(e) for e in events_data]
 
         except Exception as e:
             print(f"Error getting optimized events: {e}")
@@ -5134,7 +5483,10 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "amendment_product_name",
             "amendment_manufacturer",
             "test_results",
+            # §E-2 — lab analysis (LA)
+            "sample_matrix",
             "carbon_sequestration_potential",
+            "observation",
             "extra_data",
             "name",
             "area_covered",
@@ -5161,6 +5513,8 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "amendment_amount_unit",
             # NOP Compliance: Amendment approval + Compost tracking + Manure timing
             "amendment_organic_approved",
+            # Nitrogen content: field N2O + the CA ILRP total-nitrogen-applied figure.
+            "amendment_nitrogen_percentage",
             "compost_peak_temp_f",
             "compost_duration_days_at_temp",
             "compost_turning_count",
@@ -5408,6 +5762,35 @@ class SoilManagementEventSerializer(EventSerializer):
     event_type = serializers.SerializerMethodField()
     soil_management_type = serializers.SerializerMethodField()
 
+    # §E-2 — lab results have always been WRITTEN into the `test_results` JSONField by the soil
+    # form, but nothing ever read them back out by name: the display registry resolves a field
+    # from the top level or from `extra_data` only, so every lab value was write-only. Flattening
+    # them here (rather than promoting them to columns) keeps the historical ST rows readable
+    # with no migration and no backfill, and gives the registry and the PDF real field names.
+    # Read-only on purpose — the write path stays the `test_results` JSON the form already sends.
+    LAB_RESULT_FIELDS = {
+        "lab_name": "lab_name",
+        "lab_sample_id": "sample_id",
+        "lab_report_date": "report_date",
+        "lab_nitrogen": "nitrogen",
+        "lab_phosphorus": "phosphorus",
+        "lab_potassium": "potassium",
+        "lab_cec": "cec",
+        # Micronutrient results — the deficiency record that § 205.601(j)(6) requires before a
+        # micronutrient application (see ChemicalEvent.micronutrient_type).
+        "lab_zinc_ppm": "zinc_ppm",
+        "lab_boron_ppm": "boron_ppm",
+        "lab_manganese_ppm": "manganese_ppm",
+        "lab_iron_ppm": "iron_ppm",
+    }
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        results = instance.test_results if isinstance(instance.test_results, dict) else {}
+        for out_key, json_key in self.LAB_RESULT_FIELDS.items():
+            data[out_key] = results.get(json_key)
+        return data
+
     class Meta:
         model = SoilManagementEvent
         fields = [
@@ -5432,7 +5815,10 @@ class SoilManagementEventSerializer(EventSerializer):
             "amendment_product_name",
             "amendment_manufacturer",
             "test_results",
+            # §E-2 — lab analysis (LA)
+            "sample_matrix",
             "carbon_sequestration_potential",
+            "observation",
             "extra_data",
             "name",
             "area_covered",
@@ -5459,6 +5845,8 @@ class SoilManagementEventSerializer(EventSerializer):
             "amendment_amount_unit",
             # NOP Compliance: Amendment approval + Compost tracking + Manure timing
             "amendment_organic_approved",
+            # Nitrogen content: field N2O + the CA ILRP total-nitrogen-applied figure.
+            "amendment_nitrogen_percentage",
             "compost_peak_temp_f",
             "compost_duration_days_at_temp",
             "compost_turning_count",
@@ -5526,6 +5914,7 @@ class UpdatePestManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "damage_percentage",
             "action_threshold_met",
             "ipm_strategy",
+            "observation",
             "extra_data",
             "beneficial_insects_used",
             "chemical_free_period_days",
@@ -5540,6 +5929,8 @@ class UpdatePestManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "identified_by",
             "identification_method",
             "threshold_rationale",
+            # §E-4 — cultural / sanitation control (§ 205.206(a))
+            "cultural_practice",
         ]
         read_only_fields = ["id"]
 
@@ -5567,6 +5958,26 @@ class UpdatePestManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
         # "below threshold" (False). Coercing "" -> False fabricated a NOP 205.206(e) record.
         if "action_threshold_met" in data and data["action_threshold_met"] in ("", None):
             data["action_threshold_met"] = None
+
+        # The form's only threshold control is "Economic Threshold Status", which posts
+        # `economic_threshold_met` — an extra_data-only key. Nothing posts
+        # `action_threshold_met`, so that column stayed NULL on every UI-logged event and the
+        # certifier PDF printed "Not assessed" even for a grower who had explicitly answered
+        # "threshold not met". Promote the answer onto its real column; keep the extra_data
+        # copy for back-compat. Absence still means not assessed (F17) — only an affirmative
+        # yes/no is recorded, never inferred.
+        # `is None`, not falsiness: an explicit action_threshold_met=False is a real "assessed,
+        # below threshold" answer, and `not False` would have let the form key overwrite it.
+        # By this point the block above has already normalised a blank "" to None, so None here
+        # means "the caller did not answer on the column".
+        if data.get("action_threshold_met") is None and data.get("economic_threshold_met") not in ("", None):
+            raw_threshold = data.get("economic_threshold_met")
+            if isinstance(raw_threshold, bool):
+                data["action_threshold_met"] = raw_threshold
+            elif str(raw_threshold).strip().lower() in ("true", "yes", "1"):
+                data["action_threshold_met"] = True
+            elif str(raw_threshold).strip().lower() in ("false", "no", "0"):
+                data["action_threshold_met"] = False
 
         if "damage_percentage" in data and data["damage_percentage"] == "":
             data["damage_percentage"] = None
@@ -5682,6 +6093,7 @@ class PestManagementEventSerializer(EventSerializer):
             "damage_percentage",
             "action_threshold_met",
             "ipm_strategy",
+            "observation",
             "extra_data",
             "beneficial_insects_used",
             "chemical_free_period_days",
@@ -5696,6 +6108,8 @@ class PestManagementEventSerializer(EventSerializer):
             "identified_by",
             "identification_method",
             "threshold_rationale",
+            # §E-4 — cultural / sanitation control (§ 205.206(a))
+            "cultural_practice",
             "image",
             "carbon_data",
             "verification_level",

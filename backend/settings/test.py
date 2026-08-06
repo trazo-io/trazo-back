@@ -46,17 +46,50 @@ DATABASES = {
     }
 }
 
-# Use Redis cache if available, fallback to dummy cache
+# In-process cache, deliberately NOT the shared Redis instance.
+#
+# `backend.security.rate_limiting.SecurityMiddleware` (active via base MIDDLEWARE)
+# blocks a client IP for 30 MINUTES when it sees high-frequency requests, and it
+# stores that block in this cache. Pointed at real Redis, one API-heavy test run
+# would block 127.0.0.1 and then every subsequent run — locally and in CI — failed
+# with a plain `429 Access denied` that looks nothing like a test problem. This was
+# hit for real on 2026-08-02 while adding the certifier-link suite.
+#
+# LocMemCache is per-process and torn down with the run, so a suite can no longer
+# poison the next one. The middleware still executes, so its behavior stays covered.
 CACHES = {
     "default": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": os.environ.get("REDIS_URL", "redis://localhost:6379/0"),
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-        },
-        "KEY_PREFIX": "trazo_test",
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "trazo-test-cache",
     }
 }
+
+# django_ratelimit refuses a non-shared cache (E003) because in production a
+# per-process counter would let each worker allow the full quota. Under test that
+# is precisely what we want — a shared counter is what let one run poison the next.
+SILENCED_SYSTEM_CHECKS = ["django_ratelimit.E003", "django_ratelimit.W001"]
+
+# Drop the rate-limit / DDoS middleware family under test.
+#
+# `EnhancedRateLimitMiddleware` allows 30 requests per 60s per IP. A test run
+# issues far more than that from 127.0.0.1 in seconds — that IS the pattern these
+# middlewares exist to catch — so any suite above ~30 API calls starts returning
+# `429 {"error": "Rate limit exceeded", "limit": 30, "window": 60}` partway through.
+#
+# Observed 2026-08-02: `subscriptions.test_billing` and
+# `certifications.test_osp_change_notification_api` pass in isolation and fail only
+# inside a 457-test run. That reads exactly like a real regression and is not one —
+# it is why a green suite could not be trusted at scale.
+#
+# These middlewares keep their own direct unit tests
+# (`backend/security/tests/test_enhanced_ddos_protection.py`), which exercise the
+# classes rather than relying on them sitting in front of every other API test.
+_RATE_LIMIT_MIDDLEWARE = {
+    "backend.security.enhanced_ddos_protection.EnhancedRateLimitMiddleware",
+    "backend.security.enhanced_ddos_protection.CircuitBreakerMiddleware",
+    "backend.security.rate_limiting.SecurityMiddleware",
+}
+MIDDLEWARE = [m for m in MIDDLEWARE if m not in _RATE_LIMIT_MIDDLEWARE]  # noqa: F405
 
 
 # Disable migrations for faster testing

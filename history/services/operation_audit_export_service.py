@@ -19,16 +19,22 @@ records bundle); the per-production export remains the strict, single-production
 """
 
 import io
+import logging
 from collections import OrderedDict
 from datetime import date
 
 from django.db.models import Q
+
 from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Table, TableStyle
 
-from .audit_export_service import AuditExportService, _add_page_number, _fmt_date, _val
+from .audit_export_service import AuditExportService, _add_page_number, _fmt_date, _fmt_generated_date, _val
+
+logger = logging.getLogger(__name__)
 
 
 def _esc(text):
@@ -122,6 +128,39 @@ class OperationAuditExportService:
 
     # ------------------------------------------------------------------
 
+    def readiness_rows(self):
+        """Per-production compliance snapshot across this operation's whole window.
+
+        Added 2026-08-04 for the certifier review page: the token link is operation + date-range
+        scoped (this class's own reason to exist), but the actual CFR-cited checks — including
+        `AuditExportService.compliance_snapshot_rows()`'s newest row, per-event record
+        completeness — only exist per production. This walks the same production set the PDF
+        dossier already covers (`_productions()`, so the page and the PDF can never disagree
+        about what is in scope) and runs each one through the single existing snapshot method
+        rather than re-implementing any check.
+
+        Returns a list of `{production_id, production_name, finish_date, findings}`, one entry
+        per production, `findings` already filtered to non-PASS (same convention as
+        `company/views.py::certifier_readiness`).
+        """
+        from .audit_export_service import AuditExportService
+
+        rows = []
+        for production in self._productions():
+            service = AuditExportService(production, certification_type=self.certification_type)
+            findings = [r for r in service.compliance_snapshot_rows() if r["status"] != "PASS"]
+            rows.append(
+                {
+                    "production_id": production.id,
+                    "production_name": production.name,
+                    "finish_date": production.finish_date,
+                    "findings": findings,
+                }
+            )
+        return rows
+
+    # ------------------------------------------------------------------
+
     def generate_pdf(self):
         productions = self._productions()
         by_parcel = self._group_by_parcel(productions)
@@ -145,6 +184,15 @@ class OperationAuditExportService:
         )
 
         story = []
+        # Submission-readiness banner FIRST, above the cover.
+        #
+        # The per-production AuditExportService already refuses to emit (and stamps
+        # a red DO-NOT-SUBMIT banner) when the OFPP is missing. This service builds
+        # its own cover and never ran that gate — so the one export that goes
+        # straight to a certifier, via a share link, was the only one with no
+        # guardrail. A farmer could hand their reviewer a dossier that SOE 2024
+        # forbids certifying, and neither party would be told.
+        story += self._build_readiness_banner(styles)
         story += self._build_operation_cover(styles, productions, by_parcel)
         story.append(PageBreak())
 
@@ -204,6 +252,46 @@ class OperationAuditExportService:
 
     # ------------------------------------------------------------------
 
+    def _build_readiness_banner(self, styles):
+        """Red banner when the operation is not fit to submit. Empty when it is.
+
+        Deliberately renders for the certifier too, not just the farmer: a reviewer
+        who receives a blocked dossier should see WHY at the top rather than work it
+        out from a missing section thirty pages in.
+        """
+        from .operation_readiness_service import OperationReadinessService
+
+        try:
+            readiness = OperationReadinessService(self.establishment, self.certification_type).evaluate()
+        except Exception:  # noqa: BLE001 — never fail the export over the banner
+            logger.exception("Readiness evaluation failed for establishment %s", self.establishment.id)
+            return []
+
+        if readiness["ready"]:
+            return []
+
+        banner_style = ParagraphStyle(
+            "operation_noncompliant_banner",
+            parent=styles["body"],
+            fontSize=11,
+            fontName="Helvetica-Bold",
+            textColor=colors.white,
+            backColor=colors.HexColor("#B71C1C"),
+            alignment=TA_CENTER,
+            leading=14,
+            borderPadding=8,
+            spaceBefore=4,
+            spaceAfter=8,
+        )
+        reasons = "; ".join(b["title"] for b in readiness["blockers"])
+        return [
+            Paragraph(
+                f"[NON-COMPLIANT DOSSIER — DO NOT SUBMIT TO CERTIFIER] {reasons}. "
+                "Resolve these before handing this PDF to a reviewer.",
+                banner_style,
+            )
+        ]
+
     def _build_operation_cover(self, styles, productions, by_parcel):
         elements = []
         elements.append(Paragraph(f"Operation Audit Report — {_esc(self.establishment.name)}", styles["title"]))
@@ -216,7 +304,7 @@ class OperationAuditExportService:
             self.certification_type, self.certification_type.upper()
         )
         meta_rows = [
-            ["Generated", _fmt_date(date.today())],
+            ["Generated", _fmt_generated_date()],
             ["Certification Filter", cert_label],
             ["Audit Window", window],
             ["Parcels", str(len(by_parcel))],

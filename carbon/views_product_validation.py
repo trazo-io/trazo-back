@@ -5,6 +5,7 @@ Integrates with existing Trazo carbon calculation system.
 """
 
 import logging
+from typing import Optional
 
 from django.conf import settings
 

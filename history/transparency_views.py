@@ -7,11 +7,13 @@ Following Trazo's main goal: Authentic transparency leadership
 """
 
 import logging
+import re
 
 from django.db.models import Count, Prefetch, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.views.decorators.gzip import gzip_page
 
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -32,12 +34,17 @@ from .models import (
     WeatherEvent,
 )
 from .serializers import PublicHistorySerializer
+from .services.privacy import public_free_text, public_free_text_list
 from .services.transparency_calculator import TransparencyCalculator
 from .services.transparency_response_formatter import TransparencyResponseFormatter
 
 logger = logging.getLogger(__name__)
 
 
+# gzip — see the note on HistoryViewSet.public_history. Same anonymous consumer surface,
+# same 258-event measurement (179.7 KB -> 6.1 KB), same reasoning for scoping compression
+# to unauthenticated endpoints instead of enabling GZipMiddleware globally.
+@gzip_page
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def production_transparency_detail(request, production_public_id=None):
@@ -136,10 +143,17 @@ def production_transparency_detail(request, production_public_id=None):
             carbon_score = 0
             carbon_breakdown = {}
 
-        # Get benchmark comparison (ABSOLUTE standards, not competitive rankings)
-        # Pass pre-calculated transparency_data to avoid redundant recalculation
-        transparency_benchmarks = transparency_calculator.compare_with_benchmarks(
-            history, transparency_data=transparency_data
+        # Compare against the farm's OWN previous finished seasons — never against invented
+        # "industry" or "certification" thresholds.
+        #
+        # Owner-only: it lands in detailed_view, which is dropped wholesale for anonymous
+        # callers, and it recalculates every prior season. Computing it for a shopper scanning
+        # a QR code would spend N calculator runs on a payload they never receive, against a
+        # page held to a sub-500ms budget.
+        own_history_comparison = (
+            transparency_calculator.compare_with_own_history(history, transparency_data=transparency_data)
+            if is_owner
+            else None
         )
 
         # Build farm information
@@ -251,7 +265,9 @@ def production_transparency_detail(request, production_public_id=None):
         }
 
         transparency_data_formatted = {
-            "carbonGrade": transparency_benchmarks.get("benchmark_level", "C"),
+            # `carbonGrade` (-> data_quality_grade) is gone: it only ever carried the invented
+            # benchmark level ("certification"/"good"/"below_minimum"), no consumer rendered it,
+            # and a graded letter/level is precisely the self-created label we withhold.
             "completeness_score": transparency_data.get("completeness_score", 0),
             "transparency_percentage": transparency_data.get(
                 "transparency_percentage", 0
@@ -269,14 +285,14 @@ def production_transparency_detail(request, production_public_id=None):
                 }
             )
 
-        # Check actual blockchain verification status from production extra_data
-        production_extra_data = history.extra_data or {}
-        is_blockchain_verified = production_extra_data.get("blockchain_verified", False)
-        blockchain_tx = production_extra_data.get("blockchain_transaction", "")
-        blockchain_verification_data = {
-            "verified": bool(is_blockchain_verified),
-            "transaction_hash": blockchain_tx if is_blockchain_verified else "",
-        }
+        # Blockchain is no longer a CONSUMER-facing claim (removed 2026-08-03). What the chain
+        # can honestly support — "this record is unchanged since it was sealed" — does not
+        # answer a shopper's question, and a badge invites the "verified" reading compliance.md
+        # forbids (FTC 16 CFR 260.6; EU ECGT 2024/825, live 2026-09-27). The hash is still
+        # written and still appears in the certifier packet as an integrity line.
+        # `verified` is hard-coded False rather than dropped so an older client that still
+        # reads the key cannot render a badge from a stale truthy value.
+        blockchain_verification_data = {"verified": False, "transaction_hash": ""}
 
         # Get standardized response
         response_data = formatter.format_qr_response(
@@ -300,7 +316,14 @@ def production_transparency_detail(request, production_public_id=None):
 
         # Add timeline events with album data (same as producer page gets)
         # This ensures photos are available on consumer page
-        public_history_serializer = PublicHistorySerializer(history, context={"request": request})
+        #
+        # `force_public_view` disables the owner exemption in PublicHistorySerializer. This
+        # endpoint IS the consumer product page, so it must render identically for everyone —
+        # a grower checking their own QR link previously received the unstripped payload
+        # (REI/PHI/applicator/EPA) and could not tell that shoppers see something different.
+        public_history_serializer = PublicHistorySerializer(
+            history, context={"request": request, "force_public_view": True}
+        )
         public_history_data = public_history_serializer.data
 
         # Use CarbonEntry as single source of truth for EPA/USDA factors usage
@@ -334,7 +357,6 @@ def production_transparency_detail(request, production_public_id=None):
                     "transparency_score": {
                         "percentage": transparency_data["transparency_percentage"],
                         "message": transparency_data["message"],
-                        "status": transparency_benchmarks["benchmark_level"],
                     },
                 },
                 # STANDARD LOAD (10 seconds) - Core transparency details
@@ -356,8 +378,7 @@ def production_transparency_detail(request, production_public_id=None):
                     "transparency_insights": transparency_calculator.get_transparency_insights(
                         history, transparency_data=transparency_data
                     ),
-                    "benchmark_comparison": transparency_benchmarks,
-                    "improvement_suggestions": transparency_benchmarks.get("next_target", {}),
+                    "own_history_comparison": own_history_comparison,
                     "verification_status": _get_verification_status(history, transparency_data=transparency_data),
                     "data_quality_indicators": {
                         "last_updated": transparency_data.get("calculation_timestamp"),
@@ -365,8 +386,9 @@ def production_transparency_detail(request, production_public_id=None):
                         "completeness_trend": "improving",  # Could be calculated from historical data
                     },
                 },
-                # Blockchain verification data for consumer-facing badge
-                "blockchain_verification": _get_blockchain_verification_data(history),
+                # Consumer blockchain badge removed 2026-08-03 — see the note above. Key kept
+                # with a falsy payload so an un-upgraded client degrades to "no badge".
+                "blockchain_verification": {"verified": False, "transaction_hash": ""},
                 # Scoring methodology — included here so consumers know how the score
                 # was calculated without needing a separate API call.
                 "methodology": {
@@ -390,7 +412,7 @@ def production_transparency_detail(request, production_public_id=None):
                     # GrowerStoryCard.tsx (Avatar src). Null when farm hasn't
                     # uploaded a profile photo; Avatar falls back to initials.
                     "establishment_image": _first_album_image_url(establishment),
-                    "description": establishment.description if establishment else "",
+                    "description": public_free_text(establishment.description) if establishment else "",
                     # 2026-06 audit P1 (location PII): street address, exact coords and
                     # zip are WITHHELD from the public QR payload — same rationale as the
                     # contact strip below (P2-6) and the printed-GPS removal in
@@ -419,18 +441,42 @@ def production_transparency_detail(request, production_public_id=None):
                     # P1 (location PII): zip narrows the farm to a few sq mi; city/state
                     # already cover the public "location" string. Withheld.
                     "zip_code": None,
-                    "about": establishment.about if establishment else None,
-                    "main_activities": establishment.main_activities if establishment else None,
-                    "location_highlights": establishment.location_highlights if establishment else None,
-                    "custom_message": establishment.custom_message if establishment else None,
+                    "about": public_free_text(establishment.about) if establishment else None,
+                    "main_activities": public_free_text(establishment.main_activities) if establishment else None,
+                    "location_highlights": (
+                        public_free_text(establishment.location_highlights) if establishment else None
+                    ),
+                    "custom_message": public_free_text(establishment.custom_message) if establishment else None,
                     "is_active": establishment.is_active if establishment else True,
                     "crops_grown": establishment.crops_grown if establishment else None,
-                    "sustainability_practices": establishment.sustainability_practices if establishment else None,
+                    # A farmer-authored LIST; each entry gets the same redaction as the prose
+                    # fields. "Carbon-negative certified" was shipping here — an unverifiable
+                    # eco claim plus an implied certification (compliance.md UNSAFE).
+                    "sustainability_practices": public_free_text_list(
+                        establishment.sustainability_practices if establishment else None
+                    ),
                     "employee_count": establishment.employee_count if establishment else None,
                     "total_acreage": establishment.total_acreage if establishment else None,
                     "year_established": establishment.year_established if establishment else None,
                     "establishment_type": establishment.establishment_type if establishment else None,
-                    "farming_method": establishment.farming_method if establishment else None,
+                    # `farming_method` is DELIBERATELY not published.
+                    #
+                    # It is a free-text CharField the farmer types (no choices), and the
+                    # database holds "sustainable" and "Regenerative Agriculture" alongside
+                    # "organic". Shipping that raw to shoppers publishes a self-asserted
+                    # environmental claim with no substantiation — an FTC 16 CFR 260.6
+                    # general-benefit claim, and under EU ECGT 2024/825 (live 2026-09-27) a
+                    # self-created sustainability label. Its neighbour
+                    # `sustainability_practices` already goes through public_free_text_list()
+                    # for exactly this reason; this field slipped the same net.
+                    #
+                    # Organic status reaches consumers through `organic_claim`, which
+                    # ConsumerClaimValidator substantiates. A farmer-typed second opinion
+                    # sitting next to a validated claim can only weaken or contradict it.
+                    #
+                    # No consumer component rendered this field — it was dead weight on the
+                    # wire. The value is still used server-side (is_organic_production) and
+                    # still shown to the producer; it just is not published.
                     "location": (
                         f"{establishment.city}, {establishment.state}" if establishment and establishment.city else None
                     ),
@@ -447,7 +493,9 @@ def production_transparency_detail(request, production_public_id=None):
                                 establishment.company.name if establishment and establishment.company else "Company"
                             ),
                             "description": (
-                                establishment.company.description if establishment and establishment.company else ""
+                                public_free_text(establishment.company.description)
+                                if establishment and establishment.company
+                                else ""
                             ),
                             # P1 (location PII): company street address withheld — see farmer block.
                             "address": None,
@@ -557,6 +605,13 @@ def production_transparency_detail(request, production_public_id=None):
                         for category in breakdown.values():
                             if isinstance(category, dict):
                                 category.pop("completeness_percentage", None)
+                                # Added with the key itself (2026-08-04). `records_completeness_percentage`
+                                # is the same self-graded coverage measure with the photo penalty
+                                # removed — strictly MORE flattering, and still Trazo grading a farm
+                                # against a baseline Trazo authored. It is a producer-dashboard
+                                # number; shipping it here would reopen exactly the leak
+                                # `test_consumer_qr_privacy_regression` pins. Counts stay, grades go.
+                                category.pop("records_completeness_percentage", None)
                                 category.pop("status", None)
 
             # detailed_view (the "30s deep insights": raw current_score, benchmark
@@ -815,7 +870,10 @@ def _get_verification_status(history, transparency_data=None):
     # "'str' object has no attribute 'get'" error for malformed data
     if history.extra_data and isinstance(history.extra_data, dict):
         verifications["organic_certified"] = history.extra_data.get("organic_certified", False)
-        verifications["blockchain_verified"] = history.extra_data.get("blockchain_verified", False)
+        # `blockchain_verified` stays False on every consumer payload. It used to be read
+        # straight out of extra_data, so a flag written by any producer-side code path became a
+        # public verification claim with no transaction hash and no add-on behind it.
+        # Consumer blockchain surface removed 2026-08-03.
 
     # Check business events for certifications
     from history.models import BusinessEvent

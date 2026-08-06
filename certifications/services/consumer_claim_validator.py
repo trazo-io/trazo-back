@@ -61,6 +61,20 @@ class ConsumerClaimResult:
       reason                       Diagnostic explanation (admin/debug)
       transition_complete_date     ISO date or None
       days_remaining               int or None
+      display_label_key            react-intl message id for `display_label`
+      display_label_params         interpolation values for that message
+
+    On `display_label` vs `display_label_key`
+    ----------------------------------------
+    `display_label` is composed here, server-side, in English. Trazo's consumer QR page is
+    bilingual (en-US / es-419), so a server-composed string can never be translated — it
+    rendered as a bare English phrase in the middle of an otherwise Spanish page
+    ("Organic practices (farmer-reported)"), which is both a UX defect and, on a
+    claim-bearing surface, the wrong place to be sloppy.
+
+    The key + params are therefore the SOURCE OF TRUTH for what a consumer sees; the
+    English `display_label` is retained as a fallback for older clients, the audit trail,
+    and any non-UI consumer of this payload. Keep the two in sync.
     """
 
     can_display_organic: bool
@@ -72,9 +86,26 @@ class ConsumerClaimResult:
     reason: str
     transition_complete_date: Optional[str] = None
     days_remaining: Optional[int] = None
+    display_label_key: Optional[str] = None
+    display_label_params: Optional[dict] = None
 
-    def to_dict(self) -> dict:
-        return asdict(self)
+    def to_dict(self, *, include_diagnostics: bool = False) -> dict:
+        """Serialise for a response body.
+
+        ``reason`` is a DIAGNOSTIC string — it interpolates row primary keys and raw field
+        names ("Active Certification #144 (verification_status=verified, expiry=2028-07-31)",
+        "Parcel 42 in transition; ..."). It was shipping verbatim on the anonymous
+        ``/api/transparency/<uuid>/`` payload, which is the same class of internal-operator
+        leak as ``drift_warning``: no consumer surface reads it, and it hands anyone who opens
+        devtools a map of internal identifiers.
+
+        Callers that want it — admin views, logs, tests asserting WHY a verdict was reached —
+        pass ``include_diagnostics=True`` explicitly.
+        """
+        data = asdict(self)
+        if not include_diagnostics:
+            data.pop("reason", None)
+        return data
 
 
 class ConsumerClaimValidator:
@@ -83,7 +114,7 @@ class ConsumerClaimValidator:
 
     Usage:
         result = ConsumerClaimValidator().validate(history)
-        response["organic_claim"] = result.to_dict()
+        response["organic_claim"] = result.to_dict()  # diagnostics excluded by default
 
     Logic priority (strongest signal wins):
         1. Active verified USDA Organic Certification -> "certified_organic"
@@ -120,6 +151,7 @@ class ConsumerClaimValidator:
                 can_display_organic=True,
                 can_display_transitioning=False,
                 display_label="USDA Certified Organic",
+                display_label_key="consumer.claim.certifiedOrganic",
                 disclaimer=DISCLAIMER_CERTIFIED,
                 status="certified_organic",
                 status_color="green",
@@ -143,6 +175,12 @@ class ConsumerClaimValidator:
                 can_display_organic=False,
                 can_display_transitioning=True,
                 display_label=label,
+                display_label_key=(
+                    "consumer.claim.transitioningWithMonths"
+                    if months_in is not None
+                    else "consumer.claim.transitioning"
+                ),
+                display_label_params=({"months": months_in} if months_in is not None else None),
                 disclaimer=DISCLAIMER_TRANSITIONING,
                 status="transitioning",
                 status_color="yellow",
@@ -165,6 +203,11 @@ class ConsumerClaimValidator:
                 can_display_organic=False,
                 can_display_transitioning=False,
                 display_label=f"{method_display} practices (farmer-reported)",
+                # `method` is a controlled enum (SELF_REPORTED_ORGANIC_METHODS), not free
+                # text, so it is safe to interpolate — but it is still an ENGLISH word, so
+                # the method name gets its own key rather than being passed through raw.
+                display_label_key="consumer.claim.selfReportedPractices",
+                display_label_params={"methodKey": f"consumer.claim.method.{method}"},
                 disclaimer=DISCLAIMER_SELF_REPORTED,
                 status="self_reported",
                 status_color="gray",
@@ -186,6 +229,7 @@ class ConsumerClaimValidator:
             can_display_organic=False,
             can_display_transitioning=False,
             display_label="Conventional",
+            display_label_key="consumer.claim.conventional",
             disclaimer=DISCLAIMER_CONVENTIONAL,
             status="conventional",
             status_color="gray",

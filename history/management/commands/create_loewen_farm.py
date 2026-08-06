@@ -72,9 +72,7 @@ class Command(BaseCommand):
         existing = Company.objects.filter(name=COMPANY_NAME, company_workers__user=user).first()
         if existing and not reset:
             self.stdout.write(
-                self.style.WARNING(
-                    f"Loewen fixture already exists for {email} (Company #{existing.id}). Use --reset."
-                )
+                self.style.WARNING(f"Loewen fixture already exists for {email} (Company #{existing.id}). Use --reset.")
             )
             return
         if existing and reset:
@@ -138,9 +136,7 @@ class Command(BaseCommand):
             WeatherEvent,
         )
 
-        history_ids = list(
-            History.objects.filter(parcel__establishment__company=company).values_list("id", flat=True)
-        )
+        history_ids = list(History.objects.filter(parcel__establishment__company=company).values_list("id", flat=True))
         if history_ids:
             event_models = [
                 BusinessEvent,

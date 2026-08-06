@@ -39,7 +39,7 @@ from users.models import User, WorksIn
 
 from ._almond_demo_data import create_almond_current_events, create_almond_finished_events, create_almond_parcel
 
-COMPANY_NAME = "Coastal Valleys Ranch"
+COMPANY_NAME = "Coastal Valleys Ranch (DEMO)"
 
 # Free-to-use agricultural images from Unsplash (Unsplash License - free for commercial use)
 # Used to provide photo verification for demo transparency scores
@@ -52,34 +52,27 @@ DEMO_IMAGES = {
         # Green agricultural rows (cover crop field)
         "https://images.unsplash.com/photo-1545309451-048d50bb3719?w=800&q=80",
     ],
-    "fertilizer": [
-        # Farm machinery/equipment in agricultural field
-        "https://images.unsplash.com/photo-1655130944281-072e0644db75?w=800&q=80",
-        # Aerial view of farm fields with vehicle applying inputs
-        "https://images.unsplash.com/photo-1719254271334-4601cbafc38c?w=800&q=80",
-    ],
+    # Removed 2026-08-04: both images showed row-crop field machinery, used to
+    # illustrate banded fertilizer in an avocado grove.
+    "fertilizer": [],
     "fungicide": [
-        # Crop duster airplane spraying over green field
-        "https://images.unsplash.com/photo-1660613757833-f2b6eccbb544?w=800&q=80",
-        # Agricultural sprayer applying treatment to field
+        # Ground sprayer applying treatment. The aerial crop-duster image that used
+        # to head this list contradicted the demo's own event text ("trunk
+        # injection", "airblast sprayer") and was the most obvious tell in the
+        # 2026-08-03 dossier review.
         "https://images.unsplash.com/photo-1758608951483-0cbeef303869?w=800&q=80",
     ],
     "pesticide": [
-        # Person in protective gear hand-spraying plants
+        # Person in protective gear hand-spraying plants — plausible in an orchard.
+        # The boom-sprayer-in-crop-field image was removed 2026-08-04.
         "https://images.unsplash.com/photo-1581578017093-cd30fce4eeb7?w=800&q=80",
-        # Large agricultural boom sprayer in crop field
-        "https://images.unsplash.com/photo-1755931359594-852c73c6609c?w=800&q=80",
     ],
-    "herbicide": [
-        # Farm equipment machines in agricultural field
-        "https://images.unsplash.com/photo-1655130944329-b3a63166f6b5?w=800&q=80",
-        # John Deere tractor with boom sprayer on bare field
-        "https://images.unsplash.com/photo-1654741275609-d7861db288c2?w=800&q=80",
-    ],
-    "scouting": [
-        # Farmer inspecting crops in green grass field
-        "https://images.unsplash.com/photo-1622813071880-3f34337a0418?w=800&q=80",
-    ],
+    # Removed 2026-08-04: bare-field boom-sprayer imagery, used to illustrate weed
+    # management between orchard rows.
+    "herbicide": [],
+    # Removed 2026-08-04: grass/grain field, used to illustrate scouting for avocado
+    # lace bug in an orchard.
+    "scouting": [],
     "pruning": [
         # Arborist pruning tree branches
         "https://images.unsplash.com/photo-1626828476637-5bd713ef9f22?w=800&q=80",
@@ -108,18 +101,15 @@ DEMO_IMAGES = {
         # Ladybug on blade of grass (classic beneficial insect)
         "https://images.unsplash.com/photo-1528824620477-1cfafcb6d502?w=800&q=80",
     ],
-    "trap_monitoring": [
-        # Farmer in checked shirt monitoring crops in field
-        "https://images.unsplash.com/photo-1587810451787-0c58e490080c?w=800&q=80",
-    ],
+    # Removed 2026-08-04: open field, not an orchard.
+    "trap_monitoring": [],
     "ipm": [
         # Ladybug on grain head (biological pest control)
         "https://images.unsplash.com/photo-1745081154632-1a927ee0c847?w=800&q=80",
     ],
-    "cultivation": [
-        # Green tractor plowing/cultivating field under clear sky
-        "https://images.unsplash.com/photo-1762291317833-20c342181282?w=800&q=80",
-    ],
+    # Removed 2026-08-04: open ploughed field with no trees, used to illustrate flame
+    # weeding "in row middles between avocado rows".
+    "cultivation": [],
     "drone_survey": [
         # Agricultural drone operating over farm field
         "https://images.unsplash.com/photo-1713952152768-5f28b8093166?w=800&q=80",
@@ -179,6 +169,8 @@ class Command(BaseCommand):
             zip_code="93003",
             fiscal_id="87-1234567",
             description=(
+                "DEMONSTRATION DATASET — this operation, its people, its certifiers, and "
+                "every record shown are invented for product demonstration. "
                 "Family-owned specialty agriculture operation in California. "
                 "Growing premium Hass avocados and Valencia oranges on the "
                 "Central Coast and Nonpareil almonds in the Central Valley "
@@ -193,7 +185,7 @@ class Command(BaseCommand):
             legal_structure="Family LLC",
             primary_commodities="Hass Avocado, Valencia Orange, Nonpareil Almond",
             sustainability_commitment="GLOBALG.A.P. Certified, IPM Program",
-            certifications="USDA Organic (CCOF), GLOBALG.A.P.",
+            certifications="USDA Organic (PSOC), GLOBALG.A.P.",
             blockchain_subscription_status=True,
         )
         self.stdout.write(f"  Company: {company.name} (#{company.id})")
@@ -221,13 +213,14 @@ class Command(BaseCommand):
 
         # 5. Establishment
         establishment = Establishment.objects.create(
-            name="Coastal Valleys Farm",
+            name="Coastal Valleys Farm (DEMO)",
             address="4520 Foothill Rd",
             city="Ventura",
             state="California",
             country="United States",
             company=company,
             description=(
+                "DEMONSTRATION DATASET — invented operation, people, certifiers, and records. "
                 "150-acre specialty agriculture operation across California's "
                 "Central Coast and Central Valley. Avocado and citrus on the "
                 "coast, almonds in the valley. Drip, micro-sprinkler, and "
@@ -411,10 +404,10 @@ class Command(BaseCommand):
         Certification.objects.create(
             establishment=establishment,
             certification_type="usda_organic",
-            certification_number="CCOF-019845",
-            certifier_name="CCOF (California Certified Organic Farmers)",
+            certification_number="DEMO-ORG-0001",
+            certifier_name="DEMO — Pacific Slope Organic Certifiers (sample data, not an accredited agent)",
             effective_date=self._dt(2024, 8, 1).date(),
-            expiry_date=self._dt(2026, 7, 31).date(),
+            expiry_date=self._dt(2028, 7, 31).date(),
             certification_scope="Crops - All",
             certified_items=["Hass Avocado", "Valencia Orange", "Nonpareil Almond"],
             verification_status="verified",
@@ -422,10 +415,10 @@ class Command(BaseCommand):
         Certification.objects.create(
             establishment=establishment,
             certification_type="global_gap",
-            certification_number="GGN-4052852-001",
-            certifier_name="SCS Global Services",
+            certification_number="DEMO-GGP-0001",
+            certifier_name="DEMO — Coast Range Assurance Services (sample data, not an accredited agent)",
             effective_date=self._dt(2024, 6, 1).date(),
-            expiry_date=self._dt(2026, 5, 31).date(),
+            expiry_date=self._dt(2028, 5, 31).date(),
             certification_scope="Crops - All",
             certified_items=["Hass Avocado", "Valencia Orange", "Nonpareil Almond"],
             verification_status="self_reported",
@@ -460,14 +453,17 @@ class Command(BaseCommand):
             operator=user,
             crop_type=avo_crop,
             earning=0,
+            # This production's records were never anchored on-chain (blockchain is a
+            # paid add-on). The seeder previously carried an invented Polygon tx hash
+            # that resolves to nothing, and propagated blockchain_verified=True onto
+            # every event in the PUBLIC consumer payload — an unverifiable proof claim,
+            # and "blockchain-verified" is UNSAFE wording per .claude/rules/compliance.md
+            # (SAFE: "blockchain-recorded"). Nothing fabricated goes on a public page.
+            production_method="organic",
+            cover_image_url="https://images.unsplash.com/photo-1726177551991-270f9e79b65e?w=1600&q=80",
             extra_data={
-                "blockchain_enabled": True,
-                "blockchain_verified": True,
-                "blockchain_transaction": "0xa3f1c7d9e8b2f4a6c5d7e9f0b1a2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9",
-                "blockchain_hash": "0x7b2e4f6a8c0d1e3f5a7b9c0d2e4f6a8b0c1d3e5f7a9b0c2d4e6f8a0b1c3d5e7",
-                "smart_contract_address": "0x1234567890abcdef1234567890abcdef12345678",
-                "blockchain_network": "polygon",
-                "verification_timestamp": "2025-07-15T12:00:00Z",
+                "blockchain_enabled": False,
+                "blockchain_verified": False,
             },
         )
         avo_finished.save()
@@ -486,6 +482,7 @@ class Command(BaseCommand):
             number_of_plants="3,750",
             soil_ph="6.5",
             operator=user,
+            production_method="organic",
             crop_type=avo_crop,
             earning=0,
         )
@@ -501,7 +498,7 @@ class Command(BaseCommand):
                 "Full USDA Organic production cycle for Valencia orange "
                 "orchard. 20 agricultural events documented with 100% "
                 "OMRI-listed inputs, biological pest control, composting, "
-                "CCOF annual certification, and three harvest passes "
+                "PSOC annual certification, and three harvest passes "
                 "totaling 420,000 kg."
             ),
             production_amount=420000,
@@ -513,20 +510,17 @@ class Command(BaseCommand):
             parcel=ora_parcel,
             is_outdoor=True,
             production_method="organic",
+            cover_image_url="https://images.unsplash.com/photo-1528582654826-585a71fcf7f4?w=1600&q=80",
             age_of_plants="12-30 years",
             number_of_plants="8,000",
             soil_ph="6.8",
             operator=user,
             crop_type=ora_crop,
             earning=0,
+            # See the avocado production above — no fabricated on-chain proof.
             extra_data={
-                "blockchain_enabled": True,
-                "blockchain_verified": True,
-                "blockchain_transaction": "0xb4e2d8f0a1c3e5d7f9a0b2c4d6e8f0a1b3c5d7e9f0a2b4c6d8e0f1a3b5c7d9e0",
-                "blockchain_hash": "0x8c3f5a7b9d1e3f5a7b9c0d2e4f6a8b0c1d3e5f7a9b0c2d4e6f8a0b1c3d5e7f9",
-                "smart_contract_address": "0x1234567890abcdef1234567890abcdef12345678",
-                "blockchain_network": "polygon",
-                "verification_timestamp": "2025-08-15T12:00:00Z",
+                "blockchain_enabled": False,
+                "blockchain_verified": False,
             },
         )
         ora_finished.save()
@@ -582,18 +576,12 @@ class Command(BaseCommand):
             operator=user,
             crop_type=alm_crop,
             earning=0,
+            production_method="organic",
+            cover_image_url="https://images.unsplash.com/photo-1773076088491-d6223773da0c?w=1600&q=80",
+            # See the avocado production above — no fabricated on-chain proof.
             extra_data={
-                "blockchain_enabled": True,
-                "blockchain_verified": True,
-                "blockchain_transaction": (
-                    "0xc5f3a9d1e7b4f8c2a6d0e3f7b9c1d5a8e2f6b0c4d8" "a1e5f9b3c7d0a4e8f2b6c0d3a7e1f5b9c2d6a0e4f8"
-                ),
-                "blockchain_hash": (
-                    "0x9d4e6f8a0b2c4d6e8f0a1b3c5d7e9f0a2b4c6d8e0" "f1a3b5c7d9e0f2a4b6c8d0e1f3a5b7c9d0e2f4a6b8"
-                ),
-                "smart_contract_address": ("0x1234567890abcdef1234567890abcdef12345678"),
-                "blockchain_network": "polygon",
-                "verification_timestamp": "2025-10-15T12:00:00Z",
+                "blockchain_enabled": False,
+                "blockchain_verified": False,
             },
         )
         alm_finished.save()
@@ -612,6 +600,7 @@ class Command(BaseCommand):
             number_of_plants="6,875",
             soil_ph="7.0",
             operator=user,
+            production_method="organic",
             crop_type=alm_crop,
             earning=0,
         )
@@ -680,13 +669,27 @@ class Command(BaseCommand):
     # -- Helper: Create Gallery with demo images --
 
     def _create_album(self, image_key):
-        """Create a Gallery with GalleryImage(s) using free Unsplash URLs."""
+        """Create a Gallery with one GalleryImage, rotating within the pool.
+
+        Every event of a given type used to receive the ENTIRE pool for that key,
+        so the same two photographs backed every fungicide application across three
+        crops. The audit dossier now flags a repeated image as possible fabricated
+        evidence (7 CFR 205.201(a)(3)), and it was flagging the demo farm itself.
+
+        Rotating one image per event keeps consecutive events visually distinct.
+        Pools are still small, so reuse is reduced rather than eliminated — the
+        honest fix is real photographs from a real operation, which is a content
+        problem, not a code one.
+        """
         urls = DEMO_IMAGES.get(image_key, [])
         if not urls:
             return None
+        if not hasattr(self, "_album_cursor"):
+            self._album_cursor = {}
+        idx = self._album_cursor.get(image_key, 0)
+        self._album_cursor[image_key] = idx + 1
         gallery = Gallery.objects.create()
-        for url in urls:
-            GalleryImage.objects.create(gallery=gallery, image_url=url)
+        GalleryImage.objects.create(gallery=gallery, image_url=urls[idx % len(urls)])
         return gallery
 
     # -- Avocado 2024-2025 FINISHED (18 events) --
@@ -784,6 +787,11 @@ class Command(BaseCommand):
             concentration="12-11-18",
             volume="2250",
             area="15",
+            # area_unit is EXPLICIT on every chemical event here (2026-08-01). ChemicalEvent
+            # defaults it to "acres" while ProductionEvent/SoilManagementEvent default to "ha",
+            # so omitting it stamped these hectare values as acres — the live demo card read
+            # "Area Treated: 15 acres" directly above the farmer's own note saying "15 ha".
+            area_unit="ha",
             way_of_application="banded",
             application_method_structured="banding",
             application_fuel_type="diesel",
@@ -857,6 +865,7 @@ class Command(BaseCommand):
             volume="15",
             concentration="45.3",
             area="15",
+            area_unit="ha",
             way_of_application="soil_incorporation",
             target_pest_disease="Phytophthora cinnamomi root rot",
             organic_approved="not_organic",
@@ -965,6 +974,7 @@ class Command(BaseCommand):
             concentration="13-0-5",
             volume="1500",
             area="15",
+            area_unit="ha",
             way_of_application="fertigation",
             application_method_structured="drip",
             application_timing="fruit_development",
@@ -1124,7 +1134,7 @@ class Command(BaseCommand):
             date=self._dt(2025, 7, 10),
             description=(
                 "Annual GLOBALG.A.P. IFA v6 certification audit conducted by "
-                "SCS Global Services. All 217 control points reviewed across "
+                "Coast Range Assurance Services (DEMO). All 217 control points reviewed across "
                 "food safety, worker welfare, and environmental management. "
                 "Certified with zero non-conformances."
             ),
@@ -1136,8 +1146,8 @@ class Command(BaseCommand):
             certification_type="global_gap",
             verification_status="verified",
             sustainability_practice="integrated_pest",
-            verified_certifier_name="SCS Global Services",
-            certificate_number="GGN-4052852100014-2025",
+            verified_certifier_name="DEMO — Coast Range Assurance Services (sample data, not an accredited agent)",
+            certificate_number="DEMO-GGP-0002",
             observation=(
                 "Full compliance with IFA v6. Highlights: excellent "
                 "traceability records, strong IPM program, worker safety "
@@ -1145,7 +1155,7 @@ class Command(BaseCommand):
             ),
             extra_data={
                 "audit_date": "2025-07-10",
-                "auditor": "SCS Global Services",
+                "auditor": "Coast Range Assurance Services (DEMO)",
                 "standard": "GLOBALG.A.P. IFA v6",
                 "control_points": 217,
                 "major_nc": 0,
@@ -1173,6 +1183,7 @@ class Command(BaseCommand):
             volume="70.5",
             concentration="48.7",
             area="15",
+            area_unit="ha",
             way_of_application="ground_spray",
             application_method_structured="broadcast",
             application_timing="post_harvest",
@@ -1202,7 +1213,7 @@ class Command(BaseCommand):
             description=(
                 "Replanted 120 Hass avocado trees on GEM rootstock to "
                 "replace aging, low-producing trees in blocks 3 and 7. "
-                "Clonal nursery stock from Brokaw Nursery. Biodiesel-powered "
+                "Clonal nursery stock from Saticoy Grove Nursery. Biodiesel-powered "
                 "tractor for hole augering and tree placement."
             ),
             created_by=user,
@@ -1223,13 +1234,13 @@ class Command(BaseCommand):
             extra_data={
                 "trees_planted": 120,
                 "rootstock": "GEM (clonal)",
-                "nursery": "Brokaw Nursery, Saticoy CA",
+                "nursery": "Saticoy Grove Nursery, Saticoy CA",
                 "spacing_m": "6 x 6",
                 "blocks": "3, 7",
-                "seed_supplier": "Brokaw Nursery, Saticoy CA",
+                "seed_supplier": "Saticoy Grove Nursery, Saticoy CA",
                 "seed_variety": "Hass on GEM rootstock",
                 "seed_lot_number": "BN-2024-GEM-0892",
-                "organic_certificate_number": "CCOF-BN-2024-1183",
+                "organic_certificate_number": "DEMO-NUR-0002",
                 "treated_or_untreated": "untreated",
             },
             album=self._create_album("planting"),
@@ -1391,6 +1402,7 @@ class Command(BaseCommand):
             concentration="15-9-12",
             volume="1875",
             area="15",
+            area_unit="ha",
             way_of_application="banded",
             application_method_structured="banding",
             application_timing="pre_plant",
@@ -1451,6 +1463,7 @@ class Command(BaseCommand):
             volume="45",
             concentration="45",
             area="15",
+            area_unit="ha",
             way_of_application="soil_incorporation",
             target_pest_disease="Phytophthora cinnamomi root rot",
             organic_approved="not_organic",
@@ -1575,6 +1588,7 @@ class Command(BaseCommand):
             volume="33.6",
             concentration="46.1",
             area="15",
+            area_unit="ha",
             way_of_application="ground_spray",
             application_method_structured="broadcast",
             application_timing="preventive",
@@ -1722,6 +1736,7 @@ class Command(BaseCommand):
             concentration="2-4-1",
             volume="200",
             area="20",
+            area_unit="ha",
             way_of_application="fertigation",
             application_method_structured="drip",
             application_timing="harvest",
@@ -1804,6 +1819,7 @@ class Command(BaseCommand):
             volume="1.5",
             concentration="22.5",
             area="20",
+            area_unit="ha",
             way_of_application="ground_spray",
             target_pest_disease="Citrus leafminer (Phyllocnistis citrella)",
             organic_approved="omri_listed",
@@ -1938,6 +1954,7 @@ class Command(BaseCommand):
             concentration="2-3-1",
             volume="200",
             area="20",
+            area_unit="ha",
             way_of_application="fertigation",
             application_method_structured="drip",
             application_timing="fruit_development",
@@ -2119,13 +2136,13 @@ class Command(BaseCommand):
             },
         )
 
-        # 15: USDA Organic Annual Certification (CCOF)
+        # 15: USDA Organic Annual Certification (PSOC)
         BusinessEvent.objects.create(
             history=prod,
             index=15,
             date=self._dt(2025, 8, 1),
             description=(
-                "Annual USDA Organic certification inspection by CCOF "
+                "Annual USDA Organic certification inspection by PSOC "
                 "(California Certified Organic Farmers). All organic "
                 "production practices, input records, and harvest "
                 "documentation reviewed. Certification renewed for "
@@ -2139,8 +2156,8 @@ class Command(BaseCommand):
             certification_type="organic_usda",
             verification_status="verified",
             sustainability_practice="soil_health",
-            verified_certifier_name="CCOF (California Certified Organic Farmers)",
-            certificate_number="CCOF-019845",
+            verified_certifier_name="DEMO — Pacific Slope Organic Certifiers (sample data, not an accredited agent)",
+            certificate_number="DEMO-ORG-0001",
             observation=(
                 "Full organic system plan review. All inputs verified "
                 "OMRI-listed. Buffer zones confirmed. No prohibited "
@@ -2149,7 +2166,7 @@ class Command(BaseCommand):
             ),
             extra_data={
                 "audit_date": "2025-08-01",
-                "auditor": "CCOF",
+                "auditor": "PSOC",
                 "standard": "USDA NOP 7 CFR 205",
                 "organic_system_plan": "approved",
                 "prohibited_substances": "none_detected",
@@ -2177,6 +2194,7 @@ class Command(BaseCommand):
             volume="200",
             concentration="47",
             area="20",
+            area_unit="ha",
             way_of_application="ground_spray",
             application_method_structured="broadcast",
             application_timing="post_emergence",
@@ -2218,6 +2236,7 @@ class Command(BaseCommand):
             volume="1120",
             concentration="95",
             area="20",
+            area_unit="ha",
             way_of_application="ground_spray",
             application_method_structured="broadcast",
             application_timing="fruit_development",
@@ -2254,7 +2273,9 @@ class Command(BaseCommand):
             performed_by="Carlos Mendoza",
             type=SoilManagementEvent.PH_ADJUSTMENT,
             name="Gypsum Calcium & Sodium Correction",
-            amendment_type="Agricultural gypsum (CaSO4)",
+            # Plain words: amendment_type is free text and renders VERBATIM on the consumer
+            # page, where "(CaSO4)" is a chemistry lesson nobody asked for.
+            amendment_type="Agricultural gypsum",
             amendment_amount="50000",
             area_covered=Decimal("20.00"),
             area_unit="ha",
@@ -2364,6 +2385,7 @@ class Command(BaseCommand):
             concentration="5-5-2",
             volume="2400",
             area="20",
+            area_unit="ha",
             way_of_application="broadcast",
             application_method_structured="broadcast",
             application_timing="flowering",
@@ -2458,6 +2480,7 @@ class Command(BaseCommand):
             volume="134",
             concentration="80",
             area="20",
+            area_unit="ha",
             way_of_application="ground_spray",
             application_method_structured="broadcast",
             application_timing="fruit_development",

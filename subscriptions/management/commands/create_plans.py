@@ -300,11 +300,25 @@ class Command(BaseCommand):
                 "interval": "month",
             },
             {
-                "name": "Blockchain Verification",
+                # DISPLAY name only — the slug is an identifier referenced elsewhere and must
+                # not change. Renamed from "Blockchain Verification" (2026-08-03): compliance.md
+                # lists "blockchain-verified" as UNSAFE. Blockchain shows a record was not
+                # altered after submission; it attests nothing about the farming itself, and
+                # the rest of the product already says "Blockchain Recording"
+                # (`app.blockchainAddon`).
+                "name": "Blockchain Recording",
                 "slug": "blockchain-verification",
-                "description": "Add blockchain verification to your plan for immutable transparency records and consumer trust badges",
+                "description": "Write finished productions to the Polygon blockchain so the record cannot be altered afterwards",
                 "price": 15.00,
                 "interval": "month",
+                # WITHDRAWN 2026-08-03, not deleted. The consumer-facing blockchain surface was
+                # removed: the only claim the chain honestly supports ("unchanged since
+                # sealing") does not answer what a shopper or a wholesale buyer asks, it was
+                # not among the real competitive gaps vs COG Pro / Quick Organics, and it was
+                # the single largest source of claim-safety defects in the codebase.
+                # Seeded inactive so it stays out of pricing until a real buyer asks for it;
+                # the row is kept so existing references and Stripe IDs do not dangle.
+                "is_active": False,
             },
         ]
 
@@ -342,7 +356,9 @@ class Command(BaseCommand):
                         "description": addon_data["description"],
                         "price": addon_data["price"],
                         "stripe_price_id": price.id,
-                        "is_active": True,
+                        # Honour the definition instead of hardcoding True — a withdrawn add-on
+                        # (see "Blockchain Recording") must not be re-activated by a reseed.
+                        "is_active": addon_data.get("is_active", True),
                     },
                 )
 

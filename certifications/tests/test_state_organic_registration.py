@@ -207,8 +207,8 @@ class StateOrganicRegistrationExportSectionTests(TestCase):
         against a wrong field name being silently swallowed to an empty appendix)."""
         from datetime import datetime
 
-        from history.models import ChemicalEvent
         from certifications.services.osp_pdf_snapshot import _record_inventory
+        from history.models import ChemicalEvent
 
         ChemicalEvent.objects.create(
             history=self.history,

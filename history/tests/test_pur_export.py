@@ -10,11 +10,13 @@ from datetime import datetime
 from django.test import TestCase
 from django.utils import timezone
 
+from rest_framework.test import APIClient
+
 from company.models import Company, Establishment
 from history.models import ChemicalEvent, History
 from history.services.pur_export_service import PURExportService
 from product.models import Parcel, Product
-from users.models import User
+from users.models import User, WorksIn
 
 
 class PURExportServiceTests(TestCase):
@@ -220,3 +222,47 @@ class PURExportServiceTests(TestCase):
     def _make_row(self, **overrides):
         self._full_pesticide(**overrides)
         return PURExportService(self.establishment, 6, 2026).build_rows()[0]
+
+
+class PURExportStateGateTests(TestCase):
+    """The PUR is a California filing (3 CCR 6626) and the CSV embeds CA county
+    codes, so the endpoint must not serve it to an out-of-state farm.
+
+    Before this gate a Florida grower could generate a document titled "California
+    Pesticide Use Report (DPR-PML-017C)" carrying a note that their real county was
+    "not a recognized CA county" — a misleading artifact on a regulator-facing
+    export, not merely an empty one.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(email="gate@test.com", password="x")
+        self.company = Company.objects.create(name="Gate Co")
+        self.url = "/api/histories/pur-export/"
+
+    def _establishment(self, state):
+        est = Establishment.objects.create(name=f"Farm {state or 'blank'}", company=self.company, state=state)
+        WorksIn.objects.create(user=self.user, company=self.company, role="CA")
+        return est
+
+    def _get(self, est):
+        # Auth is httpOnly-cookie JWT, so Django's session force_login yields 401 here.
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+        return client.get(self.url, {"establishment_id": est.id, "month": 6, "year": 2026})
+
+    def test_california_farm_is_allowed(self):
+        response = self._get(self._establishment("CA"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_full_state_name_still_resolves_to_california(self):
+        # 35 of 105 live rows stored "California" rather than "CA".
+        response = self._get(self._establishment("California"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_out_of_state_farm_gets_404(self):
+        response = self._get(self._establishment("FL"))
+        self.assertEqual(response.status_code, 404)
+
+    def test_unknown_state_gets_404_rather_than_being_assumed_californian(self):
+        response = self._get(self._establishment(""))
+        self.assertEqual(response.status_code, 404)

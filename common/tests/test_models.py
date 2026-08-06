@@ -168,7 +168,10 @@ class TestGalleryImageURLProperty(TestCase):
         """Test URL property returns S3 URL when s3_key is present"""
         image = GalleryImage.objects.create(gallery=self.gallery, s3_key="test/path/image.jpg")
 
-        expected_url = f"https://test-bucket.s3.amazonaws.com/test/path/image.jpg"
+        # Region-scoped host: GalleryImage.url builds `.s3.{region}.amazonaws.com`
+        # and actively rewrites legacy region-less URLs (common/models.py:54-65).
+        region = getattr(settings, "AWS_S3_REGION_NAME", "us-east-2")
+        expected_url = f"https://test-bucket.s3.{region}.amazonaws.com/test/path/image.jpg"
         self.assertEqual(image.url, expected_url)
 
     def test_url_property_with_image_url(self):
@@ -202,7 +205,8 @@ class TestGalleryImageURLProperty(TestCase):
 
         # Should prioritize S3 key
         with override_settings(AWS_STORAGE_BUCKET_NAME="test-bucket"):
-            expected_s3_url = f"https://test-bucket.s3.amazonaws.com/test/s3_image.jpg"
+            region = getattr(settings, "AWS_S3_REGION_NAME", "us-east-2")
+            expected_s3_url = f"https://test-bucket.s3.{region}.amazonaws.com/test/s3_image.jpg"
             self.assertEqual(image.url, expected_s3_url)
 
         # Remove S3 key, should use image_url
@@ -254,7 +258,8 @@ class TestGalleryImageS3Integration(TestCase):
         image = GalleryImage.objects.create(gallery=self.gallery, s3_key="test/folder/image.jpg")
 
         self.assertEqual(image.s3_key, "test/folder/image.jpg")
-        expected_url = "https://test-bucket.s3.amazonaws.com/test/folder/image.jpg"
+        region = getattr(settings, "AWS_S3_REGION_NAME", "us-east-2")
+        expected_url = f"https://test-bucket.s3.{region}.amazonaws.com/test/folder/image.jpg"
         self.assertEqual(image.url, expected_url)
 
     def test_s3_key_validation(self):

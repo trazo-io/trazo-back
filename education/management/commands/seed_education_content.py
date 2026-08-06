@@ -6,8 +6,42 @@ from education.models import EducationCategory, EducationCourse, EducationLesson
 class Command(BaseCommand):
     help = "Seeds comprehensive educational content for farmers to understand how Trazo works"
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--refresh",
+            action="store_true",
+            help=(
+                "Rewrite content that already exists. Without this the command is "
+                "create-only, so a correction to the copy can never reach an "
+                "environment that has been seeded once."
+            ),
+        )
+
+    def _upsert_course(self, course_data):
+        """Return (course, seed_lessons).
+
+        Every caller guards its lesson block with `if created:`, so a re-run was a
+        no-op on existing rows. That meant a compliance fix to a lesson — say,
+        removing an unsourced "20-30% premium" claim — could be corrected in this
+        file and still be served forever from the database. Under --refresh the
+        course fields are rewritten and its lessons are rebuilt from scratch.
+        """
+        course, created = EducationCourse.objects.get_or_create(title=course_data["title"], defaults=course_data)
+        if created:
+            return course, True
+        if not getattr(self, "refresh", False):
+            return course, False
+        for field, value in course_data.items():
+            setattr(course, field, value)
+        course.save()
+        course.lessons.all().delete()
+        return course, True
+
     def handle(self, *args, **kwargs):
+        self.refresh = kwargs.get("refresh", False)
         self.stdout.write(self.style.SUCCESS("Starting education content seeding..."))
+        if self.refresh:
+            self.stdout.write(self.style.WARNING("--refresh: existing courses and lessons will be rewritten."))
 
         # Create Categories - Updated for Transparency-First Approach
         categories_data = [
@@ -42,7 +76,7 @@ class Command(BaseCommand):
             {
                 "name": "Market Success Through Transparency",
                 "category_type": "market_success",
-                "description": "Convert transparency into premium pricing and business value",
+                "description": "Convert transparency into market position and business value",
                 "icon": "FaDollarSign",
                 "order": 5,
             },
@@ -74,6 +108,10 @@ class Command(BaseCommand):
             category, created = EducationCategory.objects.get_or_create(
                 category_type=cat_data["category_type"], defaults=cat_data
             )
+            if not created and self.refresh:
+                for field, value in cat_data.items():
+                    setattr(category, field, value)
+                category.save()
             categories[cat_data["category_type"]] = category
             if created:
                 self.stdout.write(f"Created category: {category.name}")
@@ -107,7 +145,7 @@ class Command(BaseCommand):
             "order": 1,
         }
 
-        course, created = EducationCourse.objects.get_or_create(title=course_data["title"], defaults=course_data)
+        course, created = self._upsert_course(course_data)
 
         if created:
             lessons_data = [
@@ -134,10 +172,10 @@ class Command(BaseCommand):
 
 ## What Consumers Really Want
 **Research shows:**
-- 87% of consumers don't understand CO2e numbers
-- 92% want to know "how their food was grown"
+- Most consumers cannot interpret a raw CO2e number
+- Buyers increasingly ask how their food was grown
 - Trust indicators drive 3x more purchase decisions than carbon scores
-- Transparency stories increase engagement 340% vs technical data
+- A plain-language story holds attention better than technical data
 
 ## How Trazo Builds Your Success
 
@@ -159,13 +197,13 @@ class Command(BaseCommand):
 - But NOT your primary consumer-facing metric
 
 ### 4. **Market Premium Access**
-- Transparency-verified premiums: 15-30%
-- Direct consumer sales: 25-40% higher
-- Restaurant supplier programs: 20% premiums
+- Documentation supports premium positioning
+- Direct consumer sales: documentation supports premium positioning
+- Restaurant supplier programs: value provenance they can retell
 - Export market differentiation
 
 ## Real Farmer Results
-- **Consumer Completion Rate:** 12% → 78% (6.5x improvement)
+- **Consumer Completion Rate:** far more shoppers finish a plain-language page
 - **Farmer Engagement:** More comprehensive logging vs hiding practices
 - **Trust Building:** Verification badges > carbon scores for purchases
 - **Premium Access:** Transparency opens doors carbon couldn't
@@ -177,7 +215,7 @@ class Command(BaseCommand):
                         "Compare transparency display vs carbon data prominence",
                         "Share QR code story with family/customers for feedback",
                     ],
-                    "cost_savings_potential": "15-30% premium pricing through transparency",
+                    "cost_savings_potential": "Supports premium positioning through documented practices",
                     "time_savings_potential": "5 minutes per event vs 20-minute manual calculations",
                 },
                 {
@@ -224,11 +262,11 @@ Trazo uses a **weighted category system** that evaluates how thoroughly you docu
 
 ### Consumer Psychology Research
 **What consumers actually care about:**
-1. "How was this food grown?" (92% care deeply)
-2. "Who grew it and where?" (87% want to know)
-3. "What practices were used?" (84% value transparency)
-4. "Is it verified/authentic?" (79% need trust indicators)
-5. "Environmental impact details?" (23% understand CO2e)
+1. "How was this food grown?"
+2. "Who grew it and where?"
+3. "What practices were used?"
+4. "Is it authentic?" (buyers look for concrete trust indicators)
+5. "Environmental impact details?" (few shoppers can interpret CO2e)
 
 ### Real Example: Two Farmers Comparison
 **Farmer A (Traditional Carbon Platform):**
@@ -239,7 +277,7 @@ Trazo uses a **weighted category system** that evaluates how thoroughly you docu
 **Farmer B (Trazo Transparency):**
 - Logs 15 detailed events → 85% transparency score → Looks trustworthy → Logs more
 - Consumer page: "85% transparency - 15 farming practices documented"
-- Result: Higher engagement, premium pricing
+- Result: higher engagement and stronger premium positioning
 
 ## Your Transparency Journey
 
@@ -262,9 +300,9 @@ Trazo uses a **weighted category system** that evaluates how thoroughly you docu
 ## Impact on Your Business
 
 ### Premium Market Access
-- **Local/Regional:** 15% premium for transparency verification
-- **Direct-to-Consumer:** 25-40% higher prices
-- **Restaurant Supply:** 20% premium for "story" products
+- **Local/Regional:** documented practices support premium positioning
+- **Direct-to-Consumer:** documentation supports premium positioning
+- **Restaurant Supply:** chefs value products with a story they can retell
 - **Export Markets:** EU transparency requirements compliance
 
 ### Consumer Engagement Results
@@ -294,7 +332,7 @@ Trazo uses a **weighted category system** that evaluates how thoroughly you docu
         course_data = {
             "title": "7 Essential Farm Events for Maximum Transparency",
             "category": categories["farm_events"],
-            "description": "Master all 7 event types to achieve 85%+ transparency scores and unlock premium market access",
+            "description": "Master all 7 event types to build a record buyers can evaluate",
             "difficulty": "beginner",
             "required_plan": "all",
             "estimated_duration": 60,
@@ -303,7 +341,7 @@ Trazo uses a **weighted category system** that evaluates how thoroughly you docu
             "order": 1,
         }
 
-        course, created = EducationCourse.objects.get_or_create(title=course_data["title"], defaults=course_data)
+        course, created = self._upsert_course(course_data)
 
         if created:
             lessons_data = [
@@ -372,15 +410,15 @@ Trazo uses a **weighted category system** that evaluates how thoroughly you docu
 ## Real Impact on Consumer Trust
 
 ### Consumer Research Results:
-- **Visual Documentation**: Photos increase trust by 67%
-- **GPS Verification**: Location data adds 23% credibility
-- **Timing Details**: Harvest timing increases perceived quality by 45%
+- **Visual Documentation**: a photo is harder to doubt than a text entry
+- **GPS Location**: ties the record to a place, not just a claim
+- **Timing Details**: harvest timing tells buyers how fresh the crop is
 - **Complete Stories**: Full production cycles drive 3x more engagement
 
 ### Premium Market Access:
-- **Local Markets**: 15-25% premium for documented practices
-- **Direct Sales**: 30-40% higher prices through transparency
-- **Restaurant Supply**: 20% premium for "story" products
+- **Local Markets**: documented practices support premium positioning
+- **Direct Sales**: transparency supports premium positioning
+- **Restaurant Supply**: chefs value products with a story they can retell
 - **Export Markets**: EU transparency requirements compliance""",
                     "practical_steps": [
                         "Log your next 3 production activities with photos and GPS",
@@ -400,10 +438,10 @@ Trazo uses a **weighted category system** that evaluates how thoroughly you docu
 ## Why Chemical Transparency Matters Most
 
 ### Consumer Trust Research:
-- **94% of consumers** want to know about chemical applications
+- Chemical applications are the practice buyers ask about most
 - **Transparency wins over "zero chemicals"**: Honest documentation beats hiding practices
-- **"Reduced Risk" messaging**: 78% prefer transparency over unknown practices
-- **Photo evidence**: Increases trust by 89% vs text-only descriptions
+- **"Reduced Risk" messaging**: a documented practice beats an unknown one
+- **Photo evidence**: carries more weight than a text-only description
 
 ## The 3 High-Value Chemical Event Types
 
@@ -476,13 +514,13 @@ Protective equipment used and equipment cleaned after application."
 ## Building Consumer Confidence
 
 ### The Transparency Advantage:
-- **87% of consumers** trust farms that document all practices
-- **Verified transparency** beats "chemical-free" claims by 34%
+- Buyers trust farms that document their practices
+- **Documented practices** beat vague claims like "chemical-free"
 - **Photo evidence** creates emotional connection and trust
 - **Complete stories** demonstrate farming expertise and care
 
 ### Premium Market Access:
-- **Transparency premiums**: 20-30% higher prices
+- **Transparency**: supports premium positioning with buyers
 - **Restaurant partnerships**: Chefs value documented practices
 - **Export opportunities**: EU markets require transparency documentation
 - **Consumer direct sales**: Transparency drives 3x higher conversion rates""",
@@ -493,7 +531,7 @@ Protective equipment used and equipment cleaned after application."
                         "Set up IPM monitoring and documentation workflow",
                         "Test different photo angles and descriptions for maximum trust building",
                     ],
-                    "cost_savings_potential": "Transparency in chemical applications can command 20-30% premium pricing",
+                    "cost_savings_potential": "Documented chemical applications support premium positioning",
                 },
             ]
 
@@ -518,7 +556,7 @@ Protective equipment used and equipment cleaned after application."
             "order": 1,
         }
 
-        course, created = EducationCourse.objects.get_or_create(title=course_data["title"], defaults=course_data)
+        course, created = self._upsert_course(course_data)
 
         if created:
             lessons_data = [
@@ -534,7 +572,7 @@ Protective equipment used and equipment cleaned after application."
 ### Consumer Behavior Research:
 - **Average QR scan to decision**: 78 seconds
 - **Trust building window**: First 15 seconds are critical
-- **Completion rates**: 78% transparency-focused vs 12% carbon-focused
+- **Completion rates**: transparency-first pages hold attention better than carbon-first ones
 - **Purchase influence**: Transparency stories drive 3.4x more buying decisions
 
 ## Progressive Trust Building Strategy
@@ -543,7 +581,7 @@ Protective equipment used and equipment cleaned after application."
 **Goal**: Immediate credibility and interest
 **Elements**:
 - **Transparency Score**: "95% transparency - 12 practices documented"
-- **Verification Badges**: Blockchain verified, Photo evidence, GPS tracked
+- **Trust Indicators**: Blockchain-recorded, Photo evidence, GPS location
 - **Farm Identity**: "Grown by [Farm Name] in [Location]"
 - **Trust Signal**: "All farming practices documented and verified"
 
@@ -660,7 +698,7 @@ protected crop quality while managing resources responsibly."
 - Consumers spending >60 seconds exploring transparency
 - 80%+ completion rate through full production story
 - Positive feedback mentioning "trust" and "transparency"
-- Increased direct sales and premium pricing
+- Stronger direct sales and premium positioning
 - Customer referrals and story sharing""",
                     "practical_steps": [
                         "Audit your current QR page for trust signals and storytelling flow",
@@ -694,7 +732,7 @@ protected crop quality while managing resources responsibly."
             "order": 2,
         }
 
-        course, created = EducationCourse.objects.get_or_create(title=course_data["title"], defaults=course_data)
+        course, created = self._upsert_course(course_data)
 
         if created:
             lessons_data = [
@@ -863,11 +901,11 @@ protected crop quality while managing resources responsibly."
                     ],
                 },
                 {
-                    "title": "Blockchain Verification: Immutable Agricultural Records",
+                    "title": "Blockchain Recording: Immutable Agricultural Records",
                     "content_type": "interactive",
                     "duration": 17,
                     "order": 2,
-                    "content": """# Blockchain Verification: Unbreakable Agricultural Trust
+                    "content": """# Blockchain Recording: Unbreakable Agricultural Trust
 
 ## Understanding Blockchain for Agricultural Transparency
 
@@ -880,9 +918,9 @@ protected crop quality while managing resources responsibly."
 
 ### Why Blockchain Matters for Premium Markets:
 - **Export Requirements**: EU and other markets increasingly require verifiable records
-- **Premium Pricing**: Verified transparency commands 20-30% higher prices
+- **Premium Positioning**: documented practices give buyers something concrete to evaluate
 - **Liability Protection**: Immutable records protect against false claims
-- **Consumer Confidence**: 89% of consumers trust blockchain-verified products more
+- **Consumer Confidence**: an unaltered record is something a buyer can check for themselves
 
 ## How Trazo's Blockchain Verification Works
 
@@ -890,7 +928,7 @@ protected crop quality while managing resources responsibly."
 1. **Document Your Production**: Log all farming events as you normally do (planting, irrigation, fertilization, harvest, etc.)
 2. **Finish Your Production**: When you click "Finish Production," Trazo creates a unique digital fingerprint (hash) of ALL your documented events
 3. **Automatic Blockchain Submission**: Trazo's system submits this fingerprint to the Polygon blockchain, creating a permanent record
-4. **Verification Badge Appears**: Your product's QR code page now displays a "Blockchain Verified" badge with a link to the public record
+4. **Verification Badge Appears**: Your product's QR code page now displays a "Blockchain-Recorded" badge with a link to the public record
 5. **Consumer Verification**: Anyone who scans the QR code can verify the data is authentic through Polygonscan (a public blockchain explorer)
 
 ### Important: One Record Per Production
@@ -914,7 +952,7 @@ Blockchain verification happens at the **production level**, not per individual 
 - **One transaction per production**: Included in the Blockchain Verification add-on
 - **No per-event fees**: All events in a production are covered by one transaction
 - **No Hidden Fees**: Transparent pricing with no surprise costs
-- **ROI Positive**: Premium pricing easily covers verification costs
+- **Cost**: weigh the add-on cost against what buyer proof is worth to you
 
 ## Consumer-Facing Verification Features
 
@@ -926,7 +964,7 @@ Blockchain verification happens at the **production level**, not per individual 
 
 ### Building Consumer Understanding:
 ```
-"Blockchain Verified
+"Blockchain-Recorded
 All farming data for this product has been permanently recorded on blockchain,
 ensuring it cannot be altered or falsified. This gives you complete confidence
 in the accuracy of agricultural practices used to grow your food."
@@ -1019,21 +1057,21 @@ in the accuracy of agricultural practices used to grow your food."
 ## ROI and Business Impact
 
 ### Measurable Benefits:
-- **Premium Pricing**: 20-30% higher prices for verified products
+- **Premium Positioning**: documented products are easier for buyers to justify paying more for
 - **Market Access**: Entry to premium and export markets
-- **Consumer Trust**: 89% higher trust scores for verified products
+- **Consumer Trust**: an unaltered record is something a buyer can check
 - **Operational Efficiency**: Streamlined record-keeping and compliance
 - **Risk Reduction**: Protection against liability and false claims
 
 ### Success Stories:
-- Avocado farm increased direct sales by 340% with blockchain verification
-- Organic vegetable operation achieved 25% premium with verified transparency
-- Berry farm secured EU export contract based on blockchain-verified records
-- Wine grape grower reduced certification costs by 60% with automated verification""",
+- Growers use blockchain recording where buyers ask for proof the record was not edited
+- Organic vegetable operations use documentation to support premium positioning
+- Export buyers increasingly ask for records that can be shown to be unaltered
+- Automating recordkeeping cuts the hours spent assembling an audit packet""",
                     "practical_steps": [
                         "Enable blockchain verification in your Trazo account settings and document 3 test events",
                         "Review your QR code display to verify blockchain badges appear correctly",
-                        "Calculate ROI potential by comparing verification costs to premium pricing opportunities",
+                        "Weigh recording costs against what verifiable proof is worth to your buyers",
                         "Create consumer education materials explaining your blockchain verification",
                         "Set up verification priorities for different types of farming events based on value and importance",
                     ],
@@ -1050,7 +1088,7 @@ in the accuracy of agricultural practices used to grow your food."
     def create_market_success_content(self, categories):
         """Create market success content"""
         course_data = {
-            "title": "Converting Transparency Into Premium Pricing",
+            "title": "Converting Transparency Into Market Position",
             "category": categories["market_success"],
             "description": "Learn to monetize transparency through premium markets and direct customer relationships",
             "difficulty": "advanced",
@@ -1061,7 +1099,7 @@ in the accuracy of agricultural practices used to grow your food."
             "order": 1,
         }
 
-        course, created = EducationCourse.objects.get_or_create(title=course_data["title"], defaults=course_data)
+        course, created = self._upsert_course(course_data)
 
         if created:
             lessons_data = [
@@ -1075,14 +1113,14 @@ in the accuracy of agricultural practices used to grow your food."
 ## The Economics of Agricultural Transparency
 
 ### Market Research Data:
-- **Premium Pricing**: 85%+ transparency scores achieve 20-30% premium pricing
-- **Consumer Willingness**: 67% pay 15-25% more for verified transparent products
-- **Market Growth**: Transparent agriculture market growing 23% annually
-- **Direct Sales**: 340% higher conversion rates for transparency-verified products
+- **Premium Positioning**: a more complete record gives buyers more to evaluate
+- **Consumer Willingness**: buyers pay more when they can see what they are buying
+- **Market Growth**: buyer demand for verifiable sourcing continues to rise
+- **Direct Sales**: a page buyers can read converts better than one they cannot
 
 ## 4 Premium Market Channels for Transparent Agriculture
 
-### 1. **Direct-to-Consumer Sales** (25-40% premiums)
+### 1. **Direct-to-Consumer Sales**
 **Why Transparency Wins**: Consumers buy directly from trusted farmers
 **Success Strategy**:
 - Prominent transparency scores on product packaging
@@ -1096,7 +1134,7 @@ in the accuracy of agricultural practices used to grow your food."
 - Build email list of transparency-focused customers
 - Develop subscription boxes highlighting seasonal transparency
 
-### 2. **Restaurant and Chef Partnerships** (20-35% premiums)
+### 2. **Restaurant and Chef Partnerships**
 **Why Chefs Value Transparency**: Authentic farm stories enhance menu appeal
 **Success Strategy**:
 - Document unique farming techniques and varieties
@@ -1110,7 +1148,7 @@ in the accuracy of agricultural practices used to grow your food."
 - Develop seasonal transparency calendars for menu planning
 - Offer exclusive first access to new transparent varieties
 
-### 3. **Premium Grocery and Specialty Markets** (15-25% premiums)
+### 3. **Premium Grocery and Specialty Markets**
 **Why Retailers Pay Premiums**: Transparency differentiates products on crowded shelves
 **Success Strategy**:
 - Develop transparency-focused brand identity and packaging
@@ -1124,11 +1162,11 @@ in the accuracy of agricultural practices used to grow your food."
 - Create in-store educational materials about farming practices
 - Establish transparency-based customer loyalty programs
 
-### 4. **Export and International Markets** (30-50% premiums)
+### 4. **Export and International Markets**
 **Why Global Markets Demand Transparency**: Regulatory requirements and consumer expectations
 **Success Strategy**:
 - Meet international transparency and traceability standards
-- Provide blockchain-verified documentation for customs
+- Provide documentation whose records can be shown to be unaltered
 - Develop region-specific transparency marketing
 - Build relationships with international transparency-focused importers
 
@@ -1142,7 +1180,7 @@ in the accuracy of agricultural practices used to grow your food."
 
 ### Core Value Messages:
 1. **"Completely Transparent Farming"**: Every practice documented and verified
-2. **"Blockchain-Verified Agricultural Practices"**: Unalterable proof of farming methods
+2. **"Blockchain-Recorded Agricultural Practices"**: Unalterable proof of farming methods
 3. **"Full Farm-to-Table Visibility"**: Complete production journey transparency
 4. **"Trust Through Technology"**: Advanced verification creates unshakeable confidence
 
@@ -1160,7 +1198,7 @@ in the accuracy of agricultural practices used to grow your food."
 
 ✅ 18 farming practices fully documented
 ✅ 127 photos with timestamps and GPS coordinates  
-✅ Blockchain-verified records that can't be altered
+✅ Blockchain-recorded so the record can be shown to be unaltered
 ✅ Complete growing story from planting to harvest
 
 Scan the QR code to see exactly how your food was grown."
@@ -1174,7 +1212,7 @@ Scan the QR code to see exactly how your food was grown."
 
 ## Pricing Strategy for Transparent Products
 
-### Premium Pricing Framework:
+### Premium Positioning Framework:
 - **Base Product**: Market price for conventional equivalent
 - **Transparency Premium**: 15-30% based on transparency score and verification level
 - **Market Positioning**: Position as premium product, not commodity with markup
@@ -1253,7 +1291,7 @@ Scan the QR code to see exactly how your food was grown."
             "order": 3,
         }
 
-        course, created = EducationCourse.objects.get_or_create(title=course_data["title"], defaults=course_data)
+        course, created = self._upsert_course(course_data)
 
         if created:
             lessons_data = [
@@ -1293,7 +1331,7 @@ Scan the QR code to see exactly how your food was grown."
 
 ### Primary Value: **Transparency Score** (Consumer-Facing)
 - "95% transparency - 15 farming practices documented"
-- Drives consumer trust and premium pricing
+- Builds consumer trust and supports premium positioning
 - Rewards comprehensive agricultural documentation
 - Creates farmer incentive alignment with transparency goals
 
@@ -1333,7 +1371,7 @@ Scan the QR code to see exactly how your food was grown."
 
 ### Layer 1: Trust Building (First 15 seconds)
 - **Transparency Score**: "95% transparency"
-- **Verification**: "Blockchain verified practices"
+- **Record integrity**: "Blockchain-recorded practices"
 - **Photo Count**: "23 documented farming activities"
 
 ### Layer 2: Story Understanding (15-45 seconds)
@@ -1421,7 +1459,7 @@ This approach ensures carbon data supports your transparency story rather than r
             "order": 4,
         }
 
-        course, created = EducationCourse.objects.get_or_create(title=course_data["title"], defaults=course_data)
+        course, created = self._upsert_course(course_data)
 
         if created:
             lessons_data = [
@@ -1555,7 +1593,7 @@ Traditional Preparation (40+ hours):
 
 Trazo Preparation (30 minutes):
 - Generate compliance report by date range
-- Export blockchain-verified documentation
+- Export blockchain-recorded documentation
 - Share secure digital access with inspector
 - All data organized automatically by requirement
 ```
@@ -1646,7 +1684,7 @@ This approach transforms compliance from a burden into a competitive advantage, 
             "order": 2,
         }
 
-        course, created = EducationCourse.objects.get_or_create(title=course_data["title"], defaults=course_data)
+        course, created = self._upsert_course(course_data)
 
         if created:
             lessons_data = [
@@ -1663,7 +1701,7 @@ This approach transforms compliance from a burden into a competitive advantage, 
 - Manual event logging takes 5-10 minutes per event
 - Complex forms discourage consistent documentation
 - Farmers skip logging = Lower transparency scores
-- Incomplete records = Lost premium pricing opportunities
+- Incomplete records = weaker position with buyers
 
 ### The Quick Add Solution:
 - **3-tap event creation**: Select type → Add details → Submit
@@ -1777,7 +1815,7 @@ Your transparency score uses a **weighted category system**:
 **Log 5-7 events per week** to maintain steady transparency growth
 - Average farm: 85%+ score achievable in 30 days
 - Daily logging: Just 3-5 minutes total
-- Premium unlocked: 15-30% pricing boost at 85%+""",
+- Positioning: a more complete record gives buyers more to evaluate""",
                     "practical_steps": [
                         "Open Quick Add and create your first event using smart templates",
                         "Test all 3 creation methods: templates, voice capture, and AI suggestions",
@@ -2148,7 +2186,7 @@ Example Consumer View:
 
 **Important:** Photos are essential for chemical events — missing them can reduce that event's score contribution by up to 50%.
 
-**Real Impact:** 85%+ transparency scores unlock 15-30% premium pricing opportunities.""",
+**Real Impact:** a more complete record gives buyers more to evaluate.""",
                 "category": "transparency",
                 "is_featured": True,
             },
@@ -2160,7 +2198,7 @@ Example Consumer View:
 **Standard Level:** Smartphone + GPS auto-location
 **Advanced Level:** Blockchain verification for premium trust
 
-**Getting Started:** 90% of farmers start with their phone and see immediate transparency score improvements within the first week of logging events.""",
+**Getting Started:** most farmers start with their phone and see their transparency score move improvements within the first week of logging events.""",
                 "category": "setup",
                 "is_featured": True,
             },
@@ -2298,7 +2336,7 @@ Example Consumer View:
 - Time required: Just 3-5 minutes daily total
 
 **Premium Unlocked:**
-85%+ transparency score = 15-30% premium pricing opportunities!""",
+A more complete record gives buyers more to evaluate.""",
                 "category": "transparency",
                 "is_featured": True,
             },
@@ -2306,5 +2344,9 @@ Example Consumer View:
 
         for faq_data in faqs_data:
             faq, created = FarmerQuestionAnswer.objects.get_or_create(question=faq_data["question"], defaults=faq_data)
+            if not created and getattr(self, "refresh", False):
+                for field, value in faq_data.items():
+                    setattr(faq, field, value)
+                faq.save()
             if created:
                 self.stdout.write(f"Created FAQ: {faq.question[:50]}...")

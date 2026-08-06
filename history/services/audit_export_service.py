@@ -15,6 +15,7 @@ import csv
 import io
 import logging
 import os
+import re
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 
@@ -26,10 +27,16 @@ from reportlab.lib.units import inch
 from reportlab.platypus import Image as RLImage
 from reportlab.platypus import KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+from common.us_states import resolve_establishment_state
+
 logger = logging.getLogger(__name__)
 
 # Trazo brand green
 TRAZO_GREEN = colors.HexColor("#4CAF50")
+# Section headings AND table-header fills. #4CAF50 (TRAZO_GREEN) is the brand primary, but
+# white text on it measures 2.78:1 — under the WCAG AA floor of 4.5:1 for 7pt table headers,
+# and it greys out further on a laser printer, which is how an inspector usually reads this.
+# #2E7D32 is the same brand ramp (the app's green.700 active-state token) at 5.13:1.
 TRAZO_GREEN_DARK = colors.HexColor("#2E7D32")
 LIGHT_GRAY = colors.HexColor("#F5F5F5")
 MID_GRAY = colors.HexColor("#CCCCCC")
@@ -62,6 +69,37 @@ PROTECTION_METHOD_LABELS = {
     "other": "Other",
 }
 
+# Compact application-method labels for the audit tables. The canonical list lives in
+# common.field_registry.APPLICATION_METHOD, but several of its labels ("Air-Blast (orchard
+# sprayer)") are written for a form field and are too long for a 0.5" PDF column. The PDF was
+# printing the RAW KEY instead — "air_blast", "fertigation" — which reads as a database dump in
+# a document a certifier signs off.
+APPLICATION_METHOD_LABELS = {
+    "broadcast": "Broadcast",
+    "injection": "Soil injection",
+    "foliar": "Foliar",
+    "drip": "Drip / fertigation",
+    "fertigation": "Fertigation",
+    "banding": "Banded",
+    "ground_spray": "Ground spray",
+    "air_blast": "Air-blast",
+    "aerial": "Aerial",
+    "fumigation": "Fumigation",
+    "chemigation": "Chemigation",
+    "soil_incorporation": "Soil incorporation",
+}
+
+
+def _method_label(value):
+    """Human label for an application method, falling back to a de-slugged key."""
+    if not value:
+        return None
+    key = str(value).strip()
+    if key in APPLICATION_METHOD_LABELS:
+        return APPLICATION_METHOD_LABELS[key]
+    return key.replace("_", " ").capitalize()
+
+
 CHEMICAL_TYPE_LABELS = {
     "FE": "Fertilizer",
     "PE": "Pesticide",
@@ -79,6 +117,7 @@ SOIL_TYPE_LABELS = {
     "GR": "Grazing Management",
     "HD": "Habitat Development",
     "NS": "Nesting / Shelter Structures",
+    "LA": "Lab Analysis",
 }
 
 # Humanize SoilManagementEvent.habitat_type (HD / NS subtypes) for the Biodiversity & Habitat
@@ -149,6 +188,18 @@ PEST_TYPE_LABELS = {
     "PI": "Pest Identification",
     "TA": "Threshold Assessment",
     "IP": "IPM Implementation",
+    "CU": "Cultural / Sanitation Control",
+}
+
+# §E-4 — preventive cultural practices (7 CFR 205.206(a)). Mirrors
+# PestManagementEvent.CULTURAL_PRACTICE_CHOICES.
+CULTURAL_PRACTICE_LABELS = {
+    "mummy_removal": "Mummy nut removal (hand poling)",
+    "sanitation_shake": "Sanitation shake",
+    "brush_shred": "Brush / mummy shredding",
+    "pruning_removal": "Pruning removal and destruction",
+    "field_sanitation": "Field sanitation / debris removal",
+    "trap_crop": "Trap crop",
 }
 
 EQUIPMENT_TYPE_LABELS = {
@@ -171,6 +222,74 @@ WEATHER_TYPE_LABELS = {
     "LH": "Low Humidity",
 }
 
+# Meteorological magnitudes carried in WeatherEvent.extra_data, grouped by concept.
+#
+# Two ground truths this table encodes, both of which the exporter previously got wrong:
+#
+# 1. KEY NAMES. UpdateWeatherEventSerializer writes ``lower_temperature`` (frost),
+#    ``precipitation_amount`` (tropical storm) and ``humidity_level`` (high/low humidity).
+#    The exporter used to probe ``lowest_temperature`` / ``precipitation`` / ``humidity``,
+#    so those three magnitudes NEVER rendered — a frost row showed a blank where the
+#    inspector expected the temperature that triggered the protection measure. Both
+#    spellings are listed because historical rows may carry either; WeatherEvent.clean()
+#    likewise bounds-checks both.
+#
+# 2. UNITS. WeatherTab collects wind in km/h and precipitation in mm (labels read
+#    "Wind Speed (km/h)" / "Precipitation Amount (mm)"), and WeatherEvent's plausibility
+#    bounds are metric to match. The exporter labelled them " mph" and " in", stating the
+#    wrong unit on an inspector-facing document. Hail is genuinely inches (see
+#    ``hail_size_in`` bound); it has no writer today but legacy rows may carry it.
+#
+# Each entry is (keys, unit, prefix). Keys within one entry are SPELLINGS OF THE SAME
+# measurement, ordered most-specific-first: the first present wins, so a row never prints
+# the same reading twice. Distinct measurements get distinct entries — max and min
+# temperature are separate, because a heat event and a frost event mean different things
+# and an event carrying both must show both.
+#
+# The prefix disambiguates: two bare temperatures in one cell ("95°F, 28°F") would leave an
+# inspector guessing which is which, so they render as "max 95°F" and "min 28°F".
+# `unit=None` means "use the event's own temperature unit".
+_WEATHER_MAGNITUDE_GROUPS = (
+    (("highest_temperature",), None, "max "),
+    (("lower_temperature", "lowest_temperature"), None, "min "),
+    (("temperature",), None, ""),
+    (("wind_speed",), " km/h", ""),
+    (("precipitation_amount", "precipitation"), " mm", ""),
+    (("humidity_level", "humidity"), "%", ""),
+    (("hail_size",), " in", ""),
+)
+
+
+def _weather_magnitudes(extra):
+    """Return every magnitude recorded for a weather event, formatted with its unit.
+
+    Returns a list so callers can render all of them — a storm with both a wind speed and
+    a rainfall total has two numbers an inspector needs, and the previous
+    first-match-then-break lost one of them.
+    """
+    if not isinstance(extra, dict):
+        return []
+
+    # The fallback MUST match what the serializer stores when the unit is absent
+    # (history/serializers.py writes extra_data["temperature_unit"] = "C" by default). This
+    # defaulted to "F" and disagreed with that contract, so every event lacking an explicit unit
+    # — all seeded rows, and anything an API client posts without one — printed a frost of -2°C
+    # as "-2°F" on the certifier packet. A 17-degree misstatement changes whether the frost, and
+    # the protective measures logged against it, are even plausible.
+    temp_unit = str(extra.get("temperature_unit") or "C").upper()
+    # A bare "°" would leave an auditor guessing between 28°F (a hard frost) and 28°C
+    # (a warm afternoon), so fall back to the degree sign only if the unit is unreadable.
+    temp_suffix = f"°{temp_unit}" if temp_unit in ("F", "C") else "°"
+
+    out = []
+    for keys, unit, prefix in _WEATHER_MAGNITUDE_GROUPS:
+        for key in keys:
+            value = extra.get(key)
+            if value not in (None, ""):
+                out.append(f"{prefix}{value}{temp_suffix if unit is None else unit}")
+                break  # one reading per measurement, not one per spelling
+    return out
+
 
 def _fmt_date(dt):
     """Format a datetime or date as YYYY-MM-DD; return dash if None."""
@@ -181,6 +300,24 @@ def _fmt_date(dt):
     if isinstance(dt, date):
         return dt.isoformat()
     return str(dt)
+
+
+def _fmt_generated_date():
+    """The report's generation date, explicitly labelled UTC.
+
+    `django.setup()` forces the process timezone to settings.TIME_ZONE ("UTC"),
+    so `date.today()` is the UTC date \u2014 NOT the farm's. A Ventura grower
+    exporting at 18:00 on 15 October got a dossier stamped 16 October, a day
+    that had not started for them, on a document a certifier date-stamps
+    against a deadline.
+
+    We do not store a per-establishment timezone, so inventing a local date
+    would be guessing. Naming the zone removes the ambiguity instead: a
+    certifier reading "2026-08-04 (UTC)" cannot be misled about which day is
+    meant. If per-farm timezones are ever modelled, render the farm's local
+    date here and drop the suffix.
+    """
+    return f"{date.today().isoformat()} (UTC)"
 
 
 def _fmt_float(value, decimals=2):
@@ -236,6 +373,37 @@ def _val(value, fallback="\u2014"):
     return str(value)
 
 
+def _rate_per_area(amount, area, amount_unit, area_unit):
+    """Return "8.00 oz/acre" for an amount applied over an area, or None.
+
+    A label maximum, a manure-loading limit and a nitrogen budget are all written PER UNIT
+    AREA, so the rate — not the total — is the number a reviewer checks an application
+    against. Both exports used to print only the total and leave the division to the reader.
+
+    Returns None rather than guessing when either side is missing or the area is zero.
+    """
+    if amount is None or area is None:
+        return None
+    try:
+        amount_d = Decimal(str(amount))
+        area_d = Decimal(str(area))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+    if area_d <= 0:
+        return None
+    # "acres" -> "acre" so the rate reads "8.00 oz/acre", not "oz/acres".
+    area_unit_singular = (str(area_unit or "").strip()).rstrip("s")
+    if not area_unit_singular:
+        return None
+    numerator_unit = str(amount_unit or "").strip()
+    return f"{_fmt_float(amount_d / area_d)} {numerator_unit}/{area_unit_singular}".strip()
+
+
+# Last-resort ceiling for an uncapped cell. No legitimate audit value approaches this; it
+# exists so a corrupt or pathological field cannot render a single row taller than a page.
+_RUNAWAY_CELL_CHARS = 2000
+
+
 def _truncate(text, max_len=80):
     """Truncate text to max_len characters, appending ellipsis if needed."""
     if text is None:
@@ -246,12 +414,124 @@ def _truncate(text, max_len=80):
     return s[: max_len - 1] + "\u2026"
 
 
+# A credential number: a token carrying at least one digit, e.g. "C-0-123456",
+# "QAL 128844", "128844". Four-digit years are excluded so an expiry date is not
+# mistaken for the licence itself.
+_CREDENTIAL_TOKEN = re.compile(r"[A-Za-z]*[-/]?\d[\w\-/]*")
+_CREDENTIAL_EXPIRY = re.compile(r"exp(?:ires|iry|\.)?\s*:?\s*(\d{4}-\d{2}-\d{2})", re.IGNORECASE)
+# California applicator credentials are NOT interchangeable, and an inspector reads the
+# type as closely as the number: QAL (Qualified Applicator Licence), QAC (Qualified
+# Applicator Certificate), PAC (Private Applicator Certificate), PCA (Pest Control
+# Adviser). Reducing "QAL 128844" to "128844" throws away which one it is.
+_CREDENTIAL_TYPE = re.compile(r"\b(QAL|QAC|PAC|PCA)\b", re.IGNORECASE)
+
+
+def _amendment_nitrogen_kg(ev):
+    """kg of nitrogen applied by a soil amendment, or None when not declared.
+
+    Both the amendment tonnage and the N% are on an AS-RECEIVED (wet) basis — the field
+    help text says so explicitly, because compost analyses also publish a dry-weight
+    column and the two differ by roughly 2x at typical 30-50% moisture.
+
+    Returns None (not 0) when nitrogen was never declared: an undeclared figure is not a
+    zero figure, and rendering "0 kg N" would assert something the grower never said.
+    """
+    pct = getattr(ev, "amendment_nitrogen_percentage", None)
+    qty = getattr(ev, "amendment_amount_numeric", None)
+    if not pct or not qty:
+        return None
+    try:
+        kg = float(qty)
+        unit = (getattr(ev, "amendment_amount_unit", None) or "kg").lower()
+        if unit == "tons":
+            kg *= 1000.0  # metric tons, per the form's own unit label
+        elif unit == "lbs":
+            kg *= 0.453592
+        return kg * (float(pct) / 100.0)
+    except (TypeError, ValueError):
+        return None
+
+
+def _fmt_credential(text):
+    """Reduce a free-text applicator credential to the identifier a certifier needs.
+
+    The "Cert #" column is ~0.85" wide and head-truncates at 20 characters. Growers
+    type prose into it ("CA DPR Qualified Applicator Certificate C-0-123456 (Cat. B,
+    exp. 2027-06-30)"), so head-truncation produced "CA DPR Qualified Ap\u2026" and dropped
+    the certificate number entirely \u2014 the one value the column exists to carry. Pull
+    the credential token (and expiry, if stated) to the front so it always survives.
+
+    Returns the original string unchanged when no number-like token is present:
+    inventing structure from an unparseable value would be worse than showing it.
+    """
+    if not text:
+        return text
+    s = str(text).strip()
+    expiry = _CREDENTIAL_EXPIRY.search(s)
+    # Ignore the expiry substring when hunting for the licence number.
+    hunt = _CREDENTIAL_EXPIRY.sub(" ", s)
+    tokens = [t for t in _CREDENTIAL_TOKEN.findall(hunt) if any(c.isdigit() for c in t)]
+    # A bare 4-digit year is a date, not a licence.
+    tokens = [t for t in tokens if not (len(t) == 4 and t.isdigit())]
+    if not tokens:
+        return s
+    # Keep EVERY distinct credential number, longest first. A PCA who also holds a QAL
+    # legitimately records two, and silently dropping one is the same class of loss as the
+    # truncation this function exists to fix.
+    seen = []
+    for t in sorted(set(tokens), key=len, reverse=True):
+        if t not in seen:
+            seen.append(t)
+    numbers = " / ".join(seen)
+    # Preserve the credential TYPE when the grower stated it explicitly. Only an explicit
+    # abbreviation counts — inferring "QAC" from the prose "Qualified Applicator
+    # Certificate" would be putting a regulatory classification in the grower's mouth.
+    types = {m.group(1).upper() for m in _CREDENTIAL_TYPE.finditer(hunt)}
+    prefix = ""
+    if len(types) == 1:
+        only = types.pop()
+        # "PAC-54-2211" already carries its type — do not render "PAC PAC-54-2211".
+        if not numbers.upper().startswith(only):
+            prefix = f"{only} "
+    out = f"{prefix}{numbers}"
+    return f"{out} exp {expiry.group(1)}" if expiry else out
+
+
 # Minimum narrative length considered "materially complete" for § 205.201(a)
 # sections. Used by both the audit PDF snapshot and the OSP serializer's
 # registry-sync diff so the inspector-facing banners and the PDF never disagree.
 # Research basis: real CCOF / Oregon Tilth OSP templates show per-section
 # narratives average 150-500 words; 400 chars (~70 words) is a reasonable floor.
 OSP_NARRATIVE_MATERIAL_FLOOR = 400
+
+# A character floor measures length, not content. "Test " repeated to 602 characters
+# cleared the 400-char floor and produced "100% of § 205.201(a)(1)-(6) substantively
+# filled" with no DRAFT banner (2026-08-04, defeated in one attempt).
+#
+# Lexical diversity is the robust signal: real narrative uses many distinct words,
+# padding repeats a few. Applied only above MIN_TOKENS so a genuinely terse answer
+# ("No material changes.") is never judged by it.
+PADDING_MIN_TOKENS = 12
+PADDING_MAX_DOMINANT_SHARE = 0.35
+PADDING_MIN_UNIQUE_RATIO = 0.35
+
+
+def looks_like_padding(text) -> bool:
+    """True when a passage is long but says almost nothing.
+
+    Catches word-repetition padding. It does NOT catch a single run of keyboard
+    noise ("tetreterterrtret") — that needs a dictionary, and guessing at it would
+    reject real abbreviations. Callers should not assume this proves quality.
+    """
+    if not text:
+        return False
+    tokens = [t for t in re.split(r"\W+", str(text).lower()) if t]
+    if len(tokens) < PADDING_MIN_TOKENS:
+        return False
+    unique_ratio = len(set(tokens)) / len(tokens)
+    dominant_share = max(tokens.count(t) for t in set(tokens)) / len(tokens)
+    return unique_ratio < PADDING_MIN_UNIQUE_RATIO or dominant_share > PADDING_MAX_DOMINANT_SHARE
+
 
 # Below this structured-input count, a long narrative implies the farmer is
 # describing inputs in prose that aren't wired into the drift detector's
@@ -267,6 +547,81 @@ def _normalize_input_name(name):
     import re
 
     return re.sub(r"[^a-z0-9]+", "", (name or "").lower())
+
+
+# Words that carry no brand identity in a registry product name. Used only to
+# reject a leading-token key that is entirely generic ("All Natural ...").
+_INPUT_NAME_GENERIC_TOKENS = {
+    "the",
+    "and",
+    "for",
+    "all",
+    "to",
+    "of",
+    "organic",
+    "natural",
+    "agricultural",
+    "crop",
+    "plant",
+    "biological",
+    "broad",
+}
+
+# A leading-token key shorter than this is too generic to match on safely
+# ("Down To" → "downto" would match any narrative containing "down to").
+_BRAND_KEY_MIN_CHARS_SINGLE = 6
+_BRAND_KEY_MIN_CHARS_PAIR = 8
+
+
+def _input_name_match_keys(name):
+    """Candidate normalized keys that count as naming `name` in a narrative.
+
+    Registry entries carry the full listing title — "Kocide 3000-O Fungicide
+    Bactericide Dry Flowable" — while a farmer writing their § 205.201(a)(2)
+    narrative says "Kocide 3000". Matching only on the full title reported 5 of
+    7 correctly-named inputs as absent (2026-08-04 walkthrough), which both
+    trains farmers to ignore the warning and pins a correct OSP below 100%.
+
+    So we also accept the *brand head*: the first token, and the first two
+    tokens, of a name that has a droppable descriptor tail (≥ 3 tokens). Length
+    floors keep generic heads out.
+
+    Deliberately biased toward under-warning. Two sibling products sharing a
+    head ("Neptune's Harvest Organic Fish Fertilizer 2-4-1" and "... Fish and
+    Seaweed 2-3-1") both match when the narrative names either one. A missed
+    warning costs a farmer nothing; a false one costs the warning its meaning.
+    """
+    full = _normalize_input_name(name)
+    if not full:
+        return []
+
+    keys = [full]
+    tokens = [t for t in re.split(r"[^a-z0-9]+", (name or "").lower()) if t]
+    if len(tokens) < 3:
+        # 2-token entries ("Elemental sulfur", "Copper oxychloride") ARE the
+        # distinctive name — there is no descriptor tail to drop.
+        return keys
+
+    def _usable(token_slice, floor):
+        key = "".join(token_slice)
+        if len(key) < floor:
+            return None
+        if all(t in _INPUT_NAME_GENERIC_TOKENS for t in token_slice):
+            return None
+        return key
+
+    for candidate in (
+        _usable(tokens[:1], _BRAND_KEY_MIN_CHARS_SINGLE),
+        _usable(tokens[:2], _BRAND_KEY_MIN_CHARS_PAIR),
+    ):
+        if candidate and candidate not in keys:
+            keys.append(candidate)
+    return keys
+
+
+def _name_in_narrative(name, normalized_narrative):
+    """True when `name` is referenced in an already-normalized narrative."""
+    return any(key in normalized_narrative for key in _input_name_match_keys(name))
 
 
 def _compute_registry_sync_diff(*, inputs_narrative, omri_products, wsda_materials, nl_substances):
@@ -285,19 +640,19 @@ def _compute_registry_sync_diff(*, inputs_narrative, omri_products, wsda_materia
     entries = []
     for p in omri_products:
         name = p.product_name or ""
-        norm = _normalize_input_name(name)
-        in_narr = bool(norm) and norm in normalized_narrative
-        entries.append({"source": "OMRI", "name": name, "in_narrative": in_narr})
+        entries.append({"source": "OMRI", "name": name, "in_narrative": _name_in_narrative(name, normalized_narrative)})
     for m in wsda_materials:
         name = m.brand_name or ""
-        norm = _normalize_input_name(name)
-        in_narr = bool(norm) and norm in normalized_narrative
-        entries.append({"source": "WSDA", "name": name, "in_narrative": in_narr})
+        entries.append({"source": "WSDA", "name": name, "in_narrative": _name_in_narrative(name, normalized_narrative)})
     for s in nl_substances:
         name = s.substance_name or ""
-        norm = _normalize_input_name(name)
-        in_narr = bool(norm) and norm in normalized_narrative
-        entries.append({"source": "National List", "name": name, "in_narrative": in_narr})
+        entries.append(
+            {
+                "source": "National List",
+                "name": name,
+                "in_narrative": _name_in_narrative(name, normalized_narrative),
+            }
+        )
     return {
         "registry_total": len(entries),
         "registry_entries": entries,
@@ -511,6 +866,18 @@ class AuditExportService:
         self._photos_prod_failed = 0
         self._photos_prod_errors = []  # list of (url, reason) tuples, capped at 10
 
+    def _establishment_state(self):
+        """Canonical 2-letter state for this production's farm, or None.
+
+        None means "not recorded / not a US state" — callers must treat that as
+        unknown rather than assuming California, but may still choose to keep a
+        state-specific section visible when the underlying data is present.
+        """
+        try:
+            return resolve_establishment_state(self.production.parcel.establishment)
+        except AttributeError:
+            return None
+
     # ------------------------------------------------------------------
     # Style helpers
     # ------------------------------------------------------------------
@@ -594,12 +961,109 @@ class AuditExportService:
         v = _val(value)
         return Paragraph(f"<b>{label}:</b> {v}", self._styles["body"])
 
+    def _total_acreage_phrase(self, est):
+        """Farm acreage, reconciled against the parcels actually in this dossier.
+
+        The bare figure invited the worst possible inspector question. The demo
+        farm printed "Total Acreage: 149.0 acres" a few pages from "Parcel Area:
+        15.0 ha" and two pages from "Split Operation (7 CFR 205.272): No". A
+        certifier reading only the numbers sees 149 against 15+20+25 and asks
+        what is on the other 89 acres.
+
+        ⚠️ THE TWO FIELDS ARE IN DIFFERENT UNITS. `Establishment.total_acreage`
+        is ACRES; `Parcel.area` is HECTARES (see its help_text). 60 ha = 148.3
+        acres, which is the 149 — the land reconciles exactly and there is no
+        gap. A first cut of this method compared 149 against 60 directly and
+        would have printed a fabricated "89 acres unaccounted for, confirm
+        split-operation status" warning into the certifier's copy. Convert
+        before comparing, always.
+        """
+        total = est.total_acreage
+        if not total:
+            return None
+
+        from product.models import Parcel
+
+        HECTARES_TO_ACRES = 2.47105
+        parcel_hectares = sum(p.area or 0 for p in Parcel.objects.filter(establishment=est))
+        if not parcel_hectares:
+            return f"{total} acres"
+
+        parcel_acres = float(parcel_hectares) * HECTARES_TO_ACRES
+        gap = float(total) - parcel_acres
+        # Tolerance absorbs rounding between a hand-entered farm total and the
+        # summed parcel geometry; only a material gap is worth an inspector's
+        # time. 2% or 1 acre, whichever is larger.
+        tolerance = max(1.0, parcel_acres * 0.02)
+        if abs(gap) <= tolerance:
+            return f"{total} acres (parcels in this dossier total {parcel_acres:.1f} acres)"
+        if gap < 0:
+            return (
+                f"{total} acres recorded for the operation, but the parcels in this dossier "
+                f"total {parcel_acres:.1f} acres — the farm-level figure is lower than the land "
+                f"it contains and should be corrected."
+            )
+        return (
+            f"{total} acres total; {parcel_acres:.1f} acres in the parcels covered by this "
+            f"dossier. The remaining {gap:.1f} acres are not represented by a parcel record "
+            f"here — operator to confirm to the inspector whether that land is non-crop "
+            f"(roads, buildings, buffers, unfarmed) or carries production certified "
+            f"separately (see 7 CFR 205.272 split-operation status below)."
+        )
+
+    def _farming_method_phrase(self, est):
+        """Suppress vague self-descriptors on a regulatory document.
+
+        The demo farm carried farming_method="sustainable", which printed on a
+        USDA Organic dossier. "Sustainable" has no definition under 7 CFR 205,
+        is an unsubstantiated general environmental benefit claim of the kind
+        FTC 16 CFR 260.6 targets, and next to a real certification it reads as
+        either padding or an unearned second claim. The organic status is already
+        stated by the Active Certification Summary; a free-text field must not
+        appear to add to it.
+        """
+        raw = (est.farming_method or "").strip()
+        if not raw:
+            return None
+        UNSUBSTANTIATED = {
+            "sustainable",
+            "eco-friendly",
+            "eco friendly",
+            "green",
+            "natural",
+            "regenerative",
+            "beyond organic",
+            "chemical-free",
+            "chemical free",
+            "pesticide-free",
+            "pesticide free",
+        }
+        if raw.lower() in UNSUBSTANTIATED:
+            return (
+                f"Operator-entered: “{raw}” — not a term defined under 7 CFR 205 and not "
+                f"substantiated by this export. Certification status is stated in the Active "
+                f"Certification Summary."
+            )
+        return raw
+
     def _spacer(self, height=0.1):
         return Spacer(1, height * inch)
 
-    def _cell(self, text, max_len=120):
-        """Wrap text in a Paragraph so ReportLab can word-wrap inside table cells."""
-        t = _truncate(text, max_len) if text else "\u2014"
+    def _cell(self, text, max_len=None):
+        """Wrap text in a Paragraph so ReportLab can word-wrap inside table cells.
+
+        Truncation is OPT-IN (2026-08-01). It used to default to 120 characters, and 128 call
+        sites additionally capped at 8-80, which quietly destroyed values in a document whose
+        purpose is to record them: a lab name became "Dellavalle Laboratory Inc., F…", a
+        certifier "Organic Farmers (C…", a cover-crop species "sativ…", and several cells were
+        cut to a character and an ellipsis ("f…", "O…"). Cells are Paragraphs, so ReportLab
+        already wraps them on word boundaries — the cap was never doing the job it looked like
+        it was doing.
+
+        Pass `max_len` only where SHORTENING NARRATIVE is the intent (a long free-text note in
+        a summary row). Never on an identity or regulatory value.
+        """
+        t = _truncate(text, max_len if max_len is not None else _RUNAWAY_CELL_CHARS) if text else "\u2014"
         # Escape XML special characters for Paragraph
         t = t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         return Paragraph(t, self._styles["cell"])
@@ -640,7 +1104,7 @@ class AuditExportService:
     def _base_table_style(self):
         return TableStyle(
             [
-                ("BACKGROUND", (0, 0), (-1, 0), TRAZO_GREEN),
+                ("BACKGROUND", (0, 0), (-1, 0), TRAZO_GREEN_DARK),
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
                 ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
                 ("FONTSIZE", (0, 0), (-1, 0), 8),
@@ -654,8 +1118,11 @@ class AuditExportService:
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
                 ("TOPPADDING", (0, 1), (-1, -1), 3),
                 ("BOTTOMPADDING", (0, 1), (-1, -1), 3),
-                ("LEFTPADDING", (0, 0), (-1, -1), 4),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+                # 3pt, not 4 (2026-08-01): the Input Application Log carries 14 columns, so
+                # 8pt of horizontal padding per column was consuming 1.55" of a 7.0" budget and
+                # squeezing values until words broke mid-character ("Pestici / de").
+                ("LEFTPADDING", (0, 0), (-1, -1), 3),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 3),
             ]
         )
 
@@ -692,6 +1159,32 @@ class AuditExportService:
                     return value.strip()
         return ""
 
+    def _event_description_text(self, ev):
+        """Free-text ``description`` for an event — NOT attributable to the farmer.
+
+        Deliberately separate from :meth:`_event_note_text`. ``description`` may be written by
+        any of the 328+ AI templates, so it must never be folded into a cell that presents text
+        as the grower's own words (see the consumer-side regression where a template's
+        CFR-citing description was rendered in quotes as a farmer's field note).
+
+        It is still substantive audit evidence — on legacy events it is where the §205.206(a)
+        IPM justification and the §205.203(c)(1) grazing interval actually live — so the
+        dossier surfaces it under an explicitly different label rather than dropping it.
+        """
+        return (getattr(ev, "description", None) or "").strip()
+
+    def _event_note_or_description(self, ev):
+        """Note text for single-column tables (weather, business) that have no Source column.
+
+        Same rule as :meth:`_event_description_text`: a description is surfaced but is
+        explicitly marked as record text so it is never read as the grower's own words.
+        """
+        note = self._event_note_text(ev)
+        if note:
+            return note
+        description = self._event_description_text(ev)
+        return f"[Record description] {description}" if description else ""
+
     def _build_event_notes_subtable(self, events, title, type_labels):
         """
         Supplemental notes sub-table (date | type label | note ≤120 chars).
@@ -701,25 +1194,43 @@ class AuditExportService:
         farmer-authored documentation — would overflow them. Renders ONLY
         when at least one event has a non-empty note; returns [] otherwise.
         """
-        noted = [(ev, self._event_note_text(ev)) for ev in events]
-        noted = [(ev, note) for ev, note in noted if note]
+        # Farmer-authored note first; fall back to the record description so the substance is
+        # not lost. The Source column keeps the two apart — a description may be
+        # template-generated, so it is shown as record text, never as the grower's words.
+        noted = []
+        for ev in events:
+            note = self._event_note_text(ev)
+            if note:
+                noted.append((ev, note, "Farmer note"))
+                continue
+            description = self._event_description_text(ev)
+            if description:
+                noted.append((ev, description, "Record description"))
         if not noted:
             return []
 
         elements = [self._spacer(0.15), self._body(f"<b>{title}</b>"), self._spacer(0.05)]
 
-        notes_headers = ["Date", "Type", "Notes"]
+        notes_headers = ["Date", "Type", "Source", "Notes"]
         notes_data = [[self._hdr(h) for h in notes_headers]]
-        for ev, note in noted:
+        for ev, note, source in noted:
             notes_data.append(
                 [
                     self._cell(_fmt_date(ev.date)),
                     self._cell(type_labels.get(ev.type, _val(ev.type))),
-                    self._cell(note, 120),
+                    self._cell(source),
+                    # NOT truncated. 120 chars cut the §205.203(c)(1) grazing interval and the
+                    # §205.206(a) IPM justification mid-sentence — the exact content a
+                    # certifier reads this table for. A 600-char cap was no better: chemical
+                    # event 1004's spinosad justification is 628 characters, so the National
+                    # List citation at the end was still lost. Per the `_cell` contract,
+                    # truncation is opt-in and never applied to a regulatory value; the cell is
+                    # a Paragraph, so ReportLab word-wraps it.
+                    self._cell(note),
                 ]
             )
 
-        notes_widths = [0.7 * inch, 1.0 * inch, 4.9 * inch]
+        notes_widths = [0.7 * inch, 1.0 * inch, 1.0 * inch, 3.9 * inch]
         notes_table = Table(notes_data, colWidths=notes_widths, repeatRows=1)
         notes_table.setStyle(self._base_table_style())
         elements.append(notes_table)
@@ -980,7 +1491,7 @@ class AuditExportService:
 
         cert_label = self.CERTIFICATION_LABELS.get(self.certification_type, self.certification_type.upper())
         meta_rows = [
-            ["Generated", _fmt_date(date.today())],
+            ["Generated", _fmt_generated_date()],
             ["Certification Filter", cert_label],
             ["Production ID", _val(str(p.public_id))],
             ["Lot ID", _val(p.lot_id)],
@@ -1084,7 +1595,18 @@ class AuditExportService:
     # Compliance Snapshot — page-1 executive summary
     # ------------------------------------------------------------------
 
-    def _build_compliance_snapshot(self):
+    def compliance_snapshot_rows(self):
+        """The page-1 Compliance Snapshot as DATA, without building a PDF.
+
+        Extracted from _build_compliance_snapshot() (2026-08-03) so the same rows can feed a
+        dashboard card. This is a pure code move: no condition is recomputed and no
+        regulation logic changed — the renderer below now iterates what this returns.
+
+        Returns a list of dicts: {label, status, detail, section_hint}, where status is one of
+        PASS | REVIEW | FAIL. "REVIEW"/"FAIL" mean the RECORD needs attention in Trazo — the
+        certifying agent makes the compliance determination, not us.
+        """
+
         """
         One-table audit snapshot: ✓ / ⚠ / ✗ for the items an inspector
         scans for first. Goal is a 30-second compliance overview that
@@ -1092,6 +1614,8 @@ class AuditExportService:
         """
 
         from certifications.models import OrganicSystemPlan
+
+        from .record_completeness import summarize_chemical_events
 
         p = self.production
 
@@ -1177,7 +1701,17 @@ class AuditExportService:
         # - Windrow: 15+ days at temp, 5+ turnings.
         # - Static aerated / in-vessel: 3+ days at temp.
         # Missing C:N / method / temp / duration → REVIEW. C:N out of range → FAIL.
-        compost_events = [ev for ev in soils if ev.type == "CO"]
+        # `type == "CO"` alone was a FALSE CLEAN. The soil form offers
+        # "Compost - Organic amendment" as an `amendment_type` on the OM (organic matter)
+        # subtype, so a real 170-ton OMRI compost application is stored as OM/compost and was
+        # never inspected — the dossier then printed "No compost events to validate" as
+        # DOCUMENTED on a production that had applied compost. An unevaluated application must
+        # reach the § 205.203(c)(2) classifier, not bypass it.
+        compost_events = [
+            ev
+            for ev in soils
+            if ev.type == "CO" or (getattr(ev, "amendment_type", None) or "").strip().lower() == "compost"
+        ]
         compost_compliant = 0
         compost_missing_cn = 0
         compost_cn_out_of_range = 0
@@ -1304,11 +1838,31 @@ class AuditExportService:
         # should exist. Rinse-step documentation lands in P0-6.
         any_shared_equipment = any(ev.shared_with_conventional for ev in production_events)
         em_cleaning_events = [ev for ev in production_events if ev.type == "EM"]
-        em_fully_documented = sum(
-            1
-            for ev in em_cleaning_events
-            if ev.cleaning_date and (ev.cleaning_method or "").strip() and (ev.cleaned_by or "").strip()
-        )
+
+        def _is_documented_cleaning(ev):
+            return bool(ev.cleaning_date and (ev.cleaning_method or "").strip() and (ev.cleaned_by or "").strip())
+
+        em_fully_documented = sum(1 for ev in em_cleaning_events if _is_documented_cleaning(ev))
+
+        # §E-5 — per-operation cleaning evidence. The aggregate test above answers "does this
+        # operation keep cleaning records at all"; it cannot answer "was THIS shared-equipment
+        # pass preceded by a cleaning", which is what § 205.272 actually asks. Where a grower
+        # links the covering EM event, report that directly.
+        #
+        # The aggregate remains the verdict when NO links are in use, so an operation that has
+        # not adopted the field is judged exactly as before rather than being retroactively
+        # downgraded for a record-keeping feature that did not exist when it logged its season.
+        # A cleaning event is not an operation that needs cleaning coverage — asking the
+        # wash-down record to reference a wash-down is circular, and counting it would report
+        # "1/2 covered" for a season with exactly one harvest and its cleaning.
+        shared_operations = [ev for ev in production_events if ev.shared_with_conventional and ev.type != "EM"]
+        linked_shared_operations = [ev for ev in shared_operations if ev.equipment_cleaning_event_id]
+        covered_shared_operations = [
+            ev
+            for ev in linked_shared_operations
+            if _is_documented_cleaning(ev.equipment_cleaning_event)
+            and (not ev.date or not ev.equipment_cleaning_event.date or ev.equipment_cleaning_event.date <= ev.date)
+        ]
 
         # Contamination incidents per § 205.201(b). Both fields must be non-empty.
         contamination_events = [ev for ev in gen_events if ev.is_contamination_incident]
@@ -1324,31 +1878,6 @@ class AuditExportService:
         # supporting record is on file. Colors are kept; only the displayed word and
         # the legend change. Internal status codes stay PASS/REVIEW/FAIL so all the
         # row-building logic below is untouched.
-        def status_paragraph(status):
-            color = {"PASS": "#2E7D32", "REVIEW": "#E65100", "FAIL": "#B71C1C"}.get(status, "#555555")
-            mark = {"PASS": "DOCUMENTED", "REVIEW": "REVIEW", "FAIL": "GAP"}.get(status, status)
-            return Paragraph(
-                f'<b><font color="{color}">{mark}</font></b>',
-                ParagraphStyle("snap_status", parent=self._styles["body"], fontSize=8, alignment=TA_CENTER),
-            )
-
-        def detail_paragraph(text):
-            return Paragraph(
-                self._safe_narrative(str(text)),
-                ParagraphStyle("snap_detail", parent=self._styles["body"], fontSize=8, leading=10),
-            )
-
-        def detail_paragraph_with_hint(detail_text, hint_text):
-            """Escape the data-origin detail, then append a trusted-origin
-            section-hint fragment verbatim. The hint is Trazo-authored and
-            safe to pass as ReportLab inline markup (``<i>...</i>``); the
-            detail comes from user/DB data and must be escaped."""
-            safe_detail = self._safe_narrative(str(detail_text))
-            return Paragraph(
-                f"{safe_detail} <i>({hint_text})</i>",
-                ParagraphStyle("snap_detail", parent=self._styles["body"], fontSize=8, leading=10),
-            )
-
         # Build rows. Each row: (Requirement, status PASS/REVIEW/FAIL, detail).
         snapshot_rows = []
 
@@ -1452,6 +1981,39 @@ class AuditExportService:
                     f"{chems_with_supplier}/{len(chemicals)} inputs have supplier on file",
                 )
             )
+
+        # Record completeness — does each chemical event itself carry what an inspector reads:
+        # product name, amount, area, target pest (see history/services/record_completeness.py).
+        # Distinct from "Input traceability" above, which only asks whether a SUPPLIER is on file.
+        # A spray record with a supplier but no rate or target pest passes that check and fails
+        # this one — every field here is `blank=True, null=True` at the model level, so nothing
+        # upstream of this row currently catches it.
+        if not chemicals:
+            snapshot_rows.append(
+                ("Record completeness — chemical (§ 205.103(b)(2))", "PASS", "No chemical inputs applied")
+            )
+        else:
+            record_summary = summarize_chemical_events(chemicals)
+            if record_summary.all_complete:
+                snapshot_rows.append(
+                    (
+                        "Record completeness — chemical (§ 205.103(b)(2))",
+                        "PASS",
+                        f"{record_summary.complete}/{record_summary.total} chemical records have product, amount, area (and target pest where applicable)",
+                    )
+                )
+            else:
+                missing_summary = ", ".join(
+                    f"{label} ({count})"
+                    for label, count in sorted(record_summary.missing_field_counts.items(), key=lambda kv: -kv[1])
+                )
+                snapshot_rows.append(
+                    (
+                        "Record completeness — chemical (§ 205.103(b)(2))",
+                        "FAIL",
+                        f"{record_summary.incomplete}/{record_summary.total} chemical records missing required fields — {missing_summary}",
+                    )
+                )
 
         # Compost compliance — C:N out of range is a hard FAIL (pile reverts to
         # raw manure). Pathway info is surfaced in every case so the inspector
@@ -1611,6 +2173,32 @@ class AuditExportService:
                     "No equipment shared with conventional operations",
                 )
             )
+        elif linked_shared_operations:
+            # The grower is using per-operation links, so report what they actually establish.
+            covered = len(covered_shared_operations)
+            total = len(shared_operations)
+            if covered == total:
+                snapshot_rows.append(
+                    (
+                        "Contamination prevention (§ 205.272)",
+                        "PASS",
+                        (
+                            f"All {total} shared-equipment operation(s) reference a documented "
+                            "cleaning event performed beforehand"
+                        ),
+                    )
+                )
+            else:
+                snapshot_rows.append(
+                    (
+                        "Contamination prevention (§ 205.272)",
+                        "REVIEW",
+                        (
+                            f"{covered}/{total} shared-equipment operation(s) reference a documented "
+                            "prior cleaning — link the covering EM cleaning event on the remainder"
+                        ),
+                    )
+                )
         elif not em_cleaning_events:
             snapshot_rows.append(
                 (
@@ -1805,7 +2393,10 @@ class AuditExportService:
         # OFPP (§ 205.201(a)(3)) — page-1 signal. A suspicious-filename upload
         # is a harder FAIL than "not uploaded" because it looks compliant at a
         # glance. Inspector must open the document to confirm.
-        ofpp_flags = self._ofpp_flags()
+        # compute_hash=False: the snapshot rows never display doc_hash, and hashing the OFPP
+        # document is a blocking S3 GET. Skipping it is what makes these rows cheap enough to
+        # serve on a dashboard request.
+        ofpp_flags = self._ofpp_flags(compute_hash=False)
         if not ofpp_flags["establishment"]:
             pass  # no snapshot row when establishment missing — covered elsewhere
         elif not ofpp_flags["uploaded"]:
@@ -1848,6 +2439,72 @@ class AuditExportService:
             )
         )
 
+        # Deterministic pointer to the section carrying the full evidence for any row that is
+        # not PASS. Travels with the data so a non-PDF caller gets the same breadcrumb.
+        section_hint_by_label = {
+            "Organic System Plan (§ 205.201)": "Organic System Plan section",
+            "Unapproved-input findings (§ 205.400(f)(2))": "Unapproved-Input Findings section",
+            "Input traceability (§ 205.103)": "Chemical Log section",
+            "Record completeness — chemical (§ 205.103(b)(2))": "Chemical Log section",
+            "Compost (§ 205.203(c)(2))": "Soil Management section",
+            "Raw manure interval (§ 205.203(c)(1))": "Soil Management section",
+            "Raw manure interval (§ 205.203(c)(1)(ii))": "Soil Management section",
+            "Raw manure interval (§ 205.203(c)(1)(iii))": "Soil Management section",
+            "Contamination log (§ 205.272)": "General Documentation section",
+            "Land requirements (§ 205.202)": "Farm Overview section",
+            "OFPP (§ 205.201(a)(3))": "SOE Compliance Status section",
+            "Lot traceability (§ 205.307 / § 205.103(b)(2))": "Traceability section",
+            "Documentation depth": "Event logs + Photo Evidence sections",
+        }
+
+        return [
+            {
+                "label": label,
+                "status": status,
+                "detail": detail,
+                "section_hint": (section_hint_by_label.get(label) if status != "PASS" else None),
+            }
+            for label, status, detail in snapshot_rows
+        ]
+
+    def _build_compliance_snapshot(self):
+        """Render the page-1 Compliance Snapshot table.
+
+        The row COMPUTATION lives in compliance_snapshot_rows(); this method only turns those
+        rows into flowables.
+        """
+
+        # Computed once — the row build walks every event relation, so calling it twice would
+        # double that work for no reason.
+        rows = self.compliance_snapshot_rows()
+        snapshot_rows = [(r["label"], r["status"], r["detail"]) for r in rows]
+        section_hint_by_label = {r["label"]: r["section_hint"] for r in rows if r["section_hint"]}
+
+        def status_paragraph(status):
+            color = {"PASS": "#2E7D32", "REVIEW": "#E65100", "FAIL": "#B71C1C"}.get(status, "#555555")
+            mark = {"PASS": "DOCUMENTED", "REVIEW": "REVIEW", "FAIL": "GAP"}.get(status, status)
+            return Paragraph(
+                f'<b><font color="{color}">{mark}</font></b>',
+                ParagraphStyle("snap_status", parent=self._styles["body"], fontSize=8, alignment=TA_CENTER),
+            )
+
+        def detail_paragraph(text):
+            return Paragraph(
+                self._safe_narrative(str(text)),
+                ParagraphStyle("snap_detail", parent=self._styles["body"], fontSize=8, leading=10),
+            )
+
+        def detail_paragraph_with_hint(detail_text, hint_text):
+            """Escape the data-origin detail, then append a trusted-origin
+            section-hint fragment verbatim. The hint is Trazo-authored and
+            safe to pass as ReportLab inline markup (``<i>...</i>``); the
+            detail comes from user/DB data and must be escaped."""
+            safe_detail = self._safe_narrative(str(detail_text))
+            return Paragraph(
+                f"{safe_detail} <i>({hint_text})</i>",
+                ParagraphStyle("snap_detail", parent=self._styles["body"], fontSize=8, leading=10),
+            )
+
         header = [
             Paragraph(
                 "<b>Compliance check</b>",
@@ -1869,20 +2526,6 @@ class AuditExportService:
         # evidence. Without this, a FAIL row on page 1 reads as an unresolved
         # finding rather than a "see page N" breadcrumb. Key is the row label
         # as written above; value is the downstream section header text.
-        section_hint_by_label = {
-            "Organic System Plan (§ 205.201)": "Organic System Plan section",
-            "Unapproved-input findings (§ 205.400(f)(2))": "Unapproved-Input Findings section",
-            "Input traceability (§ 205.103)": "Chemical Log section",
-            "Compost (§ 205.203(c)(2))": "Soil Management section",
-            "Raw manure interval (§ 205.203(c)(1))": "Soil Management section",
-            "Raw manure interval (§ 205.203(c)(1)(ii))": "Soil Management section",
-            "Raw manure interval (§ 205.203(c)(1)(iii))": "Soil Management section",
-            "Contamination log (§ 205.272)": "General Documentation section",
-            "Land requirements (§ 205.202)": "Farm Overview section",
-            "OFPP (§ 205.201(a)(3))": "SOE Compliance Status section",
-            "Lot traceability (§ 205.307 / § 205.103(b)(2))": "Traceability section",
-            "Documentation depth": "Event logs + Photo Evidence sections",
-        }
         table_data = [header]
         for label, status, detail in snapshot_rows:
             hint = None
@@ -1908,7 +2551,7 @@ class AuditExportService:
         snap_table.setStyle(
             TableStyle(
                 [
-                    ("BACKGROUND", (0, 0), (-1, 0), TRAZO_GREEN),
+                    ("BACKGROUND", (0, 0), (-1, 0), TRAZO_GREEN_DARK),
                     ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
                     ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
                     ("FONTSIZE", (0, 0), (-1, 0), 8),
@@ -2553,8 +3196,8 @@ class AuditExportService:
                 "GPS Coordinates",
                 f"{est.latitude:.6f}, {est.longitude:.6f}" if est.latitude and est.longitude else None,
             ),
-            ("Total Acreage", f"{est.total_acreage} acres" if est.total_acreage else None),
-            ("Farming Method", est.farming_method),
+            ("Total Acreage", self._total_acreage_phrase(est)),
+            ("Farming Method", self._farming_method_phrase(est)),
             # "Certifications" legacy text field — suppressed here because the
             # structured Active Certification Summary table renders the real data.
             # Leaving this row would duplicate and confuse.
@@ -2593,7 +3236,14 @@ class AuditExportService:
         parcel_area = ""
         try:
             parcel_name = p.parcel.name
-            parcel_area = f"{p.parcel.area} ha" if p.parcel.area else ""
+            # `Parcel.area` is hectares. This document is read by US certifiers
+            # and states farm size in acres elsewhere, so a bare "15.0 ha" three
+            # pages from "149.0 acres" reads as a contradiction rather than the
+            # same land in two units. Lead with acres, keep the stored value.
+            if p.parcel.area:
+                parcel_area = f"{float(p.parcel.area) * 2.47105:.1f} acres ({p.parcel.area} ha)"
+            else:
+                parcel_area = ""
         except AttributeError:
             pass
 
@@ -2658,7 +3308,7 @@ class AuditExportService:
             "Product",
             "Type",
             "NPK / Conc.",
-            "Amount",
+            "Amount / Rate",
             "Area",
             "Method",
             "Target",
@@ -2667,7 +3317,9 @@ class AuditExportService:
 
         # Add EPA/WPS columns for organic and globalgap certifications
         if self.certification_type in ("organic", "globalgap", "roc", "all"):
-            app_headers.extend(["REI (hrs)", "PHI (days)", "Buffer (m)"])
+            # Units without parentheses: "(days)" is wider than "days" by more than the column
+            # can spare, and the parens carry no meaning a certifier needs.
+            app_headers.extend(["REI hrs", "PHI days", "Buffer"])
 
         # 7 CFR 205.206 + EPA WPS — restricted-use materials require EPA reg #
         # documentation for organic and ROC inspections, not just GlobalG.A.P.
@@ -2683,9 +3335,19 @@ class AuditExportService:
         for ev in events:
             amount = ""
             if ev.volume_numeric:
-                amount = f"{_fmt_float(ev.volume_numeric)} {_val(ev.volume_unit, '')}"
+                amount = f"{_fmt_float(ev.volume_numeric)} {_val(ev.volume_unit, '')}".strip()
             elif ev.volume:
-                amount = _val(ev.volume)
+                # Append the unit here too — a bare "420" is uninterpretable
+                # (gal? L? lb?) and cannot support a mass-balance or rate review.
+                amount = f"{_val(ev.volume)} {_val(ev.volume_unit, '')}".strip()
+
+            # Rate per unit area, derived (2026-08-01). A label maximum is written per ACRE
+            # ("4-10 fl oz/acre, 29 fl oz/acre/season"), so the rate — not the total — is the
+            # number an inspector checks the application against. The export was printing only
+            # the total, leaving the reviewer to divide by the area themselves.
+            rate_txt = _rate_per_area(ev.volume_numeric, ev.area_numeric, ev.volume_unit, ev.area_unit)
+            if rate_txt:
+                amount = f"{amount} ({rate_txt})" if amount else rate_txt
 
             area = ""
             if ev.area_numeric:
@@ -2698,27 +3360,55 @@ class AuditExportService:
             # block for lot traceability (it also rides the Production/Pest/Irrigation tables and
             # the CA PUR export). Wraps to a second line in the narrow column.
             if ev.block_id:
-                area = f"{area} · Blk {ev.block_id}".strip(" ·") if area else f"Blk {ev.block_id}"
+                # Growers name blocks "Block 1", so a blind "Blk " prefix produced
+                # "Blk Block 1" on the live export. Only prefix when the id is a bare
+                # designator ("1", "B-7") that would otherwise read as a stray number.
+                block_txt = str(ev.block_id).strip()
+                if not re.match(r"(?i)^(blk|block|bl)\b", block_txt):
+                    block_txt = f"Blk {block_txt}"
+                area = f"{area} · {block_txt}".strip(" ·") if area else block_txt
 
             # Use structured application method with fallback to legacy field
-            method = ev.application_method_structured or ev.way_of_application
+            method = _method_label(ev.application_method_structured or ev.way_of_application)
 
+            # NOTE: growth_stage / is_fertigation / authorizer_name are NOT folded into this
+            # table. It is hard against the 7.0" portrait budget — Target is 0.55" in the
+            # organic variant — so appending to a cell here would wrap every row to four or
+            # five lines on the most-read table in the document. They live in the
+            # "Application Context" sub-table below instead.
             row = [
                 self._cell(_fmt_date(ev.date)),
-                self._cell(ev.commercial_name, 40),
+                # No length caps on identity fields (2026-08-01). Cells are Paragraphs, so
+                # ReportLab already wraps them on word boundaries; the caps were additionally
+                # chopping the value with an ellipsis. The live export read "Organic Gem Liquid
+                # Fish Fertilizer 3-3-…", losing the NPK grade, and "Entrust SC Naturalyte
+                # Insect Control (a.i. Spinosad 22.5%) [mfr: Cort…", losing the manufacturer —
+                # in the document whose purpose is to fully identify what was applied
+                # (7 CFR 205.103(b)). The default 120-char cap stays as a runaway guard.
+                self._cell(ev.commercial_name),
                 self._cell(CHEMICAL_TYPE_LABELS.get(ev.type, _val(ev.type))),
                 self._cell(ev.concentration),
                 self._cell(amount or None),
                 self._cell(area or None),
                 self._cell(method),
-                self._cell(ev.target_pest_disease, 40),
+                self._cell(ev.target_pest_disease),
                 self._cell(ev.get_organic_approved_display() if ev.organic_approved else None),
             ]
 
             if self.certification_type in ("organic", "globalgap", "roc", "all"):
                 row.append(self._cell(str(ev.rei_hours) if ev.rei_hours is not None else None))
                 row.append(self._cell(str(ev.phi_days) if ev.phi_days is not None else None))
-                row.append(self._cell(_fmt_float(ev.buffer_zone_meters) if ev.buffer_zone_meters is not None else None))
+                # Feet first, metres retained (2026-08-01). The column stores metres, but this
+                # is a US document: every other measure on the row is acres and ounces, and a
+                # CA DPR permit condition states buffers in FEET. "15" alone made a reviewer
+                # convert in their head against the permit they are holding.
+                if ev.buffer_zone_meters is not None:
+                    _buffer_ft = _fmt_float(Decimal(str(ev.buffer_zone_meters)) * Decimal("3.28084"), 0)
+                    # Whole numbers: a buffer is a pace-it-out distance, and "15.00 m" is
+                    # wider than the column can hold without breaking mid-token.
+                    row.append(self._cell(f"{_buffer_ft} ft ({_fmt_float(ev.buffer_zone_meters, 0)} m)"))
+                else:
+                    row.append(self._cell(None))
 
             if self.certification_type in ("organic", "globalgap", "roc", "all"):
                 row.append(self._cell(ev.epa_registration_number))
@@ -2729,29 +3419,55 @@ class AuditExportService:
         # Dynamic column widths based on columns present
         # Target total <=7.0" (letter portrait, 0.75" margins). Globalgap+all cert
         # packs the most columns and must still fit — trimmed Target + EPA Reg to budget.
-        base_widths = [
-            0.55 * inch,  # Date
-            0.9 * inch,  # Product
-            0.5 * inch,  # Type
-            0.55 * inch,  # NPK / Conc.
-            0.55 * inch,  # Amount
-            0.45 * inch,  # Area
-            0.55 * inch,  # Method
-            0.65 * inch,  # Target
-            0.55 * inch,  # Organic
-        ]
+        # Widths are declared per variant rather than as base-minus-deltas (2026-08-01). The
+        # delta form hid what the packed variant actually ended up with, and it had starved two
+        # columns below the width of their own contents: Date broke "2025-07-08" across two
+        # lines and Type broke "Pesticide" mid-word into "Pestici / de".
+        #
+        # Sizing rule: a column must fit its widest ATOMIC token — a date, a type label, a
+        # header word — on one line at 7pt Helvetica, less 6pt of padding. Multi-word values
+        # (product names, target pests) are expected to wrap and are given area, not width.
+        # Widths are declared per variant rather than as base-minus-deltas (2026-08-01). The
+        # delta form hid what the packed variant actually ended up with, and it had starved
+        # columns below the width of their own contents: Date broke "2025-07-08" over two lines,
+        # Type broke "Pesticide" into "Pestici / de", Method broke "Fertigation", Target broke
+        # "orangeworm". A certifier document cannot look like that, and neither can a screenshot
+        # of one.
+        #
+        # Every width below is measured, not guessed: it is at least
+        # `stringWidth(longest_atomic_token) + 6pt padding` for that column, where the atomic
+        # tokens are the header words, the type/method labels, a date, and an EPA number.
+        # Multi-word values (product names, target pests) are meant to wrap, so the leftover
+        # budget goes to them. test_audit_pdf_column_fit.py holds this true.
         if self.certification_type in ("organic", "globalgap", "roc", "all"):
-            base_widths.extend([0.4 * inch, 0.4 * inch, 0.4 * inch])  # REI, PHI, Buffer
-        if self.certification_type in ("organic", "globalgap", "roc", "all"):
-            base_widths.append(0.5 * inch)  # EPA Reg
-            # RUP is a narrow Yes/— column. Adding it pushes the packed
-            # variant past the 7.0" budget, so trim Product, NPK, Target and
-            # Organic to compensate (base variant keeps its original widths).
-            base_widths.append(0.35 * inch)  # RUP
-            base_widths[1] -= 0.10 * inch  # Product 0.9 -> 0.8
-            base_widths[3] -= 0.05 * inch  # NPK / Conc. 0.55 -> 0.5
-            base_widths[7] -= 0.10 * inch  # Target 0.65 -> 0.55
-            base_widths[8] -= 0.05 * inch  # Organic 0.55 -> 0.5
+            base_widths = [
+                0.64 * inch,  # Date        — "2025-07-08"
+                0.65 * inch,  # Product     — wraps; longest word "Naturalyte"
+                0.53 * inch,  # Type        — "Pesticide"
+                0.45 * inch,  # NPK / Conc. — header "Conc."
+                0.51 * inch,  # Amount      — header "Amount"
+                0.40 * inch,  # Area        — wraps; "acres", block designator
+                0.60 * inch,  # Method      — "Fertigation"
+                0.68 * inch,  # Target      — wraps; "transitella)"
+                0.51 * inch,  # Organic     — "certified"
+                0.30 * inch,  # REI hrs
+                0.36 * inch,  # PHI days
+                0.43 * inch,  # Buffer m
+                0.60 * inch,  # EPA Reg #   — "62719-621"
+                0.34 * inch,  # RUP
+            ]  # = 7.00 in
+        else:
+            base_widths = [
+                0.64 * inch,  # Date
+                0.95 * inch,  # Product
+                0.53 * inch,  # Type
+                0.45 * inch,  # NPK / Conc.
+                0.51 * inch,  # Amount
+                0.50 * inch,  # Area
+                0.60 * inch,  # Method
+                0.85 * inch,  # Target
+                0.51 * inch,  # Organic
+            ]  # = 5.54 in
 
         t = Table(app_data, colWidths=base_widths, repeatRows=1)
         t.setStyle(self._base_table_style())
@@ -2765,6 +3481,14 @@ class AuditExportService:
             elements.append(self._body("<b>Input Purchase Traceability (7 CFR 205.103)</b>"))
             elements.append(self._spacer(0.05))
 
+            # The CA DPR restricted-materials permit is issued by a California county
+            # Ag Commissioner, so the column is meaningless on an out-of-state packet —
+            # an OEFFA or PCO inspector was being handed a permanently blank column
+            # titled "CA DPR Permit". Show it for a CA operation, OR whenever any event
+            # actually carries a permit: never hide data the grower already entered just
+            # because the farm's state field is blank or wrong.
+            show_dpr_permit = self._establishment_state() == "CA" or any(ev.ca_dpr_permit_number for ev in events)
+
             trace_headers = [
                 "Date Applied",
                 "Product",
@@ -2775,8 +3499,9 @@ class AuditExportService:
                 "Qty Purchased",
                 "Applicator",
                 "Cert #",
-                "CA DPR Permit",
             ]
+            if show_dpr_permit:
+                trace_headers.append("CA DPR Permit")
             trace_header_row = [self._hdr(h) for h in trace_headers]
             trace_data = [trace_header_row]
             missing_supplier = 0
@@ -2808,41 +3533,72 @@ class AuditExportService:
                     product_bits.append(f"[mfr: {ev.manufacturer}]")
                 product_txt = " ".join(b for b in product_bits if b).strip()
 
-                trace_data.append(
-                    [
-                        self._cell(_fmt_date(ev.date)),
-                        self._cell(product_txt or None, 70),
-                        self._cell(ev.supplier_name, 35),
-                        self._cell(_fmt_date(ev.purchase_date) if ev.purchase_date else None),
-                        self._cell(ev.purchase_invoice, 25),
-                        self._cell(ev.chemical_lot_number, 20),
-                        self._cell(qty_purchased or None),
-                        self._cell(ev.applicator_name or ev.performed_by, 25),
-                        self._cell(ev.applicator_certification, 20),
-                        self._cell(dpr_permit, 40),
-                    ]
-                )
+                trace_row = [
+                    self._cell(_fmt_date(ev.date)),
+                    # Same reasoning as Table 1: these identify the material and its
+                    # source for a mass-balance review, so they must not be chopped.
+                    self._cell(product_txt or None),
+                    self._cell(ev.supplier_name),
+                    self._cell(_fmt_date(ev.purchase_date) if ev.purchase_date else None),
+                    self._cell(ev.purchase_invoice),
+                    self._cell(ev.chemical_lot_number),
+                    self._cell(qty_purchased or None),
+                    # authorizer_name is NOT folded in here — this column is 0.70" and the
+                    # table is at the 7.0" budget. See the Application Context sub-table.
+                    self._cell(ev.applicator_name or ev.performed_by),
+                    # 26 fits "C-0-123456 exp 2027-06-30" (25) without ellipsising the
+                    # expiry. The cell is a wrapping Paragraph, so this is a truncation
+                    # guard, not a line-width limit — and the number now leads, so any
+                    # future truncation costs the expiry, never the licence.
+                    self._cell(_fmt_credential(ev.applicator_certification)),
+                ]
+                if show_dpr_permit:
+                    trace_row.append(self._cell(dpr_permit))
+                trace_data.append(trace_row)
 
                 if not ev.supplier_name:
                     missing_supplier += 1
 
             # Column widths: Purchase Date widened to fit "YYYY-MM-DD" without
             # wrapping; Supplier widened so common org names ("Hydra Organics",
-            # "Pacific Gold Dairy") render fully; Cert # narrowed to compensate.
-            # CA DPR Permit gets 0.95" so "PERMIT-# exp YYYY-MM-DD" wraps to
+            # "Pacific Gold Dairy") render fully.
+            # CA DPR Permit gets 0.85" so "PERMIT-# exp YYYY-MM-DD" wraps to
             # two clean lines; total stays inside the 7.0" budget.
-            trace_widths = [
-                0.55 * inch,  # Date Applied
-                0.75 * inch,  # Product
-                0.85 * inch,  # Supplier
-                0.75 * inch,  # Purchase Date
-                0.70 * inch,  # Invoice #
-                0.55 * inch,  # Lot #
-                0.65 * inch,  # Qty Purchased
-                0.70 * inch,  # Applicator
-                0.45 * inch,  # Cert #
-                0.85 * inch,  # CA DPR Permit
-            ]
+            # 2026-07-31: Cert # 0.45" -> 0.70". At 0.45" ReportLab broke a real CA
+            # licence ("C-0-123456") across FIVE lines — "C-0-12 / 3456 / exp 20 /
+            # 27-06-3 / 0" — which is not a readable certificate number on an audit
+            # packet. 0.70" holds a 10-char licence on one line with the expiry
+            # beneath. Paid for out of Qty Purchased, which is blank for every input
+            # a grower buys by the container rather than by weight.
+            # 2026-08-02: when the DPR column is dropped for a non-CA operation its
+            # 0.85" is returned to Product (+0.45) and Supplier (+0.40) rather than
+            # left as a gap — those two are the columns the comments above record as
+            # having been squeezed. Both layouts total exactly 7.0".
+            if show_dpr_permit:
+                trace_widths = [
+                    0.55 * inch,  # Date Applied
+                    0.75 * inch,  # Product
+                    0.85 * inch,  # Supplier
+                    0.75 * inch,  # Purchase Date
+                    0.70 * inch,  # Invoice #
+                    0.55 * inch,  # Lot #
+                    0.60 * inch,  # Qty Purchased
+                    0.70 * inch,  # Applicator
+                    0.70 * inch,  # Cert #
+                    0.85 * inch,  # CA DPR Permit
+                ]
+            else:
+                trace_widths = [
+                    0.55 * inch,  # Date Applied
+                    1.20 * inch,  # Product
+                    1.25 * inch,  # Supplier
+                    0.75 * inch,  # Purchase Date
+                    0.70 * inch,  # Invoice #
+                    0.55 * inch,  # Lot #
+                    0.60 * inch,  # Qty Purchased
+                    0.70 * inch,  # Applicator
+                    0.70 * inch,  # Cert #
+                ]
             t2 = Table(trace_data, colWidths=trace_widths, repeatRows=1)
             t2.setStyle(self._base_table_style())
             elements.append(t2)
@@ -2938,11 +3694,11 @@ class AuditExportService:
                 ver_data.append(
                     [
                         self._cell(_fmt_date(ev.date)),
-                        self._cell(ev.commercial_name, 30),
-                        self._cell(omri_display, 15),
-                        self._cell(nl_display, 30),
-                        self._cell(status_display, 16),
-                        self._cell(osp_approval, 20),
+                        self._cell(ev.commercial_name),
+                        self._cell(omri_display),
+                        self._cell(nl_display),
+                        self._cell(status_display),
+                        self._cell(osp_approval),
                     ]
                 )
 
@@ -3022,9 +3778,184 @@ class AuditExportService:
                     )
                 )
 
+        elements.extend(self._build_application_context_subtable(events))
+        elements.extend(self._build_micronutrient_subtable(events))
+
         # --- Application Notes (mirrors the Production Event Notes pattern) ---
         elements.extend(self._build_event_notes_subtable(events, "Application Notes", CHEMICAL_TYPE_LABELS))
 
+        return elements
+
+    # Micronutrient → the test_results key that carries its lab result. Only the four the soil
+    # form collects; the rest resolve to no key and are reported as "not on file" rather than
+    # being silently passed.
+    _MICRONUTRIENT_LAB_KEYS = {
+        "zinc": "zinc_ppm",
+        "boron": "boron_ppm",
+        "manganese": "manganese_ppm",
+        "iron": "iron_ppm",
+    }
+
+    # The nutrients 7 CFR 205.601(j)(6) actually governs: soluble boron products under (j)(6)(ii)
+    # and the sulfates/carbonates/oxides/silicates of zinc, copper, iron, manganese, molybdenum,
+    # selenium and cobalt under (j)(6)(iii). Calcium, magnesium and sulfur are SECONDARY
+    # macronutrients and are allowed on other grounds (gypsum, elemental sulfur, dolomite), so
+    # demanding a documented deficiency for them would misstate the rule to a certifier — the
+    # kind of false flag that makes an operation distrust every other flag in the document.
+    # "other" stays in scope because it may well be molybdenum, selenium or cobalt.
+    _JS601_MICRONUTRIENTS = {"zinc", "boron", "manganese", "iron", "copper", "other"}
+
+    def _build_micronutrient_subtable(self, events):
+        """Micronutrient applications paired with the lab analysis that documents the deficiency.
+
+        7 CFR 205.601(j)(6) permits synthetic micronutrients only where a documented soil or
+        plant-tissue deficiency exists, and never as a defoliant, herbicide or desiccant. So the
+        application on its own is not the record — the application PLUS the analysis is. This
+        table puts them on the same page and states plainly which applications have a matching
+        result on file, so the operation finds the gap before an inspector does.
+
+        The status column reports only what the data shows. An application with no matching lab
+        result is marked REVIEW, not "non-compliant": the deficiency may be documented outside
+        Trazo, and non-synthetic sources of calcium, magnesium and sulfur are permitted on other
+        grounds entirely.
+        """
+        applications = [ev for ev in events if getattr(ev, "micronutrient_type", None)]
+        if not applications:
+            return []
+
+        # Every lab result available in this production, as {test_results key: [(date, ppm)]}.
+        lab_results = {}
+        for sev in self.production.history_soilmanagementevent_events.all():
+            results = sev.test_results if isinstance(sev.test_results, dict) else {}
+            for key in self._MICRONUTRIENT_LAB_KEYS.values():
+                value = results.get(key)
+                if value not in (None, "") and sev.date:
+                    lab_results.setdefault(key, []).append((sev.date, value))
+
+        rows = []
+        unsupported = 0
+        in_scope = 0
+        for ev in applications:
+            nutrient = ev.get_micronutrient_type_display()
+            rate = None
+            if ev.micronutrient_rate is not None:
+                rate = f"{_fmt_float(ev.micronutrient_rate)} {_val(ev.micronutrient_rate_unit, '')}".strip()
+
+            if ev.micronutrient_type not in self._JS601_MICRONUTRIENTS:
+                # A secondary macronutrient: listed for completeness, but (j)(6) does not apply.
+                status = "n/a — not a § 205.601(j)(6) micronutrient"
+            else:
+                in_scope += 1
+                lab_key = self._MICRONUTRIENT_LAB_KEYS.get(ev.micronutrient_type)
+                # A deficiency is only evidence for an application made AFTER it was measured.
+                prior = [(d, v) for d, v in lab_results.get(lab_key, []) if ev.date and d <= ev.date] if lab_key else []
+                if prior:
+                    sample_date, value = max(prior, key=lambda pair: pair[0])
+                    status = f"DOCUMENTED — {value} ppm ({_fmt_date(sample_date)})"
+                else:
+                    status = "REVIEW — no prior lab result on file"
+                    unsupported += 1
+
+            rows.append(
+                [
+                    self._cell(_fmt_date(ev.date)),
+                    self._cell(ev.commercial_name),
+                    self._cell(nutrient),
+                    self._cell(rate),
+                    self._cell(status),
+                ]
+            )
+
+        elements = [
+            Spacer(1, 10),
+            Paragraph(
+                "<b>Micronutrient Applications &amp; Deficiency Basis (7 CFR 205.601(j)(6))</b>",
+                self._sub_header_style(),
+            ),
+        ]
+        table = Table(
+            [[self._hdr(h) for h in ("Date", "Product", "Micronutrient", "Rate", "Deficiency Record")]] + rows,
+            colWidths=[0.75 * inch, 1.6 * inch, 1.15 * inch, 0.9 * inch, 2.0 * inch],  # 6.4"
+            repeatRows=1,
+        )
+        table.setStyle(self._base_table_style())
+        elements.append(table)
+
+        # Counts are over the IN-SCOPE applications only: a gypsum or elemental-sulfur row is
+        # listed above for completeness but is not governed by (j)(6), so counting it either way
+        # would misstate the operation's position.
+        if unsupported:
+            elements.append(
+                Paragraph(
+                    f"{unsupported} of {in_scope} § 205.601(j)(6) micronutrient application(s) have no "
+                    f"prior laboratory result recorded in Trazo. The rule permits synthetic "
+                    f"micronutrients only where a deficiency is documented — log the soil test or "
+                    f"lab analysis (Soil event, Lab Analysis) that supports each application, or "
+                    f"attach the certifier-held documentation.",
+                    self._styles["footer_note"],
+                )
+            )
+        elif in_scope:
+            elements.append(
+                Paragraph(
+                    f"All {in_scope} § 205.601(j)(6) micronutrient application(s) are supported by a "
+                    f"prior laboratory result recorded in Trazo.",
+                    self._styles["footer_note"],
+                )
+            )
+
+        return elements
+
+    def _build_application_context_subtable(self, events):
+        """Crop stage, delivery route and authorisation for each input application.
+
+        These three fields were collected and rendered nowhere. They get their own table
+        rather than being folded into Table 1 or Table 2, both of which are hard against the
+        7.0" portrait budget (Target is 0.55" in the organic variant) — appending to a cell
+        there would wrap every row to four or five lines on the two most-read tables in the
+        document.
+
+        Why an inspector wants each:
+          * Growth stage — the timing a PHI or a bee-safety restriction is judged against.
+            "Spinosad at hull split" is a different record from "spinosad at bloom".
+          * Fertigated — a material delivered through the irrigation system raises
+            § 205.272 water-system contact questions a foliar spray does not.
+          * Authorised by — GLOBALG.A.P. FV-GFS 32.02.01 #10 asks for the
+            technically-responsible person who approved the application, who is often not
+            the operator who made it.
+        """
+        rows = []
+        for ev in events:
+            stage = ev.get_growth_stage_display() if ev.growth_stage else None
+            if not (stage or ev.is_fertigation or ev.authorizer_name):
+                continue
+            rows.append(
+                [
+                    self._cell(_fmt_date(ev.date)),
+                    self._cell(ev.commercial_name),
+                    self._cell(stage),
+                    self._cell("Yes" if ev.is_fertigation else "No"),
+                    self._cell(ev.authorizer_name),
+                ]
+            )
+
+        if not rows:
+            return []
+
+        elements = [
+            Spacer(1, 10),
+            Paragraph(
+                "<b>Application Context — Crop Stage, Delivery &amp; Authorisation</b>",
+                self._sub_header_style(),
+            ),
+        ]
+        table = Table(
+            [[self._hdr(h) for h in ("Date", "Product", "Crop Stage", "Fertigated", "Authorised By")]] + rows,
+            colWidths=[0.75 * inch, 1.9 * inch, 1.35 * inch, 0.8 * inch, 1.6 * inch],
+            repeatRows=1,
+        )
+        table.setStyle(self._base_table_style())
+        elements.append(table)
         return elements
 
     # ------------------------------------------------------------------
@@ -3075,10 +4006,17 @@ class AuditExportService:
                     method = technique
                 elif low_temp not in (None, ""):
                     method = f"Frost protection (to {_val(low_temp)}°C)"
+            # Growth stage dates the operation against the crop rather than the calendar —
+            # a thinning "at fruit set" is the record an inspector reads, not "on 12 May".
+            # Folded into the Type cell; this table is already at the 7.0" portrait budget.
+            type_display = PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type))
+            if ev.growth_stage:
+                type_display = f"{type_display} · {ev.get_growth_stage_display() or ev.growth_stage}"
+
             data.append(
                 [
                     self._cell(_fmt_date(ev.date)),
-                    self._cell(PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type))),
+                    self._cell(type_display),
                     # Description can be long (post-harvest sanitation steps,
                     # lot-tracking details, etc.); let ReportLab word-wrap
                     # inside the column instead of cutting mid-sentence at
@@ -3086,9 +4024,9 @@ class AuditExportService:
                     # walls of text that would blow the row height, but
                     # normal regulatory-detail descriptions fit under it.
                     self._cell(ev.description, 600),
-                    self._cell(method, 30),
+                    self._cell(method),
                     self._cell(area),
-                    self._cell(ev.block_id, 15),
+                    self._cell(ev.block_id),
                     self._cell(fuel),
                     self._cell(str(ev.equipment_hours) if ev.equipment_hours else None),
                     self._cell(ev.performed_by),
@@ -3097,7 +4035,9 @@ class AuditExportService:
 
         col_widths = [
             0.55 * inch,  # Date
-            0.65 * inch,  # Type
+            # Widened 0.65 -> 0.95 in 2026-07 to hold "Thinning · Fruit Set" on two lines
+            # once growth stage was folded in; taken from the table's unused 0.40".
+            0.95 * inch,  # Type (+ growth stage)
             1.7 * inch,  # Description
             0.85 * inch,  # Method (NEW)
             0.6 * inch,  # Area
@@ -3145,13 +4085,13 @@ class AuditExportService:
                 ir_data.append(
                     [
                         self._cell(_fmt_date(ev.date)),
-                        self._cell(water_src, 25),
-                        self._cell(method_disp, 25),
+                        self._cell(water_src),
+                        self._cell(method_disp),
                         self._cell(depth_display),
                         self._cell(_fmt_float(ev.pump_depth_ft) if ev.pump_depth_ft else None),
-                        self._cell(elec_src, 20),
+                        self._cell(elec_src),
                         self._cell(ir_area),
-                        self._cell(ev.block_id, 15),
+                        self._cell(ev.block_id),
                     ]
                 )
 
@@ -3169,15 +4109,24 @@ class AuditExportService:
             ir_table.setStyle(self._base_table_style())
             elements.append(ir_table)
 
-            # --- Irrigation/Well Water Quality Test (7 CFR 205.272 / 205.671) ---
-            # CCOF requires an annual water-source analysis showing no prohibited
-            # substances / contamination. Surfaced from the IR water-test fields; if
-            # irrigation is logged but no test is on file, flag it for the inspector.
+            # --- Irrigation/Well Water Quality Test (CCOF water-source analysis;
+            #     FDA FSMA Produce Safety Rule, 21 CFR 112) ---
+            # Water-quality testing is NOT a 7 CFR Part 205 organic requirement
+            # (§ 205.671 is exclusion-from-sale for residue exceedance; § 205.272 is
+            # commingling/contact prevention). CCOF requires an annual water-source
+            # analysis, and microbial ag-water testing lives in the FDA FSMA Produce
+            # Safety Rule. Surfaced from the IR water-test fields; if irrigation is
+            # logged but no test is on file, flag it for the inspector.
             water_test_events = [
                 ev for ev in ir_events if ev.water_test_date or ev.water_test_lab or ev.water_test_results
             ]
             elements.append(self._spacer(0.12))
-            elements.append(self._body("<b>Irrigation Water Quality Test (7 CFR 205.272 / 205.671)</b>"))
+            elements.append(
+                self._body(
+                    "<b>Irrigation Water Quality Test (CCOF water-source analysis · "
+                    "FDA FSMA Produce Safety Rule, 21 CFR 112)</b>"
+                )
+            )
             elements.append(self._spacer(0.05))
             if water_test_events:
                 wt_data = [[self._hdr(h) for h in ["Date", "Laboratory", "Results", "Block"]]]
@@ -3200,9 +4149,9 @@ class AuditExportService:
                     wt_data.append(
                         [
                             self._cell(_fmt_date(ev.water_test_date) if ev.water_test_date else None),
-                            self._cell(ev.water_test_lab, 30),
-                            self._cell("; ".join(parts) or None, 80),
-                            self._cell(ev.block_id, 15),
+                            self._cell(ev.water_test_lab),
+                            self._cell("; ".join(parts) or None),
+                            self._cell(ev.block_id),
                         ]
                     )
                 wt_table = Table(wt_data, colWidths=[0.8 * inch, 1.6 * inch, 3.6 * inch, 0.6 * inch], repeatRows=1)
@@ -3218,8 +4167,10 @@ class AuditExportService:
                 )
                 elements.append(
                     Paragraph(
-                        "<b>[REVIEW] 7 CFR 205.272:</b> add the irrigation/well water test (date, "
-                        "laboratory, results) so the inspector can verify water-source compliance.",
+                        "<b>[REVIEW] CCOF water-source analysis / FDA FSMA Produce Safety Rule "
+                        "(21 CFR 112):</b> add the irrigation/well water test (date, laboratory, "
+                        "results) so the inspector can verify water-source compliance. Water-quality "
+                        "testing is not itself a 7 CFR Part 205 requirement.",
                         self._warning_style(),
                     )
                 )
@@ -3285,8 +4236,8 @@ class AuditExportService:
                         self._cell(proc_type_display),
                         self._cell(_fmt_float(duration) if duration else None),
                         self._cell(temp_display),
-                        self._cell(ev.variety, 20),
-                        self._cell(ev.performed_by, 25),
+                        self._cell(ev.variety),
+                        self._cell(ev.performed_by),
                     ]
                 )
 
@@ -3395,13 +4346,13 @@ class AuditExportService:
                 ha_data.append(
                     [
                         self._cell(_fmt_date(ev.date)),
-                        self._cell(ev.variety, 20),
+                        self._cell(ev.variety),
                         self._cell(yield_display),
                         self._cell(quality_display),
                         self._cell(method_display),
                         self._cell(measurement_display),
-                        self._cell(storage_display, 30),
-                        self._cell(ev.performed_by, 25),
+                        self._cell(storage_display),
+                        self._cell(ev.performed_by),
                     ]
                 )
 
@@ -3564,7 +4515,7 @@ class AuditExportService:
                                 self._cell(attempt.get("supplier_name", "")),
                                 self._cell(attempt.get("date_contacted", "")),
                                 self._cell(attempt.get("result", "")),
-                                self._cell(attempt.get("notes", ""), 60),
+                                self._cell(attempt.get("notes", "")),
                             ]
                         )
 
@@ -3604,7 +4555,7 @@ class AuditExportService:
                 pl_data.append(
                     [
                         self._cell(_fmt_date(ev.date)),
-                        self._cell(ev.description, 50),
+                        self._cell(ev.description),
                         self._cell(ev.variety),
                         self._cell(seed_src),
                         self._cell(cert_status),
@@ -3665,7 +4616,7 @@ class AuditExportService:
                             self._cell(_fmt_date(ev.seed_purchase_date)),
                             self._cell(ev.seed_purchase_invoice),
                             self._cell(ev.seed_lot_number),
-                            self._cell(ev.seed_treatment, 50),
+                            self._cell(ev.seed_treatment),
                         ]
                     )
                 trace_widths = [
@@ -3738,6 +4689,30 @@ class AuditExportService:
                 unit = ev.amendment_amount_unit or ""
                 amount = f"{_val(ev.amendment_amount)} {unit}".strip()
 
+            # Nitrogen applied via the amendment, appended to the Amount cell so it sits
+            # beside the tonnage it derives from. California's Irrigated Lands Regulatory
+            # Program requires an annual Irrigation & Nitrogen Management Plan summary of
+            # total nitrogen applied FROM ALL SOURCES, and on an organic orchard compost is
+            # usually the largest single source — a tonnage alone does not answer it.
+            # Each total is paired with its own per-acre rate rather than stacking two
+            # parentheticals: the reviewable number is PER ACRE. A compost tonnage answers
+            # "how much left the pile"; tons/acre and kg N/acre answer "was the loading
+            # appropriate", which is what 7 CFR 205.203 and the California ILRP nitrogen
+            # summary actually ask.
+            tonnage_rate = _rate_per_area(
+                ev.amendment_amount_numeric, ev.area_covered, ev.amendment_amount_unit, ev.area_unit
+            )
+            if amount and tonnage_rate:
+                amount = f"{amount} ({tonnage_rate})"
+
+            _n_kg = _amendment_nitrogen_kg(ev)
+            if _n_kg is not None:
+                nitrogen_txt = f"{_n_kg:,.0f} kg N"
+                nitrogen_rate = _rate_per_area(_n_kg, ev.area_covered, "kg N", ev.area_unit)
+                if nitrogen_rate:
+                    nitrogen_txt = f"{nitrogen_txt} ({nitrogen_rate})"
+                amount = f"{amount}; {nitrogen_txt}" if amount else nitrogen_txt
+
             area = f"{_fmt_float(ev.area_covered)} {_val(ev.area_unit, '')}" if ev.area_covered else None
 
             # Track amendment approval gaps
@@ -3774,7 +4749,7 @@ class AuditExportService:
                     self._cell(SOIL_TYPE_LABELS.get(ev.type, _val(ev.type))),
                     self._cell(str(ev.soil_ph) if ev.soil_ph is not None else None),
                     self._cell(str(ev.organic_matter_percentage) if ev.organic_matter_percentage is not None else None),
-                    self._cell(amendment_display, 50),
+                    self._cell(amendment_display),
                     self._cell(amount or None),
                     self._cell(area),
                     self._cell(organic_status or None),
@@ -3795,7 +4770,10 @@ class AuditExportService:
                 habitat_events.append(ev)
             # F19: collect soil tests that carry lab RESULTS (test_results JSON) for a dedicated
             # sub-table — the main table shows only pH/OM; a certifier needs N/P/K/CEC + lab + date.
-            if ev.type == "ST" and isinstance(ev.test_results, dict) and ev.test_results:
+            # §E-2: lab analyses (LA) of any matrix — leaf, petiole, hull, compost, water — file
+            # into the same table. An LA event is listed even with no results yet, because the
+            # sample itself is the record a farmer logs on the day it ships to the lab.
+            if (ev.type == "ST" and isinstance(ev.test_results, dict) and ev.test_results) or ev.type == "LA":
                 st_events.append(ev)
 
         col_widths = [
@@ -3869,8 +4847,8 @@ class AuditExportService:
                         self._cell(peak),
                         self._cell(days),
                         self._cell(turns),
-                        self._cell(cev.compost_feedstock, 40),
-                        self._cell(cev.amendment_type, 30),
+                        self._cell(cev.compost_feedstock),
+                        self._cell(cev.amendment_type),
                         self._cell(compliant),
                     ]
                 )
@@ -3955,7 +4933,7 @@ class AuditExportService:
                         self._cell(str(gev.animal_count) if gev.animal_count is not None else None),
                         self._cell(str(grazing_days) if grazing_days not in (None, "") else None),
                         self._cell(str(passes) if passes not in (None, "") else None),
-                        self._cell(purpose, 40),
+                        self._cell(purpose),
                         self._cell(area_disp),
                     ]
                 )
@@ -4054,11 +5032,11 @@ class AuditExportService:
                     [
                         self._cell(_fmt_date(hev.date)),
                         self._cell(category),
-                        self._cell(practice, 40),
+                        self._cell(practice),
                         self._cell(count),
                         self._cell(since),
                         self._cell(area_disp),
-                        self._cell(notes, 60),
+                        self._cell(notes),
                     ]
                 )
             habitat_widths = [0.8 * inch, 1.0 * inch, 1.3 * inch, 0.45 * inch, 0.7 * inch, 0.6 * inch, 1.45 * inch]
@@ -4066,20 +5044,37 @@ class AuditExportService:
             ht.setStyle(self._base_table_style())
             elements.append(ht)
 
-        # --- Soil Test Results (F19) ---
-        # Lab results (N/P/K/CEC) + provenance for ST events — a soil test with only pH/OM is an
-        # incomplete agronomic/certifier record. Read from the test_results JSONField.
+        # --- Laboratory Analysis Results (F19 + §E-2) ---
+        # Lab results (N/P/K/CEC) + provenance for soil tests (ST) and lab analyses (LA) of any
+        # matrix. A soil test showing only pH/OM is an incomplete agronomic/certifier record, and
+        # a micronutrient application has no basis without the analysis that documents the
+        # deficiency (7 CFR 205.601(j)(6)). Read from the test_results JSONField.
         if st_events:
             elements.append(Spacer(1, 10))
-            elements.append(Paragraph("<b>Soil Test Results</b>", self._sub_header_style()))
-            st_headers = ["Date", "Lab", "Sample #", "Report Date", "N (ppm)", "P (ppm)", "K (ppm)", "CEC"]
+            elements.append(Paragraph("<b>Laboratory Analysis Results</b>", self._sub_header_style()))
+            st_headers = [
+                "Date",
+                "Sample",
+                "Lab",
+                "Sample #",
+                "Report Date",
+                "N (ppm)",
+                "P (ppm)",
+                "K (ppm)",
+                "CEC",
+            ]
             st_data = [[self._hdr(h) for h in st_headers]]
             for sev in st_events:
                 tr = sev.test_results if isinstance(sev.test_results, dict) else {}
+                # ST predates the sample_matrix column and is soil by definition.
+                matrix = (
+                    sev.get_sample_matrix_display() if sev.sample_matrix else ("Soil" if sev.type == "ST" else None)
+                )
                 st_data.append(
                     [
                         self._cell(_fmt_date(sev.date)),
-                        self._cell(tr.get("lab_name"), 24),
+                        self._cell(matrix),
+                        self._cell(tr.get("lab_name")),
                         self._cell(tr.get("sample_id")),
                         self._cell(tr.get("report_date")),
                         self._cell(_val(tr.get("nitrogen"))),
@@ -4088,10 +5083,110 @@ class AuditExportService:
                         self._cell(_val(tr.get("cec"))),
                     ]
                 )
-            st_widths = [0.7 * inch, 1.2 * inch, 0.8 * inch, 0.8 * inch, 0.6 * inch, 0.6 * inch, 0.6 * inch, 0.6 * inch]
+            st_widths = [
+                0.7 * inch,
+                0.9 * inch,
+                1.2 * inch,
+                0.8 * inch,
+                0.8 * inch,
+                0.6 * inch,
+                0.6 * inch,
+                0.6 * inch,
+                0.6 * inch,
+            ]  # 6.8" — inside the 7.0" portrait budget
             st_table = Table(st_data, colWidths=st_widths, repeatRows=1)
             st_table.setStyle(self._base_table_style())
             elements.append(st_table)
+
+            # --- Micronutrient Results (§E-2) ---
+            # Kept as its own table rather than four more columns above: the results table is
+            # already at 6.8" of a 7.0" budget. This is the deficiency record § 205.601(j)(6)
+            # requires before a synthetic micronutrient may be applied, so it is the page an
+            # inspector turns to when they see zinc or boron in the chemicals section.
+            _MICRO_KEYS = (
+                ("zinc_ppm", "Zn (ppm)"),
+                ("boron_ppm", "B (ppm)"),
+                ("manganese_ppm", "Mn (ppm)"),
+                ("iron_ppm", "Fe (ppm)"),
+            )
+            micro_events = [
+                sev
+                for sev in st_events
+                if isinstance(sev.test_results, dict)
+                and any(sev.test_results.get(k) not in (None, "") for k, _ in _MICRO_KEYS)
+            ]
+            if micro_events:
+                elements.append(Spacer(1, 8))
+                elements.append(
+                    Paragraph(
+                        "<b>Micronutrient Results (7 CFR 205.601(j)(6) deficiency record)</b>",
+                        self._sub_header_style(),
+                    )
+                )
+                micro_headers = ["Date", "Sample", "Lab"] + [label for _, label in _MICRO_KEYS]
+                micro_data = [[self._hdr(h) for h in micro_headers]]
+                for sev in micro_events:
+                    tr = sev.test_results if isinstance(sev.test_results, dict) else {}
+                    matrix = (
+                        sev.get_sample_matrix_display() if sev.sample_matrix else ("Soil" if sev.type == "ST" else None)
+                    )
+                    micro_data.append(
+                        [
+                            self._cell(_fmt_date(sev.date)),
+                            self._cell(matrix),
+                            self._cell(tr.get("lab_name")),
+                            *[self._cell(_val(tr.get(key))) for key, _ in _MICRO_KEYS],
+                        ]
+                    )
+                micro_widths = [
+                    0.7 * inch,
+                    0.9 * inch,
+                    1.4 * inch,
+                    0.7 * inch,
+                    0.7 * inch,
+                    0.7 * inch,
+                    0.7 * inch,
+                ]  # 5.8"
+                micro_table = Table(micro_data, colWidths=micro_widths, repeatRows=1)
+                micro_table.setStyle(self._base_table_style())
+                elements.append(micro_table)
+
+        # --- Soil Condition & Working Depth ---
+        # working_depth / soil_texture / soil_moisture are collected by SoilManagementTab
+        # and, until now, rendered nowhere. They are the § 205.203 context for whether an
+        # operation was appropriate: incorporation depth for an amendment, and the texture
+        # and moisture that govern compaction and leaching risk when it was performed.
+        # Kept as its own sub-table rather than squeezed into the test-results or equipment
+        # tables — those are already near the 7.0" portrait budget, and these apply to any
+        # soil sub-type, not only ST or fuel-bearing events.
+        condition_events = [ev for ev in events if ev.working_depth or ev.soil_texture or ev.soil_moisture]
+        if condition_events:
+            elements.append(Spacer(1, 10))
+            elements.append(
+                Paragraph(
+                    "<b>Soil Condition &amp; Working Depth (7 CFR 205.203)</b>",
+                    self._sub_header_style(),
+                )
+            )
+            cond_headers = ["Date", "Type", "Working Depth", "Texture", "Moisture"]
+            cond_data = [[self._hdr(h) for h in cond_headers]]
+            for ev in condition_events:
+                depth_disp = None
+                if ev.working_depth:
+                    depth_disp = f"{_fmt_float(ev.working_depth)} {_val(ev.depth_unit, '')}".strip()
+                cond_data.append(
+                    [
+                        self._cell(_fmt_date(ev.date)),
+                        self._cell(SOIL_TYPE_LABELS.get(ev.type, _val(ev.type))),
+                        self._cell(depth_disp),
+                        self._cell(ev.soil_texture),
+                        self._cell(ev.soil_moisture),
+                    ]
+                )
+            cond_widths = [0.75 * inch, 1.1 * inch, 1.1 * inch, 1.5 * inch, 1.5 * inch]
+            cond_table = Table(cond_data, colWidths=cond_widths, repeatRows=1)
+            cond_table.setStyle(self._base_table_style())
+            elements.append(cond_table)
 
         # --- Soil Equipment Operations (CC mowing, OM/PA spreading, etc.) ---
         # Soil events with fuel/equipment data (cover crop termination, amendment
@@ -4114,11 +5209,11 @@ class AuditExportService:
                     [
                         self._cell(_fmt_date(ev.date)),
                         self._cell(SOIL_TYPE_LABELS.get(ev.type, _val(ev.type))),
-                        self._cell(ev.equipment_used or ev.name, 30),
+                        self._cell(ev.equipment_used or ev.name),
                         self._cell(fuel_disp),
                         self._cell(ev.fuel_type),
                         self._cell(str(ev.equipment_hours) if ev.equipment_hours else None),
-                        self._cell(ev.performed_by, 25),
+                        self._cell(ev.performed_by),
                     ]
                 )
             eq_widths = [0.65 * inch, 0.8 * inch, 1.4 * inch, 0.75 * inch, 0.7 * inch, 0.55 * inch, 1.0 * inch]
@@ -4211,9 +5306,9 @@ class AuditExportService:
                     [
                         self._cell(_fmt_date(mev.manure_application_date) if mev.manure_application_date else None),
                         self._cell(interval_display),
-                        self._cell(_amendment_type_label(mev.amendment_type), 40),
+                        self._cell(_amendment_type_label(mev.amendment_type)),
                         self._cell(earliest_harvest),
-                        self._cell(rule_check_text, 40),
+                        self._cell(rule_check_text),
                     ]
                 )
                 if rule_check_is_warning:
@@ -4267,6 +5362,7 @@ class AuditExportService:
             "Date",
             "Type",
             "Pest Species",
+            "Crop Stage",
             "Identified By",
             "Pressure",
             "Damage %",
@@ -4326,30 +5422,44 @@ class AuditExportService:
                 _cnt = f"{_fmt_float(ev.monitoring_count)}{_unit_lbls.get(ev.monitoring_unit, '')}"
                 pressure_display = f"{pressure_display} · {_cnt}" if pressure_display else _cnt
 
+            # Crop growth stage is what makes a pest count actionable — the same mite
+            # density is trivial at dormancy and economic at bloom. It lives on CommonEvent
+            # and appeared in no export. This table had 0.5" of unused width, so it gets a
+            # real column rather than being crammed into the 0.8" species cell.
+            # PestManagementTab stores it under `crop_growth_stage` in extra_data, so read
+            # the model column first and fall back to the form's key.
+            stage = ev.get_growth_stage_display() if ev.growth_stage else None
+            if not stage and isinstance(ev.extra_data, dict):
+                stage = ev.extra_data.get("crop_growth_stage") or None
+
             data.append(
                 [
                     self._cell(_fmt_date(ev.date)),
                     self._cell(PEST_TYPE_LABELS.get(ev.type, _val(ev.type))),
-                    self._cell(ev.pest_species, 50),
-                    self._cell(identified or None, 40),
+                    self._cell(ev.pest_species),
+                    self._cell(stage),
+                    self._cell(identified or None),
                     self._cell(pressure_display),
                     self._cell(damage_display),
                     self._cell(area_display),
-                    self._cell(ev.block_id, 15),
+                    self._cell(ev.block_id),
                     self._cell(
                         "Not assessed"
                         if ev.action_threshold_met is None
                         else ("Yes" if ev.action_threshold_met else "No")
                     ),
-                    self._cell(ev.ipm_strategy, 60),
-                    self._cell(beneficial_display or None, 40),
+                    self._cell(ev.ipm_strategy),
+                    self._cell(beneficial_display or None),
                 ]
             )
 
+        # Total 7.00" — letter portrait with 0.75" margins. Crop Stage added 2026-07 into
+        # the 0.50" the table had left unused; no existing column was narrowed.
         col_widths = [
             0.55 * inch,  # Date
             0.5 * inch,  # Type
             0.8 * inch,  # Pest Species
+            0.5 * inch,  # Crop Stage
             0.65 * inch,  # Identified By
             0.45 * inch,  # Pressure
             0.45 * inch,  # Damage %
@@ -4373,6 +5483,8 @@ class AuditExportService:
             "pheromone": "Pheromone lure",
             "delta": "Delta trap",
             "bucket_funnel": "Bucket / funnel",
+            "gopher_trap": "Gopher trap",
+            "ground_squirrel_trap": "Ground squirrel trap",
             "other": "Other",
         }
         detail_events = [
@@ -4383,6 +5495,7 @@ class AuditExportService:
             or ev.beneficial_organic_approved
             or ev.trap_type
             or ev.pest_catch_count is not None
+            or ev.chemical_free_period_days is not None
         ]
         if detail_events:
             elements.append(Spacer(1, 10))
@@ -4400,6 +5513,11 @@ class AuditExportService:
                 "Organic OK",
                 "Trap Type",
                 "Catch",
+                # chemical_free_period_days was collected by PestManagementTab and rendered
+                # nowhere. It is the interval an organic operation can actually point to when
+                # asked how long a block went without an intervention — the practical evidence
+                # behind a § 205.206 prevention-first claim.
+                "Chem-Free (days)",
             ]
             detail_data = [[self._hdr(h) for h in detail_headers]]
             for ev in detail_events:
@@ -4407,14 +5525,26 @@ class AuditExportService:
                     [
                         self._cell(_fmt_date(ev.date)),
                         self._cell(PEST_TYPE_LABELS.get(ev.type, _val(ev.type))),
-                        self._cell(ev.beneficial_supplier, 40),
-                        self._cell(ev.beneficial_lot_number, 30),
+                        self._cell(ev.beneficial_supplier),
+                        self._cell(ev.beneficial_lot_number),
                         self._cell(BR_ORGANIC_LABELS.get(ev.beneficial_organic_approved)),
                         self._cell(TRAP_TYPE_LABELS.get(ev.trap_type) if ev.trap_type else None),
                         self._cell(str(ev.pest_catch_count) if ev.pest_catch_count is not None else None),
+                        self._cell(
+                            str(ev.chemical_free_period_days) if ev.chemical_free_period_days is not None else None
+                        ),
                     ]
                 )
-            detail_widths = [0.7 * inch, 1.0 * inch, 1.5 * inch, 0.9 * inch, 0.7 * inch, 1.0 * inch, 0.6 * inch]
+            detail_widths = [
+                0.7 * inch,
+                0.9 * inch,
+                1.3 * inch,
+                0.8 * inch,
+                0.65 * inch,
+                0.9 * inch,
+                0.55 * inch,
+                0.7 * inch,
+            ]
             dt = Table(detail_data, colWidths=detail_widths, repeatRows=1)
             dt.setStyle(self._base_table_style())
             elements.append(dt)
@@ -4438,7 +5568,7 @@ class AuditExportService:
                 rationale_data.append(
                     [
                         self._cell(_fmt_date(ev.date)),
-                        self._cell(ev.pest_species, 40),
+                        self._cell(ev.pest_species),
                         self._cell(
                             "Not assessed"
                             if ev.action_threshold_met is None
@@ -4477,6 +5607,56 @@ class AuditExportService:
                 )
             )
 
+        # --- Preventive Cultural Practices (§E-4, 7 CFR 205.206(a)) ---
+        # Its own sub-table because the main pest table is a 12-column monitoring record already
+        # at the 7.0" portrait budget, and because this is what an inspector reads FIRST: the
+        # § 205.206(e) justification for any substance applied later rests on these practices
+        # having been performed and found insufficient.
+        cultural_events = [ev for ev in events if ev.type == "CU" or ev.cultural_practice]
+        if cultural_events:
+            elements.append(Spacer(1, 10))
+            elements.append(
+                Paragraph(
+                    "<b>Preventive Cultural Practices (7 CFR 205.206(a))</b>",
+                    self._sub_header_style(),
+                )
+            )
+            # No "Custom Operator" column: operator_is_custom lives on ProductionEvent (§E-5),
+            # so on a pest event it would print "—" on every row — an empty column that reads
+            # like missing data rather than an absent concept. `performed_by` names who did it.
+            cu_headers = ["Date", "Practice", "Target Pest", "Area", "Performed By"]
+            cu_data = [[self._hdr(h) for h in cu_headers]]
+            for ev in cultural_events:
+                practice = CULTURAL_PRACTICE_LABELS.get(ev.cultural_practice, _val(ev.cultural_practice))
+                area = f"{_fmt_float(ev.area_covered)} {_val(ev.area_unit, '')}".strip() if ev.area_covered else None
+                cu_data.append(
+                    [
+                        self._cell(_fmt_date(ev.date)),
+                        self._cell(practice),
+                        self._cell(ev.pest_species),
+                        self._cell(area),
+                        self._cell(ev.performed_by),
+                    ]
+                )
+            cu_widths = [
+                0.8 * inch,
+                2.1 * inch,
+                1.5 * inch,
+                0.9 * inch,
+                1.6 * inch,
+            ]  # 6.9"
+            cu_table = Table(cu_data, colWidths=cu_widths, repeatRows=1)
+            cu_table.setStyle(self._base_table_style())
+            elements.append(cu_table)
+            elements.append(
+                Paragraph(
+                    f"{len(cultural_events)} preventive cultural practice(s) documented. § 205.206(a) "
+                    "requires cultural, mechanical and biological practices before any pest-control "
+                    "substance; these records are the basis for that sequence.",
+                    self._styles["footer_note"],
+                )
+            )
+
         # --- Pest Notes (mirrors the Production Event Notes pattern) ---
         elements.extend(self._build_event_notes_subtable(events, "Pest Notes", PEST_TYPE_LABELS))
 
@@ -4485,6 +5665,72 @@ class AuditExportService:
     # ------------------------------------------------------------------
     # Section 8: Equipment & Maintenance
     # ------------------------------------------------------------------
+
+    def _build_shared_equipment_coverage_subtable(self):
+        """§E-5 — which shared-equipment operations are covered by which cleaning (§ 205.272).
+
+        The cleaning-log table above proves cleanings HAPPENED. This one answers the question an
+        inspector actually asks next: was THIS organic pass preceded by one? A custom operator's
+        harvester can be in a conventional block the same morning, so the pairing — not the count
+        — is the evidence.
+
+        A row without a link says exactly that, rather than borrowing credit from an unrelated
+        cleaning elsewhere in the season.
+        """
+        operations = [
+            ev
+            for ev in self.production.history_productionevent_events.all().order_by("date")
+            # EM events ARE the cleaning records; they belong in the cleaning-log table above,
+            # not in the list of operations that need one.
+            if (ev.shared_with_conventional or ev.operator_is_custom) and ev.type != "EM"
+        ]
+        if not operations:
+            return []
+
+        rows = []
+        for ev in operations:
+            cleaning = ev.equipment_cleaning_event
+            if cleaning is None:
+                coverage = "REVIEW — no cleaning event linked"
+            elif not (
+                cleaning.cleaning_date
+                and (cleaning.cleaning_method or "").strip()
+                and (cleaning.cleaned_by or "").strip()
+            ):
+                coverage = "REVIEW — linked cleaning incomplete"
+            elif ev.date and cleaning.date and cleaning.date > ev.date:
+                # clean() blocks this going forward; historical rows may predate the guard.
+                coverage = "REVIEW — linked cleaning is dated after the operation"
+            else:
+                coverage = f"Cleaned {_fmt_date(cleaning.cleaning_date)} — {_val(cleaning.cleaning_method)}"
+
+            rows.append(
+                [
+                    self._cell(_fmt_date(ev.date)),
+                    self._cell(PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type))),
+                    self._cell("Yes" if ev.shared_with_conventional else "No"),
+                    self._cell("Yes" if ev.operator_is_custom else "No"),
+                    self._cell(ev.performed_by),
+                    self._cell(coverage),
+                ]
+            )
+
+        elements = [
+            self._spacer(0.15),
+            Paragraph(
+                "<b>Shared Equipment &amp; Custom Operators — Cleaning Coverage (7 CFR 205.272)</b>",
+                self._sub_header_style(),
+            ),
+        ]
+        table = Table(
+            [[self._hdr(h) for h in ("Date", "Operation", "Shared", "Custom Op.", "Performed By", "Cleaning Coverage")]]
+            + rows,
+            colWidths=[0.7 * inch, 1.2 * inch, 0.6 * inch, 0.7 * inch, 1.2 * inch, 2.4 * inch],  # 6.8"
+            repeatRows=1,
+        )
+        table.setStyle(self._base_table_style())
+        elements.append(table)
+        return elements
 
     def _build_equipment_section(self):
         """
@@ -4601,15 +5847,15 @@ class AuditExportService:
                     )
                     cl_data.append(
                         [
-                            self._cell(equipment_label, 30),
+                            self._cell(equipment_label),
                             self._cell(op_type_display),
                             self._cell(_fmt_date(ev.cleaning_date) if ev.cleaning_date else None),
-                            self._cell(ev.cleaning_method, 40),
-                            self._cell(ev.cleaning_materials_used, 40),
+                            self._cell(ev.cleaning_method),
+                            self._cell(ev.cleaning_materials_used),
                             self._cell(ev.cleaned_by),
                             self._cell("Yes" if ev.rinse_step_documented else "No"),
                             self._cell("Yes" if ev.shared_with_conventional else "No"),
-                            self._cell(ev.cleaning_protocol_reference, 50),
+                            self._cell(ev.cleaning_protocol_reference),
                         ]
                     )
 
@@ -4627,6 +5873,8 @@ class AuditExportService:
                 t2 = Table(cl_data, colWidths=cl_widths, repeatRows=1)
                 t2.setStyle(self._base_table_style())
                 elements.append(t2)
+
+                elements.extend(self._build_shared_equipment_coverage_subtable())
 
                 # --- Post-Harvest Sanitation subsection (7 CFR 205.272 + § 205.605) ---
                 # Only render when at least one cleaning event has actual SANITIZER detail.
@@ -4671,11 +5919,11 @@ class AuditExportService:
                         san_data.append(
                             [
                                 self._cell(_fmt_date(ev.cleaning_date) if ev.cleaning_date else None),
-                                self._cell(ev.sanitizer_name, 30),
+                                self._cell(ev.sanitizer_name),
                                 self._cell(str(ev.sanitizer_ppm) if ev.sanitizer_ppm is not None else None),
-                                self._cell(_residual_cell(ev), 20),
+                                self._cell(_residual_cell(ev)),
                                 self._cell("Yes" if ev.rinse_step_documented else "No"),
-                                self._cell(ev.sanitizer_nop_reference, 40),
+                                self._cell(ev.sanitizer_nop_reference),
                             ]
                         )
                     san_widths = [
@@ -4793,27 +6041,10 @@ class AuditExportService:
         for ev in events:
             extra = ev.extra_data if isinstance(ev.extra_data, dict) else {}
 
-            # Magnitude — pick the most specific value present and append the
-            # unit recorded in extra_data when one exists. Temperature events
-            # carry a `temperature_unit` ("F" or "C"); wind / precip / hail use
-            # standard US units. Bare "°" without F/C would be ambiguous to an
-            # auditor reading the PDF.
-            temp_unit = str(extra.get("temperature_unit") or "F").upper()
-            temp_suffix = f"°{temp_unit}" if temp_unit in ("F", "C") else "°"
-            magnitude = None
-            for key, unit in (
-                ("highest_temperature", temp_suffix),
-                ("lowest_temperature", temp_suffix),
-                ("temperature", temp_suffix),
-                ("wind_speed", " mph"),
-                ("precipitation", " in"),
-                ("humidity", "%"),
-                ("hail_size", " in"),
-            ):
-                value = extra.get(key)
-                if value not in (None, ""):
-                    magnitude = f"{value}{unit}"
-                    break
+            # Every magnitude the event recorded, not just the first one found — see
+            # _WEATHER_MAGNITUDE_GROUPS for the key-name and unit ground truth.
+            magnitudes = _weather_magnitudes(extra)
+            magnitude = ", ".join(magnitudes) if magnitudes else None
 
             data.append(
                 [
@@ -4822,21 +6053,96 @@ class AuditExportService:
                     self._cell(magnitude),
                     self._cell(_iso_date_only(extra.get("start_date"))),
                     self._cell(_iso_date_only(extra.get("end_date"))),
-                    self._cell(ev.observation, 80),
+                    self._cell(self._event_note_or_description(ev)),
                 ]
             )
 
         col_widths = [
             0.7 * inch,  # Date
             1.0 * inch,  # Type
-            0.9 * inch,  # Magnitude
-            0.85 * inch,  # Start
-            0.85 * inch,  # End
-            2.7 * inch,  # Impact / Notes
+            1.3 * inch,  # Magnitude (can now hold two readings, e.g. wind + rainfall)
+            0.8 * inch,  # Start
+            0.8 * inch,  # End
+            2.4 * inch,  # Impact / Notes
         ]
         t = Table(data, colWidths=col_widths, repeatRows=1)
         t.setStyle(self._base_table_style())
         elements.append(t)
+
+        elements.extend(self._build_weather_response_subtable(events))
+        return elements
+
+    @staticmethod
+    def _duration_label(weather_type):
+        """Column label for WeatherEvent.extra_data['duration'], whose unit varies by sub-type.
+
+        WeatherTab labels the input "Duration (minutes)" for hailstorms and "Duration (hours)"
+        for tropical storms, high winds and humidity events. The stored value carries no unit
+        of its own, so the sub-type is the only thing that says which it is — and printing
+        "minutes" for a 6-hour wind event on an inspector-facing document would be a
+        24-fold misstatement.
+
+        The underlying fragility is real: `duration` should carry an explicit unit rather
+        than relying on the form label. Until it does, this mapping must track WeatherTab.
+        """
+        return "Duration (min)" if weather_type == "HL" else "Duration (hrs)"
+
+    def _build_weather_response_subtable(self, events):
+        """Protective action taken in response to a weather event.
+
+        The six-column summary table above has no room for these, so they were collected by
+        WeatherTab and then never rendered anywhere. They matter to an inspector because
+        § 205.201(a)(3) asks what the operation DOES about monitored conditions, not merely
+        that it observed them — "frost, 28°F" is an observation; "frost, 28°F, wind machines
+        run 4 h" is the monitoring plan working.
+
+        Rendered only for events that actually recorded a response, so a production with
+        plain observations does not gain an empty table.
+        """
+        # (extra_data key, column label)
+        response_fields = (
+            ("way_of_protection", "Protection Used"),
+            ("protection_measures", "Protection Measures"),
+            ("duration", None),  # unit is sub-type dependent — see _duration_label below
+            ("water_deficit", "Water Deficit"),
+            ("damage_assessment", "Damage Assessment"),
+            ("crop_impact", "Crop Impact"),
+        )
+
+        rows = []
+        for ev in events:
+            extra = ev.extra_data if isinstance(ev.extra_data, dict) else {}
+            details = [
+                f"{self._duration_label(ev.type) if label is None else label}: {extra.get(key)}"
+                for key, label in response_fields
+                if extra.get(key) not in (None, "")
+            ]
+            if details:
+                rows.append(
+                    [
+                        self._cell(_fmt_date(ev.date)),
+                        self._cell(WEATHER_TYPE_LABELS.get(ev.type, _val(ev.type))),
+                        self._cell(" · ".join(details), 220),
+                    ]
+                )
+
+        if not rows:
+            return []
+
+        elements = [
+            Spacer(1, 10),
+            Paragraph(
+                "<b>Weather Response &amp; Protective Measures (7 CFR 205.201(a)(3))</b>",
+                self._sub_header_style(),
+            ),
+        ]
+        table = Table(
+            [[self._hdr(h) for h in ("Date", "Type", "Response Recorded")]] + rows,
+            colWidths=[0.7 * inch, 1.0 * inch, 5.3 * inch],
+            repeatRows=1,
+        )
+        table.setStyle(self._base_table_style())
+        elements.append(table)
         return elements
 
     # ------------------------------------------------------------------
@@ -4895,6 +6201,9 @@ class AuditExportService:
         else:
             elements.append(self._body("No carbon emission records found for this production."))
 
+        elements.extend(self._build_pumping_plant_subtable())
+        elements.extend(self._build_application_fuel_subtable())
+
         elements.append(self._spacer(0.1))
         elements.append(
             Paragraph(
@@ -4906,9 +6215,159 @@ class AuditExportService:
 
         return elements
 
+    def _build_pumping_plant_subtable(self):
+        """The measured irrigation pumping plant behind the irrigation energy figure (§E-6).
+
+        Irrigation is the largest energy line in a California orchard, and its emissions are
+        driven by total dynamic head and pumping-plant efficiency. When the grower has had a
+        pump test done, showing its inputs is what lets anyone reconcile the number against
+        their own utility bill instead of taking a coefficient on trust — the same reason the
+        head build-up is exposed in the calculation breakdown.
+
+        Lives in the carbon appendix rather than the organic packet: this is a carbon input,
+        and CERTIFICATION_SECTIONS deliberately excludes carbon from `organic`.
+        Rendered only when a pump test has been recorded.
+        """
+        try:
+            parcel = self.production.parcel
+        except AttributeError:
+            return []
+
+        efficiency = getattr(parcel, "pump_efficiency_pct", None)
+        pressure = getattr(parcel, "system_pressure_psi", None)
+        test_date = getattr(parcel, "pump_test_date", None)
+        provider = getattr(parcel, "pump_test_provider", None)
+        if not any([efficiency, pressure, test_date, provider]):
+            return []
+
+        rows = [
+            [self._hdr(h) for h in ("Pump Test Date", "Tested By", "Plant Efficiency", "System Pressure")],
+            [
+                self._cell(_fmt_date(test_date) if test_date else "—"),
+                self._cell(provider),
+                self._cell(f"{_fmt_float(efficiency)}%" if efficiency else "—"),
+                self._cell(f"{_fmt_float(pressure)} psi" if pressure else "—"),
+            ],
+        ]
+
+        elements = [
+            self._spacer(0.15),
+            Paragraph(
+                "<b>Irrigation Pumping Plant (measured — informational)</b>",
+                self._sub_header_style(),
+            ),
+        ]
+        table = Table(rows, colWidths=[1.3 * inch, 2.4 * inch, 1.4 * inch, 1.4 * inch], repeatRows=1)
+        table.setStyle(self._base_table_style())
+        elements.append(table)
+        elements.append(
+            Paragraph(
+                "Pumping-plant efficiency and system pressure set the energy per acre-foot used in "
+                "the irrigation figures above. Where no test is on file, a 70% efficiency and a "
+                "method-derived pressure are assumed.",
+                self._styles["footer_note"],
+            )
+        )
+        return elements
+
+    def _build_application_fuel_subtable(self):
+        """Fuel burned applying inputs — the Scope-1 input behind the chemical figures above.
+
+        Deliberately confined to this appendix. `application_fuel_type` / `_consumed` /
+        `_unit` were collected and never rendered anywhere, but they are a CARBON input, not
+        an organic-compliance record — and the carbon appendix is excluded from the
+        `organic` export by design (CERTIFICATION_SECTIONS), because energy figures on a
+        certifier document invite greenwashing-by-association. Putting them here surfaces
+        the data without leaking it into the organic packet.
+        """
+        events = [
+            ev
+            for ev in self.production.history_chemicalevent_events.all().order_by("date")
+            if ev.application_fuel_consumed and float(ev.application_fuel_consumed) > 0
+        ]
+        if not events:
+            return []
+
+        elements = [
+            self._spacer(0.15),
+            Paragraph(
+                "<b>Application Equipment Fuel (Scope 1 — informational)</b>",
+                self._sub_header_style(),
+            ),
+        ]
+        rows = [[self._hdr(h) for h in ("Date", "Product", "Fuel Type", "Fuel Used", "Fertigated")]]
+        for ev in events:
+            rows.append(
+                [
+                    self._cell(_fmt_date(ev.date)),
+                    self._cell(ev.commercial_name),
+                    self._cell(ev.application_fuel_type),
+                    self._cell(
+                        f"{_fmt_float(ev.application_fuel_consumed)} " f"{_val(ev.application_fuel_unit, '')}".strip()
+                    ),
+                    # Fertigated applications ride the irrigation event's energy, so their
+                    # application fuel is intentionally zero in the carbon model — flagging
+                    # it here explains an otherwise puzzling blank to anyone reconciling.
+                    self._cell("Yes" if ev.is_fertigation else "No"),
+                ]
+            )
+        table = Table(rows, colWidths=[0.8 * inch, 2.0 * inch, 1.1 * inch, 1.2 * inch, 0.9 * inch], repeatRows=1)
+        table.setStyle(self._base_table_style())
+        elements.append(table)
+        return elements
+
     # ------------------------------------------------------------------
     # Section 10: Traceability (FSMA 204)
     # ------------------------------------------------------------------
+
+    def _fsma_ftl_coverage(self):
+        """FSMA 204 Food Traceability List status: 'covered' | 'not_covered' | 'unknown'.
+
+        Raw/in-shell tree nuts (walnut, almond, pecan…) are NOT on the FTL — only
+        nut BUTTERS are. Single source of truth for both the Regulatory Scope
+        declaration and the Traceability-section footer so they can't contradict.
+        """
+        try:
+            crop_type_name = (self.production.crop_type.name or "").lower() if self.production.crop_type else ""
+        except AttributeError:
+            crop_type_name = ""
+        ftl_covered_keywords = (
+            "leafy green",
+            "spinach",
+            "lettuce",
+            "arugula",
+            "kale",
+            "tomato",
+            "pepper",
+            "cucumber",
+            "herb",
+            "melon",
+            "sprout",
+        )
+        ftl_exempt_keywords = (
+            "avocado",
+            "citrus",
+            "orange",
+            "lemon",
+            "apple",
+            "pear",
+            "stone fruit",
+            "cherry",
+            "peach",
+            "walnut",
+            "almond",
+            "pecan",
+            "pistachio",
+            "hazelnut",
+            "tree nut",
+        )
+        nut_names = ("walnut", "almond", "pecan", "pistachio", "hazelnut", "cashew", "peanut", "macadamia")
+        is_nut_butter = "butter" in crop_type_name and any(n in crop_type_name for n in nut_names)
+        if is_nut_butter or any(kw in crop_type_name for kw in ftl_covered_keywords):
+            return "covered"
+        if any(kw in crop_type_name for kw in ftl_exempt_keywords):
+            return "not_covered"
+        return "unknown"
 
     def _build_traceability_section(self):
         p = self.production
@@ -4923,9 +6382,16 @@ class AuditExportService:
 
         gps_display = f"{lat:.6f}, {lon:.6f}" if lat and lon else None
 
+        # Resolve the actual harvest date from the last harvesting (HA) event so
+        # the traceability record matches the Harvest Records table. Fall back to
+        # the production finish date only when no harvest event exists (the finish
+        # date can be days later than the harvest — e.g. after packing/close-out).
+        harvest_ev = self.production.history_productionevent_events.filter(type="HA").order_by("-date").first()
+        harvest_date = harvest_ev.date if (harvest_ev and harvest_ev.date) else p.finish_date
+
         rows = [
             ("Lot ID", p.lot_id),
-            ("Harvest Date", _fmt_date(p.finish_date)),
+            ("Harvest Date", _fmt_date(harvest_date)),
             ("Harvest Location (GPS)", gps_display),
             (
                 "Quantity Harvested",
@@ -4935,10 +6401,9 @@ class AuditExportService:
             ("Harvest Method", p.get_harvest_method_display() if p.harvest_method else None),
         ]
 
-        # Harvester name from the last harvesting production event
+        # Harvester name from the same harvesting production event
         harvester = None
         try:
-            harvest_ev = self.production.history_productionevent_events.filter(type="HA").order_by("-date").first()
             if harvest_ev:
                 harvester = harvest_ev.performed_by or (
                     harvest_ev.created_by.get_full_name() if harvest_ev.created_by else None
@@ -4948,17 +6413,42 @@ class AuditExportService:
 
         rows.append(("Operator / Harvester", harvester))
 
+        # Farm-to-first-receiver haul distance. `transportation_distance` is collected on
+        # harvest events, validated in ProductionEvent.clean(), shown to consumers — and
+        # rendered in no export. It belongs here rather than in the production stats: it is
+        # a movement of the lot, which is the shipping CTE an FSMA-204 record describes.
+        haul_events = [
+            ev
+            for ev in self.production.history_productionevent_events.all()
+            if ev.transportation_distance and float(ev.transportation_distance) > 0
+        ]
+        if haul_events:
+            # Sort on the formatted date string: `date` is an aware datetime under USE_TZ,
+            # so a naive sentinel for the nullable case would raise on comparison. ISO
+            # strings sort correctly and the em-dash placeholder sorts undated rows last.
+            hauls = ", ".join(
+                f"{_fmt_float(ev.transportation_distance)} {_val(ev.transportation_unit, '')}".strip()
+                + f" ({_fmt_date(ev.date)})"
+                for ev in sorted(haul_events, key=lambda e: _fmt_date(e.date))
+            )
+            rows.append(("Transport Distance (farm to first receiver)", hauls))
+
         for label, value in rows:
             elements.append(self._label_value(label, value))
 
         elements.append(self._spacer(0.1))
-        elements.append(
-            Paragraph(
-                "This section supports FSMA Section 204 traceability requirements for "
-                "produce supply chains. Lot IDs link to the production record in Trazo.",
-                self._styles["footer_note"],
+        if self._fsma_ftl_coverage() == "not_covered":
+            footer_text = (
+                "This crop is not on the FDA Food Traceability List (21 CFR 1.1300), so FSMA "
+                "Section 204 KDE/CTE tracking is not required. Lot IDs are maintained "
+                "voluntarily and link to the production record in Trazo."
             )
-        )
+        else:
+            footer_text = (
+                "This section supports FSMA Section 204 traceability requirements for "
+                "produce supply chains. Lot IDs link to the production record in Trazo."
+            )
+        elements.append(Paragraph(footer_text, self._styles["footer_note"]))
 
         return elements
 
@@ -5356,17 +6846,11 @@ class AuditExportService:
                 )
             )
             elements.append(self._spacer(0.08))
-        elif env["mode"] in ("dev_no_s3", "dev_with_s3"):
-            elements.append(
-                Paragraph(
-                    "<i>[Development mode]</i> This PDF was generated in a development "
-                    "environment. Photo metadata (filename, upload date, size) is shown "
-                    "inline in place of embedded images. Re-export from production to "
-                    "embed the actual photos.",
-                    self._styles["footer_note"],
-                )
-            )
-            elements.append(self._spacer(0.05))
+        # No blanket dev-mode banner: photos embed fine from public image URLs
+        # even without S3 configured, so a top-of-section "metadata in place of
+        # images" claim is false whenever images actually embed. Any individual
+        # photo that genuinely fails to embed is reported accurately by the
+        # trailing "[N photo(s) rendered as metadata-only …]" note below.
 
         # Pull all events across categories once. Cache for both the summary
         # table and the gallery so we don't double-query.
@@ -5389,7 +6873,7 @@ class AuditExportService:
                         [
                             self._cell(category_label),
                             self._cell(_fmt_date(ev.date)),
-                            self._cell(ev.description if hasattr(ev, "description") else None, 90),
+                            self._cell(ev.description if hasattr(ev, "description") else None),
                             self._cell(str(count)),
                         ]
                     )
@@ -5414,6 +6898,7 @@ class AuditExportService:
         elements.append(summary_table)
         elements.append(self._spacer(0.08))
         elements.append(self._label_value("Total Photos Attached", str(total_photos)))
+        elements += self._photo_reuse_findings(category_events)
 
         # ---------- Layer 2: embedded gallery ----------
         elements.append(self._spacer(0.18))
@@ -5568,9 +7053,9 @@ class AuditExportService:
                         [
                             self._cell(_fmt_date(ev.date)),
                             self._cell(category_label),
-                            self._cell(ev.description, 50),
-                            self._cell(cf.get("label", ""), 40),
-                            self._cell(cf.get("value", ""), 60),
+                            self._cell(ev.description),
+                            self._cell(cf.get("label", "")),
+                            self._cell(cf.get("value", "")),
                             self._cell(cf.get("field_type", "text")),
                         ]
                     )
@@ -5659,8 +7144,18 @@ class AuditExportService:
         ]
 
         def _verification_label(cert):
+            # The OID claim is gated on the SOURCE that substantiates it, not on
+            # verification_status alone — the same 16 CFR 260.6 rule already applied
+            # to Certification.consumer_display_status, which this had never picked
+            # up. A status set by a manual edit, an import, or a fixture was printing
+            # "Verified (USDA OID)" next to a certifier that is not an accredited
+            # agent and appears in no USDA database.
+            from certifications.models import Certification as _Cert
+
             if cert.verification_status == "verified":
-                return "Verified (USDA OID)"
+                if getattr(cert, "verification_source", "") == _Cert.DATABASE_VERIFICATION_SOURCE:
+                    return "Verified (USDA OID)"
+                return "Self-Reported"
             if cert.verification_status == "self_reported":
                 return "Self-Reported"
             if cert.verification_status in ("expired", "revoked", "suspended"):
@@ -5710,8 +7205,8 @@ class AuditExportService:
                 data.append(
                     [
                         self._cell(cert.get_certification_type_display()),
-                        self._cell(cert.certifier_name, 50),
-                        self._cell(cert.certification_number, 40),
+                        self._cell(cert.certifier_name),
+                        self._cell(cert.certification_number),
                         self._cell(_fmt_date(cert.effective_date)),
                         self._cell(_date_cell_display(cert)),
                         self._cell(_verification_label(cert)),
@@ -5938,7 +7433,11 @@ class AuditExportService:
             "Certification",
             "Certifier / Auditor",
             "Certificate #",
-            "Inspector",
+            # This column renders `performed_by` — the person who LOGGED the event
+            # in Trazo (usually the operator), NOT a third-party inspector. Label
+            # it accordingly so an operator-entered cert row doesn't read as the
+            # operator having "inspected" his own certification.
+            "Recorded By",
             "Status",
         ]
         header_row = [self._hdr(h) for h in headers]
@@ -5973,9 +7472,9 @@ class AuditExportService:
                     self._cell(_fmt_date(ev.date)),
                     self._cell(activity_label),
                     self._cell(cert_display),
-                    self._cell(ev.verified_certifier_name, 40),
-                    self._cell(ev.certificate_number, 30),
-                    self._cell(ev.performed_by, 30),
+                    self._cell(ev.verified_certifier_name),
+                    self._cell(ev.certificate_number),
+                    self._cell(ev.performed_by),
                     self._cell(status_display),
                 ]
             )
@@ -6023,7 +7522,7 @@ class AuditExportService:
                         self._cell(_fmt_date(ev.date)),
                         self._cell(practice_display),
                         self._cell(credits_display),
-                        self._cell(ev.observation, 80),
+                        self._cell(self._event_note_or_description(ev)),
                     ]
                 )
 
@@ -6126,11 +7625,11 @@ class AuditExportService:
                 purchased_rows.append(
                     [
                         self._cell(_fmt_date(ev.date)),
-                        self._cell(ev.commercial_name, 40),
+                        self._cell(ev.commercial_name),
                         self._cell(CHEMICAL_TYPE_LABELS.get(ev.type, _val(ev.type))),
-                        self._cell(ev.supplier_name, 30),
-                        self._cell(ev.purchase_invoice, 20),
-                        self._cell(ev.chemical_lot_number, 20),
+                        self._cell(ev.supplier_name),
+                        self._cell(ev.purchase_invoice),
+                        self._cell(ev.chemical_lot_number),
                         self._cell(_fmt_float(ev.quantity_purchased)),
                         self._cell(unit),
                     ]
@@ -6190,7 +7689,22 @@ class AuditExportService:
             for unit, total in sorted(total_purchased_by_unit.items()):
                 elements.append(self._label_value(f"Total Purchased ({unit})", _fmt_float(total)))
         else:
-            elements.append(self._body("No purchase quantity data recorded on chemical events."))
+            # Mass balance is the exercise an inspector actually runs, and this
+            # document itself calls input purchase traceability "the #1
+            # non-compliance finding in organic audits". Reporting the absence as a
+            # flat statement of fact buried it (2026-08-03 dossier review) — it is a
+            # REVIEW item and has to read like one.
+            elements.append(
+                Paragraph(
+                    "<b>[REVIEW] Mass balance cannot be reconciled.</b> No purchase quantity is "
+                    "recorded on any chemical event, so inputs purchased cannot be reconciled "
+                    "against inputs applied. 7 CFR 205.103(b)(2) requires records that fully "
+                    "disclose all activities and transactions in sufficient detail to be readily "
+                    "audited, and the input-to-output trace is how a certifier verifies it. Record "
+                    "supplier, purchase date, invoice number and quantity purchased on each input.",
+                    self._warning_style(),
+                )
+            )
 
         if missing_purchase_count > 0:
             elements.append(
@@ -6223,9 +7737,7 @@ class AuditExportService:
             ),
         ]
         if sales:
-            output_rows.insert(
-                2, ("Sales Records on File (§ 205.307(a))", str(len(sales)))
-            )
+            output_rows.insert(2, ("Sales Records on File (§ 205.307(a))", str(len(sales))))
 
         # Direct same-unit comparison only when it is actually meaningful —
         # not for boxes-vs-pounds where the units are explicitly incomparable
@@ -6242,6 +7754,46 @@ class AuditExportService:
         for label, value in output_rows:
             elements.append(self._label_value(label, value))
 
+        # --- Mass-balance integrity guardrails (§ 205.103(b)(2)) ---
+        # A mass-balance section must CATCH an impossible balance, not print it
+        # silently. Two physical impossibilities an inspector would immediately
+        # flag: selling more than was harvested, and a sale dated before harvest.
+        mb_flags = []
+        if harvest_amount and quantity_sold and harvest_unit == sold_unit:
+            # 2% tolerance absorbs rounding / unit-precision noise.
+            if float(quantity_sold) > float(harvest_amount) * 1.02:
+                mb_flags.append(
+                    f"Quantity sold ({_fmt_mass(quantity_sold, sold_unit)}) EXCEEDS harvest yield "
+                    f"({_fmt_mass(harvest_amount, harvest_unit)}) — a mass-balance impossibility. "
+                    f"Reconcile the harvest and sales records before certifier submission."
+                )
+        # Sale dated before harvest — resolve the harvest date from the earliest
+        # harvest (HA) event, falling back to the production finish date.
+        harvest_dt = None
+        try:
+            _ha = (
+                self.production.history_productionevent_events.filter(type="HA", date__isnull=False)
+                .order_by("date")
+                .first()
+            )
+            if _ha and _ha.date:
+                harvest_dt = _ha.date.date()
+            elif getattr(self.production, "finish_date", None):
+                _fd = self.production.finish_date
+                harvest_dt = _fd.date() if hasattr(_fd, "date") else _fd
+        except Exception:  # noqa: BLE001 — best-effort date resolution
+            harvest_dt = None
+        if harvest_dt and sales:
+            early = [s for s in sales if s.sale_date and s.sale_date < harvest_dt]
+            if early:
+                mb_flags.append(
+                    f"{len(early)} sale(s) are dated BEFORE the harvest date ({_fmt_date(harvest_dt)}) — "
+                    f"product cannot be sold before it is harvested. Correct the sale dates."
+                )
+        for _msg in mb_flags:
+            elements.append(self._spacer(0.05))
+            elements.append(Paragraph(f"<b>[REVIEW] 7 CFR 205.103(b)(2): {_msg}</b>", self._warning_style()))
+
         # Itemized SOE sales records (§ 205.307(a)) — buyer, date, quantity, invoice.
         if sales:
             elements.append(self._spacer(0.08))
@@ -6252,14 +7804,16 @@ class AuditExportService:
                 sales_data.append(
                     [
                         self._cell(_fmt_date(s.sale_date) if s.sale_date else None),
-                        self._cell(s.buyer_name, 28),
+                        self._cell(s.buyer_name),
                         self._cell(_fmt_float(s.quantity) if s.quantity is not None else None),
-                        self._cell(s.quantity_unit or sold_unit, 8),
-                        self._cell(s.invoice_number or None, 14),
-                        self._cell("Yes" if s.organic_on_invoice else "No", 6),
+                        self._cell(s.quantity_unit or sold_unit),
+                        # Invoice numbers are audit-trail identifiers — never
+                        # truncate them to an unreadable stub (e.g. "LOEWEN-20…").
+                        self._cell(s.invoice_number or None),
+                        self._cell("Yes" if s.organic_on_invoice else "No"),
                     ]
                 )
-            sales_widths = [0.85 * inch, 1.7 * inch, 0.9 * inch, 0.55 * inch, 1.0 * inch, 1.1 * inch]
+            sales_widths = [0.85 * inch, 1.6 * inch, 0.85 * inch, 0.5 * inch, 1.45 * inch, 0.85 * inch]
             st = Table(sales_data, colWidths=sales_widths, repeatRows=1)
             st.setStyle(self._base_table_style())
             elements.append(st)
@@ -6317,9 +7871,11 @@ class AuditExportService:
 
         if not harvest_amount or not quantity_sold:
             elements.append(
-                self._body(
-                    "Incomplete data — fill both the harvest yield and the quantity sold "
-                    "to enable the boxes \u2192 pounds reconciliation."
+                Paragraph(
+                    "<b>[REVIEW] Output reconciliation incomplete.</b> Harvest yield and quantity "
+                    "sold are both required to close the boxes \u2192 pounds trace from field to "
+                    "sale. Without them the § 205.2 audit trail stops at the farm gate.",
+                    self._warning_style(),
                 )
             )
         elif not sold_is_boxes:
@@ -6463,7 +8019,7 @@ class AuditExportService:
             if any(v for _, v in id_rows):
                 id_data = [[self._hdr("Field"), self._hdr("Value")]]
                 for label, value in id_rows:
-                    id_data.append([self._cell(label, 32), self._cell(_val(value), 60)])
+                    id_data.append([self._cell(label, 32), self._cell(_val(value))])
                 t_id = Table(id_data, colWidths=[2.4 * inch, 3.6 * inch], repeatRows=1)
                 t_id.setStyle(self._base_table_style())
                 elements.append(t_id)
@@ -6661,11 +8217,11 @@ class AuditExportService:
             width_txt = f"{_fmt_float(width_raw, 1)} m" if isinstance(width_raw, (int, float)) else _val(width_raw)
             data.append(
                 [
-                    self._cell(_val(b.get("direction")), 18),
-                    self._cell(_val(b.get("adjoining_land_use")), 48),
-                    self._cell(width_txt, 16),
-                    self._cell(_val(b.get("drift_risk")), 16),
-                    self._cell(_val(b.get("prevention")), 70),
+                    self._cell(_val(b.get("direction"))),
+                    self._cell(_val(b.get("adjoining_land_use"))),
+                    self._cell(width_txt),
+                    self._cell(_val(b.get("drift_risk"))),
+                    self._cell(_val(b.get("prevention"))),
                 ]
             )
         widths = [0.8 * inch, 1.85 * inch, 0.85 * inch, 0.7 * inch, 2.2 * inch]
@@ -6748,8 +8304,8 @@ class AuditExportService:
         # operation (or when the operation's state is unrecorded — better to prompt than
         # silently miss it); for a known non-CA operation a CDFA registration does not
         # apply, so surface an informational note instead of a false-positive inspector flag.
-        state_norm = ((getattr(est, "state", "") or "").strip().lower()) if est is not None else ""
-        ca_requirement_applies = state_norm in ("", "ca", "calif", "california") or "california" in state_norm
+        est_state = resolve_establishment_state(est)
+        ca_requirement_applies = est_state in ("CA", None)
 
         if reg is None:
             if ca_requirement_applies:
@@ -6799,7 +8355,7 @@ class AuditExportService:
         ]
         data = [[self._hdr("Field"), self._hdr("Value")]]
         for label, value in rows:
-            data.append([self._cell(label, 32), self._cell(_val(value), 70)])
+            data.append([self._cell(label, 32), self._cell(_val(value))])
         t = Table(data, colWidths=[2.0 * inch, 4.0 * inch], repeatRows=1)
         t.setStyle(self._base_table_style())
         elements.append(t)
@@ -6948,9 +8504,8 @@ class AuditExportService:
                 elements.append(
                     self._body(
                         "No post-harvest processing or storage events are recorded for this "
-                        "production. Tree-nut crops are typically hulled, dried, and cold-stored "
-                        "after harvest. If any of these steps occur off-farm (custom huller / "
-                        "dryer / cold storage), that facility must be a certified organic handler "
+                        f"production. {self._post_harvest_steps_phrase()} If any of these steps "
+                        "occur off-farm, that facility must be a certified organic handler "
                         "and its organic certificate must accompany the lot (7 CFR 205.272 "
                         "commingling prevention). Record post-harvest handling events and storage "
                         "locations so the audit trail is unbroken from field to sale."
@@ -6968,13 +8523,13 @@ class AuditExportService:
                 data.append(
                     [
                         self._cell(_fmt_date(ev.date)),
-                        self._cell(PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type)), 22),
-                        self._cell(ev.description, 62),
+                        self._cell(PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type))),
+                        self._cell(ev.description),
                         # Storage location carries the bin / lot ID — the traceback key —
                         # so it must not be truncated short of the identifier.
-                        self._cell(ev.storage_location, 60),
-                        self._cell(temp, 12),
-                        self._cell(ev.performed_by, 22),
+                        self._cell(ev.storage_location),
+                        self._cell(temp),
+                        self._cell(ev.performed_by),
                     ]
                 )
             widths = [0.7 * inch, 1.0 * inch, 1.95 * inch, 1.6 * inch, 0.6 * inch, 0.85 * inch]
@@ -6993,10 +8548,10 @@ class AuditExportService:
                 data.append(
                     [
                         self._cell(_fmt_date(ev.date)),
-                        self._cell(PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type)), 24),
-                        self._cell(ev.storage_location, 30),
-                        self._cell(temp, 12),
-                        self._cell(ev.performed_by, 22),
+                        self._cell(PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type))),
+                        self._cell(ev.storage_location),
+                        self._cell(temp),
+                        self._cell(ev.performed_by),
                     ]
                 )
             widths = [0.75 * inch, 1.2 * inch, 2.4 * inch, 0.85 * inch, 1.0 * inch]
@@ -7096,11 +8651,11 @@ class AuditExportService:
                 data.append(
                     [
                         self._cell(str(entry.year)),
-                        self._cell(entry.crop_grown, 50),
+                        self._cell(entry.crop_grown),
                         self._cell(entry.get_production_method_display() if entry.production_method else None),
-                        self._cell(entry.substances_applied, 80),
+                        self._cell(entry.substances_applied),
                         self._cell(_fmt_date(entry.date_last_prohibited)),
-                        self._cell(entry.notes, 80),
+                        self._cell(entry.notes),
                     ]
                 )
 
@@ -7129,12 +8684,20 @@ class AuditExportService:
 
             from history.models import History
 
-            prev_productions = list(
-                History.objects.filter(parcel=parcel)
+            # PRIOR land use only. Without the published/date filters an unpublished developer
+            # scratch production dated AFTER the audited season was printed under a
+            # § 205.202 heading as this parcel's field history.
+            prev_qs = (
+                History.objects.filter(parcel=parcel, published=True)
                 .exclude(pk=self.production.pk)
                 .select_related("crop_type", "product")
-                .order_by("-start_date")[:15]
             )
+            # `start_date` is nullable. `filter(start_date__lt=None)` raises ValueError, which
+            # would crash the whole certifier export for a production that has no start date —
+            # so only apply the date bound when there is one to compare against.
+            if self.production.start_date:
+                prev_qs = prev_qs.filter(start_date__lt=self.production.start_date)
+            prev_productions = list(prev_qs.order_by("-start_date")[:15])
 
             if prev_productions:
                 fb_headers = [
@@ -7167,10 +8730,10 @@ class AuditExportService:
                         [
                             self._cell(_fmt_date(prod.start_date)),
                             self._cell(_fmt_date(prod.finish_date)),
-                            self._cell(crop_name, 50),
+                            self._cell(crop_name),
                             self._cell(prod.get_production_method_display() if prod.production_method else None),
                             self._cell(harvest),
-                            self._cell(prod.lot_id, 30),
+                            self._cell(prod.lot_id),
                         ]
                     )
 
@@ -7210,7 +8773,7 @@ class AuditExportService:
             for aff in affidavits:
                 aff_data.append(
                     [
-                        self._cell(aff.previous_manager_name or "\u2014", 40),
+                        self._cell(aff.previous_manager_name or "\u2014"),
                         self._cell(_fmt_date(aff.last_prohibited_date)),
                         self._cell(_fmt_date(aff.previous_manager_signed_date)),
                         self._cell("Attached" if aff.signed_document else "Not attached"),
@@ -7501,10 +9064,15 @@ class AuditExportService:
         # Recompute completion using the material floor (400 chars), not the model's
         # "any non-empty" check. This matches how an inspector reads the PDF.
         sections_data = osp.sections or {}
-        material_section_hits = {
-            k: len((sections_data.get(k) or {}).get("narrative", "").strip()) >= self.OSP_NARRATIVE_MATERIAL_FLOOR
-            for k in OSP_SECTION_KEYS
-        }
+
+        def _section_is_material(key):
+            narrative = (sections_data.get(key) or {}).get("narrative", "").strip()
+            if len(narrative) < self.OSP_NARRATIVE_MATERIAL_FLOOR:
+                return False
+            # Length alone was gameable — see looks_like_padding above.
+            return not looks_like_padding(narrative)
+
+        material_section_hits = {k: _section_is_material(k) for k in OSP_SECTION_KEYS}
 
         # Registry Sync gate — narrative char-count alone is not enough. If the
         # § 205.201(a)(2) inputs narrative is long but the OSP's structured
@@ -7595,8 +9163,8 @@ class AuditExportService:
             data.append(
                 [
                     self._cell(cfr),
-                    self._cell(label, 40),
-                    self._cell(status_text, 60),
+                    self._cell(label),
+                    self._cell(status_text),
                     self._cell(str(last_updated)),
                 ]
             )
@@ -7773,7 +9341,7 @@ class AuditExportService:
                 sync_rows.append(
                     [
                         self._cell(row["source"]),
-                        self._cell(row["name"], 45),
+                        self._cell(row["name"]),
                         self._cell("Yes" if row["in_narrative"] else "No — add to narrative"),
                     ]
                 )
@@ -7922,11 +9490,13 @@ class AuditExportService:
                 cn_data.append(
                     [
                         self._cell(_fmt_date(cn.date_notified) if cn.date_notified else None),
-                        self._cell(cn.get_change_category_display(), 30),
-                        self._cell(cn.cfr_reference, 14),
-                        self._cell(cn.description, 40),
-                        self._cell(cn.get_method_display() if cn.method else None, 10),
-                        self._cell(_fmt_date(cn.certifier_acknowledged_at) if cn.certifier_acknowledged_at else "Pending"),
+                        self._cell(cn.get_change_category_display()),
+                        self._cell(cn.cfr_reference),
+                        self._cell(cn.description),
+                        self._cell(cn.get_method_display() if cn.method else None),
+                        self._cell(
+                            _fmt_date(cn.certifier_acknowledged_at) if cn.certifier_acknowledged_at else "Pending"
+                        ),
                     ]
                 )
             cn_widths = [0.7 * inch, 1.5 * inch, 0.85 * inch, 1.9 * inch, 0.6 * inch, 0.85 * inch]
@@ -7950,13 +9520,19 @@ class AuditExportService:
         # The annual update is a record distinct from the OSP version. Surface the most
         # recent one for this establishment so the certifier sees it was filed (previously
         # the OSP section queried OrganicSystemPlan only and never showed the update).
-        from certifications.models import OSPAnnualUpdate
+        from certifications.models import OSP_SECTION_KEYS, OSPAnnualUpdate
 
-        annual = (
-            OSPAnnualUpdate.objects.filter(prior_osp__establishment=establishment)
-            .order_by("-reporting_year", "-submitted_at")
-            .first()
-        )
+        # The update that matters to an inspector is the one covering the year under
+        # review, not simply the newest on file. Showing a 2027 filing on a 2025
+        # production report would misrepresent which year was actually reaffirmed.
+        target_year = self.production.start_date.year if self.production.start_date else date.today().year
+        est_updates = OSPAnnualUpdate.objects.filter(prior_osp__establishment=establishment)
+        annual = est_updates.filter(reporting_year=target_year).order_by("-submitted_at").first()
+        annual_is_fallback = False
+        if annual is None:
+            annual = est_updates.order_by("-reporting_year", "-submitted_at").first()
+            annual_is_fallback = annual is not None
+
         elements.append(self._spacer(0.15))
         elements.append(self._body("<b>Annual Continuation / Update (7 CFR 205.406)</b>"))
         elements.append(self._spacer(0.05))
@@ -7977,9 +9553,37 @@ class AuditExportService:
         else:
             additions = annual.additions if isinstance(annual.additions, list) else []
             deletions = annual.deletions if isinstance(annual.deletions, list) else []
+
+            # Per-section attestation (§ 205.201(a)(1)-(6) sections reaffirmed as unchanged).
+            # Rendered explicitly so the inspector sees which sections the operator stands
+            # behind rather than inferring it from a free-text summary.
+            #
+            # An un-attested section means "the operator did not affirm this section is
+            # unchanged" — NOT "this section changed". Those are different claims and only
+            # the first is supported by the data: a farmer who never opened the widget
+            # leaves every section un-ticked. Labelling that as "changed" would put a
+            # statement on a compliance document the operator never made.
+            attestation = annual.sections_unchanged_attestation
+            if not isinstance(attestation, dict):
+                attestation = {}
+            unchanged = [k for k in OSP_SECTION_KEYS if attestation.get(k)]
+            not_attested = [k for k in OSP_SECTION_KEYS if not attestation.get(k)]
+
+            def _fmt_sections(keys):
+                return "; ".join(k.replace("_", " ").title() for k in keys) if keys else None
+
             annual_rows = [
                 ("Reporting Year", str(annual.reporting_year) if annual.reporting_year else None),
                 ("Changes Summary", annual.changes_summary or "No changes — OSP reaffirmed"),
+            ]
+            # Both attestation rows are omitted entirely when the operator attested
+            # nothing. Rendering "Sections Not Attested: <all six>" against a filing where
+            # the question was never posed reads to an inspector as a finding, and an
+            # empty "—" row is just noise.
+            if unchanged:
+                annual_rows.append(("Sections Attested Unchanged", _fmt_sections(unchanged)))
+                annual_rows.append(("Sections Not Attested", _fmt_sections(not_attested)))
+            annual_rows += [
                 ("Additions", "; ".join(str(a) for a in additions) if additions else None),
                 ("Deletions", "; ".join(str(d) for d in deletions) if deletions else None),
                 ("Submitted", annual.submitted_at.isoformat() if annual.submitted_at else None),
@@ -7990,10 +9594,21 @@ class AuditExportService:
             ]
             annual_data = [[self._hdr("Field"), self._hdr("Value")]]
             for label, value in annual_rows:
-                annual_data.append([self._cell(label, 28), self._cell(_val(value), 80)])
+                annual_data.append([self._cell(label, 28), self._cell(_val(value))])
             annual_tbl = Table(annual_data, colWidths=[1.8 * inch, 4.2 * inch], repeatRows=1)
             annual_tbl.setStyle(self._base_table_style())
             elements.append(annual_tbl)
+
+            if annual_is_fallback:
+                elements.append(self._spacer(0.05))
+                elements.append(
+                    Paragraph(
+                        f"<b>[REVIEW] 7 CFR 205.406:</b> no annual update is on file for {target_year}, "
+                        f"the year this production covers. The {annual.reporting_year} filing is shown "
+                        "above for reference only and does not reaffirm the OSP for the year under review.",
+                        self._warning_style(),
+                    )
+                )
 
         elements.append(self._spacer(0.1))
         elements.append(
@@ -8047,9 +9662,22 @@ class AuditExportService:
             establishment = self.production.parcel.establishment
         except AttributeError:
             establishment = None
+        # NOT "does an OSP row exist" — "is there an approved-inputs set to match
+        # against". A draft OSP with zero structured inputs made every comparison
+        # vacuously true, and this section then reported "No drift findings. Every
+        # chemical input ... matched an entry on the establishment's active OSP
+        # approved-inputs list" while page 2 of the same PDF said the OSP was 0%
+        # filled and the OMRI table said an input was "Listed — not on OSP".
+        # An empty set cannot clear anything.
         osp_on_file = False
         if establishment is not None:
-            osp_on_file = OrganicSystemPlan.objects.filter(establishment=establishment).exists()
+            active_osp = (
+                OrganicSystemPlan.objects.filter(establishment=establishment).order_by("-version_number").first()
+            )
+            if active_osp is not None:
+                osp_on_file = (
+                    active_osp.approved_national_list_substances.exists() or active_osp.approved_omri_products.exists()
+                )
 
         # `self.production` is the History row (naming is historical). Events
         # link to it via CommonEvent.history, so a single-hop filter covers
@@ -8068,8 +9696,74 @@ class AuditExportService:
             )
         )
 
+        # § 205.105 prohibited-input check, independent of the drift detector.
+        # The detector matches against the approved-inputs registry; it says nothing
+        # about an input the FARMER already labelled conventional-only. Those were
+        # rendering in the input log as "Not Organic Approved - Conventional use
+        # only" while this section reported no findings on the same production.
+        prohibited_inputs = []
+        if str(getattr(self.production, "production_method", "") or "").lower() == "organic":
+            # Soil amendments carry the same ORGANIC_APPROVED choices as chemicals
+            # (7 CFR 205.203(b)); checking only ChemicalEvent let a prohibited
+            # amendment through untouched.
+            prohibited_inputs = list(
+                ChemicalEvent.objects.filter(
+                    history_id=history_id, organic_approved__in=("not_organic", "no")
+                ).order_by("date")
+            ) + list(
+                SoilManagementEvent.objects.filter(
+                    history_id=history_id, amendment_organic_approved__in=("not_organic", "no")
+                ).order_by("date")
+            )
+
+        if prohibited_inputs:
+            elements.append(
+                Paragraph(
+                    "<b>[NON-CONFORMANCE] Conventional-only inputs applied to an organic "
+                    f"production.</b> {len(prohibited_inputs)} input(s) below are recorded by the "
+                    "operator as not approved for organic use. Under 7 CFR 205.105 an organic crop "
+                    "may not be produced with a prohibited substance, and § 205.202(b) requires the "
+                    "land to have had no prohibited substance applied for 36 months before harvest. "
+                    "Resolve with the certifier before submission.",
+                    self._warning_style(),
+                )
+            )
+            rows = [[self._hdr(h) for h in ("Date", "Product", "Type", "Recorded Organic Status")]]
+            for ev in prohibited_inputs:
+                is_soil = isinstance(ev, SoilManagementEvent)
+                product = getattr(ev, "amendment_type", None) if is_soil else ev.commercial_name
+                kind = "Soil amendment" if is_soil else (ev.get_type_display() if ev.type else None)
+                status_field = "amendment_organic_approved" if is_soil else "organic_approved"
+                status = None
+                if getattr(ev, status_field, None):
+                    status = getattr(ev, f"get_{status_field}_display")()
+                rows.append(
+                    [
+                        self._cell(_fmt_date(ev.date)),
+                        self._cell(product),
+                        self._cell(kind),
+                        self._cell(status),
+                    ]
+                )
+            t = Table(rows, colWidths=[0.9 * inch, 2.6 * inch, 1.2 * inch, 2.3 * inch], repeatRows=1)
+            t.setStyle(self._base_table_style())
+            elements.append(t)
+            elements.append(self._spacer(0.1))
+
         if not chem_drift and not soil_drift and not seed_drift:
-            if osp_on_file:
+            if prohibited_inputs:
+                # Never print "no findings" on a production that just failed § 205.105.
+                summary_body = (
+                    "<b>No additional approved-inputs-registry findings.</b> Beyond the "
+                    "non-conformance above, no further input resolved outside the "
+                    "approved-inputs registry or \u00a7 205.204 seed documentation."
+                )
+                summary_note = (
+                    "The prohibited-input non-conformance above is assessed under 7 CFR "
+                    "205.105 from the operator's own recorded organic status, independently "
+                    "of the approved-inputs registry comparison."
+                )
+            elif osp_on_file:
                 summary_body = (
                     "<b>No drift findings.</b> Every chemical input, soil amendment, "
                     "and planting-event seed source logged during this production "
@@ -8085,21 +9779,21 @@ class AuditExportService:
                 )
             else:
                 summary_body = (
-                    "<b>No drift findings.</b> Every chemical input, soil amendment, "
-                    "and planting-event seed source logged during this production "
-                    "cycle resolved against the establishment-level approved-inputs "
-                    "registry and § 205.204 seed documentation requirements. Once "
-                    "the OSP is filed, this section will additionally cross-check "
-                    "against the OSP's approved-inputs list."
+                    "<b>[REVIEW] Approved-input conformance could not be evaluated.</b> "
+                    "No approved-inputs list is on file for this operation — neither the "
+                    "OSP § 205.201(a)(2) material list nor the establishment registry "
+                    "contains any entry — so there is nothing for the inputs used on this "
+                    "production to be checked against. This is an absence of evidence, "
+                    "NOT a clean result. File the OSP material list so this section can "
+                    "report a real conformance verdict."
                 )
                 summary_note = (
-                    "Inputs are cross-checked against the establishment's "
-                    "approved_national_list_substances and approved_omri_products "
-                    "registry at event save-time. 7 CFR 205.400(f)(2) requires "
-                    "producers to notify their certifying agent of any change in "
-                    "practices or procedures that may affect the organic status of "
-                    "the operation; an OSP-on-file is the canonical location for "
-                    "that approved-inputs list."
+                    "Inputs are cross-checked against approved_national_list_substances "
+                    "and approved_omri_products at event save-time. With both sets empty "
+                    "every comparison passes vacuously, which is why no verdict is "
+                    "reported here. 7 CFR 205.400(f)(2) requires producers to notify "
+                    "their certifying agent of any change in practices or procedures that "
+                    "may affect the organic status of the operation."
                 )
             elements.append(Paragraph(summary_body, self._styles["body"]))
             elements.append(self._spacer(0.05))
@@ -8207,10 +9901,10 @@ class AuditExportService:
 
             return [
                 self._cell(_fmt_date(event.date)),
-                self._cell(event_type_label, 40),
-                self._cell(dw.get("input_label") or "(unknown)", 60),
+                self._cell(event_type_label),
+                self._cell(dw.get("input_label") or "(unknown)"),
                 self._cell(dw.get("reason") or "\u2014", 120),
-                self._cell(resolution_cell, 80),
+                self._cell(resolution_cell),
                 # "Verified" column — up to 4 catalog timestamps joined with
                 # " · " so a 120-char cap is right-sized (allows word-wrap
                 # without truncating any individual stamp).
@@ -8405,6 +10099,75 @@ class AuditExportService:
                 self._styles["footer_note"],
             )
         )
+
+        elements.extend(self._build_supervisor_signoff_subtable())
+        return elements
+
+    # Event sources scanned for supervisor sign-offs. `reviewed` / `reviewer_name` /
+    # `review_date` live on CommonEvent, so EVERY event model inherits them — this tuple
+    # must stay exhaustive. Equipment in particular: § 112.161(b) names "equipment and tool
+    # cleaning" as a review-required record, so omitting EquipmentEvent would drop exactly
+    # the sign-offs the rule asks about.
+    _SIGNOFF_EVENT_SOURCES = (
+        ("Production", "history_productionevent_events"),
+        ("Chemical", "history_chemicalevent_events"),
+        ("Soil Management", "history_soilmanagementevent_events"),
+        ("Pest Management", "history_pestmanagementevent_events"),
+        ("Equipment", "history_equipmentevent_events"),
+        ("Weather", "history_weatherevent_events"),
+        ("General", "history_generalevent_events"),
+        ("Business", "history_businessevent_events"),
+    )
+
+    def _build_supervisor_signoff_subtable(self):
+        """Records a supervisor has reviewed — FSMA PSR § 112.161(b).
+
+        CommonEvent has carried `reviewed` / `reviewer_name` / `review_date` since F21, and
+        the model comment on those fields states that "the certifier PDF surfaces it". It
+        did not: nothing outside the serializers and one unit test ever read them, so a
+        farmer who diligently signed off records had no way to show it. This makes the
+        comment true.
+
+        § 112.161(b) asks for the reviewer's name and the review date on review-required
+        records (training, agricultural water, biological soil amendments, equipment and
+        tool cleaning). Rendered only when at least one sign-off exists — an operation that
+        does not use sign-offs should not be shown an empty table implying it should.
+        """
+        rows = []
+        for label, accessor in self._SIGNOFF_EVENT_SOURCES:
+            manager = getattr(self.production, accessor, None)
+            if manager is None:
+                continue
+            for ev in manager.filter(reviewed=True).order_by("date"):
+                rows.append(
+                    [
+                        self._cell(_fmt_date(ev.date)),
+                        self._cell(label),
+                        self._cell(getattr(ev, "name", None) or ev.description),
+                        self._cell(_val(ev.reviewer_name)),
+                        self._cell(_fmt_date(ev.review_date) if ev.review_date else "—"),
+                    ]
+                )
+
+        if not rows:
+            return []
+
+        rows.sort(key=lambda row: row[0].text if hasattr(row[0], "text") else "")
+
+        elements = [
+            self._spacer(0.15),
+            Paragraph(
+                "<b>Supervisor Record Review (FSMA PSR § 112.161(b))</b>",
+                self._sub_header_style(),
+            ),
+        ]
+        table = Table(
+            [[self._hdr(h) for h in ("Date", "Record Type", "Record", "Reviewed By", "Review Date")]] + rows,
+            colWidths=[0.75 * inch, 1.05 * inch, 2.6 * inch, 1.3 * inch, 0.85 * inch],
+            repeatRows=1,
+        )
+        table.setStyle(self._base_table_style())
+        elements.append(table)
         return elements
 
     def _build_regulatory_scope_section(self):
@@ -8424,66 +10187,17 @@ class AuditExportService:
             establishment = None
 
         # --- FSMA 204 Food Traceability Rule (21 CFR 1.1300, effective 2028-07-20) ---
-        crop_type_name = ""
-        try:
-            crop_type_name = (self.production.crop_type.name or "").lower() if self.production.crop_type else ""
-        except AttributeError:
-            pass
-
-        # FSMA 204 Food Traceability List (FTL). Simplified match — covered crops
-        # include leafy greens, tomatoes, peppers, cucumbers, herbs, tropical
-        # tree fruits (but NOT avocados), melons, sprouts. Do not claim coverage
-        # we can't verify — only apply the exemption if we recognize the crop.
-        # NOTE on tree nuts: raw/in-shell and shelled tree nuts (walnut, almond,
-        # pecan, pistachio, hazelnut) are NOT on the FTL — only nut BUTTERS are.
-        # A raw-nut orchard is therefore NOT COVERED; treat it like the other
-        # exempt crops rather than leaving it "STATUS UNKNOWN". (Substring matching
-        # is a stopgap; FTL membership should ultimately be a flag on the crop
-        # catalog rather than keyword matching.)
-        ftl_covered_keywords = (
-            "leafy green",
-            "spinach",
-            "lettuce",
-            "arugula",
-            "kale",
-            "tomato",
-            "pepper",
-            "cucumber",
-            "herb",
-            "melon",
-            "sprout",
-        )
-        ftl_exempt_keywords = (
-            "avocado",
-            "citrus",
-            "orange",
-            "lemon",
-            "apple",
-            "pear",
-            "stone fruit",
-            "cherry",
-            "peach",
-            "walnut",
-            "almond",
-            "pecan",
-            "pistachio",
-            "hazelnut",
-            "tree nut",
-        )
-        # Nut BUTTERS are on the FTL even though the raw nut is not. Detect the
-        # processed butter explicitly (e.g. "almond butter", "walnut butter") so a
-        # raw-nut crop stays exempt while a butter is flagged covered. Requires a
-        # specific nut name so "butternut squash" is not misread as a nut butter.
-        nut_names = ("walnut", "almond", "pecan", "pistachio", "hazelnut", "cashew", "peanut", "macadamia")
-        is_nut_butter = "butter" in crop_type_name and any(n in crop_type_name for n in nut_names)
-        if is_nut_butter or any(kw in crop_type_name for kw in ftl_covered_keywords):
+        # FTL membership resolved by the single-source-of-truth helper so this
+        # declaration and the Traceability-section footer can never contradict.
+        coverage = self._fsma_ftl_coverage()
+        if coverage == "covered":
             fsma_204_status = (
                 "COVERED. Crop is on the FDA Food Traceability List. FSMA 204 "
                 "KDEs/CTEs required at harvest, cooling, packing, and shipping "
                 "by 2028-07-20. Trazo lot tracking captures the identifiers; "
                 "formal CTE/KDE export is on the roadmap."
             )
-        elif any(kw in crop_type_name for kw in ftl_exempt_keywords):
+        elif coverage == "not_covered":
             fsma_204_status = (
                 "NOT COVERED. Crop is not on the FDA Food Traceability List "
                 "(21 CFR 1.1300). No FSMA 204 KDE/CTE tracking required. Lot "
@@ -8663,8 +10377,8 @@ class AuditExportService:
             data.append(
                 [
                     self._cell(_fmt_date(ev.date)),
-                    self._cell(ev.activity_type, 30),
-                    self._cell(ev.activity_name or ev.name, 30),
+                    self._cell(ev.activity_type),
+                    self._cell(ev.activity_name or ev.name),
                     self._cell(str(ev.people_involved) if ev.people_involved is not None else None),
                     self._cell(ev.duration),
                     # Notes can run long — season summaries, training logs,
@@ -8672,7 +10386,7 @@ class AuditExportService:
                     # inside the column instead of cutting mid-sentence.
                     # Same cap as the Production Events description column.
                     self._cell(ev.observation, 600),
-                    self._cell(ev.performed_by, 25),
+                    self._cell(ev.performed_by),
                 ]
             )
 
@@ -8698,10 +10412,15 @@ class AuditExportService:
     # file to confirm content.
     _OFPP_SUSPICIOUS_FILENAME_PATTERNS = ("factura", "invoice", "receipt", "comprobante", "recibo")
 
-    def _ofpp_flags(self):
+    def _ofpp_flags(self, compute_hash=True):
         """
         Compute OFPP state in ONE place so both the SOE section and the
         page-1 Compliance Snapshot can consult the same verdict.
+
+        ``compute_hash=False`` skips reading the OFPP document. Hashing it means a blocking
+        S3 GET of the whole file, which is the single slowest step in building the snapshot —
+        acceptable when producing a PDF, not on a dashboard request that only needs the
+        PASS/REVIEW/FAIL rows. ``doc_hash`` is then reported as "not computed".
 
         Returns dict::
 
@@ -8739,15 +10458,23 @@ class AuditExportService:
                 result["doc_name"] = os.path.basename(doc.name)
             except Exception:
                 result["doc_name"] = "—"
-            try:
-                import hashlib
+            if compute_hash:
+                try:
+                    import hashlib
 
-                with doc.open("rb") as f:
-                    result["doc_hash"] = hashlib.sha256(f.read()).hexdigest()[:16]
-            except Exception:
-                result["doc_hash"] = "unavailable"
+                    with doc.open("rb") as f:
+                        result["doc_hash"] = hashlib.sha256(f.read()).hexdigest()[:16]
+                except Exception:
+                    result["doc_hash"] = "unavailable"
+            else:
+                result["doc_hash"] = "not computed"
             lowered = result["doc_name"].lower()
             result["filename_suspicious"] = any(p in lowered for p in self._OFPP_SUSPICIOUS_FILENAME_PATTERNS)
+        elif result["uploaded"]:
+            # OFPP attested as on file but no document object is attached to this
+            # record (e.g. filed directly with the certifier). Render an explicit
+            # phrase instead of a bare "—" that reads as a broken/missing file.
+            result["doc_name"] = "on file with certifier (not embedded in this export)"
         return result
 
     def _label_images_block(self):
@@ -8858,9 +10585,7 @@ class AuditExportService:
                 _soe_sales = list(self.production.sales_records.all())
             except Exception:  # noqa: BLE001 — relation always present in practice
                 _soe_sales = []
-            _soe_sales_buyers = ", ".join(
-                sorted({(s.buyer_name or "").strip() for s in _soe_sales if s.buyer_name})
-            )
+            _soe_sales_buyers = ", ".join(sorted({(s.buyer_name or "").strip() for s in _soe_sales if s.buyer_name}))
             _soe_organic_on_invoice = (
                 all(s.organic_on_invoice for s in _soe_sales)
                 if _soe_sales
@@ -8879,13 +10604,22 @@ class AuditExportService:
                         + ofpp_filename_warning
                     ),
                 ],
+                # "Not set" here read as "this operation does not retain records
+                # for 5 years" — the opposite of true, and flatly contradicted by
+                # the § 205.103(b)(3) paragraph two blocks below on the same page.
+                # `retention_until` is only the computed END-DATE, stamped when the
+                # production finishes; the 5-year clock runs from record creation
+                # either way. Describe the clock, not the empty column.
                 [
                     P("Record Retention (5 years)"),
-                    P("Active" if self.production.retention_until else "Not set"),
+                    P("Active" if self.production.retention_until else "Running"),
                     P(
                         f"Until: {self.production.retention_until}"
                         if self.production.retention_until
-                        else "Set automatically at production finish"
+                        else (
+                            "Retained 5 years from record creation (7 CFR 205.103(b)(3)). "
+                            "The end-date is stamped when this production is finished."
+                        )
                     ),
                 ],
                 [
@@ -8899,11 +10633,7 @@ class AuditExportService:
                 ],
                 [
                     P("Post-Harvest Sales Record"),
-                    P(
-                        "Recorded"
-                        if (_soe_sales or self.production.sold_to)
-                        else "Not recorded"
-                    ),
+                    P("Recorded" if (_soe_sales or self.production.sold_to) else "Not recorded"),
                     P(
                         f"{len(_soe_sales)} itemized sales record(s) on file (§ 205.307(a)); "
                         f"buyers: {_soe_sales_buyers}"
@@ -9059,7 +10789,7 @@ class AuditExportService:
         # for. We attest to the platform behavior, not the operator's compliance.
         elements.append(
             Paragraph(
-                "<b>Record retention (7 CFR 205.103(b)(4)):</b> "
+                "<b>Record retention (7 CFR 205.103(b)(3)):</b> "
                 "Trazo retains all event logs, OSP versions, approved-input change logs, "
                 "and audit-trail entries for this production in PostgreSQL with point-in-"
                 "time recovery, and stores attached media in S3. Records remain accessible "
@@ -9174,7 +10904,7 @@ class AuditExportService:
             Paragraph(
                 "SOE (Strengthening Organic Enforcement) rule effective March 19, 2024 requires "
                 "fraud prevention plans (7 CFR 205.201(a)(3)), enhanced traceability "
-                "(7 CFR 205.103(b)(2)), 5-year record retention (7 CFR 205.103(b)(4)), "
+                "(7 CFR 205.103(b)(2)), 5-year record retention (7 CFR 205.103(b)(3)), "
                 "and supply-chain traceability audits (7 CFR 205.501(a)(21)).",
                 self._styles["footer_note"],
             )
@@ -9295,14 +11025,14 @@ class AuditExportService:
                 actor = "system (background task)"
             model_name = le.content_type.model_class().__name__ if le.content_type else "Unknown"
             record_label = f"{model_name} #{le.object_pk}"
-            changed_fields = ", ".join(le.changes_dict.keys()) if le.changes_dict else "—"
+            changed_fields = self._inspector_field_list(le.changes_dict)
             data.append(
                 [
                     self._cell(le.timestamp.strftime("%Y-%m-%d %H:%M")),
                     self._cell(actor),
                     self._cell(action_map.get(le.action, "?")),
                     self._cell(record_label),
-                    self._cell(changed_fields, 80),
+                    self._cell(changed_fields),
                 ]
             )
 
@@ -9322,6 +11052,125 @@ class AuditExportService:
             )
 
         return elements
+
+    def _photo_reuse_findings(self, category_events):
+        """Flag the same image attached to more than one event.
+
+        An inspector reading two different spray dates backed by the identical
+        photograph treats it as fabricated evidence, and under SOE 7 CFR
+        205.201(a)(3) fraud prevention that is exactly the pattern to surface.
+        The existing photo checks look at file size, format, blankness and
+        timestamp — none of them notice reuse. Found on 2026-08-03: one dossier
+        backed a trunk-injection event and an airblast event with the same two
+        images, across three different crops.
+
+        Identity is the storage key (s3_key / image_url), which is what actually
+        proves two events point at one file.
+        """
+        seen = {}
+        for category_label, events in category_events:
+            for ev in events:
+                album = getattr(ev, "album", None)
+                if album is None:
+                    continue
+                try:
+                    images = list(album.images.all())
+                except Exception:  # noqa: BLE001 — never break the PDF over photos
+                    continue
+                for img in images:
+                    key = (img.s3_key or "").strip() or (img.image_url or "").strip()
+                    if not key:
+                        continue
+                    # Dedup on the EVENT, never on the rendered label: two distinct
+                    # events in one category on one date share a label, and keying
+                    # on that hid real reuse between them.
+                    event_key = (type(ev).__name__, getattr(ev, "pk", id(ev)))
+                    label = f"{category_label} · {_fmt_date(ev.date)}"
+                    seen.setdefault(key, {})
+                    seen[key][event_key] = label
+
+        reused = {k: list(v.values()) for k, v in seen.items() if len(v) > 1}
+        if not reused:
+            return []
+
+        elements = [self._spacer(0.08)]
+        elements.append(
+            Paragraph(
+                f"<b>[REVIEW] Photo evidence reuse: {len(reused)} image(s) are attached to more "
+                "than one event.</b> The same photograph cannot document two separate operations. "
+                "Replace the duplicates with photographs taken at each operation, or remove them — "
+                "an inspector assessing SOE fraud-prevention (7 CFR 205.201(a)(3)) will read "
+                "repeated evidence as fabricated.",
+                self._warning_style(),
+            )
+        )
+        rows = [[self._hdr(h) for h in ("Image", "Attached to")]]
+        for idx, (key, labels) in enumerate(sorted(reused.items(), key=lambda kv: -len(kv[1]))[:15], start=1):
+            rows.append([self._cell(f"Image {idx}"), self._cell("; ".join(labels))])
+        table = Table(rows, colWidths=[1.0 * inch, 6.0 * inch], repeatRows=1)
+        table.setStyle(self._base_table_style())
+        elements.append(table)
+        return elements
+
+    # Reverse-relation accessors, internal plumbing and consumer/CRM columns that
+    # auditlog records but which mean nothing to a certifier. Printing
+    # `history_pestmanagementevent_events`, `favorited_by` or `buyer_doc_requests`
+    # in a regulatory document leaks the ORM schema and reads as unprofessional
+    # (2026-08-03 dossier review).
+    _CHANGE_LOG_HIDDEN_FIELDS = frozenset(
+        {
+            "id",
+            "index",
+            "public_id",
+            "album",
+            "history",
+            "reviews",
+            "favorited_by",
+            "buyer_doc_requests",
+            "cover_image_url",
+            "history_scans",
+            "sales_records",
+            "events_status",
+            "updated_at",
+            "extra_data",
+        }
+    )
+
+    @classmethod
+    def _inspector_field_list(cls, changes_dict):
+        """Human-readable field names for the certifier, ORM noise removed."""
+        if not changes_dict:
+            return "—"
+        names = [
+            f
+            for f in changes_dict.keys()
+            if f not in cls._CHANGE_LOG_HIDDEN_FIELDS and not f.startswith("history_") and not f.endswith("_events")
+        ]
+        if not names:
+            return "(internal fields only)"
+        return ", ".join(n.replace("_", " ") for n in sorted(names))
+
+    # Post-harvest handling differs by crop; the old text asserted tree-nut steps
+    # (hulling, drying) on every dossier, including avocados and citrus.
+    _POST_HARVEST_STEPS = {
+        "tree_nut": "Tree-nut crops are typically hulled, dried, and cold-stored after harvest.",
+        "tree_fruit": "Tree fruit is typically washed, graded, packed, and cold-stored after harvest.",
+        "berry": "Berries are typically field-packed and moved straight into cold storage.",
+        "vegetable": "Vegetables are typically washed, cooled, graded, and packed after harvest.",
+        "grain": "Grain is typically dried, cleaned, and binned after harvest.",
+        "oilseed": "Oilseed is typically dried, cleaned, and binned after harvest.",
+        "legume": "Legumes are typically dried, cleaned, and binned after harvest.",
+    }
+    _POST_HARVEST_DEFAULT = "Post-harvest handling and storage steps vary by crop."
+
+    def _post_harvest_steps_phrase(self):
+        category = None
+        try:
+            crop = self.production.crop_type
+            category = getattr(crop, "category", None)
+        except Exception:  # noqa: BLE001 — never break the PDF over a label
+            category = None
+        return self._POST_HARVEST_STEPS.get(category, self._POST_HARVEST_DEFAULT)
 
     # ------------------------------------------------------------------
     # CSV generation — public entry point
@@ -9347,6 +11196,10 @@ class AuditExportService:
             "Product / Input",
             "Amount",
             "Unit",
+            # Derived per-area rate, mirroring the PDF's "Amount / Rate" column (2026-08-01).
+            # A spreadsheet gets its own column rather than the PDF's parenthetical so it can
+            # be sorted and filtered.
+            "Rate",
             "Method",
             "Operator",
             "Photos Count",
@@ -9394,6 +11247,7 @@ class AuditExportService:
                     amount = _fmt_float(ev.fuel_consumed) if ev.fuel_consumed else ""
                     unit = _val(ev.fuel_unit, "") if ev.fuel_consumed else ""
                 product_input = _val(ev.variety) or ""
+                csv_rate = _rate_per_area(ev.yield_quantity, ev.area_covered, ev.yield_unit, ev.area_unit) or ""
                 method_raw = getattr(ev, "harvest_method", None) or extra.get("harvest_method") or ""
                 structured_method = (
                     _CSV_HARVEST_METHOD_LABELS.get(
@@ -9417,6 +11271,7 @@ class AuditExportService:
                 amount = _fmt_float(ev.fuel_consumed) if ev.fuel_consumed else ""
                 unit = _val(ev.fuel_unit, "") if ev.fuel_consumed else ""
                 product_input = ""
+                csv_rate = ""
                 # Non-HA: free-text production_method from extra_data (manual-labor
                 # documentation for thinning/pruning/etc.)
                 method_val = _val(extra.get("method") or extra.get("production_method"), "")
@@ -9432,6 +11287,7 @@ class AuditExportService:
                         product_input,
                         amount,
                         unit,
+                        csv_rate,
                         method_val,
                         _val(ev.performed_by),
                         str(_photo_count(ev)),
@@ -9445,8 +11301,15 @@ class AuditExportService:
         # --- Chemical Events ---
         for ev in self.production.history_chemicalevent_events.all():
             amount = _fmt_float(ev.volume_numeric) if ev.volume_numeric else _val(ev.volume, "")
-            unit = _val(ev.volume_unit, "") if ev.volume_numeric else ""
-            method = ev.application_method_structured or ev.way_of_application
+            # Show the unit whether the amount came from volume_numeric or the
+            # free-text volume string — a unitless amount is uninterpretable.
+            unit = _val(ev.volume_unit, "") if (ev.volume_numeric or ev.volume) else ""
+            # Same derived per-area rate the PDF prints, in its own column so a spreadsheet
+            # can sort and filter on it.
+            csv_rate = _rate_per_area(ev.volume_numeric, ev.area_numeric, ev.volume_unit, ev.area_unit) or ""
+            # Same label map as the PDF's Input Application Log: the CSV is read by the same
+            # certifier, so it must not be the one that says "air_blast".
+            method = _method_label(ev.application_method_structured or ev.way_of_application)
             all_rows.append(
                 (
                     ev.date,
@@ -9458,6 +11321,7 @@ class AuditExportService:
                         _val(ev.commercial_name),
                         amount,
                         unit,
+                        csv_rate,
                         _val(method),
                         _val(ev.applicator_name or ev.performed_by),
                         str(_photo_count(ev)),
@@ -9487,6 +11351,15 @@ class AuditExportService:
             notes = ""
             if ev.amendment_organic_approved:
                 notes = f"Organic: {ev.get_amendment_organic_approved_display()}"
+            # Nitrogen applied via the amendment. California's Irrigated Lands Regulatory
+            # Program requires an annual Irrigation & Nitrogen Management Plan summary of
+            # total nitrogen applied FROM ALL SOURCES — compost and manure included — so the
+            # kg of N has to be readable off the packet, not just implied by a tonnage.
+            _n_kg = _amendment_nitrogen_kg(ev)
+            if _n_kg is not None:
+                notes = (notes + " | " if notes else "") + (
+                    f"N: {ev.amendment_nitrogen_percentage}% as-received = {_n_kg:,.0f} kg N"
+                )
             if ev.type == "CO":
                 compost_parts = []
                 if ev.compost_peak_temp_f is not None:
@@ -9541,6 +11414,10 @@ class AuditExportService:
                 "",
                 "",
             ]
+            csv_rate = (
+                _rate_per_area(ev.amendment_amount_numeric, ev.area_covered, ev.amendment_amount_unit, ev.area_unit)
+                or ""
+            )
             all_rows.append(
                 (
                     ev.date,
@@ -9552,6 +11429,7 @@ class AuditExportService:
                         amendment_label,
                         amount,
                         unit,
+                        csv_rate,
                         "",
                         _val(ev.performed_by),
                         str(_photo_count(ev)),
@@ -9581,6 +11459,7 @@ class AuditExportService:
                         _val(ev.pest_species),
                         "",
                         "",
+                        "",  # Rate (no area on this event type)
                         _val(ev.ipm_strategy),
                         _val(ev.performed_by),
                         str(_photo_count(ev)),
@@ -9597,6 +11476,7 @@ class AuditExportService:
             amount = _fmt_float(fuel) if fuel else ""
             unit = _val(ev.fuel_unit, "") if fuel else ""
             hours = ev.hours_operated or ev.hours_used
+            csv_rate = ""  # EquipmentEvent carries no treated area to derive a rate from
             all_rows.append(
                 (
                     ev.date,
@@ -9608,6 +11488,7 @@ class AuditExportService:
                         _val(ev.equipment_name),
                         amount,
                         unit,
+                        csv_rate,
                         "",
                         _val(ev.performed_by),
                         str(_photo_count(ev)),
@@ -9668,6 +11549,7 @@ class AuditExportService:
                         _val(ev.description),
                         "",
                         "",
+                        "",  # Rate (no area on this event type)
                         "",
                         "",
                         _val(ev.performed_by),
@@ -9691,6 +11573,7 @@ class AuditExportService:
                         _val(ev.description),
                         "",
                         "",
+                        "",  # Rate (no area on this event type)
                         "",
                         "",
                         _val(ev.performed_by),

@@ -70,6 +70,50 @@ class Parcel(models.Model):
         null=True,
         help_text="Description / location of the treated lumber and the mitigation in place.",
     )
+
+    # ---- Irrigation pumping plant (§E-6) --------------------------------------------
+    # A pump test is an ANNUAL measurement of one plant, and every irrigation event that
+    # season should be costed against the same numbers — so these belong to the parcel, not
+    # repeated on each event. The UC Davis 2024 organic-almond cost study budgets exactly one
+    # January pump test per year (300 ft well, 75 ft pumping level, 125 HP pump).
+    #
+    # These are what make the corrected irrigation carbon ACCURATE rather than merely
+    # defensible: without them the calculator falls back to a 70% efficiency and a
+    # method-derived pressure. A grower who measures their plant gets their own figure.
+    # See carbon/services/verified_emission_factors._pump_energy_kwh_per_1000gal.
+    pump_efficiency_pct = models.DecimalField(
+        max_digits=4,
+        decimal_places=1,
+        blank=True,
+        null=True,
+        help_text=(
+            "Overall pumping-plant efficiency (wire-to-water) from the most recent pump test, "
+            "as a percentage. Leave empty to use the 70% default. A neglected plant can fall "
+            "below 50%, which RAISES emissions — this is not a field that flatters the farm."
+        ),
+    )
+    system_pressure_psi = models.DecimalField(
+        max_digits=5,
+        decimal_places=1,
+        blank=True,
+        null=True,
+        help_text=(
+            "Operating pressure the irrigation system requires, in psi. Added to the lift as "
+            "pressure head when computing total dynamic head. Leave empty to derive it from "
+            "the irrigation method (drip ~15, micro-sprinkler ~30, sprinkler ~50, flood ~5)."
+        ),
+    )
+    pump_test_date = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Date of the most recent pump test. Efficiency drifts, so an old test is weaker evidence.",
+    )
+    pump_test_provider = models.CharField(
+        max_length=120,
+        blank=True,
+        null=True,
+        help_text="Who performed the pump test (utility programme, pump company, irrigation district).",
+    )
     treated_lumber_install_date = models.DateField(
         blank=True,
         null=True,

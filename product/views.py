@@ -1,11 +1,13 @@
 import json
 import logging
+from datetime import datetime
 
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.dateparse import parse_date, parse_datetime
 
-from rest_framework import filters, mixins, viewsets
+from rest_framework import filters, mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
@@ -223,6 +225,14 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         raw_images = request.data.getlist("album[images]") if hasattr(request.data, "getlist") else []
         url_images = [u for u in raw_images if isinstance(u, str) and u]
         images = file_images + url_images
+        # History.finish() assigns request values straight onto the model and saves, so
+        # anything the database rejects (an over-length string, a bad numeric) surfaced
+        # as a 500 DataError. Finalization is the moment a grower publishes their season
+        # — it must fail with a usable field error, not a server error page.
+        invalid = self._validate_finalization_fields(history_data)
+        if invalid:
+            return Response(invalid, status=status.HTTP_400_BAD_REQUEST)
+
         history = parcel.finish_current_history(history_data, images)
         _t2 = time.monotonic()
 
@@ -255,6 +265,93 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             {"error": "No active production found for this parcel."},
             status=400,
         )
+
+    # Fields History.finish() copies from the request onto the model. Validated here
+    # because finish() bypasses serializer validation entirely.
+    _FINALIZE_FIELDS = ("lot_id", "production_unit", "quality_grade", "harvest_method")
+
+    def _validate_finalization_fields(self, history_data):
+        """
+        Return a DRF-shaped error dict for any finalization field the model would reject,
+        or None when everything is acceptable.
+        """
+        from history.models import History
+
+        errors = {}
+
+        for field_name in self._FINALIZE_FIELDS:
+            value = history_data.get(field_name)
+            if value in (None, ""):
+                continue
+            value = str(value)
+            field = History._meta.get_field(field_name)
+
+            max_length = getattr(field, "max_length", None)
+            if max_length and len(value) > max_length:
+                errors[field_name] = [f"Ensure this value has at most {max_length} characters (it has {len(value)})."]
+                continue
+
+            choices = [c[0] for c in (field.choices or [])]
+            if choices and value not in choices:
+                errors[field_name] = [f'"{value}" is not a valid choice. Valid options: {", ".join(choices)}.']
+
+        # finish() indexes history_data["production_amount"] and assigns it to a
+        # FloatField; a non-numeric value would otherwise reach the database.
+        amount = history_data.get("production_amount")
+        if amount in (None, ""):
+            errors.setdefault("production_amount", ["This field is required to finalize a production."])
+        else:
+            try:
+                float(amount)
+            except (TypeError, ValueError):
+                errors["production_amount"] = ["Enter a number."]
+
+        finish_raw = history_data.get("finish_date")
+        if not finish_raw:
+            errors.setdefault("finish_date", ["This field is required to finalize a production."])
+        else:
+            finish_dt = self._parse_finish_date(finish_raw)
+            if finish_dt is None:
+                errors["finish_date"] = ["Enter a valid date or ISO-8601 datetime."]
+            # A season that has not ended cannot be finalized. Beyond being wrong on its
+            # face, a future finish_date makes the parcel page contradict itself: the
+            # card badge reads "COMPLETE" (finish_date exists) while the
+            # completed/ongoing counters classify by date and still say "ongoing".
+            elif finish_dt > timezone.now():
+                errors["finish_date"] = ["A production cannot be finalized with a finish date in the future."]
+
+        return errors or None
+
+    @staticmethod
+    def _parse_finish_date(raw):
+        """
+        Coerce a submitted finish_date to an aware datetime, or None if unusable.
+
+        Accepts both a datetime and a date-only string: History.finish() parses with
+        datetime.fromisoformat(), which takes "2026-07-30" as well as a full timestamp,
+        so validating with parse_datetime() alone would have rejected input the model
+        would happily have stored — a validator stricter than the thing it guards.
+        """
+        if not isinstance(raw, str):
+            value = raw
+        else:
+            value = parse_datetime(raw)
+            if value is None:
+                parsed_date = parse_date(raw)
+                if parsed_date is None:
+                    return None
+                # End-of-day so a same-day finish isn't read as "in the future" for
+                # anyone whose local clock is ahead of midnight UTC. Uses
+                # datetime.max.time() rather than importing `time`, which is already
+                # shadowed by a function-local `import time` elsewhere in this file.
+                value = datetime.combine(parsed_date, datetime.max.time())
+
+        if timezone.is_naive(value):
+            try:
+                value = timezone.make_aware(value)
+            except Exception:  # noqa: BLE001 — ambiguous/nonexistent local times (DST)
+                return None
+        return value
 
     def _trigger_blockchain_submission(self, history):
         """Dispatch immediate blockchain submission if the company has an active subscription.

@@ -29,23 +29,19 @@ from history.models import (
 
 from ._loewen_base import LOEWEN_IMAGES
 
-# Authentic wholesale sales for the finished 2024–25 walnut season. Keyed by
-# invoice_number so apply_loewen_audit_fields is idempotent.
+# Itemized sale for the finished 2024–25 walnut season. Mirrors the production-
+# level export sale (Korean Organic Program buyer, 180,000 kg on 2025-11-01) so
+# the SOE sales record and the mass-balance reconcile to the same story instead
+# of contradicting it. Generic, non-specific buyer — this is a sample record, so
+# it must not assert an invented transaction with a real, checkable company.
+# Keyed by invoice_number so apply_loewen_audit_fields is idempotent.
 LOEWEN_SALES = [
     {
-        "buyer_name": "Braga Organic Farms",
-        "sale_date": date(2025, 11, 12),
-        "quantity": Decimal("800.00"),
-        "quantity_unit": "lb",
-        "invoice_number": "LOEWEN-INV-2025-041",
-        "organic_on_invoice": True,
-    },
-    {
-        "buyer_name": "Whole Foods Market — NorCal DC",
-        "sale_date": date(2025, 11, 20),
-        "quantity": Decimal("1200.00"),
-        "quantity_unit": "lb",
-        "invoice_number": "LOEWEN-INV-2025-055",
+        "buyer_name": "Korean Organic Program buyer (export)",
+        "sale_date": date(2025, 11, 1),
+        "quantity": Decimal("180000.00"),
+        "quantity_unit": "kg",
+        "invoice_number": "LOEWEN-2025-EXP-001",
         "organic_on_invoice": True,
     },
 ]
@@ -59,12 +55,55 @@ def apply_loewen_audit_fields(prod):
 
     Authentic to a regenerative organic walnut operation only:
       * NOP 5012 nitrogen_source = "organic" on fertilizer events
-      * SOE (§ 205.307(a)) itemized SalesRecords (real wholesale channel)
-      * one benign § 205.400(f)(2) OSP change notification (NOP 2615)
+      * SOE (§ 205.307(a)) one itemized SalesRecord that mirrors the export sale
 
-    Intentionally omits processed manure (5006) and chlorine sanitizer (5026) —
-    those practices don't fit his operation and would fabricate his audit record.
+    Intentionally omits processed manure (5006), chlorine sanitizer (5026), an
+    off-farm handler, and OSP change notifications — none fit his operation and
+    all would fabricate his audit record.
+
+    Also REPAIRS in place (idempotent): purges fabricated records left by an
+    earlier version of this fixture, so an already-published production is
+    corrected WITHOUT changing its public_id (Leonard's live sample link).
     """
+    # REPAIR — purge fabricated third-party records from any production seeded by
+    # an earlier fixture version. Safe no-op on freshly seeded data.
+    keep_invoices = {s["invoice_number"] for s in LOEWEN_SALES}
+    prod.sales_records.exclude(invoice_number__in=keep_invoices).delete()
+
+    fac = getattr(prod, "post_harvest_facility", None)
+    if fac is not None:
+        prod.post_harvest_facility = None
+        prod.save(update_fields=["post_harvest_facility"])
+        try:
+            fac.delete()
+        except Exception:  # noqa: BLE001 — non-fatal
+            pass
+
+    try:
+        from certifications.models import OrganicSystemPlan, OSPChangeNotification
+
+        _osp = (
+            OrganicSystemPlan.objects.filter(establishment=prod.parcel.establishment)
+            .order_by("-version_number")
+            .first()
+        )
+        if _osp is not None:
+            # Loewen files no change notifications; clear any (incl. phantom
+            # "Block C" and E2E-test residue) so the record reads "no changes".
+            OSPChangeNotification.objects.filter(osp=_osp).delete()
+    except Exception:  # noqa: BLE001 — non-fatal
+        pass
+
+    # Mark the summer-heat weather event's temperature as Celsius so the export
+    # renders "42°C" (matching the "~42C" note) instead of defaulting the unit to
+    # °F and printing "42°F" (winter cold in July).
+    for wev in prod.history_weatherevent_events.filter(type=WeatherEvent.HIGH_TEMPERATURE):
+        ed = dict(wev.extra_data or {})
+        if ed.get("highest_temperature") and not ed.get("temperature_unit"):
+            ed["temperature_unit"] = "C"
+            wev.extra_data = ed
+            wev.save(update_fields=["extra_data"])
+
     # NOP 5012 — nitrogen source on fertilizer events (fill only when blank).
     for ev in prod.history_chemicalevent_events.filter(type=ChemicalEvent.FERTILIZER):
         if not ev.nitrogen_source:
@@ -85,28 +124,10 @@ def apply_loewen_audit_fields(prod):
             ),
         )
 
-    # NOP 2615 — one benign § 205.400(f)(2) change notification on the active OSP.
-    try:
-        from certifications.models import OrganicSystemPlan, OSPChangeNotification
-
-        osp = (
-            OrganicSystemPlan.objects.filter(establishment=prod.parcel.establishment)
-            .order_by("-version_number")
-            .first()
-        )
-        if osp is not None:
-            OSPChangeNotification.objects.get_or_create(
-                osp=osp,
-                change_category=OSPChangeNotification.CATEGORY_ACREAGE_FIELD_ADDITION,
-                description="Added 12-acre Block C to the certified organic walnut acreage.",
-                defaults=dict(
-                    date_notified=date(2025, 3, 1),
-                    method=OSPChangeNotification.METHOD_WRITTEN,
-                    documentation_timing=OSPChangeNotification.DOC_AT_NOTIFICATION,
-                ),
-            )
-    except Exception:  # noqa: BLE001 — non-fatal enrichment
-        pass
+    # NOP 2615 — no OSP change notifications are seeded for Loewen. The operation
+    # reports no acreage/practice/input changes for the season, so fabricating one
+    # (e.g. a phantom "Block C") would contradict the "no recorded changes" record
+    # and read as invented regulatory correspondence to a certifier.
 
 
 def _dt(year, month, day, hour=8):
@@ -554,6 +575,9 @@ def create_loewen_finished_events(prod, user):
         extra_data={
             "event_name": "Central Valley Summer Heat",
             "highest_temperature": "42",
+            # Value is in Celsius (matches "Peak ~42C" in the notes). Without this
+            # the export defaults the unit to °F and renders "42°F" (winter cold).
+            "temperature_unit": "C",
             "duration_days": 4,
             "impact": "No crop stress; living floor buffered soil moisture",
         },

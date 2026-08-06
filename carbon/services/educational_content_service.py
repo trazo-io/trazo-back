@@ -7,6 +7,8 @@ carbon calculations, and regional farming practices.
 import logging
 from typing import Any, Dict, List
 
+from common.us_states import normalize_state
+
 logger = logging.getLogger(__name__)
 
 
@@ -437,56 +439,6 @@ class EducationalContentService:
             "last_updated": "2024-03-15",
         }
 
-    def _parse_location_for_state(self, location: str) -> str:
-        """Extract state code from location string"""
-        if not location:
-            return "CA"  # Default to California
-
-        location_upper = location.upper()
-
-        # Common state mappings
-        state_mappings = {
-            "CALIFORNIA": "CA",
-            "CA": "CA",
-            "IOWA": "IA",
-            "IA": "IA",
-            "ILLINOIS": "IL",
-            "IL": "IL",
-            "FLORIDA": "FL",
-            "FL": "FL",
-            "TEXAS": "TX",
-            "TX": "TX",
-            "NEBRASKA": "NE",
-            "NE": "NE",
-            "KANSAS": "KS",
-            "KS": "KS",
-        }
-
-        # Check for state names or codes in the location string
-        for state_name, state_code in state_mappings.items():
-            if state_name in location_upper:
-                return state_code
-
-        # Check for common California cities/regions
-        ca_indicators = [
-            "FRESNO",
-            "SACRAMENTO",
-            "BAKERSFIELD",
-            "MODESTO",
-            "STOCKTON",
-            "SALINAS",
-            "SANTA",
-            "SAN",
-            "LOS ANGELES",
-            "RIVERSIDE",
-            "CENTRAL VALLEY",
-        ]
-        if any(indicator in location_upper for indicator in ca_indicators):
-            return "CA"
-
-        # Default to California (most common agricultural state)
-        return "CA"
-
     def get_regional_benchmarks_content(
         self, user_level: str = "beginner", context: Dict[str, Any] = None
     ) -> Dict[str, Any]:
@@ -495,8 +447,11 @@ class EducationalContentService:
         location = establishment.get("location", "your region")
         crop_type = context.get("cropType", "crops")
 
-        # Parse state from location
-        state_code = self._parse_location_for_state(location)
+        # Read the state the caller supplied; None when absent or not a US state.
+        # This replaces a location-string parser that defaulted to "CA" three
+        # different ways — so an Iowa grower was shown California benchmarks and
+        # California practice copy. `location` here is a display string only.
+        state_code = normalize_state(establishment.get("state"))
 
         # Get actual benchmark data if available
         try:

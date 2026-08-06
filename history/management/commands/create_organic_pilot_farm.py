@@ -1,13 +1,13 @@
 """
 Create the Solana Verde Organic Ranch pilot-ready NOP-compliant farm fixture.
 
-This is the canonical CCOF demo + PDF regression fixture + drift-detector stress test.
+This is the canonical organic demo + PDF regression fixture + drift-detector stress test.
 Populates the NOP fields closed in the 2026-04 pivot (supplier/invoice chain,
 compost temp/duration/turnings, manure interval, pest ID + threshold rationale,
 contamination incident chain, equipment cleaning, OFPP, split operation,
 ParcelCropHistory, seed organic search log, 5-year retention, sales/delivery)
 plus an active Organic System Plan v1 (six § 205.201(a) narrative sections) and
-an OGC delivery BusinessEvent (BOL/PO/invoice + § 205.103(b)(3) organic-on-invoice).
+an POD delivery BusinessEvent (BOL/PO/invoice + § 205.103(b)(2) organic-on-invoice).
 
 Source of truth for every literal value:
   documentation/testing/E2E_ORGANIC_FARM_TESTING_GUIDE.md
@@ -112,7 +112,7 @@ class Command(BaseCommand):
         self.stdout.write(f"  Establishment:  {establishment.name} (#{establishment.id})")
         self.stdout.write(f"  Parcel:         {parcel.name} (#{parcel.id})")
 
-        # 4. Events — 24 finished (NOP-complete + OGC delivery) + 6 current
+        # 4. Events — 24 finished (NOP-complete + POD delivery) + 6 current
         finished_count = create_finished_events(production_finished, user, demo_images=DEMO_IMAGES)
         current_count = create_current_events(production_current, user, demo_images=DEMO_IMAGES)
 
@@ -150,7 +150,7 @@ class Command(BaseCommand):
         self.stdout.write("    manure 120-day, pest ID + threshold rationale, equipment cleaning,")
         self.stdout.write("    contamination incident chain, seed organic search log, sales record,")
         self.stdout.write("    active OSP v1 (six § 205.201 sections fully populated, linked to")
-        self.stdout.write("    CCOF cert), OGC delivery BusinessEvent (BOL/PO/invoice + § 205.103(b)(3)).")
+        self.stdout.write("    PSOC demo cert), POD delivery BusinessEvent (BOL/PO/invoice + § 205.103(b)(2)).")
 
     def _cascade_delete(self, company):
         """
@@ -196,6 +196,15 @@ class Command(BaseCommand):
                         f"DELETE FROM {table} WHERE history_id = ANY(%s)",
                         [history_ids],
                     )
+
+        # OSPAnnualUpdate.prior_osp is on_delete=PROTECT, so it must be deleted
+        # before the OSP (and thus the company) can be removed.
+        from certifications.models import OrganicSystemPlan, OSPAnnualUpdate
+
+        osp_ids = list(OrganicSystemPlan.objects.filter(establishment__company=company).values_list("id", flat=True))
+        if osp_ids:
+            OSPAnnualUpdate.objects.filter(prior_osp_id__in=osp_ids).delete()
+            OSPAnnualUpdate.objects.filter(new_osp_id__in=osp_ids).delete()
 
         company.delete()
 
@@ -286,18 +295,18 @@ class Command(BaseCommand):
                     f"({len(narrative)}). Audit PDF flags any short section as incomplete."
                 )
 
-        # 9. OGC delivery BusinessEvent (§ 205.501(a)(21) + § 205.103(b)(3))
+        # 9. POD delivery BusinessEvent (§ 205.501(a)(21) + § 205.103(b)(2))
         ogc_delivery = BusinessEvent.objects.filter(
             history=finished_production,
             type=BusinessEvent.COMPLIANCE,
         ).first()
         if not ogc_delivery:
             raise CommandError(
-                "NOP invariant failed: no OGC delivery BusinessEvent (type=COMPLIANCE) "
+                "NOP invariant failed: no POD delivery BusinessEvent (type=COMPLIANCE) "
                 "on finished production. § 205.501(a)(21) downstream traceability requires "
                 "a sale/delivery record with BOL/PO/invoice metadata."
             )
         extra = ogc_delivery.extra_data or {}
         for required_key in ("bill_of_lading", "purchase_order", "invoice_number", "organic_on_invoice"):
             if not extra.get(required_key):
-                raise CommandError(f"NOP invariant failed: OGC delivery missing extra_data.{required_key}.")
+                raise CommandError(f"NOP invariant failed: POD delivery missing extra_data.{required_key}.")

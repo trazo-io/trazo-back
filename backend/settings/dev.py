@@ -136,12 +136,18 @@ if os.environ.get("ENVIRONMENT") == "staging":
         "http://localhost:3000",  # Add direct localhost support
     ]
 else:
-    # Development CSRF configuration
+    # Development CSRF configuration.
+    # 3001 must be here as well as in CORS_ALLOWED_ORIGINS: Vite silently falls back to
+    # 3001 whenever 3000 is occupied, and without the CSRF entry every POST from that
+    # port fails with "Origin checking failed" while GETs keep working — which reads
+    # like a broken login rather than a config gap.
     CSRF_TRUSTED_ORIGINS = [
         "https://*.localhost",
         "http://*.localhost:3000",
+        "http://*.localhost:3001",
         "http://*.localhost:4173",
         "http://localhost:3000",
+        "http://localhost:3001",
         "http://localhost:4173",
         "https://7172-167-60-250-132.ngrok-free.app",
     ]

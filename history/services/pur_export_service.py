@@ -179,6 +179,31 @@ def _s(value):
     return "" if value is None else str(value).strip()
 
 
+def _fmt_rei(hours):
+    """Format box 25 ("25. Days Reentry") from ChemicalEvent.rei_hours.
+
+    The DPR-PML-017C box is titled *Days* Reentry, but the filing instruction is
+    "Enter the reentry interval as required by the pesticide label or regulation"
+    and modern labels state short REIs in HOURS (Entrust SC, EPA Reg. 62719-621:
+    "REI of 4 hours"). Writing the bare number 4 into a box headed "Days" tells
+    the county agricultural commissioner the block was restricted for four DAYS —
+    a 24x misstatement of a worker-safety interval on a form filed with a
+    regulator. Always emit the unit so the value cannot be misread.
+    """
+    if hours in (None, ""):
+        return ""
+    try:
+        h = float(hours)
+    except (TypeError, ValueError):
+        return _s(hours)
+    if h <= 0:
+        return ""
+    if h % 24 == 0:
+        days = h / 24
+        return f"{days:g} day" if days == 1 else f"{days:g} days"
+    return f"{h:g} hour" if h == 1 else f"{h:g} hours"
+
+
 class PURExportService:
     """Build the DPR-PML-017C monthly PUR for one establishment + month."""
 
@@ -308,7 +333,7 @@ class PURExportService:
             "block_id": _s(event.block_id),
             "epa_registration_number": _s(event.epa_registration_number),
             "total_product_used": total_product,
-            "rei_days": _s(event.rei_hours),
+            "rei_days": _fmt_rei(event.rei_hours),
             "rate_per_acre": rate_display,
             "dilution": "",
             "product_and_manufacturer": product_mfr,

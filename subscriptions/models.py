@@ -1,5 +1,8 @@
+from decimal import Decimal
+
 from django.db import models
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from company.models import Company
@@ -204,3 +207,176 @@ class ProcessedWebhookEvent(models.Model):
 
     def __str__(self):
         return f"{self.event_type} ({self.stripe_event_id})"
+
+
+# Statuses that represent contracted, billable revenue. Deliberately EXCLUDES:
+#   trialing   — Trazo's trial is 14 days with no card; nothing is charged
+#   canceled   — churned
+#   unpaid     — collection failed and given up on
+#   incomplete — checkout never finished, so no commitment exists
+# `past_due` is included: the customer is still contracted and is normally counted in
+# MRR until the subscription actually terminates.
+#
+# Single definition shared by the lifecycle signal and the monthly snapshot command so
+# the two can never disagree about what revenue means.
+MRR_STATUSES = ("active", "past_due")
+
+
+def mrr_for(plan, status):
+    """MRR attributable to `plan` while in `status` — zero when the status is not billable."""
+    if plan is None or status not in MRR_STATUSES:
+        return Decimal("0")
+    return plan.price
+
+
+class SubscriptionEvent(models.Model):
+    """
+    Append-only lifecycle log for subscriptions.
+
+    `Subscription` is a OneToOne holding CURRENT state only: `plan` and `status` are
+    overwritten in place on every upgrade, downgrade, cancel and reactivation, and
+    `updated_at` is auto_now so it is clobbered by the next unrelated save. Cohort
+    retention and MRR movement therefore cannot be reconstructed from it after the fact.
+
+    This table is the durable record — one immutable row per state transition. Rows are
+    INSERTed and never updated or deleted. Written automatically by a post_save signal
+    on Subscription (see signals.py) so no write path can bypass it.
+
+    `mrr_before` / `mrr_after` are snapshots of the plan price at transition time rather
+    than a join to Plan.price. A later price change must not silently rewrite historical
+    revenue. `from_plan_slug` / `to_plan_slug` serve the same purpose for plan identity.
+    """
+
+    EVENT_TYPE_CHOICES = [
+        ("created", "Subscription created"),
+        ("trial_started", "Trial started"),
+        ("trial_converted", "Trial converted to paid"),
+        ("upgraded", "Upgraded"),
+        ("downgraded", "Downgraded"),
+        ("plan_changed", "Plan changed (no MRR movement)"),
+        ("canceled", "Canceled"),
+        ("reactivated", "Reactivated"),
+        ("past_due", "Payment past due"),
+        ("unpaid", "Unpaid"),
+        ("status_changed", "Status changed (other)"),
+    ]
+
+    SOURCE_CHOICES = [
+        ("stripe_webhook", "Stripe webhook"),
+        ("self_serve", "Self-serve UI"),
+        ("admin", "Admin / staff action"),
+        ("system", "System (signal-derived)"),
+        ("backfill", "Backfill / import"),
+    ]
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="subscription_events")
+
+    event_type = models.CharField(max_length=30, choices=EVENT_TYPE_CHOICES, db_index=True)
+
+    # SET_NULL (not PROTECT) so retiring a Plan never blocks the write path; the slug
+    # snapshots below keep the record readable even if the Plan row is gone.
+    from_plan = models.ForeignKey(Plan, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    to_plan = models.ForeignKey(Plan, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    from_plan_slug = models.CharField(max_length=50, blank=True, default="")
+    to_plan_slug = models.CharField(max_length=50, blank=True, default="")
+
+    from_status = models.CharField(max_length=20, blank=True, default="")
+    to_status = models.CharField(max_length=20, blank=True, default="")
+
+    mrr_before = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    mrr_after = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    # When the transition actually happened (may come from a Stripe event timestamp),
+    # kept distinct from created_at = when Trazo recorded it.
+    occurred_at = models.DateTimeField(default=timezone.now, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default="system")
+    stripe_event_id = models.CharField(max_length=255, blank=True, default="", db_index=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        verbose_name = _("Subscription Event")
+        verbose_name_plural = _("Subscription Events")
+        ordering = ["-occurred_at", "-id"]
+        indexes = [
+            models.Index(fields=["company", "occurred_at"]),
+            models.Index(fields=["event_type", "occurred_at"]),
+        ]
+        constraints = [
+            # One Stripe event may legitimately produce a plan change AND a status change,
+            # so idempotency is per (event, type) rather than per event. Blank ids are
+            # exempt — signal-derived rows have no Stripe event to dedupe against.
+            models.UniqueConstraint(
+                fields=["stripe_event_id", "event_type", "company"],
+                condition=models.Q(stripe_event_id__gt=""),
+                name="unique_stripe_event_per_type_company",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.company_id}: {self.event_type} @ {self.occurred_at:%Y-%m-%d}"
+
+    @property
+    def mrr_delta(self):
+        return self.mrr_after - self.mrr_before
+
+
+class SubscriptionMonthlySnapshot(models.Model):
+    """
+    One row per company per month — the shape cohort analysis actually needs.
+
+    SubscriptionEvent records transitions; this records STATE at a point in time. With
+    both, "of the companies that signed up in month M, how many were still active in
+    month M+n" is a GROUP BY instead of an event-replay exercise.
+
+    Written by `python manage.py snapshot_subscriptions` (idempotent — safe to re-run
+    for a past month, and to backfill from month zero).
+
+    NOTE: engagement counts here are deliberately limited to establishments and active
+    productions, both single queries. A true events-logged-per-farm metric is a union
+    across the eight event tables and belongs in its own rollup, not bolted on here.
+    """
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="subscription_snapshots")
+    # Always the first day of the month, in UTC.
+    month = models.DateField(db_index=True)
+
+    plan = models.ForeignKey(Plan, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    plan_slug = models.CharField(max_length=50, blank=True, default="")
+    status = models.CharField(max_length=20, blank=True, default="")
+
+    mrr = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    is_active = models.BooleanField(default=False)
+    is_trialing = models.BooleanField(default=False)
+
+    # Cohort anchor: the month the company's subscription was created. Denormalised so a
+    # cohort query needs no join back to Subscription (whose created_at survives, but
+    # whose row may not).
+    cohort_month = models.DateField(null=True, blank=True, db_index=True)
+
+    establishments_count = models.IntegerField(default=0)
+    active_productions = models.IntegerField(default=0)
+
+    # True when plan/status could not be derived from the event log and were inferred
+    # from the subscription's CURRENT state — i.e. the row is an approximation, not an
+    # observation. Only happens for months predating the event log. Analytics must
+    # exclude or caveat these rather than treat them as measured history.
+    is_reconstructed = models.BooleanField(default=False)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = _("Subscription Monthly Snapshot")
+        verbose_name_plural = _("Subscription Monthly Snapshots")
+        ordering = ["-month", "company_id"]
+        constraints = [
+            models.UniqueConstraint(fields=["company", "month"], name="unique_company_month_snapshot"),
+        ]
+        indexes = [
+            models.Index(fields=["month", "is_active"]),
+            models.Index(fields=["cohort_month", "month"]),
+        ]
+
+    def __str__(self):
+        return f"{self.company_id} @ {self.month:%Y-%m} ({self.plan_slug or 'none'})"

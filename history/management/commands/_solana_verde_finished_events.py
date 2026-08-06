@@ -4,7 +4,7 @@ Solana Verde Organic Ranch — 24 finished-production events.
 Covers the 2026-01-15 -> 2026-04-14 Hass Avocado season on Hillside Grove A.
 Events map to Phase 7 of E2E_ORGANIC_FARM_TESTING_GUIDE.md (Events 1-21 + 8b = 22)
 plus one PL replant event for seed_search_attempts (NOP 5029) coverage and one
-post-finish OGC delivery BusinessEvent (§ 205.501(a)(21) + § 205.103(b)(3) +
+post-finish POD delivery BusinessEvent (§ 205.501(a)(21) + § 205.103(b)(2) +
 FSMA 204 shipping CTE) = 24 total.
 
 NOP fields covered:
@@ -79,7 +79,7 @@ def create_finished_events(production, user, demo_images=None):
     Create 24 NOP-complete events on the finished 2026 Hass Avocado production.
 
     Maps to Phase 7 Events 1-21 + 8b of E2E_ORGANIC_FARM_TESTING_GUIDE.md (22),
-    plus one PL replant event (NOP 5029 seed_search_attempts) and one OGC
+    plus one PL replant event (NOP 5029 seed_search_attempts) and one POD
     delivery BusinessEvent (§ 205.501(a)(21) downstream traceability) — 24 total.
 
     Returns the count of events created (24).
@@ -133,7 +133,7 @@ def create_finished_events(production, user, demo_images=None):
         date=_dt(2026, 1, 5, 8),
         description=(
             "Applied aged horse manure (6 months stored, not composted to NOP standards — "
-            "no temperature monitoring). Source: Valley Stables, Fallbrook. "
+            "no temperature monitoring). Source: Hillside Equestrian Center, Fallbrook. "
             "Applied at 2 tons/acre to younger tree rows (planted 2022). "
             "120-day interval applies: crop contacts soil during ground harvest. "
             "Earliest safe harvest: May 5, 2026. Main harvest starts April 10 — "
@@ -146,20 +146,23 @@ def create_finished_events(production, user, demo_images=None):
         area_covered=Decimal("16.19"),
         area_unit="ha",
         amendment_type="Aged horse manure (uncomposted, local stable)",
-        amendment_amount="72",
+        amendment_amount="80",
+        amendment_amount_unit="tons",
         fuel_consumed=Decimal("12.00"),
         fuel_unit="gal",
         fuel_type="diesel",
         equipment_hours=Decimal("8.00"),
         equipment_used="John Deere 5075E with manure spreader",
-        # NOP 7 CFR 205.203(b): amendment organic approval
-        amendment_organic_approved="omri_listed",
+        # NOP 7 CFR 205.203(b): amendment organic approval. Raw farm-sourced
+        # manure is an allowed input WITH the § 205.203(c)(1) pre-harvest
+        # interval — it is NOT an OMRI-listed product, so don't label it as one.
+        amendment_organic_approved="yes",
         # NOP 7 CFR 205.203(c)(1): raw manure harvest interval
         # Note: avocado fruit contacts soil during ground collection -> 120 days
         manure_harvest_interval="120",
         manure_application_date=date(2026, 1, 5),
         extra_data={
-            "manure_source": "Valley Stables, Fallbrook CA",
+            "manure_source": "Hillside Equestrian Center, Fallbrook CA",
             "application_rate_tons_acre": 2,
             "storage_duration_months": 6,
             "composted": False,
@@ -257,9 +260,10 @@ def create_finished_events(production, user, demo_images=None):
         date=_dt(2026, 1, 25, 6),
         description=(
             "Scheduled winter irrigation. Soil moisture sensors (Teros-12) showed 18% VWC "
-            "(threshold 22%). Applied 1.5 inches through drip emitters (2 GPH at 24-inch "
-            "spacing). Run time: 8 hours. Well pump at 180 ft depth, 50 GPM capacity. "
-            "Next irrigation scheduled based on ET data from CIMIS station #152 (Fallbrook)."
+            "(threshold 22%). Applied ~0.3 inch through drip emitters (2 GPH at 24-inch "
+            "spacing). Run time: 8 hours; well pump at 180 ft depth, 1,500 GPM capacity "
+            "(~720,000 gallons). Next irrigation scheduled based on ET data from CIMIS "
+            "station #152 (Fallbrook)."
         ),
         created_by=user,
         performed_by="Miguel Ramirez",
@@ -275,7 +279,7 @@ def create_finished_events(production, user, demo_images=None):
         equipment_hours=Decimal("8.00"),
         water_source="well_groundwater",
         irrigation_method="drip",
-        irrigation_depth=Decimal("1.50"),
+        irrigation_depth=Decimal("0.30"),
         irrigation_depth_unit="inches",
         pump_depth_ft=Decimal("180.0"),
         electricity_source="grid",
@@ -284,7 +288,8 @@ def create_finished_events(production, user, demo_images=None):
             "soil_moisture_vwc_pct": 18,
             "threshold_vwc_pct": 22,
             "cimis_station": "#152 Fallbrook",
-            "well_capacity_gpm": 50,
+            "well_capacity_gpm": 1500,
+            "total_water_gallons_est": 720000,
         },
         album=_create_album("avocado_grove", demo_images),
     )
@@ -529,10 +534,11 @@ def create_finished_events(production, user, demo_images=None):
         index=10,
         date=_dt(2026, 3, 5, 6),
         description=(
-            "Spring irrigation increasing to 2-inch depth as ET rises. Fruit set confirmed "
-            "on 90% of bloom clusters. Soil moisture sensors show faster depletion (22% to "
-            "16% in 5 days vs 7 days in winter). CIMIS ET0 data: 0.12 inches/day. Next "
-            "irrigation in 10-12 days based on sensor readings and ET modeling."
+            "Spring irrigation increasing as ET rises — ~0.4 inch applied over 10 h at "
+            "1,500 GPM (~900,000 gallons). Fruit set confirmed on 90% of bloom clusters. "
+            "Soil moisture sensors show faster depletion (22% to 16% in 5 days vs 7 days in "
+            "winter). CIMIS ET0 data: 0.12 inches/day. Next irrigation in 10-12 days based "
+            "on sensor readings and ET modeling."
         ),
         created_by=user,
         performed_by="Miguel Ramirez",
@@ -546,12 +552,17 @@ def create_finished_events(production, user, demo_images=None):
         equipment_hours=Decimal("10.00"),
         water_source="well_groundwater",
         irrigation_method="drip",
-        irrigation_depth=Decimal("2.00"),
+        irrigation_depth=Decimal("0.40"),
         irrigation_depth_unit="inches",
         pump_depth_ft=Decimal("180.0"),
         electricity_source="grid",
         production_efficiency="normal",
-        extra_data={"cimis_et0_inches_day": 0.12, "soil_moisture_depletion_days": 5},
+        extra_data={
+            "cimis_et0_inches_day": 0.12,
+            "soil_moisture_depletion_days": 5,
+            "well_capacity_gpm": 1500,
+            "total_water_gallons_est": 900000,
+        },
         album=_create_album("avocado_grove", demo_images),
     )
 
@@ -648,11 +659,12 @@ def create_finished_events(production, user, demo_images=None):
         index=13,
         date=_dt(2026, 3, 15, 16),
         description=(
-            "Emergency irrigation triggered by 105F heat wave. Applied 3 inches through "
-            "drip + activated overhead microsprinklers on most exposed blocks for evaporative "
-            "cooling. Priority: prevent additional fruit drop. Soil moisture had dropped to "
-            "12% VWC (critical threshold 15%). This event outside normal irrigation schedule. "
-            "Total water use approximately 6.9 million gallons."
+            "Emergency irrigation triggered by 105F heat wave. Applied ~0.45 inch through "
+            "drip plus overhead micro-sprinklers on the most exposed blocks for evaporative "
+            "cooling (frost/heat-protection use — not routine irrigation). Priority: prevent "
+            "additional fruit drop. Soil moisture had dropped to 12% VWC (critical threshold "
+            "15%). Outside the normal drip schedule. Run time ~12 hours at 1,500 GPM; total "
+            "water use approximately 1.08 million gallons."
         ),
         created_by=user,
         performed_by="Miguel Ramirez",
@@ -663,10 +675,10 @@ def create_finished_events(production, user, demo_images=None):
         area_covered=Decimal("34.40"),
         area_unit="ha",
         fuel_type="electric",
-        equipment_hours=Decimal("6.00"),
+        equipment_hours=Decimal("12.00"),
         water_source="well_groundwater",
         irrigation_method="drip",
-        irrigation_depth=Decimal("3.00"),
+        irrigation_depth=Decimal("0.45"),
         irrigation_depth_unit="inches",
         pump_depth_ft=Decimal("180.0"),
         electricity_source="grid",
@@ -675,7 +687,8 @@ def create_finished_events(production, user, demo_images=None):
             "trigger": "Heat wave 105F",
             "soil_moisture_vwc_pct_start": 12,
             "supplemental_microsprinklers": True,
-            "total_water_gallons_est": 6924270,
+            "well_capacity_gpm": 1500,
+            "total_water_gallons_est": 1080000,
         },
         album=_create_album("avocado_grove", demo_images),
     )
@@ -705,10 +718,11 @@ def create_finished_events(production, user, demo_images=None):
         contamination_source="spray_drift",
         contamination_affected_area=Decimal("3.5"),
         corrective_action_taken=(
-            "Immediately stopped harvest in affected area. Notified CCOF inspector within "
-            "24 hours. Collected leaf tissue samples for residue testing (lab results pending). "
-            "Documented wind direction and timing. Increased buffer zone from 50ft to 100ft on "
-            "east boundary. Neighbor notified of organic certification boundary."
+            "Immediately stopped harvest in affected area. Notified PSOC inspector within "
+            "24 hours. Collected leaf tissue samples for residue testing (results returned "
+            "within tolerance 2026-03-24, before harvest). "
+            "Documented wind direction and timing. Widened the east-boundary buffer from the "
+            "standing 25 ft to 100 ft. Neighbor notified of organic certification boundary."
         ),
         corrective_action_date=date(2026, 3, 17),
         certifier_notified=True,
@@ -716,7 +730,7 @@ def create_finished_events(production, user, demo_images=None):
         observation=(
             "Spray drift from Johnson Citrus (conventional neighbor, east boundary). "
             "Affected rows 1-12 of east buffer zone (~3.5 acres). Young replant trees only "
-            "(no mature fruit). Lab analysis ordered. CCOF notified same day."
+            "(no mature fruit). Lab analysis ordered. PSOC notified same day."
         ),
         extra_data={
             "adjacent_farm": "Johnson Citrus",
@@ -833,14 +847,14 @@ def create_finished_events(production, user, demo_images=None):
     )
 
     # ------------------------------------------------------------------ #
-    # Event 15 (guide #15): CCOF Inspection (Business - CE) — 2026-03-28  #
+    # Event 15 (guide #15): PSOC Inspection (Business - CE) — 2026-03-28  #
     # ------------------------------------------------------------------ #
     BusinessEvent.objects.create(
         history=production,
         index=17,
         date=_dt(2026, 3, 28, 9),
         description=(
-            "Annual USDA Organic inspection by CCOF inspector Sarah Chen. Full audit of: "
+            "Annual USDA Organic inspection by PSOC inspector R. Alvarez. Full audit of: "
             "(1) Input records — all materials OMRI-listed, no prohibited substances found, "
             "(2) Field inspection — buffer zones maintained, no contamination risk, "
             "(3) Compost records — temperature logs and lab analysis reviewed, NOP 90-day "
@@ -851,22 +865,22 @@ def create_finished_events(production, user, demo_images=None):
             "Minor observation: improve signage at north property boundary."
         ),
         created_by=user,
-        performed_by="Sarah Chen (CCOF Inspector)",
+        performed_by="R. Alvarez (PSOC Inspector)",
         type=BusinessEvent.CERTIFICATION,
-        name="Annual USDA Organic Inspection (CCOF)",
+        name="Annual USDA Organic Inspection (PSOC)",
         business_type="certification",
         certification_type="organic_usda",
         verification_status="verified",
         sustainability_practice="integrated_pest",
-        verified_certifier_name="CCOF (California Certified Organic Farmers)",
-        certificate_number="CCOF-2012-4287",
+        verified_certifier_name="DEMO — Pacific Slope Organic Certifiers (sample data, not an accredited agent)",
+        certificate_number="DEMO-ORG-0000",
         observation=(
             "All 6 inspection areas passed. Minor observation: improve north boundary "
             "signage — corrected within 24 hours. Certificate renewed through Dec 2027."
         ),
         extra_data={
             "audit_date": "2026-03-28",
-            "inspector": "Sarah Chen (CCOF)",
+            "inspector": "R. Alvarez (PSOC)",
             "result": "PASSED",
             "minor_observations": 1,
             "major_nonconformances": 0,
@@ -977,13 +991,13 @@ def create_finished_events(production, user, demo_images=None):
             "grader), (3) Quality grading (manual inspection), (4) Pack into 25-lb cartons "
             "with Solana Verde branding + Trazo QR stickers, (5) Pre-cool to 40F in "
             "forced-air cooler, (6) Cold storage at 40F, 90% humidity. "
-            "Total packed: 448 cartons (25 lbs each). Ready for OGC pickup on 4/14. "
+            "Total packed: 448 cartons (25 lbs each). Ready for POD pickup on 4/14. "
             "Lot: SVR-2026-HA-001."
         ),
         created_by=user,
         performed_by="Packing crew (6 workers), Maria Elena Gutierrez (QA)",
         type=ProductionEvent.POST_HARVEST_PROCESSING,
-        name="Packing & Cold Storage for OGC Shipment",
+        name="Packing & Cold Storage for POD Shipment",
         variety="Hass",
         block_id="Hillside Grove A",
         area_covered=Decimal("0.00"),
@@ -1014,27 +1028,27 @@ def create_finished_events(production, user, demo_images=None):
         index=22,
         date=_dt(2026, 4, 13, 10),
         description=(
-            "Production season summary for OGC buyer package: Total yield 11,200 lbs "
+            "Production season summary for POD buyer package: Total yield 11,200 lbs "
             "(5,080 kg) Hass avocados from 85-acre Hillside Grove A. Premium grade 72%, "
-            "Grade A 20%, Grade B 8%. Organic certification CCOF-2012-4287 renewed March 2026 "
+            "Grade A 20%, Grade B 8%. Organic certification DEMO-ORG-0000 renewed March 2026 "
             "(passed with no violations). Season challenges: March heat wave caused 5-8% fruit "
             "drop and cosmetic sunburn on exposed fruit. Pest management: biological control "
             "successful (green lacewings + Spinosad), no synthetic inputs used. Water: 3 "
             "irrigation events totaling approximately 7 inches applied through drip system. "
             "Soil health: OM increased to 4.2% (was 3.8% in 2024). Cover crop: crimson "
             "clover + vetch provided estimated 120 lbs N/acre. "
-            "Lot SVR-2026-HA-001 ready for OGC pickup April 14."
+            "Lot SVR-2026-HA-001 ready for POD pickup April 14."
         ),
         created_by=user,
         performed_by="Maria Elena Gutierrez",
-        name="2026 Season Summary — OGC Buyer Package",
+        name="2026 Season Summary — POD Buyer Package",
         activity_type="other",
         activity_name="Season documentation and buyer package preparation",
         duration="4",
         people_involved=3,
         observation=(
-            "Successful organic season. 22 documented events across all 7 categories; "
-            "records compiled into the OGC buyer package and organic documentation export."
+            "Successful organic season. Events documented across all 7 categories; "
+            "records compiled into the POD buyer package and organic documentation export."
         ),
     )
 
@@ -1049,7 +1063,7 @@ def create_finished_events(production, user, demo_images=None):
         index=23,
         date=_dt(2026, 1, 8, 7),
         description=(
-            "Ordered and received organic Hass avocado nursery stock from Brokaw Nursery "
+            "Ordered and received organic Hass avocado nursery stock from Saticoy Grove Nursery "
             "for replanting 28 trees lost to root rot in east buffer zone (rows 1-12). "
             "Certified organic planting stock per NOP 7 CFR 205.204. "
             "All 3 required supplier searches documented per NOP 5029."
@@ -1066,7 +1080,7 @@ def create_finished_events(production, user, demo_images=None):
         growth_stage="dormant",
         seeds_source="commercial",
         seed_certification_status="certified_organic",
-        seed_supplier_name="Brokaw Nursery, Saticoy CA",
+        seed_supplier_name="Saticoy Grove Nursery, Saticoy CA",
         seed_purchase_date=date(2025, 11, 20),
         seed_purchase_invoice="BN-2025-11-4871",
         seed_lot_number="BN-HASS-2025-L047",
@@ -1074,7 +1088,7 @@ def create_finished_events(production, user, demo_images=None):
         # included as best practice / belt-and-suspenders documentation)
         seed_search_attempts=[
             {
-                "supplier_name": "Brokaw Nursery, Saticoy CA",
+                "supplier_name": "Saticoy Grove Nursery, Saticoy CA",
                 "date_contacted": "2025-11-10",
                 "result": "Available — certified organic Hass rootstock in stock",
                 "notes": "Primary supplier. Ordered 28 trees at $45/tree.",
@@ -1083,7 +1097,7 @@ def create_finished_events(production, user, demo_images=None):
                 "supplier_name": "Durling Nursery, Fallbrook CA",
                 "date_contacted": "2025-11-08",
                 "result": "Available — certified organic Hass in limited quantity",
-                "notes": "Local alternative contacted. Brokaw selected for quality consistency.",
+                "notes": "Local alternative contacted. Saticoy Grove selected for quality consistency.",
             },
             {
                 "supplier_name": "OC Nursery, San Marcos CA",
@@ -1102,11 +1116,11 @@ def create_finished_events(production, user, demo_images=None):
     )
 
     # ------------------------------------------------------------------ #
-    # Event 24: Sale & Delivery to OGC (Business - CM) — 2026-04-15      #
-    # § 205.501(a)(21) traceability + § 205.103(b)(3) "organic on invoice"  #
+    # Event 24: Sale & Delivery to POD (Business - CM) — 2026-04-15      #
+    # § 205.501(a)(21) traceability + § 205.103(b)(2) "organic on invoice"  #
     # + FSMA 204 Critical Tracking Event (shipping). Documents the full  #
     # downstream chain so an inspector can trace lot SVR-2026-HA-001     #
-    # from this farm to OGC's Portland distribution hub.                  #
+    # from this farm to POD's Portland distribution hub.                  #
     # ------------------------------------------------------------------ #
     BusinessEvent.objects.create(
         history=production,
@@ -1114,43 +1128,43 @@ def create_finished_events(production, user, demo_images=None):
         # 06:30 PDT (UTC-7) = 13:30 UTC. Narrative time references are PT.
         date=_dt(2026, 4, 15, 13, 30),
         description=(
-            "Refrigerated shipment of lot SVR-2026-HA-001 to Organically Grown Company (OGC). "
-            "448 cartons (5,080 kg, 11,200 lbs net) loaded at 06:00 PT into OGC-contracted "
+            "Refrigerated shipment of lot SVR-2026-HA-001 to Pacific Organic Distributors (POD). "
+            "448 cartons (5,080 kg, 11,200 lbs net) loaded at 06:00 PT into POD-contracted "
             "refrigerated trailer (Cool-Chain Logistics #CCL-2814) at 38°F set point. "
-            "Bill of Lading BOL-OGC-2026-04-15-007 signed by driver Tomás Reyes and Maria "
+            "Bill of Lading BOL-POD-2026-04-15-007 signed by driver Tomás Reyes and Maria "
             "Elena Gutierrez. Pre-loading: trailer interior swept and inspected — no "
             "non-organic residue. All 448 cartons bear lot SVR-2026-HA-001 sticker + Trazo "
-            "QR code. PO #OGC-PO-2026-0412 from OGC Procurement. Invoice #SVR-INV-2026-041 "
-            "marks each line item ORGANIC per 7 CFR 205.103(b)(3) audit-trail documentation. Departed Fallbrook 06:30 PT, "
-            "ETA OGC Portland Distribution Hub 2026-04-16 18:00 PT (1,030 mi, ~26 hrs "
-            "transit, fixed cold-chain). § 205.501(a)(21) downstream attestation: OGC has "
-            "filed signed receipt of organic certification copy CCOF-2012-4287 on file at "
+            "QR code. PO #POD-PO-2026-0412 from POD Procurement. Invoice #SVR-INV-2026-041 "
+            "marks each line item ORGANIC per 7 CFR 205.103(b)(2) audit-trail documentation. Departed Fallbrook 06:30 PT, "
+            "ETA POD Portland Distribution Hub 2026-04-16 18:00 PT (1,030 mi, ~26 hrs "
+            "transit, fixed cold-chain). § 205.501(a)(21) downstream attestation: POD has "
+            "filed signed receipt of organic certification copy DEMO-ORG-0000 on file at "
             "Solana Verde."
         ),
         created_by=user,
         performed_by="Maria Elena Gutierrez",
         type=BusinessEvent.COMPLIANCE,
-        name="Shipment to OGC — Lot SVR-2026-HA-001",
+        name="Shipment to POD — Lot SVR-2026-HA-001",
         business_type="compliance",
         certification_type="organic_usda",
         verification_status="verified",
-        verified_certifier_name="CCOF (California Certified Organic Farmers)",
-        certificate_number="CCOF-2012-4287",
+        verified_certifier_name="DEMO — Pacific Slope Organic Certifiers (sample data, not an accredited agent)",
+        certificate_number="DEMO-ORG-0000",
         observation=(
-            "Sale and delivery record per § 205.501(a)(21) and § 205.103(b)(3). "
+            "Sale and delivery record per § 205.501(a)(21) and § 205.103(b)(2). "
             "FSMA 204 Critical Tracking Event (shipping) populated. All 448 cartons "
             "labelled 'Organic' with farm lot ID, traceable end-to-end."
         ),
         extra_data={
-            "buyer_name": "Organically Grown Company (OGC)",
+            "buyer_name": "Pacific Organic Distributors (POD)",
             "buyer_address": "1800 Prairie Rd, Eugene, OR 97402",
-            "destination": "OGC Distribution Hub, 5005 NE Portland Hwy, Portland, OR 97218",
+            "destination": "POD Distribution Hub, 5005 NE Portland Hwy, Portland, OR 97218",
             "lot_id": "SVR-2026-HA-001",
             "cartons_shipped": 448,
             "net_weight_kg": 5080,
             "net_weight_lbs": 11200,
-            "bill_of_lading": "BOL-OGC-2026-04-15-007",
-            "purchase_order": "OGC-PO-2026-0412",
+            "bill_of_lading": "BOL-POD-2026-04-15-007",
+            "purchase_order": "POD-PO-2026-0412",
             "invoice_number": "SVR-INV-2026-041",
             "carrier": "Cool-Chain Logistics",
             "trailer_number": "CCL-2814",

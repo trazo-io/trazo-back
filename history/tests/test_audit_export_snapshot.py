@@ -27,7 +27,7 @@ class ComplianceSnapshotTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="snap@test.com", password="x")
         self.company = Company.objects.create(name="Snap Farm")
-        self.establishment = Establishment.objects.create(name="S1", company=self.company)
+        self.establishment = Establishment.objects.create(name="S1", company=self.company, state="CA")
         self.parcel = Parcel.objects.create(name="P1", establishment=self.establishment, area=5.0)
         self.product = Product.objects.create(name="Tomato")
         self.history = History.objects.create(

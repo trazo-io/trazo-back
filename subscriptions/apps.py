@@ -13,6 +13,11 @@ class SubscriptionsConfig(AppConfig):
     def ready(self):
         from django.conf import settings
 
+        # Connects the Subscription lifecycle receivers. Without this import the
+        # SubscriptionEvent log silently records nothing — and it is the one table
+        # whose contents cannot be reconstructed later.
+        from . import signals  # noqa: F401
+
         if not settings.DEBUG:
             key = getattr(settings, "STRIPE_SECRET_KEY", "")
             if key.startswith("sk_test_"):

@@ -42,7 +42,9 @@ class TransparencyResponseFormatter:
         # PRIMARY: Transparency metrics (non-competitive)
         transparency_section = {
             "completeness_percentage": transparency_data.get("transparency_percentage", 0),  # FIX: Use calculated score
-            "data_quality_grade": transparency_data.get("carbonGrade", "C"),
+            # `data_quality_grade` removed (2026-08-02). It carried the invented benchmark
+            # level ("certification"/"good"/"below_minimum"), defaulting to a literal "C" —
+            # a grade nobody rendered, derived from thresholds nobody sets.
             "verification_status": self._get_verification_status(blockchain_verification),
             "documentation_score": transparency_data.get("completeness_score", 0),  # FIX: Remove hardcoded 75
             "last_updated": timezone.now().isoformat(),
@@ -90,7 +92,6 @@ class TransparencyResponseFormatter:
             "error": error_message,
             "transparency": {
                 "completeness_percentage": 0,
-                "data_quality_grade": "pending",
                 "verification_status": "error",
             },
             "carbon_impact": {
