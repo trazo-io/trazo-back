@@ -34,7 +34,7 @@ from .models import (
     WeatherEvent,
 )
 from .serializers import PublicHistorySerializer
-from .services.privacy import public_free_text, public_free_text_list
+from .services.privacy import public_free_text
 from .services.transparency_calculator import TransparencyCalculator
 from .services.transparency_response_formatter import TransparencyResponseFormatter
 
@@ -447,15 +447,32 @@ def production_transparency_detail(request, production_public_id=None):
                         public_free_text(establishment.location_highlights) if establishment else None
                     ),
                     "custom_message": public_free_text(establishment.custom_message) if establishment else None,
-                    "is_active": establishment.is_active if establishment else True,
                     "crops_grown": establishment.crops_grown if establishment else None,
-                    # A farmer-authored LIST; each entry gets the same redaction as the prose
-                    # fields. "Carbon-negative certified" was shipping here — an unverifiable
-                    # eco claim plus an implied certification (compliance.md UNSAFE).
-                    "sustainability_practices": public_free_text_list(
-                        establishment.sustainability_practices if establishment else None
-                    ),
-                    "employee_count": establishment.employee_count if establishment else None,
+                    # `sustainability_practices` is DELIBERATELY not published (removed 2026-08-07).
+                    #
+                    # It was a farmer-authored free-text LIST rendered to shoppers as green
+                    # leaf chips. Redaction through public_free_text_list() was not enough: the
+                    # verb-based patterns caught "USDA-verified" but not the far more common
+                    # noun-shaped label, so "USDA Organic Certified", "Certified Organic" and
+                    # "Real Organic Project Certified" all passed through intact — and three
+                    # demo seeders shipped exactly those strings. A certification attestation
+                    # with no database backing, styled as a trust signal, is the FTC
+                    # 16 CFR 260.6 / EU ECGT 2024/825 defect this codebase has now hit five
+                    # times on five different surfaces.
+                    #
+                    # Certification claims have one authoritative home: the Certification
+                    # table, gated by history/services/claim_authority.py, which will only
+                    # say "Verified via USDA Organic Integrity Database" for an actual
+                    # database match. A free-text field can never clear that bar, so it does
+                    # not get a second, unguarded route to the same shopper.
+                    #
+                    # Same disposition as `farming_method` below: still authored by the
+                    # producer, still stored, still shown on the farm profile — just not
+                    # published. Mirrored for the producer UI in
+                    # trazo-app/src/config/consumerVisibility.ts.
+                    #
+                    # `is_active` and `employee_count` were dropped at the same time: both
+                    # shipped on the wire and were rendered by nothing.
                     "total_acreage": establishment.total_acreage if establishment else None,
                     "year_established": establishment.year_established if establishment else None,
                     "establishment_type": establishment.establishment_type if establishment else None,
@@ -467,8 +484,8 @@ def production_transparency_detail(request, production_public_id=None):
                     # environmental claim with no substantiation — an FTC 16 CFR 260.6
                     # general-benefit claim, and under EU ECGT 2024/825 (live 2026-09-27) a
                     # self-created sustainability label. Its neighbour
-                    # `sustainability_practices` already goes through public_free_text_list()
-                    # for exactly this reason; this field slipped the same net.
+                    # `sustainability_practices` was withheld outright for the same reason
+                    # (see above) after redaction proved insufficient.
                     #
                     # Organic status reaches consumers through `organic_claim`, which
                     # ConsumerClaimValidator substantiates. A farmer-typed second opinion
@@ -481,10 +498,12 @@ def production_transparency_detail(request, production_public_id=None):
                         f"{establishment.city}, {establishment.state}" if establishment and establishment.city else None
                     ),
                     "certifications": certification_data or (establishment.certifications if establishment else None),
-                    "climate_zone": establishment.climate_zone if establishment else None,
                     "water_sources": establishment.water_sources if establishment else None,
                     "soil_types": establishment.soil_types if establishment else None,
-                    "conservation_practices": establishment.conservation_practices if establishment else None,
+                    # `climate_zone` and `conservation_practices` dropped 2026-08-07: both were
+                    # on the wire and rendered by no consumer component (FarmModal drops them
+                    # explicitly). Payload bloat, and a field nobody renders is a field nobody
+                    # re-reads the privacy rules for on the day they add a render.
                     "irrigation_methods": establishment.irrigation_methods if establishment else None,
                     # Nested company data
                     "company": (

@@ -122,37 +122,76 @@ npm run build
 
 ### Phase 3: Critical Data Seeding
 
-**IMPORTANT**: Run these commands in exact order for proper platform functionality.
+> ⚠️ **CORRECTED 2026-08-07.** The previous version of this section was wrong in two ways that
+> would have damaged a production database:
+>
+> * It told you to run `comprehensive_usda_seed`, which uses blind `.create()` (so it duplicates
+>   every crop and template on each run) and whose `--clear` flag wipes ALL templates — including
+>   the ones the steps above it had just created.
+> * It told you to run `create_comprehensive_production_templates`, which **does not exist**. Only
+>   `..._legacy` and `..._v2` are on disk, so the command exits `CommandError: Unknown command`.
+>
+> **The authoritative, verified runbook is
+> `documentation/reference/prod-deploy-runbook-october-2026.md`.** It has the correct ordering,
+> marks which commands are idempotent, and lists the ones that must NEVER run on production.
+> Prefer it over this section.
 
 #### 3.1 Essential Foundation Data (CRITICAL - Must Run)
 ```bash
-# 1. USDA Crop Types (PRIORITY #1)
-# Creates 16 USDA-compliant crop types required for all production forms
-poetry run python manage.py populate_usda_crop_types
+# 1. Crop catalog — 32 crop types required by every production form.
+#    --crops-only is MANDATORY: without it the command also creates a second, older generation
+#    of conventional templates, giving two per crop in the Smart Setup picker.
+poetry run python manage.py populate_usda_crop_types --crops-only
 
-# 2. Carbon Benchmarks (PRIORITY #2)  
-# Creates industry carbon benchmarks for 25+ crops with USDA verification
+# 2. Production + event templates. Idempotent (get_or_create on crop_type + slug).
+#    NEVER pass --force on production: it deletes existing templates, which cascades to their
+#    event templates and invalidates every stored template_id and translation_key.
+poetry run python manage.py create_comprehensive_production_templates_v2
+
+# 3. Template i18n keys and picker grouping.
+poetry run python manage.py update_event_template_fields
+
+# 4. Carbon reference data. All three use get_or_create / update_or_create.
 poetry run python manage.py seed_crop_benchmarks
-
-# 3. USDA Production Templates (PRIORITY #3)
-# Creates comprehensive production templates with USDA-verified practices
-poetry run python manage.py comprehensive_usda_seed
-
-# 4. Carbon Offset Actions (PRIORITY #4)
-# Creates carbon offset compensation options for neutrality features
 poetry run python manage.py seed_offset_actions
+poetry run python manage.py seed_sustainability_badges
 ```
 
-#### 3.2 Business Logic Data (IMPORTANT - Should Run)
+#### 3.2 Compliance Reference Data (CRITICAL — silent failure if skipped)
 ```bash
-# 5. Enhanced Production Templates (HELPFUL)
-# Provides additional template options for all 16 crop types
-poetry run python manage.py create_comprehensive_production_templates
+# 5. National List (7 CFR 205.601/.602). NOT included in refresh_organic_input_catalogs.
+#    If this is missing, every ChemicalEvent is saved with NO CFR classification and the
+#    certifier-facing findings come back empty — `history/signals.py` skips classification when
+#    the table is empty. Since 2026-08-07 that condition is logged once per process and reported
+#    by /health/ under `reference_data`, but it still produces no findings.
+poetry run python manage.py seed_national_list
 
-# 6. Alternative Crop Templates (HELPFUL)
-# Creates pre-configured crop templates with carbon sources
-poetry run python manage.py create_crop_templates
+# 6. Organic input catalogs (OMRI, WSDA, CDFA OIM, eCFR sync).
+poetry run python manage.py refresh_organic_input_catalogs   # add --skip-ecfr if no outbound HTTPS
+
+# 7. USDA Organic Integrity mirror — the ONLY thing that lets a farm earn a verified organic
+#    badge. Check the result: the importer refuses an implausible parse rather than emptying the
+#    table, and prints what it would replace.
+poetry run python manage.py import_usda_organic_data --dry-run
+poetry run python manage.py import_usda_organic_data
+poetry run python manage.py reverify_certifications --all   # nothing else refreshes matches
+
+# 8. Verify reference data is present and fresh.
+curl -s https://<host>/health/ | python3 -m json.tool | grep -A12 reference_data
 ```
+
+#### ⛔ NEVER run on production
+These write fabricated data or delete real data. Full list and rationale in the runbook.
+
+| Command | Why |
+|---|---|
+| `comprehensive_usda_seed` | blind `.create()` duplicates on every run; `--clear` wipes all templates |
+| `create_comprehensive_production_templates` | does not exist on disk |
+| `create_demo_user`, `populate_demo_engagement` | fake farms, fake scans, Unsplash photos as evidence |
+| `create_organic_pilot_farm`, `create_loewen_farm` | fake farms with hardcoded passwords |
+| `create_demo_billing_data` | fake paid invoices; `--clean` deletes real ones |
+| `create_staging_superuser` | hardcoded credentials, deletes the existing user first |
+| `publish_finished_productions` | no dry-run, no scoping; can make unfinished productions publicly scannable |
 
 #### 3.3 Security Implementation (CRITICAL - When Infrastructure Ready)
 ```bash

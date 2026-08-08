@@ -8651,7 +8651,14 @@ class AuditExportService:
                 data.append(
                     [
                         self._cell(str(entry.year)),
-                        self._cell(entry.crop_grown),
+                        # Fold the block into the crop cell rather than adding a column: this
+                        # table is already against the portrait width budget, and the Input
+                        # Application Log uses the same technique for its Area cell.
+                        #
+                        # Without it a SPLIT FIELD renders as two rows both reading "2011" with
+                        # different crops and nothing saying which ground each was on — the exact
+                        # question 7 CFR 205.202 land history exists to answer.
+                        self._cell(f"{entry.crop_grown} ({entry.block_id})" if entry.block_id else entry.crop_grown),
                         self._cell(entry.get_production_method_display() if entry.production_method else None),
                         self._cell(entry.substances_applied),
                         self._cell(_fmt_date(entry.date_last_prohibited)),
@@ -11863,7 +11870,9 @@ class AuditExportService:
                         writer.writerow(
                             [
                                 str(entry.year),
-                                _val(entry.crop_grown),
+                                # Same reasoning as the PDF table: a split field is two rows for
+                                # one year, and the block is what tells them apart.
+                                _val(f"{entry.crop_grown} ({entry.block_id})" if entry.block_id else entry.crop_grown),
                                 entry.get_production_method_display() if entry.production_method else "\u2014",
                                 _val(entry.substances_applied),
                                 _fmt_date(entry.date_last_prohibited),

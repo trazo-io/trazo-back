@@ -20,18 +20,63 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Normalise block_id on every event type before it is stored.
+#
+# block_id is free text and load-bearing: CA PUR box 22, the audit export's Input Application Log,
+# and the landing site for a COG Pro migration's "Row/Section ID". Without this, "Block 3",
+# "block 3 " and "Block  3" are three different blocks to every query that groups by it, and a
+# certifier asking "what happened in Block 3" silently gets a subset.
+#
+# Only mechanical variation is collapsed — the grower's own wording is preserved, because that is
+# what they will look for during an inspection. See history/services/block_ids.py.
+# ---------------------------------------------------------------------------
+@receiver(
+    pre_save,
+    sender=BusinessEvent,
+    dispatch_uid="normalize_block_id_business",
+)
+@receiver(pre_save, sender=ChemicalEvent, dispatch_uid="normalize_block_id_chemical")
+@receiver(pre_save, sender=EquipmentEvent, dispatch_uid="normalize_block_id_equipment")
+@receiver(pre_save, sender=GeneralEvent, dispatch_uid="normalize_block_id_general")
+@receiver(pre_save, sender=PestManagementEvent, dispatch_uid="normalize_block_id_pest")
+@receiver(pre_save, sender=ProductionEvent, dispatch_uid="normalize_block_id_production")
+@receiver(pre_save, sender=SoilManagementEvent, dispatch_uid="normalize_block_id_soil")
+@receiver(pre_save, sender=WeatherEvent, dispatch_uid="normalize_block_id_weather")
+def normalize_event_block_id(sender, instance, **kwargs):
+    from history.services.block_ids import normalize_block_id
+
+    instance.block_id = normalize_block_id(instance.block_id)
+
+
+# ---------------------------------------------------------------------------
 # Sprint 3 — Auto-classify ChemicalEvent against the National List (7 CFR 205.601/602)
 # on every save. Populates national_list_substance FK so the audit export can
 # show "Allowed per §205.601(i)" rather than "Self-reported" even when the
 # frontend hasn't been updated to let farmers set it manually.
 # Never overwrites a farmer/admin-set value.
 # ---------------------------------------------------------------------------
+
+# Warn once per process rather than once per event: an unseeded National List is a deployment
+# fact, not a per-record one, and a bulk import would otherwise emit thousands of identical lines.
+_warned_national_list_unseeded = False
+
+
 @receiver(pre_save, sender=ChemicalEvent)
 def auto_classify_chemical_against_national_list(sender, instance, **kwargs):
     # Respect explicit set — only classify when not already set.
     if instance.national_list_substance_id is not None:
         return
-    if not instance.commercial_name:
+    # Try the ACTIVE INGREDIENT first, then the brand.
+    #
+    # The National List (7 CFR 205.601/.602) is keyed on substance names — "Spinosad", "Copper
+    # sulfate". A brand never appears there: "Entrust SC" is not listed and never will be, though
+    # its active ingredient is. Matching only on commercial_name therefore returned nothing for
+    # any record that named a product rather than a chemical, which is how farmers actually write
+    # them and how COG Pro exports them.
+    extra = getattr(instance, "extra_data", None) or {}
+    active_ingredient = extra.get("active_ingredient") if isinstance(extra, dict) else None
+    candidates = [c for c in (active_ingredient, instance.commercial_name) if c]
+    if not candidates:
         return
 
     try:
@@ -40,24 +85,90 @@ def auto_classify_chemical_against_national_list(sender, instance, **kwargs):
 
         verifier = OMRIProductVerifier()
         if not verifier.health_check():
-            return  # National List not seeded yet; skip silently
-        result = verifier.verify(operation_name=instance.commercial_name)
-        if not result.found:
+            # Previously `return` with no signal at all. Silence here is expensive: every
+            # ChemicalEvent is saved with no CFR classification, and the certifier-facing
+            # findings — the thing the compliance pitch rests on — come back empty with nothing
+            # to indicate why. Also surfaced by /health/ via reference_data_status.
+            global _warned_national_list_unseeded
+            if not _warned_national_list_unseeded:
+                _warned_national_list_unseeded = True
+                logger.warning(
+                    "National List is not seeded — ChemicalEvents are being saved WITHOUT a "
+                    "7 CFR 205.601/602 classification, so certifier findings will be empty. "
+                    "Run `manage.py seed_national_list`. (Warned once per process.)"
+                )
             return
+        for candidate in candidates:
+            # Deliberately NOT gated on `verifier.verify(...).found`.
+            #
+            # OMRI and the National List are independent authorities. OMRI lists finished
+            # PRODUCTS ("DiPel DF"); 7 CFR 205.601/.602 lists SUBSTANCES, sometimes as a class.
+            # Requiring an OMRI hit before consulting the National List meant a substance that is
+            # plainly listed could not be cited: "Bacillus thuringiensis" returns found=False from
+            # the OMRI verifier, so one of the commonest organic inputs never reached the matcher
+            # below and rendered as "Self-reported" on the certifier packet.
+            #
+            # `health_check()` above is still the right gate — it tests whether the National List
+            # table is seeded at all, which is a different question.
+            normalized = _normalize(candidate)
+            nl = NationalListSubstance.objects.filter(substance_name_normalized=normalized).first()
 
-        normalized = _normalize(instance.commercial_name)
-        nl = NationalListSubstance.objects.filter(substance_name_normalized=normalized).first()
-        if nl is None:
-            candidates = [
-                n
-                for n in NationalListSubstance.objects.values_list("substance_name_normalized", flat=True)
-                if len(n) >= 5 and n in normalized
-            ]
-            if candidates:
-                best = max(candidates, key=len)
-                nl = NationalListSubstance.objects.filter(substance_name_normalized=best).first()
-        if nl is not None:
-            instance.national_list_substance = nl
+            if nl is None:
+                # Curated crosswalk BEFORE either fuzzy pass, because it is the only one of the
+                # three that a human checked against the CFR text. "Sulfur" is listed as
+                # "Elemental sulfur", "Boron" as "Soluble boron products" — real listings that
+                # neither substring pass can reach, and which the reverse pass actively blocks
+                # because it demands >= 12 characters and a space.
+                from certifications.services.national_list_aliases import resolve_alias
+
+                canonical = resolve_alias(normalized)
+                if canonical:
+                    nl = NationalListSubstance.objects.filter(substance_name=canonical).first()
+                    if nl is None:
+                        # The alias names a substance that is not seeded. Silent here would be the
+                        # exact failure this table exists to prevent, so say so.
+                        logger.warning(
+                            "National List alias %r -> %r has no seeded row; classification skipped.",
+                            normalized,
+                            canonical,
+                        )
+
+            if nl is None:
+                # Forward: the list entry appears inside the farmer's text.
+                # "Entrust SC (Spinosad 22.5%)" contains "spinosad".
+                substrings = [
+                    n
+                    for n in NationalListSubstance.objects.values_list("substance_name_normalized", flat=True)
+                    if len(n) >= 5 and n in normalized
+                ]
+                if substrings:
+                    best = max(substrings, key=len)
+                    nl = NationalListSubstance.objects.filter(substance_name_normalized=best).first()
+
+            if nl is None:
+                # Reverse: the farmer's substance appears inside a CATEGORY entry on the list.
+                # Several National List entries name a class rather than a chemical — Bacillus
+                # thuringiensis is listed only as "Microbial products (Bacillus thuringiensis,
+                # etc.)", so forward matching alone left one of the commonest organic inputs
+                # unclassified and it rendered as "Self-reported" on the certifier packet.
+                #
+                # Guarded harder than the forward pass: the input must be a substantial phrase,
+                # not a bare word. "copper" would otherwise match both "Copper sulfate
+                # (algicide)" and "Copper hydroxide", and picking either would be a guess about
+                # which substance the farmer applied.
+                if len(normalized) >= 12 and " " in normalized:
+                    containers = [
+                        n
+                        for n in NationalListSubstance.objects.values_list("substance_name_normalized", flat=True)
+                        if normalized in n
+                    ]
+                    # Only accept an unambiguous container: two matches means we cannot tell
+                    # which listing the farmer meant, and a wrong § citation is worse than none.
+                    if len(containers) == 1:
+                        nl = NationalListSubstance.objects.filter(substance_name_normalized=containers[0]).first()
+            if nl is not None:
+                instance.national_list_substance = nl
+                return
     except Exception:  # noqa: BLE001 — classification is advisory; never block a save
         import logging
 

@@ -11,7 +11,7 @@ Usage: poetry run python manage.py update_carbon_benchmarks --dry-run
 import logging
 from typing import Any, Dict
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.db.models import Avg, Count, Q, Sum
 from django.utils import timezone
@@ -87,8 +87,19 @@ class Command(BaseCommand):
 
         # Save changes if executing
         if execute:
+            # `_save_benchmark_updates` is NOT IMPLEMENTED — it logs and returns. This branch used
+            # to print "✅ Benchmarks updated successfully!" straight afterwards, so an operator
+            # running --execute came away believing benchmarks had been written when nothing had.
+            #
+            # Same failure class as the USDA importer reporting SUCCESS after emptying its table:
+            # a command that lies about what it did is worse than one that refuses.
             self._save_benchmark_updates(benchmarks, credit_impacts)
-            self.stdout.write(self.style.SUCCESS("✅ Benchmarks updated successfully!"))
+            raise CommandError(
+                "--execute is not implemented: _save_benchmark_updates() has no persistence "
+                "logic, so nothing was written. The analysis above is real and correct — run "
+                "without --execute to use it. Implement the benchmark writes before relying on "
+                "this flag."
+            )
         else:
             self.stdout.write(self.style.WARNING("⚠️ This was a DRY RUN - no changes were saved"))
 
@@ -252,4 +263,7 @@ class Command(BaseCommand):
             logger.info(f"Updated carbon benchmarks with corrected emission factors v3.0.0")
             logger.info(f"Average baseline increase: {benchmarks['overall_impact']['average_increase']:.2f} kg CO2e")
 
-            pass  # Placeholder for actual benchmark model updates
+            # No persistence. Deliberately left as a stub rather than guessed at: which model
+            # stores a benchmark, and whether a correction factor should overwrite or version the
+            # baseline, is a decision about published numbers — not something to infer. The caller
+            # now raises instead of claiming success.

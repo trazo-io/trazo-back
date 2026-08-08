@@ -39,7 +39,14 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action == "create":
-            return [IsAuthenticated(), HasParcelCreationPermission()]
+            # COMPOSE with the class default, never replace it.
+            #
+            # This previously returned [IsAuthenticated(), HasParcelCreationPermission()], which
+            # DISCARDED CompanyNestedViewSet's
+            # `[IsSuperUser | (ReadOnlyForViewers & AuthPermission)]` — so the role check and the
+            # company-membership check both vanished, and any authenticated user satisfied the
+            # endpoint as long as the target company was under quota.
+            return super().get_permissions() + [HasParcelCreationPermission()]
         return super().get_permissions()
 
     def partial_update(self, request, *args, **kwargs):

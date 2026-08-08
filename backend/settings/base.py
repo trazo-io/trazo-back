@@ -753,7 +753,23 @@ BLOCKCHAIN_BATCH_SIZE_LIMIT = config("BLOCKCHAIN_BATCH_SIZE_LIMIT", default=50, 
 BLOCKCHAIN_TIMEOUT_SECONDS = config("BLOCKCHAIN_TIMEOUT_SECONDS", default=180, cast=int)
 
 # Blockchain Feature Settings
-BLOCKCHAIN_ENABLED = config("BLOCKCHAIN_ENABLED", default=True, cast=bool)
+#
+# DISABLED BY DEFAULT since 2026-08-06. The consumer-facing blockchain surface and the
+# $15/mo add-on were withdrawn on 2026-08-03 — it was the single largest source of
+# claim-safety defects ("blockchain-recorded" is heard as "farming practices verified",
+# which is not what a hash proves). With no consumer surface left, what remained was cost
+# and risk: a hot signing key in production secrets, Polygon gas, an RPC dependency, and a
+# boot-time failure mode in prod.py when keys are absent.
+#
+# It also buys nothing for the October audience. FSMA 204 is explicitly technology-neutral
+# and NOP § 205.103 is format-agnostic — a certifier gets zero regulatory weight from a
+# Polygon transaction, and reads it as vendor hype on a product whose credibility rests on
+# citing CFR accurately.
+#
+# The code is kept, not deleted: set BLOCKCHAIN_ENABLED=True to restore (e.g. if an export
+# buyer genuinely requires chain-anchored traceability). See
+# documentation/strategy/TRAZO-OCTOBER-2026-PLAN.md §10.8.
+BLOCKCHAIN_ENABLED = config("BLOCKCHAIN_ENABLED", default=False, cast=bool)
 AUTO_VERIFY_CARBON_RECORDS = config("AUTO_VERIFY_CARBON_RECORDS", default=True, cast=bool)
 USDA_VERIFICATION_ENABLED = config("USDA_VERIFICATION_ENABLED", default=True, cast=bool)
 

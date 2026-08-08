@@ -161,11 +161,27 @@ class Company(models.Model):
         if max_productions == -1:
             return True
 
-        # Single efficient query instead of N+1 nested loops
+        # Count by `created_at`, NOT by `start_date`.
+        #
+        # `start_date` is when the farmer says the season began: it is user-supplied and editable,
+        # so the previous version was defeated simply by dating a production to 31 December, and a
+        # NULL `start_date` escaped `start_date__gte` entirely and was never counted. Neither is
+        # acceptable for something that gates billing. `created_at` is `auto_now_add` and is not
+        # exposed for editing anywhere.
+        #
+        # The WINDOW stays the calendar year. An earlier version of this fix used the
+        # subscription's `current_period_start`, which is wrong: that is the BILLING period, so on
+        # a monthly plan it is ~30 days — a limit named `max_productions_per_year` would have
+        # reset every month, turning 3/year into 36/year.
+        #
+        # Known limitation, deliberately not addressed here: the calendar year means a customer
+        # who subscribes in December gets a full allowance that resets a few weeks later. That is
+        # generous to the customer rather than harmful, and fixing it properly needs a
+        # subscription-anniversary concept rather than a different date field.
         start_of_year = timezone.now().replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
         productions_this_year = History.objects.filter(
             parcel__establishment__company=self,
-            start_date__gte=start_of_year,
+            created_at__gte=start_of_year,
         ).count()
 
         # Add purchased add-ons

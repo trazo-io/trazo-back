@@ -43,7 +43,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
-from django.db.models import Count, Q, Sum
+from django.db.models import Case, Count, Q, Sum, When
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.utils.html import escape
@@ -77,6 +77,12 @@ from history.models import (
     SoilManagementEvent,
     WeatherEvent,
 )
+
+# Public-payload sanitisers. This module serves an ANONYMOUS production endpoint
+# (PublicProductionViewSet), so it is bound by the same privacy and claim rules as
+# history/transparency_views.py — see the note on the establishment block in
+# `complete_summary`.
+from history.services.privacy import public_free_text, public_parcel_geo
 
 from .models import (
     AutomationRule,
@@ -4273,43 +4279,71 @@ class PublicProductionViewSet(viewsets.ViewSet):
                         establishment_photo = None
 
                 # Build establishment data (privacy-filtered for public access)
+                #
+                # 🔴 P0 FIX 2026-08-07. This action is ANONYMOUS (PublicQRPermission allows
+                # unauthenticated GET) and hand-built its own establishment block, which meant
+                # it never received any of the fixes applied to the other public production
+                # endpoint. It was shipping, raw:
+                #     address, latitude, longitude, zip_code   -> the 2026-06 P1 location-PII
+                #                                                 set, hard-nulled elsewhere
+                #     about / main_activities / location_highlights / custom_message
+                #                                              -> with NO public_free_text(),
+                #                                                 so farm P&L and unsupportable
+                #                                                 eco claims passed through
+                #     farming_method                           -> the one field
+                #                                                 test_cross_surface_claim_safety
+                #                                                 exists to keep off the wire
+                # plus `location` falling back to the STREET ADDRESS when city/state were unset.
+                #
+                # Kept in lockstep with history/transparency_views.py's `farmer` block. The
+                # source sweep in test_cross_surface_claim_safety.py now covers BOTH modules,
+                # because two hand-built blocks is exactly how this drifted for so long.
                 establishment_data = {
                     "id": establishment.id,
                     "name": establishment.name,
-                    "description": establishment.description or "",
+                    "description": public_free_text(establishment.description) or "",
+                    # City/state only. NEVER fall back to the street address.
                     "location": (
                         f"{establishment.city}, {establishment.state}"
                         if establishment.city and establishment.state
-                        else establishment.address or ""
+                        else ""
                     ),
                     "photo": establishment_photo,
                     "certifications": getattr(establishment, "certifications", []),
-                    # Basic location fields
-                    "address": establishment.address or "",
+                    # Coarse location only.
                     "city": establishment.city or "",
                     "state": establishment.state or "",
                     "country": establishment.country or "",
                     "zone": getattr(establishment, "zone", ""),
-                    "latitude": establishment.latitude,
-                    "longitude": establishment.longitude,
-                    "zip_code": getattr(establishment, "zip_code", ""),
-                    # Consumer-facing transparency fields
-                    "about": getattr(establishment, "about", ""),
-                    "main_activities": getattr(establishment, "main_activities", ""),
-                    "location_highlights": getattr(establishment, "location_highlights", ""),
-                    "custom_message": getattr(establishment, "custom_message", ""),
-                    "is_active": getattr(establishment, "is_active", True),
+                    # P1 (location PII): street address, coordinates and ZIP identify the
+                    # operation to within a few square metres. Withheld.
+                    "address": None,
+                    "latitude": None,
+                    "longitude": None,
+                    "zip_code": None,
+                    # Consumer-facing transparency fields — farmer free text, so redacted.
+                    "about": public_free_text(getattr(establishment, "about", "")),
+                    "main_activities": public_free_text(getattr(establishment, "main_activities", "")),
+                    "location_highlights": public_free_text(getattr(establishment, "location_highlights", "")),
+                    "custom_message": public_free_text(getattr(establishment, "custom_message", "")),
                     # Agricultural transparency fields
                     "crops_grown": getattr(establishment, "crops_grown", []),
-                    "sustainability_practices": getattr(establishment, "sustainability_practices", []),
+                    # `sustainability_practices` withheld 2026-08-07 — see the long note in
+                    # history/transparency_views.py. It is farmer free text that shipped
+                    # "USDA Organic Certified" to shoppers; certification claims come from
+                    # the Certification table via claim_authority.py, nowhere else.
+                    #
+                    # `farming_method` is withheld for the same reason: a self-declared
+                    # environmental claim (FTC 16 CFR 260.6 / EU ECGT 2024/825). Organic status
+                    # reaches consumers through `organic_claim`, which is substantiated.
+                    #
+                    # `is_active`, `climate_zone` and `conservation_practices` dropped as
+                    # payload bloat — published, rendered by nothing.
                     "year_established": getattr(establishment, "year_established", None),
                     "establishment_type": getattr(establishment, "establishment_type", ""),
-                    "farming_method": getattr(establishment, "farming_method", ""),
                     # Operational agricultural fields (Operations & Practices from step 3)
                     "water_sources": getattr(establishment, "water_sources", []),
-                    "climate_zone": getattr(establishment, "climate_zone", ""),
                     "soil_types": getattr(establishment, "soil_types", []),
-                    "conservation_practices": getattr(establishment, "conservation_practices", []),
                     "irrigation_methods": getattr(establishment, "irrigation_methods", []),
                     # NOTE: employee_count and total_acreage intentionally excluded (business sensitive)
                 }
@@ -4332,8 +4366,13 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     company_data = {
                         "id": company.id,
                         "name": company.name,
-                        "description": getattr(company, "description", ""),
-                        "address": getattr(company, "address", ""),
+                        # Free text the company types — same redaction as the establishment
+                        # prose. `description` was shipping raw here while the other public
+                        # endpoint redacted it (2026-08-07).
+                        "description": public_free_text(getattr(company, "description", "")),
+                        # P1 (location PII): the company's street address is withheld, exactly
+                        # as it is on the transparency endpoint.
+                        "address": None,
                         "city": getattr(company, "city", ""),
                         "state": getattr(company, "state", ""),
                         "country": getattr(company, "country", ""),
@@ -4342,7 +4381,11 @@ class PublicProductionViewSet(viewsets.ViewSet):
                         "instagram": getattr(company, "instagram", ""),
                         "legal_structure": getattr(company, "legal_structure", ""),
                         "primary_commodities": getattr(company, "primary_commodities", ""),
-                        "sustainability_commitment": getattr(company, "sustainability_commitment", ""),
+                        # An unsubstantiated eco claim by construction — it is a free-text
+                        # "commitment". Redacted, not published raw.
+                        "sustainability_commitment": public_free_text(
+                            getattr(company, "sustainability_commitment", "")
+                        ),
                         "logo": company_logo,
                         # Company overview stats for consumer transparency
                         "total_establishments": total_establishments,
@@ -4370,23 +4413,57 @@ class PublicProductionViewSet(viewsets.ViewSet):
                         for img in parcel.album.images.all()[:5]  # Limit to 5 images
                     ]
 
+                parcel_geo = public_parcel_geo(parcel)
+
                 parcel_data = {
                     "id": parcel.id,
                     "name": parcel.name,
                     "area": float(parcel.area) if parcel.area else None,
-                    "polygon": parcel.polygon,
-                    "map_metadata": parcel.map_metadata,
-                    "description": getattr(parcel, "description", ""),
+                    # 🔴 Both of these shipped RAW here (fixed 2026-08-07), bypassing the two
+                    # gates the transparency endpoint applies:
+                    #
+                    # `polygon` — public_parcel_geo() honours Parcel.location_disclosure_level.
+                    #   A parcel set to "approximate" or "hidden" was publishing its exact
+                    #   boundary anyway, which is the whole point of the setting.
+                    #
+                    # `map_metadata` — public_map_metadata() is an ALLOW-list of map-rendering
+                    #   keys. The raw JSON is free-form and was found (2026-08-02) publishing
+                    #   soil_health_score, biodiversity_score, water_efficiency_rating "A+",
+                    #   yield_vs_conventional "+85%" — self-assigned grades, i.e. the
+                    #   self-created sustainability label ECGT 2024/825 bans.
+                    # ONE call, both keys. public_parcel_geo returns the polygon AND the
+                    # map_metadata already gated together — at "approximate" it drops the
+                    # boundary and ROUNDS the centre to ~1km with a zoom cap, so filtering
+                    # map_metadata separately would hand back full-precision coordinates and
+                    # silently undo the rounding.
+                    "polygon": parcel_geo.get("polygon"),
+                    "map_metadata": parcel_geo.get("map_metadata"),
+                    "description": public_free_text(getattr(parcel, "description", "")),
                     "soil_type": getattr(parcel, "soil_type", ""),
                     "crop_type": getattr(parcel, "crop_type", ""),
                     "certification_type": getattr(parcel, "certification_type", ""),
                     "certified": getattr(parcel, "certified", False),
                     "unique_code": getattr(parcel, "unique_code", ""),
-                    "agricultural_details": getattr(parcel, "agricultural_details", {}),
-                    # Transparency fields for consumer display
-                    "transparency_description": parcel.get_transparency_description(),
-                    "sustainability_practices": parcel.get_sustainability_practices(),
-                    "consumer_story": parcel.get_consumer_story(),
+                    # 🔴 `agricultural_details` DROPPED 2026-08-07.
+                    #
+                    # It was published RAW: a free-form JSONField the parcel form writes into,
+                    # on an anonymous endpoint, rendered by no consumer surface at all. It
+                    # carries the grower's private agronomy — soil test results (pH, organic
+                    # matter, N, P), irrigation efficiency, and `water_allocation_acre_feet`,
+                    # which is commercially sensitive in California.
+                    #
+                    # This is the same defect `map_metadata` had: an unguarded free-form blob
+                    # beside carefully-gated fields. That one shipped soil_health_score,
+                    # biodiversity_score and yield_vs_conventional "+85%" to shoppers
+                    # (2026-08-02) and had to be reduced to an allow-list. A blob nobody
+                    # renders cannot leak if it is not sent.
+                    #
+                    # The two keys inside it that a consumer surface ever wanted are still
+                    # published individually below, and now redacted.
+                    "transparency_description": public_free_text(parcel.get_transparency_description()),
+                    "sustainability_practices": public_free_text(parcel.get_sustainability_practices()),
+                    # `consumer_story` removed 2026-08-07 — the field is gone from the parcel
+                    # form and rendered nowhere; it scored nothing and reached no shopper.
                     "primary_crop": parcel.get_primary_crop(),
                     # `transparency_score` is deliberately NOT exposed here. It is a
                     # self-assigned 0-100 grade and a PRODUCER-dashboard KPI. Publishing it
@@ -7027,7 +7104,7 @@ def get_crop_templates(request):
                 "metadata": {
                     "generated_at": timezone.now().isoformat(),
                     "version": "2.0",
-                    "source": "USDA-verified database templates",
+                    "source": "EPA/USDA-sourced database templates",
                 },
             },
             status=status.HTTP_200_OK,
@@ -7150,7 +7227,15 @@ def get_crop_template_detail(request, template_id):
         template = None
         try:
             crop_type = CropType.objects.get(slug=template_id)
-            template = ProductionTemplate.objects.filter(crop_type=crop_type, is_active=True).first()
+            # Ordered deliberately. An unordered .first() returns whichever row Postgres hands
+            # back, which in practice was always the CONVENTIONAL template — the one carrying
+            # prohibited inputs. Prefer organic, then fall back, so resolving a bare crop slug
+            # can never silently hand an organic grower a glyphosate programme.
+            template = (
+                ProductionTemplate.objects.filter(crop_type=crop_type, is_active=True)
+                .order_by(Case(When(farming_approach="organic", then=0), default=1), "id")
+                .first()
+            )
         except CropType.DoesNotExist:
             # Try to find by template ID directly
             try:
@@ -7710,7 +7795,7 @@ def process_voice_event(request):
     company = request.user.get_active_company()
     if not company or not company.has_feature("voice_recording"):
         return Response(
-            {"error": "Voice recording is not available on your current plan. " "Please upgrade to Basic or higher."},
+            {"error": "Voice recording is not available on your current plan. " "Please upgrade to Compliance."},
             status=status.HTTP_403_FORBIDDEN,
         )
     try:
@@ -7777,7 +7862,7 @@ def process_voice_event_ai(request):
     company = request.user.get_active_company()
     if not company or not company.has_feature("voice_recording"):
         return Response(
-            {"error": "Voice recording is not available on your current plan. " "Please upgrade to Basic or higher."},
+            {"error": "Voice recording is not available on your current plan. " "Please upgrade to Compliance."},
             status=status.HTTP_403_FORBIDDEN,
         )
     try:
@@ -9125,7 +9210,7 @@ def voice_config(request):
     company = request.user.get_active_company()
     if not company or not company.has_feature("voice_recording"):
         return Response(
-            {"error": "Voice recording is not available on your current plan. " "Please upgrade to Basic or higher."},
+            {"error": "Voice recording is not available on your current plan. " "Please upgrade to Compliance."},
             status=status.HTTP_403_FORBIDDEN,
         )
     provider = "deepgram" if getattr(settings, "DEEPGRAM_API_KEY", "") else "web_speech_api"
@@ -9143,7 +9228,7 @@ def deepgram_token(request):
     company = request.user.get_active_company()
     if not company or not company.has_feature("voice_recording"):
         return Response(
-            {"error": "Voice recording is not available on your current plan. " "Please upgrade to Basic or higher."},
+            {"error": "Voice recording is not available on your current plan. " "Please upgrade to Compliance."},
             status=status.HTTP_403_FORBIDDEN,
         )
     import requests as http_requests

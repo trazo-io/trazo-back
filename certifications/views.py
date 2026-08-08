@@ -38,6 +38,8 @@ from .serializers import (
     OSPChangeNotificationSerializer,
     StateOrganicRegistrationSerializer,
 )
+from .services.common_osp_records import RECORD_TYPES_BY_KEY, confirm, derive_record_types, summarize
+from .services.common_osp_workbooks import WORKBOOKS_BY_KEY, build_workbook, workbook_summary
 from .services.omri_verifier import OMRIProductVerifier
 
 logger = logging.getLogger(__name__)
@@ -763,6 +765,115 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 created_by=self.request.user,
             )
         return Response(OrganicSystemPlanSerializer(clone).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["get", "post"], url_path="record-types")
+    def record_types(self, request, **kwargs):
+        """
+        Common OSP § 11 "Records Maintained" — evidence (GET) and the operator's own
+        confirmation (POST).
+
+        GET returns one row per § 11 record type with an evidence verdict derived from what the
+        farm has actually logged, plus whether the operator has confirmed it. **Evidence is not
+        an answer**: § 205.201(a) makes the producer the author of the plan, so a row is only a
+        ticked checkbox once it carries `confirmed: true`. Rows with `suggested: true` are
+        evidenced but unconfirmed and must never be rendered as ticked — see the module docstring
+        in `services/common_osp_records.py`.
+
+        POST payload: { "keys": ["harvest_records", ...], "confirmed": true|false }.
+        This is the ONLY path from evidence to an assertion, and it must stay operator-initiated
+        — never called from a signal, seeder, import, or derivation.
+        """
+        osp = self.get_object()
+        establishment = osp.establishment
+
+        if request.method == "GET":
+            rows = derive_record_types(establishment, osp=osp)
+            return Response({"summary": summarize(rows), "record_types": rows})
+
+        # A submitted/superseded/withdrawn plan is a record of what a third party was already
+        # sent — confirming a § 11 box on one would silently change what the certifier received.
+        # The panel disables the controls for these statuses; enforce it here too, because a
+        # disabled checkbox is a UI courtesy, not an access rule.
+        if osp.status not in ("draft", "active"):
+            raise ValidationError(
+                {
+                    "status": (
+                        f"This plan is {osp.get_status_display()}. Record types can only be "
+                        "confirmed on a draft or active plan — create a new version to make changes."
+                    )
+                }
+            )
+
+        keys = request.data.get("keys")
+        if not isinstance(keys, list) or not keys:
+            raise ValidationError({"keys": "Provide a non-empty list of record-type keys."})
+
+        unknown = [k for k in keys if k not in RECORD_TYPES_BY_KEY]
+        if unknown:
+            raise ValidationError({"keys": f"Unknown record type(s): {', '.join(sorted(unknown))}"})
+
+        confirmed = request.data.get("confirmed", True)
+        if not isinstance(confirmed, bool):
+            raise ValidationError({"confirmed": "Must be a boolean."})
+
+        confirm(osp, keys, user=request.user if request.user.is_authenticated else None, confirmed=confirmed)
+        rows = derive_record_types(establishment, osp=osp)
+        return Response({"summary": summarize(rows), "record_types": rows})
+
+    @action(detail=True, methods=["get"], url_path="attachments")
+    def attachments(self, request, **kwargs):
+        """
+        Common OSP required attachments — the four workbooks.
+
+        Without `?workbook=`, returns a per-workbook summary (row count + how many cells Trazo
+        could not fill). With it, downloads that workbook as .xlsx.
+
+        `blank_cells` is work remaining for the operator, not a completeness score: these forms
+        are a starting point they review and finish, and Trazo leaves a cell blank rather than
+        guessing at an answer on a regulatory attachment.
+        """
+        from django.http import FileResponse
+
+        osp = self.get_object()
+        establishment = osp.establishment
+
+        key = request.query_params.get("workbook")
+        if not key:
+            return Response({"workbooks": workbook_summary(establishment)})
+
+        if key not in WORKBOOKS_BY_KEY:
+            raise ValidationError(
+                {"workbook": f"Unknown workbook. Expected one of: {', '.join(sorted(WORKBOOKS_BY_KEY))}"}
+            )
+
+        spec = WORKBOOKS_BY_KEY[key]
+        buffer = build_workbook(establishment, key)
+        response = FileResponse(
+            buffer,
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        stem = slugify(establishment.name) or "operation"
+        response["Content-Disposition"] = f'attachment; filename="{stem}-{spec.filename}.xlsx"'
+        return response
+
+    @action(detail=True, methods=["get"], url_path="module-definitions")
+    def module_definitions(self, request, **kwargs):
+        """
+        Guided OSP module questionnaire definitions (WS-2.1).
+
+        Returns the full serialized module registry plus `content_version`, both locales
+        inline (the wizard picks the locale client-side — module content deliberately does
+        not ride the react-intl catalogs, see osp_modules/schema.py).
+
+        OSP-scoped (detail=True) rather than global so a future certifier overlay can key
+        off `certifier_template_name` without an API change. The payload is
+        definition-only — answers live in `module_responses` and are returned by the
+        module actions (WS-2.2), never here.
+        """
+        from certifications.osp_modules import serialize_registry
+
+        self.get_object()  # 404/permission gate; payload is OSP-independent today
+        return Response(serialize_registry())
 
 
 class OSPAnnualUpdateViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):

@@ -1148,7 +1148,11 @@ class EventCarbonCalculator:
         try:
             # Get crop information
             crop_name = "unknown"
-            if hasattr(event, "history") and event.history and hasattr(event.history, "product"):
+            # `hasattr(history, "product")` is ALWAYS True for a model FK — the attribute exists,
+            # it is simply None when unset. Checking it therefore guarded nothing, and
+            # `event.history.product.name` raised AttributeError on every production without a
+            # crop, which the caller swallowed into "zero defaults": silent zero carbon.
+            if event.history is not None and event.history.product is not None:
                 crop_name = event.history.product.name
 
             # Extract chemical type - handle None values properly
@@ -2170,7 +2174,11 @@ class EventCarbonCalculator:
         try:
             # Get crop information from the production
             crop_name = "default"
-            if hasattr(event, "history") and event.history and hasattr(event.history, "product"):
+            # `hasattr(history, "product")` is ALWAYS True for a model FK — the attribute exists,
+            # it is simply None when unset. Checking it therefore guarded nothing, and
+            # `event.history.product.name` raised AttributeError on every production without a
+            # crop, which the caller swallowed into "zero defaults": silent zero carbon.
+            if event.history is not None and event.history.product is not None:
                 crop_name = event.history.product.name
 
             # ENHANCED: Use structured equipment data
@@ -2725,7 +2733,11 @@ class EventCarbonCalculator:
         """
         try:
             crop_name = "default"
-            if hasattr(event, "history") and event.history and hasattr(event.history, "product"):
+            # `hasattr(history, "product")` is ALWAYS True for a model FK — the attribute exists,
+            # it is simply None when unset. Checking it therefore guarded nothing, and
+            # `event.history.product.name` raised AttributeError on every production without a
+            # crop, which the caller swallowed into "zero defaults": silent zero carbon.
+            if event.history is not None and event.history.product is not None:
                 crop_name = event.history.product.name
 
             business_data = self._get_structured_business_data(event, crop_name)
@@ -3385,7 +3397,11 @@ class EventCarbonCalculator:
         try:
             # Get crop information from the production
             crop_name = "unknown"
-            if hasattr(event, "history") and event.history and hasattr(event.history, "product"):
+            # `hasattr(history, "product")` is ALWAYS True for a model FK — the attribute exists,
+            # it is simply None when unset. Checking it therefore guarded nothing, and
+            # `event.history.product.name` raised AttributeError on every production without a
+            # crop, which the caller swallowed into "zero defaults": silent zero carbon.
+            if event.history is not None and event.history.product is not None:
                 crop_name = event.history.product.name
             elif hasattr(event, "history") and event.history and hasattr(event.history, "crop_type"):
                 crop_name = event.history.crop_type.name if event.history.crop_type else "unknown"

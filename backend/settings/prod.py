@@ -8,6 +8,10 @@ from decouple import config
 
 from backend.settings.base import *
 
+# Imported explicitly: base.py imports a fixed list of names from subdomain_config, so
+# `import *` above does NOT re-export anything added there later.
+from backend.subdomain_config import find_non_public_urls, get_frontend_urls
+
 # Sentry Error Tracking
 SENTRY_DSN = config("SENTRY_DSN", default="")
 if SENTRY_DSN:
@@ -158,8 +162,9 @@ EMAIL_BACKEND = "backend.email_backend.SendGridAPIBackend"
 SERVER_EMAIL = os.environ.get("FROM_EMAIL_ADDRESS", "noreply@trazo.io")
 DEFAULT_FROM_EMAIL = config("FROM_EMAIL_ADDRESS", default="noreply@trazo.io")
 
-# Frontend URL for email links (CTA buttons, upgrade links)
-FRONTEND_URL = config("FRONTEND_URL", default="https://app.trazo.io")
+# FRONTEND_URL (email CTA/upgrade links) is defined with the other public URLs further down,
+# where it is derived from BASE_APP_URL rather than hardcoded — a hardcoded "app.trazo.io"
+# sends staging's emails to production's frontend.
 
 # Support email shown in email body copy (distinct from envelope sender)
 SUPPORT_EMAIL = config("SUPPORT_EMAIL", default="hello@trazo.io")
@@ -247,8 +252,10 @@ WEATHER_ALERT_THRESHOLDS = {
     "high_humidity": 85,  # percentage
 }
 
-# Blockchain Configuration - REQUIRED in production
-BLOCKCHAIN_ENABLED = config("BLOCKCHAIN_ENABLED", default=True, cast=bool)
+# Blockchain Configuration — OFF by default since 2026-08-06 (see base.py for the reasoning).
+# When disabled, the required-vars check below is skipped, so production no longer needs a
+# signing key in its secrets and no longer fails to boot without one.
+BLOCKCHAIN_ENABLED = config("BLOCKCHAIN_ENABLED", default=False, cast=bool)
 POLYGON_RPC_URL = config("POLYGON_RPC_URL", default=None)
 CARBON_CONTRACT_ADDRESS = config("CARBON_CONTRACT_ADDRESS", default=None)
 BLOCKCHAIN_PRIVATE_KEY = config("BLOCKCHAIN_PRIVATE_KEY", default=None)
@@ -292,6 +299,46 @@ USE_ICR_SANDBOX = config("USE_ICR_SANDBOX", default=False, cast=bool)  # Product
 AWS_SERVICES_ENABLED = config("AWS_SERVICES_ENABLED", default=True, cast=bool)
 FORCE_AWS_KEY_MANAGEMENT = config("FORCE_AWS_KEY_MANAGEMENT", default=False, cast=bool)
 ENVIRONMENT = config("ENVIRONMENT", default="production")
+
+# ---------------------------------------------------------------------------
+# Public URLs — re-derived here, never inherited from base.py's fallback.
+#
+# base.py resolves these via backend/subdomain_config.py, which reads ENVIRONMENT with
+# default="development". This module is only ever loaded when we ARE deployed, but it is
+# imported AFTER base.py has already consumed that default — so if the environment does not
+# set ENVIRONMENT, base.py has silently handed us http://consumer.localhost:3000/, and
+# setting ENVIRONMENT further down this file is too late to undo it.
+#
+# That is not cosmetic. history/models.py bakes BASE_CONSUMER_URL into the QR *image* at
+# generation time, so a wrong value means every QR code a farm prints is permanently dead —
+# and the farm only finds out when a buyer scans it. The same values back every verification,
+# password-reset and invitation email. Both failure modes are silent.
+#
+# So: derive from the ENVIRONMENT this module knows it has, still honour an explicit override,
+# and refuse to boot if the result is not publicly reachable.
+# ---------------------------------------------------------------------------
+_frontend_urls = get_frontend_urls(ENVIRONMENT)
+BASE_APP_URL = config("BASE_APP_URL", default=_frontend_urls["BASE_APP_URL"])
+BASE_CONSUMER_URL = config("BASE_CONSUMER_URL", default=_frontend_urls["BASE_CONSUMER_URL"])
+BASE_URL = config("BASE_URL", default="https://api.trazo.io/")
+FRONTEND_URL = config("FRONTEND_URL", default=BASE_APP_URL.rstrip("/"))
+
+_unreachable = find_non_public_urls(
+    {
+        "BASE_APP_URL": BASE_APP_URL,
+        "BASE_CONSUMER_URL": BASE_CONSUMER_URL,
+        "BASE_URL": BASE_URL,
+        "FRONTEND_URL": FRONTEND_URL,
+    }
+)
+if _unreachable:
+    raise ValueError(
+        "Deployed settings resolved a public URL to a non-public host: "
+        + ", ".join(_unreachable)
+        + f". ENVIRONMENT={ENVIRONMENT!r}. These URLs are baked into printed QR codes and "
+        "every outbound email link, so booting with them would produce dead QR codes that "
+        "cannot be recalled. Set ENVIRONMENT=production (or set the URLs explicitly) and redeploy."
+    )
 
 # Override logging configuration for Railway deployment - Console logging only
 LOGGING = {

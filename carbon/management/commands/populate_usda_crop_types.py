@@ -277,7 +277,7 @@ class Command(BaseCommand):
             self.stdout.write(f"   Templates:             {total_templates}")
             self.stdout.write(
                 self.style.SUCCESS(
-                    f"\n✅ After running, production dropdown will show {total_crops} USDA-verified crop types!"
+                    f"\n✅ After running, production dropdown will show {total_crops} EPA/USDA-sourced crop types!"
                 )
             )
             return
@@ -293,7 +293,7 @@ class Command(BaseCommand):
         self.stdout.write(f"   Active Events:         {total_events}")
 
         self.stdout.write(
-            self.style.SUCCESS(f"\n✅ Production dropdown will show {total_crops} USDA-verified crop types!")
+            self.style.SUCCESS(f"\n✅ Production dropdown will show {total_crops} EPA/USDA-sourced crop types!")
         )
 
     # =========================================================================
@@ -1087,6 +1087,192 @@ class Command(BaseCommand):
                 ],
                 "usda_factors_used": True,
                 "data_source": "USDA ARS - Pacific Northwest hazelnut study",
+            },
+            # ---------------------------------------------------------------------------
+            # California perennial specialty crops — added 2026-08-07.
+            #
+            # These five were absent from the catalog entirely, and the crop picker is a CLOSED
+            # list with no "Other" and no free-text entry: a California pistachio grower, a
+            # top-three CA tree nut by acreage, could not create a production at all. Olives,
+            # dates, figs and pomegranates were in the same position. All five are squarely in
+            # the ICP (perennial, CA, largely wholesale).
+            #
+            # HONESTY NOTE ON THE NUMBERS: `benchmark_verified` is False and
+            # `usda_benchmark_source` names a provisional key, exactly as the other unverified
+            # entries in this file do. The emissions figures are interpolated from comparable
+            # perennial systems already in the catalog (almonds/pecans for the nut, stone fruit
+            # and grapes for the fruit) — they are placeholders for ordering and comparison, NOT
+            # measured values, and must not be presented to a grower as measured.
+            # ---------------------------------------------------------------------------
+            {
+                "name": "Pistachios",
+                "slug": "pistachios",
+                "category": "tree_nut",
+                "description": "Pistachio orchards, ~99% of the US crop grown in California's San Joaquin Valley. "
+                "Strongly alternate-bearing and dioecious (separate male pollinizers); navel orangeworm "
+                "is the dominant pest pressure and drives winter mummy sanitation.",
+                "typical_farm_size": "40-400 hectares",
+                "growing_season": "12 months (deciduous)",
+                "harvest_season": "August - October",
+                "usda_benchmark_source": "pistachio_ca_provisional",
+                "benchmark_verified": False,
+                "emissions_calculation_method": "usda_lca_methodology",
+                "emissions_per_hectare": 3100.0,
+                "industry_average": 3100.0,
+                "best_practice": 2100.0,
+                "carbon_credit_potential": 600.0,
+                "typical_cost_per_hectare": 1500.0,
+                "fertilizer_cost_per_hectare": 320.0,
+                "fuel_cost_per_hectare": 340.0,
+                "irrigation_cost_per_hectare": 430.0,
+                "labor_cost_per_hectare": 410.0,
+                "organic_premium": "20-40%",
+                "sustainable_premium": "10-20%",
+                "local_premium": "5-15%",
+                "sustainability_opportunities": [
+                    "Winter mummy sanitation to cut navel orangeworm sprays",
+                    "Mating disruption instead of broad-spectrum insecticide passes",
+                    "Pressure-compensating drip with soil-moisture scheduling",
+                    "Return hulls and shells to the orchard as mulch or compost",
+                ],
+                "usda_factors_used": False,
+                "data_source": "Provisional - interpolated from comparable CA tree-nut systems",
+            },
+            {
+                "name": "Olives",
+                "slug": "olives",
+                "category": "tree_fruit",
+                "description": "Olive groves for table fruit and oil, concentrated in California's Central Valley "
+                "and Sacramento Valley. Alternate-bearing evergreen; olive fruit fly is the key pest and "
+                "harvest timing separates oil from table styles.",
+                "typical_farm_size": "10-200 hectares",
+                "growing_season": "12 months (evergreen)",
+                "harvest_season": "September - December",
+                "usda_benchmark_source": "olive_ca_provisional",
+                "benchmark_verified": False,
+                "emissions_calculation_method": "usda_lca_methodology",
+                "emissions_per_hectare": 2200.0,
+                "industry_average": 2200.0,
+                "best_practice": 1500.0,
+                "carbon_credit_potential": 480.0,
+                "typical_cost_per_hectare": 1150.0,
+                "fertilizer_cost_per_hectare": 210.0,
+                "fuel_cost_per_hectare": 300.0,
+                "irrigation_cost_per_hectare": 280.0,
+                "labor_cost_per_hectare": 360.0,
+                "organic_premium": "20-40%",
+                "sustainable_premium": "10-20%",
+                "local_premium": "10-20%",
+                "sustainability_opportunities": [
+                    "Bait sprays and traps for olive fruit fly instead of cover sprays",
+                    "Deficit irrigation matched to oil-accumulation stage",
+                    "Chip prunings back into grove middles as organic matter",
+                    "Cover crops between rows to cut nitrogen inputs and erosion",
+                ],
+                "usda_factors_used": False,
+                "data_source": "Provisional - interpolated from comparable CA perennial systems",
+            },
+            {
+                "name": "Dates",
+                "slug": "dates",
+                "category": "tree_fruit",
+                "description": "Date palm groves, almost entirely California's Coachella Valley and southwestern "
+                "Arizona. Dioecious with hand pollination and multiple hand passes per bunch; very high "
+                "heat requirement and correspondingly high irrigation demand.",
+                "typical_farm_size": "10-120 hectares",
+                "growing_season": "12 months (evergreen palm)",
+                "harvest_season": "September - November",
+                "usda_benchmark_source": "date_ca_provisional",
+                "benchmark_verified": False,
+                "emissions_calculation_method": "usda_lca_methodology",
+                "emissions_per_hectare": 3400.0,
+                "industry_average": 3400.0,
+                "best_practice": 2400.0,
+                "carbon_credit_potential": 560.0,
+                "typical_cost_per_hectare": 1900.0,
+                "fertilizer_cost_per_hectare": 300.0,
+                "fuel_cost_per_hectare": 330.0,
+                "irrigation_cost_per_hectare": 620.0,
+                "labor_cost_per_hectare": 650.0,
+                "organic_premium": "20-40%",
+                "sustainable_premium": "10-20%",
+                "local_premium": "5-15%",
+                "sustainability_opportunities": [
+                    "Soil-moisture-scheduled irrigation to trim the high desert water load",
+                    "Bunch bagging to reduce pest sprays and harvest loss",
+                    "Return frond and bunch waste to the grove as mulch",
+                    "Solar-assisted pumping for the long irrigation season",
+                ],
+                "usda_factors_used": False,
+                "data_source": "Provisional - interpolated from comparable desert perennial systems",
+            },
+            {
+                "name": "Figs",
+                "slug": "figs",
+                "category": "tree_fruit",
+                "description": "Fig orchards for fresh and dried fruit, concentrated in California's San Joaquin "
+                "Valley. Many cultivars carry two crops a season (breba and main); dried production "
+                "adds a drying stage after harvest.",
+                "typical_farm_size": "5-80 hectares",
+                "growing_season": "12 months (deciduous)",
+                "harvest_season": "June - September",
+                "usda_benchmark_source": "fig_ca_provisional",
+                "benchmark_verified": False,
+                "emissions_calculation_method": "usda_lca_methodology",
+                "emissions_per_hectare": 2300.0,
+                "industry_average": 2300.0,
+                "best_practice": 1600.0,
+                "carbon_credit_potential": 470.0,
+                "typical_cost_per_hectare": 1250.0,
+                "fertilizer_cost_per_hectare": 230.0,
+                "fuel_cost_per_hectare": 300.0,
+                "irrigation_cost_per_hectare": 330.0,
+                "labor_cost_per_hectare": 390.0,
+                "organic_premium": "20-40%",
+                "sustainable_premium": "10-20%",
+                "local_premium": "10-20%",
+                "sustainability_opportunities": [
+                    "Sanitation and timely harvest to limit dried-fruit beetle pressure",
+                    "Drip conversion from flood to cut pumping energy",
+                    "Solar or ambient drying instead of fuel-fired dehydration",
+                    "Chip prunings back into the orchard as organic matter",
+                ],
+                "usda_factors_used": False,
+                "data_source": "Provisional - interpolated from comparable CA perennial systems",
+            },
+            {
+                "name": "Pomegranates",
+                "slug": "pomegranates",
+                "category": "tree_fruit",
+                "description": "Pomegranate orchards, overwhelmingly California's San Joaquin Valley and dominated "
+                "by the Wonderful cultivar. Deciduous and drought-tolerant once established; fruit "
+                "splitting and sunburn drive irrigation and canopy management.",
+                "typical_farm_size": "10-150 hectares",
+                "growing_season": "12 months (deciduous)",
+                "harvest_season": "September - November",
+                "usda_benchmark_source": "pomegranate_ca_provisional",
+                "benchmark_verified": False,
+                "emissions_calculation_method": "usda_lca_methodology",
+                "emissions_per_hectare": 2500.0,
+                "industry_average": 2500.0,
+                "best_practice": 1700.0,
+                "carbon_credit_potential": 500.0,
+                "typical_cost_per_hectare": 1350.0,
+                "fertilizer_cost_per_hectare": 250.0,
+                "fuel_cost_per_hectare": 300.0,
+                "irrigation_cost_per_hectare": 380.0,
+                "labor_cost_per_hectare": 420.0,
+                "organic_premium": "20-40%",
+                "sustainable_premium": "10-20%",
+                "local_premium": "10-20%",
+                "sustainability_opportunities": [
+                    "Even deficit irrigation to limit fruit splitting and rework",
+                    "Kaolin clay for sunburn instead of extra cover sprays",
+                    "Cover crops in row middles to cut nitrogen inputs",
+                    "Return prunings and cull fruit to the orchard as organic matter",
+                ],
+                "usda_factors_used": False,
+                "data_source": "Provisional - interpolated from comparable CA perennial systems",
             },
             {
                 "name": "Blueberries",

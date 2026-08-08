@@ -53,6 +53,33 @@ VERIFICATION_PATTERNS = [
     # Database match that compliance.md requires before claiming verification.
     re.compile(r"\bverified\b[^.;,]*", re.IGNORECASE),
     re.compile(r"\bcertified\s+by\s+trazo\b[^.;,]*", re.IGNORECASE),
+    # A CERT-SHAPED LABEL IS A CLAIM REGARDLESS OF WORD ORDER.
+    #
+    # Every rule above keys on a VERB ("verified", "certified by"), or on the exact
+    # adjacency "USDA certified". Real farmer input is a NOUN PHRASE, and the adjacency
+    # rule requires certified/verified immediately after USDA — so "USDA Organic
+    # Certified" (the word "Organic" intervenes), "Certified Organic" and "Real Organic
+    # Project Certified" all cleared the whole list untouched. Three demo seeders
+    # shipped exactly those strings to shoppers.
+    #
+    # These stay in force even though the one production caller
+    # (transparency_views.py's sustainability_practices) has been withdrawn: the
+    # helper still guards `about`, `main_activities`, `location_highlights` and
+    # `custom_message`, where a farmer can type the same claim in prose.
+    # The trailing optional parenthetical consumes the certifier the farmer names in
+    # brackets — "USDA Organic Certified (CCOF)" otherwise redacted down to a bare
+    # "(CCOF)", which still puts an accrediting body's name on a shopper's screen.
+    re.compile(r"\b(?:USDA|NOP)\b[^.;,]*\bcertifi\w*(?:\s*\([^)]*\))?", re.IGNORECASE),
+    re.compile(r"\bcertifi\w+\s+organic\b[^.;,]*(?:\s*\([^)]*\))?", re.IGNORECASE),
+    re.compile(r"\borganic\s+certifi\w+\b[^.;,]*(?:\s*\([^)]*\))?", re.IGNORECASE),
+    # Named third-party schemes a free-text field cannot substantiate. Trazo holds no
+    # licence to display these marks, and a database cross-reference exists only for
+    # USDA Organic (see cert_logo_usage_standards).
+    re.compile(
+        r"\b(?:Real Organic Project|Rainforest Alliance|Fair Trade|Non-GMO Project|"
+        r"GlobalG\.?A\.?P\.?|CCOF)\b[^.;,]*\bcertifi\w*(?:\s*\([^)]*\))?",
+        re.IGNORECASE,
+    ),
 ]
 
 

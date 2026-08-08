@@ -3146,7 +3146,7 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 if history.finish_date is not None or history.published:
                     raise PermissionDenied(
                         "Cannot add events to a completed production. "
-                        "This ensures the integrity of blockchain-verified transparency data."
+                        "A finished production is a closed record; reopen it to add events."
                     )
 
                 index = (
@@ -3310,7 +3310,7 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 {
                     "error": "Event is locked",
                     "detail": "Events cannot be modified after a production has been completed. "
-                    "This ensures the integrity of blockchain-verified transparency data.",
+                    "A finished production is a closed record; reopen it to add events.",
                     "production_id": history.id,
                     "production_finished": history.finish_date is not None,
                     "production_published": history.published,
@@ -3485,7 +3485,7 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 {
                     "error": "Event is locked",
                     "detail": "Events cannot be deleted after a production has been completed. "
-                    "This ensures the integrity of blockchain-verified transparency data.",
+                    "A finished production is a closed record; reopen it to add events.",
                     "production_id": history.id,
                 },
                 status=status.HTTP_423_LOCKED,

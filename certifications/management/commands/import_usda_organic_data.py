@@ -8,6 +8,17 @@ Usage:
     poetry run python manage.py import_usda_organic_data
     poetry run python manage.py import_usda_organic_data --file /path/to/local.xlsx
     poetry run python manage.py import_usda_organic_data --date 2026-03-01
+    poetry run python manage.py import_usda_organic_data --dry-run   # parse only, write nothing
+
+This table is REPLACED on every run (delete-then-insert inside one transaction), which makes a
+bad parse silently destructive: if the upstream export renames a column, the parser yields few
+or no rows, every existing row is deleted, and the run still reports success. Every farm's
+organic badge then flips to self-reported at once, because
+`certifications/services/consumer_claim_validator.py` gates the badge on a database match.
+
+So the import refuses to replace good data with implausible data — see `_check_replacement_is_safe`.
+A refused import leaves the previous snapshot intact, which is stale but true; the alternative is
+an empty table, which reads as "no farm in America is certified".
 """
 
 from __future__ import annotations
@@ -15,6 +26,7 @@ from __future__ import annotations
 import os
 import re
 import tempfile
+from argparse import BooleanOptionalAction
 from datetime import date, datetime
 
 from django.core.management.base import BaseCommand, CommandError
@@ -22,7 +34,8 @@ from django.db import transaction
 
 import requests
 
-from certifications.models import USDAOrganicOperation
+from certifications.models import IngestionRun, USDAOrganicOperation
+from certifications.services.reference_data_status import reset_reference_data_cache
 
 USDA_MONTHLY_URL = "https://organic.ams.usda.gov/Integrity/MonthlyReports/INTEGRITY_Export_{date}.xlsx"
 
@@ -62,6 +75,16 @@ def normalize_name(name: str) -> str:
     return " ".join(words).strip()
 
 
+# A parse that yields fewer rows than this is not a real USDA export — the smallest plausible
+# national snapshot is tens of thousands of operations. Used only when the table is empty, where
+# there is no previous count to compare against.
+MIN_PLAUSIBLE_RECORDS = 1000
+
+# Replacing the table with less than this fraction of what it already held means the parser
+# almost certainly lost columns or rows. Overridable with --allow-shrink for a genuine contraction.
+MIN_RETAINED_FRACTION = 0.5
+
+
 class Command(BaseCommand):
     help = "Import USDA Organic Integrity Database from monthly bulk XLSX export"
 
@@ -78,9 +101,27 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             "--us-only",
-            action="store_true",
+            action=BooleanOptionalAction,
             default=True,
-            help="Only import US operations (default: True)",
+            help="Only import US operations (default: enabled; disable with --no-us-only)",
+        )
+        parser.add_argument(
+            "--dry-run",
+            action="store_true",
+            help="Parse and report what WOULD be imported, then exit without writing.",
+        )
+        parser.add_argument(
+            "--allow-shrink",
+            action="store_true",
+            # NOTE: argparse runs %-formatting over help strings, so a literal "%" here raises
+            # TypeError when --help is rendered. Spell the fraction out instead of interpolating
+            # a percentage.
+            help=(
+                "Permit an import that would drop the operation count below "
+                f"{MIN_RETAINED_FRACTION} of the current table. Required when USDA "
+                "genuinely publishes a much smaller export; never use it to force through "
+                "a parse you have not inspected."
+            ),
         )
 
     def handle(self, *args, **options):
@@ -94,17 +135,29 @@ class Command(BaseCommand):
         if file_path:
             if not os.path.exists(file_path):
                 raise CommandError(f"File not found: {file_path}")
-            snapshot_date = date.today()
+            # Honour --date here too. Stamping a local file with today's date would claim the
+            # data is current when it may be months old, and data_snapshot_date is the only
+            # record of how fresh the badge evidence actually is.
+            if options.get("date"):
+                snapshot_date = self._parse_snapshot_date(options["date"])
+            else:
+                snapshot_date = date.today()
+                self.stdout.write(
+                    self.style.WARNING(
+                        "No --date given with --file; stamping this snapshot as today "
+                        f"({snapshot_date}). Pass --date YYYYMMDD to record when USDA "
+                        "actually published it."
+                    )
+                )
             self.stdout.write(f"Using local file: {file_path}")
         else:
             # Determine the download URL
             if options.get("date"):
-                date_str = options["date"].replace("-", "")
+                snapshot_date = self._parse_snapshot_date(options["date"])
             else:
-                now = date.today()
-                date_str = now.strftime("%Y%m") + "01"
+                snapshot_date = date.today().replace(day=1)
 
-            snapshot_date = datetime.strptime(date_str, "%Y%m%d").date()
+            date_str = snapshot_date.strftime("%Y%m%d")
             url = USDA_MONTHLY_URL.format(date=date_str)
             self.stdout.write(f"Downloading USDA data from: {url}")
 
@@ -125,14 +178,127 @@ class Command(BaseCommand):
         self.stdout.write("Parsing XLSX file...")
         records = self._parse_xlsx(file_path, us_only=options.get("us_only", True))
 
-        self.stdout.write(f"Parsed {len(records)} US operations. Importing...")
+        existing_count = USDAOrganicOperation.objects.count()
+        self.stdout.write(f"Parsed {len(records)} operations (table currently holds {existing_count}).")
+
+        allow_shrink = options.get("allow_shrink", False)
+
+        # --dry-run is the tool an operator reaches for BECAUSE an import was refused, so the
+        # parse breakdown has to be printed BEFORE the verdict. Checking first would make the
+        # advice in _check_replacement_is_safe ("inspect with --dry-run") impossible to follow:
+        # the dry run would die on the same error, showing nothing. The refusal is still raised
+        # afterwards so the exit code stays honest.
+        if options.get("dry_run"):
+            states = {}
+            for r in records:
+                states[r["state"]] = states.get(r["state"], 0) + 1
+            top = sorted(states.items(), key=lambda kv: -kv[1])[:5]
+            summary = ", ".join("{}={}".format(state or "(blank)", count) for state, count in top)
+            self.stdout.write(
+                self.style.WARNING(
+                    f"DRY RUN — nothing written. Would replace {existing_count} row(s) with "
+                    f"{len(records)} (snapshot: {snapshot_date}). Top states: {summary}"
+                )
+            )
+            try:
+                self._check_replacement_is_safe(
+                    new_count=len(records),
+                    existing_count=existing_count,
+                    allow_shrink=allow_shrink,
+                )
+            except CommandError as exc:
+                # The diagnostic above is already on stdout, which is the point of --dry-run.
+                # Re-raise so the exit code is honest: a dry run that reports a refusal must not
+                # exit 0, or `--dry-run && <real import>` would sail straight past it.
+                self.stdout.write(self.style.ERROR("WOULD BE REFUSED — see below."))
+                raise
+            self.stdout.write(self.style.SUCCESS("Safety check passed — this import would proceed."))
+            return
+
+        # Refuse BEFORE deleting anything. The delete and the insert share a transaction, so a
+        # crash would roll back — but an empty parse is not a crash, it commits happily.
+        self._check_replacement_is_safe(
+            new_count=len(records),
+            existing_count=existing_count,
+            allow_shrink=allow_shrink,
+        )
+
+        self.stdout.write("Importing...")
         self._import_records(records, snapshot_date)
 
+        final_count = USDAOrganicOperation.objects.count()
+
+        # Audit row so "when was the USDA mirror last synced?" has an answer. IngestionRun exists
+        # exactly for this question but had no source for this dataset, which is part of why the
+        # snapshot could go stale unnoticed for months.
+        IngestionRun.objects.create(
+            source="usda_organic",
+            status="ok",
+            rows_created=final_count,
+            message=f"snapshot {snapshot_date}; replaced {existing_count} row(s)",
+        )
+
+        # The /health/ report memoises for 5 minutes; this process just invalidated it. Only
+        # clears THIS process's memo — other workers expire on their own, which is fine for a
+        # status report but means `/health/` may lag a fresh import briefly.
+        reset_reference_data_cache()
         self.stdout.write(
             self.style.SUCCESS(
-                f"Import complete: {len(records)} USDA organic operations loaded " f"(snapshot: {snapshot_date})"
+                f"Import complete: {final_count} USDA organic operations loaded "
+                f"(snapshot: {snapshot_date}, was {existing_count})"
             )
         )
+        self.stdout.write(
+            "Certification matches are NOT refreshed by this command and no scheduled job "
+            "does it either — run `manage.py reverify_certifications --all` next."
+        )
+
+    @staticmethod
+    def _parse_snapshot_date(value: str) -> date:
+        """Parse a --date argument, accepting YYYYMMDD or YYYY-MM-DD."""
+        cleaned = value.replace("-", "")
+        try:
+            return datetime.strptime(cleaned, "%Y%m%d").date()
+        except ValueError:
+            raise CommandError(f"Could not parse --date {value!r}. Use YYYYMMDD or YYYY-MM-DD.")
+
+    def _check_replacement_is_safe(self, *, new_count: int, existing_count: int, allow_shrink: bool):
+        """Refuse to replace a populated table with an implausibly small parse.
+
+        The failure this exists for is silent: USDA renames a column upstream, `_parse_xlsx`
+        matches nothing, and the import deletes every row and reports success. Because the
+        organic badge is gated on a database match, that turns every certified pilot farm into
+        "not independently verified" in one command, with no error to notice.
+        """
+        if new_count == 0:
+            raise CommandError(
+                "Parsed 0 operations — refusing to import. This would delete all "
+                f"{existing_count} existing row(s) and leave the table empty, which reads "
+                "downstream as 'no farm is certified' and silently strips every organic badge. "
+                "The usual cause is an upstream column rename; check the header row with "
+                "--dry-run against a known-good file."
+            )
+
+        if existing_count == 0:
+            if new_count < MIN_PLAUSIBLE_RECORDS and not allow_shrink:
+                raise CommandError(
+                    f"Parsed only {new_count} operations into an empty table. A real USDA "
+                    f"national export holds far more than {MIN_PLAUSIBLE_RECORDS}; this is "
+                    "almost certainly a partial parse. Inspect with --dry-run, or pass "
+                    "--allow-shrink if you are deliberately loading a small fixture."
+                )
+            return
+
+        if allow_shrink:
+            return
+
+        if new_count < existing_count * MIN_RETAINED_FRACTION:
+            raise CommandError(
+                f"Refusing to replace {existing_count} operations with {new_count} "
+                f"({new_count / existing_count:.0%} of current). A drop this large usually "
+                "means the parser lost columns or rows rather than USDA publishing a smaller "
+                "export. Verify with --dry-run; pass --allow-shrink if the contraction is real."
+            )
 
     def _download_file(self, url: str) -> str | None:
         """Download the XLSX file to a temp location."""

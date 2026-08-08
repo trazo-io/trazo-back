@@ -134,8 +134,10 @@ def create_solana_verde_base(user):
         contact_phone="+1-760-555-0143",
         is_active=True,
         crops_grown=["Hass Avocados", "Cover Crops", "Companion Herbs"],
+        # Practices only. A certification belongs in the Certification table, where it can
+        # be checked against the USDA Organic Integrity Database — not in a free-text list
+        # a farmer types. "USDA Organic Certified" used to lead this array (2026-08-07).
         sustainability_practices=[
-            "USDA Organic Certified",
             "Drip irrigation (95% efficiency)",
             "Cover cropping (winter legumes)",
             "Composting (on-farm)",
@@ -151,7 +153,16 @@ def create_solana_verde_base(user):
         farming_method="organic",
         water_sources=["Well water (180ft)", "Rainwater collection"],
         climate_zone="Mediterranean (Csb)",
-        soil_types=["Clay Loam", "Sandy Loam"],
+        # The `soil_types` COLUMN NAME is legacy. Every surface labels this field "Soil
+        # health practices", and the farm form asks for practices ("Cover cropping,
+        # Compost application, No-till"). Seeding soil texture classes here made the
+        # producer profile AND the shopper page both read "Soil health practices: Clay
+        # Loam, Sandy Loam" (fixed 2026-08-07).
+        #
+        # Practices are also the more useful concept on both surfaces: a certifier reads
+        # soil fertility as management under 7 CFR 205.203, and "Cover cropping" means
+        # something to a shopper where a texture class does not.
+        soil_types=["Cover cropping (winter legumes)", "Compost application", "Reduced tillage"],
         conservation_practices=[
             "Cover Crops",
             "Hedgerows",

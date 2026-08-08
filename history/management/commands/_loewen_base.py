@@ -153,9 +153,10 @@ def create_loewen_base(user):
         contact_person="Leonard Loewen",
         is_active=True,
         crops_grown=["Walnuts", "Cover Crops"],
+        # Practices only — certifications live in the Certification table. Two cert claims
+        # ("USDA Organic Certified (CCOF)", "Real Organic Project Certified") led this
+        # array until 2026-08-07.
         sustainability_practices=[
-            "USDA Organic Certified (CCOF)",
-            "Real Organic Project Certified",
             "Integrated sheep grazing",
             "Multi-species cover crops",
             "No synthetic sprays",

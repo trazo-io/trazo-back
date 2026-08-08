@@ -14,8 +14,17 @@ class CarbonOffsetVerificationService:
     """Service for verifying carbon offset projects and purchases with blockchain integration"""
 
     def __init__(self):
-        self.production_mode = getattr(settings, "DEBUG", True) == False
-        self.blockchain_required = self.production_mode or getattr(settings, "FORCE_BLOCKCHAIN_VERIFICATION", False)
+        self.production_mode = getattr(settings, "DEBUG", True) is False
+        # Blockchain is required only when it is actually ENABLED.
+        #
+        # This derived `blockchain_required` from DEBUG alone, so with DEBUG=False and
+        # BLOCKCHAIN_ENABLED=False — the production default since 2026-08-06 — every offset
+        # verification returned "failed" and certificate generation raised, while dev (DEBUG=True)
+        # passed. A dev/prod behavioural inversion that no test could see.
+        blockchain_enabled = getattr(settings, "BLOCKCHAIN_ENABLED", False)
+        self.blockchain_required = blockchain_enabled and (
+            self.production_mode or getattr(settings, "FORCE_BLOCKCHAIN_VERIFICATION", False)
+        )
 
     def verify_project(self, project: CarbonOffsetProject) -> Dict[str, Any]:
         """

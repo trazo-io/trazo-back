@@ -1618,6 +1618,36 @@ class PublicPayloadFinalAuditTests(TestCase):
         cleaned = public_free_text_list(["Carbon-negative certified", "Cover cropping"])
         self.assertEqual(cleaned, ["Cover cropping"])
 
+    def test_redaction_covers_noun_shaped_certification_labels(self):
+        """
+        The verb-keyed rules ("verified", "certified by", "USDA certified") missed the shape
+        farmers actually write: a noun phrase where the certifying verb trails, or where a
+        word intervenes between USDA and "Certified". Every string below shipped in a demo
+        seeder and reached shoppers intact until 2026-08-07.
+
+        `sustainability_practices` no longer reaches any public payload at all, but the same
+        helper still guards `about`, `main_activities`, `location_highlights`,
+        `custom_message` and `company.description`, where the claim can be typed as prose.
+        """
+        from history.services.privacy import public_free_text, public_free_text_list
+
+        for claim in (
+            "USDA Organic Certified",
+            "Certified Organic",
+            "Real Organic Project Certified",
+        ):
+            self.assertIsNone(public_free_text(claim), f"{claim!r} survived redaction")
+
+        # The bracketed certifier goes with the claim — redacting to a bare "(CCOF)" still
+        # puts an accrediting body's name in front of a shopper.
+        self.assertIsNone(public_free_text("USDA Organic Certified (CCOF)"))
+
+        # Entries losing anything to redaction are dropped whole; honest practices survive.
+        self.assertEqual(
+            public_free_text_list(["USDA Organic Certified", "Cover Cropping", "Drip Irrigation"]),
+            ["Cover Cropping", "Drip Irrigation"],
+        )
+
     def test_redaction_keeps_the_rest_of_the_growers_own_words(self):
         """Guards against over-redaction: only the money and the claims come out."""
         import json

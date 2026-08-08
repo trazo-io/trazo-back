@@ -839,9 +839,20 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
             or {}
         )
 
-        # Extract unit fields from extra_data for frontend form compatibility
-        data["volume_unit"] = extra_data.get("volume_unit", "L")
-        data["area_unit"] = extra_data.get("area_unit", "ha")
+        # Unit fields: the MODEL COLUMN wins, extra_data is only a legacy fallback.
+        #
+        # 🔴 This used to read `extra_data.get("volume_unit", "L")` and assign unconditionally, so
+        # a stored unit was discarded and, whenever extra_data carried no copy, replaced with a
+        # hardcoded default. A compost application of **88 tons** was served to the UI as
+        # **"88 L"** — no conversion, just a relabel, three orders of magnitude out, on a record
+        # that feeds the certifier packet, the carbon calculation and the consumer page. Same for
+        # `area_unit`, which defaulted every US farm's acres to hectares.
+        #
+        # These have been real columns on ChemicalEvent since the volume_numeric/volume_unit
+        # migration (see the note at `to_internal_value`); extra_data is mirrored only for older
+        # rows written before that.
+        data["volume_unit"] = data.get("volume_unit") or extra_data.get("volume_unit") or "L"
+        data["area_unit"] = data.get("area_unit") or extra_data.get("area_unit") or "ha"
 
         # Environmental context: model columns with extra_data fallback for legacy events
         data["weather_conditions"] = extra_data.get("weather_conditions", "") or data.get("weather_conditions") or ""
@@ -1022,9 +1033,17 @@ class ChemicalEventSerializer(EventSerializer):
         # Get extra_data for unit fallbacks (template events store units here)
         extra_data = instance.extra_data or {}
 
-        # Default units from extra_data or fallbacks
-        default_volume_unit = extra_data.get("volume_unit", "L")
-        default_area_unit = extra_data.get("area_unit", "ha")
+        # 🔴 The MODEL COLUMN comes first. It was missing from this chain entirely.
+        #
+        # `volume_unit` / `area_unit` are real columns on ChemicalEvent, but this method only ever
+        # consulted the combined `volume` string and then extra_data, falling back to hardcoded
+        # "L"/"ha". `instance.volume` is a bare number for anything not written as "400 kg/ha", so
+        # a COG Pro compost application of **88 tons** — stored correctly as volume_unit="tons" —
+        # was served as **"88 L"**. No conversion, just a relabel, three orders of magnitude out,
+        # on the value the certifier packet, the carbon calculation and the consumer page all read.
+        # `area_unit` had the same shape and turned every US farm's acres into hectares.
+        default_volume_unit = getattr(instance, "volume_unit", None) or extra_data.get("volume_unit") or "L"
+        default_area_unit = getattr(instance, "area_unit", None) or extra_data.get("area_unit") or "ha"
 
         # Parse volume - may be combined string like "400 kg/ha"
         volume_raw = instance.volume
@@ -2483,11 +2502,17 @@ class OptimizedHistoryListSerializer(serializers.ModelSerializer):
             else:
                 enhanced_name = f"{product_name} {year}"
 
-            # Override the name field with enhanced version
-            data["name"] = enhanced_name
+            # FALL BACK to the generated name — never override one the farmer chose.
+            #
+            # This used to assign unconditionally, so a production named "Chandler Block 1 —
+            # North" was displayed as "Walnut 2026" everywhere this serializer is used, with the
+            # real name buried in extra_data. Silently discarding what a user typed is bad on its
+            # own; on a record a certifier reads it also breaks the link between what the grower
+            # calls a block and what the packet calls it.
+            data["name"] = instance.name or enhanced_name
 
-            # Store original name in extra_data for reference
-            data["extra_data"]["original_name"] = instance.name
+            # Keep the generated form available for records that never had a name.
+            data["extra_data"]["generated_name"] = enhanced_name
 
         except Exception as e:
             print(f"Error enhancing production name for {instance.id}: {e}")

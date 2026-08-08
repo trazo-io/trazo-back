@@ -117,7 +117,15 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         if self.action == "destroy":
             return [IsCompanyAdmin()]
         if self.action in ["create", "update", "partial_update"]:
-            return [IsAuthenticated(), HasEstablishmentCreationPermission()]
+            # COMPOSE with the class default, never replace it.
+            #
+            # This previously returned [IsAuthenticated(), HasEstablishmentCreationPermission()],
+            # which DISCARDED CompanyNestedViewSet's
+            # `[IsSuperUser | (ReadOnlyForViewers & AuthPermission)]`. Because
+            # HasEstablishmentCreationPermission returns True for every non-POST method, the only
+            # surviving check on PUT/PATCH was "is authenticated" — so a Viewer-role member could
+            # edit a farm, and the company-membership check was gone too.
+            return super().get_permissions() + [HasEstablishmentCreationPermission()]
         return super().get_permissions()
 
     def get_serializer_class(self):

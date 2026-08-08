@@ -61,6 +61,17 @@ class History(models.Model):
     name = models.CharField(max_length=150, blank=True, null=True, help_text="Production name")
     type = models.CharField(max_length=2, choices=HISTORY_TYPES, blank=True, null=True)
     extra_data = models.JSONField(blank=True, null=True)
+    # When the record was created in Trazo — distinct from `start_date`, which is when the SEASON
+    # began and is supplied (and editable) by the farmer.
+    #
+    # Added because the subscription production quota counted `start_date` over a calendar year,
+    # which made it trivially gameable: backdate a production to 31 December and it fell outside
+    # the window, and a NULL `start_date` was never counted at all. A quota has to key off
+    # something the customer cannot edit.
+    #
+    # Nullable for rows that predate the field; those are historical and correctly fall outside
+    # any current billing period.
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True, db_index=True)
     start_date = models.DateTimeField(null=True, blank=True)
     expected_harvest = models.DateTimeField(
         null=True,

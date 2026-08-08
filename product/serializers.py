@@ -89,14 +89,29 @@ class RetrieveParcelSerializer(ModelSerializer):
     # 🎯 TRANSPARENCY FIELDS for consumer display
     transparency_description = serializers.SerializerMethodField()
     sustainability_practices = serializers.SerializerMethodField()
-    consumer_story = serializers.SerializerMethodField()
     primary_crop = serializers.SerializerMethodField()
     transparency_score = serializers.SerializerMethodField()
     transparency_ready = serializers.SerializerMethodField()
 
+    # Vocabulary for the block_id autocomplete on every event form. Served with the parcel the
+    # form already loads, so offering it costs no extra request.
+    known_block_ids = serializers.SerializerMethodField()
+
     class Meta:
         model = Parcel
         exclude = ("album",)
+
+    def get_known_block_ids(self, parcel):
+        """Blocks already recorded on this parcel, so the grower picks instead of retyping.
+
+        Free text plus no vocabulary is how "Block 3", "block 3" and "Blk 3" become three blocks
+        that no certifier query can reconcile. Imported COG Pro "Row/Section ID" values populate
+        this automatically, which is what keeps a migration's block structure intact the first
+        time the farmer logs a new event against it.
+        """
+        from history.services.block_ids import known_block_ids_for_parcel
+
+        return known_block_ids_for_parcel(parcel)
 
     def get_product(self, parcel):
         return parcel.product.name if parcel.product else None
@@ -158,10 +173,6 @@ class RetrieveParcelSerializer(ModelSerializer):
         """Get sustainability practices narrative for consumers"""
         return parcel.get_sustainability_practices()
 
-    def get_consumer_story(self, parcel):
-        """Get consumer story explaining why this parcel matters"""
-        return parcel.get_consumer_story()
-
     def get_primary_crop(self, parcel):
         """Get primary crop focus for this parcel"""
         return parcel.get_primary_crop()
@@ -216,14 +227,13 @@ class CreateParcelSerializer(USContactFieldsMixin, ModelSerializer):
 
     # 🎯 TRANSPARENCY-FOCUSED FIELDS for consumer-facing narratives
     transparency_description = serializers.CharField(
-        required=False, write_only=True, help_text="Consumer-facing parcel description"
+        required=False, write_only=True, help_text="Parcel description (stored as Parcel.description)"
     )
     sustainability_practices = serializers.CharField(
-        required=False, write_only=True, help_text="Sustainability practices for consumers"
+        required=False, write_only=True, help_text="Soil and conservation practices (7 CFR 205.203)"
     )
-    consumer_story = serializers.CharField(
-        required=False, write_only=True, help_text="Why consumers should care about this parcel"
-    )
+    # `consumer_story` write field removed 2026-08-07 — the parcel form no longer collects
+    # it and no surface renders it. See product/models.py where the getter was removed.
     crop_focus = serializers.CharField(required=False, write_only=True, help_text="Primary crop grown for transparency")
     transparency_ready = serializers.BooleanField(
         required=False, write_only=True, help_text="Parcel ready for consumer transparency"
@@ -281,7 +291,6 @@ class CreateParcelSerializer(USContactFieldsMixin, ModelSerializer):
             "carbon_sequestration_practices",
             "transparency_description",
             "sustainability_practices",
-            "consumer_story",
             "crop_focus",
             "transparency_ready",
             # SerializerMethodField
@@ -387,7 +396,7 @@ class CreateParcelSerializer(USContactFieldsMixin, ModelSerializer):
         ]
 
         # 🎯 TRANSPARENCY FIELDS for consumer-facing narratives
-        transparency_fields = ["sustainability_practices", "consumer_story", "transparency_ready"]
+        transparency_fields = ["sustainability_practices", "transparency_ready"]
 
         # Get existing agricultural_details or create new dict
         agricultural_details = validated_data.get("agricultural_details", instance.agricultural_details or {})
@@ -603,8 +612,12 @@ class ParcelCropHistorySerializer(serializers.ModelSerializer):
             "parcel",
             "year",
             "crop_grown",
+            # Distinguishes the rows of a SPLIT FIELD — two crops on one parcel in one year.
+            # Without it the API cannot set or show which part of the field grew what.
+            "block_id",
             "production_method",
             "substances_applied",
+            "last_prohibited_substance",
             "date_last_prohibited",
             "notes",
             "created_at",

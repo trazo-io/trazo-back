@@ -233,8 +233,10 @@ class Command(BaseCommand):
             zip_code="93003",
             is_active=True,
             crops_grown=["Hass Avocado", "Valencia Orange", "Nonpareil Almond"],
+            # Practices only — certifications live in the Certification table, which is
+            # gated by claim_authority.py. "USDA Organic Certified" led this array until
+            # 2026-08-07.
             sustainability_practices=[
-                "USDA Organic Certified",
                 "Integrated Pest Management",
                 "Cover Cropping",
                 "Drip Irrigation",
@@ -247,7 +249,11 @@ class Command(BaseCommand):
             farming_method="sustainable",
             water_sources=["Deep Well Groundwater"],
             climate_zone="Mediterranean (Csb)",
-            soil_types=["Sandy Loam", "Clay Loam"],
+            # `soil_types` is a legacy COLUMN NAME — every surface labels it "Soil health
+            # practices" and the farm form collects practices. Seeding texture classes made
+            # both the producer profile and the shopper page read "Soil health practices:
+            # Sandy Loam, Clay Loam" (fixed 2026-08-07).
+            soil_types=["Cover cropping", "Compost application", "Reduced tillage"],
             conservation_practices=[
                 "Cover Crops",
                 "Windbreaks",

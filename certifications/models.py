@@ -468,6 +468,7 @@ class IngestionRun(models.Model):
         ("cdfa_oim", "CDFA OIM cross-reference (committed CSV)"),
         ("national_list_ecfr", "National List — eCFR API snapshot"),
         ("national_list_seed", "National List — committed seed"),
+        ("usda_organic", "USDA Organic Integrity — monthly XLSX mirror"),
     ]
     STATUS_CHOICES = [
         ("ok", "OK"),

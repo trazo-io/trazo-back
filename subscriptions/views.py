@@ -42,6 +42,26 @@ def stripe_ts(ts):
     return dt.fromtimestamp(ts, tz=dt_timezone.utc) if ts else None
 
 
+def internal_plans():
+    """Plans that exist for staff provisioning and must never be self-serve selectable.
+
+    `pilot` is free with unlimited farms, parcels and productions. It is granted deliberately by
+    `provision_pilot` during white-glove onboarding; it is not something a visitor may choose.
+
+    NOTE the shape. The obvious `.exclude(features__is_pilot=True)` is WRONG on a JSONField: for
+    every row that simply lacks the key the comparison is NULL, `NOT NULL` is not true, and the
+    row is dropped — so that expression returns ZERO plans, not "all but pilot". Verified against
+    the live table. Excluding by primary key keeps the missing-key rows.
+    """
+    return Plan.objects.filter(features__is_pilot=True)
+
+
+def self_serve_plans(queryset=None):
+    """Active plans a user is allowed to pick without a human in the loop."""
+    queryset = Plan.objects.filter(is_active=True) if queryset is None else queryset
+    return queryset.exclude(pk__in=internal_plans().values("pk"))
+
+
 class PlanViewSet(viewsets.ReadOnlyModelViewSet):
     """API endpoint for listing subscription plans"""
 
@@ -52,7 +72,8 @@ class PlanViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         from django.db.models import Q
 
-        queryset = super().get_queryset()
+        # AllowAny: this list is public, so an internal plan listed here is an offer to the world.
+        queryset = self_serve_plans(super().get_queryset())
         interval = self.request.query_params.get("interval")
 
         # Filter by interval if provided, but always include free plans (Starter)
@@ -280,7 +301,9 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         plan_id = request.data.get("plan_id")
 
         try:
-            plan = Plan.objects.get(id=plan_id, is_active=True)
+            # self_serve_plans, not Plan.objects: hiding the pilot plan from the public list is
+            # not a control if the id still works when posted here.
+            plan = self_serve_plans().get(id=plan_id)
             is_downgrade = subscription.plan and self._is_downgrade(subscription.plan, plan)
 
             if subscription.stripe_subscription_id:
@@ -696,8 +719,9 @@ class CheckoutViewSet(ViewSet):
 
                 return Response({"url": checkout_session.url})
 
-            # Regular subscription flow
-            plan = Plan.objects.get(id=plan_id, interval=interval, is_active=True)
+            # Regular subscription flow. self_serve_plans keeps the free unlimited pilot plan out
+            # of checkout even if a caller supplies its id directly.
+            plan = self_serve_plans().get(id=plan_id, interval=interval)
 
             # Set up trial parameters if requested
             subscription_data = {}
@@ -1733,6 +1757,22 @@ class BlockchainSubscriptionView(APIView):
         POST /api/billing/subscribe-blockchain/
         """
         try:
+            # The blockchain add-on was WITHDRAWN on 2026-08-03 and the feature disabled on
+            # 2026-08-06 (`BLOCKCHAIN_ENABLED` defaults False).
+            #
+            # This endpoint previously stayed reachable and was safe only because the AddOn row
+            # carried `is_active=False` — i.e. a DATA flag was the sole thing standing between a
+            # customer and a live $15/mo charge for a product Trazo does not sell. One reseed or
+            # one admin toggle would have re-opened it. Gate on the SETTING as well, so turning the
+            # product back on is a deliberate act rather than an accident.
+            from django.conf import settings
+
+            if not getattr(settings, "BLOCKCHAIN_ENABLED", False):
+                return Response(
+                    {"error": "Blockchain recording is not available."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
             user = request.user
             company = user.get_active_company()
 

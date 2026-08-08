@@ -5,12 +5,7 @@
 
 from django.urls import path
 
-from .views import (
-    certifier_review_dossier,
-    certifier_review_metadata,
-    certifier_review_readiness,
-    verify_input,
-)
+from .views import certifier_review_dossier, certifier_review_metadata, certifier_review_readiness, verify_input
 
 urlpatterns = [
     # NOP input verifier (Sprint 3) — classify a chemical/amendment against the

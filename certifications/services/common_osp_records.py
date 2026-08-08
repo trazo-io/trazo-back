@@ -47,15 +47,52 @@ parts of their recordkeeping live outside this tool.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Callable
 
 # Same emptiness rule the PUR export and per-event completeness registry already use:
 # None, "", and whitespace-only all count as missing.
 from history.services.record_completeness import _present
 
+logger = logging.getLogger(__name__)
+
+
+def _has_content(value) -> bool:
+    """Does this field actually record something?
+
+    `_present()` alone is WRONG here. It was written for the chemical-event required-field
+    registry, where every field is a string or a number, so it returns True for anything that
+    is not None and not blank text. Applied to the field types this module reads, that produced
+    fabricated evidence on real data:
+
+      - `History.organic_on_invoice` is a `BooleanField(default=False)`. Every production
+        defaults to False, so `_present(False)` → True reported "13 invoice records logged" on a
+        farm where **zero** productions had it set.
+      - `seed_search_attempts` and `water_test_results` are JSONFields that default to `[]`.
+        `_present([])` → True reported "9 documented seed searches logged" where all nine were
+        empty lists.
+
+    Both would have put a fabricated count in front of a farmer as the basis for ticking a § 11
+    checkbox — the auto-attestation failure this module exists to prevent, arriving through the
+    evidence rather than through the checkbox.
+
+    A False boolean is an explicit "no", not a record. An empty container is not a record either.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (dict, list, tuple, set)):
+        return len(value) > 0
+    return _present(value)
+
+
 EVIDENCED = "evidenced_in_trazo"
 NOT_EVIDENCED = "not_evidenced_in_trazo"
+# A record type whose evidence check itself failed. Deliberately NOT folded into
+# NOT_EVIDENCED: "we could not look" and "we looked and found nothing" are different
+# statements, and only one of them is safe to show a certifier. A swallowed AttributeError
+# once rendered a farm holding 4 organic certificates as holding none.
+UNKNOWN = "evidence_check_failed"
 
 # Where operator confirmations live inside OrganicSystemPlan.sections. § 11 is a recordkeeping
 # question, so it belongs under the (a)(4) section rather than in a new table — the JSONB is
@@ -143,7 +180,7 @@ class EvidenceBundle:
 
     def with_field(self, events, *field_names):
         """Events where at least one of the named fields carries a value."""
-        return [e for e in events if any(_present(getattr(e, f, None)) for f in field_names)]
+        return [e for e in events if any(_has_content(getattr(e, f, None)) for f in field_names)]
 
     def business_extra(self, *keys):
         """Sale/Delivery BusinessEvents carrying at least one of the given extra_data keys.
@@ -156,17 +193,17 @@ class EvidenceBundle:
         out = []
         for e in self.business:
             data = e.extra_data or {}
-            if any(_present(data.get(k)) for k in keys):
+            if any(_has_content(data.get(k)) for k in keys):
                 out.append(e)
         return out
 
 
-def _count(items, basis_singular, basis_plural=None):
+def _count(items, basis_singular, basis_plural=None, verb="logged"):
     n = len(items)
     if n == 0:
         return 0, ""
     word = basis_singular if n == 1 else (basis_plural or basis_singular + "s")
-    return n, f"{n} {word} logged"
+    return n, f"{n} {word} {verb}".strip()
 
 
 # --------------------------------------------------------------------------------------
@@ -204,7 +241,7 @@ COMMON_OSP_RECORD_TYPES: list[RecordType] = [
         cfr_cite="7 CFR 205.206",
         # Both halves of § 205.206: the non-chemical tiers (scouting, beneficials, cultural
         # controls) and the substance applications that § 205.206(e) allows only after them.
-        evidence=lambda b: _count(b.pest() + b.chem("PE"), "pest management record"),
+        evidence=lambda b: _count(b.pest + b.chem("PE"), "pest management record"),
     ),
     RecordType(
         key="cultivation",
@@ -249,9 +286,11 @@ COMMON_OSP_RECORD_TYPES: list[RecordType] = [
         # NOT proof that mulch was applied — the basis string says so rather than overstating.
         evidence=lambda b: (
             len(b.prod("MO")),
-            f"{len(b.prod('MO'))} orchard-floor / mowing event(s) logged — confirm whether these include mulching"
-            if b.prod("MO")
-            else "",
+            (
+                f"{len(b.prod('MO'))} orchard-floor / mowing event(s) logged — confirm whether these include mulching"
+                if b.prod("MO")
+                else ""
+            ),
         ),
     ),
     RecordType(
@@ -260,7 +299,7 @@ COMMON_OSP_RECORD_TYPES: list[RecordType] = [
         group=GROUP_CROP,
         cfr_cite="7 CFR 205.206",
         evidence=lambda b: _count(
-            b.chem("FU") + b.with_field(b.pest(), "pest_species"),
+            b.chem("FU") + b.with_field(b.pest, "pest_species"),
             "disease management record",
         ),
     ),
@@ -336,10 +375,7 @@ COMMON_OSP_RECORD_TYPES: list[RecordType] = [
     ),
     RecordType(
         key="restricted_input_use_records",
-        label=(
-            "Input use records verify all restricted inputs are used in accordance with their "
-            "use restriction"
-        ),
+        label=("Input use records verify all restricted inputs are used in accordance with their " "use restriction"),
         group=GROUP_INPUTS,
         cfr_cite="7 CFR 205.601",
         # Evidence = inputs matched against an approved-materials source (OMRI / National List)
@@ -422,10 +458,15 @@ COMMON_OSP_RECORD_TYPES: list[RecordType] = [
         label="Organic certificates",
         group=GROUP_SALES,
         cfr_cite="7 CFR 205.103(b)(1)",
+        # ⚠️ The reverse accessor is `structured_certifications`, NOT `certifications` —
+        # `Establishment.certifications` is an unrelated TEXT field, so the obvious spelling
+        # returns a string and blows up at `.all()`. Caught by a smoke test against real data;
+        # the swallowed exception had rendered a farm with 4 certificates as having none.
         evidence=lambda b: _count(
-            list(b.establishment.certifications.all()) if hasattr(b.establishment, "certifications") else [],
-            "organic certificate on file",
-            "organic certificates on file",
+            list(b.establishment.structured_certifications.all()),
+            "organic certificate",
+            "organic certificates",
+            verb="on file",
         ),
     ),
     RecordType(
@@ -476,7 +517,7 @@ COMMON_OSP_RECORD_TYPES: list[RecordType] = [
         group=GROUP_SALES,
         cfr_cite="7 CFR 205.103(b)(2)",
         evidence=lambda b: _count(
-            b.business_extra("invoice_number") + [p for p in b.productions if _present(p.organic_on_invoice)],
+            b.business_extra("invoice_number") + [p for p in b.productions if _has_content(p.organic_on_invoice)],
             "invoice record",
         ),
     ),
@@ -551,10 +592,12 @@ def derive_record_types(establishment, osp=None, start_date=None, end_date=None)
 
     rows = []
     for rt in COMMON_OSP_RECORD_TYPES:
+        failed = False
         try:
             count, basis = rt.evidence(bundle)
-        except Exception:  # noqa: BLE001 — one bad record type must not break the whole section
-            count, basis = 0, ""
+        except Exception as exc:  # noqa: BLE001 — one bad record type must not break the section
+            logger.exception("Common OSP §11 evidence check failed for %r", rt.key)
+            count, basis, failed = 0, f"Evidence check failed: {exc.__class__.__name__}", True
 
         conf = confirmations.get(rt.key) or {}
         confirmed = bool(conf.get("confirmed"))
@@ -565,7 +608,7 @@ def derive_record_types(establishment, osp=None, start_date=None, end_date=None)
                 "label": rt.label,
                 "group": rt.group,
                 "cfr_cite": rt.cfr_cite,
-                "status": EVIDENCED if count else NOT_EVIDENCED,
+                "status": UNKNOWN if failed else (EVIDENCED if count else NOT_EVIDENCED),
                 "count": count,
                 "basis": basis,
                 "external_by_design": rt.external_by_design,
@@ -590,6 +633,8 @@ def summarize(rows: list[dict]) -> dict:
         "confirmed": sum(1 for r in rows if r["confirmed"]),
         "awaiting_confirmation": sum(1 for r in rows if r["suggested"]),
         "external_by_design": sum(1 for r in rows if r["external_by_design"]),
+        # Surfaced so a broken evidence check is visible instead of quietly reading as "none".
+        "evidence_check_failed": sum(1 for r in rows if r["status"] == UNKNOWN),
     }
 
 

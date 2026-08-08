@@ -967,6 +967,131 @@ class CarbonCompleteSummaryScoreGatingTests(_Base):
         if parcel is not None:
             self.assertIn("transparency_ready", parcel)
 
+    # --- P0 (2026-08-07): the same action leaked the whole location-PII set --------------
+    #
+    # `complete/` hand-built its own establishment, company and parcel blocks, so it never
+    # received ANY of the fixes applied to history/transparency_views.py. It shipped, raw:
+    # street address, exact lat/lon, ZIP, un-redacted marketing prose, `farming_method`, the
+    # company street address, and an ungated parcel polygon + map_metadata. Two hand-built
+    # payloads for one resource is how it drifted unnoticed for months.
+
+    def _populate_pii(self):
+        """The _Base fixture leaves every PII field blank.
+
+        Without this the assertions below are VACUOUS — `assertFalse(falsy)` passes whether
+        or not the endpoint withholds anything. Verified by reintroducing the leak: the test
+        still passed until these values were set.
+        """
+        self.establishment.address = "1234 Very Private Lane"
+        self.establishment.latitude = 36.123456
+        self.establishment.longitude = -119.654321
+        self.establishment.zip_code = "93999"
+        self.establishment.farming_method = "sustainable"
+        self.establishment.save(update_fields=["address", "latitude", "longitude", "zip_code", "farming_method"])
+        self.company.address = "9 Corporate Row"
+        self.company.save(update_fields=["address"])
+
+    def test_location_pii_is_withheld(self):
+        self._populate_pii()
+        resp = self.client.get(self._url(), HTTP_USER_AGENT=self._UA)
+        self.assertEqual(resp.status_code, 200, resp.content[:300])
+        payload = resp.json()
+        farm = payload.get("establishment") or {}
+
+        for field in ("address", "latitude", "longitude", "zip_code"):
+            self.assertFalse(
+                bool(farm.get(field)),
+                f"location PII '{field}' leaked on the anonymous complete/ endpoint: "
+                f"{farm.get(field)!r} (2026-06 P1; hard-nulled on the transparency endpoint)",
+            )
+
+        company = farm.get("company") or {}
+        self.assertFalse(
+            bool(company.get("address")),
+            f"company street address leaked: {company.get('address')!r}",
+        )
+
+        # Belt and braces: the VALUES must be absent from the whole blob, not just from the
+        # keys we thought to check.
+        blob = json.dumps(payload)
+        for secret in ("1234 Very Private Lane", "93999", "36.123456", "-119.654321", "9 Corporate Row"):
+            self.assertNotIn(secret, blob, f"{secret!r} reached the anonymous payload")
+
+    def test_farming_method_is_not_published(self):
+        """Free-text self-declared claim — FTC 16 CFR 260.6 / EU ECGT 2024/825.
+
+        The transparency endpoint never serialises it; this one published it raw.
+        """
+        self._populate_pii()
+        resp = self.client.get(self._url(), HTTP_USER_AGENT=self._UA)
+        farm = resp.json().get("establishment") or {}
+        self.assertNotIn(
+            "farming_method",
+            farm,
+            "farming_method leaked on the anonymous complete/ endpoint",
+        )
+        self.assertNotIn("sustainable", json.dumps(resp.json()))
+
+    def test_parcel_agricultural_details_blob_is_not_published(self):
+        """The grower's private agronomy must not ship on an anonymous endpoint.
+
+        `agricultural_details` is a free-form JSONField the parcel form writes into — soil
+        test results (pH, organic matter, N, P), irrigation efficiency and
+        `water_allocation_acre_feet`, which is commercially sensitive in California. It was
+        published RAW here and rendered by no consumer surface at all.
+
+        Same defect `map_metadata` had (2026-08-02: soil_health_score, biodiversity_score,
+        yield_vs_conventional "+85%"). A blob nobody renders cannot leak if it is not sent.
+        """
+        self.parcel.agricultural_details = {
+            "soil_ph": "6.8",
+            "water_allocation_acre_feet": "42.5",
+            "consumer_story": "secret narrative",
+            "soil_health_score": 92,
+        }
+        self.parcel.save(update_fields=["agricultural_details"])
+
+        resp = self.client.get(self._url(), HTTP_USER_AGENT=self._UA)
+        self.assertEqual(resp.status_code, 200, resp.content[:300])
+        parcel = resp.json().get("parcel") or {}
+
+        self.assertNotIn(
+            "agricultural_details",
+            parcel,
+            "raw agricultural_details blob published on the anonymous complete/ endpoint",
+        )
+        blob = json.dumps(resp.json())
+        for secret in ("42.5", "secret narrative", "soil_health_score"):
+            self.assertNotIn(secret, blob, f"{secret!r} reached the anonymous payload")
+
+    def test_parcel_consumer_story_is_not_published(self):
+        """Removed from the product 2026-08-07 — form, serializer, model getter and payload."""
+        self.parcel.agricultural_details = {"consumer_story": "why shoppers should care"}
+        self.parcel.save(update_fields=["agricultural_details"])
+
+        resp = self.client.get(self._url(), HTTP_USER_AGENT=self._UA)
+        parcel = resp.json().get("parcel") or {}
+        self.assertNotIn("consumer_story", parcel)
+
+    def test_location_string_never_falls_back_to_the_street_address(self):
+        """`location` used to read `f"{city}, {state}" or establishment.address`.
+
+        With city/state unset that published the street address through a field whose whole
+        purpose is to be the COARSE location.
+        """
+        self.establishment.city = ""
+        self.establishment.state = ""
+        self.establishment.address = "1234 Very Private Lane"
+        self.establishment.save(update_fields=["city", "state", "address"])
+
+        resp = self.client.get(self._url(), HTTP_USER_AGENT=self._UA)
+        blob = json.dumps(resp.json())
+        self.assertNotIn(
+            "Very Private Lane",
+            blob,
+            "street address leaked through the `location` fallback",
+        )
+
 
 class ComplianceFieldExposureTests(_Base):
     """New compliance fields (2026-06) must reach the RIGHT output. BR organic-approval, TM trap

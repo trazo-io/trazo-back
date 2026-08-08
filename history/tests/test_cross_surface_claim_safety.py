@@ -217,6 +217,85 @@ class FarmingMethodNotPublishedTests(SimpleTestCase):
             "farming_method is being published raw to the anonymous consumer payload",
         )
 
+    def test_sustainability_practices_is_absent_from_the_transparency_payload(self):
+        """The 5th occurrence of the self-reported-trust-signal defect (2026-08-07).
+
+        `sustainability_practices` is a farmer-authored free-text LIST that shopper
+        surfaces rendered as green leaf chips. Running it through
+        `public_free_text_list()` was not enough: every verification pattern keyed on a
+        VERB ("verified", "certified by") or on the exact adjacency "USDA certified", so
+        the noun-shaped labels farmers actually write — "USDA Organic Certified",
+        "Certified Organic", "Real Organic Project Certified" — passed through untouched.
+        Three demo seeders shipped exactly those strings.
+
+        A certification attestation with no database backing, styled as a trust signal,
+        is the FTC 16 CFR 260.6 / EU ECGT 2024/825 defect. Certification claims have one
+        authoritative home: the Certification table, gated by claim_authority.py.
+        """
+        import inspect
+
+        from history import transparency_views
+
+        source = inspect.getsource(transparency_views)
+        self.assertNotIn(
+            '"sustainability_practices":',
+            source,
+            "sustainability_practices is being published to the anonymous consumer payload",
+        )
+
+    def test_sustainability_practices_is_absent_from_the_public_carbon_payload(self):
+        """The same field on the OTHER anonymous production endpoint.
+
+        `carbon.views.PublicProductionViewSet` is reachable unauthenticated and builds
+        its own establishment block. Fixing one surface and not the other is how this
+        defect class keeps recurring on a surface nobody remembered.
+        """
+        import inspect
+
+        from carbon import views as carbon_views
+
+        source = inspect.getsource(carbon_views)
+        self.assertNotIn(
+            '"sustainability_practices": getattr(establishment',
+            source,
+            "sustainability_practices is being published on the public carbon endpoint",
+        )
+
+    def test_cert_shaped_labels_are_redacted_from_public_free_text(self):
+        """The redaction gap that let the claim through, pinned.
+
+        These are the literal strings the demo seeders shipped. Each must be removed
+        while honest practice text and negated disclaimers survive intact.
+        """
+        from history.services.privacy import public_free_text
+
+        for claim in (
+            "USDA Organic Certified",
+            "USDA Organic Certified (CCOF)",
+            "Certified Organic",
+            "Real Organic Project Certified",
+            "Rainforest Alliance Certified",
+        ):
+            with self.subTest(claim=claim):
+                self.assertIsNone(
+                    public_free_text(claim),
+                    f"cert-shaped label survived redaction: {claim!r}",
+                )
+
+        # Honest practice text must NOT be collateral damage — over-redaction would push
+        # farmers back toward writing claims to get anything to render.
+        for practice in (
+            "Drip irrigation (95% efficiency)",
+            "Cover cropping between rows",
+            "Integrated Pest Management",
+        ):
+            with self.subTest(practice=practice):
+                self.assertEqual(public_free_text(practice), practice)
+
+        # A negated mention is a DISCLAIMER, not a claim.
+        disclaimer = "Practices are not independently verified"
+        self.assertEqual(public_free_text(disclaimer), disclaimer)
+
     def test_unverified_organic_cert_does_not_assert_organic_farming_method(self):
         import inspect
 

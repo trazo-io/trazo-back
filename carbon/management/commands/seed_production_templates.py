@@ -210,7 +210,11 @@ class Command(BaseCommand):
     def _seed_crop_types(self):
         """Step 1: Seed USDA crop types."""
         before_count = CropType.objects.filter(is_active=True).count()
-        call_command("populate_usda_crop_types", verbosity=0)
+        # `--crops-only` is MANDATORY. Without it the command also creates a second, older
+        # generation of `{slug}_conventional` templates on top of the `_v3` ones, giving two
+        # conventional templates per crop in the Smart Setup picker (`get_crop_templates` has
+        # no version filter). See the deploy runbook, Step 2.
+        call_command("populate_usda_crop_types", crops_only=True, verbosity=0)
         after_count = CropType.objects.filter(is_active=True).count()
         self.stats["crop_types_created"] = after_count - before_count
         self.stdout.write(f"  Created {self.stats['crop_types_created']} crop types")
@@ -219,7 +223,10 @@ class Command(BaseCommand):
         """Step 2: Seed production templates with event templates."""
         before_pt = ProductionTemplate.objects.count()
         before_et = EventTemplate.objects.count()
-        call_command("create_comprehensive_production_templates", verbosity=0)
+        # v2 is the only generator on disk. This previously called
+        # `create_comprehensive_production_templates` (no suffix), which does not exist —
+        # the command died with `CommandError: Unknown command` every time it was run.
+        call_command("create_comprehensive_production_templates_v2", verbosity=0)
         after_pt = ProductionTemplate.objects.count()
         after_et = EventTemplate.objects.count()
         self.stats["production_templates_created"] = after_pt - before_pt

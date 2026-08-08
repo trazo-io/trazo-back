@@ -167,3 +167,60 @@ def summarize_chemical_events(events: Iterable) -> ChemicalRecordCompletenessSum
         missing_field_counts=missing_field_counts,
         example_missing_labels=example_missing_labels,
     )
+
+
+@dataclass(frozen=True)
+class NationalListCoverage:
+    """How many of a season's inputs carry a 7 CFR 205.601/.602 citation.
+
+    A miss is NOT a compliance judgement. It means Trazo could not map the farmer's wording to a
+    listing, so the packet cites nothing and falls back to "self-reported". Surfacing the number
+    is what turns that from an invisible gap into something a grower can fix, and it is the honest
+    framing: coverage of OUR crosswalk, not a verdict on THEIR inputs.
+    """
+
+    total: int
+    cited: int
+    #: Distinct substance/product names Trazo could not map, most frequent first.
+    unmatched_terms: list
+
+    @property
+    def uncited(self) -> int:
+        return self.total - self.cited
+
+    @property
+    def all_cited(self) -> bool:
+        return self.total > 0 and self.uncited == 0
+
+    @property
+    def percent(self) -> int:
+        return round(self.cited / self.total * 100) if self.total else 0
+
+
+def summarize_national_list_coverage(events: Iterable) -> NationalListCoverage:
+    """Count ChemicalEvents that resolved to a National List entry.
+
+    Reads the substance the classifier keys on — `extra_data["active_ingredient"]` first, then the
+    brand — so the unmatched list names what the FARMER wrote, which is what they need to see to
+    correct it. Reporting the canonical name would be circular: the ones with no canonical name
+    are precisely the ones that failed.
+    """
+    total = 0
+    cited = 0
+    counts: dict = {}
+
+    for event in events:
+        total += 1
+        if getattr(event, "national_list_substance_id", None):
+            cited += 1
+            continue
+        extra = getattr(event, "extra_data", None) or {}
+        term = (extra.get("active_ingredient") if isinstance(extra, dict) else None) or getattr(
+            event, "commercial_name", None
+        )
+        term = (term or "").strip()
+        if term:
+            counts[term] = counts.get(term, 0) + 1
+
+    unmatched = [t for t, _ in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))]
+    return NationalListCoverage(total=total, cited=cited, unmatched_terms=unmatched)

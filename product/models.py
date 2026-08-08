@@ -232,12 +232,10 @@ class Parcel(models.Model):
             or ""
         )
 
-    def get_consumer_story(self):
-        """Get consumer story explaining why this parcel matters"""
-        # Check multiple possible keys due to form field mapping
-        return (
-            self.agricultural_details.get("consumer_story") or self.agricultural_details.get("consumer_narrative") or ""
-        )
+    # `get_consumer_story()` removed 2026-08-07. The field was dropped from the parcel form
+    # and from every surface: it scored nothing, no consumer page rendered it, and its only
+    # publisher was the anonymous carbon endpoint. Historic values may still sit inert under
+    # agricultural_details["consumer_story" | "consumer_narrative"]; nothing reads them.
 
     def get_primary_crop(self):
         """Get primary crop focus for this parcel"""
@@ -318,6 +316,20 @@ class ParcelCropHistory(models.Model):
         max_length=200,
         help_text="Crop or cover crop grown during this year",
     )
+    block_id = models.CharField(
+        # 50 to match CommonEvent.block_id — same concept, same token, so a block name that fits
+        # on an event must fit here. That model is nullable and this one is not: the difference is
+        # deliberate, because this column takes part in a unique_together and Postgres treats
+        # NULLs as distinct (see Meta below).
+        max_length=50,
+        blank=True,
+        default="",
+        help_text=(
+            "Optional block, row or section within the parcel — the same free-text identifier "
+            "CommonEvent.block_id uses. Lets a SPLIT FIELD be recorded honestly: one crop on "
+            "rows 1-40, another on rows 41-80, in the same year."
+        ),
+    )
     production_method = models.CharField(
         max_length=30,
         choices=[
@@ -336,6 +348,19 @@ class ParcelCropHistory(models.Model):
         null=True,
         help_text="Summary of all substances applied during this year (for 36-month history)",
     )
+    last_prohibited_substance = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text=(
+            "Name of the LAST prohibited substance applied to this field, e.g. 'Glyphosate'. "
+            "Paired with date_last_prohibited to answer the Common OSP Field and Crop "
+            "Information form's 'Name and Application Date of Last Prohibited Input' column, "
+            "which USDA requires for EVERY field including already-organic ones. Distinct from "
+            "substances_applied, which is a free-text summary of ALL substances that year — "
+            "the last prohibited one cannot be inferred from that list without guessing."
+        ),
+    )
     date_last_prohibited = models.DateField(
         blank=True,
         null=True,
@@ -350,7 +375,16 @@ class ParcelCropHistory(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ("parcel", "year")
+        # A parcel may grow MORE THAN ONE crop in a year — split fields are ordinary practice,
+        # and COG Pro's own data does it (South Field 2011: tomatoes on rows 1-40, melons on
+        # rows 41-80). The previous ("parcel", "year") constraint made that unrecordable, which
+        # forced a migrating farm to drop half its land history — exactly the history 7 CFR
+        # 205.202 asks for.
+        #
+        # `block_id` carries default="" rather than null: Postgres treats NULLs as distinct, so a
+        # nullable column here would silently permit true duplicate rows, and Django 4.1 has no
+        # `nulls_distinct` to say otherwise.
+        unique_together = ("parcel", "year", "crop_grown", "block_id")
         ordering = ["-year"]
         verbose_name = "Parcel Crop History"
         verbose_name_plural = "Parcel Crop Histories"

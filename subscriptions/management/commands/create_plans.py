@@ -28,6 +28,23 @@ class Command(BaseCommand):
         self.force = options["force"]
         self.environment = options["environment"]
 
+        # No Stripe key -> seed local rows only, never call Stripe.
+        #
+        # Trazo has no US entity yet and Stripe is disabled in production, so `STRIPE_SECRET_KEY`
+        # is empty. Without this guard every paid plan would attempt `stripe.Product.create` and
+        # fail inside the broad `except` below, leaving the run "successful" with plans that were
+        # never written. Feature gating (parcel/production limits) lives in `Plan.features` and
+        # works with no Stripe at all — billing is the only thing that needs it.
+        self.stripe_enabled = bool(getattr(settings, "STRIPE_SECRET_KEY", ""))
+        if not self.stripe_enabled:
+            self.stdout.write(
+                self.style.WARNING(
+                    "STRIPE_SECRET_KEY is not set — seeding local plan rows only. Prices are "
+                    "published for display and feature gating; no Stripe products or prices are "
+                    "created and `stripe_price_id` stays NULL."
+                )
+            )
+
         self.stdout.write(self.style.SUCCESS(f"Setting up plans and add-ons for {self.environment} environment..."))
 
         # Create plans
@@ -41,7 +58,11 @@ class Command(BaseCommand):
         # Starter (Free Trial) - 14-day trial, no credit card required
         starter_features = {
             "max_establishments": 1,
-            "max_parcels_per_establishment": 1,
+            # Unlimited parcels, deliberately. A Parcel IS a block, so a one-parcel free tier
+            # cannot demonstrate anything to a 20-block orchard — the trial was structurally
+            # incapable of showing value to the exact ICP it exists to attract. The limit that
+            # makes Starter a trial is one PRODUCTION per year, not one block.
+            "max_parcels_per_establishment": -1,
             "max_productions_per_year": 1,
             "establishment_full_description": False,
             "monthly_scan_limit": 1000,
@@ -54,6 +75,71 @@ class Command(BaseCommand):
             "is_starter": True,
             "voice_recording": False,
             "ai_event_templates": True,
+        }
+
+        # Pilot — hand-provisioned, never self-served, never billed.
+        #
+        # Exists because no other plan shape can host an October pilot. A real mid-size CA orchard
+        # maps one block to one Parcel, so it needs 15-25 parcels and ~20 productions a year,
+        # against Starter's 1/1. Enforcement is a hard 403 (subscriptions/permissions.py), so a
+        # Starter pilot dies at parcel #2 and again at production #2.
+        #
+        # Three properties are load-bearing and must not be "simplified":
+        #   price = 0        -> mrr_for() returns 0 even on status="active", so pilots never book
+        #                       phantom revenue. Putting a pilot on Enterprise/active instead
+        #                       would report $299/mo of MRR that does not exist.
+        #   slug != "starter" -> expire_trials filters plan__slug="starter"; a Starter-based pilot
+        #                       flips to "canceled" at day 14, which nulls Company.subscription_plan
+        #                       and 403s every creation across the app.
+        #   status "active"   -> subscription_plan resolves only for active/trialing.
+        # Compliance — the paid tier, and the only one offered.
+        #
+        # Priced ANNUALLY at $249 against a category that charges per year: COG Pro $99/$155/$179
+        # (dying 2026-12-31), Quick Organics $150. The old $69-299/MONTH ladder was 5-8x the
+        # category, and a refugee paying $155/yr was never going to sign for $828.
+        #
+        # Per-FARM, not per-parcel. A Parcel is a block, so parcel count prices farm geometry
+        # rather than value — and "structuring your records properly costs more" is the same
+        # perverse incentive the transparency-first pivot rejected for carbon scoring. What a farm
+        # buys (certifier packet, PUR export, buyer page, Common OSP § 11) is per-farm: one
+        # certificate, one OSP, one renewal.
+        compliance_features = {
+            "max_establishments": 1,
+            "max_parcels_per_establishment": -1,
+            "max_productions_per_year": -1,
+            "establishment_full_description": True,
+            "monthly_scan_limit": -1,
+            "storage_limit_gb": 25,
+            "support_response_time": 24,
+            "trial_no_card_days": 14,
+            "trial_with_card_days": 14,
+            "priority_support": True,
+            "dedicated_support": False,
+            "voice_recording": True,
+            "ai_event_templates": True,
+        }
+
+        # Pilot — Compliance, comped. DERIVED, never hand-listed.
+        #
+        # It used to grant unlimited farms, 50 GB and 12hr support: entitlements no customer can
+        # buy. That makes conversion a DOWNGRADE — at the moment you ask for money the product
+        # gets worse — and the storage half was a hard blocker, not a feeling: `storage_utils`
+        # refuses uploads over quota, so a pilot who logged 40 GB of photo evidence could not move
+        # to Compliance's 25 GB without deleting their own records.
+        #
+        # It also broke the measurement. The Apr 30 conversion verdict is meant to test
+        # willingness to pay for Trazo; if pilots ran on unlimited-everything it tested
+        # willingness to pay for a tier that does not exist.
+        #
+        # Spreading compliance_features rather than repeating it means the two cannot drift: any
+        # future change to what a customer buys is automatically what a pilot experiences.
+        pilot_features = {
+            **compliance_features,
+            # Not a trial. A pilot ends by agreement on the grower's certifier renewal date (set
+            # per-company by `provision_pilot`), not by a timer that silently cancels the account.
+            "trial_no_card_days": 0,
+            "trial_with_card_days": 0,
+            "is_pilot": True,
         }
 
         # Base feature sets for each tier (shared between monthly and yearly)
@@ -134,8 +220,34 @@ class Command(BaseCommand):
                 "interval": "monthly",
                 "features": starter_features,
             },
+            # Pilot - free, hand-assigned via Django admin, not offered in the pricing UI
+            {
+                "name": "Pilot",
+                "slug": "pilot",
+                "description": "Free pilot programme - unlimited farms, parcels and productions, white-glove onboarding",
+                "price": 0.00,
+                "interval": "monthly",
+                "features": pilot_features,
+            },
+            # Compliance - the one paid tier
+            {
+                "name": "Compliance",
+                "slug": "compliance-yearly",
+                "description": (
+                    "Everything one certified farm needs for renewal season: unlimited parcels "
+                    "and productions, the certifier packet, CA PUR export and the buyer page."
+                ),
+                "price": 249.00,
+                "interval": "yearly",
+                "features": compliance_features,
+            },
+            # ---- RETIRED 2026-08-07 (migration subscriptions/0009) -------------------------
+            # The monthly ladder below is seeded INACTIVE so a fresh environment matches a
+            # migrated one. Kept rather than deleted: Subscription.plan is PROTECT, and a plan
+            # somebody references cannot be removed.
             # Basic Monthly
             {
+                "is_active": False,
                 "name": "Basic",
                 "slug": "basic-monthly",
                 "description": "Basic plan for small producers with transparency tracking",
@@ -146,6 +258,7 @@ class Command(BaseCommand):
             # Standard Monthly
             {
                 "name": "Standard",
+                "is_active": False,
                 "slug": "standard-monthly",
                 "description": "Standard plan for growing businesses with transparency tracking",
                 "price": 119.00,
@@ -155,6 +268,7 @@ class Command(BaseCommand):
             # Corporate Monthly
             {
                 "name": "Corporate",
+                "is_active": False,
                 "slug": "corporate-monthly",
                 "description": "Corporate plan for larger operations with full transparency tracking and priority support",
                 "price": 149.00,
@@ -173,6 +287,7 @@ class Command(BaseCommand):
             # Basic Annual (2 months free)
             {
                 "name": "Basic",
+                "is_active": False,
                 "slug": "basic-yearly",
                 "description": "Basic plan for small producers with transparency tracking (annual billing - 2 months free)",
                 "price": 69.00 * ANNUAL_MULTIPLIER,
@@ -182,6 +297,7 @@ class Command(BaseCommand):
             # Standard Annual (2 months free)
             {
                 "name": "Standard",
+                "is_active": False,
                 "slug": "standard-yearly",
                 "description": "Standard plan for growing businesses with transparency tracking (annual billing - 2 months free)",
                 "price": 119.00 * ANNUAL_MULTIPLIER,
@@ -191,6 +307,7 @@ class Command(BaseCommand):
             # Corporate Annual (2 months free)
             {
                 "name": "Corporate",
+                "is_active": False,
                 "slug": "corporate-yearly",
                 "description": "Corporate plan for larger operations with transparency tracking (annual billing - 2 months free)",
                 "price": 149.00 * ANNUAL_MULTIPLIER,
@@ -222,21 +339,23 @@ class Command(BaseCommand):
                     continue
 
             try:
-                # Free plans (Starter) don't need Stripe products/prices
-                if plan_data["price"] == 0:
+                # Free plans (Starter, Pilot) never need Stripe. Neither does anything else when
+                # there is no key — see the guard in handle().
+                if plan_data["price"] == 0 or not self.stripe_enabled:
                     Plan.objects.update_or_create(
                         slug=plan_data["slug"],
                         defaults={
                             "name": plan_data["name"],
                             "description": plan_data["description"],
-                            "price": 0,
+                            "price": plan_data["price"],
                             "interval": plan_data["interval"],
                             "features": plan_data["features"],
                             "stripe_price_id": None,
-                            "is_active": True,
+                            "is_active": plan_data.get("is_active", True),
                         },
                     )
-                    self.stdout.write(self.style.SUCCESS(f"✓ Created free plan: {product_name}"))
+                    label = "free" if plan_data["price"] == 0 else "local-only (no Stripe)"
+                    self.stdout.write(self.style.SUCCESS(f"✓ Created {label} plan: {product_name}"))
                     continue
 
                 # Create product in Stripe
@@ -291,6 +410,11 @@ class Command(BaseCommand):
                 "description": "Add 10 extra productions per year beyond your plan limit with full transparency tracking and QR codes",
                 "price": 20.00,
                 "interval": "month",
+                # SUPERSEDED 2026-08-07 by migration 0010. Compliance grants unlimited
+                # productions, so this sells capacity the plan already includes. Seeded inactive
+                # so a reseed cannot resurrect the offer — the flag has to live HERE, not only in
+                # the migration, because create_plans is what runs on a fresh environment.
+                "is_active": False,
             },
             {
                 "name": "Extra Parcel",
@@ -298,6 +422,11 @@ class Command(BaseCommand):
                 "description": "Add an additional parcel per establishment",
                 "price": 25.00,
                 "interval": "month",
+                # SUPERSEDED 2026-08-07 by migration 0010. BOTH live tiers now grant unlimited
+                # parcels. Charging per parcel also priced farm geometry rather than value: a
+                # parcel is a block, so a 20-block orchard paid 5x a 4-block one of the same
+                # acreage for identical output.
+                "is_active": False,
             },
             {
                 # DISPLAY name only — the slug is an identifier referenced elsewhere and must
@@ -325,6 +454,30 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"Creating {len(addons)} add-ons..."))
 
         for addon_data in addons:
+            # A WITHDRAWN add-on must never reach Stripe.
+            #
+            # The is_active flag used to be applied only at the update_or_create below — AFTER
+            # stripe.Product.create and stripe.Price.create had already run. So every seed of a
+            # fresh environment minted a live, recurring $15/mo price for the blockchain add-on
+            # that was withdrawn on 2026-08-03, in a Stripe account that is meant to have no such
+            # product. The local row is still written so existing references do not dangle.
+            if not addon_data.get("is_active", True):
+                AddOn.objects.update_or_create(
+                    slug=addon_data["slug"],
+                    defaults={
+                        "name": addon_data["name"],
+                        "description": addon_data["description"],
+                        "price": addon_data["price"],
+                        "is_active": False,
+                    },
+                )
+                self.stdout.write(
+                    self.style.WARNING(
+                        f'⊘ Skipped Stripe for withdrawn add-on: {addon_data["name"]} ' f"(local row seeded inactive)"
+                    )
+                )
+                continue
+
             # Check if we already have this add-on
             existing_addon = AddOn.objects.filter(slug=addon_data["slug"]).first()
             if existing_addon and existing_addon.stripe_price_id and not self.force:

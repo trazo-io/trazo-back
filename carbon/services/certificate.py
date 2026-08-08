@@ -18,9 +18,13 @@ class CertificateGenerator:
 
     def __init__(self):
         self.styles = getSampleStyleSheet()
-        self.production_mode = getattr(settings, "DEBUG", True) == False
-        self.require_blockchain_verification = self.production_mode or getattr(
-            settings, "FORCE_BLOCKCHAIN_VERIFICATION", False
+        self.production_mode = getattr(settings, "DEBUG", True) is False
+        # Blockchain is required only when it is actually ENABLED. Deriving this from DEBUG alone
+        # meant that with DEBUG=False and BLOCKCHAIN_ENABLED=False — the production default since
+        # 2026-08-06 — certificate generation raised ValueError in prod while passing in dev.
+        blockchain_enabled = getattr(settings, "BLOCKCHAIN_ENABLED", False)
+        self.require_blockchain_verification = blockchain_enabled and (
+            self.production_mode or getattr(settings, "FORCE_BLOCKCHAIN_VERIFICATION", False)
         )
 
     def generate_certificate(self, purchase: CarbonOffsetPurchase) -> str:

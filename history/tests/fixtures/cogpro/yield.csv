@@ -1,0 +1,2 @@
+"Crop","Variety","Field ID","Row/Section ID","Date","Harvest Lot No.","Yield Amount","Yield Units","Product Value","Area Planted","Area Measure","Yield","Units Per Area","Gross Return","Per Area Planted","Planting Batch #","Status","Classification","Labor in hrs","Notes"
+"Basil","Test 1","Greenhouse 1","Z1","01/15/2020","Z2","500.00","heads","1000.00","1000.00","sq. feet","0.5","heads / sq. feet","$[phpcode_3]","/ sq. feet","","Available","Organic","2.00",""

@@ -63,6 +63,27 @@ def health_check(request):
             health_status["checks"]["cache"] = {"status": "unhealthy", "error": str(e)}
             # Cache failures are warnings, not critical
 
+    # Compliance reference data (National List, USDA Organic mirror).
+    #
+    # Reported, never fatal: stale reference data makes Trazo state wrong things about a farm's
+    # organic status, but it is not a reason to pull a serving instance out of rotation. Before
+    # this existed, nothing anywhere could tell you the USDA mirror had gone stale — the badge
+    # just quietly started lying in both directions.
+    try:
+        from certifications.services.reference_data_status import reference_data_report
+
+        report = reference_data_report()
+        health_status["checks"]["reference_data"] = report
+        if report["overall"] != "ok":
+            logger.warning(
+                "Compliance reference data is %s: %s",
+                report["overall"],
+                "; ".join(d["detail"] for d in report["datasets"].values() if d["status"] != "ok"),
+            )
+    except Exception as e:  # noqa: BLE001 — a reporting failure must not fail the health check
+        logger.warning(f"Reference data health check failed: {str(e)}")
+        health_status["checks"]["reference_data"] = {"status": "unknown", "error": str(e)}
+
     # Response time check
     response_time = (time.time() - start_time) * 1000  # Convert to ms
     health_status["response_time_ms"] = round(response_time, 2)
