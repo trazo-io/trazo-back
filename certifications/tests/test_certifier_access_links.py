@@ -359,6 +359,13 @@ class CertifierLinkManagementTests(TestCase):
         WorksIn.objects.create(user=self.outsider, company=self.other_company, role="CA")
 
         make_operation_submission_ready(self.establishment, self.user)
+        # Minting a certifier link is a Compliance artifact (2026-08-14,
+        # subscriptions/gating.py). Only the OWNING company is subscribed: the tenant-isolation
+        # cases below must still be denied by isolation, not by the outsider's company happening
+        # to lack a plan.
+        from subscriptions.testing import grant_compliance_exports
+
+        grant_compliance_exports(self.company)
 
         self.url = f"/api/companies/{self.company.id}/establishments/{self.establishment.id}/certifier-links/"
 
@@ -500,6 +507,11 @@ class PreShareReadinessTests(TestCase):
         )
         self.user = User.objects.create_user(email="grower2@test.com", password="x")
         WorksIn.objects.create(user=self.user, company=self.company, role="CA")
+        # Minting is a Compliance artifact (2026-08-14). Without a plan the 403 below would come
+        # from the paywall, and these tests would stop proving anything about READINESS.
+        from subscriptions.testing import grant_compliance_exports
+
+        grant_compliance_exports(self.company)
         self.url = f"/api/companies/{self.company.id}/establishments/{self.establishment.id}/certifier-links/"
 
     def _client(self):
@@ -588,6 +600,11 @@ class ReadinessScopeTests(TestCase):
         self.establishment = Establishment.objects.create(name="Plain Farm", company=self.company, state="CA")
         self.user = User.objects.create_user(email="conv@test.com", password="x")
         WorksIn.objects.create(user=self.user, company=self.company, role="CA")
+        # Minting is a Compliance artifact (2026-08-14); without a plan this conventional grower
+        # would be blocked by the paywall rather than by the NOP scoping under test.
+        from subscriptions.testing import grant_compliance_exports
+
+        grant_compliance_exports(self.company)
         self.url = f"/api/companies/{self.company.id}/establishments/{self.establishment.id}/certifier-links/"
 
         # Records exist; only the NOP artifacts are absent.

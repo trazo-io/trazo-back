@@ -497,7 +497,31 @@ def production_transparency_detail(request, production_public_id=None):
                     "location": (
                         f"{establishment.city}, {establishment.state}" if establishment and establishment.city else None
                     ),
-                    "certifications": certification_data or (establishment.certifications if establishment else None),
+                    # STRUCTURED certifications only — never the free-text field.
+                    #
+                    # 🔴 2026-08-12: this used to read
+                    #     `certification_data or establishment.certifications`
+                    # so an operation with NO Certification rows fell back to
+                    # `Establishment.certifications`, a plain TextField the farmer types into.
+                    # Measured on the wire, that published:
+                    #   "Carbon Trust Standard, Regenerative Organic Certified, GlobalGAP,
+                    #    SQF Level 2, Rainforest Alliance"
+                    # — five third-party certification names, asserted on an anonymous consumer
+                    # surface, with nothing in the database behind any of them and no
+                    # verification status attached. That is the self-created-label class
+                    # (EU ECGT 2024/825, live 2026-09-27) and an FTC 16 CFR 260.6 claim.
+                    #
+                    # The `or` also swapped the TYPE: every claim-safety control downstream —
+                    # `filter_certifications_for_consumer`, `consumer_display_status`, the
+                    # JSON-LD `verified_via_database` filter — operates on a list of cert
+                    # OBJECTS. A bare string satisfies `or` and then sails past all of them,
+                    # because there is no `.status` on a string to check. The fallback was
+                    # therefore not a degraded version of the safe path; it was a bypass of it.
+                    #
+                    # An operation with no certification rows now reports none, which is the
+                    # true answer. The free-text field is still shown to the producer and still
+                    # used server-side; it is simply not a consumer claim.
+                    "certifications": certification_data,
                     "water_sources": establishment.water_sources if establishment else None,
                     "soil_types": establishment.soil_types if establishment else None,
                     # `climate_zone` and `conservation_practices` dropped 2026-08-07: both were
@@ -613,12 +637,25 @@ def production_transparency_detail(request, production_public_id=None):
             if isinstance(standard_view, dict):
                 details = standard_view.get("transparency_details")
                 if isinstance(details, dict):
-                    # Drop the rolled-up grade; keep the factual evidence counts
-                    # (actual_events / expected_events / category_breakdown).
+                    # The rule this block enforces, stated once so future keys are
+                    # classified rather than remembered (2026-08-10 USDA audit, P4-F1):
+                    #
+                    #   PUBLISH facts about the FARM. Never publish Trazo's authored
+                    #   BASELINE, nor the scoring machinery that applies it.
+                    #
+                    # Stripping the quotient while shipping its divisor was a rename, not
+                    # a demotion: `actual_events: 12` + `expected_events: 13` is the 92%
+                    # grade, reconstructable by division, and the per-category breakdown
+                    # made the reconstruction exact rather than approximate.
+                    #
+                    # `actual_events` is a fact — this farm documented 12 things.
+                    # `expected_events` is not a fact about the farm at all: it is Trazo's
+                    # opinion of how many events this crop SHOULD have. That is precisely
+                    # the "baseline Trazo authored" the note below already refuses to ship,
+                    # so the baseline itself has to go with the grade computed from it.
+                    # EU ECGT 2024/825 (live 2026-09-27); FTC 16 CFR 260.6.
                     details.pop("completeness_score", None)
-                    # Per-category breakdown: keep the factual counts
-                    # (actual_count / photo_verified_count / expected_count), strip
-                    # the per-category graded "% complete" + status verdict.
+                    details.pop("expected_events", None)
                     breakdown = details.get("category_breakdown")
                     if isinstance(breakdown, dict):
                         for category in breakdown.values():
@@ -632,6 +669,34 @@ def production_transparency_detail(request, production_public_id=None):
                                 # `test_consumer_qr_privacy_regression` pins. Counts stay, grades go.
                                 category.pop("records_completeness_percentage", None)
                                 category.pop("status", None)
+                                # Per-category denominators and scoring machinery, same rule
+                                # as `expected_events` above. `expected_count` is the authored
+                                # baseline; `requires_photos` and the essential/recommended
+                                # `photo_tier_summary` are Trazo-authored tiers stating what
+                                # this category OUGHT to carry; `anti_gaming_applied` is an
+                                # internal scoring flag. None describe the farm.
+                                # Kept, because each is a fact the farm produced:
+                                # `actual_count` and the photo counts renamed just below.
+                                category.pop("expected_count", None)
+                                category.pop("requires_photos", None)
+                                category.pop("anti_gaming_applied", None)
+                                category.pop("photo_tier_summary", None)
+                                # P4-F5. These photographs were uploaded by the grower and
+                                # checked by nobody, so "verified" is a claim the data does not
+                                # support — the same word this project reserves for a USDA
+                                # Organic Integrity Database match and enforces through
+                                # `claim_authority`. The key name travels on the wire and is
+                                # scrapable whatever the UI renders, so it is the claim.
+                                #
+                                # Renamed HERE rather than in `transparency_calculator`: the
+                                # internal name reaches the authenticated producer surface too,
+                                # and this block is the one chokepoint that shapes what an
+                                # anonymous caller sees. Renaming the calculator is a wider
+                                # change with its own consumers — worth doing, separately.
+                                if "photo_verified_count" in category:
+                                    category["photo_documented_count"] = category.pop("photo_verified_count")
+                                if "photo_verification_rate" in category:
+                                    category["photo_documentation_rate"] = category.pop("photo_verification_rate")
 
             # detailed_view (the "30s deep insights": raw current_score, benchmark
             # level/grade, improvement coaching, verification status) is farmer-facing
@@ -779,6 +844,77 @@ def _build_organic_summary(history, certification_data, establishment, organic_c
         "organic_input_percentage": (
             round((organic_inputs / classified_count * 100)) if classified_count > 0 else None
         ),
+        # P4-F6. The counts above are built from `organic_approved`, a GROWER DROPDOWN whose
+        # values include "omri_listed" — the grower picking that label, not a catalog match.
+        # `claim_authority.may_claim_input_listing()` already tiers exactly this per input,
+        # after an anonymous payload said "OMRI Listed" for an input with no OMRI row and no
+        # National List citation (2026-08-09). That fix landed on the per-input chip and never
+        # on this aggregate, so the summary asserted, in one number, more than the authority
+        # permits each input to claim individually — the seventh instance of "fixed on the
+        # audited surface, alive on its sibling".
+        #
+        # The percentage is not removed: it is a real fact about what the grower recorded, and
+        # the consumer page needs it. What it must never do is travel WITHOUT its basis, so the
+        # basis ships in the same object and names the WEAKEST evidence behind the number.
+        # A caller rendering the figure alone now has no excuse.
+        **_organic_input_evidence(chemical_events),
+    }
+
+
+#: Weakest-first, so the first tier present is the honest headline. `contradicted` leads because
+#: it is not weak evidence FOR the claim — it is evidence AGAINST it, and an aggregate containing
+#: one must never present as though it were merely under-documented.
+_INPUT_EVIDENCE_ORDER = ("contradicted", "grower_reported", "national_list", "catalog_matched")
+
+
+def _organic_input_evidence(chemical_events):
+    """Tier the evidence behind the organic-input counts, using the one claim authority.
+
+    Returns the per-tier counts plus `organic_input_basis`, the weakest tier represented — an
+    aggregate is only as strong as its weakest member, and "one of these twelve was matched to
+    the OMRI catalog" does not license speaking for the other eleven.
+    """
+    from history.services.claim_authority import (
+        LABEL_INPUT_NATIONAL_LIST,
+        LABEL_INPUT_NATIONAL_LIST_PROHIBITED,
+        LABEL_INPUT_OMRI_LISTED,
+        may_claim_input_listing,
+    )
+
+    # Imported here, not at module scope, because the caller does the same — these live in
+    # claim_resolver and the module-level import would be a cycle.
+    from history.services.claim_resolver import ORGANIC_APPROVED_VALUES, event_organic_classification
+
+    counts = {"catalog_matched": 0, "national_list": 0, "grower_reported": 0, "contradicted": 0}
+    for event in chemical_events:
+        if event_organic_classification(event) not in ORGANIC_APPROVED_VALUES:
+            continue
+        label = may_claim_input_listing(event).safe_label
+        if label == LABEL_INPUT_OMRI_LISTED:
+            counts["catalog_matched"] += 1
+        elif label == LABEL_INPUT_NATIONAL_LIST:
+            counts["national_list"] += 1
+        elif label == LABEL_INPUT_NATIONAL_LIST_PROHIBITED:
+            # The grower classified this input as organic-approved and § 205.602 lists the
+            # substance as PROHIBITED. `resolve_lot_organic_eligibility` already refuses the
+            # lot-level organic claim on exactly this signal, but `all_inputs_organic` reads
+            # only the grower's dropdown — so without this bucket the summary would report
+            # "100%, grower_reported" beside a lot the claim gate had already failed, and the
+            # two halves of one payload would contradict each other.
+            #
+            # Zero such rows exist today (checked 2026-08-11). Counted anyway: this costs one
+            # branch now, and the recurring lesson of this codebase is that the surface nobody
+            # checked is the one that leaks.
+            counts["contradicted"] += 1
+        else:
+            # The grower's own dropdown, or unclassified. Never promote: absence of catalog
+            # evidence is not evidence of a catalog match.
+            counts["grower_reported"] += 1
+
+    present = [tier for tier in _INPUT_EVIDENCE_ORDER if counts[tier]]
+    return {
+        "organic_input_evidence": counts,
+        "organic_input_basis": present[0] if present else None,
     }
 
 
@@ -1254,10 +1390,26 @@ def verify_blockchain(request, production_public_id=None):
         if not verification_data.get("tx_hash"):
             return Response(
                 {
-                    "status": "pending",
+                    "status": "not_recorded",
+                    # Was: status "pending" with the message "This production has not yet been
+                    # submitted to blockchain. Blockchain verification occurs in monthly batch
+                    # cycles." Found 2026-08-09 by the live anonymous-payload sweep, and wrong
+                    # on two counts at once:
+                    #
+                    #   1. "Blockchain verification" is the phrasing compliance.md marks
+                    #      UNSAFE — the chain shows a record was not altered after submission,
+                    #      it does not verify that any farming practice happened.
+                    #   2. It promised a WITHDRAWN product. `BLOCKCHAIN_ENABLED` defaults False
+                    #      and the add-on was withdrawn on 2026-08-06, so "occurs in monthly
+                    #      batch cycles" told a shopper to expect something that will never
+                    #      arrive. "pending" said the same thing in the status field.
+                    #
+                    # Same class as the collateral finding the same day: withdrawing a product
+                    # from the DATA is not withdrawing it from the UI, and neither is
+                    # withdrawing it from the API.
                     "message": (
-                        "This production has not yet been submitted to blockchain. "
-                        "Blockchain verification occurs in monthly batch cycles."
+                        "This production has no blockchain record. The documentation below "
+                        "comes from the farm's own activity log."
                     ),
                     "data_integrity": integrity_status,
                     "data_integrity_detail": integrity_detail,

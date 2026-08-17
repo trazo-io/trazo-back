@@ -154,6 +154,10 @@ G4_0_ROTATION_SOIL = Module(
                     compiles_to=CompileRule(template="Soil fertility is managed through: {answer}."),
                     options=(
                         Option(
+                            "biodynamic_preparations",
+                            text("Biodynamic preparations", "Preparados biodinámicos"),
+                        ),
+                        Option(
                             "crop_residue",
                             text("Incorporation of crop residue", "Incorporación de residuos de cosecha"),
                         ),
@@ -284,6 +288,17 @@ G4_0_ROTATION_SOIL = Module(
                     nop_cite="§ 205.203(a)",
                     compiles_to=CompileRule(template="Erosion is controlled through: {answer}."),
                     options=(
+                        Option(
+                            "strip_cropping",
+                            text("Strip cropping", "Cultivo en franjas"),
+                        ),
+                        Option(
+                            "land_leveling",
+                            text(
+                                "Land leveling / land forming",
+                                "Nivelación / conformación del terreno",
+                            ),
+                        ),
                         Option(
                             "no_erosion",
                             text(

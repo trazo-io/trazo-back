@@ -2173,21 +2173,21 @@ Example Consumer View:
         """Create transparency-focused FAQ entries"""
         faqs_data = [
             {
-                "question": "How does transparency scoring actually work?",
-                "answer": """Transparency scoring rewards comprehensive documentation using a weighted category system:
+                "question": "What does a complete season record look like?",
+                "answer": """A complete season covers seven kinds of records — the same map your certifier's reviewer works through:
 
-**Weighted Categories (The More You Log, The Higher Your Score):**
-- Growing Practices (30%): Planting, irrigation, harvest, pruning
-- Treatments & Applications (20%): Fertilizer, pest control, amendments
-- Soil & Land Care (18%): Soil preparation, composting, cover crops
-- Environmental Monitoring (12%): Weather events, climate observations
-- Business & Compliance (10%): Certifications, audits, compliance
-- Photo Evidence (10%): Photos across all events
+**The Seven Categories:**
+- Growing Practices: Planting, irrigation, harvest, pruning
+- Treatments & Applications: Fertilizer, pest control, amendments
+- Soil & Land Care: Soil preparation, composting, cover crops
+- Pest Management: Scouting, traps, beneficial releases
+- Business & Compliance: Certifications, audits, inspections
+- Weather and General: Observations and everything else
 
-**Important:** Photos are essential for chemical events — missing them can reduce that event's score contribution by up to 50%.
+**Photos are evidence, not decoration** — planting, harvest, and chemical applications are where an inspector most wants a photo behind the entry.
 
-**Real Impact:** a more complete record gives buyers more to evaluate.""",
-                "category": "transparency",
+**Where to check yourself:** the readiness card on your farm home lists what is missing before your certifier asks. Buyers and shoppers never see any score — they see the documented practices themselves.""",
+                "category": "records",
                 "is_featured": True,
             },
             {
@@ -2195,152 +2195,163 @@ Example Consumer View:
                 "answer": """No special equipment required! Trazo works with:
 
 **Basic Level:** Just your smartphone for photos and event logging
-**Standard Level:** Smartphone + GPS auto-location
-**Advanced Level:** Blockchain verification for premium trust
+**With location:** Smartphone GPS auto-fills the parcel and weather context
 
-**Getting Started:** most farmers start with their phone and see their transparency score move improvements within the first week of logging events.""",
+**Getting Started:** most farmers start with their phone and see their documentation completeness improve within the first week of logging events.""",
                 "category": "setup",
-                "is_featured": True,
+                "is_featured": False,
             },
             {
                 "question": "How do consumers actually use the transparency information?",
-                "answer": """Consumer engagement data shows transparency drives purchasing:
+                "answer": """When someone scans your QR code, they see your records — not a rating:
 
 **What Consumers See:**
-- Transparency score (prominent): "85% transparency - 12 practices documented"
-- Farming story: Your farm description and practices
-- Photo evidence: Timestamped farming activities
-- Verification badges: Blockchain and USDA verification
-- Carbon data (secondary): Available but not primary focus
+- Documented practices: each activity in plain words, with its date
+- Farming story: your farm description, in your words, labeled as yours
+- Photo evidence: timestamped photos from the field
+- Certifications: USDA Organic shows "Verified" only when it matches the USDA Organic Integrity Database; anything else is labeled "Self-Reported"
+- Carbon data (secondary): available in an expandable section, never the headline
 
-**Results:** 6.5x higher engagement vs carbon-first pages, with 78% completion rates.""",
-                "category": "consumer_impact",
-                "is_featured": True,
+**What consumers do NOT see:** any score, grade, or rating. Your transparency score is a producer-dashboard tool; the public page shows the facts it is built from.""",
+                "category": "consumer_page",
+                "is_featured": False,
             },
-            # Quick Add Event FAQs
+            # Logging activities — matches the LIVE "Add event → What did you do?"
+            # verb-tile flow (WS-4). The old "Quick Add Event" feature name and the
+            # backend 7-type taxonomy are retired from farmer-facing copy: farmers
+            # pick a VERB; the seven record categories appear only as list filters.
             {
-                "question": "What is Quick Add Event and how does it work?",
-                "answer": """Quick Add Event is the fastest way to log farm activities:
+                "question": "How do I log an activity?",
+                "answer": """From your parcel or the Activities page, press **Add event**. Three steps:
 
-**3 Ways to Create Events:**
-1. **Smart Templates**: Pre-configured forms for 7 event types with AI-powered crop-specific suggestions
-2. **Voice Capture**: Speak naturally — AI pre-fills key fields from your description
-3. **AI Suggestions**: Intelligent recommendations based on your farm and season
+1. **What did you do?** Pick the activity tile — Planting, Input application, Irrigation, Field work, Harvest, Equipment cleanout, Soil & amendments, Pest & scouting, Weather event, Sales & compliance, or Other activity — and set the date
+2. **Details** — the form asks only what that activity needs; templates and voice can pre-fill most of it
+3. **Photos** — optional but powerful; add them for planting, harvest, and input applications especially
 
-**Simple 4-Step Process:**
-1. Choose creation method (5 seconds)
-2. Select event type (10 seconds)
-3. Add details with smart defaults (30-40 seconds)
-4. Review preview and submit (10 seconds)
-
-**Result:** Log complete events in under 60 seconds with full transparency scoring!""",
-                "category": "data_entry",
+Most activities take under two minutes. Everything you log builds the same record your certifier reviews and your renewal packet assembles from.""",
+                "category": "quick_add",
                 "is_featured": True,
             },
             {
-                "question": "Which event type should I choose in Quick Add?",
-                "answer": """Quick Add offers 7 event types:
+                "question": "Which activity type should I choose?",
+                "answer": """Pick the tile that matches what happened in the field:
 
-- 🌱 **Production**: Planting, irrigation, harvesting, pruning, equipment use
-- 🧪 **Chemical**: Fertilizer, pesticide, herbicide, fungicide applications
-- 🌍 **Soil Management**: Soil tests, amendments, compost, cover crops
-- 🐛 **Pest Management**: Pest monitoring, biological controls, IPM
-- 🌦️ **Weather**: Frost, drought, hail, wind, climate observations
-- 📋 **Business**: Certifications, audits, compliance records
-- 📝 **General**: Agronomist visits, field observations, technical notes
+- **Input application** — any fertilizer, pesticide, fungicide, herbicide, or amendment you applied (product, rate, and area are captured here)
+- **Planting / Harvest** — crop in, crop out; harvest also records quantity, destination, and buffer-row disposition
+- **Irrigation** — water source, method, and duration
+- **Soil & amendments** — soil tests, compost, cover crops
+- **Pest & scouting** — monitoring walks, traps, beneficial releases
+- **Equipment cleanout** — what was cleaned and how; this is your commingling-prevention record (7 CFR 205.272)
+- **Sales & compliance** — certifications, inspections, audits, sales records
+- **Weather event / Field work / Other activity** — context and everything else
 
-**Quick Decision:** If applying chemicals/fertilizer to crops, use Chemical. If working with plants directly (planting, irrigating, harvesting), use Production. For soil health work, use Soil Management.""",
-                "category": "data_entry",
-                "is_featured": True,
-            },
-            {
-                "question": "How do I add photos in Quick Add?",
-                "answer": """Adding photos in Quick Add is simple and critical for your transparency score:
-
-**While Creating Event:**
-1. Fill in event details as normal
-2. Tap the camera icon in the form
-3. Take 1-3 photos (context, action, detail shots)
-4. Photos auto-attach with GPS and timestamp
-5. Complete form and submit
-
-**Photo Tips for Maximum Impact:**
-- Clean phone lens before shooting
-- Use natural lighting when possible
-- Include product labels for chemical events
-- Show crop condition for production events
-
-**Why Photos Matter:** Chemical events without photos lose up to 50% of their transparency value. Production events without photos lose up to 25%. Always include photos for the best score.""",
-                "category": "data_entry",
+**Quick decision:** applying something to the crop or soil? Input application. Working with the plants themselves? Planting or Harvest.""",
+                "category": "quick_add",
                 "is_featured": False,
             },
             {
-                "question": "Can I use voice to create events in Quick Add?",
-                "answer": """Yes! Voice Capture gives you a head start on documentation:
+                "question": "Can I use voice or templates to log faster?",
+                "answer": """Yes — both live inside the activity form:
 
-**How to Use:**
-1. Open Quick Add and tap the microphone icon
-2. Speak naturally: "Applied organic fertilizer to field 3, about 50 pounds per acre"
-3. AI pre-fills key fields from your description (typically 4-7 fields)
-4. Review and complete the remaining fields
-5. Add photos (essential for chemical events) and submit
+- **Voice**: speak it the way you'd say it — "Applied 200 pounds of zinc sulfate on the north block" — and Trazo pre-fills 4-7 fields from your words. You review before saving
+- **Templates**: crop-specific accelerators pre-fill typical values for common activities; you adjust the numbers to match the day
 
-**Important:** Voice pre-fills key fields but does not create a fully documented event. For maximum transparency scores, always review the form, complete all fields, and add photos.
-
-**Voice Tips:**
-- Speak clearly near your phone
-- Include: what, where, how much, why
-- Always review and add details after voice capture
-
-**Best For:** Getting started fast in the field when your hands are busy.""",
-                "category": "data_entry",
+Whatever the entry method, you confirm every field — the record is yours.""",
+                "category": "quick_add",
                 "is_featured": False,
             },
             {
-                "question": "What are smart defaults in Quick Add?",
-                "answer": """Smart defaults pre-fill common values to speed up event creation:
+                "question": "How do I add photos to an activity?",
+                "answer": """The photo step is the last step of every activity form — snap from your phone in the field or upload later.
 
-**What Gets Pre-Filled:**
-- **Chemical events**: Common NPK ratios, application methods, volume defaults
-- **Irrigation**: Typical water volumes, methods, durations
-- **Harvest**: Yield units, equipment types
-- **All events**: Area covered, fuel consumption estimates
-
-**How It Works:**
-- Defaults are based on common farming practices
-- Values update based on your farm profile and past events
-- You can always override any default value
-- Smart defaults save 20-30 seconds per event
-
-**Pro Tip:** Review and adjust defaults for your first few events, then Quick Add learns your patterns!""",
-                "category": "data_entry",
+**Where photos matter most:** planting, harvest, and input applications — those are the records where an inspector most wants visual evidence behind the entry. A product-label photo on an input application answers the "what exactly did you apply?" question before it is asked.""",
+                "category": "quick_add",
                 "is_featured": False,
             },
             {
-                "question": "How does Quick Add affect my transparency score?",
-                "answer": """Each Quick Add event directly increases your transparency score through a weighted category system:
+                "question": "How does each activity build my season record?",
+                "answer": """Each activity you log lands in the season file your certifier reviews:
 
 **How Categories Work:**
-- Growing Practices (30%): Planting, irrigation, harvest, pruning events
-- Treatments (20%): Chemical applications — photos essential here
-- Soil & Land Care (18%): Soil management activities
-- Environmental (12%): Weather events and monitoring
-- Business (10%): Certifications and compliance
-- Photo Evidence (10%): Photos across all event types
+- Growing Practices: Planting, irrigation, harvest, pruning events
+- Treatments: Input applications — photos essential here
+- Soil & Land Care: Soil management activities
+- Pest Management: Scouting and control activities
+- Business: Certifications and compliance
+- Weather and General: Observations and everything else
 
-**Key Tip:** Always add photos to chemical events — missing them reduces their transparency value by up to 50%.
+**Key Tip:** Photos matter most on essential events — an input application with its label photo answers the inspector's question before it is asked.
 
 **Weekly Goal for Success:**
-- Log 5-7 events per week for steady growth
-- Achievable: 85%+ score within 30 days
+- Log 5-7 activities per week for steady coverage
 - Time required: Just 3-5 minutes daily total
 
-**Premium Unlocked:**
-A more complete record gives buyers more to evaluate.""",
-                "category": "transparency",
+**The payoff:** at renewal time, your OSP modules and packet draft themselves from what you logged — and the readiness card shows any gaps while there is still time to close them.""",
+                "category": "quick_add",
+                "is_featured": False,
+            },
+            {
+                "question": "How do I build my Organic System Plan in Trazo?",
+                "answer": """Open **Organic System Plan** in the sidebar. Your OSP is a set of guided modules that follow the Common OSP structure — seeds, soil, pest management, harvest, storage, recordkeeping, and more.
+
+**How it works:**
+- Answer each module as a short questionnaire, in English or Spanish
+- Where Trazo can suggest an answer from your season's records, it shows the suggestion **with the evidence named** — you confirm or edit it; nothing is ever auto-saved
+- Topics that don't apply get an explicit Not Applicable attestation, so "skipped" never looks like "forgotten"
+- Completed modules become PDFs, and the whole plan assembles into a renewal packet
+
+You are the author of your plan — Trazo makes sure nothing is missing when your certifier asks.""",
+                "category": "osp_renewal",
                 "is_featured": True,
             },
+            {
+                "question": "What deadlines matter for renewal season?",
+                "answer": """The window runs October to April, and the exact dates depend on your certifier — always confirm with them. Typical recent windows:
+
+- **CCOF**: annual update opens early November, due January 1
+- **PCO**: mid-January - **MOSA**: early February - **OTCO**: January 1 or April 1
+- **OCCSP cost-share**: applications historically due **December 31** at your county FSA office — reimburses a share of certification costs (verify current-year terms)
+
+**The practical rule:** reconcile your records in the postharvest window, while the season is still fresh. Trazo's readiness card shows what is missing while there is still time to close the gaps.""",
+                "category": "osp_renewal",
+                "is_featured": True,
+            },
+            {
+                "question": "I'm coming from COG Pro — how do I move my records?",
+                "answer": """COG Pro has announced it will end service December 31, 2026. Your organic records must stay retrievable for **5 years** (7 CFR 205.103(b)(4)), so export everything before the shutdown — field lists, input applications, harvest logs, and sales records, covering the full retention window.
+
+Trazo imports COG Pro CSV exports **white-glove**: send us the export and your records arrive as structured activities, linked to your parcels. Their Field maps to a Trazo parcel; Row/Section identifiers land on each activity's block ID.""",
+                "category": "records",
+                "is_featured": False,
+            },
+            {
+                "question": "How does my certifier see my records?",
+                "answer": """Two ways, and you control both:
+
+- **The renewal packet** — module PDFs, per-parcel applications, workbooks, and the audit PDF, generated on demand and filed in your Documents
+- **A live review link** — a read-only page you can share that opens your current records in the browser: activity log, inputs with National List cross-references, and documents. No account needed on their side, and it always shows the records as they stand today
+
+Trazo never sends anything to your certifier on its own — sharing is always your action.""",
+                "category": "records",
+                "is_featured": False,
+            },
         ]
+
+        # Questions renamed over time: get_or_create keys on question text, so the
+        # old rows must be removed or the FAQ list serves both generations forever.
+        LEGACY_QUESTIONS = [
+            "How does transparency scoring actually work?",
+            "How does Quick Add affect my transparency score?",
+            # 2026-08-09: "Quick Add Event" feature name retired (WS-7); questions
+            # re-authored around the live verb-tile flow.
+            "What is Quick Add Event and how does it work?",
+            "Which event type should I choose in Quick Add?",
+            "How do I add photos in Quick Add?",
+            "Can I use voice to create events in Quick Add?",
+            "What are smart defaults in Quick Add?",
+            "How does Quick Add build my season record?",
+        ]
+        FarmerQuestionAnswer.objects.filter(question__in=LEGACY_QUESTIONS).delete()
 
         for faq_data in faqs_data:
             faq, created = FarmerQuestionAnswer.objects.get_or_create(question=faq_data["question"], defaults=faq_data)

@@ -21,6 +21,7 @@ from product.models import Parcel, Product
 from product.serializers import ProductListOptionsSerializer
 from reviews.models import Review
 from reviews.serializers import ListReviewSerializer
+from subscriptions.gating import require_compliance_exports
 from subscriptions.permissions import HasEstablishmentCreationPermission
 from users.models import WorksIn
 from users.serializers import WorksInSerializer
@@ -39,6 +40,11 @@ from .serializers import (
     RetrieveEstablishmentSerializer,
     UpdateEstablishmentSerializer,
 )
+
+# Activity-feed payload caps. Module level so a test can patch them instead of creating 400
+# events to prove the cap reports itself.
+ACTIVITY_FEED_PER_MODEL_CAP = 400
+ACTIVITY_FEED_TOTAL_CAP = 800
 
 
 class CompanyViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
@@ -66,26 +72,34 @@ class CompanyViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         company = serializer.save()
         WorksIn.objects.create(user=request.user, company=company, role=WorksIn.COMPANY_ADMIN)
 
-        # Auto-start 14-day Starter trial for new companies
+        # Put every new company on Starter — FREE FOREVER, not a trial.
+        #
+        # 2026-08-13: this created `status="trialing"` with a 14-day `trial_end`, and
+        # `expire_trials` then flipped it to "canceled" on day 14, which nulls
+        # `Company.subscription_plan` and 403s every creation in the app. That contradicts the
+        # October plan in four places ("Starter free forever, pilot free, no card") and, worse,
+        # contradicts the COG Pro migration page whose entire anti-lock-in answer is "Starter is
+        # free permanently, not a trial" — aimed at refugees from a product that dies 2026-12-31.
+        #
+        # `status="active"` with no `trial_end`: the tier is bounded by what it can PRODUCE,
+        # never by a clock. Since migration 0014 that means unlimited parcels and productions,
+        # 10 GB of photo storage and voice input, with the certifier OUTPUTS (OSP packet, audit
+        # export, PUR export, certifier link) gated behind `compliance_exports`.
+        # `current_period_end=None` is correct for a plan that does not renew or lapse;
+        # `mrr_for()` reads price, which is 0.
         from subscriptions.models import Plan, Subscription
 
         starter_plan = Plan.objects.filter(slug="starter", is_active=True).first()
         if starter_plan:
-            now = timezone.now()
-            trial_end = now + timedelta(days=settings.TRIAL_PERIOD_DAYS)
             Subscription.objects.create(
                 company=company,
                 plan=starter_plan,
-                status="trialing",
-                current_period_start=now,
-                current_period_end=trial_end,
-                trial_end=trial_end,
+                status="active",
+                current_period_start=timezone.now(),
+                current_period_end=None,
+                trial_end=None,
             )
-            logger.info(
-                "Auto-started %d-day trial for new company %s",
-                settings.TRIAL_PERIOD_DAYS,
-                company.id,
-            )
+            logger.info("Started free-forever Starter plan for new company %s", company.id)
         else:
             logger.warning(
                 "Starter plan not found! New company %s has no subscription.",
@@ -225,11 +239,15 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         series_result = []
         if period == "week":
-            histories = HistoryScan.objects.filter(
-                history__parcel__establishment=establishment,
-                history__published=True,
-                **filter_kwargs,
-            ).distinct()
+            histories = (
+                HistoryScan.objects.counted()
+                .filter(
+                    history__parcel__establishment=establishment,
+                    history__published=True,
+                    **filter_kwargs,
+                )
+                .distinct()
+            )
             total_histories = histories.annotate(day_of_week=ExtractWeekDay("date"))
             total_histories = total_histories.values("day_of_week").annotate(count=Count("id", distinct=True))
 
@@ -285,11 +303,15 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     series_result_reviews.append(0)
 
         elif period == "month":
-            histories = HistoryScan.objects.filter(
-                history__parcel__establishment=establishment,
-                history__published=True,
-                **filter_kwargs,
-            ).distinct()
+            histories = (
+                HistoryScan.objects.counted()
+                .filter(
+                    history__parcel__establishment=establishment,
+                    history__published=True,
+                    **filter_kwargs,
+                )
+                .distinct()
+            )
             total_histories = histories.annotate(day_of_month=ExtractDay("date"), month=ExtractMonth("date"))
             total_histories = total_histories.values("day_of_month", "month")
             total_histories = total_histories.annotate(count=Count("id", distinct=True))
@@ -354,11 +376,15 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     series_result.append(0)
                     series_result_reviews.append(0)
         elif period == "year":
-            histories = HistoryScan.objects.filter(
-                history__parcel__establishment=establishment,
-                history__published=True,
-                **filter_kwargs,
-            ).distinct()
+            histories = (
+                HistoryScan.objects.counted()
+                .filter(
+                    history__parcel__establishment=establishment,
+                    history__published=True,
+                    **filter_kwargs,
+                )
+                .distinct()
+            )
             total_histories = histories.annotate(month=ExtractMonth("date"))
             total_histories = total_histories.values("month")
             total_histories = total_histories.annotate(count=Count("id", distinct=True))
@@ -541,6 +567,13 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # dashboard_metrics — self.company is set by CompanyNestedViewSet.initial).
         establishment = get_object_or_404(self.company.establishment_set.all(), pk=pk)
 
+        # Plan gate. This is the operation-wide twin of the per-production audit export in
+        # history/views.py and produces the same class of certifier document — a wider one — so
+        # it carries the same gate. It was the door that nearly got missed: it lives in a
+        # different app from the other three, which is precisely why the check belongs to one
+        # shared function (subscriptions/gating.py) and is asserted by an inventory test.
+        require_compliance_exports(establishment.company, user=request.user)
+
         cert_type = request.query_params.get("certification", "organic").lower()
         valid_certifications = {"all", "organic", "globalgap", "roc", "fsma204", "scs"}
         if cert_type not in valid_certifications:
@@ -569,9 +602,120 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             establishment, certification_type=cert_type, start_date=start, end_date=end
         )
         buffer = service.generate_pdf()
-        response = FileResponse(buffer, content_type="application/pdf")
+        # WS-3: file a dated copy in the DMS, then stream the same bytes.
+        from io import BytesIO
+
+        from documents.services.filing import file_document
+
+        pdf_bytes = buffer.getvalue() if hasattr(buffer, "getvalue") else buffer.read()
+        file_document(
+            establishment=establishment,
+            source="operation_dossier",
+            folder="exports",
+            title=f"Operation audit dossier ({cert_type})",
+            filename=f"trazo-operation-audit-{establishment.id}.pdf",
+            content=pdf_bytes,
+            content_type="application/pdf",
+            created_by=request.user,
+        )
+        response = FileResponse(BytesIO(pdf_bytes), content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="trazo-operation-audit-{establishment.id}.pdf"'
         return response
+
+    @action(detail=True, methods=["get"], url_path="activity-feed")
+    def activity_feed(self, request, pk=None, company_pk=None) -> Response:
+        """
+        Establishment-wide activity feed (WS-4) — one merged, date-sorted list across all
+        eight event models, for the Activities calendar/list surface.
+
+        Query params:
+          start, end   optional YYYY-MM-DD window (inclusive)
+          event_type   optional int 0-7 filter
+          parcel       optional parcel id filter
+
+        Returns lightweight rows only — the frontend maps subtype codes to labels via its
+        registry (the same maps every other surface uses), and detail/edit goes through
+        the existing per-type event routes.
+
+        `parcel` is filtered in the QUERYSET, not by the caller afterwards: the caps below
+        are applied before the response is built, so client-side parcel filtering would
+        silently drop a block's older activities whenever the farm's newest 800 rows are
+        dominated by another block.
+        """
+        from datetime import datetime as _dt
+
+        from history.constants import EVENT_TYPE_TO_MODEL
+        from history.services.activity_detail import narrative_detail
+
+        establishment = get_object_or_404(self.company.establishment_set.all(), pk=pk)
+
+        def _parse(raw):
+            if not raw:
+                return None
+            try:
+                return _dt.strptime(raw, "%Y-%m-%d").date()
+            except ValueError:
+                return None
+
+        start = _parse(request.query_params.get("start"))
+        end = _parse(request.query_params.get("end"))
+        type_filter = request.query_params.get("event_type")
+        raw_parcel = request.query_params.get("parcel")
+        try:
+            parcel_filter = int(raw_parcel) if raw_parcel not in (None, "") else None
+        except (TypeError, ValueError):
+            parcel_filter = None
+
+        per_model_cap = ACTIVITY_FEED_PER_MODEL_CAP
+        total_cap = ACTIVITY_FEED_TOTAL_CAP
+        # Whether either cap actually bit. A capped list that does not SAY it is capped reads
+        # as "this is the whole log" — which is the one thing a certifier-facing record must
+        # never imply. The frontend surfaces this as a "narrow the range" note.
+        truncated = False
+
+        rows = []
+        for event_type, model in EVENT_TYPE_TO_MODEL.items():
+            if type_filter not in (None, "") and int(type_filter) != event_type:
+                continue
+            qs = model.objects.filter(history__parcel__establishment=establishment).select_related(
+                "history", "history__parcel"
+            )
+            if parcel_filter is not None:
+                qs = qs.filter(history__parcel_id=parcel_filter)
+            if start:
+                qs = qs.filter(date__gte=start)
+            if end:
+                qs = qs.filter(date__lte=end)
+            # Cap per model so a dense farm cannot balloon the payload; the calendar
+            # requests one month at a time, where this cap is never reached. One extra row is
+            # read so the cap can be REPORTED rather than applied silently.
+            page = list(qs.order_by("-date")[: per_model_cap + 1])
+            if len(page) > per_model_cap:
+                truncated = True
+                page = page[:per_model_cap]
+            for event in page:
+                rows.append(
+                    {
+                        "event_type": event_type,
+                        "event_id": event.id,
+                        "subtype": getattr(event, "type", None),
+                        "name": getattr(event, "name", None),
+                        "date": event.date,
+                        "description": (event.description or "")[:200],
+                        "parcel_id": event.history.parcel_id,
+                        "parcel_name": event.history.parcel.name,
+                        "history_id": event.history_id,
+                        "performed_by": getattr(event, "performed_by", "") or "",
+                        # WS-4 auto-narrative: structured VALUES only — the frontend
+                        # composes localized wording (config/events/narrative.ts).
+                        "detail": narrative_detail(event_type, event),
+                    }
+                )
+
+        rows.sort(key=lambda r: (r["date"] is None, r["date"]), reverse=True)
+        if len(rows) > total_cap:
+            truncated = True
+        return Response({"activities": rows[:total_cap], "truncated": truncated})
 
     @action(detail=True, methods=["get"], url_path="certifier-readiness")
     def certifier_readiness(self, request, pk=None, company_pk=None) -> Response:
@@ -1609,21 +1753,22 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         thirty_days_ago = now - timedelta(days=30)
         sixty_days_ago = now - timedelta(days=60)
 
-        # Filter for high-quality scans only (not duplicates, low bot score)
-        quality_filter = Q(is_duplicate=False) & Q(bot_score__lt=0.3)
+        # Countable scans only — see `HistoryScanQuerySet.counted()`. This block used to define
+        # its own `quality_filter` at bot_score < 0.3 while the analytics service used < 0.5 and
+        # most other surfaces filtered nothing at all, so one farm had three different scan
+        # totals depending on the screen. There is now one definition.
+        counted_scans = HistoryScan.objects.counted()
 
         # Current month scans (last 30 days)
-        current_month_scans = HistoryScan.objects.filter(
-            history_id__in=production_ids, date__gte=thirty_days_ago
-        ).filter(quality_filter)
+        current_month_scans = counted_scans.filter(history_id__in=production_ids, date__gte=thirty_days_ago)
 
         # Previous month scans (30-60 days ago) for growth calculation
-        previous_month_scans = HistoryScan.objects.filter(
+        previous_month_scans = counted_scans.filter(
             history_id__in=production_ids, date__gte=sixty_days_ago, date__lt=thirty_days_ago
-        ).filter(quality_filter)
+        )
 
         # All-time scans
-        all_time_scans = HistoryScan.objects.filter(history_id__in=production_ids).filter(quality_filter)
+        all_time_scans = counted_scans.filter(history_id__in=production_ids)
 
         # === REAL METRICS ===
 
@@ -1729,135 +1874,22 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         return context
 
 
-class PublicEstablishmentViewSet(viewsets.ViewSet):
-    """
-    Public endpoint for consumer-facing establishment views.
-    No authentication required.
-    """
-
-    permission_classes = []
-
-    def retrieve(self, request, pk=None):
-        """Get public establishment data by ID or UUID"""
-        try:
-            # Support both UUID and integer lookups
-            import uuid as uuid_module
-
-            try:
-                public_uuid = uuid_module.UUID(str(pk))
-                establishment = get_object_or_404(
-                    Establishment.objects.select_related("company"), public_id=public_uuid, is_active=True
-                )
-            except (ValueError, AttributeError):
-                # Fall back to integer PK lookup for backward compatibility
-                establishment = get_object_or_404(
-                    Establishment.objects.select_related("company"), pk=pk, is_active=True
-                )
-
-            # Use EstablishmentSerializer but filter sensitive data
-            serializer = EstablishmentSerializer(establishment, context={"request": request})
-            data = serializer.data
-
-            # Remove sensitive fields for public view
-            # Include public_id (UUID) for external references
-            public_data_extra = {"public_id": str(establishment.public_id)}
-            public_fields = [
-                "id",
-                "name",
-                "description",
-                "address",
-                "city",
-                "state",
-                "country",
-                "location",
-                "latitude",
-                "longitude",
-                "certifications",
-                "about",
-                "main_activities",
-                "location_highlights",
-                "custom_message",
-                "images",
-                "email",
-                "phone",
-                "zip_code",
-                "crops_grown",
-                "sustainability_practices",
-                "employee_count",
-                "total_acreage",
-                "year_established",
-                "establishment_type",
-                "farming_method",
-                "image",
-                "water_sources",
-                "climate_zone",
-                "soil_types",
-                "conservation_practices",
-                "irrigation_methods",
-            ]
-
-            public_data = {key: data[key] for key in public_fields if key in data}
-            public_data.update(public_data_extra)
-
-            return Response(public_data, status=status.HTTP_200_OK)
-
-        except Establishment.DoesNotExist:
-            return Response(
-                {"error": "Establishment not found or not available publicly"}, status=status.HTTP_404_NOT_FOUND
-            )
-        except Exception as e:
-            return Response({"error": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-    def _get_primary_crop(self, establishment):
-        """
-        Helper method to determine primary crop for benchmarking
-        Returns the most commonly produced crop in the establishment
-        """
-        crop_counts = {}
-        for parcel in establishment.parcels.all():
-            for history in parcel.histories.all():
-                if hasattr(history, "crop_type") and history.crop_type:
-                    crop_name = history.crop_type.name
-                    crop_counts[crop_name] = crop_counts.get(crop_name, 0) + 1
-
-        if not crop_counts:
-            return None
-
-        # Return the most common crop
-        return max(crop_counts.items(), key=lambda x: x[1])[0]
-
-    def _get_establishment_crops(self, establishment):
-        """
-        Helper method to get all unique crops grown at establishment
-        Returns list of crop names for context
-        """
-        crops = set()
-        for parcel in establishment.parcels.all():
-            for history in parcel.histories.all():
-                if hasattr(history, "crop_type") and history.crop_type:
-                    crops.add(history.crop_type.name)
-
-        return sorted(list(crops))
-
-    def _get_analysis_timeframe(self, carbon_entries):
-        """
-        Helper method to determine the time period covered by carbon entries
-        Returns dict with start_date, end_date, and duration_days
-        """
-        if not carbon_entries:
-            return None
-
-        dates = [entry.created_at for entry in carbon_entries if entry.created_at]
-        if not dates:
-            return None
-
-        start_date = min(dates)
-        end_date = max(dates)
-        duration_days = (end_date - start_date).days
-
-        return {
-            "start_date": start_date.isoformat(),
-            "end_date": end_date.isoformat(),
-            "duration_days": duration_days,
-            "period_description": f"{duration_days} days of carbon data",
-        }
+# `PublicEstablishmentViewSet` DELETED 2026-08-12 (route: companies/public/establishments/<pk>/).
+#
+# It was anonymous — `permission_classes = []`, i.e. no checks run at all — and served, for any
+# establishment id, to anyone with the URL:
+#   street address, ZIP, exact latitude/longitude, farm email and phone, `farming_method`,
+#   `sustainability_practices` (incl. "Carbon-negative certified"), `conservation_practices`,
+#   and the free-text `certifications` string.
+#
+# Every one of those had already been withheld or removed on the consumer surfaces during the
+# 2026-06 PII audit, the 2026-08-07 farm-profile redesign and the 2026-08-12 certification fix.
+# This was a THIRD hand-built payload for the same resource and received none of them.
+#
+# Deleted rather than locked because it had ZERO callers — no app, landing or worker reference,
+# and its RTK hook (`useGetPublicFarm`, aliased `useGetPublicEstablishment`) was exported but
+# never used. An unused public endpoint is the cheapest leak there is. Consumers are served by
+# `history/transparency_views.py`, which is gated by `claim_authority.py`.
+#
+# Found by `history/tests/test_anonymous_endpoint_inventory.py`, which now fails CI on any new
+# anonymous endpoint that has not been written down and reviewed.

@@ -1,3 +1,4 @@
+{% autoescape off %}
 Welcome to {{ company.name }}!
 
 Hi {{ user.first_name|default:"there" }},
@@ -40,3 +41,4 @@ Need help getting started? Don't hesitate to reach out to {{ inviter.first_name 
 Welcome to {{ company.name }} and the future of agricultural transparency!
 
 The Trazo Team
+{% endautoescape %}

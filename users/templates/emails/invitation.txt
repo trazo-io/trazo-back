@@ -1,3 +1,4 @@
+{% autoescape off %}
 YOU'RE INVITED TO JOIN {{ company.name|upper }} ON TRAZO!
 
 Hi {{ invitee_name|default:"there" }},
@@ -57,3 +58,4 @@ Your buyers want proof. Give it to them.
 
 Visit us: https://trazo.io
 Support: support@trazo.io
+{% endautoescape %}

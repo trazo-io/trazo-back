@@ -29,6 +29,12 @@ ENFORCED_LIMITS = (
     "max_productions_per_year",
     "monthly_scan_limit",
     "storage_limit_gb",
+    # Added 2026-08-14 and now the load-bearing one. Starter grants the same capacity limits as
+    # Compliance, so `compliance_exports` is the ONLY entitlement separating free from paid: a
+    # pilot without it would spend the season unable to produce the certifier packet, the audit
+    # exports, the PUR export or a certifier link — a pilot of a product nobody is being asked
+    # to buy.
+    "compliance_exports",
 )
 
 

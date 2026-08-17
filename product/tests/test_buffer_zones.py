@@ -15,25 +15,13 @@ from rest_framework.test import APIRequestFactory
 from company.models import Company, Establishment
 from product.models import Parcel
 from product.serializers import CreateParcelSerializer, RetrieveParcelSerializer
+from product.services.buffer_zones import CANONICAL_KEYS
 from users.models import User
 
-# Exact keys the audit export's buffer-zone section reads
-# (audit_export_service.py: direction / adjoining_land_use / buffer_width_m / drift_risk /
-# prevention). The write path must normalize to precisely these.
-EXPORT_BUFFER_KEYS = {
-    "direction",
-    "adjoining_land_use",
-    "buffer_width_m",
-    "drift_risk",
-    "prevention",
-    # CCOF OSP Sections D & E
-    "adjacent_organic",
-    "buffer_type",
-    "crop_in_buffer",
-    # § 205.400(f)(1) drift-notification readiness
-    "neighbor_notified",
-    "neighbor_notification_date",
-}
+# The one canonical vocabulary, owned by product.services.buffer_zones. Every write path
+# normalizes to exactly these keys — the 2026-08-09 P0 was two writers owning two different
+# spellings of the same record.
+EXPORT_BUFFER_KEYS = set(CANONICAL_KEYS)
 
 
 class BufferZoneWritePathTests(TestCase):
@@ -55,7 +43,7 @@ class BufferZoneWritePathTests(TestCase):
                 "buffer_width_m": 8,
                 "drift_risk": "Medium",
                 "prevention": "8 m vegetative hedgerow + annual neighbor-notification letter",
-                # CCOF OSP Sections D & E
+                # CCOF OSP Sections D & E — legacy spellings, still accepted as aliases.
                 "adjacent_organic": True,
                 "buffer_type": "Hedgerow",
                 "crop_in_buffer": "Unharvested native cover",
@@ -88,18 +76,22 @@ class BufferZoneWritePathTests(TestCase):
         self.assertEqual(set(north.keys()), EXPORT_BUFFER_KEYS)
         self.assertEqual(north["direction"], "North")
         self.assertEqual(north["buffer_width_m"], 8.0)
-        # CCOF OSP Sections D & E round-trip.
-        self.assertIs(north["adjacent_organic"], True)
+        # Feet derived from the metric entry — the farmer-facing unit is always populated.
+        self.assertEqual(north["buffer_width_ft"], 26.2)
+        # CCOF OSP Sections D & E round-trip, under the canonical spelling.
+        self.assertIs(north["adjacent_is_organic"], True)
         self.assertEqual(north["buffer_type"], "Hedgerow")
-        self.assertEqual(north["crop_in_buffer"], "Unharvested native cover")
+        self.assertEqual(north["crop_grown_in_buffer"], "Unharvested native cover")
         self.assertIs(north["neighbor_notified"], True)
         self.assertEqual(north["neighbor_notification_date"], "2026-02-15")
-        # Defaults when D&E fields are omitted (South boundary in the fixture).
+        # Omitted D&E fields stay UNANSWERED (None), never an affirmative False. A stored
+        # False is a claim the operator did not make — "the neighbour is not certified
+        # organic" is a statement about someone else's farm.
         south = parcel.buffer_zones[1]
-        self.assertIs(south["adjacent_organic"], False)
+        self.assertIsNone(south["adjacent_is_organic"])
         self.assertIsNone(south["buffer_type"])
-        self.assertIsNone(south["crop_in_buffer"])
-        self.assertIs(south["neighbor_notified"], False)
+        self.assertIsNone(south["crop_grown_in_buffer"])
+        self.assertIsNone(south["neighbor_notified"])
         self.assertIsNone(south["neighbor_notification_date"])
         # String width coerced to float so the export's numeric "X m" formatting works.
         self.assertEqual(south["buffer_width_m"], 12.0)

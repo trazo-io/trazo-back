@@ -4,8 +4,6 @@ from django.utils import timezone
 
 from rest_framework import serializers
 
-from common.models import GalleryImage
-
 from .models import AddOn, Invoice, PaymentMethod, Plan, Subscription, SubscriptionAddOn
 
 
@@ -18,7 +16,10 @@ class PlanSerializer(serializers.ModelSerializer):
 class AddOnSerializer(serializers.ModelSerializer):
     class Meta:
         model = AddOn
-        fields = ["id", "name", "slug", "description", "price", "is_active"]
+        # `interval` is not decoration: the UI printed a bare "$30.00" beside a plan labelled
+        # "/Yearly", so nothing on screen distinguished $30 a month from $30 a year. It has to
+        # reach the client for the price to mean anything.
+        fields = ["id", "name", "slug", "description", "price", "interval", "is_active"]
 
 
 class SubscriptionAddOnSerializer(serializers.ModelSerializer):
@@ -37,6 +38,12 @@ class SubscriptionSerializer(serializers.ModelSerializer):
     # Dynamic calculations instead of cached fields
     used_productions = serializers.SerializerMethodField()
     used_storage_gb = serializers.SerializerMethodField()
+    # Storage is one number to the quota and two things to the farmer. A meter that reads
+    # "18 of 25 GB" without saying what filled it is unactionable: photos can be pruned,
+    # generated documents cannot be deleted at all. Every consumer storage product worth
+    # copying (Drive, Dropbox, iCloud) breaks the bar down by category for exactly this
+    # reason — the breakdown is what turns a number into a decision.
+    storage_breakdown = serializers.SerializerMethodField()
     scan_count = serializers.SerializerMethodField()
     usage_warnings = serializers.SerializerMethodField()
     effective_limits = serializers.SerializerMethodField()
@@ -53,6 +60,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             "cancel_at_period_end",
             "used_productions",
             "used_storage_gb",
+            "storage_breakdown",
             "scan_count",
             "trial_end",
             "addons",
@@ -67,7 +75,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             return getattr(self, cache_attr)
 
         productions = self._compute_used_productions(obj)
-        storage = self._compute_used_storage_gb(obj)
+        storage = self._compute_storage_breakdown(obj)
         scans = self._compute_scan_count(obj)
 
         try:
@@ -77,7 +85,11 @@ class SubscriptionSerializer(serializers.ModelSerializer):
 
         result = {
             "productions": productions,
-            "storage": storage,
+            # `storage` stays the TOTAL so every existing reader keeps meaning what it
+            # meant. It just stopped under-reporting: before the DMS was summed, the
+            # October pivot's entire document shelf was invisible to this number.
+            "storage": storage["total_gb"],
+            "storage_breakdown": storage,
             "scans": scans,
             "establishments": est_count,
         }
@@ -100,113 +112,29 @@ class SubscriptionSerializer(serializers.ModelSerializer):
         except Exception:
             return 0
 
-    def _compute_used_storage_gb(self, obj):
-        """
-        Compute total storage used across all galleries for a company's
-        establishments, parcels, histories, and events.
+    def _compute_storage_breakdown(self, obj):
+        """Media + documents + total, in GB.
 
-        Prefers the file_size field (populated on upload) for accuracy.
-        Falls back to 3 MB estimate for S3/URL images without file_size,
-        or reads .size from local storage backend.
+        The accounting itself lives in `subscriptions.storage_accounting` — the serializer
+        renders it, it does not own it. That split exists because the ENFORCEMENT path
+        (`storage_utils.check_storage_quota`) needs the media figure ALONE, and it used to
+        get it by reaching into this class for a private method that only ever returned the
+        gallery total. See that module for why documents are counted but never blocked.
         """
+        from subscriptions.storage_accounting import storage_breakdown
+
         try:
-            from history.models import History
-
-            company = obj.company
-            if not company:
-                return Decimal("0.00")
-
-            ESTIMATED_IMAGE_SIZE = 3 * 1024 * 1024  # 3 MB fallback for images without file_size
-
-            # --- Step 1: collect gallery IDs across all tiers ---
-            est_gallery_ids = list(
-                company.establishment_set.exclude(album__isnull=True).values_list("album_id", flat=True)
-            )
-
-            parcel_gallery_ids = list(
-                company.establishment_set.prefetch_related("parcels")
-                .exclude(parcels__album__isnull=True)
-                .values_list("parcels__album_id", flat=True)
-            )
-
-            history_qs = History.objects.filter(parcel__establishment__company=company).exclude(album__isnull=True)
-            history_gallery_ids = list(history_qs.values_list("album_id", flat=True))
-
-            event_related_names = [
-                "history_productionevent_events",
-                "history_chemicalevent_events",
-                "history_weatherevent_events",
-                "history_generalevent_events",
-                "history_equipmentevent_events",
-                "history_soilmanagementevent_events",
-                "history_pestmanagementevent_events",
-                "history_businessevent_events",
-            ]
-
-            history_ids = list(
-                History.objects.filter(parcel__establishment__company=company).values_list("id", flat=True)
-            )
-
-            event_gallery_ids = []
-            if history_ids:
-                for related_name in event_related_names:
-                    try:
-                        manager = getattr(History, related_name, None)
-                        if manager is None:
-                            continue
-                        related_model = manager.rel.related_model
-                        event_gallery_ids.extend(
-                            list(
-                                related_model.objects.filter(history_id__in=history_ids)
-                                .exclude(album__isnull=True)
-                                .values_list("album_id", flat=True)
-                            )
-                        )
-                    except Exception:
-                        pass
-
-            all_gallery_ids = est_gallery_ids + parcel_gallery_ids + history_gallery_ids + event_gallery_ids
-
-            if not all_gallery_ids:
-                return Decimal("0.00")
-
-            # --- Step 2: compute total bytes ---
-            from django.db.models import Q, Sum
-
-            all_images_qs = GalleryImage.objects.filter(gallery_id__in=all_gallery_ids)
-
-            # Sum known file sizes (populated on upload)
-            known_size_result = all_images_qs.filter(file_size__isnull=False).aggregate(total=Sum("file_size"))
-            known_bytes = known_size_result["total"] or 0
-
-            # Count remote images WITHOUT file_size (need estimate)
-            remote_unknown_count = (
-                all_images_qs.filter(file_size__isnull=True)
-                .filter(Q(s3_key__isnull=False) | Q(image_url__isnull=False))
-                .count()
-            )
-
-            # Local images WITHOUT file_size — read actual .size
-            local_images = list(
-                all_images_qs.filter(file_size__isnull=True)
-                .exclude(Q(s3_key__isnull=False) | Q(image_url__isnull=False))
-                .exclude(image="")
-                .only("id", "image")
-            )
-
-            local_bytes = 0
-            for img in local_images:
-                try:
-                    local_bytes += img.image.size
-                except Exception:
-                    local_bytes += ESTIMATED_IMAGE_SIZE
-
-            total_bytes = known_bytes + (remote_unknown_count * ESTIMATED_IMAGE_SIZE) + local_bytes
-
-            gb = Decimal(total_bytes) / Decimal(1024 * 1024 * 1024)
-            return round(gb, 2)
+            return storage_breakdown(obj.company)
         except Exception:
-            return Decimal("0.00")
+            zero = Decimal("0.00")
+            return {
+                "media_gb": zero,
+                "documents_gb": zero,
+                "total_gb": zero,
+                "media_bytes": 0,
+                "documents_bytes": 0,
+                "total_bytes": 0,
+            }
 
     def _compute_scan_count(self, obj):
         try:
@@ -222,10 +150,14 @@ class SubscriptionSerializer(serializers.ModelSerializer):
                 now = timezone.now()
                 period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-            return HistoryScan.objects.filter(
-                history__parcel__establishment__company=company,
-                date__gte=period_start,
-            ).count()
+            return (
+                HistoryScan.objects.counted()
+                .filter(
+                    history__parcel__establishment__company=company,
+                    date__gte=period_start,
+                )
+                .count()
+            )
         except Exception:
             return 0
 
@@ -234,6 +166,26 @@ class SubscriptionSerializer(serializers.ModelSerializer):
 
     def get_used_storage_gb(self, obj):
         return self._get_cached_usage(obj)["storage"]
+
+    def get_storage_breakdown(self, obj):
+        breakdown = self._get_cached_usage(obj)["storage_breakdown"]
+        # `enforced` is not decoration — it is the contract the UI has to render. Media is
+        # refused at the ceiling; documents are counted and let through. A meter that shows
+        # both under one bar without saying which one bites teaches the farmer the wrong
+        # thing about what happens when the bar fills.
+        return {
+            "media_gb": float(breakdown["media_gb"]),
+            "documents_gb": float(breakdown["documents_gb"]),
+            "total_gb": float(breakdown["total_gb"]),
+            # Raw bytes so the client can pick a unit per line. A document shelf of 21 real
+            # certifier artifacts weighs under a megabyte; "0.00 GB" beside a list of 21
+            # files reads as a broken meter, and rounding to GB here would make the honest
+            # rendering impossible downstream.
+            "media_bytes": int(breakdown["media_bytes"]),
+            "documents_bytes": int(breakdown["documents_bytes"]),
+            "total_bytes": int(breakdown["total_bytes"]),
+            "enforced_category": "media",
+        }
 
     def get_scan_count(self, obj):
         return self._get_cached_usage(obj)["scans"]
@@ -287,6 +239,12 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             "priority_support": base("priority_support", False),
             "voice_recording": base("voice_recording", False),
             "ai_event_templates": base("ai_event_templates", True),
+            # What the app needs to know BEFORE offering an export button. Without it the only
+            # way a farmer learns their plan cannot produce the packet is by clicking Download
+            # and receiving a 403 — the gate has to be visible ahead of the click, not just
+            # enforced behind it. Default False matches `Company.has_feature`, so a plan that
+            # predates the key reads the same here as it does at the gate.
+            "compliance_exports": base("compliance_exports", False),
         }
         setattr(self, cache_attr, result)
         return result
@@ -349,18 +307,34 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             limits.get("monthly_scan_limit", 0),
             "QR scans this month",
         )
+        # Scored on the ENFORCED half, not the total.
+        #
+        # A warning says "act now or something stops working". Only media can stop working:
+        # photo uploads are refused at the ceiling, documents never are. Scoring the total
+        # would fire "95% used — upgrade to avoid service interruption" at a farm whose
+        # document shelf happens to be large, about an interruption that cannot happen and
+        # in response to files they are not allowed to delete. The meter still SHOWS the
+        # total (`storage_breakdown`); the alarm is wired to the half that can ring.
         check_limit(
             "storage",
-            float(usage["storage"]),
+            float(usage["storage_breakdown"]["media_gb"]),
             limits.get("storage_limit_gb", 0),
-            "Storage (GB)",
+            "Photo storage (GB)",
         )
-        check_limit(
-            "establishments",
-            usage["establishments"],
-            limits.get("max_establishments", 0),
-            "Establishments",
-        )
+        # UI naming rule: an Establishment is a "Farm" everywhere a farmer reads it.
+        #
+        # Skipped entirely for pilots: a pilot is capped at one farm BY AGREEMENT, so
+        # "100% used — upgrade to avoid service interruption" would sit permanently on
+        # every pilot's subscription page, warning about a ceiling they chose. Storage
+        # stays warned for everyone, pilots included: photo uploads ARE refused at the
+        # ceiling, so the farmer has to see it coming.
+        if not obj.plan.features.get("is_pilot"):
+            check_limit(
+                "establishments",
+                usage["establishments"],
+                limits.get("max_establishments", 0),
+                "Farms",
+            )
 
         return warnings
 

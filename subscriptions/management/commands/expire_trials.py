@@ -7,17 +7,36 @@ from subscriptions.models import Subscription
 
 logger = logging.getLogger(__name__)
 
+# Plans this command may cancel. Starter is NOT one of them.
+#
+# 2026-08-13: this used to filter `plan__slug="starter"` and flip expired Starter subscriptions to
+# "canceled". Starter is free FOREVER (October plan: "Actually free. Starter free forever, pilot
+# free, no card"), and the COG Pro migration page's whole anti-lock-in answer is "Starter is free
+# permanently, not a trial". Cancelling it nulls `Company.subscription_plan` and 403s every
+# creation in the app — i.e. it silently locked out the exact COG Pro refugees October targets.
+#
+# Nothing self-serve carries a trial now: Starter is free forever, Compliance is paid, and Pilot
+# is hand-provisioned with `trial_no_card_days: 0`. The command is kept (the beat schedule and
+# `subscriptions.tasks.expire_trials` reference it, and Stripe-side trials on a future plan would
+# need it) but it can only act on plans listed here — add a slug deliberately, never a catch-all.
+EXPIRABLE_TRIAL_PLAN_SLUGS: list[str] = []
+
 
 class Command(BaseCommand):
-    help = "Expire Starter trials that have passed their trial_end date. Run daily."
+    help = "Expire trials that have passed their trial_end date. Run daily. Never touches Starter."
 
     def handle(self, *args, **options):
-        now = timezone.now()
+        if not EXPIRABLE_TRIAL_PLAN_SLUGS:
+            self.stdout.write(
+                self.style.SUCCESS("No plans are trial-expirable (Starter is free forever). Nothing to do.")
+            )
+            return
 
+        now = timezone.now()
         expired_trials = Subscription.objects.filter(
             status="trialing",
             trial_end__lte=now,
-            plan__slug="starter",
+            plan__slug__in=EXPIRABLE_TRIAL_PLAN_SLUGS,
         )
         count = expired_trials.count()
 
@@ -27,5 +46,5 @@ class Command(BaseCommand):
 
         expired_trials.update(status="canceled")
 
-        logger.info("Expired %d starter trials at %s", count, now.isoformat())
-        self.stdout.write(self.style.SUCCESS(f"Expired {count} starter trial(s)."))
+        logger.info("Expired %d trials at %s", count, now.isoformat())
+        self.stdout.write(self.style.SUCCESS(f"Expired {count} trial(s)."))

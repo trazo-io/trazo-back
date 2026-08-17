@@ -185,7 +185,7 @@ class UserImpactSummarySerializer(serializers.ModelSerializer):
             return self._event_counts_cache
 
         user = obj.user
-        scans = HistoryScan.objects.filter(user=user).select_related("history")
+        scans = HistoryScan.objects.counted().filter(user=user).select_related("history")
 
         # Get all history IDs in one query
         history_ids = [scan.history_id for scan in scans if scan.history_id]
@@ -202,7 +202,7 @@ class UserImpactSummarySerializer(serializers.ModelSerializer):
         OPTIMIZED: Uses bulk event counts instead of N+1 queries.
         """
         user = obj.user
-        scans = HistoryScan.objects.filter(user=user).select_related("history")
+        scans = HistoryScan.objects.counted().filter(user=user).select_related("history")
 
         if not scans.exists():
             return None
@@ -243,7 +243,8 @@ class UserImpactSummarySerializer(serializers.ModelSerializer):
                 ).values_list("establishment_id", flat=True)
             )
             return (
-                HistoryScan.objects.filter(user=user)
+                HistoryScan.objects.counted()
+                .filter(user=user)
                 .filter(history__parcel__establishment__in=certified_est_ids)
                 .values("history__parcel__establishment")
                 .distinct()

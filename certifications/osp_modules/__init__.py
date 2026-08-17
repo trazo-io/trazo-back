@@ -15,20 +15,68 @@ Module keys are permanent identifiers (stored in module_responses); never rename
 
 from certifications.models import OSP_SECTION_KEYS
 
+from .g2_0_fraud_prevention import G2_0_FRAUD_PREVENTION
 from .g3_0_seeds import G3_0_SEEDS
+from .g3_2_planting_stock import G3_2_PLANTING_STOCK
 from .g4_0_rotation_soil import G4_0_ROTATION_SOIL
+from .g4_1_compost_manure import G4_1_COMPOST_MANURE
+from .g4_2_natural_resources import G4_2_NATURAL_RESOURCES
+from .g5_0_pest import G5_0_PEST
+from .g6_0_production import G6_0_PRODUCTION
+from .g6_1_harvest_transport import G6_1_HARVEST_TRANSPORT
+from .g6_2_storage import G6_2_STORAGE
+from .g7_0_labeling import G7_0_LABELING
 from .g8_0_record_keeping import G8_0_RECORD_KEEPING
+from .g9_0_facility_pest import G9_0_FACILITY_PEST
+from .materials_application import MATERIALS_APPLICATION
 from .schema import Module, serialize_module, validate_module
+from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_SALES_SOE, W2_0_WILD_CROP
 
-CONTENT_VERSION = "2026.08.1"
+# WS-2.7 (2026-08-08): full crop-scope registry — 10 depth modules + Materials
+# Application + 6 N/A-able stubs. Bumped from 2026.08.1 (3-module pilot).
+# 2026.08.4: G6.4 Handling graduated from thin stub to full depth (applicability
+# gate, products & site, process flow, commingling controls, records) — 11 depth
+# modules + Materials Application + 5 N/A-able stubs remain.
+# 2026.08.11: prefill for PERENNIAL operations — pest monitoring scope + cadence
+# (G5.0) and on-farm storage (G6.2). The original five resolvers were all annual-crop
+# shaped, so a mature orchard with a full season logged got 2 suggestions in total.
+# 2026.08.10: G4.2 page B — conservation agreements, invasive-species control, and
+# the food-safety-vs-§205.200 wildlife/habitat tension. Topics the CERTIFIER form asks
+# beyond the federal template; wording authored from §205.200 + NOP guidance 5020.
+# 2026.08.9: G4.2 gained the irrigation-district additive questions (§ 205.202(b))
+# — CA growers on district water, where the district applies canal algaecides.
+# 2026.08.8: G8.0 gained page C Import & Export (Common OSP § 11 subsection —
+# export certificates TM-11/COI/NAQS/Canada, NOP Import Certificates, port
+# integrity). Gated on a single trigger: domestic-only operations answer once.
+# 2026.08.5: G3.0b Perennial Planting Stock graduated from thin stub to full depth
+# (establishment record, commercial-availability justification, the § 205.204(a)(4)
+# one-year rule, records) — the question every orchard and vineyard answers. 12 depth
+# modules + Materials Application + 4 N/A-able stubs remain.
+CONTENT_VERSION = "2026.08.13"
 
-# Wizard/list order follows the Common OSP grower taxonomy. Pilot scope (WS-2.1):
-# the three modules with the strongest existing evidence bindings. The remaining
-# crop/wild-crop modules land in WS-2.7 — teardown §7 documents their section maps.
+# Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
+# soil → pest → production/handling chain → labeling → recordkeeping →
+# materials → contract. Wild crop last among crop-scope modules.
 MODULE_REGISTRY: tuple = (
+    G2_0_FRAUD_PREVENTION,
     G3_0_SEEDS,
+    G3_1_SEEDLINGS,
+    G3_2_PLANTING_STOCK,
     G4_0_ROTATION_SOIL,
+    G4_1_COMPOST_MANURE,
+    G4_2_NATURAL_RESOURCES,
+    G5_0_PEST,
+    G6_0_PRODUCTION,
+    G6_1_HARVEST_TRANSPORT,
+    G6_2_STORAGE,
+    G6_4_HANDLING,
+    G6_5_SALES_SOE,
+    G7_0_LABELING,
     G8_0_RECORD_KEEPING,
+    G9_0_FACILITY_PEST,
+    W2_0_WILD_CROP,
+    MATERIALS_APPLICATION,
+    CERTIFICATION_CONTRACT,
 )
 
 MODULES_BY_KEY = {m.key: m for m in MODULE_REGISTRY}

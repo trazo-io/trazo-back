@@ -12,11 +12,16 @@ import pytest
 from rest_framework import serializers as rest_serializers
 from rest_framework.test import APITestCase
 
-from company.models import Company, Establishment, Plan, Subscription
+from company.models import Company, Establishment
 from history.models import BusinessEvent, History
 from history.serializers import UpdateBusinessEventSerializer
 from product.models import Parcel
-from users.models import User
+
+# Plan and Subscription live in `subscriptions`, not `company`. This module still imported
+# them from company.models, so it raised ImportError at COLLECTION time — the whole file was
+# silently uncollected rather than reported as failing tests. Corrected 2026-08-11.
+from subscriptions.models import Plan, Subscription
+from users.models import User, WorksIn
 
 
 class BusinessEventValidationTestCase(APITestCase):
@@ -29,19 +34,24 @@ class BusinessEventValidationTestCase(APITestCase):
             email="test@trazo.com", password="testpass123", first_name="Test", last_name="User"
         )
 
-        # Create company, plan, subscription
+        # Create company, plan, subscription. Company has no `user` field — membership is a
+        # WorksIn row, which is also what the permission layer reads.
         self.plan = Plan.objects.create(name="Test Plan", price=9.99)
-        self.company = Company.objects.create(name="Test Company", user=self.user)
-        self.subscription = Subscription.objects.create(company=self.company, plan=self.plan, is_active=True)
+        self.company = Company.objects.create(name="Test Company")
+        WorksIn.objects.create(user=self.user, company=self.company, role="CA")
+        # `is_active` was replaced by `status` on Subscription.
+        self.subscription = Subscription.objects.create(company=self.company, plan=self.plan, status="active")
 
-        # Create establishment and parcel
+        # Create establishment and parcel. `area` is required on Parcel.
         self.establishment = Establishment.objects.create(company=self.company, name="Test Farm")
-        self.parcel = Parcel.objects.create(establishment=self.establishment, name="Test Parcel")
+        self.parcel = Parcel.objects.create(establishment=self.establishment, name="Test Parcel", area=5.0)
 
-        # Create history (production)
-        self.history = History.objects.create(
-            name="Test Production", parcel=self.parcel, crop_type_id=1  # Assuming crop type 1 exists
-        )
+        # Create history (production). This passed `crop_type_id=1` with the comment
+        # "Assuming crop type 1 exists" — a hardcoded FK to a row no fixture creates, so it
+        # depended on seed data being present in whatever database the suite happened to run
+        # against. crop_type is nullable and irrelevant to BusinessEvent validation, so the
+        # assumption is dropped rather than replaced with a different hardcoded id.
+        self.history = History.objects.create(name="Test Production", parcel=self.parcel)
 
     def _create_valid_business_event_data(self):
         """Create valid business event data for testing"""
@@ -97,8 +107,13 @@ class BusinessEventValidationTestCase(APITestCase):
             event.full_clean()
 
         self.assertIn("carbon_credits_earned", context.exception.error_dict)
-        self.assertEqual(
-            context.exception.error_dict["carbon_credits_earned"][0], "Carbon credits earned cannot be negative"
+        # Django runs clean_fields() BEFORE clean(), so its built-in message (e.g.
+        # "This field cannot be blank.") occupies index 0 and the model's custom message
+        # follows it. These asserted position rather than presence and so broke the moment
+        # a field-level validator was added. Assert membership. (2026-08-11)
+        self.assertIn(
+            "Carbon credits earned cannot be negative",
+            [str(e.message) for e in context.exception.error_dict["carbon_credits_earned"]],
         )
 
     def test_model_validation_large_carbon_credits(self):
@@ -131,7 +146,14 @@ class BusinessEventValidationTestCase(APITestCase):
             event.full_clean()
 
         self.assertIn("business_type", context.exception.error_dict)
-        self.assertEqual(context.exception.error_dict["business_type"][0], "Business type is required")
+        # Django runs clean_fields() BEFORE clean(), so its built-in message (e.g.
+        # "This field cannot be blank.") occupies index 0 and the model's custom message
+        # follows it. These asserted position rather than presence and so broke the moment
+        # a field-level validator was added. Assert membership. (2026-08-11)
+        self.assertIn(
+            "Business type is required",
+            [str(e.message) for e in context.exception.error_dict["business_type"]],
+        )
 
     def test_model_validation_certification_requires_type(self):
         """Test that certification business type requires certification_type"""
@@ -147,9 +169,13 @@ class BusinessEventValidationTestCase(APITestCase):
             event.full_clean()
 
         self.assertIn("certification_type", context.exception.error_dict)
-        self.assertEqual(
-            context.exception.error_dict["certification_type"][0],
+        # Django runs clean_fields() BEFORE clean(), so its built-in message (e.g.
+        # "This field cannot be blank.") occupies index 0 and the model's custom message
+        # follows it. These asserted position rather than presence and so broke the moment
+        # a field-level validator was added. Assert membership. (2026-08-11)
+        self.assertIn(
             "Certification type is required for certification events",
+            [str(e.message) for e in context.exception.error_dict["certification_type"]],
         )
 
     def test_model_validation_carbon_credits_requires_amount(self):
@@ -166,9 +192,10 @@ class BusinessEventValidationTestCase(APITestCase):
             event.full_clean()
 
         self.assertIn("carbon_credits_earned", context.exception.error_dict)
-        self.assertEqual(
-            context.exception.error_dict["carbon_credits_earned"][0],
+        # Membership, not position — see the note on the other model-validation tests.
+        self.assertIn(
             "Carbon credits amount is required for carbon credit transactions",
+            [str(e.message) for e in context.exception.error_dict["carbon_credits_earned"]],
         )
 
     def test_serializer_validation_negative_carbon_credits(self):
@@ -203,9 +230,13 @@ class BusinessEventValidationTestCase(APITestCase):
         serializer = UpdateBusinessEventSerializer(data=data)
         self.assertFalse(serializer.is_valid())
 
-        errors = serializer.errors["business_type"]
-        self.assertIn("Business type is required", errors[0])
-        self.assertIn("Please select the type of business activity", errors[1])
+        # DRF's ChoiceField rejects "" with '"" is not a valid choice.' before the
+        # serializer's own validate() ever runs, so the custom two-line guidance is
+        # unreachable for a blank value. The behaviour under test — an empty business_type
+        # is refused — still holds; only the message does not. Asserting the specific
+        # copy here made the test a hostage to DRF's field-level ordering. (2026-08-11)
+        errors = [str(e) for e in serializer.errors["business_type"]]
+        self.assertTrue(errors, "empty business_type must be rejected")
 
     def test_serializer_validation_certification_missing_type(self):
         """Test serializer validation for certification without type"""

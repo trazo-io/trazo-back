@@ -38,6 +38,8 @@ class _FakeBundle(EvidenceBundle):
         self.start_date = None
         self.end_date = None
         self.productions = kwargs.pop("productions", [])
+        self.parcels = kwargs.pop("parcels", [])
+        self.sales = kwargs.pop("sales", [])
         self.chemical = kwargs.pop("chemical", [])
         self.production_events = kwargs.pop("production_events", [])
         self.soil = kwargs.pop("soil", [])
@@ -310,6 +312,7 @@ class EveryRuleRunsCleanTests(SimpleTestCase):
     def test_no_rule_raises_on_a_populated_bundle(self):
         bundle = _FakeBundle(
             productions=[SimpleNamespace(organic_on_invoice="INV-9", storage_location="Barn A")],
+            parcels=[SimpleNamespace(buffer_zones=[{"side": "north", "width_ft": 30}])],
             production_events=[_ev(c) for c in ("PL", "TR", "HA", "CU", "MO", "EM", "PH", "IR")],
             chemical=[_ev(c) for c in ("FE", "PE", "FU", "HE")],
             soil=[_ev(c) for c in ("TI", "CO", "ST", "LA", "OM", "PA")],

@@ -207,6 +207,17 @@ def send_trial_emails(self):
     """
     from subscriptions.models import Subscription
 
+    # ⛔ NEVER email a free-forever plan about an expiring trial.
+    #
+    # Starter has no trial since 2026-08-13 (October plan: "Starter free forever"), so new rows
+    # carry `trial_end=None` and fall out of the date windows below on their own. Rows created
+    # BEFORE that change still have a `trial_end`, and would otherwise be told their free plan is
+    # ending — the precise message the COG Pro migration page promises we will never send.
+    FREE_FOREVER_PLAN_SLUGS = ("starter",)
+
+    def trial_email_candidates():
+        return Subscription.objects.exclude(plan__slug__in=FREE_FOREVER_PLAN_SLUGS)
+
     now = timezone.now()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     today_end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
@@ -217,11 +228,15 @@ def send_trial_emails(self):
     day11_start = today_start + timezone.timedelta(days=3)
     day11_end = today_end + timezone.timedelta(days=3)
 
-    day11_subs = Subscription.objects.filter(
-        status="trialing",
-        trial_end__gte=day11_start,
-        trial_end__lte=day11_end,
-    ).select_related("company")
+    day11_subs = (
+        trial_email_candidates()
+        .filter(
+            status="trialing",
+            trial_end__gte=day11_start,
+            trial_end__lte=day11_end,
+        )
+        .select_related("company")
+    )
 
     for sub in day11_subs:
         dispatched = _send_trial_email(
@@ -234,11 +249,15 @@ def send_trial_emails(self):
             sent_day11 += 1
 
     # --- Day 14: trial expired today (canceled OR still trialing if expire_trials hasn't run) ---
-    day14_subs = Subscription.objects.filter(
-        Q(status="canceled") | Q(status="trialing"),
-        trial_end__gte=today_start,
-        trial_end__lte=today_end,
-    ).select_related("company")
+    day14_subs = (
+        trial_email_candidates()
+        .filter(
+            Q(status="canceled") | Q(status="trialing"),
+            trial_end__gte=today_start,
+            trial_end__lte=today_end,
+        )
+        .select_related("company")
+    )
 
     for sub in day14_subs:
         dispatched = _send_trial_email(
@@ -254,11 +273,15 @@ def send_trial_emails(self):
     day17_start = today_start - timezone.timedelta(days=3)
     day17_end = today_end - timezone.timedelta(days=3)
 
-    day17_subs = Subscription.objects.filter(
-        status="canceled",
-        trial_end__gte=day17_start,
-        trial_end__lte=day17_end,
-    ).select_related("company")
+    day17_subs = (
+        trial_email_candidates()
+        .filter(
+            status="canceled",
+            trial_end__gte=day17_start,
+            trial_end__lte=day17_end,
+        )
+        .select_related("company")
+    )
 
     for sub in day17_subs:
         dispatched = _send_trial_email(

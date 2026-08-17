@@ -68,6 +68,8 @@ class EstablishmentSerializer(ModelSerializer):
             "irrigation_methods",
             # NOP compliance — OFPP fraud prevention plan
             "fraud_prevention_plan_uploaded",
+            "ofpp_on_file",
+            "ofpp_filename_suspicious",
             "fraud_prevention_plan_date",
             "fraud_prevention_plan_document",
             "ofpp_responsible_person",
@@ -178,6 +180,8 @@ class UpdateEstablishmentSerializer(USContactFieldsMixin, USStateFieldMixin, Mod
             "irrigation_methods",
             # NOP compliance — OFPP fraud prevention plan
             "fraud_prevention_plan_uploaded",
+            "ofpp_on_file",
+            "ofpp_filename_suspicious",
             "fraud_prevention_plan_date",
             "fraud_prevention_plan_document",
             "ofpp_responsible_person",
@@ -390,6 +394,8 @@ class RetrieveEstablishmentSerializer(ModelSerializer):
             "irrigation_methods",
             # NOP compliance — OFPP fraud prevention plan
             "fraud_prevention_plan_uploaded",
+            "ofpp_on_file",
+            "ofpp_filename_suspicious",
             "fraud_prevention_plan_date",
             "fraud_prevention_plan_document",
             "ofpp_responsible_person",
@@ -681,7 +687,7 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
         last_month_start = (month_start - timedelta(days=1)).replace(day=1)
 
         # --- 1. CONSUMER ENGAGEMENT (2 queries) ---
-        current_month_scans = HistoryScan.objects.filter(
+        current_month_scans = HistoryScan.objects.counted().filter(
             history__parcel__establishment=establishment,
             date__gte=month_start,
         )
@@ -696,11 +702,15 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
             consumer_reach = ip_reach if ip_reach > 0 else (max(1, monthly_scans // 30) if monthly_scans > 0 else 0)
 
         # --- 2. SCAN GROWTH (1 query) ---
-        last_month_count = HistoryScan.objects.filter(
-            history__parcel__establishment=establishment,
-            date__gte=last_month_start,
-            date__lt=month_start,
-        ).count()
+        last_month_count = (
+            HistoryScan.objects.counted()
+            .filter(
+                history__parcel__establishment=establishment,
+                date__gte=last_month_start,
+                date__lt=month_start,
+            )
+            .count()
+        )
 
         if last_month_count > 0:
             scan_growth_percentage = ((monthly_scans - last_month_count) / last_month_count) * 100

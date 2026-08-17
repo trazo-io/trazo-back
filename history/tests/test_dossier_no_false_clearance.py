@@ -426,3 +426,60 @@ class PaddingDefeatsLengthFloorTests(TestCase):
 
         self.assertFalse(result["ready"])
         self.assertIn("osp", [b["key"] for b in result["blockers"]])
+
+
+class AttestationSupportTests(TestCase):
+    """An attestation the operation's own packet contradicts.
+
+    A certifier read of a completed packet (2026-08-09) found G3.0b attesting that
+    "planting stock suppliers are listed on the Supplier List" while that workbook had
+    zero rows, and Materials Application making four "all materials are entered"
+    statements against an empty approved-inputs list. Nothing was falsified — the
+    workbooks are honest about blanks — but a reviewer cross-checks each attestation
+    against the document that should corroborate it, and the operator had no way to see
+    the mismatch before sending.
+
+    A WARNING, never a blocker: the producer authors the plan (§ 205.201(a)).
+    """
+
+    def setUp(self):
+        self.company = Company.objects.create(name="Attestation Orchards")
+        self.establishment = Establishment.objects.create(
+            name="Attest Ranch", company=self.company, state="CA", farming_method="Certified Organic"
+        )
+        self.plan = OrganicSystemPlan.objects.create(establishment=self.establishment, status="draft", version_number=1)
+
+    def _check(self):
+        return OperationReadinessService(self.establishment, "organic")._check_attestation_support()
+
+    def _attest(self, module_key, question_key):
+        self.plan.module_responses = {
+            "schema_version": 1,
+            "modules": {module_key: {"answers": {question_key: {"value": True}}}},
+        }
+        self.plan.save(update_fields=["module_responses"])
+
+    def test_unsupported_materials_attestation_warns(self):
+        self._attest("materials_application", "materials_list_complete")
+        result = self._check()
+        self.assertEqual(result["status"], "warning")
+        self.assertIn("no materials are on the approved list", result["detail"])
+
+    def test_unsupported_supplier_attestation_warns(self):
+        self._attest("g3_2_planting_stock", "suppliers_on_supplier_list")
+        result = self._check()
+        self.assertEqual(result["status"], "warning")
+        self.assertIn("Supplier List is empty", result["detail"])
+
+    def test_no_attestation_no_warning(self):
+        self.assertEqual(self._check()["status"], "ok")
+
+    def test_never_blocks_a_submission(self):
+        """The producer authors the plan — Trazo reports, it does not refuse."""
+        self._attest("materials_application", "materials_list_complete")
+        verdict = OperationReadinessService(self.establishment, "organic").evaluate()
+        self.assertNotIn(
+            "attestation_support",
+            [b["key"] for b in verdict["blockers"]],
+        )
+        self.assertIn("attestation_support", [w["key"] for w in verdict["warnings"]])

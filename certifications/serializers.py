@@ -5,6 +5,7 @@ from rest_framework.validators import UniqueTogetherValidator
 
 from .models import (
     OSP_SECTION_KEYS,
+    AdjoiningLandAffidavit,
     ApprovedInputChangeLog,
     Certification,
     CertificationVerificationLog,
@@ -311,6 +312,7 @@ class OrganicSystemPlanSerializer(serializers.ModelSerializer):
             "submitted_at",
             "approved_at",
             "sections",
+            "module_responses",
             "pdf_document",
             "submission_pdf",
             "approval_document",
@@ -336,6 +338,7 @@ class OrganicSystemPlanSerializer(serializers.ModelSerializer):
             "version_number",
             "previous_version",
             "submission_pdf",  # Set only by submit() action.
+            "module_responses",  # Written only via the module PUT action (WS-2.2).
             "approved_at",
             "approved_national_list_substances",
             "approved_omri_products",
@@ -542,6 +545,90 @@ class OSPChangeNotificationSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "osp", "created_at"]
 
+    def validate(self, attrs):
+        """Run the model's date guard on the API path — DRF does not call Model.clean()."""
+        merged = {
+            **{f: getattr(self.instance, f, None) for f in ("change_category", "date_notified")},
+            **attrs,
+        }
+        date_notified = merged.get("date_notified")
+        if date_notified and date_notified > timezone.localdate():
+            raise serializers.ValidationError(
+                {"date_notified": "The certifier cannot have been notified on a future date."}
+            )
+        return attrs
+
+
+class AdjoiningLandAffidavitSerializer(serializers.ModelSerializer):
+    """USDA Adjoining Land Use Verification (form #25) — signed by the NEIGHBOUR.
+
+    `materials_display` and `is_signed` are exposed read-only so a client renders the same
+    three-state logic the certifier packet does, rather than re-deriving it and drifting.
+    """
+
+    materials_display = serializers.CharField(read_only=True)
+    is_signed = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = AdjoiningLandAffidavit
+        fields = [
+            "id",
+            "public_id",
+            "parcel",
+            "neighbor_name",
+            "neighbor_farm_name",
+            "neighbor_address",
+            "neighbor_phone",
+            "border_side",
+            "neighbor_is_certified_organic",
+            "neighbor_certifier_name",
+            "materials_used",
+            "declares_no_materials",
+            "not_used_on_adjoining_fields",
+            "distance_to_organic_property_ft",
+            "agrees_to_notify",
+            "neighbor_signed_date",
+            "signed_document",
+            "notes",
+            "materials_display",
+            "is_signed",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "public_id", "created_at", "updated_at"]
+
+    def validate_materials_used(self, value):
+        """Reject anything but a list of known codes.
+
+        An unknown code would render verbatim in the certifier packet (deliberately — a
+        stored value is evidence of something), so the guard belongs at the write boundary
+        rather than the render one.
+        """
+        if not isinstance(value, list):
+            raise serializers.ValidationError("materials_used must be a list of codes.")
+        unknown = [c for c in value if c not in AdjoiningLandAffidavit.MATERIAL_CHOICES]
+        if unknown:
+            raise serializers.ValidationError(
+                f"Unknown material code(s): {', '.join(map(str, unknown))}. "
+                f"Valid: {', '.join(AdjoiningLandAffidavit.MATERIAL_CHOICES)}."
+            )
+        return value
+
+    def validate(self, attrs):
+        """ "None of the above" and a list of materials are contradictory answers."""
+        declares_none = attrs.get("declares_no_materials")
+        materials = attrs.get("materials_used")
+        if declares_none is True and materials:
+            raise serializers.ValidationError(
+                {
+                    "declares_no_materials": (
+                        "The neighbour cannot declare 'none of the above' while also listing "
+                        "materials. Clear one of the two."
+                    )
+                }
+            )
+        return attrs
+
 
 class LandownerAffidavitSerializer(serializers.ModelSerializer):
     attestation_default = serializers.SerializerMethodField()
@@ -569,6 +656,11 @@ class LandownerAffidavitSerializer(serializers.ModelSerializer):
             "landowner_address",
             "landowner_phone",
             "yearly_history",
+            # USDA Land Use History Verification form #2
+            "no_materials_applied",
+            "management_period_start",
+            "management_period_end",
+            "parcel_legal_description",
             "last_prohibited_date",
             "attestation_text",
             "attestation_default",

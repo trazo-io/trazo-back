@@ -82,7 +82,13 @@ class TransportExportTests(TestCase):
     def test_affidavit_on_file_no_review(self):
         self.history.transport_affidavit_on_file = True
         self.history.save(update_fields=["transport_affidavit_on_file"])
-        self.assertNotIn("[REVIEW]", self._text())
+        # Mirror of test_missing_affidavit_fires_review: assert the TRANSPORT review is
+        # gone, not that the whole section is review-free. This asserted a bare "[REVIEW]"
+        # and so was failing on the mass-balance and output-reconciliation reviews the same
+        # section legitimately raises for a fixture with no purchase quantities and no
+        # quantity sold — neither has anything to do with a clean-transport affidavit.
+        # (Pre-existing failure, present in the 2026-08-10 baseline; corrected same day.)
+        self.assertNotIn("[REVIEW] 7 CFR 205.272", self._text())
 
     def test_transport_data_not_leaked_to_consumer(self):
         data = PublicHistorySerializer(self.history).data

@@ -392,12 +392,95 @@ class PublicSerializerSeedSupplierLeakageTests(TestCase):
         self.assertNotIn("BN-2025-11-4871", blob, "seed_purchase_invoice leaked into public payload")
         self.assertNotIn("Willits & Newcomb Inc.", blob, "seed_search_attempts supplier identity leaked")
 
+    def test_storage_facility_identifiers_not_public(self):
+        """storage_location / storage_temperature_f are FSMA-204/certifier data.
+
+        Sprint 3.2 put them on the anonymous wire "for cold-chain transparency", but no
+        consumer component ever rendered them (the event registry gives them no consumer
+        surface) — internal facility identifiers ("Warehouse B-Bin-12") rode the public
+        payload for nothing. Removed 2026-08-09; they stay owner/certifier-side.
+        """
+        import json
+
+        blob = json.dumps(PublicHistorySerializer(self.history).data, default=str)
+        self.assertNotIn('"storage_location"', blob, "storage_location key on the public wire")
+        self.assertNotIn('"storage_temperature_f"', blob, "storage_temperature_f key on the public wire")
+
     def test_legitimate_seed_fields_still_present(self):
-        """Sanity: stripping vendor data must not regress legitimate seed transparency."""
+        """Sanity: stripping vendor data must not regress legitimate seed transparency.
+
+        What was PLANTED stays public. `seed_certification_status` left this list on
+        2026-08-15 — see test_self_assigned_certification_status_is_not_public below.
+        """
         event = self._public_planting_event()
-        self.assertEqual(event.get("seed_lot_number"), "LOT-HASS-2025-09")
-        self.assertEqual(event.get("seed_certification_status"), "organic")
         self.assertEqual(event.get("seed_treatment"), "untreated")
+
+    def test_self_assigned_certification_status_is_not_public(self):
+        """A grower dropdown of CERTIFICATION statuses must not ride the anonymous wire.
+
+        `seed_certification_status` is operator-entered and its values are certification
+        statuses ("Certified Organic"). Published anonymously with no self-reported qualifier
+        it is a self-assigned certification-mark claim — the same class as the 2026-08-09 OMRI
+        incident, and the same reason this file's sibling field `seed_treatment_allowed_basis`
+        (value `omri_listed`) has never been public.
+
+        The certified fact a shopper can rely on is the farm's third-party certification,
+        published from structured USDA-OID-matched records by transparency_views.
+        """
+        event = self._public_planting_event()
+        self.assertNotIn("seed_certification_status", event)
+
+    def test_operator_only_keys_are_off_the_public_wire(self):
+        """Keys that ship publicly but no consumer component renders.
+
+        Added 2026-08-15 after a live capture of the anonymous endpoint. Each of these was on
+        the wire with NO `consumer_card` surface in the event registry, i.e. scrapable JSON and
+        nothing else — the same finding, and the same fix, as storage_location above.
+
+          seed_lot_number        a SUPPLIER's batch id ("BN-HASS-2025-L047")
+          block_id               an internal operator id ("Hillside Grove A - East Buffer Zone")
+          growth_stage           no consumer surface
+          production_efficiency  a SELF-GRADED rating the registry withholds from the card on
+          operation_efficiency   stated ECGT/FTC grounds — and it shipped under two names
+        """
+        event = self._public_planting_event()
+        for key in (
+            "seed_lot_number",
+            "block_id",
+            "growth_stage",
+            "production_efficiency",
+            "operation_efficiency",
+        ):
+            self.assertNotIn(
+                key,
+                event,
+                f"{key} is on the anonymous wire with no consumer renderer behind it",
+            )
+
+    def test_vendor_name_does_not_leak_through_free_text(self):
+        """The stripped field is not the only way a vendor reaches the page.
+
+        🔴 Measured live 2026-08-15 on the demo farm: `seed_supplier_name` was correctly
+        stripped, and the same nursery was published verbatim inside `description` —
+        "...nursery stock from Saticoy Grove Nursery for replanting 28 trees...". The existing
+        assertion above passed the whole time because it matched the FULL stored string,
+        "Brokaw Nursery, Saticoy CA", while the prose named the vendor without the city.
+
+        So assert on the distinctive vendor token, not the exact stored value.
+        """
+        import json
+
+        event = ProductionEvent.objects.filter(history=self.history, type="PL").first()
+        event.description = "Received stock from Brokaw Nursery for the east block replant."
+        event.save(update_fields=["description"])
+
+        blob = json.dumps(PublicHistorySerializer(self.history).data, default=str)
+        self.assertNotIn(
+            "Brokaw",
+            blob,
+            "the seed vendor reached the anonymous payload through free text — stripping "
+            "seed_supplier_name is not enough if description/observation are unscrubbed",
+        )
 
 
 class PublicSerializerExtraDataLeakageTests(TestCase):
@@ -1192,12 +1275,45 @@ class PublicSerializerWorkerNameAndLabBlobTests(TestCase):
         self.assertEqual(leaked, [], "the raw soil-lab JSONField leaked to consumers")
 
     def test_lab_analyst_and_numeric_panel_not_in_payload(self):
-        """Only the curated §E-2 facts survive; the panel and the analyst do not."""
+        """Only the curated §E-2 facts survive; the panel and the analyst do not.
+
+        🔴 FLAKY-TEST FIX 2026-08-15. This used to substring-search the whole serialized blob
+        for "cec" and failed at random: a public_id UUID of
+        `39552156-585f-4755-a5a6-d3cec7c7e239` contains "cec", so the assertion fired on an
+        identifier rather than on leaked lab data. The pre-existing `.replace("recent", "")`
+        was the same collision being patched one word at a time.
+
+        A three-letter token cannot be searched across a document containing UUIDs, hashes and
+        filenames. Assert against the EVENT FIELDS instead — which is also the real claim:
+        the numeric soil panel must not appear as data, whatever any identifier happens to
+        spell.
+        """
         import json
 
         blob = json.dumps(PublicHistorySerializer(self.history).data, default=str)
         self.assertNotIn("J. Whitfield", blob, "lab analyst name leaked")
-        self.assertNotIn("cec", blob.lower().replace("recent", ""))
+
+        panel_keys = {"cec", "cec_meq_100g", "test_results", "lab_analyst", "analyst"}
+        # The VALUES this fixture puts in the panel. Asserting on the readings rather than on
+        # the token "cec" — a three-letter substring collides with UUIDs (that is the bug this
+        # test had) and with ordinary prose a grower might write, e.g. a worker named Cecilia.
+        panel_values = {"14.2", "45", "210", "1.8"}
+        for event in self._events():
+            with self.subTest(event=event.get("type")):
+                leaked = panel_keys & set(event.keys())
+                self.assertEqual(leaked, set(), f"numeric soil panel leaked to consumers: {leaked}")
+                # Values too: a panel smuggled into a free-text field is the same leak. Only
+                # free text is searched — a numeric reading has no business inside prose, while
+                # legitimate numeric FIELDS (area, yield) obviously carry numbers.
+                for key in ("description", "observation"):
+                    text = event.get(key)
+                    if isinstance(text, str):
+                        for reading in panel_values:
+                            self.assertNotIn(
+                                reading,
+                                text,
+                                f"soil panel reading {reading} surfaced inside `{key}`",
+                            )
 
     def test_curated_lab_facts_still_survive(self):
         """§E-2: an independent lab IS third-party evidence — keep the facts."""
@@ -1507,9 +1623,35 @@ class PublicSerializerSelfAttestedVerificationTests(TestCase):
         )
 
     def test_checkable_certificate_facts_still_public(self):
-        """Guards against over-stripping: a buyer must still be able to verify the claim."""
+        """Guards against over-stripping: a buyer must still be able to verify the claim.
+
+        2026-08-09 policy reconciliation: this test originally required the farmer-typed
+        certifier NAME to ship too. The claim authority (2026-08-03, written after this
+        test) is stricter — `public_certifier_name` withholds the name unless a USDA-OID
+        database-verified certification backs it, because a typed name beside a
+        certificate number reads as third-party attestation (ECGT 2024/825; FTC 16 CFR
+        260.6). Strict wins for launch. The certificate NUMBER alone remains the
+        buyer-checkable fact; the name unlocks on a database-verified match (case below).
+        """
         event = self._business_event()
         self.assertEqual(event.get("certificate_number"), "DEMO-GGP-0002")
+        self.assertIsNone(
+            event.get("verified_certifier_name"),
+            "farmer-typed certifier name must be withheld without a database-verified certification",
+        )
+
+    def test_certifier_name_ships_when_database_verified(self):
+        """The strict gate opens on real evidence: a USDA-OID-verified certification."""
+        from certifications.models import Certification
+        from history.services.claim_authority import DATABASE_VERIFICATION_SOURCE
+
+        Certification.objects.create(
+            establishment=self.establishment,
+            certification_type="global_gap",
+            verification_status="verified",
+            verification_source=DATABASE_VERIFICATION_SOURCE,
+        )
+        event = self._business_event()
         self.assertEqual(event.get("verified_certifier_name"), "Coast Range Assurance Services")
 
     def test_owner_still_sees_their_own_verification_status(self):

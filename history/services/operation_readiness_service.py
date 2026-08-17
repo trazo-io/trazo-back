@@ -66,7 +66,12 @@ class OperationReadinessService:
         warnings = []
         checked = []
 
-        for check in (self._check_ofpp, self._check_osp, self._check_has_records):
+        for check in (
+            self._check_ofpp,
+            self._check_osp,
+            self._check_attestation_support,
+            self._check_has_records,
+        ):
             try:
                 result = check()
             except Exception:  # noqa: BLE001 — a broken check must not hide the others
@@ -122,6 +127,23 @@ class OperationReadinessService:
     # Individual checks. Each returns a dict or None (not applicable).
     # ------------------------------------------------------------------
 
+    def _ofpp_module_completed(self) -> bool:
+        """True when the operator has completed OSP module G2.0.
+
+        Since 2026-08-09 there are two legitimate routes to a fraud-prevention plan: attach a
+        document the operator wrote elsewhere, or answer G2.0, whose questions ARE the plan
+        (risk areas, mitigation practices, and the review process — the Common OSP Section 2
+        content). Treating only the upload as valid would tell a farmer who just completed the
+        module that they still have a blocker.
+        """
+        from certifications.models import OrganicSystemPlan
+
+        for plan in OrganicSystemPlan.objects.filter(establishment=self.establishment):
+            entry = ((plan.module_responses or {}).get("modules") or {}).get("g2_0_fraud_prevention") or {}
+            if entry.get("completed_at"):
+                return True
+        return False
+
     def _check_ofpp(self):
         """Organic Fraud Prevention Plan — 7 CFR 205.201(a)(3), SOE 2024.
 
@@ -132,6 +154,15 @@ class OperationReadinessService:
             return None
 
         est = self.establishment
+        if self._ofpp_module_completed():
+            return {
+                "key": "ofpp",
+                "status": "ok",
+                "title": "Organic Fraud Prevention Plan on file",
+                "detail": "Authored in OSP module G2.0 — Monitoring & Organic Fraud Prevention.",
+                "fix": "",
+            }
+
         uploaded = bool(getattr(est, "fraud_prevention_plan_uploaded", False))
         doc = getattr(est, "fraud_prevention_plan_document", None)
         doc_name = ""
@@ -152,7 +183,10 @@ class OperationReadinessService:
                     "SOE 2024 (7 CFR 205.201(a)(3)) prohibits certification without a valid "
                     "Organic Fraud Prevention Plan."
                 ),
-                "fix": "Upload the plan on the farm profile, under Organic Fraud Prevention Plan.",
+                "fix": (
+                    "Complete OSP module G2.0 (Monitoring & Organic Fraud Prevention), or "
+                    "upload a plan you already have on the farm profile."
+                ),
             }
 
         if suspicious:
@@ -256,6 +290,91 @@ class OperationReadinessService:
             }
 
         return {"key": "osp", "status": "ok", "title": "Organic System Plan on file", "detail": "", "fix": ""}
+
+    def _check_attestation_support(self):
+        """Attestations the operation's own packet contradicts.
+
+        A certifier read of a completed packet found modules attesting to lists that were
+        empty: G3.0b said "planting stock suppliers are listed on the Supplier List" while
+        the Supplier List had zero rows, and Materials Application made four separate
+        "all materials are entered" statements against a near-empty list. Nothing is
+        falsified — the workbooks are honest about blanks — but an attestation the packet
+        itself contradicts is the fastest route to a noncompliance, and the operator has no
+        way to notice before sending it.
+
+        A WARNING, never a blocker. The producer authors the plan (§ 205.201(a)); Trazo does
+        not refuse their statement or edit it. It reports what a reviewer will see.
+        """
+        if not self._nop_checks_apply():
+            return None
+
+        from certifications.models import OrganicSystemPlan
+
+        plan = OrganicSystemPlan.objects.filter(establishment=self.establishment).order_by("-version_number").first()
+        if plan is None:
+            return None
+
+        modules = (plan.module_responses or {}).get("modules") or {}
+
+        def _answer(module_key, question_key):
+            entry = (modules.get(module_key) or {}).get("answers") or {}
+            return (entry.get(question_key) or {}).get("value")
+
+        unsupported = []
+
+        materials_attested = any(
+            _answer("materials_application", key) is True
+            for key in (
+                "materials_list_complete",
+                "fertilizers_listed",
+                "pest_disease_weed_listed",
+                "production_aids_listed",
+                "post_harvest_contact_listed",
+            )
+        )
+        approved_count = plan.approved_national_list_substances.count() + plan.approved_omri_products.count()
+        if materials_attested and approved_count == 0:
+            unsupported.append(
+                "the Materials Application attests that all input materials are entered, "
+                "but no materials are on the approved list"
+            )
+
+        if _answer("g3_2_planting_stock", "suppliers_on_supplier_list") is True:
+            from certifications.services.common_osp_workbooks import WORKBOOKS_BY_KEY
+
+            spec = WORKBOOKS_BY_KEY.get("supplier_list")
+            try:
+                supplier_rows = list(spec.rows(self.establishment)) if spec else []
+            except Exception:  # noqa: BLE001
+                supplier_rows = []
+            if not supplier_rows:
+                unsupported.append(
+                    "G3.0b attests that planting stock suppliers are on the Supplier List, "
+                    "but the Supplier List is empty"
+                )
+
+        if not unsupported:
+            return {
+                "key": "attestation_support",
+                "status": "ok",
+                "title": "OSP attestations are supported by the packet",
+                "detail": "",
+                "fix": "",
+            }
+
+        return {
+            "key": "attestation_support",
+            "status": "warning",
+            "title": "An OSP attestation is not supported by the rest of the packet",
+            "detail": (
+                "A reviewer cross-checks each attestation against the document that should "
+                "corroborate it: " + "; ".join(unsupported) + "."
+            ),
+            "fix": (
+                "Add the missing entries, or change the answer — an attestation the packet "
+                "itself contradicts reads as a noncompliance."
+            ),
+        }
 
     def _check_has_records(self):
         """An empty dossier wastes the reviewer's time and the farmer's credibility."""

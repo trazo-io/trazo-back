@@ -40,6 +40,31 @@ from users.models import User, WorksIn
 COMPANY_NAME = "Solana Verde Farms LLC (DEMO)"
 ESTABLISHMENT_NAME = "Solana Verde Organic Ranch (DEMO)"
 
+# --- Canonical season figures -------------------------------------------------
+# ONE definition, imported by every module that states a number, because the season
+# yield is repeated in a History field, a harvest event's `yield_quantity`, three
+# event NARRATIVES, a packing carton count and a shipping payload. When those drifted
+# apart (2026-08-13/15) the packet showed 606,270 lb in the summary and "Total yield:
+# 11,200 lbs" in the harvest event on the same production — and CCOF's Production
+# Verification Audit ("estimated production/yield capacity vs. actual production/
+# sales") is precisely the review that opens on that discrepancy.
+#
+# 275,000 kg over 34.4 ha = 7,994 kg/ha = 7,132 lb/acre over 4,250 trees = 143 lb/tree.
+# All three framings land inside commercial California Hass ranges; the previous 5,080 kg
+# was 148 kg/ha, ~50x low, and reconciled perfectly against itself.
+SEASON_YIELD_KG = Decimal("275000")
+SEASON_YIELD_LB = Decimal("606270")  # 275,000 kg x 2.20462, rounded
+SEASON_SOLD_KG = Decimal("260000")  # 94.5%; balance is culls/grade-outs, per the packet
+SEASON_SOLD_LB = Decimal("573201")
+PRE_HARVEST_ESTIMATE_LB = Decimal("590000")  # thinning-time estimate; actual came in +2.8%
+CARTON_NET_LB = Decimal("25")
+SEASON_CARTONS = int(SEASON_YIELD_LB / CARTON_NET_LB)  # 24,250
+
+# The buyer is INVENTED, like every other third-party name here (see above). An earlier
+# scaling pass briefly wrote a real Pacific-Northwest distributor into these records;
+# that is exactly what the note above forbids.
+BUYER_NAME = "Pacific Organic Distributors (POD)"
+
 
 def _dt(year, month, day, hour=8):
     return datetime(year, month, day, hour, 0, tzinfo=dt_tz.utc)
@@ -368,7 +393,7 @@ def create_solana_verde_base(user):
             "pest control, organic inputs, harvest, and post-harvest handling. "
             "USDA Organic certified through PSOC. Lot SVR-2026-HA-001."
         ),
-        production_amount=5080,
+        production_amount=SEASON_YIELD_KG,
         production_unit="kg",
         quality_grade="grade_a",
         harvest_method="manual",
@@ -389,14 +414,14 @@ def create_solana_verde_base(user):
         crop_type=crop_type,
         earning=0,
         # NOP post-finish sales/traceability fields (7 CFR 205.103)
-        sold_to="Pacific Organic Distributors (POD)",
+        sold_to=BUYER_NAME,
         sale_date=date(2026, 4, 15),
-        quantity_sold=Decimal("5080"),
+        quantity_sold=SEASON_SOLD_KG,
         quantity_sold_unit="kg",
         organic_on_invoice=True,
         transport_method="Refrigerated truck",
         destination="POD Distribution Hub, Portland, OR",
-        # NOP retention (7 CFR 205.103(b)(3))
+        # NOP retention (7 CFR 205.103(b)(4))
         retention_until=retention_until,
     )
     production_finished.save()

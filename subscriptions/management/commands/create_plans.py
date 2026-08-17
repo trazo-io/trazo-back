@@ -8,6 +8,86 @@ from subscriptions.models import AddOn, Plan
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
+# The add-on catalogue, at module scope so it can be READ without running the command.
+#
+# It lived inside `create_addons` as a local. That made it untestable: migrations never
+# INSERT add-on rows (0006/0010/0013/0014/0016 only update existing ones), so a freshly
+# migrated database has an empty AddOn table and every guard written against the table
+# passed by iterating nothing. The definitions here are what a fresh environment actually
+# gets, so they are what the guards have to read.
+#
+# `interval` is in the STRIPE shape ("month"/"year") because that is the value that must be
+# exact for billing; `_db_interval` maps it to the model shape.
+ADDON_DEFINITIONS = [
+    {
+        # DISPLAY name only — the slug is an identifier referenced elsewhere and must
+        # not change. "Establishment" is the model name; a farmer buys a FARM
+        # (UI naming rule: Establishment = Farm everywhere a farmer reads it).
+        "name": "Extra Farm",
+        "slug": "extra-establishment",
+        "description": "Add an additional farm to your Compliance plan, billed yearly alongside it",
+        # $149/YEAR, not $30/month.
+        #
+        # 2026-08-14: at $30/mo this add-on cost $360/yr — 45% MORE than the $249/yr plan
+        # it extends. Farm #2 was dearer than farm #1, so the marginal price went UP with
+        # volume, and the operator it penalised hardest was the multi-farm grower, i.e.
+        # the largest and best-funded customer in the pipeline. It also mixed billing
+        # periods on a single invoice: an annual plan with a monthly rider.
+        #
+        # $149 is 60% of base — enough to reflect that a second farm is a second
+        # certificate, a second OSP and a second renewal, while keeping the marginal
+        # price below the first unit, which is the direction it has to run.
+        "price": 149.00,
+        "interval": "year",
+    },
+    {
+        "name": "Extra Production",
+        "slug": "extra-production",
+        "description": "Add 10 extra productions per year beyond your plan limit with full transparency tracking and QR codes",
+        "price": 20.00,
+        "interval": "month",
+        # SUPERSEDED 2026-08-07 by migration 0010. Compliance grants unlimited
+        # productions, so this sells capacity the plan already includes. Seeded inactive
+        # so a reseed cannot resurrect the offer — the flag has to live HERE, not only in
+        # the migration, because create_plans is what runs on a fresh environment.
+        "is_active": False,
+    },
+    {
+        "name": "Extra Parcel",
+        "slug": "extra-parcel",
+        "description": "Add an additional parcel per establishment",
+        "price": 25.00,
+        "interval": "month",
+        # SUPERSEDED 2026-08-07 by migration 0010. BOTH live tiers now grant unlimited
+        # parcels. Charging per parcel also priced farm geometry rather than value: a
+        # parcel is a block, so a 20-block orchard paid 5x a 4-block one of the same
+        # acreage for identical output.
+        "is_active": False,
+    },
+    {
+        # DISPLAY name only — the slug is an identifier referenced elsewhere and must
+        # not change. Renamed from "Blockchain Verification" (2026-08-03): compliance.md
+        # lists "blockchain-verified" as UNSAFE. Blockchain shows a record was not
+        # altered after submission; it attests nothing about the farming itself, and
+        # the rest of the product already says "Blockchain Recording"
+        # (`app.blockchainAddon`).
+        "name": "Blockchain Recording",
+        "slug": "blockchain-verification",
+        "description": "Write finished productions to the Polygon blockchain so the record cannot be altered afterwards",
+        "price": 15.00,
+        "interval": "month",
+        # WITHDRAWN 2026-08-03, not deleted. The consumer-facing blockchain surface was
+        # removed: the only claim the chain honestly supports ("unchanged since
+        # sealing") does not answer what a shopper or a wholesale buyer asks, it was
+        # not among the real competitive gaps vs COG Pro / Quick Organics, and it was
+        # the single largest source of claim-safety defects in the codebase.
+        # Seeded inactive so it stays out of pricing until a real buyer asks for it;
+        # the row is kept so existing references and Stripe IDs do not dangle.
+        "is_active": False,
+    },
+]
+
+
 class Command(BaseCommand):
     help = "Creates initial subscription plans and add-ons in Stripe and syncs with the database"
 
@@ -55,43 +135,82 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS("Setup completed successfully!"))
 
     def create_plans(self):
-        # Starter (Free Trial) - 14-day trial, no credit card required
+        # Starter — FREE FOREVER, no card, no clock.
+        #
+        # 2026-08-13: the trial keys are gone. Starter was created as a 14-day trial that
+        # `expire_trials` canceled, contradicting the October plan in four places ("Actually
+        # free. Starter free forever, pilot free, no card") and the COG Pro migration page, whose
+        # anti-lock-in answer is "Starter is free permanently, not a trial" — the page aimed at
+        # refugees from a product that shuts down 2026-12-31. A COG Pro migrant read that promise,
+        # signed up, and was cut off on day 14.
+        #
+        # The tier is bounded by LIMITS, not time. `trial_*` keys are also what the pricing page
+        # renders its "14-day free trial included" line from, so removing them removes the claim
+        # at the same time.
+        # Starter is bounded by what it can PRODUCE, not by how much it can log.
+        #
+        # 2026-08-14 (pricing research): the previous limiter was `max_productions_per_year: 1`.
+        # A production is a crop cycle, and the ICP — a mid-size CA wholesale orchard — runs ~20
+        # a year. So Starter let a farm model all 20 blocks (parcels are unlimited, deliberately)
+        # and then 403'd at production #2: it blocked at the exact moment the farm began
+        # generating the records the product exists to produce. Nobody can evaluate a
+        # RECORDKEEPING tool on one crop cycle; a renewal needs a season.
+        #
+        # It also lost the free-tier comparison outright. Quick Organics gives 12 months of the
+        # FULL product (live and uncapped on their pricing page as of 2026-08-14), farmOS is free,
+        # and the CCOF Foundation writes California growers' OSPs for free. Against that, a
+        # one-cycle cap is not a free tier, it is a demo.
+        #
+        # The wall moved to the OUTPUT. Log everything, all season, free. The certifier packet,
+        # the audit export, the CA PUR export and the certifier review link are what Compliance
+        # buys — see `compliance_exports` and `subscriptions/gating.py`. That puts the upgrade
+        # prompt on the renewal deadline (a date the certifier sets, not a timer we invented) at
+        # the moment a season of the farm's own records is already in the system.
         starter_features = {
             "max_establishments": 1,
             # Unlimited parcels, deliberately. A Parcel IS a block, so a one-parcel free tier
-            # cannot demonstrate anything to a 20-block orchard — the trial was structurally
-            # incapable of showing value to the exact ICP it exists to attract. The limit that
-            # makes Starter a trial is one PRODUCTION per year, not one block.
+            # cannot demonstrate anything to a 20-block orchard — it would be structurally
+            # incapable of showing value to the exact ICP it exists to attract.
             "max_parcels_per_establishment": -1,
-            "max_productions_per_year": 1,
+            "max_productions_per_year": -1,
             "establishment_full_description": False,
             "monthly_scan_limit": 1000,
-            "storage_limit_gb": 2,
+            # 10 GB, not 2. A season of photo evidence does not fit in 2 GB, and `storage_utils`
+            # REFUSES the upload once projected usage passes the limit — so a 2 GB Starter would
+            # simply have re-imposed the removed wall as a storage failure mid-season.
+            "storage_limit_gb": 10,
             "support_response_time": 72,
-            "trial_no_card_days": 14,
-            "trial_with_card_days": 14,
             "priority_support": False,
             "dedicated_support": False,
             "is_starter": True,
-            "voice_recording": False,
+            # Voice is ON for free. Gating it was backwards: the measured barriers to farm
+            # software adoption are lack of time/labour (63-65%) and insufficient training (53%)
+            # ahead of price (44% cite up-front cost) — so crippling the fastest gloves-on input
+            # path suppresses exactly the logging that creates the records that create the
+            # upgrade. The paid tier sells the artifact, not the keyboard.
+            "voice_recording": True,
             "ai_event_templates": True,
+            # The gate. False here is what makes Starter a free tier rather than a free product.
+            "compliance_exports": False,
         }
 
         # Pilot — hand-provisioned, never self-served, never billed.
         #
-        # Exists because no other plan shape can host an October pilot. A real mid-size CA orchard
-        # maps one block to one Parcel, so it needs 15-25 parcels and ~20 productions a year,
-        # against Starter's 1/1. Enforcement is a hard 403 (subscriptions/permissions.py), so a
-        # Starter pilot dies at parcel #2 and again at production #2.
+        # Exists because no other plan shape can host an October pilot. A pilot is a COMPED
+        # Compliance customer: they get the certifier packet, the audit export, the PUR export and
+        # the certifier link, which is precisely what Starter does not grant, and precisely what
+        # the April conversion verdict has to be measuring.
         #
-        # Three properties are load-bearing and must not be "simplified":
-        #   price = 0        -> mrr_for() returns 0 even on status="active", so pilots never book
-        #                       phantom revenue. Putting a pilot on Enterprise/active instead
-        #                       would report $299/mo of MRR that does not exist.
-        #   slug != "starter" -> expire_trials filters plan__slug="starter"; a Starter-based pilot
-        #                       flips to "canceled" at day 14, which nulls Company.subscription_plan
-        #                       and 403s every creation across the app.
-        #   status "active"   -> subscription_plan resolves only for active/trialing.
+        # Two properties are load-bearing and must not be "simplified":
+        #   price = 0       -> mrr_for() returns 0 even on status="active", so pilots never book
+        #                      phantom revenue. Putting a pilot on Enterprise/active instead
+        #                      would report $299/mo of MRR that does not exist.
+        #   status "active" -> subscription_plan resolves only for active/trialing.
+        #
+        # (`slug != "starter"` used to be a third: expire_trials filtered plan__slug="starter" and
+        # would have canceled a Starter-based pilot on day 14. That filter is gone — Starter is
+        # free forever — so the slug no longer carries that meaning.)
+        #
         # Compliance — the paid tier, and the only one offered.
         #
         # Priced ANNUALLY at $249 against a category that charges per year: COG Pro $99/$155/$179
@@ -111,12 +230,17 @@ class Command(BaseCommand):
             "monthly_scan_limit": -1,
             "storage_limit_gb": 25,
             "support_response_time": 24,
-            "trial_no_card_days": 14,
-            "trial_with_card_days": 14,
+            # No trial keys: Starter is the free path. Two 14-day offers on one page read as
+            # the same thing twice, and the pricing page renders its trial line from these.
             "priority_support": True,
             "dedicated_support": False,
             "voice_recording": True,
             "ai_event_templates": True,
+            # What the $249 actually buys. Starter logs; Compliance produces the documents a
+            # certifier, a county ag commissioner or a wholesale buyer asks for: the OSP renewal
+            # packet, the audit export, the CA PUR export, and the tokenized certifier link.
+            # Enforced in `subscriptions/gating.py`, not merely displayed.
+            "compliance_exports": True,
         }
 
         # Pilot — Compliance, comped. DERIVED, never hand-listed.
@@ -142,7 +266,13 @@ class Command(BaseCommand):
             "is_pilot": True,
         }
 
-        # Base feature sets for each tier (shared between monthly and yearly)
+        # Base feature sets for each tier (shared between monthly and yearly).
+        #
+        # All four carry `compliance_exports: True`. They are RETIRED, not deleted, and every one
+        # of them was a PAID tier — omitting the key would make `has_feature` return False and
+        # silently strip the certifier packet, audit export, PUR export and certifier link from
+        # anyone still on a legacy plan. There are no such subscribers today; that is a reason the
+        # correction is cheap, not a reason to skip it.
         basic_features = {
             "max_establishments": 1,
             "max_parcels_per_establishment": 2,
@@ -157,6 +287,7 @@ class Command(BaseCommand):
             "dedicated_support": False,
             "voice_recording": True,
             "ai_event_templates": True,
+            "compliance_exports": True,
         }
 
         standard_features = {
@@ -173,6 +304,7 @@ class Command(BaseCommand):
             "dedicated_support": False,
             "voice_recording": True,
             "ai_event_templates": True,
+            "compliance_exports": True,
         }
 
         corporate_features = {
@@ -189,6 +321,7 @@ class Command(BaseCommand):
             "dedicated_support": False,
             "voice_recording": True,
             "ai_event_templates": True,
+            "compliance_exports": True,
         }
 
         enterprise_features = {
@@ -205,6 +338,7 @@ class Command(BaseCommand):
             "dedicated_support": True,
             "voice_recording": True,
             "ai_event_templates": True,
+            "compliance_exports": True,
         }
 
         # Annual discount: 2 months free (pay for 10, get 12) = 16.7% savings
@@ -215,7 +349,10 @@ class Command(BaseCommand):
             {
                 "name": "Starter",
                 "slug": "starter",
-                "description": "Free Trial - Try Trazo free for 14 days with core transparency features",
+                "description": (
+                    "Free forever. One farm, unlimited parcels, unlimited productions — log a "
+                    "whole season with no card and no expiry. Certifier documents are Compliance."
+                ),
                 "price": 0.00,
                 "interval": "monthly",
                 "features": starter_features,
@@ -234,8 +371,8 @@ class Command(BaseCommand):
                 "name": "Compliance",
                 "slug": "compliance-yearly",
                 "description": (
-                    "Everything one certified farm needs for renewal season: unlimited parcels "
-                    "and productions, the certifier packet, CA PUR export and the buyer page."
+                    "Everything one certified farm needs for renewal season: the OSP renewal "
+                    "packet, the audit export, the CA PUR export and the certifier review link."
                 ),
                 "price": 249.00,
                 "interval": "yearly",
@@ -275,8 +412,11 @@ class Command(BaseCommand):
                 "interval": "monthly",
                 "features": corporate_features,
             },
-            # Enterprise Monthly
+            # Enterprise Monthly — self-serve RETIRED 2026-08-12 (migration 0012). The lineup is
+            # Starter + Compliance + "Enterprise: talk to us"; a public $299/mo offer beside a
+            # $249/yr tier contradicted it. Row kept for provisioning, never listed.
             {
+                "is_active": False,
                 "name": "Enterprise",
                 "slug": "enterprise-monthly",
                 "description": "Enterprise plan for large-scale operations with unlimited transparency features",
@@ -314,8 +454,9 @@ class Command(BaseCommand):
                 "interval": "yearly",
                 "features": corporate_features,
             },
-            # Enterprise Annual (2 months free)
+            # Enterprise Annual — self-serve RETIRED 2026-08-12 (migration 0012), same as monthly.
             {
+                "is_active": False,
                 "name": "Enterprise",
                 "slug": "enterprise-yearly",
                 "description": "Enterprise plan for large-scale operations with unlimited transparency features (annual billing - 2 months free)",
@@ -337,6 +478,46 @@ class Command(BaseCommand):
                 if plan_data["price"] == 0 or existing_plan.stripe_price_id:
                     self.stdout.write(self.style.WARNING(f"Plan already exists: {product_name}"))
                     continue
+
+            # A RETIRED plan must never reach Stripe, and must never come back active.
+            #
+            # 2026-08-16: this guard did not exist and the Stripe branch below hardcoded
+            # `is_active: True`, ignoring the definition. `create_addons` had the identical bug
+            # and was fixed; `create_plans` was not. The consequence is dormant only while
+            # STRIPE_SECRET_KEY is empty — the free/no-Stripe branch honours the flag — so it
+            # detonates on the exact day Stripe is switched on:
+            #
+            #   * migrations 0009/0012 DEACTIVATE the retired ladder, but on a fresh database
+            #     they run BEFORE any plan row exists and no-op. `create_plans` then creates all
+            #     eleven, and with a key present every priced one came back `is_active=True`.
+            #   * `PlanViewSet` is AllowAny and serves `self_serve_plans()`, so the public
+            #     pricing API answered with TEN plans — Basic $69, Standard $119, Corporate $149,
+            #     Enterprise $299 and their annual twins — beside the $249/yr Compliance tier the
+            #     October pivot replaced them with. `enterprise-*` self-serve was retired BY NAME
+            #     in migration 0012.
+            #   * all eight carry `trial_no_card_days: 7` / `trial_with_card_days: 14`, so the
+            #     pricing page renders "14-day free trial" again — the claim migration 0015
+            #     exists to remove.
+            #   * and it minted live Stripe products and prices for eight withdrawn products, in
+            #     an account meant to have no such thing.
+            #
+            # MEASURED on a pristine `migrate` + `create_plans` database, 2026-08-16.
+            if not plan_data.get("is_active", True):
+                Plan.objects.update_or_create(
+                    slug=plan_data["slug"],
+                    defaults={
+                        "name": plan_data["name"],
+                        "description": plan_data["description"],
+                        "price": plan_data["price"],
+                        "interval": plan_data["interval"],
+                        "features": plan_data["features"],
+                        "is_active": False,
+                    },
+                )
+                self.stdout.write(
+                    self.style.WARNING(f"⊘ Skipped Stripe for retired plan: {product_name} (local row seeded inactive)")
+                )
+                continue
 
             try:
                 # Free plans (Starter, Pilot) never need Stripe. Neither does anything else when
@@ -386,7 +567,11 @@ class Command(BaseCommand):
                         "interval": plan_data["interval"],
                         "features": plan_data["features"],
                         "stripe_price_id": price.id,
-                        "is_active": True,
+                        # Honour the definition, never hardcode True. Anything retired is already
+                        # handled by the guard above and cannot reach here, so this is belt and
+                        # braces — but it is the line that was wrong, and a reader who deletes
+                        # the guard should not find a `True` waiting underneath it.
+                        "is_active": plan_data.get("is_active", True),
                     },
                 )
 
@@ -395,65 +580,116 @@ class Command(BaseCommand):
             except Exception as e:
                 self.stdout.write(self.style.ERROR(f"✗ Error creating plan {product_name}: {str(e)}"))
 
+    # `stripe.Price.create` wants "month"/"year"; `AddOn.interval` stores "monthly"/"yearly"
+    # (same choices as `Plan.interval`, so the two can be rendered by one formatter). The
+    # definitions below are written in the Stripe shape because that is the value that has to
+    # be exact for billing; this maps it for storage.
+    STRIPE_TO_DB_INTERVAL = {"month": "monthly", "year": "yearly"}
+
+    def _db_interval(self, addon_data):
+        """The model-side interval for one add-on definition, or a clear error.
+
+        The first version read `addon_data["interval"]` inline at the three write sites. The
+        WITHDRAWN branch sits OUTSIDE the try/except around the Stripe calls, so an add-on defined
+        without an interval would abort the whole seeder after the plans were written but before
+        the add-ons were — a half-seeded environment and a traceback naming neither the add-on nor
+        the missing key. A price with no period must fail loudly and say which one.
+        """
+        raw = addon_data.get("interval")
+        if raw not in self.STRIPE_TO_DB_INTERVAL:
+            raise ValueError(
+                f"Add-on {addon_data.get('slug')!r} has interval {raw!r}; expected one of "
+                f"{sorted(self.STRIPE_TO_DB_INTERVAL)}. Every add-on must declare the period it "
+                f"bills at — that omission is what let Extra Farm read as $30 with no period."
+            )
+        return self.STRIPE_TO_DB_INTERVAL[raw]
+
+    def _addon_price_drift(self, existing_addon, addon_data):
+        """Describe how the live Stripe price disagrees with this file, or None if it agrees.
+
+        A Stripe price that cannot be read is treated as DRIFT, not as agreement. The whole
+        point of this check is that an unverified id must not be trusted to bill; "the API
+        call failed" is not evidence that the price is correct.
+        """
+        expected_cents = int(round(float(addon_data["price"]) * 100))
+        expected_interval = addon_data["interval"]
+
+        try:
+            price = stripe.Price.retrieve(existing_addon.stripe_price_id)
+        except Exception as e:
+            return f"could not read Stripe price {existing_addon.stripe_price_id} ({e})"
+
+        if getattr(price, "deleted", False) or not getattr(price, "active", True):
+            return f"Stripe price {existing_addon.stripe_price_id} is archived"
+
+        actual_cents = getattr(price, "unit_amount", None)
+        recurring = getattr(price, "recurring", None) or {}
+        actual_interval = recurring.get("interval") if hasattr(recurring, "get") else None
+
+        problems = []
+        if actual_cents != expected_cents:
+            problems.append(f"amount {actual_cents} != {expected_cents} cents")
+        if actual_interval != expected_interval:
+            problems.append(f"interval {actual_interval!r} != {expected_interval!r}")
+        return ", ".join(problems) or None
+
+    def _reprice_addon(self, existing_addon, addon_data, db_interval):
+        """Mint a replacement Stripe price on the existing product and repoint the row.
+
+        Returns True on success. The old price is ARCHIVED rather than deleted — Stripe
+        keeps it referenced by any subscription item already billing on it, and archiving is
+        what stops it being attachable to a new one.
+        """
+        try:
+            old_price = stripe.Price.retrieve(existing_addon.stripe_price_id)
+            product_id = getattr(old_price, "product", None)
+            if not product_id:
+                return False
+
+            new_price = stripe.Price.create(
+                product=product_id,
+                unit_amount=int(round(float(addon_data["price"]) * 100)),
+                currency="usd",
+                recurring={"interval": addon_data["interval"]},
+                metadata={"addon_slug": addon_data["slug"], "environment": self.environment},
+            )
+            try:
+                stripe.Price.modify(existing_addon.stripe_price_id, active=False)
+            except Exception as e:
+                # Non-fatal: the row already points at the correct price, so nothing can be
+                # sold at the old one. Say so rather than fail the seed.
+                self.stdout.write(self.style.WARNING(f"  could not archive old price: {e}"))
+
+            AddOn.objects.filter(pk=existing_addon.pk).update(
+                name=addon_data["name"],
+                description=addon_data["description"],
+                price=addon_data["price"],
+                interval=db_interval,
+                stripe_price_id=new_price.id,
+                is_active=addon_data.get("is_active", True),
+            )
+            self.stdout.write(self.style.SUCCESS(f'✓ Repriced add-on: {addon_data["name"]} -> {new_price.id}'))
+            return True
+        except Exception as e:
+            self.stdout.write(self.style.ERROR(f'✗ Could not reprice {addon_data["name"]}: {e}'))
+            return False
+
     def create_addons(self):
-        addons = [
-            {
-                "name": "Extra Establishment",
-                "slug": "extra-establishment",
-                "description": "Add an additional farm beyond your plan limit",
-                "price": 30.00,
-                "interval": "month",
-            },
-            {
-                "name": "Extra Production",
-                "slug": "extra-production",
-                "description": "Add 10 extra productions per year beyond your plan limit with full transparency tracking and QR codes",
-                "price": 20.00,
-                "interval": "month",
-                # SUPERSEDED 2026-08-07 by migration 0010. Compliance grants unlimited
-                # productions, so this sells capacity the plan already includes. Seeded inactive
-                # so a reseed cannot resurrect the offer — the flag has to live HERE, not only in
-                # the migration, because create_plans is what runs on a fresh environment.
-                "is_active": False,
-            },
-            {
-                "name": "Extra Parcel",
-                "slug": "extra-parcel",
-                "description": "Add an additional parcel per establishment",
-                "price": 25.00,
-                "interval": "month",
-                # SUPERSEDED 2026-08-07 by migration 0010. BOTH live tiers now grant unlimited
-                # parcels. Charging per parcel also priced farm geometry rather than value: a
-                # parcel is a block, so a 20-block orchard paid 5x a 4-block one of the same
-                # acreage for identical output.
-                "is_active": False,
-            },
-            {
-                # DISPLAY name only — the slug is an identifier referenced elsewhere and must
-                # not change. Renamed from "Blockchain Verification" (2026-08-03): compliance.md
-                # lists "blockchain-verified" as UNSAFE. Blockchain shows a record was not
-                # altered after submission; it attests nothing about the farming itself, and
-                # the rest of the product already says "Blockchain Recording"
-                # (`app.blockchainAddon`).
-                "name": "Blockchain Recording",
-                "slug": "blockchain-verification",
-                "description": "Write finished productions to the Polygon blockchain so the record cannot be altered afterwards",
-                "price": 15.00,
-                "interval": "month",
-                # WITHDRAWN 2026-08-03, not deleted. The consumer-facing blockchain surface was
-                # removed: the only claim the chain honestly supports ("unchanged since
-                # sealing") does not answer what a shopper or a wholesale buyer asks, it was
-                # not among the real competitive gaps vs COG Pro / Quick Organics, and it was
-                # the single largest source of claim-safety defects in the codebase.
-                # Seeded inactive so it stays out of pricing until a real buyer asks for it;
-                # the row is kept so existing references and Stripe IDs do not dangle.
-                "is_active": False,
-            },
-        ]
+        addons = ADDON_DEFINITIONS
 
         self.stdout.write(self.style.SUCCESS(f"Creating {len(addons)} add-ons..."))
 
         for addon_data in addons:
+            # Validate the period FIRST, before any branch and before Stripe is touched.
+            #
+            # Called lazily inside the three `update_or_create` blocks, a malformed definition
+            # would still have run `stripe.Product.create` on the paid path — the KeyError lands
+            # while building the Price kwargs, so the PRODUCT is already in Stripe and the price
+            # never arrives. This file's whole theme is that a bad definition must not reach
+            # Stripe (see the withdrawn-add-on guard below); the same applies to one that cannot
+            # state what period it bills at.
+            db_interval = self._db_interval(addon_data)
+
             # A WITHDRAWN add-on must never reach Stripe.
             #
             # The is_active flag used to be applied only at the update_or_create below — AFTER
@@ -468,6 +704,7 @@ class Command(BaseCommand):
                         "name": addon_data["name"],
                         "description": addon_data["description"],
                         "price": addon_data["price"],
+                        "interval": db_interval,
                         "is_active": False,
                     },
                 )
@@ -478,11 +715,57 @@ class Command(BaseCommand):
                 )
                 continue
 
-            # Check if we already have this add-on
+            # No Stripe key -> seed the local row only, same guard as create_plans. Without
+            # this, a fresh no-Stripe environment raised inside stripe.Product.create for
+            # every ACTIVE add-on, the broad except swallowed it, and the one add-on Trazo
+            # actually sells was never written.
+            #
+            # This branch runs BEFORE the "already exists" check on purpose. With the old
+            # order, an environment that once had Stripe keys and no longer does kept a
+            # populated `stripe_price_id` forever — the row was skipped as "already exists"
+            # and the id was never reconciled against anything. Seeding the local row first
+            # means a no-Stripe environment always ends up with a NULL id, which is the only
+            # honest value there: an id nothing can verify must not be allowed to bill.
+            if not self.stripe_enabled:
+                AddOn.objects.update_or_create(
+                    slug=addon_data["slug"],
+                    defaults={
+                        "name": addon_data["name"],
+                        "description": addon_data["description"],
+                        "price": addon_data["price"],
+                        "interval": db_interval,
+                        "stripe_price_id": None,
+                        "is_active": True,
+                    },
+                )
+                self.stdout.write(self.style.SUCCESS(f'✓ Created local-only add-on (no Stripe): {addon_data["name"]}'))
+                continue
+
+            # Check if we already have this add-on — and whether its Stripe price still
+            # matches what this file says it costs.
+            #
+            # 2026-08-16: "already exists -> skip" was a billing defect, not an optimisation.
+            # A Stripe Price is IMMUTABLE: the amount and the recurring interval live on the
+            # price object, not the product, so repricing means minting a new one. Migration
+            # 0014 repriced Extra Farm from $30/MONTH to $149/YEAR by updating the local row,
+            # and this branch then skipped the add-on on every subsequent seed because it
+            # already had an id. The result was a row that displayed "$149.00 per year" while
+            # its `stripe_price_id` still pointed at a live $30/month price — the exact defect
+            # 0014 was written to remove, surviving in the payment rail where nobody reads it.
+            #
+            # So the check is no longer "is there an id" but "does the id still mean what we
+            # publish". Drift mints a replacement price on the SAME product (the product is
+            # the durable object; only the price changes) and repoints the row.
             existing_addon = AddOn.objects.filter(slug=addon_data["slug"]).first()
             if existing_addon and existing_addon.stripe_price_id and not self.force:
-                self.stdout.write(self.style.WARNING(f'Add-on already exists: {addon_data["name"]}'))
-                continue
+                drift = self._addon_price_drift(existing_addon, addon_data)
+                if drift is None:
+                    self.stdout.write(self.style.WARNING(f'Add-on already exists: {addon_data["name"]}'))
+                    continue
+                self.stdout.write(self.style.WARNING(f'↻ Repricing add-on {addon_data["name"]}: {drift}'))
+                if self._reprice_addon(existing_addon, addon_data, db_interval):
+                    continue
+                # Repricing failed -> fall through and rebuild product + price from scratch.
 
             try:
                 # Create product
@@ -508,6 +791,7 @@ class Command(BaseCommand):
                         "name": addon_data["name"],
                         "description": addon_data["description"],
                         "price": addon_data["price"],
+                        "interval": db_interval,
                         "stripe_price_id": price.id,
                         # Honour the definition instead of hardcoding True — a withdrawn add-on
                         # (see "Blockchain Recording") must not be re-activated by a reseed.

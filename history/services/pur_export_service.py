@@ -27,6 +27,7 @@ Scope notes / known limitations (surfaced, not hidden):
 
 import csv
 import io
+import re
 
 # DPR-PML-017C box order. (key, human header, required?). REI/rate/dilution and
 # pre-plant/block are optional per the official form instructions.
@@ -165,6 +166,56 @@ _METHOD_TO_DPR = {
 }
 
 
+_MTRS_EMPTY = {"section": "", "township": "", "range": "", "base_meridian": ""}
+
+# "S14 T8N R2E", "14/8N/2E MD", "Sec 14 Twp 8N Rge 2E M" — the PLSS descriptor a grower
+# copies off their permit or deed. Base & meridian is optional in the string.
+_MTRS_RE = re.compile(
+    r"""(?ix)
+    \b (?:S(?:ec(?:tion)?)?[\s.]*)? (?P<section>\d{1,2}) \b
+    [\s,/-]+
+    (?:T(?:wp|ownship)?[\s.]*)? (?P<township>\d{1,3}\s*[NS]) \b
+    [\s,/-]+
+    (?:R(?:ge|ange)?[\s.]*)? (?P<range>\d{1,3}\s*[EW]) \b
+    (?: [\s,/-]+ (?P<meridian>H|M|S|MD|HM|SB) \b )?
+    """
+)
+
+
+def _parcel_county(parcel) -> str:
+    """The county the operator entered on the Parcel Application (§ 205.202 identity page)."""
+    answers = getattr(parcel, "application_answers", None) or {}
+    if not isinstance(answers, dict):
+        return ""
+    return _s(answers.get("county"))
+
+
+def _parse_mtrs(descriptor) -> dict:
+    """Split a parcel's free-text PLSS descriptor into PUR's four separate fields.
+
+    California's PUR form wants Section, Township, Range and Base & Meridian as distinct
+    boxes (10-14). Trazo stores what the grower actually has — one string on the parcel,
+    "S14 T8N R2E" — and `ChemicalEvent.mtrs_*` is capturable nowhere in the UI, so before
+    this those four boxes could never be filled and every exported row was incomplete.
+
+    Deterministic parse, never a guess: anything that does not match the pattern yields
+    blanks, because a wrong section number on a state filing is worse than an empty one.
+    An explicit value on the event always wins over this fallback.
+    """
+    text = _s(descriptor)
+    if not text:
+        return dict(_MTRS_EMPTY)
+    match = _MTRS_RE.search(text)
+    if not match:
+        return dict(_MTRS_EMPTY)
+    return {
+        "section": match.group("section"),
+        "township": re.sub(r"\s+", "", match.group("township")).upper(),
+        "range": re.sub(r"\s+", "", match.group("range")).upper(),
+        "base_meridian": (match.group("meridian") or "").upper(),
+    }
+
+
 def _fmt_dt(value):
     """Render a datetime in 24-hour (military) form per DPR boxes 17-18."""
     if not value:
@@ -281,7 +332,12 @@ class PURExportService:
         # the name. Resolve the logged county name to its code and emit "37 (San Diego)".
         # If the name doesn't resolve to a CA county, leave box 10 BLANK (so the
         # completeness check flags it) rather than emit an unvalidatable name.
-        county_name = _s(event.application_county) or _s(event.ca_dpr_permit_county)
+        # Falls back to the county the operator entered on the Parcel Application — the
+        # same PLSS-adjacent identity data as MTRS above, and the value they typed, not an
+        # inference. `planted_area` deliberately does NOT fall back to `parcel.area`: the
+        # box asks for planted acres and a parcel can be partly planted, so deriving it
+        # would overstate a state filing. Parse what the operator wrote; never infer.
+        county_name = _s(event.application_county) or _s(event.ca_dpr_permit_county) or _parcel_county(parcel)
         county_code = _county_code(county_name)
         county_display = f"{county_code} ({county_name})" if county_code else ""
 
@@ -301,6 +357,8 @@ class PURExportService:
         except (TypeError, ValueError, ZeroDivisionError):
             rate_display = ""
 
+        mtrs_fallback = _parse_mtrs(getattr(parcel, "section_township_range", None))
+
         product_mfr = _s(event.commercial_name)
         manufacturer = _s(event.manufacturer)
         if manufacturer:
@@ -318,10 +376,10 @@ class PURExportService:
             "site_id": _s(event.site_id),
             "planted_area": planted_display,
             "county": county_display,
-            "section": _s(event.mtrs_section),
-            "township": _s(event.mtrs_township),
-            "range": _s(event.mtrs_range),
-            "base_meridian": _s(event.mtrs_base_meridian),
+            "section": _s(event.mtrs_section) or mtrs_fallback["section"],
+            "township": _s(event.mtrs_township) or mtrs_fallback["township"],
+            "range": _s(event.mtrs_range) or mtrs_fallback["range"],
+            "base_meridian": _s(event.mtrs_base_meridian) or mtrs_fallback["base_meridian"],
             "commodity": commodity,
             "field_location": _s(getattr(parcel, "name", None)) or _s(event.block_id),
             "application_start": _fmt_dt(event.application_start),

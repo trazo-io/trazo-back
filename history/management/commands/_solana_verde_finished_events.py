@@ -40,6 +40,19 @@ from history.models import (
     WeatherEvent,
 )
 
+from ._solana_verde_base import BUYER_NAME, PRE_HARVEST_ESTIMATE_LB, SEASON_CARTONS, SEASON_YIELD_KG, SEASON_YIELD_LB
+
+# The fixture's packing and shipping events describe ONE truckload, not the season:
+# 573,201 lb of sold fruit is ~14 refrigerated loads, and a single BOL for 286 short
+# tons on one trailer is the kind of number a certifier notices immediately.
+FIRST_LOAD_CARTONS = 1640
+FIRST_LOAD_KG = 18600
+FIRST_LOAD_LB = 41006
+SEASON_LOADS = 14
+# Pre-thinning estimate, before the fruit-drop revision to PRE_HARVEST_ESTIMATE_LB.
+EARLY_ESTIMATE_LB = 650000
+THINNED_LB = 65000
+
 # Avocado-specific Unsplash images (free-to-use Unsplash License)
 AVOCADO_IMAGES = {
     "avocado_grove": [
@@ -632,14 +645,14 @@ def create_finished_events(production, user, demo_images=None):
             "for evaporative cooling on most exposed trees. Estimated 5-8% young fruit drop "
             "from heat stress. No structural damage to trees. Some sunburn on south-facing "
             "fruit — will affect cosmetic grade at harvest. Yield estimate revised from "
-            "12,000 to 11,200 lbs."
+            f"{EARLY_ESTIMATE_LB:,} to {int(PRE_HARVEST_ESTIMATE_LB):,} lbs."
         ),
         created_by=user,
         performed_by="Maria Elena Gutierrez",
         type=WeatherEvent.HIGH_TEMPERATURE,
         observation=(
             "Peak temps 40.5C/105F on day 2. Emergency irrigation activated. "
-            "Estimated 5-8% fruit drop. Yield revised to ~11,200 lbs."
+            f"Estimated 5-8% fruit drop. Yield revised to ~{int(PRE_HARVEST_ESTIMATE_LB):,} lbs."
         ),
         extra_data={
             "event_name": "Santa Ana Heat Wave",
@@ -647,7 +660,7 @@ def create_finished_events(production, user, demo_images=None):
             "start_date": "2026-03-14T08:00",
             "end_date": "2026-03-16T20:00",
             "fruit_drop_pct": "5-8",
-            "yield_revision_lbs": 11200,
+            "yield_revision_lbs": int(PRE_HARVEST_ESTIMATE_LB),
         },
     )
 
@@ -900,8 +913,8 @@ def create_finished_events(production, user, demo_images=None):
             "improve size of remaining avocados. Targeting premium size (48-60 count per "
             "carton). Removed sun-damaged fruit from heat wave, undersized fruit, and "
             "clusters too dense for proper development. All removed fruit left on ground "
-            "as organic matter. Estimated 1,200 lbs of fruit removed. "
-            "Remaining crop load: approximately 11,200 lbs estimated yield."
+            f"as organic matter. Estimated {THINNED_LB:,} lbs of fruit removed. "
+            f"Remaining crop load: approximately {int(PRE_HARVEST_ESTIMATE_LB):,} lbs estimated yield."
         ),
         created_by=user,
         performed_by="Harvest crew (12 workers)",
@@ -937,7 +950,7 @@ def create_finished_events(production, user, demo_images=None):
             "(minimum 21.5% for Hass). Fruit sorted field-side: Premium 72%, Grade A 20%, "
             "Grade B 8% (mostly sunburn cosmetic). All bins moved to packing shed within "
             "2 hours of harvest. Pre-cooling to 45F within 4 hours. "
-            "Total yield: 11,200 lbs (5,080 kg)."
+            f"Total yield: {int(SEASON_YIELD_LB):,} lbs ({int(SEASON_YIELD_KG):,} kg)."
         ),
         created_by=user,
         performed_by="Harvest crew (18 workers), Maria Elena Gutierrez (QA)",
@@ -947,7 +960,7 @@ def create_finished_events(production, user, demo_images=None):
         block_id="Hillside Grove A",
         area_covered=Decimal("34.40"),
         area_unit="ha",
-        yield_quantity=Decimal("5080.00"),
+        yield_quantity=SEASON_YIELD_KG,
         yield_unit="kg",
         harvest_quality_grade="grade_a",
         fuel_consumed=Decimal("8.00"),
@@ -961,7 +974,7 @@ def create_finished_events(production, user, demo_images=None):
         storage_temperature_f=Decimal("45.0"),
         observation=(
             "Premium grade achieved: 72% premium, 20% Grade A, 8% Grade B (cosmetic). "
-            "Dry matter 26.4%. Yield 5,080 kg total."
+            f"Dry matter 26.4%. Yield {int(SEASON_YIELD_KG):,} kg total."
         ),
         extra_data={
             "crew_size": 18,
@@ -991,8 +1004,9 @@ def create_finished_events(production, user, demo_images=None):
             "grader), (3) Quality grading (manual inspection), (4) Pack into 25-lb cartons "
             "with Solana Verde branding + Trazo QR stickers, (5) Pre-cool to 40F in "
             "forced-air cooler, (6) Cold storage at 40F, 90% humidity. "
-            "Total packed: 448 cartons (25 lbs each). Ready for POD pickup on 4/14. "
-            "Lot: SVR-2026-HA-001."
+            f"Season total packed: {SEASON_CARTONS:,} cartons (25 lbs each), shipped over "
+            f"{SEASON_LOADS} refrigerated loads. First load ready for POD pickup on 4/14: "
+            f"{FIRST_LOAD_CARTONS:,} cartons. Lot: SVR-2026-HA-001."
         ),
         created_by=user,
         performed_by="Packing crew (6 workers), Maria Elena Gutierrez (QA)",
@@ -1010,7 +1024,7 @@ def create_finished_events(production, user, demo_images=None):
         storage_location="On-farm packing shed cooler",
         storage_temperature_f=Decimal("40.0"),
         extra_data={
-            "cartons_packed": 448,
+            "cartons_packed": SEASON_CARTONS,
             "carton_weight_lbs": 25,
             "lot_id": "SVR-2026-HA-001",
             "qr_stickers_applied": True,
@@ -1028,8 +1042,8 @@ def create_finished_events(production, user, demo_images=None):
         index=22,
         date=_dt(2026, 4, 13, 10),
         description=(
-            "Production season summary for POD buyer package: Total yield 11,200 lbs "
-            "(5,080 kg) Hass avocados from 85-acre Hillside Grove A. Premium grade 72%, "
+            f"Production season summary for POD buyer package: Total yield {int(SEASON_YIELD_LB):,} lbs "
+            f"({int(SEASON_YIELD_KG):,} kg) Hass avocados from 85-acre Hillside Grove A. Premium grade 72%, "
             "Grade A 20%, Grade B 8%. Organic certification DEMO-ORG-0000 renewed March 2026 "
             "(passed with no violations). Season challenges: March heat wave caused 5-8% fruit "
             "drop and cosmetic sunburn on exposed fruit. Pest management: biological control "
@@ -1062,11 +1076,16 @@ def create_finished_events(production, user, demo_images=None):
         history=production,
         index=23,
         date=_dt(2026, 1, 8, 7),
+        # 2026-08-15: rewritten. The old text named the nursery inline (which the consumer
+        # payload strips from `seed_supplier_name` and therefore has to strip here too — see
+        # privacy.redact_own_vendor_names) and asserted "All 3 required supplier searches
+        # documented per NOP 5029" on a shopper-visible surface. 205.204 sets no supplier
+        # count, and demo data that states a requirement the regulation does not make is how a
+        # fabricated claim ends up quoted in a screenshot.
         description=(
-            "Ordered and received organic Hass avocado nursery stock from Saticoy Grove Nursery "
-            "for replanting 28 trees lost to root rot in east buffer zone (rows 1-12). "
-            "Certified organic planting stock per NOP 7 CFR 205.204. "
-            "All 3 required supplier searches documented per NOP 5029."
+            "Replanted 28 Hass avocado trees in the east buffer zone (rows 1-12) after "
+            "root-rot losses. Nursery stock and its organic certificate are on file; supplier "
+            "contacts are recorded on this event."
         ),
         created_by=user,
         performed_by="Maria Elena Gutierrez",
@@ -1128,12 +1147,14 @@ def create_finished_events(production, user, demo_images=None):
         # 06:30 PDT (UTC-7) = 13:30 UTC. Narrative time references are PT.
         date=_dt(2026, 4, 15, 13, 30),
         description=(
-            "Refrigerated shipment of lot SVR-2026-HA-001 to Pacific Organic Distributors (POD). "
-            "448 cartons (5,080 kg, 11,200 lbs net) loaded at 06:00 PT into POD-contracted "
+            f"Refrigerated shipment of lot SVR-2026-HA-001 to {BUYER_NAME} — load 1 of "
+            f"{SEASON_LOADS} for the season. "
+            f"{FIRST_LOAD_CARTONS:,} cartons ({FIRST_LOAD_KG:,} kg, {FIRST_LOAD_LB:,} lbs net) "
+            "loaded at 06:00 PT into POD-contracted "
             "refrigerated trailer (Cool-Chain Logistics #CCL-2814) at 38°F set point. "
             "Bill of Lading BOL-POD-2026-04-15-007 signed by driver Tomás Reyes and Maria "
             "Elena Gutierrez. Pre-loading: trailer interior swept and inspected — no "
-            "non-organic residue. All 448 cartons bear lot SVR-2026-HA-001 sticker + Trazo "
+            f"non-organic residue. All {FIRST_LOAD_CARTONS:,} cartons bear lot SVR-2026-HA-001 sticker + Trazo "
             "QR code. PO #POD-PO-2026-0412 from POD Procurement. Invoice #SVR-INV-2026-041 "
             "marks each line item ORGANIC per 7 CFR 205.103(b)(2) audit-trail documentation. Departed Fallbrook 06:30 PT, "
             "ETA POD Portland Distribution Hub 2026-04-16 18:00 PT (1,030 mi, ~26 hrs "
@@ -1152,17 +1173,18 @@ def create_finished_events(production, user, demo_images=None):
         certificate_number="DEMO-ORG-0000",
         observation=(
             "Sale and delivery record per § 205.501(a)(21) and § 205.103(b)(2). "
-            "FSMA 204 Critical Tracking Event (shipping) populated. All 448 cartons "
+            f"FSMA 204 Critical Tracking Event (shipping) populated. All {FIRST_LOAD_CARTONS:,} cartons "
             "labelled 'Organic' with farm lot ID, traceable end-to-end."
         ),
         extra_data={
-            "buyer_name": "Pacific Organic Distributors (POD)",
+            "buyer_name": BUYER_NAME,
             "buyer_address": "1800 Prairie Rd, Eugene, OR 97402",
             "destination": "POD Distribution Hub, 5005 NE Portland Hwy, Portland, OR 97218",
             "lot_id": "SVR-2026-HA-001",
-            "cartons_shipped": 448,
-            "net_weight_kg": 5080,
-            "net_weight_lbs": 11200,
+            "cartons_shipped": FIRST_LOAD_CARTONS,
+            "net_weight_kg": FIRST_LOAD_KG,
+            "net_weight_lbs": FIRST_LOAD_LB,
+            "load_sequence": "1 of %d" % SEASON_LOADS,
             "bill_of_lading": "BOL-POD-2026-04-15-007",
             "purchase_order": "POD-PO-2026-0412",
             "invoice_number": "SVR-INV-2026-041",

@@ -305,6 +305,13 @@ class AttachmentsAPITests(_Base):
         self.user = User.objects.create_user(email="grower-wb@test.com", password="x")
         WorksIn.objects.create(user=self.user, company=self.company, role=WorksIn.COMPANY_ADMIN)
         self.osp = OrganicSystemPlan.objects.create(establishment=self.establishment, version_number=1, status="draft")
+        # Downloading a workbook is a Compliance artifact (2026-08-15, subscriptions/gating.py) —
+        # the four Common OSP attachments are named on the price list. The summary branch
+        # (no `?workbook=`) stays open on every plan; only the .xlsx download is gated, so
+        # `test_summary_*` here would pass either way and the download cases need a plan.
+        from subscriptions.testing import grant_compliance_exports
+
+        grant_compliance_exports(self.company)
         self.client.force_authenticate(user=self.user)
 
     def _url(self, query=""):

@@ -9,12 +9,13 @@ from django.utils.dateparse import parse_date, parse_datetime
 
 from rest_framework import filters, mixins, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from backend.permissions import CompanyNestedViewSet
 from history.serializers import HistorySerializer
+from product.services.buffer_zones import BufferZoneError, normalize_buffer_rows
 from subscriptions.permissions import HasParcelCreationPermission
 
 from .models import Parcel, ParcelCropHistory, Product
@@ -84,6 +85,117 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         context = super().get_serializer_context()
         context["request"] = self.request
         return context
+
+    # WS-5 Parcel Application (plan #30, Appendix A §f) — the per-parcel § 205.202
+    # module. Definition comes from the shared osp_modules schema; answers bind to
+    # real Parcel columns (parcel_field whitelist) or land in application_answers.
+    # Completion always reads LIVE model state via parcel_application_status.
+    _APPLICATION_PARCEL_FIELDS = {
+        "name": str,
+        "apn": str,
+        "section_township_range": str,
+        "address": str,
+        "container_production": bool,
+        "treated_lumber_present": bool,
+        "treated_lumber_description": str,
+        "treated_lumber_install_date": "date",
+        "date_began_managing": "date",
+    }
+
+    # Buffer-row keys are owned by product.services.buffer_zones (CANONICAL_KEYS +
+    # LEGACY_ALIASES). This viewset deliberately keeps no second copy of that list.
+
+    def _application_payload(self, parcel):
+        from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
+        from certifications.osp_modules.schema import serialize_module
+        from product.services.parcel_application_status import parcel_application_status, parcel_application_values
+
+        values = parcel_application_values(parcel)
+
+        return {
+            "definition": serialize_module(PARCEL_APPLICATION),
+            "values": values,
+            "buffer_zones": parcel.buffer_zones or [],
+            "crop_history_count": parcel.crop_history.count(),
+            "has_polygon": bool(parcel.polygon),
+            # E-page map render (authenticated surface; CardWithMap wants both)
+            "polygon": parcel.polygon or None,
+            "map_metadata": parcel.map_metadata or None,
+            "has_affidavit": parcel.landowner_affidavits.exists(),
+            "status": parcel_application_status(parcel),
+        }
+
+    @action(detail=True, methods=["get", "put"], parser_classes=[JSONParser])
+    def application(self, request, pk=None, parcel_pk=None, company_pk=None, establishment_pk=None):
+        """Parcel Application module: definition + live-bound values (+ save)."""
+        from datetime import date as _date
+
+        establishments = self.company.establishment_set.all()
+        parcel = get_object_or_404(Parcel, id=pk, establishment__in=establishments.all())
+
+        if request.method == "PUT":
+            question_to_field = {
+                "parcel_name": "name",
+                "apn": "apn",
+                "section_township_range": "section_township_range",
+                "address": "address",
+                "container_production": "container_production",
+                "treated_lumber_present": "treated_lumber_present",
+                "treated_lumber_description": "treated_lumber_description",
+                "treated_lumber_install_date": "treated_lumber_install_date",
+                "date_began_managing": "date_began_managing",
+            }
+            incoming = request.data.get("values", {})
+            if not isinstance(incoming, dict):
+                return Response({"detail": "values must be an object"}, status=400)
+
+            answers = dict(parcel.application_answers or {})
+            update_fields = set()
+            for key, value in incoming.items():
+                field = question_to_field.get(key)
+                if field:
+                    expected = self._APPLICATION_PARCEL_FIELDS[field]
+                    if expected == "date":
+                        if value in (None, ""):
+                            value = None
+                        else:
+                            try:
+                                value = _date.fromisoformat(str(value))
+                            except ValueError:
+                                return Response({"detail": f"{key}: invalid date"}, status=400)
+                    elif expected is bool:
+                        # bool("false") is True — JSON clients send real booleans,
+                        # but a string must not silently flip a compliance flag.
+                        if isinstance(value, str):
+                            value = value.strip().lower() in ("true", "1", "yes")
+                        else:
+                            value = bool(value)
+                    elif value is not None:
+                        value = str(value)
+                    setattr(parcel, field, value)
+                    update_fields.add(field)
+                else:
+                    # Non-model answer. None deletes; everything else stores as-is.
+                    if value is None:
+                        answers.pop(key, None)
+                    else:
+                        answers[key] = value
+
+            if "buffer_zones" in request.data:
+                # One vocabulary, owned by product.services.buffer_zones — the Parcel page
+                # and this wizard MUST normalize identically, or a save on one surface
+                # destroys what the other wrote.
+                try:
+                    parcel.buffer_zones = normalize_buffer_rows(request.data.get("buffer_zones"))
+                except BufferZoneError as exc:
+                    return Response({"detail": str(exc)}, status=400)
+                update_fields.add("buffer_zones")
+
+            parcel.application_answers = answers
+            update_fields.add("application_answers")
+            parcel.save(update_fields=list(update_fields))
+
+        return Response(self._application_payload(parcel))
 
     @action(detail=True, methods=["get"], url_path="transition-status")
     def transition_status(self, request, pk=None, parcel_pk=None, company_pk=None, establishment_pk=None):
@@ -236,7 +348,7 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # anything the database rejects (an over-length string, a bad numeric) surfaced
         # as a 500 DataError. Finalization is the moment a grower publishes their season
         # — it must fail with a usable field error, not a server error page.
-        invalid = self._validate_finalization_fields(history_data)
+        invalid = self._validate_finalization_fields(history_data, current_history=parcel.current_history)
         if invalid:
             return Response(invalid, status=status.HTTP_400_BAD_REQUEST)
 
@@ -277,7 +389,7 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     # because finish() bypasses serializer validation entirely.
     _FINALIZE_FIELDS = ("lot_id", "production_unit", "quality_grade", "harvest_method")
 
-    def _validate_finalization_fields(self, history_data):
+    def _validate_finalization_fields(self, history_data, current_history=None):
         """
         Return a DRF-shaped error dict for any finalization field the model would reject,
         or None when everything is acceptable.
@@ -326,6 +438,17 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             # completed/ongoing counters classify by date and still say "ongoing".
             elif finish_dt > timezone.now():
                 errors["finish_date"] = ["A production cannot be finalized with a finish date in the future."]
+            # A season cannot end before it starts — the operation dossier
+            # otherwise prints windows like "2026-08-09 – 2026-08-08" verbatim.
+            elif (
+                current_history is not None
+                and current_history.start_date
+                and finish_dt.date() < current_history.start_date.date()
+            ):
+                errors["finish_date"] = [
+                    "Finish date cannot be before the production's start date "
+                    f"({current_history.start_date.date().isoformat()})."
+                ]
 
         return errors or None
 

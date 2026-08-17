@@ -84,9 +84,21 @@ class PrivacyService:
         if accept_encoding:
             components.append(accept_encoding)
 
-        # Screen resolution (if available via JS on frontend)
-        # This would be passed via request data, not headers
-        screen_resolution = request.GET.get("screen", "")
+        # Screen resolution (measured by JS on the frontend; there is no header for it).
+        #
+        # Read from the request BODY first. Its own comment said "passed via request data", but the
+        # lookup was `request.GET` — and `ProductDetail` sends `screen` in the POST body, so this
+        # component was empty on every real scan. The fingerprint was therefore
+        # user-agent + Accept-Language + Accept-Encoding alone: a DEVICE-CLASS signature, identical
+        # for any two people on the same phone model, browser version and language. Dropping the
+        # one client-measured component made same-device collisions markedly more likely, which
+        # matters because a collision inside the dedup window marks a real second visitor's scan
+        # as a duplicate. GET is kept as a fallback for any caller that passes it as a query param.
+        screen_resolution = ""
+        if hasattr(request, "data"):
+            screen_resolution = str(request.data.get("screen", "") or "")
+        if not screen_resolution:
+            screen_resolution = request.GET.get("screen", "")
         if screen_resolution:
             components.append(screen_resolution[:20])
 

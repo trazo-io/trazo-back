@@ -16,6 +16,7 @@ import io
 import logging
 import os
 import re
+from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 
@@ -27,6 +28,7 @@ from reportlab.lib.units import inch
 from reportlab.platypus import Image as RLImage
 from reportlab.platypus import KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+from common.field_registry import NO_TREATMENT_ANSWERS, NON_ORGANIC_SEED_STATUSES
 from common.us_states import resolve_establishment_state
 
 logger = logging.getLogger(__name__)
@@ -88,6 +90,169 @@ APPLICATION_METHOD_LABELS = {
     "chemigation": "Chemigation",
     "soil_incorporation": "Soil incorporation",
 }
+
+
+#: Units that mean "a countable container", i.e. the ones `box_weight_lb` can convert to pounds.
+#: Extracted from an inline literal so the boxes→pounds reconciliation and the mass-balance
+#: section share one vocabulary — two lists would be the same defect this module just fixed.
+_BOX_LIKE_UNITS = frozenset({"boxes", "box", "cartons", "carton", "lugs", "lug"})
+
+
+def _is_box_unit(unit, *, blank_counts_as_boxes=False):
+    """True when a sold-quantity unit can be multiplied by `box_weight_lb`.
+
+    `blank_counts_as_boxes` is for legacy rows: `History.quantity_sold_unit` was often left
+    empty, and the field only ever paired with `box_weight_lb`, which is meaningless for a
+    mass unit. Never pass it for `SalesRecord` rows — those always carry an explicit unit.
+    """
+    cleaned = (unit or "").strip().lower()
+    if not cleaned:
+        return blank_counts_as_boxes
+    return cleaned in _BOX_LIKE_UNITS
+
+
+@dataclass(frozen=True)
+class SalesDisclosure:
+    """What the packet may say about who bought this production, and on what basis.
+
+    ``source`` is "sales_records" or "legacy"; ``quantity`` is None when the rows disagree on
+    unit and therefore cannot be summed honestly.
+    """
+
+    buyer: str
+    sale_date: object
+    organic_on_invoice: bool
+    quantity: object
+    quantity_unit: str
+    source: str
+    #: § 205.301 labeling category the product is sold under, which § 205.103(b)(3) requires
+    #: records to carry. "" means not documented — never inferred. When sales rows disagree
+    #: (a lot split across categories), this is "" and `label_categories` holds the set, so
+    #: the packet reports the split instead of silently picking one.
+    label_category: str = ""
+    label_categories: tuple = ()
+
+
+def resolve_sales_disclosure(production):
+    """Single source of truth for the production's sales facts.
+
+    SOE (§ 205.307(a)) supports multiple itemized sales per production, so `SalesRecord` rows
+    win when present and the legacy single `sold_to` / `quantity_sold` / `organic_on_invoice`
+    fields on `History` are the fallback.
+
+    WHY THIS IS A FUNCTION AND NOT A BRANCH
+    ---------------------------------------
+    That precedence was implemented inline in the packet body while the compliance-snapshot
+    row branched on `production.sold_to` alone. The result, verified on a rendered PDF
+    (2026-08-10): page 1 said "Sales documentation (§ 205.103) — REVIEW: Add buyer +
+    organic-on-invoice flag" while page 12 of the same document itemised the buyer, the
+    invoice number and the bill of lading. The packet contradicted itself, and it under-
+    reported the operation's own compliance to the certifier who reads page 1 first.
+
+    This is the third recorded instance of one defect class: two writers for the same fact
+    with disjoint key vocabularies, where fixing the surface under audit leaves the sibling
+    surface wrong. So the precedence lives here once, and callers ask.
+    """
+    try:
+        sales = list(production.sales_records.all())
+    except Exception:  # noqa: BLE001 — relation always present in practice
+        sales = []
+
+    if sales:
+        first_unit = (sales[0].quantity_unit or "").strip()
+        same_unit = all((s.quantity_unit or "").strip() == first_unit for s in sales)
+        # A lot can legitimately ship under more than one labeling category. Collect the
+        # distinct set; only collapse to a single value when the rows agree, so the packet
+        # never picks one category on the operation's behalf.
+        categories = tuple(sorted({(s.organic_label_category or "").strip() for s in sales} - {""}))
+        return SalesDisclosure(
+            buyer=", ".join(sorted({(s.buyer_name or "").strip() for s in sales if (s.buyer_name or "").strip()})),
+            sale_date=max((s.sale_date for s in sales if s.sale_date), default=None),
+            # ALL rows must be flagged. One unflagged shipment means the operation cannot
+            # claim its organic identification was carried on every invoice.
+            organic_on_invoice=all(s.organic_on_invoice for s in sales),
+            quantity=sum(float(s.quantity) for s in sales) if same_unit else None,
+            quantity_unit=first_unit,
+            source="sales_records",
+            label_category=categories[0] if len(categories) == 1 else "",
+            label_categories=categories,
+        )
+
+    legacy_category = (getattr(production, "organic_label_category", "") or "").strip()
+    return SalesDisclosure(
+        buyer=(production.sold_to or "").strip(),
+        sale_date=production.sale_date,
+        organic_on_invoice=bool(production.organic_on_invoice),
+        quantity=production.quantity_sold,
+        quantity_unit=(production.quantity_sold_unit or "").strip(),
+        source="legacy",
+        label_category=legacy_category,
+        label_categories=(legacy_category,) if legacy_category else (),
+    )
+
+
+def _seed_treatment_basis_display(event):
+    """The § 205.204(a)(2) allowability basis for a seed treatment, in regulation wording.
+
+    Prints the ask when a treatment is named with no basis, rather than a blank: silence in a
+    certifier packet reads as "nothing to report" instead of "not yet recorded". Says nothing
+    at all when no treatment was named — absence of a treatment is not a missing record, and
+    neither is a grower writing "None" in the box.
+
+    🔴 2026-08-15: this used to test the treatment string for truthiness alone. The input
+    is free text whose own placeholder reads "e.g., Rhizobium inoculant, None", so "None" is
+    the answer the UI invites — and the packet printed "Not recorded — 205.204(a)(2) asks why
+    the treatment is allowed" beside it, telling a grower who correctly reported that nothing
+    was applied that their record had a gap. A fabricated finding in a certifier packet is the
+    same class of error as a fabricated claim.
+    """
+    from history.models import ProductionEvent
+
+    basis = (getattr(event, "seed_treatment_allowed_basis", None) or "").strip()
+    if basis:
+        return dict(ProductionEvent.SEED_TREATMENT_BASIS_CHOICES).get(basis, basis)
+    treatment = (getattr(event, "seed_treatment", None) or "").strip()
+    if treatment and treatment.lower() not in NO_TREATMENT_ANSWERS:
+        return "Not recorded — \u00a7 205.204(a)(2) asks why the treatment is allowed"
+    return None
+
+
+def _target_or_purpose(event):
+    """The form's "Purpose / Reason for Use" for one input application.
+
+    Prefers the specific target where one exists (a pest name says more than a use category),
+    and falls back to the § 205.601 use category — which is the only answer a fertilizer has.
+    Both are shown when both are recorded, because "aphids" and "insecticide use" are different
+    facts and § 205.601 lists synthetics by the latter.
+    """
+    from history.models import ChemicalEvent
+
+    target = (getattr(event, "target_pest_disease", None) or "").strip()
+    purpose_key = (getattr(event, "application_purpose", None) or "").strip()
+    purpose = dict(ChemicalEvent.APPLICATION_PURPOSE_CHOICES).get(purpose_key, purpose_key)
+    if target and purpose:
+        return f"{target} \u00b7 {purpose}"
+    return target or purpose or None
+
+
+def _label_category_display(disclosure):
+    """How the packet renders the § 205.301 labeling category.
+
+    Three outcomes, and the distinction between them is the point:
+      * one category on file  → its regulation wording
+      * several (a lot split across categories) → all of them, never one picked for the operation
+      * none → an explicit ask, because § 205.103(b)(3) requires this and silence in a
+        certifier packet reads as "nothing to report" rather than "not yet recorded"
+    """
+    from history.models import ORGANIC_LABEL_CATEGORY_CHOICES
+
+    labels = dict(ORGANIC_LABEL_CATEGORY_CHOICES)
+    categories = [c for c in (disclosure.label_categories or ()) if c]
+    if not categories:
+        return "Not recorded — § 205.103(b)(3) requires records to identify the labeling category"
+    if len(categories) == 1:
+        return labels.get(categories[0], categories[0])
+    return "Mixed: " + "; ".join(labels.get(c, c) for c in categories)
 
 
 def _method_label(value):
@@ -364,6 +529,41 @@ def _fmt_mass(value, unit):
         kg_str = f"{v:,.2f}".rstrip("0").rstrip(".")
         return f"{primary} [{kg_str} kg]"
     return primary
+
+
+def _last_prohibited_input(entry):
+    """USDA's "Name and Application Date of Last Prohibited Input", from one ParcelCropHistory row.
+
+    Both halves matter and either can stand alone: a name with no date cannot be checked
+    against the 36-month window, and a date with no name cannot be checked against the
+    National List. Returns a dash when neither is recorded \u2014 deliberately NOT "none applied",
+    which would be an attestation nobody made.
+    """
+    name = (getattr(entry, "last_prohibited_substance", "") or "").strip()
+    date = _fmt_date(entry.date_last_prohibited) if entry.date_last_prohibited else ""
+    if name and date:
+        return f"{name} \u2014 {date}"
+    return name or date or "\u2014"
+
+
+def _esc(value, fallback="\u2014"):
+    """`_val`, plus the XML escaping any raw `Paragraph(f"...{user_text}...")` needs.
+
+    ReportLab Paragraphs parse a mini-HTML dialect, so interpolating farmer free text into
+    one is not cosmetic \u2014 it is a correctness and availability bug. Measured 2026-08-12 on
+    the buffer detail lines:
+
+        "Walnuts & almonds <north lot>"  -> renders as "Walnuts & almonds", the operator's
+                                           own text SILENTLY DESTROYED in a document whose
+                                           entire purpose is to record it
+        "Bob & Sons <b>bold"             -> ValueError, the whole certifier packet fails
+                                           to generate
+
+    `_cell` already escapes, so table cells were never exposed; only the hand-built
+    Paragraph lines were. Use this for those.
+    """
+    text = _val(value, fallback)
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def _val(value, fallback="\u2014"):
@@ -686,7 +886,7 @@ def _add_page_number(canvas, doc):
     canvas.setFillColor(colors.HexColor("#888888"))
     page_num_text = f"Page {doc.page}"
     canvas.drawRightString(letter[0] - 0.75 * inch, 0.5 * inch, page_num_text)
-    canvas.drawString(0.75 * inch, 0.5 * inch, "Generated by Trazo  |  EPA/USDA-sourced emission factors")
+    canvas.drawString(0.75 * inch, 0.5 * inch, "Generated by Trazo  |  Organic recordkeeping platform  |  trazo.io")
     canvas.restoreState()
 
 
@@ -789,7 +989,7 @@ class AuditExportService:
             "soil",
             "pest",  # NOP 7 CFR 205.206(e) requires pest mgmt + threshold rationale docs
             "equipment",
-            "weather",  # Climate-impact attestations supporting § 205.201(a)(3) monitoring
+            "weather",  # Weather/climate context — informational; no Part 205 section requires a weather record
             # "carbon" intentionally excluded from NOP organic export — USDA inspectors
             # do not grade on environmental footprint, and including emissions data in
             # an audit PDF risks greenwashing-by-association claims. Carbon remains in
@@ -958,7 +1158,13 @@ class AuditExportService:
         return Paragraph(text, self._styles["body"])
 
     def _label_value(self, label, value):
-        v = _val(value)
+        # _esc on the VALUE (39 call sites): it is operator-entered — farm name, contact,
+        # lot ID, seed source — and lands unescaped in a markup-parsing Paragraph. An "&"
+        # in a farm name mangles the line; a stray "<" fails the whole export with a
+        # ValueError. No caller passes deliberate markup as a value (checked 2026-08-12).
+        # `label` stays raw: every one comes from a developer-authored constant, and some
+        # legitimately carry markup.
+        v = _esc(value)
         return Paragraph(f"<b>{label}:</b> {v}", self._styles["body"])
 
     def _total_acreage_phrase(self, est):
@@ -1469,7 +1675,10 @@ class AuditExportService:
 
         elements.append(self._spacer(1.2))
 
-        elements.append(Paragraph(f"Audit Report \u2014 {self._farm_name()}", self._styles["title"]))
+        # _esc: the farm name is operator text on a markup-parsing Paragraph. "Smith & Sons"
+        # mangles the title; an unclosed tag raised ValueError here and produced no packet
+        # at all — this line, not _label_value, was the first thing the export hit.
+        elements.append(Paragraph(f"Audit Report \u2014 {_esc(self._farm_name())}", self._styles["title"]))
         elements.append(self._spacer(0.1))
 
         crop_name = ""
@@ -1480,9 +1689,15 @@ class AuditExportService:
 
         start = _fmt_date(p.start_date)
         end = _fmt_date(p.finish_date or p.expected_harvest)
+        # Crop types are stored as plural nouns for list display ("Avocados", "Walnuts"), which
+        # reads as a slip in a singular noun phrase \u2014 the cover printed "Avocados Production".
+        # Trim a trailing "s" only where it is unambiguous; "Grass"/"Citrus" keep theirs.
+        crop_label = _esc(crop_name, fallback="")
+        if len(crop_label) > 3 and crop_label.endswith("s") and not crop_label.endswith(("ss", "us", "is")):
+            crop_label = crop_label[:-1]
         elements.append(
             Paragraph(
-                f"{crop_name} Production \u2014 {start} to {end}",
+                f"{crop_label} Production \u2014 {start} to {end}",
                 self._styles["subtitle"],
             )
         )
@@ -1493,9 +1708,12 @@ class AuditExportService:
         meta_rows = [
             ["Generated", _fmt_generated_date()],
             ["Certification Filter", cert_label],
-            ["Production ID", _val(str(p.public_id))],
             ["Lot ID", _val(p.lot_id)],
         ]
+        # The raw production UUID used to sit on the cover above the Lot ID. It is an internal
+        # database key: a certifier cannot look it up, cannot cross-reference it to any document
+        # the operation holds, and the Lot ID directly below is the identifier they actually use
+        # at inspection. Kept out of the cover, retained in the traceability section for support.
         meta_table = Table(meta_rows, colWidths=[2 * inch, 4 * inch])
         meta_table.setStyle(
             TableStyle(
@@ -1578,7 +1796,7 @@ class AuditExportService:
         elements.append(self._spacer(0.3))
         elements.append(
             Paragraph(
-                "Generated by Trazo  |  Transparency-first agricultural platform  |  trazo.io",
+                "Generated by Trazo  |  Organic recordkeeping platform  |  trazo.io",
                 self._styles["footer_note"],
             )
         )
@@ -1805,6 +2023,12 @@ class AuditExportService:
         # Pest threshold rationale per § 205.206(e). Strip whitespace so a
         # placeholder " " doesn't pass for a documented rationale.
         threshold_met_events = [ev for ev in pests if ev.action_threshold_met]
+        # Pesticide/fungicide/herbicide applications. § 205.601's preamble permits a listed
+        # synthetic "only when the provisions set forth in § 205.206(a) through (d) prove
+        # insufficient", so these are the events whose lawfulness depends on the two rows
+        # below having evidence behind them. Fertilizer (FE) is excluded: it is not a
+        # pest-control substance and carries no § 205.206 precondition.
+        control_substance_events = [ev for ev in chemicals if getattr(ev, "type", None) in ("PE", "FU", "HE")]
         threshold_with_rationale = sum(
             1 for ev in threshold_met_events if ev.threshold_rationale and ev.threshold_rationale.strip()
         )
@@ -2231,10 +2455,36 @@ class AuditExportService:
             )
 
         # Pest threshold rationale
+        #
+        # 🔴 2026-08-15. This used to emit PASS when `threshold_met_events` was empty, i.e.
+        # precisely when there was no evidence. An operation that logged ten § 205.601
+        # applications and zero pest events collected a green PASS on the clause that makes
+        # those applications lawful. A packet may report a gap; it must never invent a pass.
+        #
+        # The honest states are three, not two: SATISFIED, a real gap, and "nothing to assess".
+        # And the third is only benign when no control substance was applied — if substances
+        # WERE applied with no threshold record, that is the § 205.206(e) gap itself.
         if not threshold_met_events:
-            snapshot_rows.append(
-                ("Pest threshold rationale (§ 205.206(e))", "PASS", "No pest events with action threshold met")
-            )
+            if control_substance_events:
+                snapshot_rows.append(
+                    (
+                        "Pest threshold rationale (§ 205.206(e))",
+                        "REVIEW",
+                        (
+                            f"{len(control_substance_events)} pest-control application(s) on file with no "
+                            "action-threshold record — § 205.601 permits a substance only where "
+                            "§ 205.206(a)-(d) proved insufficient"
+                        ),
+                    )
+                )
+            else:
+                snapshot_rows.append(
+                    (
+                        "Pest threshold rationale (§ 205.206(e))",
+                        "NOT ASSESSED",
+                        "No pest-control applications and no threshold records on file",
+                    )
+                )
         elif threshold_with_rationale == len(threshold_met_events):
             snapshot_rows.append(
                 (
@@ -2253,8 +2503,26 @@ class AuditExportService:
             )
 
         # IPM strategy
+        #
+        # 🔴 Same defect, same date. "No pest events" is not compliance with § 205.206(a) —
+        # it is an absence of evidence, and it reads as a pass only because the row was
+        # written as a two-state check.
         if not pests:
-            snapshot_rows.append(("IPM strategy (§ 205.206(a))", "PASS", "No pest events"))
+            if control_substance_events:
+                snapshot_rows.append(
+                    (
+                        "IPM strategy (§ 205.206(a))",
+                        "REVIEW",
+                        (
+                            f"{len(control_substance_events)} pest-control application(s) on file with no pest "
+                            "management records documenting the preventive practices tried first"
+                        ),
+                    )
+                )
+            else:
+                snapshot_rows.append(
+                    ("IPM strategy (§ 205.206(a))", "NOT ASSESSED", "No pest management records on file")
+                )
         elif pests_with_ipm == len(pests):
             snapshot_rows.append(
                 ("IPM strategy (§ 205.206(a))", "PASS", f"{pests_with_ipm}/{len(pests)} pest events document IPM")
@@ -2280,13 +2548,20 @@ class AuditExportService:
                 ("Lot traceability (§ 205.307 / § 205.103(b)(2))", "REVIEW", "Lot ID assigned at finish")
             )
 
-        # Sales record
-        if p.sold_to:
+        # Sales record. Reads through resolve_sales_disclosure() — the SAME precedence the
+        # packet body uses — because this row previously branched on `p.sold_to` alone and
+        # therefore ignored SalesRecord entirely. A production with a complete sales record
+        # printed "REVIEW — Add buyer + organic-on-invoice flag" on page 1 while page 12 of
+        # the same PDF printed "Sold To: <buyer> / Organic Identified on Invoice: Yes".
+        # Confirmed on a rendered packet 2026-08-10.
+        sales_disclosure = resolve_sales_disclosure(p)
+        if sales_disclosure.buyer:
             snapshot_rows.append(
                 (
                     "Sales documentation (§ 205.103)",
                     "PASS",
-                    f"Sold to: {_truncate(p.sold_to, 50)}; organic on invoice = {'Yes' if p.organic_on_invoice else 'No'}",
+                    f"Sold to: {_truncate(sales_disclosure.buyer, 50)}; "
+                    f"organic on invoice = {'Yes' if sales_disclosure.organic_on_invoice else 'No'}",
                 )
             )
         else:
@@ -2481,7 +2756,12 @@ class AuditExportService:
         section_hint_by_label = {r["label"]: r["section_hint"] for r in rows if r["section_hint"]}
 
         def status_paragraph(status):
-            color = {"PASS": "#2E7D32", "REVIEW": "#E65100", "FAIL": "#B71C1C"}.get(status, "#555555")
+            # MEASURED on white, WCAG AA normal text (4.5:1): #2E7D32 = 5.13, #BF360C = 5.60,
+            # #B71C1C = 6.57, #555555 = 7.46. REVIEW was #E65100 — the theme's amber ceiling —
+            # which is only 3.79:1 and FAILED, on the most-repeated word in the auditor pre-read
+            # table. Same failure class as the app's amber pills: the token is the darkest amber
+            # available, which is not the same as an accessible one.
+            color = {"PASS": "#2E7D32", "REVIEW": "#BF360C", "FAIL": "#B71C1C"}.get(status, "#555555")
             mark = {"PASS": "DOCUMENTED", "REVIEW": "REVIEW", "FAIL": "GAP"}.get(status, status)
             return Paragraph(
                 f'<b><font color="{color}">{mark}</font></b>',
@@ -2505,21 +2785,21 @@ class AuditExportService:
                 ParagraphStyle("snap_detail", parent=self._styles["body"], fontSize=8, leading=10),
             )
 
+        # textColor is set on each ParagraphStyle, NOT left to the TableStyle below. A
+        # TableStyle ("TEXTCOLOR", (0, 0), (-1, 0), colors.white) colours plain string cells;
+        # it does not reach text inside a Paragraph flowable, which carries its own style. So
+        # these three headers were rendering in the body colour on the dark-green band and only
+        # LOOKED white-ish at display resolution — the whitest of them was antialiasing.
+        _snap_header_style = dict(
+            parent=self._styles["body"],
+            fontSize=8,
+            fontName="Helvetica-Bold",
+            textColor=colors.white,
+        )
         header = [
-            Paragraph(
-                "<b>Compliance check</b>",
-                ParagraphStyle("snap_h1", parent=self._styles["body"], fontSize=8, fontName="Helvetica-Bold"),
-            ),
-            Paragraph(
-                "<b>Documentation</b>",
-                ParagraphStyle(
-                    "snap_h2", parent=self._styles["body"], fontSize=8, fontName="Helvetica-Bold", alignment=TA_CENTER
-                ),
-            ),
-            Paragraph(
-                "<b>Detail</b>",
-                ParagraphStyle("snap_h3", parent=self._styles["body"], fontSize=8, fontName="Helvetica-Bold"),
-            ),
+            Paragraph("<b>Compliance check</b>", ParagraphStyle("snap_h1", **_snap_header_style)),
+            Paragraph("<b>Documentation</b>", ParagraphStyle("snap_h2", alignment=TA_CENTER, **_snap_header_style)),
+            Paragraph("<b>Detail</b>", ParagraphStyle("snap_h3", **_snap_header_style)),
         ]
         # Section-lookup table: when a snapshot row is NOT PASS, the inspector
         # needs a deterministic pointer to the section that carries the full
@@ -2590,7 +2870,7 @@ class AuditExportService:
                 "Trazo, not a compliance determination — the certifying agent makes the "
                 "compliance decision. Each row links to its source section in the body of "
                 "this report. Section headers cross-reference the corresponding CCOF Grower "
-                "OSP form numbers (G3.0–G8.0) for inspector navigation.",
+                "OSP form numbers (G2.0–G9.0) for inspector navigation.",
                 self._styles["footer_note"],
             ),
         ]
@@ -2727,8 +3007,26 @@ class AuditExportService:
         import re
 
         ph_events = [ev for ev in p.history_productionevent_events.all() if ev.type == "PH"]
-        if ph_events and p.quantity_sold and p.box_weight_lb:
-            sold_lb_equivalent = float(p.quantity_sold) * float(p.box_weight_lb)
+        # Read through the disclosure: this branched on the legacy `p.quantity_sold` alone, so
+        # an operation recording sales as SalesRecord rows (the SOE-supported path) silently
+        # skipped this cross-check entirely — a missing audit check reads as a clean one.
+        #
+        # The unit guard is new and deliberate. `box_weight_lb` only converts a COUNT of
+        # containers; multiplying a pounds figure by it produced a fabricated number in a
+        # certifier document. Legacy rows frequently left the unit blank while pairing with
+        # box_weight_lb, so blank is treated as boxes there and never for SalesRecord rows,
+        # which always carry an explicit unit.
+        _boxes_disclosure = resolve_sales_disclosure(p)
+        _sold_qty_boxes = (
+            _boxes_disclosure.quantity
+            if _is_box_unit(
+                _boxes_disclosure.quantity_unit,
+                blank_counts_as_boxes=_boxes_disclosure.source == "legacy",
+            )
+            else None
+        )
+        if ph_events and _sold_qty_boxes and p.box_weight_lb:
+            sold_lb_equivalent = float(_sold_qty_boxes) * float(p.box_weight_lb)
             narrative_cartons = []
             for ev in ph_events:
                 for m in re.finditer(r"(\d[\d,]*)\s*(?:cartons?|boxes)", ev.description or "", re.IGNORECASE):
@@ -2756,7 +3054,11 @@ class AuditExportService:
                                 f"Packing-shed narrative: {narrative_summary} cartons · "
                                 f"closest match {closest_cartons:,} × {float(p.box_weight_lb):g} lb "
                                 f"= {int(packed_lb):,} lb · "
-                                f"Sales record: {p.quantity_sold} {p.quantity_sold_unit or 'units'} × "
+                                # Must print the SAME figure the math above used. Printing the
+                                # legacy field here while computing from the disclosure would
+                                # make the sentence contradict its own arithmetic.
+                                f"Sales record: {_fmt_float(_sold_qty_boxes)} "
+                                f"{_boxes_disclosure.quantity_unit or 'units'} × "
                                 f"{float(p.box_weight_lb):g} lb = {int(sold_lb_equivalent):,} lb · "
                                 f"delta {delta_pct * 100:.1f}%"
                             ),
@@ -2854,7 +3156,9 @@ class AuditExportService:
         # the post-harvest event narrative. Detect mismatched distributor /
         # retailer names — the classic "packing says OGC, sales says Whole
         # Foods" signal.
-        sold_to = (p.sold_to or "").strip()
+        # Same read-through: branching on the legacy field alone meant an operation whose
+        # buyers live in SalesRecord skipped the handler-consistency check silently.
+        sold_to = resolve_sales_disclosure(p).buyer
         if sold_to:
             handler_tokens = set()
             # Scan post-harvest narratives for "<Name> pickup" or
@@ -3283,7 +3587,7 @@ class AuditExportService:
 
     def _build_chemical_log(self):
         """
-        Input Application Log — 7 CFR 205.103(b)(1) compliant.
+        Input Application Log — 7 CFR 205.103(b)(2).
 
         Auditor-facing table with two parts:
         1. Application details: what was applied, where, how, and compliance fields
@@ -3311,7 +3615,11 @@ class AuditExportService:
             "Amount / Rate",
             "Area",
             "Method",
-            "Target",
+            # USDA's form calls this "Purpose / Reason for Use". `target_pest_disease`
+            # answers it for PE/FU/HE ("aphids"); `application_purpose` answers it for
+            # fertilizer, which previously had no purpose at all. One column, both facts,
+            # header naming both rather than implying the pest reading covers fertiliser.
+            "Target / Purpose",
             "Organic Status",
         ]
 
@@ -3391,7 +3699,7 @@ class AuditExportService:
                 self._cell(amount or None),
                 self._cell(area or None),
                 self._cell(method),
-                self._cell(ev.target_pest_disease),
+                self._cell(_target_or_purpose(ev)),
                 self._cell(ev.get_organic_approved_display() if ev.organic_approved else None),
             ]
 
@@ -3724,8 +4032,15 @@ class AuditExportService:
                 elements.append(self._spacer(0.05))
                 elements.append(
                     Paragraph(
-                        f"Note: {self_reported_count} input(s) are self-reported only (no OMRI ID and "
-                        f"no National List match) and remain UNCLASSIFIED. Per NOP 5033 (Classification "
+                        # ⚠️ `omri_product` has NO writer in production code — it is read by
+                        # claim_authority, claim_resolver and readiness, and set by nothing but
+                        # seeders. So this count includes every input whose only missing piece
+                        # is an OMRI FK the product cannot yet populate, which inflates it.
+                        # Said plainly here rather than quietly overstating a finding.
+                        f"Note: {self_reported_count} input(s) have no National List match on file "
+                        f"and remain UNCLASSIFIED (OMRI catalog matching is not yet applied "
+                        f"automatically, so an OMRI-listed product may appear here). Per NOP 5033 "
+                        f"(Classification "
                         f"of Materials), each must be resolved through the synthetic/non-synthetic and "
                         f"agricultural/non-agricultural decision trees before use — verify each against "
                         f"omri.org or 7 CFR 205.601/205.602 directly rather than treating an unmatched "
@@ -4260,13 +4575,26 @@ class AuditExportService:
             elements.append(self._body("<b>Harvest Records</b>"))
             elements.append(self._spacer(0.05))
 
+            # 🔴 2026-08-15 — Block and Destination added.
+            #
+            # USDA's Harvest Record is five columns: Harvest Date | LOCATION (Field or Parcel
+            # ID) | Crop | Quantity | WHERE STORED OR SOLD. Two of those were missing here.
+            # `block_id` printed only in the generic Production Events table, so an inspector
+            # reconciling a harvest could not see which block it came from in the harvest
+            # table itself; and `harvest_destination` — the direct analogue of "Where Stored
+            # or Sold", and the § 205.103(b)(2) production→sale hinge — had ZERO occurrences
+            # anywhere in this file despite being collected, validated and serialized.
             ha_headers = [
                 "Date",
+                "Lot",
+                "Block",
                 "Variety",
                 "Yield",
+                "Determined By",
                 "Quality Grade",
                 "Method",
                 "Brix / Moisture",
+                "Destination",
                 "Storage",
                 "Operator",
             ]
@@ -4343,28 +4671,57 @@ class AuditExportService:
                     storage_parts.append(f"{_fmt_float(ev.storage_temperature_f)}°F")
                 storage_display = " @ ".join(storage_parts) if storage_parts else None
 
+                # "Estimated" vs "verified via certified scale" is what makes a yield figure
+                # auditable under § 205.103(b)(2) ("readily understood and audited") — and it
+                # is the question USDA's own harvest guidance asks about quantity.
+                determined_display = (
+                    ev.get_amount_determination_display() if getattr(ev, "amount_determination", None) else None
+                )
+                destination_display = (
+                    ev.get_harvest_destination_display() if getattr(ev, "harvest_destination", None) else None
+                )
+                # A harvest spanning several days is one record with a range, not a lie about
+                # a single date. USDA's column header is "Harvest Date(s)", plural.
+                date_display = _fmt_date(ev.date)
+                if getattr(ev, "harvest_date_end", None):
+                    date_display = f"{date_display} – {_fmt_date(ev.harvest_date_end)}"
+
                 ha_data.append(
                     [
-                        self._cell(_fmt_date(ev.date)),
+                        self._cell(date_display),
+                        # § 205.103(b)(2) — the per-pass lot. This is the key a sales record
+                        # references, and the thing that makes a multi-pick season traceable.
+                        self._cell(getattr(ev, "harvest_lot_code", None)),
+                        self._cell(ev.block_id),
                         self._cell(ev.variety),
                         self._cell(yield_display),
+                        self._cell(determined_display),
                         self._cell(quality_display),
                         self._cell(method_display),
                         self._cell(measurement_display),
+                        self._cell(destination_display),
                         self._cell(storage_display),
                         self._cell(ev.performed_by),
                     ]
                 )
 
+            # Eleven columns, 7.45in — inside the 7.5in text block.
+            # Twelve columns, 7.44in — inside the 7.5in text block. Lot gets the widest cell
+            # after Method because a code like "HAS-BLOCK2-20260410" is the thing an inspector
+            # reads across from a sales record, and a wrapped lot code is a misread lot code.
             ha_widths = [
-                0.65 * inch,
-                0.8 * inch,
-                0.8 * inch,
-                0.85 * inch,
-                0.95 * inch,
-                0.95 * inch,
-                0.95 * inch,
-                0.75 * inch,
+                0.58 * inch,  # Date
+                0.98 * inch,  # Lot
+                0.62 * inch,  # Block
+                0.52 * inch,  # Variety
+                0.6 * inch,  # Yield
+                0.62 * inch,  # Determined By
+                0.6 * inch,  # Quality Grade
+                0.68 * inch,  # Method
+                0.62 * inch,  # Brix / Moisture
+                0.58 * inch,  # Destination
+                0.52 * inch,  # Storage
+                0.52 * inch,  # Operator
             ]
             ha_table = Table(ha_data, colWidths=ha_widths, repeatRows=1)
             ha_table.setStyle(self._base_table_style())
@@ -4404,19 +4761,31 @@ class AuditExportService:
         return elements
 
     # ------------------------------------------------------------------
-    # Section 5b: Seed & Planting Stock Records (NOP 5029)
+    # Section 5b: Seed & Planting Stock Records (7 CFR 205.204)
     # ------------------------------------------------------------------
 
     def _build_seed_stock_section(self):
-        """
-        Seed & Planting Stock Records — 7 CFR 205.204 / NOP 5029.
+        """Seed & Planting Stock Records — 7 CFR 205.204.
 
-        NOP requires:
-        - Use of organically produced seed when commercially available
-        - Documentation of 3+ supplier searches when non-organic seed used
-        - Seed variety, source, and organic status for each planting event
+        NOP 5029 is now frozen at ``documentation/reference/usda-nop-handbook/`` and CAN be
+        cited. Earlier revisions cited it from a live URL while it appeared in no frozen
+        source, which is exactly what the corpus discipline forbids.
 
-        This is a common non-conformance finding per CCOF inspection checklists.
+        The two sources say different-strength things, and the difference is the whole point:
+
+        * **7 CFR 205.204(a)(1) — BINDING.** Non-organic seed is permitted only when an
+          equivalent organic variety is not commercially available. It imposes NO supplier
+          count.
+        * **NOP 5029 § 4.2 b.1 — GUIDANCE.** Asks for "documentation of contact with three or
+          more seed or planting stock sources". AMS states the Handbook is non-binding and
+          that any citation issued must reference the regulations.
+
+        So this section states the REGULATION as the rule and the three-source figure as what
+        certifiers EXPECT. NOP 5029 § 4.4.3 is why the expectation still carries weight:
+        certifying agents verify commercial availability at inspection.
+
+        Writing "NOP requires 3+ supplier searches" — as this docstring previously did —
+        states guidance as law inside the document a certifier reads.
         """
         elements = [self._section_header("Seed & Planting Stock Records (CCOF OSP G3.0)")]
 
@@ -4494,14 +4863,114 @@ class AuditExportService:
         if events_with_seed:
             # Use the first event with seed source as the representative
             seed_ev = events_with_seed[0]
+            # "Seed Origin", not "Seed Source". MEASURED complaint from the Planting teardown:
+            # printed as "Seed Source: Commercial" an inspector reads it as the SUPPLIER, which
+            # it is not — it is where the stock came from as a category. The teardown proposed
+            # merging this field into `seed_certification_status`; that was reconsidered and
+            # REJECTED, because the two are orthogonal axes and the merge would destroy
+            # `farm_saved` — a distinct § 205.204 story (no purchase, so no availability search
+            # to run) that the status enum cannot express. Renaming fixes the actual defect.
             seed_source_display = seed_ev.get_seeds_source_display() if seed_ev.seeds_source else None
-            elements.append(self._label_value("Seed Source", seed_source_display))
+            elements.append(self._label_value("Seed Origin", seed_source_display))
 
-            # Organic seed search documentation (NOP 5029)
+            # § 205.105(e) — excluded methods. The third leg of USDA Form 11's allowed-status
+            # triple; the packet previously asserted an organic planting while saying nothing
+            # about the one § 205.105 prohibition that is unconditional.
+            if seed_ev.seed_non_gmo_status:
+                elements.append(
+                    self._label_value(
+                        "Excluded methods (\u00a7 205.105(e))",
+                        seed_ev.get_seed_non_gmo_status_display(),
+                    )
+                )
+            else:
+                elements.append(
+                    self._label_value(
+                        "Excluded methods (\u00a7 205.105(e))",
+                        "Not recorded",
+                    )
+                )
+
+            # § 205.204(a)(4) — PERENNIAL planting stock must be under continuous organic
+            # management for at least a year before its crop sells as organic. Printed as a
+            # computed elapsed time rather than a bare date, because the date alone leaves the
+            # inspector to do the arithmetic the rule is actually about.
+            _mgmt_start = getattr(seed_ev, "stock_organic_management_start", None)
+            if _mgmt_start:
+                _ref = seed_ev.date.date() if getattr(seed_ev, "date", None) else None
+                if _ref:
+                    _days = (_ref - _mgmt_start).days
+                    _met = _days >= 365
+                    elements.append(
+                        self._label_value(
+                            "Organic management since (\u00a7 205.204(a)(4))",
+                            f"{_fmt_date(_mgmt_start)} \u2014 "
+                            + (
+                                f"{_days // 365} yr {(_days % 365) // 30} mo at planting"
+                                if _met
+                                else f"{max(_days, 0)} days at planting, UNDER the 12-month minimum"
+                            ),
+                        )
+                    )
+                    if not _met:
+                        elements.append(
+                            Paragraph(
+                                "<b>[REVIEW] 7 CFR 205.204(a)(4):</b> this perennial planting stock had "
+                                "been under organic management for less than one year at planting. Its "
+                                "crop may not be sold as organic until the year has elapsed.",
+                                self._warning_style(),
+                            )
+                        )
+                else:
+                    elements.append(
+                        self._label_value("Organic management since (\u00a7 205.204(a)(4))", _fmt_date(_mgmt_start))
+                    )
+
+            # Organic seed search documentation (7 CFR 205.204(a)(1))
             search_attempts = getattr(seed_ev, "seed_search_attempts", None) or []
+
+            # § 205.204(a)(1) permits non-organic seed only when an equivalent organic variety
+            # is not "commercially available", and § 205.2 defines that by FORM, QUALITY or
+            # QUANTITY. The supplier rows say WHO was contacted; this says the GROUND the
+            # exemption rests on.
+            #
+            # Rendered before the branch below, not inside it. The first version sat inside the
+            # "has supplier rows" branch, so an operation that recorded the ground but not the
+            # contacts showed nothing — and the "no search documented" note, the case where a
+            # certifier most needs the ground, never showed it either.
+            #
+            # Only when an exemption is actually claimed: printing "not recorded" for a grower
+            # who planted certified organic seed would invent a finding out of a rule that does
+            # not apply to them.
+            #
+            # 🔴 2026-08-15: this used to also treat "has search rows" as claiming an
+            # exemption. That inference held only while the search widget was GATED to
+            # non-organic seed — the presence of rows implied the status. The widget is now
+            # available on every planting, precisely so a grower who compared suppliers and
+            # then bought ORGANIC seed can record it (and so correcting a status no longer
+            # hides evidence they already entered). With that gate gone, the old heuristic
+            # prints "Ground for the exemption: not recorded" underneath a certified-organic
+            # planting — a fabricated finding, which is the one thing a certifier packet must
+            # never contain. The STATUS is the only thing that claims an exemption.
+            _claims_seed_exemption = seed_ev.seed_certification_status in NON_ORGANIC_SEED_STATUSES
+            if _claims_seed_exemption:
+                from history.models import ProductionEvent as _PE
+
+                _reason_key = (getattr(seed_ev, "seed_nonavailability_reason", None) or "").strip()
+                _reason = dict(_PE.SEED_NONAVAILABILITY_REASON_CHOICES).get(_reason_key, _reason_key)
+                elements.append(self._spacer(0.05))
+                elements.append(
+                    self._body(
+                        f"Ground for the exemption (\u00a7 205.204(a)(1)): {_reason}"
+                        if _reason_key
+                        else "Ground for the exemption (\u00a7 205.204(a)(1)): not recorded \u2014 "
+                        "\u00a7 205.2 asks whether organic seed was unavailable in the required "
+                        "form, quality or quantity."
+                    )
+                )
             if search_attempts and isinstance(search_attempts, list) and len(search_attempts) > 0:
                 elements.append(self._spacer(0.1))
-                elements.append(self._body("<b>Organic Seed Commercial Availability Search (NOP 5029)</b>"))
+                elements.append(self._body("<b>Organic Seed Commercial-Availability Search (7 CFR 205.204(a)(1))</b>"))
                 elements.append(self._spacer(0.05))
 
                 search_headers = ["Supplier Contacted", "Date", "Result", "Notes"]
@@ -4510,9 +4979,15 @@ class AuditExportService:
 
                 for attempt in search_attempts:
                     if isinstance(attempt, dict):
+                        # `supplier` is the pre-2026-08-15 key written by the planting form.
+                        # Migration 0161 rewrites stored rows and the serializer normalises
+                        # new ones, but a packet must never print a blank supplier column for
+                        # a row that has the name under the old key — that column IS the
+                        # § 205.204(a)(1) evidence.
+                        supplier = attempt.get("supplier_name") or attempt.get("supplier") or ""
                         search_data.append(
                             [
-                                self._cell(attempt.get("supplier_name", "")),
+                                self._cell(supplier),
                                 self._cell(attempt.get("date_contacted", "")),
                                 self._cell(attempt.get("result", "")),
                                 self._cell(attempt.get("notes", "")),
@@ -4531,9 +5006,18 @@ class AuditExportService:
                 elements.append(self._spacer(0.05))
                 elements.append(
                     Paragraph(
-                        "Note: Non-organic seed indicated but no commercial availability "
-                        "search documented. NOP 5029 (7 CFR 205.204(a)(1)) requires "
-                        "documentation of at least 3 supplier searches when organic seed is not used.",
+                        # 7 CFR 205.204 imposes NO supplier count. "At least three" is NOP
+                        # 5029 § 4.2 b.1 — "documentation of contact with three or more seed or
+                        # planting stock sources" — now frozen at
+                        # documentation/reference/usda-nop-handbook/txt/NOP-5029.txt. That is
+                        # GUIDANCE: AMS states the Handbook is non-binding and that any citation
+                        # issued must reference the regulations. So it is phrased below as what
+                        # certifiers expect, never as what the rule requires.
+                        "Note: Non-organic seed or planting stock is indicated but no "
+                        "commercial-availability search is documented. 7 CFR 205.204(a)(1) "
+                        "permits non-organic seed only when an equivalent organic variety is "
+                        "not commercially available; certifiers typically expect at least "
+                        "three suppliers to have been contacted.",
                         self._styles["footer_note"],
                     )
                 )
@@ -4544,7 +5028,21 @@ class AuditExportService:
             elements.append(self._body("<b>Planting Event Details</b>"))
             elements.append(self._spacer(0.05))
 
-            pl_headers = ["Date", "Description", "Variety", "Seed Source", "Cert Status", "Area", "Operator"]
+            # Rootstock and plant count added 2026-08-15. On a perennial operation these are
+            # the two facts an inspector reconciles against the nursery invoice, and until
+            # they had columns the packet carried a written disclosure that Trazo did not
+            # structure them.
+            pl_headers = [
+                "Date",
+                "Variety",
+                "Rootstock",
+                "Plants",
+                "Spacing",
+                "Seed Source",
+                "Cert Status",
+                "Area",
+                "Operator",
+            ]
             pl_header_row = [self._hdr(h) for h in pl_headers]
             pl_data = [pl_header_row]
 
@@ -4555,8 +5053,10 @@ class AuditExportService:
                 pl_data.append(
                     [
                         self._cell(_fmt_date(ev.date)),
-                        self._cell(ev.description),
                         self._cell(ev.variety),
+                        self._cell(getattr(ev, "rootstock", None)),
+                        self._cell(str(ev.plants_established) if getattr(ev, "plants_established", None) else None),
+                        self._cell(getattr(ev, "plant_spacing", None)),
                         self._cell(seed_src),
                         self._cell(cert_status),
                         self._cell(area),
@@ -4564,13 +5064,18 @@ class AuditExportService:
                     ]
                 )
 
+            # Description dropped from this table: it repeats the narrative already printed
+            # in the event log above, and the row is now carrying the columns a certifier
+            # actually reconciles. Widths sum to 7.0in, inside the 7.5in text block.
             pl_widths = [
-                0.65 * inch,
-                1.55 * inch,
-                0.8 * inch,
+                0.62 * inch,
+                0.78 * inch,
+                1.05 * inch,
+                0.48 * inch,
+                0.85 * inch,
+                0.85 * inch,
                 0.9 * inch,
-                0.9 * inch,
-                0.65 * inch,
+                0.62 * inch,
                 0.85 * inch,
             ]
             t = Table(pl_data, colWidths=pl_widths, repeatRows=1)
@@ -4605,6 +5110,10 @@ class AuditExportService:
                     "Invoice #",
                     "Lot #",
                     "Treatment",
+                    # USDA "Seed Records Part C" pairs every named treatment with its
+                    # "Documentation of Allowed Status". A treatment with no basis is
+                    # unreviewable under § 205.204(a)(2).
+                    "Allowed Because",
                 ]
                 trace_rows = [[self._hdr(h) for h in trace_headers]]
                 for ev in traceable:
@@ -4617,16 +5126,18 @@ class AuditExportService:
                             self._cell(ev.seed_purchase_invoice),
                             self._cell(ev.seed_lot_number),
                             self._cell(ev.seed_treatment),
+                            self._cell(_seed_treatment_basis_display(ev)),
                         ]
                     )
                 trace_widths = [
+                    0.6 * inch,
+                    0.75 * inch,
+                    1.0 * inch,
                     0.7 * inch,
-                    0.85 * inch,
-                    1.15 * inch,
-                    0.8 * inch,
-                    0.8 * inch,
-                    0.8 * inch,
-                    1.2 * inch,
+                    0.7 * inch,
+                    0.7 * inch,
+                    1.0 * inch,
+                    1.45 * inch,
                 ]
                 tt = Table(trace_rows, colWidths=trace_widths, repeatRows=1)
                 tt.setStyle(self._base_table_style())
@@ -4870,10 +5381,34 @@ class AuditExportService:
             log_events = [ev for ev in compost_events if (ev.compost_temperature_log or "").strip()]
             if log_events:
                 elements.append(Spacer(1, 6))
-                log_data = [[self._hdr("Date"), self._hdr("Temperature Monitoring Readings")]]
+                # Pile ID and reading method come from USDA's Compost Production Record, which
+                # heads every sheet with both. A § 205.203(c)(2) series is unattributable
+                # without them: two piles and one temperature log, and an inspector cannot tell
+                # which pile it describes — nor reproduce a reading with no stated depth or
+                # instrument. Blank prints an em-dash rather than nothing, so a missing answer
+                # reads as missing rather than as absent-by-design.
+                log_data = [
+                    [
+                        self._hdr("Date"),
+                        self._hdr("Pile / Windrow"),
+                        self._hdr("Reading Location & Method"),
+                        self._hdr("Temperature Monitoring Readings"),
+                    ]
+                ]
                 for lev in log_events:
-                    log_data.append([self._cell(_fmt_date(lev.date)), self._cell(lev.compost_temperature_log, 200)])
-                lt = Table(log_data, colWidths=[0.8 * inch, 5.6 * inch], repeatRows=1)
+                    log_data.append(
+                        [
+                            self._cell(_fmt_date(lev.date)),
+                            self._cell(lev.compost_unit_id),
+                            self._cell(lev.compost_temp_reading_method, 60),
+                            self._cell(lev.compost_temperature_log, 200),
+                        ]
+                    )
+                lt = Table(
+                    log_data,
+                    colWidths=[0.7 * inch, 0.85 * inch, 1.45 * inch, 3.4 * inch],
+                    repeatRows=1,
+                )
                 lt.setStyle(self._base_table_style())
                 elements.append(lt)
 
@@ -5152,14 +5687,20 @@ class AuditExportService:
                 elements.append(micro_table)
 
         # --- Soil Condition & Working Depth ---
-        # working_depth / soil_texture / soil_moisture are collected by SoilManagementTab
+        # working_depth / soil_texture are collected by SoilManagementTab
         # and, until now, rendered nowhere. They are the § 205.203 context for whether an
         # operation was appropriate: incorporation depth for an amendment, and the texture
         # and moisture that govern compaction and leaching risk when it was performed.
         # Kept as its own sub-table rather than squeezed into the test-results or equipment
         # tables — those are already near the 7.0" portrait budget, and these apply to any
         # soil sub-type, not only ST or fuel-bearing events.
-        condition_events = [ev for ev in events if ev.working_depth or ev.soil_texture or ev.soil_moisture]
+        #
+        # 🔴 `soil_moisture` dropped from this table 2026-08-15. Its input was removed from
+        # SoilManagementTab in Sprint 2 Epic 2.1.3 (it duplicated the Weather event), so the
+        # column could only ever print "—" for any record created since. A packet column with
+        # no writer behind it is not disclosure — it is an empty promise on a certifier's desk.
+        # The model column and its `modal` surface stay so pre-removal rows still render.
+        condition_events = [ev for ev in events if ev.working_depth or ev.soil_texture]
         if condition_events:
             elements.append(Spacer(1, 10))
             elements.append(
@@ -5168,7 +5709,7 @@ class AuditExportService:
                     self._sub_header_style(),
                 )
             )
-            cond_headers = ["Date", "Type", "Working Depth", "Texture", "Moisture"]
+            cond_headers = ["Date", "Type", "Working Depth", "Texture"]
             cond_data = [[self._hdr(h) for h in cond_headers]]
             for ev in condition_events:
                 depth_disp = None
@@ -5180,10 +5721,9 @@ class AuditExportService:
                         self._cell(SOIL_TYPE_LABELS.get(ev.type, _val(ev.type))),
                         self._cell(depth_disp),
                         self._cell(ev.soil_texture),
-                        self._cell(ev.soil_moisture),
                     ]
                 )
-            cond_widths = [0.75 * inch, 1.1 * inch, 1.1 * inch, 1.5 * inch, 1.5 * inch]
+            cond_widths = [0.85 * inch, 1.3 * inch, 1.3 * inch, 1.8 * inch]
             cond_table = Table(cond_data, colWidths=cond_widths, repeatRows=1)
             cond_table.setStyle(self._base_table_style())
             elements.append(cond_table)
@@ -5238,11 +5778,17 @@ class AuditExportService:
                     self._sub_header_style(),
                 )
             )
+            # "Planned Harvest" mirrors the "Date of Harvest — Estimated" column on USDA's
+            # crop documentation form. The ACTUAL harvest date is the harvest event, which
+            # `_validate_raw_manure_harvest_interval` already checks; showing the estimate
+            # beside the earliest safe date is what lets an inspector see whether the plan was
+            # sound when the manure went on, rather than only whether the outcome happened to be.
             manure_headers = [
                 "Date Applied",
                 "Harvest Interval",
                 "Amendment Type",
                 "Earliest Safe Harvest",
+                "Planned Harvest",
                 "Crop-Rule Check",
             ]
             # Resolve the crop's required interval ONCE so each row can be
@@ -5308,12 +5854,15 @@ class AuditExportService:
                         self._cell(interval_display),
                         self._cell(_amendment_type_label(mev.amendment_type)),
                         self._cell(earliest_harvest),
+                        self._cell(
+                            _fmt_date(mev.manure_harvest_date_planned) if mev.manure_harvest_date_planned else None
+                        ),
                         self._cell(rule_check_text),
                     ]
                 )
                 if rule_check_is_warning:
                     row_warning_indices.append(len(manure_data) - 1)
-            manure_widths = [0.85 * inch, 1.0 * inch, 1.1 * inch, 1.05 * inch, 1.5 * inch]
+            manure_widths = [0.8 * inch, 0.9 * inch, 1.0 * inch, 0.95 * inch, 0.9 * inch, 1.35 * inch]
             mt = Table(manure_data, colWidths=manure_widths, repeatRows=1)
             # Apply red text to mismatched rows so the inspector's eye is
             # drawn straight to the offending entry. Merge the warning
@@ -5326,10 +5875,37 @@ class AuditExportService:
             base_cmds = list(self._base_table_style().getCommands())
             warning_overlay_cmds = []
             for ridx in row_warning_indices:
-                warning_overlay_cmds.append(("TEXTCOLOR", (4, ridx), (4, ridx), colors.HexColor("#B71C1C")))
-                warning_overlay_cmds.append(("FONTNAME", (4, ridx), (4, ridx), "Helvetica-Bold"))
+                warning_overlay_cmds.append(("TEXTCOLOR", (5, ridx), (5, ridx), colors.HexColor("#B71C1C")))
+                warning_overlay_cmds.append(("FONTNAME", (5, ridx), (5, ridx), "Helvetica-Bold"))
             mt.setStyle(TableStyle(base_cmds + warning_overlay_cmds))
             elements.append(mt)
+
+            # USDA's form also asks "How Applied / Incorporated" ("Manure spreader disk in")
+            # and "Manure Type, Form and Source" ("Chicken, dry, on farm"). They are rendered
+            # as per-row detail LINES rather than two more columns: the table is already
+            # 5.9in of the ~6.4in available, and two more would need ~2.2in. This is the same
+            # treatment the buffer-zone section gives its CCOF Section D&E descriptors.
+            #
+            # Adding columns would also have shifted the warning overlay's hard-coded column
+            # index 5 — the reindexing trap this file has hit before.
+            manure_detail_lines = []
+            for mev in manure_events:
+                tfs = mev.manure_type_form_source_display()
+                applied = mev.get_manure_application_method_display() if mev.manure_application_method else ""
+                if not (tfs or applied):
+                    continue
+                bits = []
+                if tfs:
+                    bits.append(_esc(tfs))
+                if applied:
+                    bits.append("applied: " + _esc(applied))
+                date_txt = _esc(_fmt_date(mev.manure_application_date) if mev.manure_application_date else None)
+                manure_detail_lines.append(f"<b>{date_txt}:</b> " + "; ".join(bits))
+            if manure_detail_lines:
+                elements.append(self._spacer(0.06))
+                elements.append(self._body("Manure type, form, source and application method:"))
+                for line in manure_detail_lines:
+                    elements.append(Paragraph("&bull; " + line, self._styles["footer_note"]))
             if any_mismatch:
                 elements.append(
                     Paragraph(
@@ -5755,12 +6331,17 @@ class AuditExportService:
         events = list(self.production.history_equipmentevent_events.all().order_by("date"))
 
         if not events:
-            # Render the empty-equipment placeholder but do NOT return: the
-            # Equipment Cleaning Logs + Post-Harvest Sanitation subsections
-            # below live on ProductionEvent (EM subtype), which is independent
-            # of EquipmentEvent. Early-returning here hid both from inspectors
-            # on farms that don't track EquipmentEvent separately.
-            elements.append(self._empty_table(headers))
+            # 🔴 2026-08-15 — the placeholder table is gone.
+            #
+            # EquipmentEvent has no form: the tab was removed when equipment merged into
+            # Production as the EM subtype, and type 4 was dropped from the event picker. So
+            # this section printed "No records for this production" on EVERY farm onboarded
+            # since — an empty table for a record type the product no longer lets anyone
+            # create, which reads to a certifier as a gap rather than a non-applicable.
+            #
+            # Still no early return: the Equipment Cleaning Logs and Post-Harvest Sanitation
+            # subsections below live on ProductionEvent and must render regardless.
+            pass
         else:
             header_row = [self._hdr(h) for h in headers]
             data = [header_row]
@@ -5794,9 +6375,17 @@ class AuditExportService:
         # cleaning-log fields OR any of the post-harvest sanitizer fields —
         # otherwise the sanitation subsection below would be hidden on events
         # that recorded sanitizer detail without completing the cleaning core.
+        # 🔴 2026-08-15 — PH included, not EM alone.
+        #
+        # The form has sent the five sanitizer fields for POST-HARVEST events since 2026-07-31
+        # (a fix whose own comment says "a post-harvest wash could never submit them"). This
+        # query never followed, so a produce wash's sanitizer name, ppm, residual-at-discharge,
+        # rinse step and § 205.605 reference were written, stored, serialized — and printed
+        # nowhere. That is the FOOD-CONTACT case, i.e. the one § 205.605(b) actually governs,
+        # and it was the one case the packet could not show.
         cleaning_events = [
             ev
-            for ev in self.production.history_productionevent_events.filter(type="EM")
+            for ev in self.production.history_productionevent_events.filter(type__in=("EM", "PH"))
             if ev.cleaning_date
             or ev.cleaning_method
             or ev.shared_with_conventional
@@ -5812,7 +6401,13 @@ class AuditExportService:
             elements.append(self._spacer(0.05))
 
             if cleaning_events:
+                # "What Was Cleaned" added 2026-08-15. USDA's Equipment Cleaning Log column is
+                # "Equipment **or Surface**", and `equipment_type`'s enum (tractor / harvester /
+                # sprayer / truck / generator / pump / other) cannot say bins, cooler or
+                # trailer — the three answers a certifier most wants on a § 205.272 log.
+                # `cleaning_asset_class` is exactly that field and had zero packet occurrences.
                 cl_headers = [
+                    "What Was Cleaned",
                     "Equipment",
                     "Op Type",
                     "Cleaning Date",
@@ -5845,8 +6440,12 @@ class AuditExportService:
                     equipment_label = (
                         (ev.get_equipment_type_display() if ev.equipment_type else None) or ev.name or ev.description
                     )
+                    asset_class = (
+                        ev.get_cleaning_asset_class_display() if getattr(ev, "cleaning_asset_class", None) else None
+                    )
                     cl_data.append(
                         [
+                            self._cell(asset_class),
                             self._cell(equipment_label),
                             self._cell(op_type_display),
                             self._cell(_fmt_date(ev.cleaning_date) if ev.cleaning_date else None),
@@ -5859,16 +6458,18 @@ class AuditExportService:
                         ]
                     )
 
+                # Ten columns, 7.45in total — inside the 7.5in text block.
                 cl_widths = [
-                    0.9 * inch,
-                    0.75 * inch,
-                    0.6 * inch,
-                    0.8 * inch,
-                    0.8 * inch,
+                    0.95 * inch,
+                    0.85 * inch,
                     0.7 * inch,
-                    0.5 * inch,
                     0.6 * inch,
-                    0.8 * inch,
+                    0.75 * inch,
+                    0.75 * inch,
+                    0.65 * inch,
+                    0.45 * inch,
+                    0.55 * inch,
+                    0.7 * inch,
                 ]
                 t2 = Table(cl_data, colWidths=cl_widths, repeatRows=1)
                 t2.setStyle(self._base_table_style())
@@ -5998,6 +6599,13 @@ class AuditExportService:
                     )
                 )
 
+        # A section that is nothing but its own heading is worse than an absent section — an
+        # inspector reads the empty space as a gap. Since the EquipmentEvent placeholder was
+        # removed (see above), this can now happen on a non-organic packet with no cleaning
+        # records, so drop the whole section rather than print a bare title.
+        if len(elements) <= 1:
+            return []
+
         return elements
 
     # ------------------------------------------------------------------
@@ -6006,7 +6614,7 @@ class AuditExportService:
 
     def _build_weather_section(self):
         """
-        Weather events — supports § 205.201(a)(3) monitoring plan.
+        Weather events — operational context only — § 205.201(a)(3) is OSP-implementation, supplier and fraud monitoring, not meteorology.
 
         Documents climate impacts (frost, heat waves, storms) so an inspector can
         cross-reference yield variances and emergency irrigation events to the
@@ -7580,6 +8188,73 @@ class AuditExportService:
     }
     DEFAULT_BOX_WEIGHT_TOLERANCE = 0.10
 
+    # Harvest yields and sale quantities are typed in two different vocabularies. MEASURED on
+    # real records: `yield_unit` holds kg / lbs / tons / t / lb / bins, while a SalesRecord's
+    # `quantity_unit` is restricted to kg / lb / boxes / crates / tons / bushels / units. So a
+    # grower whose picks say "lbs" and whose invoice says "lb" wrote the same unit twice and
+    # got NO balance line, because the reconciliation only prints when the two strings match.
+    #
+    # Only unambiguous synonyms are folded. "t" is NOT mapped to "tons": a metric tonne and a
+    # US short ton differ by ~10%, and guessing which one a grower meant would produce a
+    # confident wrong balance — worse than the [REVIEW] line that prints when units disagree.
+    UNIT_SYNONYMS = {
+        "lbs": "lb",
+        "pound": "lb",
+        "pounds": "lb",
+        "kgs": "kg",
+        "kilo": "kg",
+        "kilos": "kg",
+        "kilogram": "kg",
+        "kilograms": "kg",
+        "ton": "tons",
+        "box": "boxes",
+        "crate": "crates",
+        "bushel": "bushels",
+        "unit": "units",
+    }
+
+    @classmethod
+    def _canonical_unit(cls, unit):
+        """Fold a unit onto the sale vocabulary so the two halves can be compared."""
+        cleaned = (unit or "").strip().lower()
+        return cls.UNIT_SYNONYMS.get(cleaned, cleaned)
+
+    def _resolve_harvest_total(self):
+        """Return (amount, unit, basis) for the mass balance, preferring the harvest RECORDS.
+
+        🔴 2026-08-15. `production_amount` is one number typed on the season header; the
+        harvest passes each carry a structured `yield_quantity`. Reconciling sales against the
+        header meant the packet's mass balance never touched the records it was auditing — and
+        a separate consistency check in this file regexes pound values out of free-text
+        descriptions while the structured field sits on the same row. Three yield numbers, no
+        source of truth.
+
+        Summing only when the picks AGREE on a unit is deliberate: adding pounds to bins would
+        produce a confident fabricated total, which is worse for an inspector than falling back
+        to the header number the operator typed and saying so. `basis` is printed, so whichever
+        number wins, the packet states where it came from.
+
+        Both the PDF and the CSV call this. They previously each read the header separately,
+        which is how the two exports of one production came to disagree about the buyer.
+        """
+        events = [ev for ev in self.production.history_productionevent_events.filter(type="HA") if ev.yield_quantity]
+        units = {(_val(ev.yield_unit, "") or "").strip().lower() for ev in events}
+        if events and len(units) == 1:
+            return (
+                sum(ev.yield_quantity for ev in events),
+                _val(events[0].yield_unit, ""),
+                f"sum of {len(events)} harvest record(s)",
+            )
+        return (
+            self.production.production_amount,
+            _val(self.production.production_unit, ""),
+            (
+                "production total (harvest records use mixed units)"
+                if events
+                else "production total (no harvest records with a yield on file)"
+            ),
+        )
+
     def _box_weight_for_production(self):
         """
         Resolve (lb_per_box, tolerance) for the current production.
@@ -7638,29 +8313,17 @@ class AuditExportService:
                 missing_purchase_count += 1
 
         # --- Output side: harvest yield + quantity sold ---
-        # SOE (§ 205.307(a)) supports multiple itemized sales per production. When
-        # dedicated SalesRecord rows exist, aggregate them for the output side and
-        # itemize them below; fall back to the single legacy sold_to/quantity_sold
-        # fields only when no SalesRecord rows are on file.
-        harvest_amount = p.production_amount
-        harvest_unit = _val(p.production_unit, "")
-        try:
-            sales = list(p.sales_records.all())
-        except Exception:  # noqa: BLE001 — relation always present in practice
-            sales = []
-        if sales:
-            sold_unit = _val(sales[0].quantity_unit, harvest_unit)
-            same_sold_unit = all(_val(s.quantity_unit, sold_unit) == sold_unit for s in sales)
-            quantity_sold = sum(float(s.quantity) for s in sales) if same_sold_unit else None
-            sold_to_display = ", ".join(sorted({(s.buyer_name or "").strip() for s in sales if s.buyer_name}))
-            sale_date_display = max((s.sale_date for s in sales if s.sale_date), default=None)
-            organic_on_invoice_display = bool(sales) and all(s.organic_on_invoice for s in sales)
-        else:
-            quantity_sold = p.quantity_sold
-            sold_unit = _val(p.quantity_sold_unit, harvest_unit)
-            sold_to_display = p.sold_to
-            sale_date_display = p.sale_date
-            organic_on_invoice_display = p.organic_on_invoice
+        # Precedence (SalesRecord rows win, legacy History fields are the fallback) lives in
+        # resolve_sales_disclosure(). It used to be inline here, which is exactly how the
+        # compliance snapshot on page 1 ended up disagreeing with this table on page 12.
+        harvest_amount, harvest_unit, harvest_basis = self._resolve_harvest_total()
+        _sales_disclosure = resolve_sales_disclosure(p)
+        sales = list(p.sales_records.all()) if _sales_disclosure.source == "sales_records" else []
+        quantity_sold = _sales_disclosure.quantity
+        sold_unit = _val(_sales_disclosure.quantity_unit, harvest_unit)
+        sold_to_display = _sales_disclosure.buyer
+        sale_date_display = _sales_disclosure.sale_date
+        organic_on_invoice_display = _sales_disclosure.organic_on_invoice
 
         # --- Render input table ---
         elements.append(self._body("<b>Inputs Purchased (Chemical Events)</b>"))
@@ -7725,6 +8388,7 @@ class AuditExportService:
                 "Harvest Yield",
                 _fmt_mass(harvest_amount, harvest_unit) if harvest_amount else None,
             ),
+            ("Harvest basis", harvest_basis),
             (
                 "Quantity Sold",
                 _fmt_mass(quantity_sold, sold_unit) if quantity_sold else None,
@@ -7735,6 +8399,12 @@ class AuditExportService:
                 "Organic Identified on Invoice",
                 "Yes" if organic_on_invoice_display else "No",
             ),
+            # § 205.103(b)(3): records must identify the product by its § 205.301 labeling
+            # category, not merely as "organic". Never inferred — blank prints the ask.
+            (
+                "Labeling Category (§ 205.301)",
+                _label_category_display(_sales_disclosure),
+            ),
         ]
         if sales:
             output_rows.insert(2, ("Sales Records on File (§ 205.307(a))", str(len(sales))))
@@ -7742,7 +8412,7 @@ class AuditExportService:
         # Direct same-unit comparison only when it is actually meaningful —
         # not for boxes-vs-pounds where the units are explicitly incomparable
         # without a conversion. Boxes→lb reconciliation follows below.
-        if harvest_amount and quantity_sold and harvest_unit == sold_unit:
+        if harvest_amount and quantity_sold and self._canonical_unit(harvest_unit) == self._canonical_unit(sold_unit):
             balance = float(harvest_amount) - float(quantity_sold)
             output_rows.append(
                 (
@@ -7759,7 +8429,7 @@ class AuditExportService:
         # silently. Two physical impossibilities an inspector would immediately
         # flag: selling more than was harvested, and a sale dated before harvest.
         mb_flags = []
-        if harvest_amount and quantity_sold and harvest_unit == sold_unit:
+        if harvest_amount and quantity_sold and self._canonical_unit(harvest_unit) == self._canonical_unit(sold_unit):
             # 2% tolerance absorbs rounding / unit-precision noise.
             if float(quantity_sold) > float(harvest_amount) * 1.02:
                 mb_flags.append(
@@ -7798,13 +8468,29 @@ class AuditExportService:
         if sales:
             elements.append(self._spacer(0.08))
             elements.append(self._body("<b>Itemized Sales Records (7 CFR 205.307(a))</b>"))
-            sales_headers = ["Sale Date", "Buyer", "Quantity", "Unit", "Invoice #", "Organic on Invoice"]
+            # "Lot(s)" closes the trace: the harvest table above lists a lot per pick, this
+            # column says which of those picks each buyer received. Without it the packet shows
+            # harvests and sales side by side and cannot answer the § 205.103(b)(2) question an
+            # inspector actually asks of a block picked more than once — which pick went where.
+            sales_headers = [
+                "Sale Date",
+                "Buyer",
+                "Lot(s)",
+                "Quantity",
+                "Unit",
+                "Invoice #",
+                "Organic on Invoice",
+            ]
             sales_data = [[self._hdr(h) for h in sales_headers]]
             for s in sorted(sales, key=lambda r: (r.sale_date is None, r.sale_date or date.min)):
+                lot_codes = [ev.harvest_lot_code for ev in s.harvest_events.all() if ev.harvest_lot_code]
                 sales_data.append(
                     [
                         self._cell(_fmt_date(s.sale_date) if s.sale_date else None),
                         self._cell(s.buyer_name),
+                        # Not truncated, for the same reason as the invoice number below: a
+                        # lot code cut to a stub is a lot code nobody can match to a bin tag.
+                        self._cell(", ".join(lot_codes) if lot_codes else None),
                         self._cell(_fmt_float(s.quantity) if s.quantity is not None else None),
                         self._cell(s.quantity_unit or sold_unit),
                         # Invoice numbers are audit-trail identifiers — never
@@ -7813,10 +8499,135 @@ class AuditExportService:
                         self._cell("Yes" if s.organic_on_invoice else "No"),
                     ]
                 )
-            sales_widths = [0.85 * inch, 1.6 * inch, 0.85 * inch, 0.5 * inch, 1.45 * inch, 0.85 * inch]
+            # Seven columns, 7.45in — inside the 7.5in text block.
+            sales_widths = [
+                0.8 * inch,
+                1.35 * inch,
+                1.35 * inch,
+                0.75 * inch,
+                0.5 * inch,
+                1.85 * inch,
+                0.85 * inch,
+            ]
             st = Table(sales_data, colWidths=sales_widths, repeatRows=1)
             st.setStyle(self._base_table_style())
             elements.append(st)
+
+        # --- Per-shipment transport (§ 205.272(a) / § 205.103(b)(2)) ---
+        # Wholesale lots move in many loads; each SalesRecord row can carry its own
+        # BOL / carrier / clean-transport documentation. Render only rows that have
+        # any shipment data, and flag shipped rows with no clean-transport method —
+        # that is the § 205.272 question an inspector asks per load, not per lot.
+        from history.models import SalesRecord
+
+        _clean_labels = dict(SalesRecord.CLEAN_TRANSPORT_CHOICES)
+        # The USDA form #22 answers below (cleaning method, prior load, inspection findings,
+        # notes) count as transport detail in their own right. Gating them on the BOL/carrier
+        # block meant a grower who answered the affidavit but left the shipping identifiers
+        # blank got NOTHING on paper — including the notes the "Other" labels promise — and the
+        # two [REVIEW] flags at the end of this section could never fire for those rows either.
+        shipment_rows = [
+            s
+            for s in sales
+            if any(
+                [
+                    s.bill_of_lading,
+                    s.carrier_name,
+                    s.vehicle_id,
+                    s.destination,
+                    s.clean_transport_method,
+                    s.transport_cleaning_method,
+                    s.prior_products_transported,
+                    s.transport_inspected_free_of,
+                    s.transport_notes,
+                ]
+            )
+        ]
+        if shipment_rows:
+            elements.append(self._spacer(0.08))
+            elements.append(self._body("<b>Per-Shipment Transport (7 CFR 205.272 / 205.103(b)(2))</b>"))
+            ship_headers = ["Sale Date", "BOL #", "Carrier", "Vehicle", "Destination", "Clean Transport"]
+            ship_data = [[self._hdr(h) for h in ship_headers]]
+            for s in sorted(shipment_rows, key=lambda r: (r.sale_date is None, r.sale_date or date.min)):
+                ship_data.append(
+                    [
+                        self._cell(_fmt_date(s.sale_date) if s.sale_date else None),
+                        # BOL numbers are audit-trail identifiers — same no-truncation
+                        # rule as invoice numbers above.
+                        self._cell(s.bill_of_lading or None),
+                        self._cell(s.carrier_name or None),
+                        self._cell(s.vehicle_id or None),
+                        self._cell(s.destination or None),
+                        self._cell(_clean_labels.get(s.clean_transport_method) or None),
+                    ]
+                )
+            ship_widths = [0.85 * inch, 1.1 * inch, 1.15 * inch, 0.8 * inch, 1.2 * inch, 1.5 * inch]
+            sht = Table(ship_data, colWidths=ship_widths, repeatRows=1)
+            sht.setStyle(self._base_table_style())
+            elements.append(sht)
+
+            # USDA's Clean Transport Affidavit content — what the unit carried before, how it
+            # was cleaned, what the pre-load inspection found. The table above is 6.6in of the
+            # portrait budget, so these ride as per-shipment detail lines (same treatment as
+            # manure, buffer and field-history materials).
+            _clean_method_labels = dict(SalesRecord.TRANSPORT_CLEANING_CHOICES)
+            transport_detail_lines = []
+            for s in sorted(shipment_rows, key=lambda r: (r.sale_date is None, r.sale_date or date.min)):
+                bits = []
+                if s.prior_products_transported:
+                    bits.append("previously carried: " + _esc(s.prior_products_transported))
+                if s.transport_cleaning_method:
+                    bits.append(
+                        "cleaning: "
+                        + _esc(_clean_method_labels.get(s.transport_cleaning_method, s.transport_cleaning_method))
+                    )
+                inspection = s.transport_inspection_display()
+                if inspection:
+                    bits.append("inspected: " + _esc(inspection))
+                # Both "Other" labels above end in "see notes" / "described in the notes".
+                # Printing them without this line pointed a certifier at a description that
+                # had nowhere to live (SalesRecord.transport_notes did not exist until then).
+                if s.transport_notes:
+                    bits.append("notes: " + _esc(s.transport_notes))
+                if not bits:
+                    continue
+                label = _esc(_fmt_date(s.sale_date) if s.sale_date else None)
+                transport_detail_lines.append(f"<b>{label}:</b> " + "; ".join(bits))
+            if transport_detail_lines:
+                elements.append(self._spacer(0.06))
+                elements.append(self._body("Transport unit history, cleaning and pre-load inspection:"))
+                for line in transport_detail_lines:
+                    elements.append(Paragraph("&bull; " + line, self._styles["footer_note"]))
+
+            # A non-dedicated unit with no record of what it carried before is the gap
+            # § 205.272 actually cares about — "swept" means little without knowing swept of
+            # what. Flagged separately from the missing-method check below.
+            _no_prior = [
+                s
+                for s in shipment_rows
+                if s.clean_transport_method in ("affidavit", "inspected") and not s.prior_products_transported
+            ]
+            if _no_prior:
+                elements.append(
+                    Paragraph(
+                        f"<b>[REVIEW] 7 CFR 205.272:</b> {len(_no_prior)} shipment(s) used a non-dedicated "
+                        "transport unit without recording what it carried immediately before the organic "
+                        "load. USDA's Clean Transport Affidavit asks for it, and contamination risk cannot "
+                        "be judged without it.",
+                        self._warning_style(),
+                    )
+                )
+
+            _undocumented = [s for s in shipment_rows if not s.clean_transport_method]
+            if _undocumented:
+                elements.append(
+                    Paragraph(
+                        f"<b>[REVIEW] 7 CFR 205.272:</b> {len(_undocumented)} shipment(s) carry transport "
+                        "details but no clean-transport documentation (affidavit, pre-load inspection, "
+                        "or dedicated organic vehicle). Record how each load's organic integrity was protected.",
+                        self._warning_style(),
+                    )
+                )
 
         # --- Off-farm transport / clean-transport record (CCOF G6.1 / § 205.272 / 205.307) ---
         # transport_method + destination are farmer-entered but were previously never
@@ -7826,14 +8637,37 @@ class AuditExportService:
         if any([p.destination, p.transport_method, p.transport_vehicle_id]):
             elements.append(self._spacer(0.1))
             elements.append(self._body("<b>Off-Farm Transport (CCOF G6.1 / 7 CFR 205.272 / 205.307)</b>"))
-            for label, value in [
+            _shipments_documented = bool(shipment_rows) and all(s.clean_transport_method for s in shipment_rows)
+            _legacy_rows = [
                 ("Destination", p.destination),
                 ("Transport Method", p.transport_method),
                 ("Vehicle / Container ID", p.transport_vehicle_id),
-                ("Clean-Transport Affidavit on File", "Yes" if p.transport_affidavit_on_file else "No"),
-            ]:
+            ]
+            # The legacy lot-level "affidavit on file" flag is only meaningful while it is the
+            # ONLY transport record. Once every load carries its own clean-transport method,
+            # printing "Clean-Transport Affidavit on File: No" beside "documented on all 14
+            # shipments" states two opposite things about the same lot.
+            if not _shipments_documented:
+                _legacy_rows.append(
+                    ("Clean-Transport Affidavit on File", "Yes" if p.transport_affidavit_on_file else "No")
+                )
+            for label, value in _legacy_rows:
                 elements.append(self._label_value(label, value))
-            if not p.transport_affidavit_on_file:
+            # This block and the per-shipment table above describe the SAME fact from two
+            # editors: `transport_affidavit_on_file` is the legacy single-shipment flag, and
+            # SalesRecord.clean_transport_method is the per-load record that replaced it. When
+            # every load is documented, firing the legacy warning made the packet contradict
+            # itself on the same page — a table of 14 documented shipments followed by "no
+            # clean-transport affidavit is recorded". Ask the newer editor first.
+            _undocumented_loads = [s for s in shipment_rows if not s.clean_transport_method]
+            if shipment_rows and not _undocumented_loads:
+                elements.append(
+                    self._label_value(
+                        "Per-Shipment Clean Transport",
+                        f"Documented on all {len(shipment_rows)} shipment(s) — see the table above",
+                    )
+                )
+            elif not p.transport_affidavit_on_file:
                 elements.append(
                     Paragraph(
                         "<b>[REVIEW] 7 CFR 205.272 / CCOF G6.1:</b> organic product was moved off-farm "
@@ -7861,13 +8695,13 @@ class AuditExportService:
         )
 
         harvest_lb = None
-        if harvest_amount and harvest_unit.lower() in ("lb", "pounds", "pound", "lbs"):
+        if harvest_amount and self._canonical_unit(harvest_unit) == "lb":
             try:
                 harvest_lb = float(harvest_amount)
             except (TypeError, ValueError):
                 harvest_lb = None
 
-        sold_is_boxes = sold_unit.lower() in ("boxes", "box", "cartons", "carton", "lugs", "lug")
+        sold_is_boxes = _is_box_unit(sold_unit)
 
         if not harvest_amount or not quantity_sold:
             elements.append(
@@ -8208,7 +9042,12 @@ class AuditExportService:
                     self._warning_style(),
                 )
             )
-            return elements
+            # A missing BOUNDARY record does not excuse the DISPOSITION record — if anything a
+            # buffer harvest logged against an undocumented boundary is the more urgent thing
+            # for an inspector to see. Appending only on the has-rows path put the disposition
+            # table behind this early return, which is the same defect shape as the seed
+            # exemption ground that shipped inside `if search_attempts:`.
+            return elements + self._buffer_zone_section_tail()
 
         headers = ["Boundary", "Adjoining Land Use", "Buffer Width", "Drift Risk", "Prevention Measure"]
         data = [[self._hdr(h) for h in headers]]
@@ -8234,44 +9073,240 @@ class AuditExportService:
         # width. Only boundaries that carry any D&E data appear here.
         de_lines = []
         for b in rows:
-            adjacent_organic = bool(b.get("adjacent_organic"))
-            buffer_type = _val(b.get("buffer_type"))
-            crop_in_buffer = _val(b.get("crop_in_buffer"))
+            # Rows are normalized onto one vocabulary by product.services.buffer_zones
+            # (canonical: adjacent_is_organic / crop_grown_in_buffer) and migration
+            # product.0023 rewrote the stored ones. The legacy spellings are still read as a
+            # fallback for any row that predates that migration — e.g. a database restored
+            # from an older backup. Do NOT take this as licence to add a third spelling:
+            # reading both was the 2026-08 patch that fixed this PDF while leaving the two
+            # writers free to keep destroying each other's data.
+            # _esc, not _val: these are interpolated into a raw Paragraph below, and
+            # ReportLab parses markup there. Unescaped, "Bob & Sons <b>x" raised ValueError
+            # and failed the whole export; "<north lot>" was silently swallowed.
+            adjacent_organic = bool(b.get("adjacent_is_organic") or b.get("adjacent_organic"))
+            buffer_type = _esc(b.get("buffer_type"))
+            crop_in_buffer = _esc(b.get("crop_grown_in_buffer") or b.get("crop_in_buffer"))
             neighbor_notified = bool(b.get("neighbor_notified"))
-            notify_date = _val(b.get("neighbor_notification_date"))
-            if not (adjacent_organic or buffer_type or crop_in_buffer or neighbor_notified):
+            notify_date = _esc(b.get("neighbor_notification_date"))
+            prohibited_last = _esc(b.get("prohibited_use_last_date"))
+            if not (adjacent_organic or buffer_type or crop_in_buffer or neighbor_notified or prohibited_last):
                 continue
             parts = []
             if buffer_type:
                 parts.append(f"buffer type: {buffer_type}")
             if crop_in_buffer:
-                parts.append(f"crop in buffer (not sold as organic): {crop_in_buffer}")
+                # State the crop, NOT its organic status. The old text read "crop in buffer
+                # (not sold as organic)" — the packet asserting the exact fact § 205.202(c)
+                # asks the operator to PROVE, on the strength of a free-text parcel field.
+                # What actually happened to the crop is evidenced by the buffer-crop
+                # disposition record below; this line only names it.
+                parts.append(f"crop grown in buffer: {crop_in_buffer}")
             if adjacent_organic:
                 parts.append("adjoining land is also certified organic — no buffer required")
+            if prohibited_last:
+                parts.append(f"adjoining land last received a prohibited material: {prohibited_last}")
             if neighbor_notified:
                 notify_txt = "drift-notification letter on file (§ 205.400(f)(1))"
                 if notify_date:
                     notify_txt += f", dated {notify_date}"
                 parts.append(notify_txt)
-            de_lines.append(f"<b>{_val(b.get('direction'))}:</b> " + "; ".join(parts))
+            de_lines.append(f"<b>{_esc(b.get('direction'))}:</b> " + "; ".join(parts))
         if de_lines:
             elements.append(self._spacer(0.08))
             elements.append(self._body("Adjoining-land &amp; buffer detail (CCOF OSP Sections D &amp; E):"))
             for line in de_lines:
                 elements.append(Paragraph("&bull; " + line, self._styles["footer_note"]))
 
-        elements.append(self._spacer(0.1))
-        elements.append(
-            Paragraph(
-                "7 CFR 205.202(c): certified land must have distinct, defined boundaries and "
-                "buffer zones to prevent unintended contact with prohibited substances from "
-                "adjoining land. Drift exceeding 5% of the EPA tolerance can cause loss of "
-                "organic status. Operator maintains the drift-prevention measures above and, "
-                "where a neighbor applies prohibited substances, an annual neighbor-"
-                "notification letter on file (§ 205.400(f)(1) drift-notification readiness).",
-                self._styles["footer_note"],
-            )
+        return elements + self._buffer_zone_section_tail()
+
+    def _buffer_zone_section_tail(self):
+        """Everything that closes the land-requirements section, on BOTH exit paths.
+
+        This function returns early when the parcel has no structured buffer-zone record, and
+        THREE separate additions have now been appended to the has-rows path only — the buffer
+        crop disposition record, the § 205.202(c) footnote, and the neighbour attestation. Each
+        time the content silently vanished for exactly the operations with the thinnest
+        boundary documentation, which are the ones an inspector looks at hardest.
+
+        One tail, called from both returns, so a fourth addition cannot repeat it.
+        """
+        return (
+            self._buffer_crop_disposition_rows()
+            + self._adjoining_land_affidavit_rows()
+            + [self._spacer(0.1), self._buffer_zone_footnote()]
         )
+
+    def _adjoining_land_affidavit_rows(self):
+        """USDA's Adjoining Land Use Verification (form #25) — signed BY THE NEIGHBOUR.
+
+        Kept visually and structurally apart from the buffer-zone table above because the two
+        have different authors. The buffer table is the operation's own account of its
+        boundary; this is a third party attesting to their own practices. Presenting them as
+        one record would let an operator's entry read as an independent attestation.
+
+        Unsigned rows are rendered and marked as unsigned rather than hidden: the operation
+        having sought the attestation is itself worth showing, but it is not yet third-party
+        evidence.
+        """
+        from certifications.models import AdjoiningLandAffidavit
+
+        try:
+            parcel = self.production.parcel
+        except AttributeError:
+            parcel = None
+        if parcel is None:
+            return []
+
+        affidavits = list(AdjoiningLandAffidavit.objects.filter(parcel=parcel).order_by("border_side", "-created_at"))
+        if not affidavits:
+            return []
+
+        elements = [
+            self._spacer(0.12),
+            self._body("<b>Adjoining Land Use Verification — neighbour attestation (7 CFR 205.202(c))</b>"),
+        ]
+        headers = ["Neighbour", "Side", "Materials Used", "Distance", "Notify?", "Signed"]
+        data = [[self._hdr(h) for h in headers]]
+        unsigned = []
+        for a in affidavits:
+            # Three states again: an affirmative "none of the above", a list, or silence.
+            if a.declares_no_materials is True:
+                materials = "None of the listed materials (declared)"
+            elif a.materials_display():
+                materials = a.materials_display()
+                if a.not_used_on_adjoining_fields is True:
+                    materials += " — not on adjoining fields"
+            else:
+                materials = "Not answered"
+
+            distance = (
+                f"{a.distance_to_organic_property_ft} ft" if a.distance_to_organic_property_ft is not None else "—"
+            )
+            # A neighbour who did not answer has not refused; say so rather than printing "No".
+            notify = {True: "Yes", False: "No", None: "Not answered"}[a.agrees_to_notify]
+            if a.is_signed():
+                signed = _fmt_date(a.neighbor_signed_date) if a.neighbor_signed_date else "Document on file"
+            else:
+                signed = "UNSIGNED"
+                unsigned.append(a)
+            data.append(
+                [
+                    self._cell(a.neighbor_name or "—"),
+                    self._cell(a.get_border_side_display() if a.border_side else "—"),
+                    self._cell(materials),
+                    self._cell(distance),
+                    self._cell(notify),
+                    self._cell(signed),
+                ]
+            )
+        t = Table(
+            data, colWidths=[1.3 * inch, 0.7 * inch, 2.0 * inch, 0.7 * inch, 0.8 * inch, 0.9 * inch], repeatRows=1
+        )
+        t.setStyle(self._base_table_style())
+        elements.append(t)
+
+        if unsigned:
+            elements.append(
+                Paragraph(
+                    f"<b>[REVIEW] 7 CFR 205.202(c):</b> {len(unsigned)} adjoining-land attestation(s) are "
+                    "recorded but not signed by the neighbour. Until signed they are the operation's own "
+                    "account of a neighbour's practices, not third-party verification of them.",
+                    self._warning_style(),
+                )
+            )
+        return elements
+
+    def _buffer_zone_footnote(self):
+        """The § 205.202(c) closing note.
+
+        Extracted because this section has TWO exit paths and the early one (no structured
+        buffer-zone record on file) used to return without it — so the section simply ended
+        mid-air, and anything keying off the footnote as a section boundary ran past it into
+        the rest of the document. Copy-pasting the text into both paths would have made it
+        two writers of one string; a single method keeps it one.
+        """
+        return Paragraph(
+            "7 CFR 205.202(c): certified land must have distinct, defined boundaries and "
+            "buffer zones to prevent unintended contact with prohibited substances from "
+            "adjoining land. Drift exceeding 5% of the EPA tolerance can cause loss of "
+            "organic status. Operator maintains the drift-prevention measures above and, "
+            "where a neighbor applies prohibited substances, an annual neighbor-"
+            "notification letter on file (§ 205.400(f)(1) drift-notification readiness).",
+            self._styles["footer_note"],
+        )
+
+    def _buffer_crop_disposition_rows(self):
+        """USDA's Buffer Crop Disposition Record, per harvest event (7 CFR 205.202(c)).
+
+        The buffer-zone table above documents the drift CONTROL; this documents what became
+        of the crop grown inside that buffer. USDA publishes them as one record because a
+        certifier asks both questions in the same breath, and until now the packet answered
+        only the first.
+
+        Silence is deliberate where the regulation is silent: a harvest with no disposition
+        recorded produces no row (the question was not asked of pre-2026-08 events, and
+        NULL means unanswered, not "no buffer"), and only commerce-entering dispositions
+        draw a missing-evidence flag.
+        """
+        from history.models import ProductionEvent
+
+        events = list(
+            ProductionEvent.objects.filter(history_id=self.production.id, type="HA", buffer_disposition__isnull=False)
+            .exclude(buffer_disposition="")
+            .order_by("date")
+        )
+        if not events:
+            return []
+
+        labels = dict(ProductionEvent._meta.get_field("buffer_disposition").choices or [])
+
+        elements = [
+            self._spacer(0.12),
+            self._body("<b>Buffer Crop Disposition Record (7 CFR 205.202(c))</b>"),
+        ]
+        headers = ["Date", "Disposition", "Quantity Removed", "Documentation (type and location)"]
+        data = [[self._hdr(h) for h in headers]]
+        missing_evidence = []
+        for e in events:
+            entered = e.buffer_disposition_entered_commerce()
+            # Evidence is only owed once the crop left the operation. A bare dash in both
+            # cases would read as one gap to a certifier skimming the column, so name the
+            # two states apart: nothing owed vs owed and absent.
+            # `entered` is checked FIRST, deliberately. Evidence recorded against an earlier
+            # commerce disposition can survive a correction to "left in field" (the field is
+            # nullable and older clients omitted the key rather than clearing it), and
+            # printing a delivery tag beside a crop that never left the farm would be the
+            # packet contradicting itself.
+            if not entered:
+                evidence = "Not required — crop did not leave the operation"
+            elif e.buffer_disposition_evidence:
+                evidence = str(e.buffer_disposition_evidence)
+            else:
+                evidence = "Not recorded"
+                missing_evidence.append(e)
+            data.append(
+                [
+                    self._cell(_val(e.date.date() if e.date else None)),
+                    self._cell(labels.get(e.buffer_disposition, _val(e.buffer_disposition))),
+                    self._cell(_val(e.buffer_disposition_quantity)),
+                    self._cell(evidence),
+                ]
+            )
+        t = Table(data, colWidths=[0.9 * inch, 1.7 * inch, 1.2 * inch, 2.6 * inch], repeatRows=1)
+        t.setStyle(self._base_table_style())
+        elements.append(t)
+
+        if missing_evidence:
+            elements.append(
+                Paragraph(
+                    "<b>[REVIEW] 7 CFR 205.202(c):</b> "
+                    f"{len(missing_evidence)} buffer harvest(s) left the operation with no "
+                    "documentation recorded. USDA's Buffer Crop Disposition Record asks for "
+                    "delivery tags and nonorganic sales records showing the buffer crop was not "
+                    "represented as organic — record the document type and where it is filed.",
+                    self._warning_style(),
+                )
+            )
         return elements
 
     # ------------------------------------------------------------------
@@ -8641,7 +9676,12 @@ class AuditExportService:
                 "Crop Grown",
                 "Production Method",
                 "Substances Applied",
-                "Last Prohibited Substance",
+                # Was "Last Prohibited Substance" over a cell rendering only the DATE, so a
+                # certifier read "Last Prohibited Substance: 2019-05-12". Worse, the model
+                # carries the substance NAME in `last_prohibited_substance` — the very
+                # "Name and Application Date of Last Prohibited Input" USDA asks for on every
+                # field — and the packet never printed it. Both now render.
+                "Last Prohibited Input",
                 "Notes",
             ]
             header_row = [self._hdr(h) for h in headers]
@@ -8658,10 +9698,15 @@ class AuditExportService:
                         # Without it a SPLIT FIELD renders as two rows both reading "2011" with
                         # different crops and nothing saying which ground each was on — the exact
                         # question 7 CFR 205.202 land history exists to answer.
-                        self._cell(f"{entry.crop_grown} ({entry.block_id})" if entry.block_id else entry.crop_grown),
+                        # Cover crop folds into the same cell for the same width-budget
+                        # reason — "Walnuts + cover: bell beans" is one land-use fact.
+                        self._cell(
+                            (f"{entry.crop_grown} ({entry.block_id})" if entry.block_id else entry.crop_grown)
+                            + (f" + cover: {entry.cover_crop}" if entry.cover_crop else "")
+                        ),
                         self._cell(entry.get_production_method_display() if entry.production_method else None),
                         self._cell(entry.substances_applied),
-                        self._cell(_fmt_date(entry.date_last_prohibited)),
+                        self._cell(_last_prohibited_input(entry)),
                         self._cell(entry.notes),
                     ]
                 )
@@ -8677,6 +9722,37 @@ class AuditExportService:
             t = Table(data, colWidths=col_widths, repeatRows=1)
             t.setStyle(self._base_table_style())
             elements.append(t)
+
+            # USDA's Field History form asks for "Material / Product Brand Name",
+            # "Manufacturer" and "Application Date(s)" as three columns. The table above is
+            # already 6.75in of the portrait budget, so per-year detail lines carry them —
+            # the same treatment the manure and buffer sections use.
+            #
+            # Only structured rows appear here. `substances_applied` is prose and is NEVER
+            # parsed into a manufacturer: guessing which word is a brand and which is a maker
+            # would put a fabricated attribution into an eligibility determination.
+            history_material_lines = []
+            for entry in crop_history:
+                rows = entry.substance_applications if isinstance(entry.substance_applications, list) else []
+                for row in rows:
+                    if not isinstance(row, dict):
+                        continue
+                    material = _esc(row.get("material"), fallback="")
+                    manufacturer = _esc(row.get("manufacturer"), fallback="")
+                    dates = _esc(row.get("application_dates"), fallback="")
+                    if not (material or manufacturer or dates):
+                        continue
+                    bits = [
+                        b
+                        for b in (material, manufacturer and f"mfr: {manufacturer}", dates and f"applied: {dates}")
+                        if b
+                    ]
+                    history_material_lines.append(f"<b>{entry.year}:</b> " + "; ".join(bits))
+            if history_material_lines:
+                elements.append(self._spacer(0.06))
+                elements.append(self._body("Materials by year — brand, manufacturer and application date(s):"))
+                for line in history_material_lines:
+                    elements.append(Paragraph("&bull; " + line, self._styles["footer_note"]))
 
         else:
             # --- Fallback: derive history from previous History objects on the same parcel ---
@@ -8770,29 +9846,102 @@ class AuditExportService:
         if affidavits:
             elements.append(self._spacer(0.15))
             elements.append(self._body("<b>Landowner Affidavits (prior-manager attestation)</b>"))
+            # "Last Prohibited Substance" used to head a column rendering
+            # `last_prohibited_date`, so a certifier read "Last Prohibited Substance:
+            # 2019-05-12". There is no substance NAME on this model \u2014 the affidavit records
+            # the date \u2014 so the header is corrected rather than the value.
+            #
+            # "Management Period" and "Materials Declared" are USDA Land Use History
+            # Verification columns. The period matters because without it a signer who
+            # managed the land for one of three years reads as covering all three.
             aff_headers = [
                 "Previous Manager",
-                "Last Prohibited Substance",
+                "Management Period",
+                "Last Prohibited Application",
+                "Materials Declared",
                 "Signed Date",
                 "Document",
             ]
             aff_data = [[self._hdr(h) for h in aff_headers]]
+            contradictory = []
             for aff in affidavits:
+                period_start = _fmt_date(aff.management_period_start) if aff.management_period_start else None
+                period_end = _fmt_date(aff.management_period_end) if aff.management_period_end else None
+                if period_start or period_end:
+                    period = f"{period_start or '?'} \u2013 {period_end or '?'}"
+                else:
+                    period = "\u2014"
+                # Three states, never two. An unanswered checkbox is NOT a declaration that
+                # nothing was applied, and rendering it as one would manufacture the
+                # \u00a7 205.202(b) attestation the eligibility determination rests on.
+                if aff.declared_no_materials_applied() and aff.yearly_history:
+                    # The affidavit contradicts itself: a declaration of "none applied" over a
+                    # table that lists applications. Printing only the declaration would hide
+                    # the very rows a certifier needs, and printing only the rows would hide a
+                    # signed statement. Show both and flag it — same treatment as the
+                    # page-1/page-12 sales disagreement.
+                    declared = f"CONTRADICTION — declared none, {len(aff.yearly_history)} year(s) listed"
+                    contradictory.append(aff)
+                elif aff.declared_no_materials_applied():
+                    declared = "None applied (declared)"
+                elif aff.yearly_history:
+                    declared = f"{len(aff.yearly_history)} year(s) listed"
+                else:
+                    declared = "Not answered"
                 aff_data.append(
                     [
                         self._cell(aff.previous_manager_name or "\u2014"),
+                        self._cell(period),
                         self._cell(_fmt_date(aff.last_prohibited_date)),
+                        self._cell(declared),
                         self._cell(_fmt_date(aff.previous_manager_signed_date)),
                         self._cell("Attached" if aff.signed_document else "Not attached"),
                     ]
                 )
             aff_t = Table(
                 aff_data,
-                colWidths=[2.2 * inch, 1.5 * inch, 1.1 * inch, 1.0 * inch],
+                colWidths=[1.4 * inch, 1.2 * inch, 1.1 * inch, 1.1 * inch, 0.8 * inch, 0.8 * inch],
                 repeatRows=1,
             )
             aff_t.setStyle(self._base_table_style())
             elements.append(aff_t)
+
+            # USDA form #2 asks the signer to describe the land they are attesting for —
+            # "assessor's parcel number, county, township/section/range" — and to name the
+            # landowner separately from the manager. Both were captured and NEITHER was
+            # printed, so the packet showed an attestation without saying what land it covered
+            # or who owned it. Rendered as detail lines rather than columns: the table is
+            # already six wide, and these vary in length.
+            #
+            # NOT the same fact as Parcel.apn / section_township_range above. That is the
+            # operation's own record of its land; this is what the SIGNER attested it to be,
+            # and a mismatch between them is information a reviewer wants, not a duplicate.
+            aff_detail_lines = []
+            for aff in affidavits:
+                bits = []
+                if aff.parcel_legal_description:
+                    bits.append("land as described by signer: " + _esc(aff.parcel_legal_description))
+                if aff.landowner_name:
+                    bits.append("landowner: " + _esc(aff.landowner_name))
+                if aff.field_acres:
+                    bits.append(f"{_esc(aff.field_acres)} acres")
+                if not bits:
+                    continue
+                aff_detail_lines.append(f"<b>{_esc(aff.previous_manager_name)}:</b> " + "; ".join(bits))
+            if aff_detail_lines:
+                elements.append(self._spacer(0.06))
+                for line in aff_detail_lines:
+                    elements.append(Paragraph("&bull; " + line, self._styles["footer_note"]))
+            if contradictory:
+                elements.append(
+                    Paragraph(
+                        "<b>[REVIEW] 7 CFR 205.202(b):</b> "
+                        f"{len(contradictory)} affidavit(s) declare that no materials were applied "
+                        "while also listing applications for the same period. A certifier cannot "
+                        "rely on either statement until the signer resolves which is correct.",
+                        self._warning_style(),
+                    )
+                )
             elements.append(self._spacer(0.06))
             elements.append(
                 Paragraph(
@@ -9510,6 +10659,30 @@ class AuditExportService:
             cn_tbl = Table(cn_data, colWidths=cn_widths, repeatRows=1)
             cn_tbl.setStyle(self._base_table_style())
             elements.append(cn_tbl)
+
+            # § 205.400(f)(2) lets supporting documentation follow at the annual update rather
+            # than accompany the notice, so WHICH of the two the operation chose is part of the
+            # record. The panel collected `documentation_timing` and this table never printed
+            # it — a compliance question the grower answered that reached no certifier. Ride it
+            # as a detail line rather than a seventh column: the table is already 6.4in of the
+            # portrait budget, and widening it would mean truncating Description, which is the
+            # operator's own words.
+            doc_lines = []
+            for cn in change_notifications:
+                bits = []
+                if cn.documentation_timing:
+                    bits.append(_esc(cn.get_documentation_timing_display()))
+                if cn.supporting_document:
+                    bits.append("document on file")
+                if not bits:
+                    continue
+                label = _esc(_fmt_date(cn.date_notified) if cn.date_notified else None)
+                doc_lines.append(f"<b>{label}:</b> " + "; ".join(bits))
+            if doc_lines:
+                elements.append(self._spacer(0.06))
+                elements.append(self._body("Supporting documentation:"))
+                for line in doc_lines:
+                    elements.append(Paragraph("&bull; " + line, self._styles["footer_note"]))
             # Flag any (f)(1) prohibited-substance notification — the immediate-report category.
             immediate = [cn for cn in change_notifications if cn.is_immediate]
             if immediate:
@@ -9522,6 +10695,22 @@ class AuditExportService:
                         self._warning_style(),
                     )
                 )
+                # The date is the only evidence the report WAS immediate. Recording the event
+                # without it is deliberately allowed — a grower must be able to log drift before
+                # they have phoned the certifier — so the gap is named HERE rather than refused
+                # at entry, which would make the most urgent category the hardest to record.
+                undated = [cn for cn in immediate if not cn.date_notified]
+                if undated:
+                    elements.append(self._spacer(0.05))
+                    elements.append(
+                        Paragraph(
+                            f"<b>[REVIEW] 7 CFR 205.400(f)(1): {len(undated)} of those record no "
+                            f"notification date. § 205.400(f)(1) requires the report to be made "
+                            f"immediately, and the date is the only evidence of when it was. Record "
+                            f"the date the certifier was notified for each.</b>",
+                            self._warning_style(),
+                        )
+                    )
 
         # --- Annual Continuation / Update (7 CFR 205.406) ---
         # The annual update is a record distinct from the OSP version. Surface the most
@@ -9876,9 +11065,9 @@ class AuditExportService:
                 "wsda": "WSDA Materials List",
                 "national_list": "National List lookup",
                 "unresolved": "Name match only (unresolved)",
-                # Phase 2 — seed source findings (§ 205.204 / NOP 5029).
+                # Phase 2 — seed source findings (§ 205.204).
                 "seed_certification_missing": "Seed certification not documented",
-                "seed_search_incomplete": "NOP 5029 search incomplete",
+                "seed_search_incomplete": "Commercial-availability search incomplete",
                 "seed_treated_prohibited": "Treated seed — confirm with certifier",
             }.get(resolution, resolution)
 
@@ -10242,19 +11431,34 @@ class AuditExportService:
         # Producer groups require an Internal Control System per SOE. Single-
         # operation farms skip it. The OSP's additional_certifier_info section
         # also declares this; the scope section repeats for inspector clarity.
-        is_producer_group = False
-        if establishment:
-            # Best-effort heuristic: has_split_operation or multi-parcel multi-
-            # operator setups aren't the same as a producer group. Without an
-            # explicit "is_group" flag, default to N/A.
-            is_producer_group = False
-        ics_status = (
-            "APPLICABLE — producer group. Internal Control System required per "
-            "§ 205.201(c); see OSP additional_certifier_info section."
-            if is_producer_group
-            else "NOT APPLICABLE — single-operation farm. § 205.201(c) Internal "
-            "Control System requirements do not apply."
-        )
+        # 🔴 2026-08-15 — this printed a REGULATORY DETERMINATION from a constant.
+        #
+        # `is_producer_group` was hard-coded False inside an `if establishment:` block that
+        # re-assigned it False, and the packet then asserted "§ 205.201(c) Internal Control
+        # System requirements do not apply." True for a single farm; a stated falsehood the
+        # day a co-op is onboarded — and § 205.201(c) is a ten-part requirement including
+        # (c)(9) "traceability and mass-balance audits".
+        #
+        # There is still no `is_group` flag on Establishment. The honest output is therefore
+        # not a determination at all: state the basis and let the certifier judge, exactly as
+        # this file does elsewhere for water testing.
+        is_producer_group = getattr(establishment, "is_producer_group", None) if establishment else None
+        if is_producer_group is True:
+            ics_status = (
+                "APPLICABLE — producer group. Internal Control System required per "
+                "§ 205.201(c); see OSP additional_certifier_info section."
+            )
+        elif is_producer_group is False:
+            ics_status = (
+                "NOT APPLICABLE — recorded as a single operation. § 205.201(c) Internal "
+                "Control System requirements apply to producer groups only."
+            )
+        else:
+            ics_status = (
+                "NOT RECORDED — Trazo does not capture producer-group status. § 205.201(c) "
+                "Internal Control System requirements apply to producer group operations; "
+                "the operator confirms whether they apply."
+            )
         elements.append(self._label_value("§ 205.201(c) Internal Control System", ics_status))
 
         # --- SOE Fraud Prevention (§ 205.201(a)(3)) — cross-reference -----
@@ -10296,16 +11500,24 @@ class AuditExportService:
         # maintain a structured rootstock dossier; the honest disclosure is that
         # the documentation lives in the parcel dossier and must be provided
         # directly to the inspector on request.
+        # 2026-08-15: rootstock, plant count and spacing now have columns on ProductionEvent
+        # and print in the Planting Event Details table above, so the blanket "Trazo does not
+        # yet structure rootstock records" disclosure is no longer true and has been removed —
+        # a disclosure that overstates a gap is as wrong as one that hides it.
+        #
+        # What remains genuinely out of scope is the SUPPLIER-side paperwork: the nursery's own
+        # organic certificate for the stock, and the (a)(1) affidavit where the stock is
+        # non-organic. Those are documents the operator holds, not records Trazo generates, so
+        # the honest line is narrower now.
         elements.append(
             self._label_value(
-                "Rootstock commercial-availability (§ 205.204)",
+                "Rootstock certification documents (§ 205.204)",
                 (
-                    "Perennial rootstock certification and, for non-organic "
-                    "rootstock, the § 205.204(a)(1) commercial-availability "
-                    "search affidavit are maintained in the parcel dossier. "
-                    "Operator provides these directly to the inspector on "
-                    "request. Trazo does not yet structure rootstock records "
-                    "in this export."
+                    "Rootstock, plant count and spacing are recorded per planting event and "
+                    "printed above. The nursery's organic certificate for the planting stock, "
+                    "and for non-organic stock the § 205.204(a)(1) commercial-availability "
+                    "affidavit, are documents the operator holds; they are maintained in the "
+                    "parcel dossier and provided to the inspector on request."
                 ),
             )
         )
@@ -10456,6 +11668,29 @@ class AuditExportService:
         if not establishment:
             return result
         result["uploaded"] = bool(establishment.fraud_prevention_plan_uploaded)
+        if not result["uploaded"]:
+            # Second legitimate route (2026-08-10, mirroring
+            # OperationReadinessService._ofpp_module_completed): OSP module G2.0's
+            # questions ARE the fraud-prevention plan. Accepting the module here
+            # keeps this gate consistent with the readiness card — before this,
+            # a farmer whose farm home said "OFPP on file" still hit the 422 on
+            # the organic audit export because the two services disagreed.
+            try:
+                from certifications.models import OrganicSystemPlan
+
+                for plan in OrganicSystemPlan.objects.filter(establishment=establishment):
+                    entry = ((plan.module_responses or {}).get("modules") or {}).get("g2_0_fraud_prevention") or {}
+                    if entry.get("completed_at"):
+                        result["uploaded"] = True
+                        result["doc_name"] = (
+                            "authored in Trazo (OSP module G2.0 — Monitoring & Organic Fraud Prevention)"
+                        )
+                        completed = str(entry.get("completed_at"))[:10]
+                        if completed:
+                            result["date_str"] = completed
+                        return result
+            except Exception:  # noqa: BLE001 — G2.0 acceptance must never break the gate
+                pass
         if establishment.fraud_prevention_plan_date:
             result["date_str"] = establishment.fraud_prevention_plan_date.strftime("%Y-%m-%d")
         result["responsible"] = establishment.ofpp_responsible_person or "Not assigned"
@@ -10624,7 +11859,7 @@ class AuditExportService:
                         f"Until: {self.production.retention_until}"
                         if self.production.retention_until
                         else (
-                            "Retained 5 years from record creation (7 CFR 205.103(b)(3)). "
+                            "Retained 5 years from record creation (7 CFR 205.103(b)(4)). "
                             "The end-date is stamped when this production is finished."
                         )
                     ),
@@ -10796,7 +12031,7 @@ class AuditExportService:
         # for. We attest to the platform behavior, not the operator's compliance.
         elements.append(
             Paragraph(
-                "<b>Record retention (7 CFR 205.103(b)(3)):</b> "
+                "<b>Record retention (7 CFR 205.103(b)(4)):</b> "
                 "Trazo retains all event logs, OSP versions, approved-input change logs, "
                 "and audit-trail entries for this production in PostgreSQL with point-in-"
                 "time recovery, and stores attached media in S3. Records remain accessible "
@@ -10838,7 +12073,8 @@ class AuditExportService:
         if self.production.lot_id:
             label_text = (
                 "<b>Non-retail container labeling (7 CFR 205.307):</b> "
-                f"Lot ID <b>{self.production.lot_id}</b> is assigned to this production "
+                # _esc: operator-assigned identity string on a markup-parsing Paragraph.
+                f"Lot ID <b>{_esc(self.production.lot_id)}</b> is assigned to this production "
                 "and links every harvest container to the events recorded in this "
                 "report. Under the post-SOE § 205.307(a), each non-retail container "
                 "must display only: (1) identification of the product as organic "
@@ -10911,7 +12147,7 @@ class AuditExportService:
             Paragraph(
                 "SOE (Strengthening Organic Enforcement) rule effective March 19, 2024 requires "
                 "fraud prevention plans (7 CFR 205.201(a)(3)), enhanced traceability "
-                "(7 CFR 205.103(b)(2)), 5-year record retention (7 CFR 205.103(b)(3)), "
+                "(7 CFR 205.103(b)(2)), 5-year record retention (7 CFR 205.103(b)(4)), "
                 "and supply-chain traceability audits (7 CFR 205.501(a)(21)).",
                 self._styles["footer_note"],
             )
@@ -11381,7 +12617,25 @@ class AuditExportService:
                 manure_info = f"Manure interval: {ev.manure_harvest_interval} days"
                 if ev.manure_application_date:
                     manure_info += f" (applied: {_fmt_date(ev.manure_application_date)})"
+                # The PDF's manure table gained a "Planned Harvest" column (USDA's
+                # "Date of Harvest — Estimated"); carry it here too. A field that reaches one
+                # export and not the other is how the same production came to give two answers
+                # about its buyer — see resolve_sales_disclosure().
+                if ev.manure_harvest_date_planned:
+                    manure_info += f" (planned harvest: {_fmt_date(ev.manure_harvest_date_planned)})"
                 notes = (notes + " | " if notes else "") + manure_info
+            # USDA form #9's "Manure Type, Form and Source" and "How Applied / Incorporated",
+            # kept in step with the PDF's per-row detail lines for the same reason as above.
+            #
+            # Deliberately OUTSIDE the `manure_harvest_interval` guard the block above sits in:
+            # composted and NOP 5006 manure carry interval "na", and an operation that records
+            # "Chicken, dry, on farm" on a composted amendment would otherwise have it silently
+            # dropped from the CSV while the PDF printed it.
+            _manure_tfs = ev.manure_type_form_source_display()
+            _manure_applied = ev.get_manure_application_method_display() if ev.manure_application_method else ""
+            if _manure_tfs or _manure_applied:
+                _bits = [b for b in (_manure_tfs, _manure_applied and f"applied: {_manure_applied}") if b]
+                notes = (notes + " | " if notes else "") + "Manure: " + ", ".join(_bits)
 
             # Cover-crop species lives in extra_data, not amendment_type — surface it in the
             # Amendment column so the CSV matches the PDF (and doesn't drop the planted mix).
@@ -11812,25 +13066,33 @@ class AuditExportService:
             writer.writerow(["=== MASS-BALANCE AUDIT SUMMARY ==="])
             writer.writerow(["Field", "Value"])
             p = self.production
-            harvest_amount = p.production_amount
-            harvest_unit = _val(p.production_unit, "")
-            quantity_sold = p.quantity_sold
-            sold_unit = _val(p.quantity_sold_unit, harvest_unit)
+            harvest_amount, harvest_unit, harvest_basis = self._resolve_harvest_total()
+            # The CSV export had NO SalesRecord fallback at all, so for any operation
+            # recording sales the SOE-supported way it reported "Sold To: —" while the PDF
+            # of the same production itemised the buyer. Same production, two exports, two
+            # answers — the defect this sweep exists to close.
+            _csv_sales = resolve_sales_disclosure(p)
+            quantity_sold = _csv_sales.quantity
+            sold_unit = _val(_csv_sales.quantity_unit, harvest_unit)
             writer.writerow(
                 [
                     "Harvest Yield",
                     f"{_fmt_float(harvest_amount)} {harvest_unit}".strip() if harvest_amount else "\u2014",
                 ]
             )
+            writer.writerow(["Harvest basis", harvest_basis])
             writer.writerow(
                 [
                     "Quantity Sold",
                     f"{_fmt_float(quantity_sold)} {sold_unit}".strip() if quantity_sold else "\u2014",
                 ]
             )
-            writer.writerow(["Sold To", _val(p.sold_to)])
-            writer.writerow(["Sale Date", _fmt_date(p.sale_date) if p.sale_date else "\u2014"])
-            writer.writerow(["Organic on Invoice", "Yes" if p.organic_on_invoice else "No"])
+            writer.writerow(["Sold To", _val(_csv_sales.buyer)])
+            writer.writerow(["Sale Date", _fmt_date(_csv_sales.sale_date) if _csv_sales.sale_date else "\u2014"])
+            writer.writerow(["Organic on Invoice", "Yes" if _csv_sales.organic_on_invoice else "No"])
+            # Same source and same renderer as the PDF — the two exports of one production
+            # disagreeing on a sales fact is the defect this resolver was extracted to end.
+            writer.writerow(["Labeling Category (§ 205.301)", _label_category_display(_csv_sales)])
             # Inputs purchased sub-table
             writer.writerow([])
             writer.writerow(["Date", "Product", "Type", "Qty Purchased", "Unit"])

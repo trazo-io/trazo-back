@@ -212,10 +212,16 @@ class Company(models.Model):
             if not period_start:
                 period_start = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-            current_usage = HistoryScan.objects.filter(
-                history__parcel__establishment__company=self,
-                date__gte=period_start,
-            ).count()
+            # Quota consumes COUNTED scans only: a shopper reloading the page must not burn
+            # the farm's allowance twice, and a crawler must not burn it at all.
+            current_usage = (
+                HistoryScan.objects.counted()
+                .filter(
+                    history__parcel__establishment__company=self,
+                    date__gte=period_start,
+                )
+                .count()
+            )
             return max(0, base_quota - current_usage)
 
         return base_quota
@@ -317,6 +323,44 @@ class Establishment(models.Model):
         null=True,
         help_text="Person responsible for fraud prevention oversight",
     )
+
+    # One OFPP truth (2026-08-10). Three surfaces used to answer "is a fraud
+    # prevention plan on file?" differently: the readiness service accepted OSP
+    # module G2.0, the audit-export gate accepted only the upload flag, and the
+    # frontend checklist only knew the upload flag. Everything now asks HERE.
+    _OFPP_SUSPICIOUS_FILENAME_PATTERNS = ("factura", "invoice", "receipt", "comprobante", "recibo")
+
+    @property
+    def ofpp_filename_suspicious(self) -> bool:
+        """Uploaded OFPP filename matches the misfiled-invoice heuristic —
+        the audit export refuses such a file, so surfaces must not show it
+        as a clean 'Plan Uploaded'."""
+        doc = self.fraud_prevention_plan_document
+        if not (doc and doc.name):
+            return False
+        import os
+
+        lowered = os.path.basename(doc.name).lower()
+        return any(p in lowered for p in self._OFPP_SUSPICIOUS_FILENAME_PATTERNS)
+
+    def ofpp_authored_via_module(self) -> bool:
+        """True when OSP module G2.0 (Monitoring & Organic Fraud Prevention)
+        is completed on any of this establishment's plans — its questions ARE
+        the written plan."""
+        from certifications.models import OrganicSystemPlan
+
+        for plan in OrganicSystemPlan.objects.filter(establishment=self):
+            entry = ((plan.module_responses or {}).get("modules") or {}).get("g2_0_fraud_prevention") or {}
+            if entry.get("completed_at"):
+                return True
+        return False
+
+    @property
+    def ofpp_on_file(self) -> bool:
+        """A valid OFPP exists by EITHER route: a clean upload, or module G2.0."""
+        if self.fraud_prevention_plan_uploaded and not self.ofpp_filename_suspicious:
+            return True
+        return self.ofpp_authored_via_module()
 
     # NOP Compliance: Split Operation Tracking (7 CFR 205.201(a)(5), 7 CFR 205.272)
     has_split_operation = models.BooleanField(

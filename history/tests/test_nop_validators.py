@@ -64,13 +64,42 @@ class NOPSeedSearchValidatorTests(TestCase):
             event.full_clean()
         self.assertIn("seed_search_attempts", ctx.exception.message_dict)
 
-    def test_non_organic_seed_with_two_attempts_still_rejected(self):
+    def test_non_organic_seed_with_two_attempts_is_accepted(self):
+        """Two documented suppliers saves; three is a certifier expectation, not the rule.
+
+        Changed 2026-08-15. This previously asserted a REJECTION below three. 7 CFR 205.204
+        imposes no numeric count — "at least three suppliers" appears only in USDA's optional
+        Guide for Organic Crop Producers, as what "certifiers want clear indication" of. The
+        frozen corpus contains no rule text behind the number, so blocking a grower's save on
+        it overstated the regulation. What IS a genuine gap is non-organic seed with no
+        documented search at all, which the test above still pins; one- and two-supplier
+        records surface on the readiness card instead.
+        """
         event = self._planting_event(
             seed_certification_status="non_organic_treated",
             seed_search_attempts=[
                 {"supplier_name": "A", "date_contacted": "2026-01-01", "result": "none"},
                 {"supplier_name": "B", "date_contacted": "2026-01-02", "result": "none"},
             ],
+        )
+        event.full_clean()  # must not raise
+
+    def test_transplanting_carries_the_same_obligation_as_planting(self):
+        """TR was exempt until 2026-08-15 — the more common orchard record skipped the rule."""
+        event = self._planting_event(
+            type="TR",
+            seed_certification_status="non_organic_untreated",
+            seed_search_attempts=[],
+        )
+        with self.assertRaises(ValidationError) as ctx:
+            event.full_clean()
+        self.assertIn("seed_search_attempts", ctx.exception.message_dict)
+
+    def test_a_row_with_no_supplier_name_does_not_count_as_documentation(self):
+        """An empty row is not evidence: 205.204(a)(1) turns on WHO was contacted."""
+        event = self._planting_event(
+            seed_certification_status="non_organic_untreated",
+            seed_search_attempts=[{"supplier_name": "", "result": "none"}],
         )
         with self.assertRaises(ValidationError):
             event.full_clean()

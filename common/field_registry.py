@@ -152,6 +152,65 @@ SEED_CERTIFICATION_STATUS = [
     ("non_organic_treated", "Non-organic (Treated)"),
 ]
 
+#: USDA Form 11's "allowed status" column is a TRIPLE, not a single status:
+#:   (a) the variety is on an allowed list, (b) no prohibited treatments were applied,
+#:   (c) the seed is non-GMO (excluded methods, 7 CFR 205.105(e)).
+#: `SEED_CERTIFICATION_STATUS` answers (a) and (b). (c) had no field at all, so a packet
+#: could assert an organic planting while saying nothing about excluded methods — which is
+#: the one of the three that § 205.105(e) states as a flat prohibition rather than a
+#: conditional.
+#:
+#: NOT a boolean. "Not asked" and "the grower checked and it is not verified" are different
+#: records, and a boolean collapses them into False — which would read on a packet as a
+#: negative finding against a grower who was never asked the question.
+#: ⚠️ Producer/certifier surface ONLY. "Non-GMO" is a marketing claim on a consumer surface
+#: and this value is entirely self-reported; it must never reach the public payload.
+SEED_NON_GMO_STATUS = [
+    ("supplier_attested", "Supplier attested non-GMO (documentation on file)"),
+    ("seed_label", "Stated on the seed label / tag"),
+    ("organic_certified", "Certified organic — excluded methods prohibited by § 205.105(e)"),
+    ("not_verified", "Checked — could not verify"),
+]
+
+#: Free-text answers that MEAN "nothing was applied to the seed". The seed-treatment input is
+#: a text box whose own placeholder reads "e.g., Rhizobium inoculant, None", so "None" is the
+#: answer the UI invites. Treating it as a NAMED treatment made the certifier packet print
+#: "Not recorded - 205.204(a)(2) asks why the treatment is allowed" beside it, telling a
+#: grower who correctly reported that nothing was applied that their record had a gap.
+#: Spanish included: the app ships es-419.
+NO_TREATMENT_ANSWERS = {
+    "none",
+    "no",
+    "n/a",
+    "na",
+    "-",
+    "--",
+    "nil",
+    "nothing",
+    "untreated",
+    "no treatment",
+    "ninguno",
+    "ninguna",
+    "sin tratamiento",
+    "sin tratar",
+}
+
+
+# Production subtypes that put seed or planting stock in the ground, and are therefore
+# subject to 7 CFR 205.204. Transplanting belongs here with Planting: the seedling or
+# nursery stock is still seed/planting stock for § 205.204 purposes, common_osp_records
+# already scores prod("PL", "TR") together, and the planting form shows the seed block for
+# both. Testing "PL" alone — as the serializer and model validators did until 2026-08-15 —
+# let a transplant of non-organic nursery stock skip the commercial-availability
+# requirement entirely, which on a perennial orchard is the MORE common of the two records.
+SEED_SOURCED_SUBTYPES = ("PL", "TR")
+
+# The two seed_certification_status values that trigger the § 205.204(a)(1)
+# commercial-availability obligation. Transitional is NOT among them here only because the
+# statute speaks of "nonorganically produced" stock; osp_prefill maps transitional onto the
+# non-organic OSP options separately.
+NON_ORGANIC_SEED_STATUSES = ("non_organic_untreated", "non_organic_treated")
+
 # Water source (affects pump energy factor — USDA NRCS)
 # Used in: ProductionEvent.water_source
 WATER_SOURCE = [
@@ -198,6 +257,62 @@ HARVEST_QUALITY_GRADE = [
     ("grade_c", "Grade C"),
     ("domestic", "Domestic Market"),
     ("processing", "Processing/Juice"),
+]
+
+# WS-4 (2026-08): how the harvest quantity was determined (§ 205.103(b)(2) —
+# records must be "accurate"; a scale-verified figure carries a weigh ticket).
+# Used in: ProductionEvent.amount_determination (HA subtype)
+AMOUNT_DETERMINATION = [
+    ("estimated", "Estimated"),
+    ("scale_verified", "Scale-Verified (weigh ticket)"),
+]
+
+# WS-4 (2026-08): where the harvested lot went — first hop of the audit trail
+# (§ 205.103(b)(2) tracking from production to sale; FSMA 204 KDE prep).
+# Used in: ProductionEvent.harvest_destination (HA subtype)
+HARVEST_DESTINATION = [
+    ("stored", "Stored on farm"),
+    ("sold_direct", "Sold / shipped from field"),
+    ("livestock_feed", "Livestock feed"),
+    ("other", "Other"),
+]
+
+# WS-4 (2026-08): what happened to crop from buffer rows (§ 205.202(c) — buffer
+# crop may never be sold, labeled, or represented as organic). NULL = question
+# not answered; absence of an answer is NOT a claim that no buffer exists.
+# Used in: ProductionEvent.buffer_disposition (HA subtype)
+BUFFER_DISPOSITION = [
+    ("not_harvested", "Buffer rows not harvested / excluded"),
+    ("left_in_field", "Harvested and left in the field"),
+    ("sold_conventional", "Sold as conventional"),
+    ("fed_nonorganic_livestock", "Fed to non-organic livestock"),
+    ("disposed", "Disposed of"),
+    ("given_away", "Given away"),
+    # Legacy value from the 2-option enum (2026-08-08) — kept selectable so stored
+    # rows keep rendering; superseded by the specific dispositions above.
+    ("harvested_conventional", "Harvested separately — sold or used as conventional"),
+]
+
+# WS-4 (2026-08): whether an input application covered the whole planting or a
+# part of it (§ 205.103(b)(2) audit sufficiency — records must identify WHERE the input
+# went; (b)(1) is "adapted to the particular business" and says nothing about location;
+# PUR site-level reporting needs the same answer).
+# Used in: ChemicalEvent.applied_scope
+APPLIED_SCOPE = [
+    ("all", "Entire planting"),
+    ("part", "Part of planting"),
+]
+
+
+# 2026-08 QO-parity: WHAT was cleaned. § 205.272(a) commingling prevention —
+# an inspector reads cleanout logs per asset class (harvester vs bin vs truck),
+# not as one undifferentiated "cleaning" pile.
+# Used in: ProductionEvent.cleaning_asset_class (EM cleaning ops)
+CLEANING_ASSET_CLASS = [
+    ("equipment", "Field / harvest equipment"),
+    ("harvest_bins", "Harvest bins / totes"),
+    ("storage", "Storage area / cooler"),
+    ("transport_vehicle", "Transport vehicle / trailer"),
 ]
 
 
@@ -262,9 +377,25 @@ ORGANIC_APPROVED = [
     ("no", "No - Not Organic"),
     ("not_applicable", "Not Applicable"),
     # Detailed organic certification options (Sprint 6, 2025-11)
-    ("omri_listed", "OMRI Listed - Organic certified"),
-    ("usda_nop_approved", "USDA NOP Approved - National Organic Program"),
-    ("organic_equivalent", "Organic Equivalent - Meets organic standards"),
+    ("omri_listed", "OMRI Listed"),
+    ("wsda_listed", "WSDA Listed"),
+    ("nop_seal_on_label", "NOP seal on the product label"),
+    ("certifier_approved", "Reviewed and approved by my certifier"),
+    # ⛔ Retired 2026-08-15, kept so existing rows still render a label rather than a raw slug.
+    #
+    # "usda_nop_approved / USDA NOP Approved - National Organic Program" asserted a federal
+    # product approval that does not exist: the NOP publishes a substance list (§ 205.601 /
+    # § 205.602) and licenses a seal — it does not approve or list products. USDA's own
+    # Input Material Application Record enumerates exactly four lawful verification bases,
+    # verbatim: "OMRI or WSDA List, NOP Seal on label, or certifier review and approval".
+    # Two of those four (WSDA, certifier review) had no option at all, which is why growers
+    # reached for the invented ones.
+    #
+    # "organic_equivalent / Meets organic standards" is a grower-graded self-assessment
+    # sitting in the column an inspector reads as a verification basis. It appears nowhere
+    # in the frozen corpus.
+    ("usda_nop_approved", "NOP seal on label (legacy entry)"),
+    ("organic_equivalent", "Grower-assessed as equivalent (legacy entry — no listing)"),
     ("not_organic", "Not Organic Approved - Conventional use only"),
     ("transitional", "Transitional - In certification process"),
 ]
@@ -282,8 +413,11 @@ ORGANIC_APPROVED = [
 ORGANIC_APPROVED_OK_VALUES = frozenset(
     {
         "omri_listed",
-        "usda_nop_approved",
-        "organic_equivalent",
+        "wsda_listed",  # 2026-08-15 — a lawful basis USDA's own form names; had no option
+        "nop_seal_on_label",  # 2026-08-15 — ditto, and what "usda_nop_approved" meant to say
+        "certifier_approved",  # 2026-08-15 — the ordinary basis for a non-listed material
+        "usda_nop_approved",  # legacy rows; label retired, value still means "seal on label"
+        "organic_equivalent",  # legacy rows; grower self-assessment, retained for continuity
         "yes",  # legacy "Yes - Organic Approved", still selectable
         "organic",  # present in stored data; predates the detailed enum
     }

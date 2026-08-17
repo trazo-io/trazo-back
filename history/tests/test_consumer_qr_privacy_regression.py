@@ -12,17 +12,20 @@ Two consent-gated surfaces:
 """
 
 import json
+import re
 
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from rest_framework.test import APIClient
+
 from company.models import Company, Establishment
-from history.models import History, PestManagementEvent, ProductionEvent, SoilManagementEvent
+from history.models import ChemicalEvent, History, PestManagementEvent, ProductionEvent, SoilManagementEvent
 from history.serializers import PublicHistorySerializer
 from history.services.privacy import public_parcel_geo
 from product.models import Parcel, Product
-from users.models import User
+from users.models import User, WorksIn
 
 
 def _flatten_reportlab_text(elements):
@@ -242,6 +245,21 @@ class TransparencyScoreGatingTests(_Base):
     def setUp(self):
         super().setUp()
         ProductionEvent.objects.create(history=self.history, type="PL", date=timezone.now())
+        # A CLASSIFIED input, so the organic-input evidence assertions below actually run.
+        # `omri_listed` here is the grower's dropdown pick with no OMRI catalog row behind it
+        # — precisely the case P4-F6 is about, and the one a fixture without inputs would let
+        # skip silently. A skipped test is not a passing test.
+        ChemicalEvent.objects.create(
+            history=self.history,
+            type=ChemicalEvent.FUNGICIDE,
+            date=timezone.now(),
+            commercial_name="Grower-Picked Copper",
+            organic_approved="omri_listed",
+        )
+        # `_build_organic_summary` returns None for a non-organic operation, which made the
+        # assertion above skip rather than run.
+        self.history.production_method = "organic"
+        self.history.save(update_fields=["production_method"])
 
     def _url(self):
         return reverse(
@@ -309,6 +327,128 @@ class TransparencyScoreGatingTests(_Base):
         # Factual per-category counts survive even though the grade was stripped.
         for name, category in (details.get("category_breakdown") or {}).items():
             self.assertIn("actual_count", category, f"category '{name}' factual count over-stripped")
+
+    # ---- authored-baseline gating (2026-08-10 USDA audit, P4-F1) -------------
+    #
+    # `test_no_graded_number_anywhere_in_anonymous_blob` above pins four key NAMES.
+    # A name denylist only ever encodes the last incident, which is how the grade
+    # survived this long: the quotient was stripped and its DIVISOR shipped, so
+    # `actual_events: 12` + `expected_events: 13` still published 92% to anyone
+    # willing to divide. The tests below assert the RULE instead of the names —
+    #
+    #   publish facts about the FARM; never publish Trazo's authored BASELINE
+    #   or the scoring machinery that applies it
+    #
+    # — so a baseline key invented next year fails here without anyone
+    # remembering to add it to a list. EU ECGT 2024/825 (live 2026-09-27).
+
+    #: Key shapes that describe a Trazo-authored standard rather than the farm.
+    _BASELINE_KEY_RE = re.compile(r"(^|_)(expected|target|should|requires?|required)(_|$)")
+    #: Scoring internals that are neither farm facts nor obviously "baseline"-named.
+    _MACHINERY_KEYS = frozenset({"anti_gaming_applied", "photo_tier_summary"})
+
+    def test_no_authored_baseline_key_anywhere_in_anonymous_blob(self):
+        blob = self._anon_payload()
+        offenders = []
+
+        def walk(node, path=""):
+            if isinstance(node, dict):
+                for k, v in node.items():
+                    if self._BASELINE_KEY_RE.search(k) or k in self._MACHINERY_KEYS:
+                        offenders.append(f"{path}{k}={v!r}")
+                    walk(v, f"{path}{k}.")
+            elif isinstance(node, list):
+                for i, v in enumerate(node):
+                    walk(v, f"{path}[{i}].")
+
+        walk(blob)
+        self.assertEqual(
+            offenders,
+            [],
+            "anonymous payload published a Trazo-authored baseline or scoring internal. "
+            "The farm's own counts are evidence and belong here; a baseline the farm is "
+            "measured AGAINST is a self-created standard (ECGT 2024/825). Offenders: " + "; ".join(offenders),
+        )
+
+    def test_grade_is_not_reconstructable_from_anonymous_counts(self):
+        # The specific arithmetic that made the removal a rename: a numerator with
+        # its denominator alongside. Pinned concretely so a regression is legible
+        # even if the shape rule above is ever relaxed.
+        details = (self._anon_payload().get("standard_view") or {}).get("transparency_details") or {}
+        self.assertIn("actual_events", details, "event count (evidence) over-stripped")
+        self.assertNotIn("expected_events", details, "denominator republished — the grade is 12/13 again")
+        for name, category in (details.get("category_breakdown") or {}).items():
+            self.assertIn("actual_count", category, f"category '{name}' factual count over-stripped")
+            self.assertNotIn("expected_count", category, f"category '{name}' republished its denominator")
+
+    def test_owner_still_receives_the_baseline(self):
+        # The mirror of the gate: `expected_events` is the producer dashboard's KPI
+        # input. Stripping it for the OWNER too would be over-correction — the score
+        # is a legitimate engagement metric on the farmer's own surface.
+        from rest_framework.test import APIClient
+
+        self.user.companies.add(self.company)
+        client = APIClient()
+        client.force_authenticate(self.user)
+        details = ((client.get(self._url()).json().get("standard_view") or {}).get("transparency_details")) or {}
+        self.assertIn("expected_events", details, "owner (producer dashboard) lost its baseline — over-stripped")
+
+    # ---- P4-F5 / P4-F6: word choice and evidence basis (2026-08-11) -----------
+
+    def test_photo_counts_are_documented_not_verified(self):
+        """Farmer-uploaded photographs were checked by nobody.
+
+        "Verified" is the word this project reserves for a USDA Organic Integrity Database
+        match and enforces through claim_authority. A key name travels on the wire and is
+        scrapable whatever the UI renders, so the key IS the claim.
+        """
+        blob = json.dumps(self._anon_payload())
+        self.assertNotIn("photo_verified_count", blob)
+        self.assertNotIn("photo_verification_rate", blob)
+
+        details = (self._anon_payload().get("standard_view") or {}).get("transparency_details") or {}
+        for name, category in (details.get("category_breakdown") or {}).items():
+            with self.subTest(category=name):
+                self.assertIn("photo_documented_count", category, "the factual count was dropped, not renamed")
+
+    def test_organic_input_numbers_never_travel_without_their_basis(self):
+        """P4-F6, and the seventh instance of one defect class.
+
+        `organic_approved` is a grower DROPDOWN whose values include "omri_listed" — the grower
+        picking that label, not a catalog match. `may_claim_input_listing()` already tiers this
+        per input, after an anonymous payload asserted "OMRI Listed" for an input with no OMRI
+        row (2026-08-09). That fix landed on the per-input chip and not on this aggregate, so
+        one number spoke for evidence the authority refuses to speak for individually.
+        """
+        summary = (self._anon_payload().get("standard_view") or {}).get("organic_summary") or {}
+        if not summary.get("has_input_data"):
+            self.skipTest("fixture has no classified inputs")
+
+        self.assertIn("organic_input_basis", summary, "the percentage shipped with no evidence tier")
+        self.assertIn("organic_input_evidence", summary)
+        self.assertIn(
+            summary["organic_input_basis"],
+            {"grower_reported", "national_list", "catalog_matched"},
+        )
+
+    def test_basis_reports_the_weakest_tier_present(self):
+        # An aggregate is only as strong as its weakest member: one catalog match does not
+        # license speaking for the inputs that have none.
+        from history.transparency_views import _organic_input_evidence
+
+        class _Ev:
+            organic_approved = "omri_listed"
+            omri_product_id = None
+            national_list_substance_id = None
+            extra_data = None
+
+        matched = _Ev()
+        matched.omri_product_id = 7
+
+        result = _organic_input_evidence([matched, _Ev()])
+        self.assertEqual(result["organic_input_evidence"]["catalog_matched"], 1)
+        self.assertEqual(result["organic_input_evidence"]["grower_reported"], 1)
+        self.assertEqual(result["organic_input_basis"], "grower_reported")
 
     def test_score_present_for_authenticated_owner(self):
         # The producer dashboard hits this same endpoint authenticated; the owner
@@ -922,9 +1062,14 @@ class CarbonQrSummaryScoreGatingTests(_Base):
 class CarbonCompleteSummaryScoreGatingTests(_Base):
     """The `complete/` sibling of qr-summary was never covered by the score gate.
 
-    `carbon/public/productions/<pk>/complete/` is anonymous AND integer-pk enumerable, and
-    the frontend calls it (carbonApi.ts). It served `parcel.transparency_score` — the same
+    `carbon/public/productions/<pk>/complete/` served `parcel.transparency_score` — the same
     self-assigned 0-100 grade the transparency endpoint carefully strips. Found 2026-07-31.
+
+    🔒 2026-08-12: the endpoint is now AUTHENTICATED and OWNER-ONLY (it was anonymous and
+    integer-pk enumerable). The assertions below still run, against the owner's own request,
+    because the scrubbing in the payload is unconditional — it does not consult the caller.
+    Keeping them costs nothing and they are the regression net if the endpoint is ever
+    re-opened. `CompleteSummaryIsOwnerOnlyTests` below covers the access rule itself.
     """
 
     _UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1"
@@ -932,6 +1077,12 @@ class CarbonCompleteSummaryScoreGatingTests(_Base):
     def setUp(self):
         super().setUp()
         ProductionEvent.objects.create(history=self.history, type="PL", date=timezone.now())
+        WorksIn.objects.create(user=self.user, company=self.company, role="CA")
+        # DRF here authenticates ONLY via users.auth.CustomAuthentication (JWT cookie) — there is
+        # no SessionAuthentication, so django.test.Client.force_login leaves the request
+        # anonymous as far as DRF is concerned and every call 401s.
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
 
     def _url(self):
         return f"/api/carbon/public/productions/{self.history.id}/complete/"
@@ -991,12 +1142,30 @@ class CarbonCompleteSummaryScoreGatingTests(_Base):
         self.company.address = "9 Corporate Row"
         self.company.save(update_fields=["address"])
 
+    def _farm_block(self, payload):
+        """The establishment block, under the key the payload ACTUALLY uses.
+
+        🔴 These tests read `payload["establishment"]` for months. The action serialises its
+        establishment dict as **`farmer`** (`carbon/views.py`: `"farmer": establishment_data`),
+        so `.get("establishment")` returned `{}` and every `assertFalse(bool(farm.get(...)))`
+        below passed against an empty dict — whatever the endpoint published. The class had
+        already been hardened once against VALUE vacuity (`_populate_pii`); the vacuity had
+        simply moved to the KEY. Asserting the block exists is what stops it moving again.
+        """
+        farm = payload.get("farmer")
+        self.assertIsInstance(
+            farm,
+            dict,
+            "no `farmer` block in the payload — every PII assertion in this test would be vacuous",
+        )
+        return farm
+
     def test_location_pii_is_withheld(self):
         self._populate_pii()
         resp = self.client.get(self._url(), HTTP_USER_AGENT=self._UA)
         self.assertEqual(resp.status_code, 200, resp.content[:300])
         payload = resp.json()
-        farm = payload.get("establishment") or {}
+        farm = self._farm_block(payload)
 
         for field in ("address", "latitude", "longitude", "zip_code"):
             self.assertFalse(
@@ -1024,7 +1193,7 @@ class CarbonCompleteSummaryScoreGatingTests(_Base):
         """
         self._populate_pii()
         resp = self.client.get(self._url(), HTTP_USER_AGENT=self._UA)
-        farm = resp.json().get("establishment") or {}
+        farm = self._farm_block(resp.json())
         self.assertNotIn(
             "farming_method",
             farm,
@@ -1090,6 +1259,170 @@ class CarbonCompleteSummaryScoreGatingTests(_Base):
             "Very Private Lane",
             blob,
             "street address leaked through the `location` fallback",
+        )
+
+
+class CompleteSummaryIsOwnerOnlyTests(_Base):
+    """`carbon/public/productions/<pk>/complete/` is authenticated and owner-only (2026-08-12).
+
+    It used to be anonymous and integer-pk enumerable while hand-building its own
+    establishment, company and parcel blocks — a second public payload for a resource that
+    already has one, which is why the same PII and claim fixes had to be re-applied to it
+    repeatedly. Its only caller is the producer's own `ProfileProduction` screen.
+
+    These tests pin the ACCESS rule. The payload-content rules stay in
+    `CarbonCompleteSummaryScoreGatingTests` above.
+    """
+
+    def setUp(self):
+        super().setUp()
+        ProductionEvent.objects.create(history=self.history, type="PL", date=timezone.now())
+        WorksIn.objects.create(user=self.user, company=self.company, role="CA")
+
+        # A second, unrelated grower — the "any signed-up account" case.
+        self.outsider = User.objects.create_user(email="outsider@test.com", password="x")
+        self.outsider_company = Company.objects.create(name="Someone Else Farms")
+        WorksIn.objects.create(user=self.outsider, company=self.outsider_company, role="CA")
+
+    def _url(self):
+        return f"/api/carbon/public/productions/{self.history.id}/complete/"
+
+    def test_anonymous_is_refused(self):
+        resp = self.client.get(self._url())
+        self.assertIn(
+            resp.status_code,
+            (401, 403),
+            f"anonymous caller still reached complete/ (HTTP {resp.status_code}) — this endpoint "
+            f"emits unqualified certification strings and the grower's own record",
+        )
+
+    def _as(self, user):
+        client = APIClient()
+        client.force_authenticate(user=user)
+        return client
+
+    def test_the_owner_still_gets_it(self):
+        """ProfileProduction must keep working — the point is to narrow access, not break it."""
+        self.client = self._as(self.user)
+        resp = self.client.get(self._url())
+        self.assertEqual(resp.status_code, 200, resp.content[:300])
+        self.assertEqual(resp.json().get("production_id"), self.history.id)
+
+    def test_a_signed_in_stranger_is_refused(self):
+        """Authentication alone is not the gate.
+
+        The old visibility clause was `published=True OR mine`, so ANY account could read ANY
+        published production here — the anonymous exposure with a free signup in front of it.
+        """
+        self.client = self._as(self.outsider)
+        resp = self.client.get(self._url())
+        self.assertEqual(
+            resp.status_code,
+            404,
+            "a grower from another company read this production's complete summary",
+        )
+
+    def test_the_owner_can_still_read_an_unpublished_draft(self):
+        """ProfileProduction loads before the production is published."""
+        self.history.published = False
+        self.history.save(update_fields=["published"])
+
+        self.client = self._as(self.user)
+        self.assertEqual(self.client.get(self._url()).status_code, 200)
+
+    def test_integer_pk_enumeration_is_closed_to_strangers(self):
+        """The docstring that flagged this endpoint called out integer-pk enumeration.
+
+        Ownership is what closes it: guessing the id no longer helps, published or not.
+        """
+        self.client = self._as(self.outsider)
+        for pk in (self.history.id, self.history.id + 1, 1):
+            resp = self.client.get(f"/api/carbon/public/productions/{pk}/complete/")
+            self.assertIn(resp.status_code, (403, 404), f"pk={pk} returned {resp.status_code}")
+
+
+class FarmCertificationsAreStructuredOnlyTests(_Base):
+    """`farmer.certifications` on the anonymous transparency payload is STRUCTURED or absent.
+
+    Until 2026-08-12 the block read `certification_data or establishment.certifications`, so an
+    operation with no `Certification` rows fell back to the free-text field the farmer types
+    into — publishing third-party certification names with nothing in the database behind them
+    and no verification status attached.
+
+    The `or` also changed the TYPE. Every downstream control (`filter_certifications_for_consumer`,
+    `consumer_display_status`, the JSON-LD `verified_via_database` filter) reads a list of cert
+    OBJECTS; a bare string satisfies `or` and then passes all of them untouched, because a string
+    has no `.status` to test. It was a bypass, not a degraded path.
+    """
+
+    _UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1"
+
+    _FREE_TEXT = "Carbon Trust Standard, GlobalGAP, SQF Level 2, Rainforest Alliance"
+
+    def setUp(self):
+        super().setUp()
+        ProductionEvent.objects.create(history=self.history, type="PL", date=timezone.now())
+        self.establishment.certifications = self._FREE_TEXT
+        self.establishment.save(update_fields=["certifications"])
+
+    def _payload_json(self):
+        resp = self.client.get(f"/api/transparency/{self.history.public_id}/", HTTP_USER_AGENT=self._UA)
+        self.assertEqual(resp.status_code, 200, resp.content[:300])
+        return resp.json()
+
+    def _farmer_certifications(self, payload):
+        for block in (payload, payload.get("standard_view") or {}):
+            farmer = block.get("farmer") or block.get("establishment") or {}
+            if "certifications" in farmer:
+                return farmer["certifications"]
+        return None
+
+    def test_free_text_certifications_never_reach_the_consumer_payload(self):
+        """No Certification rows exist for this establishment — the field must not stand in."""
+        payload = self._payload_json()
+
+        blob = json.dumps(payload)
+        for claimed in ("Carbon Trust Standard", "GlobalGAP", "SQF Level 2", "Rainforest Alliance"):
+            self.assertNotIn(
+                claimed,
+                blob,
+                f"free-text certification {claimed!r} reached the anonymous consumer payload with "
+                f"no Certification row behind it",
+            )
+
+    def test_certifications_is_never_a_bare_string(self):
+        """A string bypasses every claim-safety control, all of which expect cert objects."""
+        certifications = self._farmer_certifications(self._payload_json())
+        self.assertNotIsInstance(
+            certifications,
+            str,
+            "certifications published as a free-text string — status-based gating cannot apply",
+        )
+
+    def test_real_rows_still_publish_with_their_status(self):
+        """Removing the fallback must not remove genuine certifications."""
+        from certifications.models import Certification
+
+        Certification.objects.create(
+            establishment=self.establishment,
+            certification_type="global_gap",
+            verification_status="self_reported",
+        )
+
+        certifications = self._farmer_certifications(self._payload_json())
+        self.assertIsInstance(certifications, list, f"expected a list of cert objects, got {certifications!r}")
+        self.assertTrue(certifications, "a real Certification row did not reach the payload")
+        for cert in certifications:
+            self.assertIn(
+                "status",
+                cert,
+                f"certification published without a verification status: {cert!r} — the consumer "
+                f"surface cannot label it, so it reads as third-party verified",
+            )
+        self.assertEqual(
+            {c["status"] for c in certifications},
+            {"self_reported"},
+            "a self-reported certification was upgraded on the consumer payload",
         )
 
 

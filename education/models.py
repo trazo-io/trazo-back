@@ -174,15 +174,15 @@ class EducationBookmark(models.Model):
 class FarmerQuestionAnswer(models.Model):
     """FAQ system for common farmer questions about Trazo"""
 
+    # 2026-08-09 pivot taxonomy. Old values (carbon/iot/billing/technical + the
+    # never-valid seed values "transparency"/"consumer_impact") retired; the FAQ
+    # page derives its filter chips from these values via a client-side i18n map.
     QUESTION_CATEGORIES = [
+        ("records", "Records & Documentation"),
+        ("quick_add", "Logging Activities"),
+        ("osp_renewal", "OSP & Renewal"),
+        ("consumer_page", "Your Buyer Page"),
         ("setup", "Getting Started"),
-        ("data_entry", "Data Entry & Events"),
-        ("carbon", "Carbon Tracking"),
-        ("iot", "IoT & Automation"),
-        ("qr_codes", "QR Codes & Consumers"),
-        ("billing", "Pricing & Plans"),
-        ("technical", "Technical Issues"),
-        ("compliance", "USDA & Certifications"),
     ]
 
     question = models.CharField(max_length=300)

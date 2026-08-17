@@ -1,0 +1,362 @@
+"""
+G6.1 — Harvest & Transport.
+
+Sources: 7 CFR 205.272 (commingling and contact with prohibited substance prevention practice
+standard), 205.103 (recordkeeping by certified operations). Topic order follows the public
+Common OSP grower template; all wording authored for Trazo.
+
+Three pages:
+
+A. Who harvests — the operation's own crew, a custom-hired harvester, or the buyer. A
+   custom-hired harvester brings equipment from other operations onto organic fields, so that
+   branch adds an equipment-cleanout check and asks how the operator is instructed.
+B. Containers & handling — what touches the product at harvest, whether those containers are
+   new, dedicated, or cleaned before use, and the narrower case of reusing a container that
+   once held a prohibited substance (§ 205.272(b)(1)).
+C. Transport & lot identity — who moves product off the operation, whether transport units are
+   inspected clean, and the lot identification that lets § 205.103(b)(2) records trace a load
+   back to its field and harvest date. When the operation does not control the transport leg
+   itself (a commercial carrier or the buyer picks up), it records what that carrier or
+   handler provides in return.
+"""
+
+from .schema import CompileRule, Condition, Module, ModulePage, Option, Question, text
+
+G6_1_HARVEST_TRANSPORT = Module(
+    key="g6_1_harvest_transport",
+    code="G6.1",
+    title=text("Harvest & Transport", "Cosecha y transporte"),
+    nop_cites=("§ 205.272", "§ 205.103"),
+    education=(
+        text(
+            "Management practices must prevent organic product from commingling with "
+            "nonorganic product and from contacting prohibited substances at every step "
+            "between harvest and sale. Containers, bins, harvest equipment, and transport "
+            "units must be clean, dedicated to organic use, or otherwise protected from "
+            "contamination whenever they touch organic product (§ 205.272).",
+            "Las prácticas de manejo deben evitar que el producto orgánico se mezcle con "
+            "producto no orgánico y que entre en contacto con sustancias prohibidas en cada "
+            "paso entre la cosecha y la venta. Los contenedores, cajones, el equipo de "
+            "cosecha y las unidades de transporte deben estar limpios, dedicados al uso "
+            "orgánico o protegidos de otra manera contra la contaminación cada vez que tocan "
+            "producto orgánico (§ 205.272).",
+        ),
+    ),
+    allows_not_applicable=False,
+    default_section_key="commingling_barriers",
+    pages=(
+        ModulePage(
+            key="a_who_harvests",
+            title=text("A. Who harvests", "A. Quién cosecha"),
+            education=(
+                text(
+                    "Whoever physically harvests the crop — the operation's own crew, a "
+                    "custom-hired operator, or the buyer — is handling organic product. A "
+                    "custom harvester's equipment is a contamination pathway if it was just "
+                    "used on nonorganic or prohibited-substance-treated land.",
+                    "Quien cosecha físicamente el cultivo — el personal propio de la "
+                    "operación, un operador contratado o el comprador — está manejando "
+                    "producto orgánico. El equipo de un cosechador contratado es una vía de "
+                    "contaminación si acaba de usarse en tierra no orgánica o tratada con "
+                    "sustancias prohibidas.",
+                ),
+            ),
+            questions=(
+                Question(
+                    key="who_harvests",
+                    kind="radio",
+                    label=text("Who harvests this crop?", "¿Quién cosecha este cultivo?"),
+                    nop_cite="§ 205.272(a)",
+                    compiles_to=CompileRule(template="Harvest is performed by: {answer}."),
+                    options=(
+                        Option("own_crew", text("Our own crew", "Nuestro propio personal")),
+                        Option(
+                            "custom_harvester",
+                            text(
+                                "Custom-hired harvester",
+                                "Cosechador contratado (servicio externo)",
+                            ),
+                        ),
+                        Option("buyer_harvests", text("Buyer harvests", "El comprador cosecha")),
+                    ),
+                ),
+                Question(
+                    key="custom_harvester_cleanout_verified",
+                    kind="boolean",
+                    label=text(
+                        "Has equipment cleanout been verified before the custom harvester's "
+                        "equipment enters your organic fields?",
+                        "¿Se ha verificado la limpieza del equipo antes de que el equipo del "
+                        "cosechador contratado ingrese a sus campos orgánicos?",
+                    ),
+                    coaching=text(
+                        "Trazo's Equipment Cleanout activities are the per-pass evidence — "
+                        "link each harvest operation to the cleaning that preceded it.",
+                        "Las actividades de Limpieza de Equipo de Trazo son la evidencia de "
+                        "cada pase — vincule cada operación de cosecha con la limpieza que la "
+                        "precedió.",
+                    ),
+                    nop_cite="§ 205.272(a)",
+                    visible_when=(Condition("who_harvests", "eq", "custom_harvester"),),
+                    compiles_to=CompileRule(
+                        template="Equipment cleanout verified before the custom harvester enters organic fields: {answer}."
+                    ),
+                ),
+                Question(
+                    key="custom_harvester_instructions",
+                    kind="textarea",
+                    label=text(
+                        "Describe how the custom-hired harvester is instructed to maintain " "organic integrity",
+                        "Describa cómo se instruye al cosechador contratado para mantener la " "integridad orgánica",
+                    ),
+                    visible_when=(Condition("who_harvests", "eq", "custom_harvester"),),
+                    compiles_to=CompileRule(template="Instructions given to the custom harvest operator: {answer}"),
+                ),
+                Question(
+                    key="custom_harvester_records",
+                    kind="checkbox_group",
+                    label=text(
+                        "Which harvest records does the custom harvester provide for each pass?",
+                        "¿Qué registros de cosecha entrega el cosechador contratado por cada pasada?",
+                    ),
+                    coaching=text(
+                        "An uncertified harvester's records must still let your certifier "
+                        "trace the harvest: date, quantity, crop, and parcel.",
+                        "Los registros de un cosechador no certificado igual deben permitir "
+                        "al certificador rastrear la cosecha: fecha, cantidad, cultivo y parcela.",
+                    ),
+                    required=False,
+                    visible_when=(Condition("who_harvests", "eq", "custom_harvester"),),
+                    nop_cite="§ 205.103(b)",
+                    compiles_to=CompileRule(template="Custom-harvester records provided per pass: {answer}."),
+                    options=(
+                        Option("harvest_date", text("Harvest date", "Fecha de cosecha")),
+                        Option("quantity", text("Quantity harvested", "Cantidad cosechada")),
+                        Option("crop_variety", text("Crop and variety", "Cultivo y variedad")),
+                        Option("parcel_field", text("Parcel / field identity", "Identidad de parcela / campo")),
+                        Option(
+                            "weigh_tickets",
+                            text("Weigh tickets or receiving records", "Tickets de pesaje o registros de recepción"),
+                        ),
+                        Option(
+                            "none_yet",
+                            text("No records provided yet — being arranged", "Aún no entrega registros — en gestión"),
+                            exclusive=True,
+                        ),
+                    ),
+                ),
+            ),
+        ),
+        ModulePage(
+            key="b_containers",
+            title=text("B. Containers & handling", "B. Contenedores y manejo"),
+            education=(
+                text(
+                    "Every container, bin, or trailer that touches the crop after harvest "
+                    "must be new, dedicated to organic use, or cleaned before that use. A "
+                    "container that once held a prohibited substance may be reused only "
+                    "behind a barrier or cleaning that prevents contact (§ 205.272(b)).",
+                    "Todo contenedor, cajón o remolque que toque el cultivo después de la "
+                    "cosecha debe ser nuevo, estar dedicado al uso orgánico o haberse "
+                    "limpiado antes de ese uso. Un contenedor que alguna vez contuvo una "
+                    "sustancia prohibida solo puede reutilizarse con una barrera o limpieza "
+                    "que impida el contacto (§ 205.272(b)).",
+                ),
+            ),
+            questions=(
+                Question(
+                    key="container_types",
+                    kind="checkbox_group",
+                    label=text(
+                        "What containers or bins hold the product at harvest?",
+                        "¿Qué contenedores o cajones sostienen el producto en la cosecha?",
+                    ),
+                    nop_cite="§ 205.272",
+                    compiles_to=CompileRule(template="Containers and bins used at harvest: {answer}."),
+                    options=(
+                        Option("field_bins", text("Field bins", "Bins de campo")),
+                        Option("totes", text("Totes", "Totes (contenedores grandes)")),
+                        Option("buckets", text("Buckets", "Baldes")),
+                        Option("bulk_trailers", text("Bulk trailers", "Remolques a granel")),
+                        Option(
+                            "reusable_lugs",
+                            text("Reusable lugs", "Cajas reutilizables (lugs)"),
+                        ),
+                        Option(
+                            "single_use_cartons",
+                            text("Single-use cartons", "Cartones desechables (un solo uso)"),
+                        ),
+                        Option("other", text("Other (describe below)", "Otro (describa abajo)")),
+                    ),
+                ),
+                Question(
+                    key="container_types_other",
+                    kind="text",
+                    label=text(
+                        "Describe the other container type",
+                        "Describa el otro tipo de contenedor",
+                    ),
+                    visible_when=(Condition("container_types", "includes", "other"),),
+                    compiles_to=CompileRule(template="Additional container type used: {answer}."),
+                ),
+                Question(
+                    key="containers_clean_or_dedicated",
+                    kind="boolean",
+                    label=text(
+                        "Are these containers new, dedicated to organic use, or cleaned " "before each use?",
+                        "¿Estos contenedores son nuevos, están dedicados al uso orgánico o se "
+                        "limpian antes de cada uso?",
+                    ),
+                    nop_cite="§ 205.272(a)",
+                    compiles_to=CompileRule(
+                        template="Containers are new, dedicated to organic use, or cleaned before each use: {answer}."
+                    ),
+                ),
+                Question(
+                    key="containers_cleaning_method",
+                    kind="textarea",
+                    label=text(
+                        "Describe the cleaning method and when it happens relative to " "organic use",
+                        "Describa el método de limpieza y cuándo ocurre en relación con el " "uso orgánico",
+                    ),
+                    visible_when=(Condition("containers_clean_or_dedicated", "truthy"),),
+                    compiles_to=CompileRule(template="Container cleaning method: {answer}"),
+                ),
+                Question(
+                    key="containers_reused_from_prohibited",
+                    kind="boolean",
+                    label=text(
+                        "Have you ever reused a container, bin, or bulk trailer that "
+                        "previously held a prohibited substance (pesticide, fertilizer, "
+                        "fuel, or another nonorganic-only material) for organic product?",
+                        "¿Alguna vez ha reutilizado para producto orgánico un contenedor, "
+                        "cajón o remolque a granel que antes contuvo una sustancia prohibida "
+                        "(pesticida, fertilizante, combustible u otro material exclusivamente "
+                        "no orgánico)?",
+                    ),
+                    coaching=text(
+                        "§ 205.272(b)(1) forbids reusing a container for organic product "
+                        "when the reuse would compromise its organic integrity — a container "
+                        "that held a prohibited substance may be reused only behind a "
+                        "protective barrier or after cleaning that removes the residue.",
+                        "El § 205.272(b)(1) prohíbe reutilizar un contenedor para producto "
+                        "orgánico cuando la reutilización comprometa su integridad orgánica — "
+                        "un contenedor que contuvo una sustancia prohibida solo puede "
+                        "reutilizarse con una barrera protectora o tras una limpieza que "
+                        "elimine el residuo.",
+                    ),
+                    nop_cite="§ 205.272(b)(1)",
+                    compiles_to=CompileRule(
+                        template=(
+                            "Containers that previously held a prohibited substance are ever "
+                            "reused for organic product: {answer}."
+                        )
+                    ),
+                ),
+                Question(
+                    key="containers_reused_barrier",
+                    kind="textarea",
+                    label=text(
+                        "What protective barrier or cleaning is applied before reuse?",
+                        "¿Qué barrera protectora o limpieza se aplica antes de reutilizarlo?",
+                    ),
+                    visible_when=(Condition("containers_reused_from_prohibited", "truthy"),),
+                    compiles_to=CompileRule(template="Protective barrier or cleaning applied before reuse: {answer}"),
+                ),
+            ),
+        ),
+        ModulePage(
+            key="c_transport",
+            title=text("C. Transport & lot identity", "C. Transporte e identidad de lote"),
+            education=(
+                text(
+                    "Transport is the last point where organic product can be contaminated "
+                    "or lose its identity before sale. Whoever drives it off the operation, "
+                    "the unit must be clean and the load must carry the lot identification "
+                    "that ties it back to the field and harvest date.",
+                    "El transporte es el último punto donde el producto orgánico puede "
+                    "contaminarse o perder su identidad antes de la venta. Sin importar quién "
+                    "lo transporte fuera de la operación, la unidad debe estar limpia y la "
+                    "carga debe llevar la identificación de lote que la vincule con el campo "
+                    "y la fecha de cosecha.",
+                ),
+            ),
+            questions=(
+                Question(
+                    key="who_transports",
+                    kind="radio",
+                    label=text(
+                        "Who transports this product off the operation?",
+                        "¿Quién transporta este producto fuera de la operación?",
+                    ),
+                    nop_cite="§ 205.272(a)",
+                    compiles_to=CompileRule(template="Product is transported off the operation by: {answer}."),
+                    options=(
+                        Option("own_vehicles", text("Our own vehicles", "Nuestros propios vehículos")),
+                        Option("commercial_carrier", text("Commercial carrier", "Transportista comercial")),
+                        Option(
+                            "buyer_pickup",
+                            text("Buyer pickup", "Recolección por el comprador"),
+                        ),
+                    ),
+                ),
+                Question(
+                    key="transport_units_inspected_clean",
+                    kind="boolean",
+                    label=text(
+                        "Are transport units inspected clean before loading organic product?",
+                        "¿Se inspeccionan las unidades de transporte para verificar que estén "
+                        "limpias antes de cargar producto orgánico?",
+                    ),
+                    nop_cite="§ 205.272(a)",
+                    compiles_to=CompileRule(
+                        template="Transport units are inspected clean before loading organic product: {answer}."
+                    ),
+                ),
+                Question(
+                    key="lot_identification_on_every_load",
+                    kind="boolean",
+                    label=text(
+                        "Does every load leave with lot identification tying it to the field " "and harvest date?",
+                        "¿Toda carga sale con una identificación de lote que la vincula con "
+                        "el campo y la fecha de cosecha?",
+                    ),
+                    coaching=text(
+                        "Trazo lot tags carry the parcel and harvest date automatically — "
+                        "§ 205.103(b)(2) requires records that track product from the field "
+                        "to the point of sale.",
+                        "Las etiquetas de lote de Trazo llevan automáticamente la parcela y "
+                        "la fecha de cosecha — el § 205.103(b)(2) exige registros que "
+                        "rastreen el producto desde el campo hasta el punto de venta.",
+                    ),
+                    nop_cite="§ 205.103(b)(2)",
+                    compiles_to=CompileRule(
+                        template=(
+                            "Every load leaves the operation with lot identification tying it "
+                            "to the field and harvest date: {answer}."
+                        )
+                    ),
+                ),
+                Question(
+                    key="non_own_transport_records",
+                    kind="textarea",
+                    label=text(
+                        "What records does the carrier or handler provide for each load?",
+                        "¿Qué registros proporciona el transportista o manejador por cada " "carga?",
+                    ),
+                    coaching=text(
+                        "For example, a clean-truck affidavit or a bill of lading that "
+                        "carries the lot identification.",
+                        "Por ejemplo, una declaración jurada de camión limpio o una guía de "
+                        "embarque (bill of lading) que lleve la identificación de lote.",
+                    ),
+                    nop_cite="§ 205.103",
+                    visible_when=(Condition("who_transports", "one_of", ["commercial_carrier", "buyer_pickup"]),),
+                    compiles_to=CompileRule(
+                        template="Records provided by the carrier or handler transporting product off the operation: {answer}"
+                    ),
+                ),
+            ),
+        ),
+    ),
+)

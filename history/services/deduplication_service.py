@@ -310,9 +310,7 @@ class SessionAnalyticsService:
 
         start_date = timezone.now() - timedelta(days=days)
 
-        scans = HistoryScan.objects.filter(
-            history_id=history_id, date__gte=start_date, is_duplicate=False  # Only count unique sessions
-        )
+        scans = HistoryScan.objects.counted().filter(history_id=history_id, date__gte=start_date)
 
         total_sessions = scans.count()
 

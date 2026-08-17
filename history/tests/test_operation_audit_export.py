@@ -87,6 +87,12 @@ class OperationAuditExportPermissionTests(TestCase):
         self.company_b = Company.objects.create(name="Company B")
         self.outsider = User.objects.create_user(email="outsider@test.com", password="x")
         self.est_b = Establishment.objects.create(name="B Farm", company=self.company_b, state="CA")
+        # The operation dossier is a Compliance artifact (2026-08-14, subscriptions/gating.py).
+        # Only the VICTIM company is subscribed: the cross-tenant case must still be denied by
+        # tenant isolation, not by company A happening to lack a plan.
+        from subscriptions.testing import grant_compliance_exports
+
+        grant_compliance_exports(self.company_b)
 
     def _url(self, company, est):
         return f"/api/companies/{company.id}/establishments/{est.id}/operation-audit-export/"

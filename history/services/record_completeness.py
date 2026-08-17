@@ -23,17 +23,27 @@ presented as an external requirement (see the transparency-score demotion, 2026-
 matters but has no citation, it does not belong in this registry; add it to `PhotoVerificationGap`
 or a roadmap suggestion instead, where "recommended" is an honest word.
 
-Scope, deliberately narrow for v1: `ChemicalEvent` only, four fields. This is the highest-stakes
-record type — spray records are what an inspector reaches for first — and the smallest citable set
-that catches the actual failure mode (a record `python manage.py shell` can happily construct with
-every field blank). Extend to other event types only alongside a specific citation, not by
-resemblance to this one.
+Scope. v1 was `ChemicalEvent` only, four fields — the highest-stakes record type, and the
+smallest citable set that catches the actual failure mode (a record `python manage.py shell` can
+happily construct with every field blank).
+
+Extended 2026-08-15 to the seed-sourced production subtypes (PL planting, TR transplanting)
+under § 205.204. The trigger was an audit finding rather than resemblance: the certifier packet
+already PRINTS a seed table with columns for organic status, the § 205.2 nonavailability ground,
+the supplier searches and the treatment-allowability basis — and none of them were checked
+anywhere, so a planting record could reach a certifier with every one of those cells blank while
+the farm dashboard's readiness card reported nothing. Every entry carries its own citation, per
+the discipline above.
+
+Extend to further event types only alongside specific citations, not by resemblance to these.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Callable, Iterable, Optional
+
+from common.field_registry import NO_TREATMENT_ANSWERS, NON_ORGANIC_SEED_STATUSES, SEED_SOURCED_SUBTYPES
 
 # Pesticide-type subtypes: an application against a target. Fertilizer (FE) has no "target pest"
 # concept, so the target-pest requirement below does not apply to it.
@@ -60,8 +70,14 @@ class RequiredField:
     # has a legacy string twin plus a newer numeric one (volume/volume_numeric, area/area_numeric)
     # and either satisfies the requirement.
     present: Callable = field(default=None)  # type: ignore[assignment]
+    # A CONDITIONAL requirement: the field is owed only when this predicate holds. Distinct
+    # from `applies_to`, which keys on subtype. Use it when a field is required because of
+    # something the operator already recorded, rather than because of what kind of event it is.
+    applies_when: Callable = field(default=None)  # type: ignore[assignment]
 
     def applies(self, event) -> bool:
+        if self.applies_when is not None and not self.applies_when(event):
+            return False
         if self.applies_to is None:
             return True
         # `type` is nullable at the model level (history/models.py:1058) — an event with no
@@ -108,24 +124,168 @@ CHEMICAL_EVENT_REQUIRED_FIELDS: list[RequiredField] = [
         cfr_cite="§ 205.206(a)",
         applies_to=_PEST_TARGETING_TYPES,
     ),
+    # § 205.103(b)(2): records must span "the time of purchase or acquisition, through
+    # production". A certifier closes that trace by mass balance — quantity purchased against
+    # quantity applied — and the packet's own words when it cannot: "Mass balance cannot be
+    # reconciled. No purchase quantity is recorded on any chemical event."
+    #
+    # Measured 2026-08-11: 289 of 289 chemical events have no `quantity_purchased`, so the
+    # input side has never reconciled for anybody, on any packet.
+    #
+    # CONDITIONAL on purchase evidence existing, and that restraint is the point. Not every
+    # application is a purchase event — inputs get carried over from last season, produced on
+    # farm, or supplied by a custom applicator, and demanding a purchase quantity there would
+    # be Trazo inventing a requirement the regulation does not make. But once the operator has
+    # recorded a supplier, a date, an invoice or a lot, they have asserted a purchase, and a
+    # purchase with no quantity is precisely the half-record that breaks the trace.
+    RequiredField(
+        key="quantity_purchased",
+        label="quantity purchased",
+        cfr_cite="§ 205.103(b)(2)",
+        applies_when=lambda ev: any(
+            _present(getattr(ev, attr, None))
+            for attr in ("supplier_name", "purchase_date", "purchase_invoice", "chemical_lot_number")
+        ),
+    ),
 ]
 
 
+def _seed_search_documented(event, minimum: int = 1) -> bool:
+    """At least `minimum` search rows that actually NAME a supplier.
+
+    A row with a result but no supplier is not evidence — § 205.204(a)(1) turns on WHO was
+    contacted. `supplier` is the pre-2026-08-15 key (see migration 0205).
+    """
+    rows = getattr(event, "seed_search_attempts", None) or []
+    named = [r for r in rows if isinstance(r, dict) and str(r.get("supplier_name") or r.get("supplier") or "").strip()]
+    return len(named) >= minimum
+
+
+def _uses_non_organic_seed(event) -> bool:
+    return getattr(event, "seed_certification_status", None) in NON_ORGANIC_SEED_STATUSES
+
+
+def _named_a_seed_treatment(event) -> bool:
+    """A treatment was actually applied — "None" in the box is an answer, not a treatment."""
+    treatment = str(getattr(event, "seed_treatment", None) or "").strip()
+    return bool(treatment) and treatment.lower() not in NO_TREATMENT_ANSWERS
+
+
+#: Planting / Transplanting (7 CFR 205.204). Added 2026-08-15 — this registry was
+#: chemical-only, so a planting record missing its § 205.204 evidence never appeared on the
+#: readiness card the farm dashboard leads with, even though the certifier packet prints
+#: exactly those columns.
+PLANTING_EVENT_REQUIRED_FIELDS: list[RequiredField] = [
+    # § 205.204(a): the whole standard turns on whether the seed was organic. Without this the
+    # record cannot be classified at all, and osp_prefill's G3.0 resolver stays silent.
+    RequiredField(
+        key="seed_certification_status",
+        label="seed organic status",
+        cfr_cite="§ 205.204(a)",
+    ),
+    # § 205.2 defines "commercially available" by FORM, QUALITY or QUANTITY, and
+    # § 205.204(a)(1) permits non-organic seed only when that test fails. The supplier rows say
+    # WHO was contacted; this says the ground the exemption rests on.
+    RequiredField(
+        key="seed_nonavailability_reason",
+        label="reason organic seed was unavailable",
+        cfr_cite="§ 205.204(a)(1)",
+        applies_when=_uses_non_organic_seed,
+    ),
+    # The certifier EXPECTATION of three contacts. Deliberately a readiness check and not a
+    # save-blocking validator: § 205.204 sets no count, and USDA's Guide for Organic Crop
+    # Producers is where "at least three" comes from. One documented supplier is enforced at
+    # save time; the second and third belong here, framed as "what an inspector will ask for".
+    RequiredField(
+        key="seed_search_attempts",
+        label="three documented supplier searches",
+        cfr_cite="§ 205.204(a)(1)",
+        applies_when=_uses_non_organic_seed,
+        present=lambda ev: _seed_search_documented(ev, minimum=3),
+    ),
+    # USDA's Seed Records Part C pairs every named treatment with a "Documentation of Allowed
+    # Status" column. A named treatment with no basis is unreviewable under § 205.204(a)(2) —
+    # the same "named but unjustified" shape as the 2026-08-09 OMRI incident.
+    RequiredField(
+        key="seed_treatment_allowed_basis",
+        label="why the seed treatment is allowed",
+        cfr_cite="§ 205.204(a)(2)",
+        applies_when=_named_a_seed_treatment,
+    ),
+    # § 205.103(b)(2): records must span "the time of purchase or acquisition". Conditional on
+    # the operator having already asserted a purchase, exactly as the chemical
+    # `quantity_purchased` check is — a farm-saved or nursery-gifted planting is not a purchase,
+    # and demanding a supplier there would invent a requirement the regulation does not make.
+    RequiredField(
+        key="seed_supplier_name",
+        label="seed supplier",
+        cfr_cite="§ 205.103(b)(2)",
+        applies_when=lambda ev: any(
+            _present(getattr(ev, attr, None))
+            for attr in ("seed_purchase_invoice", "seed_purchase_date", "seed_lot_number")
+        ),
+    ),
+]
+
+
+def _registry_for(event) -> list[RequiredField]:
+    """Which required-field registry governs this event.
+
+    Deliberately NOT `isinstance`. This module is called with real model instances from the
+    viewset and with `SimpleNamespace` fixtures from its own tests, and an isinstance dispatch
+    silently returned "no requirements" for every duck-typed caller — which reads as "this
+    record is complete" and is the worst possible failure mode for a completeness check.
+
+    Discriminates on Django's own model_name when there is one, and falls back to a field that
+    only exists on the production model. Chemical stays the default so the v1 behaviour is
+    bit-for-bit unchanged for every existing caller.
+    """
+    model_name = getattr(getattr(event, "_meta", None), "model_name", None)
+
+    if model_name == "productionevent" or (model_name is None and hasattr(event, "seeds_source")):
+        # Only the subtypes that actually put seed or planting stock in the ground owe § 205.204
+        # evidence. Every other production subtype returns [] — silence, not a completeness claim.
+        if getattr(event, "type", None) in SEED_SOURCED_SUBTYPES:
+            return PLANTING_EVENT_REQUIRED_FIELDS
+        return []
+
+    if model_name == "chemicalevent" or (model_name is None and hasattr(event, "commercial_name")):
+        return CHEMICAL_EVENT_REQUIRED_FIELDS
+
+    # Weather, soil, pest, business, general: no citable registry yet. Return nothing rather
+    # than running the chemical checks against a model that has none of those columns — doing
+    # so raised AttributeError inside the write-time nudge and 500'd the whole event save.
+    return []
+
+
 def missing_required_fields(event) -> list[dict]:
-    """Required fields absent on this ChemicalEvent. Empty list = record is complete.
+    """Required fields absent on this event. Empty list = record is complete.
 
     Each item: {"key", "label", "cfr_cite"} — same shape PUR export's `_missing_required` implies,
     minus the CA-only "which PUR box" framing.
+
+    Covers ChemicalEvent and the seed-sourced production subtypes (PL/TR). Any other event type
+    returns [] — silence, not a claim of completeness.
     """
     return [
         {"key": rf.key, "label": rf.label, "cfr_cite": rf.cfr_cite}
-        for rf in CHEMICAL_EVENT_REQUIRED_FIELDS
+        for rf in _registry_for(event)
         if rf.applies(event) and not rf.is_present(event)
     ]
 
 
 def is_complete(event) -> bool:
     return not missing_required_fields(event)
+
+
+def completeness_gap_keys(event) -> list[str]:
+    """Machine keys of required fields absent on this ChemicalEvent, for API payloads.
+
+    The write-time nudge (EventViewSet create/update) sends keys, not labels: the frontend owns
+    the human wording via i18n, and a key survives copy changes. Same source of truth as
+    `missing_required_fields` — this is a projection, not a second registry.
+    """
+    return [m["key"] for m in missing_required_fields(event)]
 
 
 @dataclass(frozen=True)

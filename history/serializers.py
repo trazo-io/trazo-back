@@ -2,6 +2,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 
 from rest_framework import serializers
 
+from common.field_registry import NO_TREATMENT_ANSWERS, NON_ORGANIC_SEED_STATUSES, SEED_SOURCED_SUBTYPES
 from common.models import Gallery
 from common.serializers import GallerySerializer
 from company.models import Establishment
@@ -107,7 +108,7 @@ def _public_unit(event, field_name):
     return None
 
 
-def ensure_event_description(data, default_label):
+def ensure_event_description(data, default_label, serializer=None):
     """F01 fix (2026-06): CommonEvent.description is a non-blank TextField, so any
     event saved with the (clearly "Optional") Observations/notes field empty returned
     {"description":["This field may not be blank."]} as a SILENT 400 — no toast, the
@@ -115,10 +116,130 @@ def ensure_event_description(data, default_label):
     already had its own fallback). Default a blank description from the event
     name/type so the save succeeds and the consumer card shows something sensible.
     Mutates ``data`` in place; call at the top of to_internal_value after data.copy().
+
+    ``serializer`` (2026-08-12) — pass ``self``. Without it this DESTROYS DATA on any
+    partial update that does not mention description. Measured on a real event:
+
+        PATCH {"buffer_disposition_quantity": "1 4x4 bin"}
+        description: "Shake and pickup, north rows first. Scale ticket 4471."
+                  -> "Production activity"
+
+    The farmer's harvest note, scale-ticket reference and all, replaced by a placeholder —
+    silently, on a request that never mentioned the field. `to_internal_value` runs for
+    PATCH as well as POST, and DRF's own default-skipping for partial updates does not
+    apply because this writes into ``data`` before field processing.
+
+    🔴 2026-08-15: that 08-12 fix guarded on ``partial``, and the app's own edit form does
+    not send PATCH. Measured live on a Planting event, opening Edit and pressing Update
+    without touching a single input:
+
+        PUT  /api/companies/91/establishments/127/events/3882/
+        description: "Replanted 40 Hass on Duke 7 rootstock, rows 1-12, east buffer."
+                  -> "Production activity: Planting"
+
+    The edit form prefills its notes box from ``observation`` and posts it back as
+    ``description``, so any row whose text lives in ``description`` — every
+    template-created, AI-created and COG Pro-imported event — arrives here with an
+    explicit blank. ``partial`` is False, the 08-12 guard does not fire, and the record
+    is replaced by a placeholder.
+
+    So the test is now the INSTANCE, not the request verb: on an update we never replace a
+    description that is already on the record. A grower who truly wants to empty a note can
+    still overwrite it with new text; silently destroying § 205.103 record content is not a
+    trade we make to support clearing it to nothing. On CREATE the original F01 behaviour is
+    unchanged — a blank notes box still gets a sensible default so the save succeeds.
     """
+    if serializer is not None:
+        instance = getattr(serializer, "instance", None)
+        if instance is not None:
+            stored = getattr(instance, "description", "") or ""
+            incoming = str(data.get("description") or "").strip()
+            if not incoming and str(stored).strip():
+                # THE FIX. An update that sends a blank description, or omits the key, never
+                # replaces a description already on the record. Restored rather than popped:
+                # on a PUT (partial=False) ``description`` is required, so removing the key
+                # would 400 the whole save instead of protecting the record.
+                data["description"] = stored
+                return
+            if "description" not in data:
+                # Stored value is itself blank. Echo it so a PUT does not 400 on a required
+                # field the client never touched, then fall through to the F01 default below —
+                # an empty description is exactly the case that default exists for.
+                data["description"] = stored
+        elif getattr(serializer, "partial", False) and "description" not in data:
+            # No instance bound and a partial write that never mentioned the field: do not
+            # inject one. This is how the viewset's PATCH path validates (the 08-12 case).
+            return
     if not str(data.get("description") or "").strip():
         name = str(data.get("name") or data.get("commercial_name") or data.get("event_name") or "").strip()
         data["description"] = f"{default_label}: {name}" if name else default_label
+
+
+SEED_SEARCH_ROW_KEYS = ("supplier_name", "date_contacted", "result", "notes")
+
+
+def normalize_seed_search_attempts(rows):
+    """Canonicalise NOP 5029 commercial-availability search rows.
+
+    🔴 2026-08-15. The planting form wrote ``supplier`` while the certifier packet reads
+    ``supplier_name`` (audit_export_service._build_seed_stock_section) and the model's own
+    help_text documents ``supplier_name``. Nothing remapped them and the serializer checked
+    only the row COUNT, so a grower could fill the widget, pass validation, see a success
+    toast — and get a NOP 5029 table whose "Supplier Contacted" column was entirely blank.
+    Under § 205.204(a)(1) the identity of the suppliers contacted IS the evidence, so a
+    blank column is worse than an absent table: it reads as a claim with the proof deleted.
+
+    It went unnoticed because every row in every database had been written by the demo
+    seeder, which used the correct key. No row had ever come through the widget.
+
+    Normalising here rather than only in the form means an API client, an importer or a
+    seeder cannot reintroduce the mismatch. Unknown keys are preserved so a future column
+    is not silently dropped the way ``notes`` was.
+    """
+    if not isinstance(rows, list):
+        return rows
+    normalized = []
+    for row in rows:
+        if not isinstance(row, dict):
+            normalized.append(row)
+            continue
+        out = dict(row)
+        legacy = out.pop("supplier", None)
+        if not str(out.get("supplier_name") or "").strip() and str(legacy or "").strip():
+            out["supplier_name"] = legacy
+        for key in SEED_SEARCH_ROW_KEYS:
+            out.setdefault(key, "")
+        normalized.append(out)
+    return normalized
+
+
+def _public_event_text(value, event):
+    """Free text on its way to the anonymous consumer payload.
+
+    Removes the commercial counterparties the operator named on THIS event. Measured live
+    2026-08-15: `seed_supplier_name` was correctly stripped from a Planting event and the same
+    nursery was published verbatim in `description` — "...nursery stock from Saticoy Grove
+    Nursery for replanting 28 trees..." — which makes the strip decorative.
+
+    ⚠️ Deliberately NOT `public_free_text`. That scrubber (farm financials + unsupportable
+    market/verification claims) is built for the establishment bio, and running it over event
+    narrative is a product decision the sanitizer's own docstring explicitly defers ("a separate
+    product-level decision (2026-06 audit P0-2 / P1-7), not handled here"). It is also lossy on
+    this content: applied to a real planting description it turned
+
+        "Certified organic planting stock per NOP 7 CFR 205.204."
+    into
+        ".204."
+
+    because the verification-claim pattern ate the sentence up to the section number. Whether
+    growers' own "certified organic" prose should be scrubbed on a consumer surface is worth
+    deciding — but deciding it silently, as a side effect of a vendor-leak fix, is not.
+    """
+    from .services.privacy import redact_own_vendor_names
+
+    if not value:
+        return value
+    return redact_own_vendor_names(value, event)
 
 
 def coerce_blank_nullable_dates(serializer, data):
@@ -518,8 +639,11 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
             "weather_conditions",
             "application_timing",
             "target_pest_disease",
+            "application_purpose",
             "organic_approved",
             "buffer_zone_meters",
+            "applied_scope",
+            "applied_scope_detail",
             "applicator_name",
             "epa_registration_number",
             "restricted_use_pesticide",
@@ -918,8 +1042,11 @@ class ChemicalEventSerializer(EventSerializer):
             "weather_conditions",
             "application_timing",
             "target_pest_disease",
+            "application_purpose",
             "organic_approved",
             "buffer_zone_meters",
+            "applied_scope",
+            "applied_scope_detail",
             "applicator_name",
             "epa_registration_number",
             "restricted_use_pesticide",
@@ -1116,6 +1243,15 @@ class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
             "type",
             "observation",
             "extra_data",
+            # FSMA PSR § 112.161(b) supervisor sign-off. Added 2026-08-15: these three live
+            # on the shared CommonEvent base and were writable on Chemical ALONE, while the
+            # packet's Supervisor Record Review table walks all eight managers. The record
+            # classes that rule actually names — training, agricultural water, biological soil
+            # amendments, equipment and tool cleaning — are General, Production(IR), Soil and
+            # Production(EM): precisely the four that could not record a sign-off.
+            "reviewed",
+            "reviewer_name",
+            "review_date",
         ]
         read_only_fields = ["id"]
 
@@ -1124,7 +1260,7 @@ class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
         if event_type is None:
             raise serializers.ValidationError({"type": ["This field is required."]}, code="required")
         data = data.copy()
-        ensure_event_description(data, "Weather event")  # F01: avoid silent 400 on blank notes
+        ensure_event_description(data, "Weather event", self)  # F01: avoid silent 400 on blank notes
 
         # Handle custom fields (user-defined additional information)
         custom_fields = self.handle_custom_fields_input(data)
@@ -1643,6 +1779,7 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
             "water_test_results",
             # NOP compliance — seed sourcing & equipment cleaning
             "seed_search_attempts",
+            "seed_nonavailability_reason",
             # NOP 7 CFR 205.204 — seed traceability (planting subtype)
             "seed_supplier_name",
             "seed_purchase_date",
@@ -1650,6 +1787,19 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
             "seed_lot_number",
             "seed_certification_status",
             "seed_treatment",
+            "seed_treatment_allowed_basis",
+            # § 205.105(e) excluded methods + § 205.204(a)(4) perennial 12-month rule.
+            # Producer/certifier only — neither is on the anonymous payload: "non-GMO" is a
+            # marketing claim and this value is entirely self-reported.
+            "seed_non_gmo_status",
+            "stock_organic_management_start",
+            "rootstock",
+            "plants_established",
+            "plant_spacing",
+            # Signal-stamped OSP drift finding (PL). Read-only: the grower never sets it.
+            # Withheld from anonymous callers by _CERTIFIER_ONLY_EVENT_FIELDS; present here so
+            # the producer's DriftFindingsBanner has something to render.
+            "drift_warning",
             "cleaning_date",
             "cleaning_method",
             "cleaning_materials_used",
@@ -1668,8 +1818,32 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
             # Sprint 3.2 — Post-harvest storage (NOP 205.272 / FSMA 204 KDE)
             "storage_location",
             "storage_temperature_f",
+            # WS-4 — harvest-record completeness (§ 205.103(b)(2); § 205.202(c))
+            "amount_determination",
+            "harvest_date_end",
+            "harvest_destination",
+            "buffer_disposition",
+            "buffer_disposition_quantity",
+            "buffer_disposition_evidence",
+            # 2026-08 QO-parity — contract-harvest ref, cleanout asset class,
+            # whole-vs-part coverage (§ 205.103(b); § 205.272(a))
+            "harvest_contract_number",
+            "cleaning_asset_class",
+            "applied_scope",
+            "applied_scope_detail",
+            # FSMA PSR § 112.161(b) supervisor sign-off. Added 2026-08-15: these three live
+            # on the shared CommonEvent base and were writable on Chemical ALONE, while the
+            # packet's Supervisor Record Review table walks all eight managers. The record
+            # classes that rule actually names — training, agricultural water, biological soil
+            # amendments, equipment and tool cleaning — are General, Production(IR), Soil and
+            # Production(EM): precisely the four that could not record a sign-off.
+            "reviewed",
+            "reviewer_name",
+            "review_date",
+            # § 205.103(b)(2) harvest-pass lot identity (HA). See ProductionEvent.
+            "harvest_lot_code",
         ]
-        read_only_fields = ["id"]
+        read_only_fields = ["id", "drift_warning"]
 
     # Fields captured from Quick Add forms that are stored in extra_data
     # (not model fields on ProductionEvent, but valuable for consumer display)
@@ -1711,11 +1885,37 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
     def to_internal_value(self, data):
         """Handle custom fields and extra_data fields for production events."""
         data = data.copy()
-        ensure_event_description(data, "Production activity")  # F01: avoid silent 400 on blank notes
+        ensure_event_description(data, "Production activity", self)  # F01: avoid silent 400 on blank notes
 
         # Map EM-specific operation_efficiency → production_efficiency (model field)
         if "operation_efficiency" in data and "production_efficiency" not in data:
             data["production_efficiency"] = data.pop("operation_efficiency")
+
+        if "seed_search_attempts" in data:
+            data["seed_search_attempts"] = normalize_seed_search_attempts(data["seed_search_attempts"])
+
+        # "None" in the seed-treatment box is an ANSWER, not a blank: § 205.204(a)(2) only
+        # bites when something was actually applied to the seed. Record the corresponding
+        # basis so the certifier packet prints "Untreated — no coating, inoculant or pelleting
+        # applied" instead of silence. This PARSES what the operator wrote; it never infers
+        # from an empty field, which is left untouched for them to answer.
+        #
+        # Three guards, and each earns its place:
+        #  - subtype: only the seed-sourced records have a § 205.204(a)(2) basis at all.
+        #  - the basis must be absent from the REQUEST *and* from the stored row. Testing the
+        #    request alone would let `PATCH {"seed_treatment": "None"}` silently overwrite a
+        #    stored `omri_listed` — the same shape as the description-destruction bug above,
+        #    and a worse one, because it would rewrite a compliance answer rather than a note.
+        #  - the treatment must be explicitly present in this request; an absent key says
+        #    nothing about the seed.
+        subtype_now = data.get("type") or (getattr(self.instance, "type", "") if self.instance else "")
+        if subtype_now in SEED_SOURCED_SUBTYPES and "seed_treatment" in data:
+            stored_basis = str(getattr(self.instance, "seed_treatment_allowed_basis", "") or "").strip()
+            incoming_basis = str(data.get("seed_treatment_allowed_basis") or "").strip()
+            if not incoming_basis and not stored_basis:
+                treatment = str(data.get("seed_treatment") or "").strip().lower()
+                if treatment and treatment in NO_TREATMENT_ANSWERS:
+                    data["seed_treatment_allowed_basis"] = "untreated"
 
         # Extract frontend's extra_data BEFORE super() call
         # Frontend sends summary mode fields (is_summary, date_start, event_count, etc.)
@@ -1918,28 +2118,49 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
         if brix_level is not None and brix_level > 45:
             raise serializers.ValidationError({"brix_level": "Brix level cannot exceed 45."})
 
-        # NOP 5029 / 7 CFR 205.204(a)(1): non-organic seed/planting stock on a planting (PL)
-        # event requires a documented commercial-availability search of >= 3 suppliers. The
-        # planting form now ships the seed-search widget (ProductionTab.jsx, gated on a
-        # non-organic seed certification status), so the farmer CAN satisfy this — enforce it on
-        # the API save path too (DRF does not call the model's clean()). This serializer handles
-        # both create and update; fall back to the instance on partial updates.
+        # 7 CFR 205.204(a)(1): non-organic seed or planting stock may be used only when an
+        # equivalent organic variety is not commercially available. The record must therefore
+        # carry the ground for that determination — with NO documented search there is no
+        # basis at all, which is a genuine gap and the one case worth blocking a save over.
+        #
+        # ⚠️ We deliberately do NOT block below three. § 205.204 imposes no numeric count.
+        # "At least three suppliers" is a certifier EXPECTATION, stated in USDA's optional
+        # Guide for Organic Crop Producers ("certifiers want clear indication that several
+        # (at least three) suppliers have been contacted") — not a rule, and not something to
+        # 400 a grower's record over mid-season. One-or-two-supplier records surface on the
+        # readiness card instead (record_completeness.seed_search_gaps), which is framed as a
+        # documentation check rather than a compliance decision.
+        #
+        # TR is included with PL: a transplant of non-organic nursery stock is squarely
+        # § 205.204, common_osp_records already scores prod("PL", "TR") together, and the
+        # form shows the seed block for both. Testing PL alone let the more common orchard
+        # record skip the requirement entirely.
         seed_cert_status = data.get("seed_certification_status")
         if seed_cert_status is None and self.instance is not None:
             seed_cert_status = getattr(self.instance, "seed_certification_status", None)
         pl_type = production_type or (getattr(self.instance, "type", "") if self.instance else "")
-        if pl_type == "PL" and seed_cert_status in ("non_organic_untreated", "non_organic_treated"):
+        if pl_type in SEED_SOURCED_SUBTYPES and seed_cert_status in NON_ORGANIC_SEED_STATUSES:
             attempts = data.get("seed_search_attempts")
             if attempts is None and self.instance is not None:
                 attempts = getattr(self.instance, "seed_search_attempts", None)
             attempts = attempts or []
-            if len(attempts) < 3:
+            # Accept the pre-2026-08-15 `supplier` key too. to_internal_value normalises it
+            # on the real write path, but validate() is also called directly (and by tests),
+            # and a rule that silently stops seeing legacy rows would reject records that are
+            # in fact complete.
+            documented = [
+                a
+                for a in attempts
+                if isinstance(a, dict) and str(a.get("supplier_name") or a.get("supplier") or "").strip()
+            ]
+            if not documented:
                 raise serializers.ValidationError(
                     {
                         "seed_search_attempts": [
-                            "NOP 5029 (7 CFR 205.204(a)(1)) requires documentation of at least 3 "
-                            "supplier searches when using non-organic seed or planting stock.",
-                            f"Current search attempts: {len(attempts)}. Add more suppliers before saving.",
+                            "Non-organic seed or planting stock may only be used when an equivalent "
+                            "organic variety is not commercially available (7 CFR 205.204(a)(1)).",
+                            "Record at least one supplier you contacted, so the record shows the "
+                            "ground for the exemption. Certifiers typically look for three.",
                         ]
                     }
                 )
@@ -2034,6 +2255,7 @@ class ProductionEventSerializer(CustomFieldsMixin, EventSerializer):
             "verification_level",
             # NOP compliance — seed sourcing & equipment cleaning
             "seed_search_attempts",
+            "seed_nonavailability_reason",
             # NOP 7 CFR 205.204 — seed traceability (planting subtype)
             "seed_supplier_name",
             "seed_purchase_date",
@@ -2041,6 +2263,19 @@ class ProductionEventSerializer(CustomFieldsMixin, EventSerializer):
             "seed_lot_number",
             "seed_certification_status",
             "seed_treatment",
+            "seed_treatment_allowed_basis",
+            # § 205.105(e) excluded methods + § 205.204(a)(4) perennial 12-month rule.
+            # Producer/certifier only — neither is on the anonymous payload: "non-GMO" is a
+            # marketing claim and this value is entirely self-reported.
+            "seed_non_gmo_status",
+            "stock_organic_management_start",
+            "rootstock",
+            "plants_established",
+            "plant_spacing",
+            # Signal-stamped OSP drift finding (PL). Read-only: the grower never sets it.
+            # Withheld from anonymous callers by _CERTIFIER_ONLY_EVENT_FIELDS; present here so
+            # the producer's DriftFindingsBanner has something to render.
+            "drift_warning",
             "cleaning_date",
             "cleaning_method",
             "cleaning_materials_used",
@@ -2059,8 +2294,23 @@ class ProductionEventSerializer(CustomFieldsMixin, EventSerializer):
             # Sprint 3.2 — Post-harvest storage
             "storage_location",
             "storage_temperature_f",
+            # WS-4 — harvest-record completeness (§ 205.103(b)(2); § 205.202(c))
+            "amount_determination",
+            "harvest_date_end",
+            "harvest_destination",
+            "buffer_disposition",
+            "buffer_disposition_quantity",
+            "buffer_disposition_evidence",
+            # 2026-08 QO-parity — contract-harvest ref, cleanout asset class,
+            # whole-vs-part coverage (§ 205.103(b); § 205.272(a))
+            "harvest_contract_number",
+            "cleaning_asset_class",
+            "applied_scope",
+            "applied_scope_detail",
+            # § 205.103(b)(2) harvest-pass lot identity (HA). See ProductionEvent.
+            "harvest_lot_code",
         ]
-        read_only_fields = ["id", "index", "created_by"]
+        read_only_fields = ["id", "index", "created_by", "drift_warning"]
 
     def get_type(self, production_event):
         type_display = production_event.get_type_display()
@@ -2160,13 +2410,22 @@ class UpdateGeneralEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
             "corrective_action_date",
             "certifier_notified",
             "certifier_notification_date",
+            # FSMA PSR § 112.161(b) supervisor sign-off. Added 2026-08-15: these three live
+            # on the shared CommonEvent base and were writable on Chemical ALONE, while the
+            # packet's Supervisor Record Review table walks all eight managers. The record
+            # classes that rule actually names — training, agricultural water, biological soil
+            # amendments, equipment and tool cleaning — are General, Production(IR), Soil and
+            # Production(EM): precisely the four that could not record a sign-off.
+            "reviewed",
+            "reviewer_name",
+            "review_date",
         ]
         read_only_fields = ["id"]
 
     def to_internal_value(self, data):
         """Handle custom fields and field name remapping for general events."""
         data = data.copy()
-        ensure_event_description(data, "Farm activity")  # F01: avoid silent 400 on blank notes
+        ensure_event_description(data, "Farm activity", self)  # F01: avoid silent 400 on blank notes
 
         # Convert empty strings to None for nullable fields (contamination incident fields)
         nullable_fields = [
@@ -2289,6 +2548,7 @@ class OptimizedHistoryListSerializer(serializers.ModelSerializer):
     members = serializers.SerializerMethodField()
     crop_type = serializers.SerializerMethodField()
     events_count = serializers.IntegerField(source="total_events_count", read_only=True, default=0)
+    has_sale_record = serializers.SerializerMethodField()
 
     class Meta:
         model = History
@@ -2315,9 +2575,31 @@ class OptimizedHistoryListSerializer(serializers.ModelSerializer):
             "crop_type",
             "transparency_score",  # Include for transparency calculations
             "events_count",  # Annotated count of all events
+            "lot_id",  # Traceability anchor — § 205.103(b)(2) forward trace
+            "has_sale_record",  # Whether the season's output was sold to someone, on record
             "extra_data",  # Include for carbon data
         ]
         read_only_fields = ["id", "public_id"]
+
+    def get_has_sale_record(self, history):
+        """
+        True when a sale is recorded ANYWHERE for this season.
+
+        Sales currently live in two places: the `SalesRecord` rows written by
+        SalesRecordsSection (the canonical editor, and the richer model — invoice number,
+        organic-on-invoice, bill of lading), and the legacy `History.sale_date` /
+        `quantity_sold` columns. That duplication is a known open item and this read
+        deliberately does NOT pick a winner.
+
+        The OR is the safe direction for a READINESS signal. Reading only the canonical store
+        would print "Sale — not recorded" at a grower who did record one in the legacy fields,
+        and a check that accuses someone of missing a record they actually entered is worse
+        than no check at all. Cf. the absence-is-not-denial rule: absence of a row in ONE store
+        is not evidence the sale was never recorded.
+        """
+        if getattr(history, "sales_record_count", 0):
+            return True
+        return bool(history.sale_date or history.quantity_sold)
 
     def get_product(self, history):
         return history.product.name if history.product else None
@@ -2526,11 +2808,58 @@ class HistoryWriteSerializer(serializers.ModelSerializer):
     product = serializers.SerializerMethodField()
     parcel = serializers.SerializerMethodField()
     crop_type = serializers.SerializerMethodField()
+    # REPAIR-ONLY crop assignment. UI-created productions always carry a crop
+    # (start_production requires it), but white-glove paths — the COG Pro
+    # importer's hand-created target productions — can leave crop_type/product
+    # NULL, and the edit form's read-only crop field made that state permanent.
+    # Semantics: sets crop on a production that has NONE (and backfills the
+    # Product row the same way start_production does); refuses to CHANGE an
+    # existing crop — events, templates, and PUR rows are keyed to it.
+    crop_type_id = serializers.IntegerField(write_only=True, required=False)
+
+    def validate(self, attrs):
+        # A season cannot end before it starts. Cross-field, merged with the
+        # instance so a PATCH that sends only one of the pair is still checked
+        # (found 2026-08-10: the operation dossier printed a production window
+        # "2026-08-09 – 2026-08-08" because nothing enforced this).
+        start = attrs.get("start_date", getattr(self.instance, "start_date", None))
+        finish = attrs.get("finish_date", getattr(self.instance, "finish_date", None))
+        if start and finish and finish.date() < start.date():
+            raise serializers.ValidationError(
+                {
+                    "finish_date": (
+                        f"Finish date cannot be before the production's start date " f"({start.date().isoformat()})."
+                    )
+                }
+            )
+        return attrs
+
+    def update(self, instance, validated_data):
+        crop_type_id = validated_data.pop("crop_type_id", None)
+        if crop_type_id is not None:
+            from carbon.models import CropType
+            from product.models import Product
+
+            try:
+                crop_type = CropType.objects.get(id=crop_type_id)
+            except CropType.DoesNotExist:
+                raise serializers.ValidationError({"crop_type_id": "Unknown crop type."})
+            if instance.crop_type_id is None:
+                instance.crop_type = crop_type
+                if instance.product_id is None:
+                    product, _ = Product.objects.get_or_create(name=crop_type.name)
+                    instance.product = product
+            elif instance.crop_type_id != crop_type.id:
+                raise serializers.ValidationError(
+                    {"crop_type_id": "Crop type cannot be changed once set. Create a new production instead."}
+                )
+        return super().update(instance, validated_data)
 
     class Meta:
         model = History
         fields = [
             "id",
+            "crop_type_id",
             "public_id",
             "start_date",
             "expected_harvest",
@@ -4039,8 +4368,8 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                     {
                         "id": f"chemical_{i}",
                         "date": event.date.isoformat() if event.date else None,
-                        "description": event.description or "Chemical Application",
-                        "observation": getattr(event, "observation", ""),
+                        "description": _public_event_text(event.description or "Chemical Application", event),
+                        "observation": _public_event_text(getattr(event, "observation", ""), event),
                         "performed_by": self._public_performer(event, show_full_names),
                         "type": "chemical",
                         "chemical_type": self._get_chemical_type_with_fallback(
@@ -4216,8 +4545,8 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                     {
                         "id": f"production_{i}",
                         "date": event.date.isoformat() if event.date else None,
-                        "description": event.description or "Production Activity",
-                        "observation": event.observation or "",
+                        "description": _public_event_text(event.description or "Production Activity", event),
+                        "observation": _public_event_text(event.observation or "", event),
                         "performed_by": self._public_performer(event, show_full_names),
                         "type": getattr(event, "type", "production"),
                         "event_type": PRODUCTION_EVENT_TYPE,
@@ -4234,8 +4563,26 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         # Production-specific fields for detailed display
                         "name": getattr(event, "name", None),
                         "variety": getattr(event, "variety", None),
-                        "block_id": getattr(event, "block_id", None),
-                        "growth_stage": getattr(event, "growth_stage", None),
+                        # 🔴 2026-08-15 — four keys removed from the anonymous payload. None of
+                        # them had a consumer_card surface in the event registry, so no
+                        # component has ever rendered any of them; they were scrapable JSON and
+                        # nothing else. The precedent is this file's own storage_location
+                        # removal and the rule stated in transparency_views: "the key name
+                        # travels on the wire and is scrapable whatever the UI renders, so it
+                        # is the claim."
+                        #
+                        #   block_id      — an internal operator identifier
+                        #                   ("Hillside Grove A - East Buffer Zone (rows 1-12)");
+                        #                   surfaces.ts already names block IDs as operator data.
+                        #   growth_stage  — no consumer surface, and meaningless out of context.
+                        #   production_efficiency / operation_efficiency — the SAME self-graded
+                        #                   value under two names. The registry withholds it from
+                        #                   the card on stated EU ECGT 2024/825 and FTC
+                        #                   16 CFR 260.6 grounds; shipping it on the wire anyway
+                        #                   defeated that decision.
+                        #
+                        # They remain on the OWNER serializers, the certifier packet and the
+                        # dossier, which is where operator data belongs.
                         "area_covered": float(getattr(event, "area_covered", None) or 0) or None,
                         "area_unit": getattr(event, "area_unit", "ha"),
                         "yield_quantity": float(getattr(event, "yield_quantity", None) or 0) or None,
@@ -4246,9 +4593,14 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "equipment_hours": float(getattr(event, "equipment_hours", None) or 0) or None,
                         "transportation_distance": float(getattr(event, "transportation_distance", None) or 0) or None,
                         "transportation_unit": getattr(event, "transportation_unit", "km"),
-                        "production_efficiency": getattr(event, "production_efficiency", "normal"),
-                        "operation_efficiency": getattr(event, "production_efficiency", "normal"),
                         "seeds_source": getattr(event, "seeds_source", None),
+                        # Owner-only: stripped for anonymous callers by _CERTIFIER_ONLY_EVENT_FIELDS.
+                        # Present so the producer's own timeline can render DriftFindingsBanner —
+                        # ProductionEvent stamps drift_warning on PL events via a post_save signal
+                        # and, until 2026-08-15, NO serializer returned it, so a seed-sourcing
+                        # finding could never reach the banner built to show it. Chemical and Soil
+                        # both already expose it this way.
+                        "drift_warning": getattr(event, "drift_warning", None),
                         # Irrigation fields (model field with extra_data fallback)
                         "irrigation_method": (
                             getattr(event, "irrigation_method", None)
@@ -4403,18 +4755,43 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         # certifier-facing NOP PDF (audit_export_service). Same policy and class as the
                         # chemical supplier_name/purchase_* fields above (see L3103-3110) and Standard
                         # Fix #5 in AUDIT_INSTRUCTIONS. Regression: test_public_serializer_leakage.py.
-                        # seed_lot_number / seed_certification_status / seed_treatment are legitimate
-                        # consumer transparency (what was planted, not who sold it) and remain public.
-                        "seed_lot_number": getattr(event, "seed_lot_number", None),
-                        "seed_certification_status": getattr(event, "seed_certification_status", None),
+                        # seed_certification_status / seed_treatment are legitimate consumer
+                        # transparency (WHAT was planted, not who sold it) and remain public.
+                        #
+                        # 🔴 seed_lot_number removed 2026-08-15. It shipped as "legitimate
+                        # consumer transparency", but the event registry gives it no
+                        # consumer_card surface, so no component has ever rendered it — the
+                        # anonymous wire carried a SUPPLIER's batch identifier
+                        # ("BN-HASS-2025-L047") that a shopper cannot act on and that belongs
+                        # to the same vendor-record family as seed_supplier_name directly
+                        # above. Identical reasoning, and identical outcome, to the
+                        # storage_location removal noted below.
+                        # 🔴 seed_certification_status removed from the public payload
+                        # 2026-08-15, with its consumer_card surface. It is a grower DROPDOWN
+                        # of CERTIFICATION statuses; published anonymously it is a self-assigned
+                        # certification-mark claim, the same class the registry already withholds
+                        # `seed_treatment_allowed_basis` for (one of its values is `omri_listed`).
+                        # The certified fact a shopper can rely on is the farm's third-party
+                        # certification, which transparency_views publishes from structured
+                        # USDA-OID-matched records — not from a dropdown on one event.
+                        #
+                        # `seed_treatment` stays: the NAME of what was applied to the seed is a
+                        # factual practice, not a claim about who certified anything.
                         "seed_treatment": getattr(event, "seed_treatment", None),
-                        # Sprint 3.2 — Post-harvest storage (NOP 205.272 / FSMA 204 KDE prep)
-                        "storage_location": getattr(event, "storage_location", None),
-                        "storage_temperature_f": (
-                            float(event.storage_temperature_f)
-                            if getattr(event, "storage_temperature_f", None) is not None
-                            else None
-                        ),
+                        # WHAT was planted, not who sold it. `rootstock` was already reaching
+                        # consumers through the extra_data allow-list before it had a column,
+                        # so this is not new exposure — it is the same fact, from a field the
+                        # grower can now actually fill in.
+                        "rootstock": getattr(event, "rootstock", None),
+                        "plants_established": getattr(event, "plants_established", None),
+                        "plant_spacing": getattr(event, "plant_spacing", None),
+                        # Sprint 3.2 shipped storage_location/storage_temperature_f here "for
+                        # cold-chain transparency", but no consumer component ever rendered
+                        # them (the event registry gives them no consumer surface) — so the
+                        # anonymous wire carried internal facility identifiers ("Warehouse
+                        # B-Bin-12") for nothing. Removed 2026-08-09; they remain on the
+                        # owner serializers and the certifier dossier/§ 11 evidence, which is
+                        # where FSMA 204 KDE data belongs.
                         # Custom fields stored in extra_data (e.g., custom_fields, carbon_calculation)
                         "extra_data": self._sanitize_extra_data_for_public(event),
                         # Aggregate event fields (Sprint 4) - extracted from extra_data for normalizer
@@ -4490,8 +4867,8 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                     {
                         "id": f"weather_{i}",
                         "date": event.date.isoformat() if event.date else None,
-                        "description": event.description or "Weather Event",
-                        "observation": event.observation or "",
+                        "description": _public_event_text(event.description or "Weather Event", event),
+                        "observation": _public_event_text(event.observation or "", event),
                         "performed_by": self._public_performer(event, show_full_names),
                         "type": getattr(
                             event, "type", "weather"
@@ -4544,8 +4921,8 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                     {
                         "id": f"equipment_{i}",
                         "date": event.date.isoformat() if event.date else None,
-                        "description": event.description or "Equipment Use",
-                        "observation": getattr(event, "observation", ""),
+                        "description": _public_event_text(event.description or "Equipment Use", event),
+                        "observation": _public_event_text(getattr(event, "observation", ""), event),
                         "performed_by": self._public_performer(event, show_full_names),
                         "type": "equipment",  # FIXED: Always return "equipment" as main type for Equipment events
                         "certified": getattr(event, "certified", False),
@@ -4613,8 +4990,8 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                     {
                         "id": f"soil_{i}",
                         "date": event.date.isoformat() if event.date else None,
-                        "description": event.description or "Soil Management",
-                        "observation": getattr(event, "observation", ""),
+                        "description": _public_event_text(event.description or "Soil Management", event),
+                        "observation": _public_event_text(getattr(event, "observation", ""), event),
                         "performed_by": self._public_performer(event, show_full_names),
                         "type": "soil_management",
                         "event_type": SOIL_MANAGEMENT_EVENT_TYPE,
@@ -5246,7 +5623,7 @@ class UpdateEquipmentEventSerializer(CustomFieldsMixin, serializers.ModelSeriali
         """
         # Create a copy to avoid modifying the original
         data = data.copy()
-        ensure_event_description(data, "Equipment activity")  # F01: avoid silent 400 on blank notes
+        ensure_event_description(data, "Equipment activity", self)  # F01: avoid silent 400 on blank notes
 
         # Handle custom fields (user-defined additional information)
         custom_fields = self.handle_custom_fields_input(data)
@@ -5547,8 +5924,16 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "compost_initial_cn_ratio",
             "compost_feedstock",
             "compost_temperature_log",
+            "compost_unit_id",
+            "compost_temp_reading_method",
             "manure_harvest_interval",
             "manure_application_date",
+            "manure_harvest_date_planned",
+            # USDA manure form #9: "How Applied / Incorporated" + "Manure Type, Form and Source"
+            "manure_application_method",
+            "manure_animal_source",
+            "manure_form",
+            "manure_origin",
             # NOP 5006 — processed animal manure (interval-exempt when documented)
             "manure_treatment",
             "processed_manure_temp_f",
@@ -5557,6 +5942,15 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "habitat_type",
             "habitat_structure_count",
             "habitat_install_date",
+            # FSMA PSR § 112.161(b) supervisor sign-off. Added 2026-08-15: these three live
+            # on the shared CommonEvent base and were writable on Chemical ALONE, while the
+            # packet's Supervisor Record Review table walks all eight managers. The record
+            # classes that rule actually names — training, agricultural water, biological soil
+            # amendments, equipment and tool cleaning — are General, Production(IR), Soil and
+            # Production(EM): precisely the four that could not record a sign-off.
+            "reviewed",
+            "reviewer_name",
+            "review_date",
         ]
         read_only_fields = ["id"]
 
@@ -5571,7 +5965,7 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
 
         # Create a copy to avoid modifying the original
         data = data.copy()
-        ensure_event_description(data, "Soil management")  # F01: avoid silent 400 on blank notes
+        ensure_event_description(data, "Soil management", self)  # F01: avoid silent 400 on blank notes
 
         # Convert empty strings to None for optional integer fields
         integer_fields = [
@@ -5601,7 +5995,7 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
                 data[field_name] = None
 
         # Convert empty strings to None for optional date fields
-        date_fields = ["manure_application_date", "habitat_install_date"]
+        date_fields = ["manure_application_date", "manure_harvest_date_planned", "habitat_install_date"]
         for field_name in date_fields:
             if field_name in data and data[field_name] in ("", None):
                 data[field_name] = None
@@ -5879,8 +6273,16 @@ class SoilManagementEventSerializer(EventSerializer):
             "compost_initial_cn_ratio",
             "compost_feedstock",
             "compost_temperature_log",
+            "compost_unit_id",
+            "compost_temp_reading_method",
             "manure_harvest_interval",
             "manure_application_date",
+            "manure_harvest_date_planned",
+            # USDA manure form #9: "How Applied / Incorporated" + "Manure Type, Form and Source"
+            "manure_application_method",
+            "manure_animal_source",
+            "manure_form",
+            "manure_origin",
             # Biodiversity / habitat (HD / NS) — needed so the producer edit form pre-fills them
             "habitat_type",
             "habitat_structure_count",
@@ -5956,6 +6358,15 @@ class UpdatePestManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "threshold_rationale",
             # §E-4 — cultural / sanitation control (§ 205.206(a))
             "cultural_practice",
+            # FSMA PSR § 112.161(b) supervisor sign-off. Added 2026-08-15: these three live
+            # on the shared CommonEvent base and were writable on Chemical ALONE, while the
+            # packet's Supervisor Record Review table walks all eight managers. The record
+            # classes that rule actually names — training, agricultural water, biological soil
+            # amendments, equipment and tool cleaning — are General, Production(IR), Soil and
+            # Production(EM): precisely the four that could not record a sign-off.
+            "reviewed",
+            "reviewer_name",
+            "review_date",
         ]
         read_only_fields = ["id"]
 
@@ -6189,6 +6600,15 @@ class UpdateBusinessEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
             "certificate_number",
             "observation",
             "extra_data",
+            # FSMA PSR § 112.161(b) supervisor sign-off. Added 2026-08-15: these three live
+            # on the shared CommonEvent base and were writable on Chemical ALONE, while the
+            # packet's Supervisor Record Review table walks all eight managers. The record
+            # classes that rule actually names — training, agricultural water, biological soil
+            # amendments, equipment and tool cleaning — are General, Production(IR), Soil and
+            # Production(EM): precisely the four that could not record a sign-off.
+            "reviewed",
+            "reviewer_name",
+            "review_date",
         ]
         read_only_fields = ["id"]
 
@@ -6200,7 +6620,7 @@ class UpdateBusinessEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
         """
         # Create a copy to avoid modifying the original
         data = data.copy()
-        ensure_event_description(data, "Business event")  # F01: avoid silent 400 on blank notes
+        ensure_event_description(data, "Business event", self)  # F01: avoid silent 400 on blank notes
 
         # Handle custom fields (user-defined additional information)
         custom_fields = self.handle_custom_fields_input(data)
@@ -6289,8 +6709,10 @@ class UpdateBusinessEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
                 }
             )
 
-        # Business logic: carbon_credits events should have carbon_credits_earned
-        if business_type == "carbon_credits" and not carbon_credits_earned:
+        # Business logic: carbon_credits events should have carbon_credits_earned.
+        # `is None`, not falsy — Decimal("0.00") is falsy, so `not value` rejected a
+        # legitimately-recorded zero as if the field were blank. See BusinessEvent.clean().
+        if business_type == "carbon_credits" and carbon_credits_earned is None:
             raise serializers.ValidationError(
                 {
                     "carbon_credits_earned": [
@@ -6447,16 +6869,148 @@ class BuyerDocRequestSerializer(serializers.ModelSerializer):
 class SalesRecordSerializer(serializers.ModelSerializer):
     """Owner-facing sales record (SOE traceback). Never on public endpoints."""
 
+    #: Read-only companion to `harvest_events`: the lot codes of the linked picks, so a client
+    #: can render "Lots: HAS-BLOCK2-20260410, HAS-BLOCK2-20260418" without a second round-trip.
+    harvest_lot_codes = serializers.SerializerMethodField()
+
+    def get_harvest_lot_codes(self, obj):
+        return [ev.harvest_lot_code for ev in obj.harvest_events.all() if ev.harvest_lot_code]
+
     class Meta:
         model = SalesRecord
         fields = [
             "id",
+            # § 205.103(b)(2) — WHICH harvest pass(es) this sale drew from. Writable as a list
+            # of ProductionEvent ids; `harvest_lot_codes` returns their codes for display.
+            "harvest_events",
+            "harvest_lot_codes",
             "sale_date",
             "buyer_name",
             "quantity",
             "quantity_unit",
             "invoice_number",
             "organic_on_invoice",
+            # § 205.103(b)(3) labeling category. Owner-facing only, like the rest of this
+            # serializer — it is a record field, not a consumer claim.
+            "organic_label_category",
+            "bill_of_lading",
+            "carrier_name",
+            "vehicle_id",
+            "destination",
+            "clean_transport_method",
+            # USDA Clean Transport Affidavit (form #22) content — what the unit carried
+            # before, how it was cleaned, what the pre-load inspection found.
+            "transport_cleaning_method",
+            "prior_products_transported",
+            "transport_inspected_free_of",
+            # What the two "Other" options describe. Without it the packet printed
+            # "Other — described in the notes" against a column that did not exist.
+            "transport_notes",
             "created_at",
         ]
         read_only_fields = ["id", "created_at"]
+
+    def _reject_foreign_harvest_events(self, validated_data):
+        """A sale may only cite harvest passes from ITS OWN production.
+
+        `limit_choices_to` on the M2M constrains the admin and model forms — it does NOT
+        constrain DRF's PrimaryKeyRelatedField, which accepts any pk in the table. Without this
+        a client could post another operation's harvest event ids, and the certifier packet
+        would print that operation's lot codes against this operation's sale: a broken trace
+        AND another farm's data on a page it does not belong on.
+
+        Checked here rather than in `validate()` because the view supplies the production via
+        `serializer.save(production=...)`, so it is absent from `attrs` at validation time and
+        only appears once DRF merges the save kwargs — a guard in `validate()` either sees no
+        production and rejects every legitimate create, or sees None and waves everything
+        through.
+        """
+        events = validated_data.get("harvest_events") or []
+        if not events:
+            return
+        production = validated_data.get("production") or getattr(self.instance, "production", None)
+        if production is None:
+            raise serializers.ValidationError(
+                {"harvest_events": "Cannot link harvest records before the sale's production is known."}
+            )
+        foreign = [ev.pk for ev in events if ev.history_id != production.pk]
+        if foreign:
+            raise serializers.ValidationError(
+                {
+                    "harvest_events": (
+                        "These harvest records belong to a different production: "
+                        + ", ".join(str(pk) for pk in foreign)
+                        + "."
+                    )
+                }
+            )
+
+    def create(self, validated_data):
+        self._reject_foreign_harvest_events(validated_data)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        self._reject_foreign_harvest_events(validated_data)
+        return super().update(instance, validated_data)
+
+    def validate(self, attrs):
+        """Run the model's contradiction guard on the API path too.
+
+        DRF does not call Model.clean(), so without this a category could be saved against a
+        sale that is not marked organic-on-invoice through the endpoint while the admin and
+        any full_clean() path refused it.
+        """
+        guarded = (
+            "organic_label_category",
+            "organic_on_invoice",
+            "clean_transport_method",
+            "transport_cleaning_method",
+            "transport_inspected_free_of",
+            "transport_notes",
+        )
+        merged = {
+            **{f: getattr(self.instance, f, None) for f in guarded},
+            **attrs,
+        }
+        if merged.get("organic_label_category") and not merged.get("organic_on_invoice"):
+            raise serializers.ValidationError(
+                {
+                    "organic_label_category": (
+                        "This sale records a § 205.301 labeling category but is not marked as "
+                        "identifying the product as organic on the invoice. Set "
+                        "'organic on invoice', or clear the labeling category."
+                    )
+                }
+            )
+
+        # Same reason as above: the model guard exists, and DRF would never reach it.
+        if merged.get("transport_cleaning_method") == "not_required" and merged.get("clean_transport_method") in (
+            "affidavit",
+            "inspected",
+        ):
+            raise serializers.ValidationError(
+                {
+                    "transport_cleaning_method": (
+                        "'Not required — dedicated organic unit' contradicts a clean-transport "
+                        "method of affidavit or pre-load inspection, which both describe a "
+                        "NON-dedicated unit. Record how this unit was actually cleaned, or set "
+                        "clean transport to 'Dedicated organic vehicle'."
+                    )
+                }
+            )
+
+        codes = merged.get("transport_inspected_free_of")
+        codes = codes if isinstance(codes, list) else []
+        if (merged.get("transport_cleaning_method") == "other" or "other" in codes) and not (
+            merged.get("transport_notes") or ""
+        ).strip():
+            raise serializers.ValidationError(
+                {
+                    "transport_notes": (
+                        "'Other' was selected for the cleaning method or the pre-load "
+                        "inspection, and both print as 'see notes' in the certifier packet. "
+                        "Describe what it was, or choose a listed option."
+                    )
+                }
+            )
+        return attrs

@@ -4,6 +4,7 @@ from rest_framework.serializers import ModelSerializer
 from common.models import Gallery
 from common.serializers import GallerySerializer
 from common.validators import USContactFieldsMixin
+from product.services.buffer_zones import BufferZoneError, normalize_buffer_rows
 from users.models import User
 from users.serializers import BasicUserSerializer
 
@@ -15,6 +16,11 @@ class ParcelBasicSerializer(ModelSerializer):
     image = serializers.SerializerMethodField()
     has_current_production = serializers.SerializerMethodField()
     members = serializers.SerializerMethodField()
+    # WS-5 quick-add: lets the parcel card show "Add details" without shipping the
+    # full polygon payload in every establishment response.
+    has_boundaries = serializers.SerializerMethodField()
+    # WS-5 Parcel Application: live completion state for the card chip / list column.
+    application_status = serializers.SerializerMethodField()
 
     class Meta:
         model = Parcel
@@ -26,6 +32,8 @@ class ParcelBasicSerializer(ModelSerializer):
             "image",
             "has_current_production",
             "members",
+            "has_boundaries",
+            "application_status",
             # Hectares (see Parcel.area help_text). Served so the OSP editor can show
             # the farmer their own acreage while they write the § 205.201(a) narrative,
             # instead of leaving them to describe their operation from memory.
@@ -44,6 +52,14 @@ class ParcelBasicSerializer(ModelSerializer):
         return (
             parcel.current_history.product.name if parcel.current_history and parcel.current_history.product else None
         )
+
+    def get_has_boundaries(self, parcel):
+        return bool(parcel.polygon)
+
+    def get_application_status(self, parcel):
+        from product.services.parcel_application_status import parcel_application_status
+
+        return parcel_application_status(parcel)["state"]
 
     def get_has_current_production(self, parcel):
         return parcel.current_history is not None
@@ -97,9 +113,28 @@ class RetrieveParcelSerializer(ModelSerializer):
     # form already loads, so offering it costs no extra request.
     known_block_ids = serializers.SerializerMethodField()
 
+    # WS-5: live Parcel Application state for the parcel page's entry button.
+    application_status = serializers.SerializerMethodField()
+    application_missing = serializers.SerializerMethodField()
+
     class Meta:
         model = Parcel
         exclude = ("album",)
+
+    def get_application_status(self, parcel):
+        from product.services.parcel_application_status import parcel_application_status
+
+        return parcel_application_status(parcel)["state"]
+
+    def get_application_missing(self, parcel):
+        # The service always computed WHICH of the five §205.202 blocks are
+        # missing (identity/transition/buffers/map/land_history), but this
+        # serializer stripped it to the bare state — so the UI could only say
+        # "In progress", never what was left (found in the 2026-08-10
+        # signposting audit).
+        from product.services.parcel_application_status import parcel_application_status
+
+        return parcel_application_status(parcel)["missing"]
 
     def get_known_block_ids(self, parcel):
         """Blocks already recorded on this parcel, so the grower picks instead of retyping.
@@ -255,6 +290,7 @@ class CreateParcelSerializer(USContactFieldsMixin, ModelSerializer):
             "polygon",
             "map_metadata",
             "buffer_zones",
+            "container_production",
             "apn",
             "section_township_range",
             "date_began_managing",
@@ -321,64 +357,17 @@ class CreateParcelSerializer(USContactFieldsMixin, ModelSerializer):
     def validate_buffer_zones(self, value):
         """Validate + normalize the per-boundary buffer-zone records (7 CFR 205.202(c)).
 
-        The audit export's Field Map + Buffer Zone sections consume a list of dicts,
-        one per boundary, each with: direction, adjoining_land_use, buffer_width_m
-        (numeric, rendered as "X m"), drift_risk, prevention. We require the two
-        identifying keys (direction + adjoining_land_use) so a record can't be a blank
-        row, coerce buffer_width_m to a number, and normalize to exactly the export's
-        keys so a malformed blob can't produce an illegible inspector record.
-
-        CCOF OSP Sections D (Adjoining Land Use) & E (Buffer Zones) add three optional
-        descriptors per boundary: adjacent_organic (the neighbor is also certified, so
-        no buffer is required), buffer_type (hedgerow / road / fallow strip / windbreak),
-        and crop_in_buffer (what, if anything, grows in the strip — flagged so it is never
-        sold as organic). § 205.400(f)(1) adds drift-notification readiness per boundary
-        (neighbor_notified + neighbor_notification_date — the annual letter to a neighbor
-        who applies prohibited substances). All ride alongside the core keys in the same
-        JSON record.
+        Delegates to `product.services.buffer_zones`, which is the single owner of the
+        row vocabulary. This method used to rebuild each row from its own whitelist,
+        which destroyed every key the OSP Parcel Application wizard wrote — see that
+        module's docstring for the full failure.
         """
         if value is None:
             return value
-        if not isinstance(value, list):
-            raise serializers.ValidationError("buffer_zones must be a list of boundary records.")
-        cleaned = []
-        for i, row in enumerate(value):
-            if not isinstance(row, dict):
-                raise serializers.ValidationError(f"buffer_zones[{i}] must be an object.")
-            direction = str(row.get("direction") or "").strip()
-            adjoining = str(row.get("adjoining_land_use") or "").strip()
-            if not direction or not adjoining:
-                raise serializers.ValidationError(
-                    f"buffer_zones[{i}] requires both 'direction' and 'adjoining_land_use'."
-                )
-            width = row.get("buffer_width_m")
-            if width in (None, ""):
-                width = None
-            else:
-                try:
-                    width = float(width)
-                except (TypeError, ValueError):
-                    raise serializers.ValidationError(f"buffer_zones[{i}].buffer_width_m must be a number (meters).")
-                if width < 0:
-                    raise serializers.ValidationError(f"buffer_zones[{i}].buffer_width_m cannot be negative.")
-            cleaned.append(
-                {
-                    "direction": direction,
-                    "adjoining_land_use": adjoining,
-                    "buffer_width_m": width,
-                    "drift_risk": str(row.get("drift_risk") or "").strip() or None,
-                    "prevention": str(row.get("prevention") or "").strip() or None,
-                    # CCOF OSP Sections D & E
-                    "adjacent_organic": bool(row.get("adjacent_organic")),
-                    "buffer_type": str(row.get("buffer_type") or "").strip() or None,
-                    "crop_in_buffer": str(row.get("crop_in_buffer") or "").strip() or None,
-                    # § 205.400(f)(1) drift-notification readiness — the annual letter to a
-                    # neighbor who applies prohibited substances on this boundary.
-                    "neighbor_notified": bool(row.get("neighbor_notified")),
-                    "neighbor_notification_date": str(row.get("neighbor_notification_date") or "").strip() or None,
-                }
-            )
-        return cleaned
+        try:
+            return normalize_buffer_rows(value)
+        except BufferZoneError as exc:
+            raise serializers.ValidationError(str(exc))
 
     def _handle_agricultural_data(self, instance, validated_data):
         """Handle agricultural data fields and store in agricultural_details JSONField"""
@@ -612,11 +601,14 @@ class ParcelCropHistorySerializer(serializers.ModelSerializer):
             "parcel",
             "year",
             "crop_grown",
+            "cover_crop",
             # Distinguishes the rows of a SPLIT FIELD — two crops on one parcel in one year.
             # Without it the API cannot set or show which part of the field grew what.
             "block_id",
             "production_method",
             "substances_applied",
+            # USDA Field History form #1: per-material rows (material / manufacturer / dates)
+            "substance_applications",
             "last_prohibited_substance",
             "date_last_prohibited",
             "notes",
@@ -624,3 +616,21 @@ class ParcelCropHistorySerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
+
+    def to_internal_value(self, data):
+        """Coerce "" -> None for nullable date fields.
+
+        The field-history form posts every field it renders, so a grower who leaves "Date
+        Applied" blank sends "" — and DRF's DateField rejects that with "Date has wrong
+        format", 400ing the whole entry over a field the form itself calls optional. This is
+        the same class as the seed_purchase_date / cleaning_date / ca_dpr_permit_expires bugs.
+
+        Uses the introspective helper rather than naming `date_last_prohibited`: a
+        hand-maintained list is exactly what lets the next nullable date slip through.
+        """
+        from history.serializers import coerce_blank_nullable_dates
+
+        if hasattr(data, "copy"):
+            data = data.copy()
+            coerce_blank_nullable_dates(self, data)
+        return super().to_internal_value(data)

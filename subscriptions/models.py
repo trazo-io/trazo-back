@@ -107,6 +107,15 @@ class AddOn(models.Model):
     slug = models.SlugField(unique=True)
     description = models.TextField()
     price = models.DecimalField(max_digits=10, decimal_places=2)
+    # A price without a period is not a price.
+    #
+    # 2026-08-14: this field did not exist. `create_plans` passed an "interval" key that reached
+    # `stripe.Price.create` and was then DROPPED on the way into the database, so the recurring
+    # period an add-on actually billed at lived only in Stripe. The app rendered a bare "$30.00"
+    # next to a plan labelled "/Yearly" and the farmer had no way to tell which it was — while the
+    # real answer, $30 a MONTH beside a $249 a YEAR plan, was the defect that made farm #2 cost
+    # more than farm #1. Storing the period is what lets the UI say it out loud.
+    interval = models.CharField(max_length=20, choices=Plan.INTERVAL_CHOICES, default="yearly")
     stripe_price_id = models.CharField(max_length=100, blank=True, null=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -132,6 +141,22 @@ class SubscriptionAddOn(models.Model):
     class Meta:
         verbose_name = _("Subscription Add-on")
         verbose_name_plural = _("Subscription Add-ons")
+        constraints = [
+            # One row per (subscription, add-on). Quantity is the multiplier — a second row
+            # is never the way to hold two of something.
+            #
+            # Both writers already ASSUMED this and neither enforced it: the webhook does
+            # `get_or_create(...)` then increments, and `add_addon` does `update_or_create`.
+            # Without a database constraint, two requests that interleave between the SELECT
+            # and the INSERT both insert, and `Company.can_create_establishment` — which SUMS
+            # every matching row — hands the farmer twice the farms they paid for. A
+            # get-or-create pattern is not a uniqueness guarantee; it is a uniqueness
+            # ASSUMPTION, and this is the line that makes it true.
+            models.UniqueConstraint(
+                fields=["subscription", "addon"],
+                name="unique_addon_per_subscription",
+            )
+        ]
 
     def __str__(self):
         return f"{self.subscription.company.name} - {self.addon.name} x{self.quantity}"

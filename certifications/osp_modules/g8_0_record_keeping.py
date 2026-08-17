@@ -2,7 +2,8 @@
 G8.0 — Record Keeping.
 
 Sources: 7 CFR 205.103 (recordkeeping by certified operations), 205.101, 205.201(a)(4),
-205.307 (nonretail container labeling — the lot-number linkage requirement). Two sections:
+205.307 (nonretail container labeling — the lot-number linkage requirement), 205.272.
+Mirrors Common OSP Section 11, whose three parts are:
 
 A. Records maintained — the body of this page IS the shipped Common OSP § 11 registry panel
    (`embed="s11_record_types"`): per-record-type evidence with explicit operator confirmation,
@@ -14,6 +15,15 @@ B. Audit trail — § 205.103(b)(2) requires records that fully disclose all act
    link to audit trail documentation. Trazo GENERATES a sample audit-trail exhibit from real
    records (lot tags + traceability + mass-balance dossier sections); the operator reviews and
    attaches it rather than hand-drawing one.
+
+C. Import & export — the Common OSP puts this inside Section 11 rather than giving it its own
+   section, and so do we: a whole extra module that almost every domestic grower would mark
+   "not applicable" is worse than one gated question. Everything below the trigger uses
+   `includes_any`, so an operation selling only within the US answers once and the page ends.
+
+   It is not the edge case it looks like for this ICP. California tree nuts are largely
+   exported, and several trade partners require a certificate issued by the CERTIFIER before
+   the shipment departs — a load that sails without one cannot be fixed retroactively.
 """
 
 from .schema import CompileRule, Condition, Module, ModulePage, Option, Question, text
@@ -173,6 +183,308 @@ G8_0_RECORD_KEEPING = Module(
                         "y adjúntelo aquí — o adjunte el suyo propio.",
                     ),
                     nop_cite="§ 205.103(b)(2)",
+                ),
+            ),
+        ),
+        ModulePage(
+            key="c_import_export",
+            title=text("C. Import & export", "C. Importación y exportación"),
+            education=(
+                text(
+                    "Most operations selling only within the United States answer the first "
+                    "question and are done with this page. It matters for tree nuts, dried "
+                    "fruit, and other crops that commonly ship abroad: several trade partners "
+                    "require an export certificate issued by your certifier BEFORE the "
+                    "shipment leaves, and a shipment that departs without one cannot be "
+                    "corrected afterwards.",
+                    "La mayoría de las operaciones que venden solo dentro de Estados Unidos "
+                    "responden la primera pregunta y terminan con esta página. Importa para "
+                    "frutos secos, fruta deshidratada y otros cultivos que suelen enviarse al "
+                    "exterior: varios socios comerciales exigen un certificado de exportación "
+                    "emitido por su certificador ANTES de que salga el envío, y un envío que "
+                    "parte sin él no puede corregirse después.",
+                ),
+            ),
+            questions=(
+                Question(
+                    key="import_export_activity",
+                    kind="checkbox_group",
+                    label=text(
+                        "Does your operation import or export organic products?",
+                        "¿Su operación importa o exporta productos orgánicos?",
+                    ),
+                    nop_cite="§ 205.103",
+                    compiles_to=CompileRule(template="Import and export activity: {answer}."),
+                    options=(
+                        Option(
+                            "export",
+                            text(
+                                "We export organic product to other countries",
+                                "Exportamos producto orgánico a otros países",
+                            ),
+                        ),
+                        Option(
+                            "import",
+                            text(
+                                "We import organic product or ingredients into the United States",
+                                "Importamos producto o ingredientes orgánicos a Estados Unidos",
+                            ),
+                        ),
+                        Option(
+                            "none",
+                            text(
+                                "Neither — all product is sold within the United States",
+                                "Ninguna — todo el producto se vende dentro de Estados Unidos",
+                            ),
+                            exclusive=True,
+                        ),
+                    ),
+                ),
+                Question(
+                    key="export_destinations",
+                    kind="text",
+                    label=text(
+                        "Which countries do you export to?",
+                        "¿A qué países exporta?",
+                    ),
+                    visible_when=(Condition("import_export_activity", "includes", "export"),),
+                    compiles_to=CompileRule(template="Export destination countries: {answer}."),
+                ),
+                Question(
+                    key="export_certificate_types",
+                    kind="checkbox_group",
+                    label=text(
+                        "Which export certificates do your destination countries require?",
+                        "¿Qué certificados de exportación exigen sus países de destino?",
+                    ),
+                    coaching=text(
+                        "Each of these is issued by your certifier, not by you, and must be "
+                        "requested before the shipment departs. Check the USDA NOP "
+                        "International Trade Partners page if you are not sure which applies.",
+                        "Cada uno de estos lo emite su certificador, no usted, y debe "
+                        "solicitarse antes de que salga el envío. Consulte la página de Socios "
+                        "Comerciales Internacionales del NOP del USDA si no está seguro de "
+                        "cuál aplica.",
+                    ),
+                    nop_cite="§ 205.103",
+                    visible_when=(Condition("import_export_activity", "includes", "export"),),
+                    compiles_to=CompileRule(template="Export certificates required by destination: {answer}."),
+                    options=(
+                        Option(
+                            "coi_eu",
+                            text(
+                                "Certificate of Inspection (EU, UK, Switzerland)",
+                                "Certificado de Inspección (UE, Reino Unido, Suiza)",
+                            ),
+                        ),
+                        Option("tm11", text("TM-11 (Japan, Taiwan)", "TM-11 (Japón, Taiwán)")),
+                        Option("naqs", text("NAQS import certificate (Korea)", "Certificado NAQS (Corea)")),
+                        Option(
+                            "canada",
+                            text(
+                                "Canada organic equivalence attestation",
+                                "Constancia de equivalencia orgánica de Canadá",
+                            ),
+                        ),
+                        Option(
+                            "none_required",
+                            text(
+                                "None required by our destination countries",
+                                "Ninguno exigido por nuestros países de destino",
+                            ),
+                            exclusive=True,
+                        ),
+                        Option("other", text("Other (describe below)", "Otro (describa abajo)")),
+                    ),
+                ),
+                Question(
+                    key="export_certificate_types_other",
+                    kind="text",
+                    label=text(
+                        "Describe the other export certificate",
+                        "Describa el otro certificado de exportación",
+                    ),
+                    visible_when=(Condition("export_certificate_types", "includes", "other"),),
+                    compiles_to=CompileRule(template="Additional export certificate required: {answer}"),
+                ),
+                Question(
+                    key="export_certificate_process",
+                    kind="textarea",
+                    label=text(
+                        "How do you request, verify, and keep these export certificates?",
+                        "¿Cómo solicita, verifica y conserva estos certificados de exportación?",
+                    ),
+                    coaching=text(
+                        "Say who requests the certificate, how far ahead of shipment, and "
+                        "where the issued certificates are filed.",
+                        "Indique quién solicita el certificado, con cuánta anticipación al "
+                        "envío, y dónde se archivan los certificados emitidos.",
+                    ),
+                    nop_cite="§ 205.103",
+                    visible_when=(Condition("import_export_activity", "includes", "export"),),
+                    compiles_to=CompileRule(
+                        template="Process for requesting, verifying, and retaining export certificates: {answer}"
+                    ),
+                ),
+                Question(
+                    key="export_destination_requirements",
+                    kind="textarea",
+                    label=text(
+                        "How do you ensure exported product meets the destination country's "
+                        "requirements (labeling, permitted production practices)?",
+                        "¿Cómo asegura que el producto exportado cumple los requisitos del país "
+                        "de destino (etiquetado, prácticas de producción permitidas)?",
+                    ),
+                    nop_cite="§ 205.103",
+                    visible_when=(Condition("import_export_activity", "includes", "export"),),
+                    compiles_to=CompileRule(template="Meeting destination-country requirements: {answer}"),
+                ),
+                Question(
+                    key="import_documentation",
+                    kind="checkbox_group",
+                    label=text(
+                        "How do you ensure each imported shipment carries the required " "documentation?",
+                        "¿Cómo asegura que cada envío importado lleve la documentación " "requerida?",
+                    ),
+                    coaching=text(
+                        "A NOP Import Certificate must be issued by a certifier before the "
+                        "shipment leaves the country of origin — it cannot be obtained after "
+                        "arrival.",
+                        "Un Certificado de Importación NOP debe ser emitido por un "
+                        "certificador antes de que el envío salga del país de origen — no "
+                        "puede obtenerse después de la llegada.",
+                    ),
+                    nop_cite="§ 205.103",
+                    visible_when=(Condition("import_export_activity", "includes", "import"),),
+                    compiles_to=CompileRule(template="Import documentation controls: {answer}."),
+                    options=(
+                        Option(
+                            "nop_import_certificate",
+                            text(
+                                "A current NOP Import Certificate is kept for each shipment",
+                                "Se conserva un Certificado de Importación NOP vigente para " "cada envío",
+                            ),
+                        ),
+                        Option(
+                            "ace_declaration",
+                            text(
+                                "Import Certificate data is entered into US Customs' ACE system",
+                                "Los datos del Certificado de Importación se ingresan al "
+                                "sistema ACE de Aduanas de EE. UU.",
+                            ),
+                        ),
+                        Option(
+                            "marked_organic",
+                            text(
+                                "Each import is identified as organic on all import documents",
+                                "Cada importación se identifica como orgánica en todos los "
+                                "documentos de importación",
+                            ),
+                        ),
+                        Option("other", text("Other (describe below)", "Otro (describa abajo)")),
+                    ),
+                ),
+                Question(
+                    key="import_documentation_other",
+                    kind="text",
+                    label=text(
+                        "Describe the other import documentation control",
+                        "Describa el otro control de documentación de importación",
+                    ),
+                    visible_when=(Condition("import_documentation", "includes", "other"),),
+                    compiles_to=CompileRule(template="Additional import documentation control: {answer}"),
+                ),
+                Question(
+                    key="import_integrity_verification",
+                    kind="textarea",
+                    label=text(
+                        "How do you verify and document that each imported shipment had no "
+                        "contact with prohibited substances or ionizing radiation since export?",
+                        "¿Cómo verifica y documenta que cada envío importado no tuvo contacto "
+                        "con sustancias prohibidas ni radiación ionizante desde su exportación?",
+                    ),
+                    nop_cite="§ 205.272",
+                    visible_when=(Condition("import_export_activity", "includes", "import"),),
+                    compiles_to=CompileRule(
+                        template="Verification that imported shipments avoided prohibited "
+                        "substances and ionizing radiation since export: {answer}",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    key="port_integrity_measures",
+                    kind="textarea",
+                    label=text(
+                        "What measures keep organic integrity intact at the port of export or " "entry?",
+                        "¿Qué medidas mantienen intacta la integridad orgánica en el puerto de "
+                        "exportación o entrada?",
+                    ),
+                    coaching=text(
+                        "Include container sealing, who breaks and re-applies seals, and any "
+                        "fumigation or phytosanitary treatment the port may require — a "
+                        "treatment with a prohibited material at the port ends the organic "
+                        "status of that load.",
+                        "Incluya el sellado de contenedores, quién rompe y vuelve a colocar "
+                        "los sellos, y cualquier fumigación o tratamiento fitosanitario que el "
+                        "puerto pueda exigir — un tratamiento con material prohibido en el "
+                        "puerto termina con el estatus orgánico de esa carga.",
+                    ),
+                    nop_cite="§ 205.272",
+                    visible_when=(Condition("import_export_activity", "includes_any", ["export", "import"]),),
+                    compiles_to=CompileRule(
+                        template="Measures preserving organic integrity at port: {answer}",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    key="import_export_records",
+                    kind="checkbox_group",
+                    label=text(
+                        "Which import and export records do you keep?",
+                        "¿Qué registros de importación y exportación conserva?",
+                    ),
+                    nop_cite="§ 205.103",
+                    visible_when=(Condition("import_export_activity", "includes_any", ["export", "import"]),),
+                    compiles_to=CompileRule(template="Import and export records maintained: {answer}."),
+                    options=(
+                        Option(
+                            "certificates",
+                            text(
+                                "Import or export certificates",
+                                "Certificados de importación o exportación",
+                            ),
+                        ),
+                        Option(
+                            "operation_certificate",
+                            text("Our own organic certificate", "Nuestro propio certificado orgánico"),
+                        ),
+                        Option(
+                            "contracts",
+                            text("Contractual agreements", "Acuerdos contractuales"),
+                        ),
+                        Option(
+                            "phytosanitary",
+                            text(
+                                "Phytosanitary certificates and treatment records",
+                                "Certificados fitosanitarios y registros de tratamiento",
+                            ),
+                        ),
+                        Option(
+                            "fda_ean",
+                            text(
+                                "FDA Emergency Action Notifications, where a treatment was performed",
+                                "Notificaciones de Acción de Emergencia de la FDA, cuando se " "realizó un tratamiento",
+                            ),
+                        ),
+                        Option(
+                            "entry_summary",
+                            text("Customs entry summaries", "Resúmenes de entrada aduanera"),
+                        ),
+                        Option(
+                            "labeling",
+                            text("Labels used on exported product", "Etiquetas usadas en producto exportado"),
+                        ),
+                    ),
                 ),
             ),
         ),

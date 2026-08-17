@@ -55,13 +55,14 @@ DEMO_IMAGES = {
     # Removed 2026-08-04: both images showed row-crop field machinery, used to
     # illustrate banded fertilizer in an avocado grove.
     "fertilizer": [],
-    "fungicide": [
-        # Ground sprayer applying treatment. The aerial crop-duster image that used
-        # to head this list contradicted the demo's own event text ("trunk
-        # injection", "airblast sprayer") and was the most obvious tell in the
-        # 2026-08-03 dossier review.
-        "https://images.unsplash.com/photo-1758608951483-0cbeef303869?w=800&q=80",
-    ],
+    # Emptied 2026-08-15. The surviving entry was captioned "ground sprayer applying
+    # treatment"; the image is a LIQUID-MANURE SLURRY TANKER with a trailing-hose disc
+    # injector on a bare arable field — not a sprayer, not an orchard, and not a fungicide
+    # application. It replaced the crop-duster in the 2026-08-04 prune and was never opened,
+    # so a wrong photo was swapped for another wrong photo. It then became the hero image of
+    # the consumer QR page, because ProductDetail takes the first production photo.
+    # Removed, not replaced: see prune_misleading_demo_photos.
+    "fungicide": [],
     "pesticide": [
         # Person in protective gear hand-spraying plants — plausible in an orchard.
         # The boom-sprayer-in-crop-field image was removed 2026-08-04.
@@ -186,7 +187,9 @@ class Command(BaseCommand):
             primary_commodities="Hass Avocado, Valencia Orange, Nonpareil Almond",
             sustainability_commitment="GLOBALG.A.P. Certified, IPM Program",
             certifications="USDA Organic (PSOC), GLOBALG.A.P.",
-            blockchain_subscription_status=True,
+            # Blockchain was withdrawn 2026-08-03 (BLOCKCHAIN_ENABLED defaults False); the demo
+            # must not advertise a product that is no longer sold.
+            blockchain_subscription_status=False,
         )
         self.stdout.write(f"  Company: {company.name} (#{company.id})")
 
@@ -197,18 +200,20 @@ class Command(BaseCommand):
             role=WorksIn.COMPANY_ADMIN,
         )
 
-        # 4. Subscription — corporate plan (3 parcels, 6 productions)
+        # 4. Subscription — Compliance, the one plan actually sold (2026-08-07 restructure).
+        # The demo used to sit on "corporate-monthly", a ladder tier retired that day, so every
+        # fresh seed showed prospects a plan and a price that no longer exist.
         try:
-            plan = Plan.objects.get(slug="corporate-monthly")
+            plan = Plan.objects.get(slug="compliance-yearly")
         except Plan.DoesNotExist:
-            raise CommandError("Corporate plan not found. Run 'python manage.py create_plans' first.")
+            raise CommandError("Compliance plan not found. Run 'python manage.py create_plans' first.")
         now = timezone.now()
         Subscription.objects.create(
             company=company,
             plan=plan,
             status="active",
             current_period_start=now,
-            current_period_end=now + timedelta(days=30),
+            current_period_end=now + timedelta(days=365),
         )
 
         # 5. Establishment

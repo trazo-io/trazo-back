@@ -1,0 +1,111 @@
+"""
+Documents / DMS — the farm's document shelf (WS-3).
+
+## Why this exists
+
+Before WS-3, every PDF Trazo generated was streamed and discarded, and uploaded files
+were FileFields scattered across eight models with no unified "your farm's documents"
+view — the single biggest structural gap against a certification assistant, whose core
+promise is "everything lands in one organized place." This model is that place: one row
+per generated artifact or farmer upload, folder-organized, establishment-scoped.
+
+## Rules
+
+- **Generated documents are immutable history.** A dossier generated on a date is a
+  record of what existed that day; the viewset refuses to delete anything whose source
+  is not `upload`. Regenerating creates a NEW row (dated), never mutates an old one.
+- **The certifier link deliberately does NOT file here.** Its dossier regenerates on
+  every open — freshness is that feature; the DMS holds the dated copies the farmer
+  explicitly generates.
+- Filing happens through exactly one seam — `documents.services.filing.file_document()`
+  — called by generator views at explicit generate actions. Nothing files from signals
+  or background jobs (a document appearing that the farmer didn't ask for is the
+  fabrication failure class again, in file form).
+"""
+
+import uuid
+
+from django.conf import settings
+from django.db import models
+
+
+class GeneratedDocument(models.Model):
+    # Trazo-shaped folder taxonomy (plan §1.6 #54) — organized by what the document IS,
+    # not by which app produced it.
+    FOLDER_CHOICES = [
+        ("organic_system_plan", "Organic System Plan"),
+        ("certifications", "Certifications"),
+        ("activity_attachments", "Activity Attachments"),
+        ("exports", "Exports"),
+        ("uploads", "Uploads"),
+    ]
+
+    SOURCE_CHOICES = [
+        ("osp_snapshot", "OSP submission snapshot"),
+        ("module_pdf", "OSP module PDF"),
+        ("packet", "OSP packet ZIP"),
+        ("workbook", "Common OSP workbook"),
+        ("dossier", "Audit dossier"),
+        ("operation_dossier", "Operation audit dossier"),
+        ("pur", "California PUR export"),
+        ("lot_tag", "Lot tag sheet"),
+        ("upload", "Farmer upload"),
+    ]
+
+    public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, db_index=True)
+    establishment = models.ForeignKey(
+        "company.Establishment",
+        on_delete=models.CASCADE,
+        related_name="documents",
+    )
+    folder = models.CharField(max_length=32, choices=FOLDER_CHOICES, db_index=True)
+    source = models.CharField(max_length=32, choices=SOURCE_CHOICES, db_index=True)
+    title = models.CharField(max_length=255)
+    file = models.FileField(upload_to="documents/%Y/%m/")
+    content_type = models.CharField(max_length=100, blank=True, default="")
+    size_bytes = models.PositiveBigIntegerField(default=0)
+
+    # Optional context links — which OSP module section / parcel / production this
+    # document belongs to (drives "documents for this module" and activity-attachment
+    # filtering without a folder explosion).
+    linked_section = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="OSP module key this document supports (e.g. g8_0_record_keeping)",
+    )
+    parcel = models.ForeignKey(
+        "product.Parcel", on_delete=models.SET_NULL, null=True, blank=True, related_name="documents"
+    )
+    history = models.ForeignKey(
+        "history.History", on_delete=models.SET_NULL, null=True, blank=True, related_name="documents"
+    )
+
+    # Farmer-managed labels (QO's DMS carries Owner + Tags per document; owner here is
+    # created_by, tags are free labels). Per-document org ACLs are deliberately NOT
+    # modeled — Trazo's sharing primitive is the scoped CertifierAccessLink.
+    tags = models.JSONField(default=list, blank=True)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_documents",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["establishment", "folder", "-created_at"]),
+            models.Index(fields=["establishment", "source"]),
+        ]
+
+    def __str__(self):
+        return f"{self.get_folder_display()} · {self.title}"
+
+    @property
+    def is_deletable(self) -> bool:
+        """Only farmer uploads may be deleted — generated documents are dated history."""
+        return self.source == "upload"

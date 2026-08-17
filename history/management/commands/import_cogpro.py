@@ -67,6 +67,18 @@ class Command(BaseCommand):
                 production = History.objects.select_related("parcel__establishment").get(id=options["production"])
             except History.DoesNotExist:
                 raise CommandError(f"No production with id {options['production']}.")
+            # A hand-created target without a crop/product is how the "timeline
+            # renders but the app thinks there is no production" state used to
+            # ship to COG Pro migrants. Create the production through the app
+            # (Start production), which sets crop, product, and current_history —
+            # then import onto it.
+            if production.crop_type_id is None or production.product_id is None:
+                raise CommandError(
+                    f"Production {production.id} has no crop/product set. Create the target "
+                    "production through the app (Start production on the parcel) so crop, "
+                    "product, and current-production wiring are all in place, then re-run. "
+                    "(An existing crop-less production can be repaired once via Edit production.)"
+                )
             self.stdout.write(
                 self.style.WARNING(f"Importing into: {production.name} " f"({production.parcel.establishment.name})")
             )

@@ -4155,11 +4155,31 @@ class PublicProductionViewSet(viewsets.ViewSet):
     # word the compliance rules reserve for USDA Organic Integrity Database matches.
     # Dead code one call site away from being live. Do not reintroduce.
 
-    @action(detail=True, methods=["get"], url_path="complete")
+    @action(detail=True, methods=["get"], url_path="complete", permission_classes=[permissions.IsAuthenticated])
     def complete_summary(self, request, pk=None):
         """
-        Public access to the complete summary endpoint.
-        Uses the same TimelineService logic that works in the transparency endpoint.
+        The producer's own complete summary. **Authenticated, and owner-only.**
+
+        🔒 2026-08-12: this was ANONYMOUS, and integer-pk enumerable. It no longer needs to be:
+        the consumer QR page stopped calling it (`ProductDetail.tsx` — "Removed duplicate
+        useGetCompleteSummaryQuery"), leaving `ProfileProduction.tsx` as the sole caller, which
+        is an authenticated producer screen sending `credentials: 'include'`.
+
+        Why close it rather than keep patching it. This action hand-builds its OWN establishment,
+        company and parcel blocks instead of reusing the consumer serializers, so every
+        claim-safety and PII fix applied to `history/transparency_views.py` had to be
+        re-discovered and re-applied here — which is how it shipped street address, exact
+        lat/lon, ZIP, `farming_method`, raw `agricultural_details` and raw `map_metadata` at
+        various points, each found months later. A second public payload for one resource is a
+        standing invitation to drift. Anonymous consumers are served by exactly one surface now:
+        `history/transparency_views.py`, gated by `claim_authority.py`.
+
+        Still on the wire here, and the reason this is owner-only rather than merely
+        authenticated: `establishment.certifications` and `parcel.certification_type` are passed
+        through with a bare `getattr`, so a farmer-typed string like "Regenerative Organic
+        Certified, GlobalGAP, Rainforest Alliance" is emitted verbatim, unqualified, with
+        `parcel.certified` False beside it. That is fine for the grower reading back their own
+        record; it is the self-created-label claim class the moment anyone else can read it.
         """
         try:
             import uuid as uuid_module
@@ -4176,14 +4196,24 @@ class PublicProductionViewSet(viewsets.ViewSet):
             except (ValueError, AttributeError):
                 lookup_kwargs["id"] = pk
 
-            # Published productions are public; a producer previewing their OWN
-            # unpublished (draft) production is also allowed so ProfileProduction
-            # loads before publishing. Anonymous/other users stay published-only.
-            user = getattr(request, "user", None)
-            if user is not None and user.is_authenticated:
-                visibility = Q(published=True) | Q(parcel__establishment__company__in=user.companies.all())
-            else:
-                visibility = Q(published=True)
+            # OWNER-ONLY. The visibility clause used to read "published OR mine", so any
+            # authenticated account could read any PUBLISHED production's block — which, on an
+            # endpoint that emits unqualified certification strings and the grower's own
+            # record, is the same exposure as the anonymous version with one free signup in
+            # front of it. `published` is now irrelevant here: it decides what CONSUMERS see,
+            # and consumers are served by the transparency endpoint. Draft productions still
+            # load for their owner, which is what ProfileProduction needs before publishing.
+            #
+            # FAIL-CLOSED on an orphan production. `History.parcel` is nullable, and ownership is
+            # only derivable through parcel -> establishment -> company, so a production with no
+            # parcel matches nothing and 404s for EVERYONE — including whoever created it. That
+            # is deliberate: ownership cannot be established, so access is refused rather than
+            # guessed. It is also not a regression — the previous clause was
+            # `published=True OR <this same company join>`, and its company branch failed on a
+            # null parcel too, so an orphan production was only ever reachable while published
+            # (there are none in that state). ProfileProduction is routed under
+            # /farm/:farmId/parcel/:parcelId/..., so it never asks for one.
+            visibility = Q(parcel__establishment__company__in=request.user.companies.all())
 
             # Get the production object
             try:
@@ -7053,7 +7083,13 @@ def get_crop_templates(request):
                     float(template.projected_emissions_reduction) if template.projected_emissions_reduction else 0
                 ),
                 "avg_revenue": 1200.0,  # Default estimated cost per acre
-                "setup_time_minutes": 8,  # Estimated time savings
+                # `setup_time_minutes` removed (2026-08-16). It was the literal `8`, hardcoded
+                # here with the comment "Estimated time savings" — not measured, not derived
+                # from the template, identical for every crop. The template picker rendered it
+                # to the farmer as "Setup Time: 8 minutes". An unsourced statistic shown to a
+                # user is the first thing .claude/rules/compliance.md rules out, and with no
+                # real users there was nothing it could have been measured from. Same figure
+                # class as the "37+ minutes" claim removed from the picker's own subtitle.
                 "usage_count": template.usage_count,
                 "carbon_benchmark": {
                     "emissions_range": f"{template.crop_type.best_practice}-{template.crop_type.emissions_per_hectare} kg CO2e/ha",

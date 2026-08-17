@@ -3,6 +3,7 @@ from django.urls import include, path, re_path
 from rest_framework_nested import routers
 
 from certifications.views import (
+    AdjoiningLandAffidavitViewSet,
     CertificationViewSet,
     CertifierAccessLinkViewSet,
     LandownerAffidavitViewSet,
@@ -10,18 +11,20 @@ from certifications.views import (
     OSPAnnualUpdateViewSet,
     StateOrganicRegistrationViewSet,
 )
+from documents.views import GeneratedDocumentViewSet
 from history.views import EventViewSet, HistoryScanViewSet, HistoryViewSet
 from product.views import ParcelViewSet, ProductsViewSet
 from reviews.views import ReviewsViewSet
 
-from .views import CompanyViewSet, EstablishmentViewSet, PublicEstablishmentViewSet
+from .views import CompanyViewSet, EstablishmentViewSet
 
 router = routers.DefaultRouter()
 
 router.register(r"companies", CompanyViewSet, basename="companies")
 
-# Public routes (no authentication required)
-router.register(r"companies/public/establishments", PublicEstablishmentViewSet, basename="public-establishments")
+# `companies/public/establishments/` DELETED 2026-08-12 — anonymous, no permission classes,
+# and it published street address, coordinates, ZIP, contact details and unqualified
+# certification claims. Zero callers. See the note in company/views.py.
 
 # Company routes
 company_router = routers.NestedDefaultRouter(router, r"companies", lookup="company")
@@ -37,6 +40,9 @@ establishment_router.register(
     r"osp-annual-updates", OSPAnnualUpdateViewSet, basename="establishment-osp-annual-updates"
 )
 establishment_router.register(r"affidavits", LandownerAffidavitViewSet, basename="establishment-affidavits")
+# USDA form #25 — neighbour-signed adjoining-land attestation. Separate route from
+# "affidavits" because it is a different document with a different signer.
+establishment_router.register(r"adjoining-land", AdjoiningLandAffidavitViewSet, basename="establishment-adjoining-land")
 establishment_router.register(
     r"state-organic-registrations",
     StateOrganicRegistrationViewSet,
@@ -47,6 +53,7 @@ establishment_router.register(
     CertifierAccessLinkViewSet,
     basename="establishment-certifier-links",
 )
+establishment_router.register(r"documents", GeneratedDocumentViewSet, basename="establishment-documents")
 establishment_router.register(r"scans", HistoryScanViewSet, basename="establishment-scans")
 establishment_router.register(r"events", EventViewSet, basename="establishment-events")
 establishment_router.register(r"parcels", ParcelViewSet, basename="establishment-parcels")

@@ -39,6 +39,11 @@ MISLEADING_IMAGE_IDS = [
     ("photo-1622813071880", "grass field, used for orchard pest scouting"),
     ("photo-1762291317833", "ploughed open field, used for flame weeding between tree rows"),
     ("photo-1587810451787", "open field, used for orchard trap monitoring"),
+    # 2026-08-15: survived the 2026-08-04 prune under the caption "ground sprayer applying
+    # treatment". It is a liquid-manure slurry tanker + disc injector on bare arable ground,
+    # attached to orchard fungicide records — and, being the first production photo, it was
+    # rendering as the hero of the consumer QR page.
+    ("photo-1758608951483", "liquid-manure slurry tanker, used for orchard fungicide"),
 ]
 
 

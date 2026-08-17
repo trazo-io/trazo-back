@@ -6,6 +6,7 @@ completeness flags, month filtering, fumigation FFM requirement, and CSV shape.
 """
 
 from datetime import datetime
+from types import SimpleNamespace
 
 from django.test import TestCase
 from django.utils import timezone
@@ -235,8 +236,14 @@ class PURExportStateGateTests(TestCase):
     """
 
     def setUp(self):
+        from subscriptions.testing import grant_compliance_exports
+
         self.user = User.objects.create_user(email="gate@test.com", password="x")
         self.company = Company.objects.create(name="Gate Co")
+        # The PUR export is a Compliance artifact (2026-08-14, subscriptions/gating.py). Without a
+        # plan every case below would 403 before reaching the STATE check these tests are about,
+        # and the two 404 cases would pass for the wrong reason.
+        grant_compliance_exports(self.company)
         self.url = "/api/histories/pur-export/"
 
     def _establishment(self, state):
@@ -266,3 +273,48 @@ class PURExportStateGateTests(TestCase):
     def test_unknown_state_gets_404_rather_than_being_assumed_californian(self):
         response = self._get(self._establishment(""))
         self.assertEqual(response.status_code, 404)
+
+
+class MTRSAndCountyFallbackTests(TestCase):
+    """PUR boxes that could never be filled before 2026-08-09.
+
+    Boxes 11-14 (Section / Township / Range / Base & Meridian) are read from
+    `ChemicalEvent.mtrs_*`, which is capturable NOWHERE in the UI — so every exported
+    row was incomplete no matter how diligently the grower filled the spray form. What
+    they do have is the parcel's PLSS descriptor, one string: "S14 T8N R2E".
+
+    Same for box 10 (County): read only from the event, while the operator entered it on
+    the Parcel Application.
+    """
+
+    def test_parses_the_plss_descriptor_the_grower_actually_wrote(self):
+        from history.services.pur_export_service import _parse_mtrs
+
+        self.assertEqual(
+            _parse_mtrs("S14 T8N R2E"),
+            {"section": "14", "township": "8N", "range": "2E", "base_meridian": ""},
+        )
+        self.assertEqual(
+            _parse_mtrs("Sec 14 Twp 8N Rge 2E MD"),
+            {"section": "14", "township": "8N", "range": "2E", "base_meridian": "MD"},
+        )
+        self.assertEqual(
+            _parse_mtrs("14/8N/2E"),
+            {"section": "14", "township": "8N", "range": "2E", "base_meridian": ""},
+        )
+
+    def test_never_guesses_on_a_state_filing(self):
+        """A wrong section number on a PUR is worse than an empty box."""
+        from history.services.pur_export_service import _parse_mtrs
+
+        blank = {"section": "", "township": "", "range": "", "base_meridian": ""}
+        for junk in ("", None, "   ", "north forty", "the block by the creek", "T8N"):
+            self.assertEqual(_parse_mtrs(junk), blank, f"{junk!r} must not parse")
+
+    def test_county_falls_back_to_the_parcel_application_answer(self):
+        from history.services.pur_export_service import _parcel_county
+
+        self.assertEqual(_parcel_county(SimpleNamespace(application_answers={"county": "Yolo"})), "Yolo")
+        self.assertEqual(_parcel_county(SimpleNamespace(application_answers={})), "")
+        self.assertEqual(_parcel_county(SimpleNamespace(application_answers=None)), "")
+        self.assertEqual(_parcel_county(SimpleNamespace(application_answers="not-a-dict")), "")

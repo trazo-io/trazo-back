@@ -72,6 +72,7 @@ INSTALLED_APPS = [
     "education",
     "notifications",
     "certifications",
+    "documents",
     # Django Channels
     "channels",
     # django-allauth apps
@@ -498,10 +499,30 @@ if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # SECURITY: File Upload Security
+#
+# ⚠️ Neither Django setting below caps the SIZE OF AN UPLOADED FILE, and it is easy to
+# read them as if they did. `DATA_UPLOAD_MAX_MEMORY_SIZE` is enforced only in the
+# `item_type == FIELD` branch of `django/http/multipartparser.py` — the FILE branch has no
+# ceiling at all — and `FILE_UPLOAD_MAX_MEMORY_SIZE` only decides memory-vs-tempfile, not
+# whether the upload is accepted. A per-endpoint limit is the only real cap; see
+# DOCUMENT_UPLOAD_MAX_BYTES below and `documents.serializers.DocumentUploadSerializer`.
 FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024  # 5MB
 DATA_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024  # 5MB
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 100
 FILE_UPLOAD_PERMISSIONS = 0o644
+
+# Largest single file the DMS accepts (WS-3 document shelf).
+#
+# 50 MB is sized on the artifact, not on a round number: the biggest thing a certified
+# operation legitimately uploads is a scanned multi-page OSP or an inspection report at
+# 300 dpi, which lands in the 20-40 MB range. Anything above that is a photo dump that
+# belongs in a gallery, or a mistake.
+#
+# This is the ONLY bound on the document endpoint. Storage quota deliberately does not
+# refuse documents (see `subscriptions.storage_accounting`), so without a per-file cap an
+# authenticated member could post an arbitrarily large body and spike memory on the app
+# instance. A soft category still needs a hard ceiling on any single object.
+DOCUMENT_UPLOAD_MAX_BYTES = 50 * 1024 * 1024  # 50 MB
 
 # SECURITY: Session Security (canonical values are below in the JWT section)
 
@@ -677,7 +698,9 @@ SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 SESSION_COOKIE_NAME = "sessionid"
 
-FILE_UPLOAD_MAX_MEMORY_SIZE = 1024 * 1024 * 10  # Set to desired size in bytes (10MB in this case)
+# A second `FILE_UPLOAD_MAX_MEMORY_SIZE = 10MB` sat here and silently overrode the 5 MB in
+# the "SECURITY: File Upload Security" block above — the value under the security heading
+# was dead. One setting, one definition; the canonical one is up there.
 
 
 SIMPLE_JWT = {
@@ -712,7 +735,13 @@ SIMPLE_JWT = {
     "AUTH_COOKIE_SAMESITE": "Lax",
 }
 
-# Trial configuration
+# Trial configuration.
+#
+# ⚠️ UNUSED since 2026-08-13 — kept only so a stray import does not break, and because Stripe-side
+# trials on a future plan would want it. Starter is FREE FOREVER (October plan: "Actually free.
+# Starter free forever, pilot free, no card"), Compliance is paid with no trial, and Pilot is
+# hand-provisioned. Nothing reads this. If you wire it back up, you are reintroducing a clock to
+# a tier the COG Pro migration page promises has none — check that page first.
 TRIAL_PERIOD_DAYS = 14
 
 # Stripe Settings

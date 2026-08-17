@@ -39,12 +39,28 @@ class SeedSearchValidationTests(TestCase):
             )
         self.assertIn("seed_search_attempts", ctx.exception.detail)
 
-    def test_non_organic_pl_with_two_attempts_rejected(self):
+    def test_non_organic_pl_with_two_attempts_accepted(self):
+        """Changed 2026-08-15: 205.204 sets no supplier COUNT.
+
+        Three is a certifier expectation from USDA's optional Guide, not rule text. Zero
+        documented suppliers is still rejected (the test above) because that leaves the
+        exemption with no ground at all.
+        """
+        attempts = [{"supplier": "A"}, {"supplier": "B"}]
+        out = self._validate(
+            type="PL",
+            seed_certification_status="non_organic_treated",
+            seed_search_attempts=attempts,
+        )
+        self.assertEqual(out["seed_search_attempts"], attempts)
+
+    def test_non_organic_tr_without_attempts_rejected(self):
+        """Transplanting was exempt from this rule until 2026-08-15."""
         with self.assertRaises(drf_serializers.ValidationError) as ctx:
             self._validate(
-                type="PL",
-                seed_certification_status="non_organic_treated",
-                seed_search_attempts=[{"supplier": "A"}, {"supplier": "B"}],
+                type="TR",
+                seed_certification_status="non_organic_untreated",
+                seed_search_attempts=[],
             )
         self.assertIn("seed_search_attempts", ctx.exception.detail)
 

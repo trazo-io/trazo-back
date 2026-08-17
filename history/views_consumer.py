@@ -82,7 +82,8 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
         # Get recent scans for timeline (deduplicated by production)
         t0 = time.time()
         recent_scans = (
-            HistoryScan.objects.filter(user=user)
+            HistoryScan.objects.counted()
+            .filter(user=user)
             .select_related("history", "history__parcel__establishment")
             .order_by("history_id", "-date")
             .distinct("history_id")
@@ -150,7 +151,8 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
 
         # Base queryset
         queryset = (
-            HistoryScan.objects.filter(user=user)
+            HistoryScan.objects.counted()
+            .filter(user=user)
             .select_related("history", "history__parcel__establishment")
             .order_by("-date")
         )
@@ -400,7 +402,7 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
 
         # Count scans
         t0 = time.time()
-        total_scans = HistoryScan.objects.filter(user=user).count()
+        total_scans = HistoryScan.objects.counted().filter(user=user).count()
         update_timings["count_scans"] = time.time() - t0
 
         # Count reviews
@@ -418,7 +420,7 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
         from carbon.models import CarbonEntry
 
         # Get all production IDs from user's scans
-        production_ids = HistoryScan.objects.filter(user=user).values_list("history_id", flat=True)
+        production_ids = HistoryScan.objects.counted().filter(user=user).values_list("history_id", flat=True)
         update_timings["get_production_ids"] = time.time() - t0
 
         # Single aggregated query for carbon totals
@@ -452,7 +454,7 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
                 ).values_list("establishment_id", flat=True)
             )
             scanned_est_ids = set(
-                HistoryScan.objects.filter(user=user).values_list("history__parcel__establishment", flat=True)
+                HistoryScan.objects.counted().filter(user=user).values_list("history__parcel__establishment", flat=True)
             )
             sustainable_farms = len(certified_est_ids & scanned_est_ids)
         except Exception:
@@ -468,7 +470,10 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
         t0 = time.time()
         # Count scans where user chose farms with verified certifications
         scanned_with_cert = (
-            HistoryScan.objects.filter(user=user).filter(history__parcel__establishment__in=certified_est_ids).count()
+            HistoryScan.objects.counted()
+            .filter(user=user)
+            .filter(history__parcel__establishment__in=certified_est_ids)
+            .count()
             if certified_est_ids
             else 0
         )
@@ -476,9 +481,9 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
 
         # If no certified data available, count scans with verified carbon entries
         if better_choices == 0:
-            better_choices = HistoryScan.objects.filter(
-                user=user, history__carbonentry__usda_factors_based=True
-            ).count()
+            better_choices = (
+                HistoryScan.objects.counted().filter(user=user, history__carbonentry__usda_factors_based=True).count()
+            )
         update_timings["count_better_choices"] = time.time() - t0
 
         # Update impact summary
@@ -496,8 +501,8 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
 
         # Update timestamps
         t0 = time.time()
-        first_scan = HistoryScan.objects.filter(user=user).order_by("date").first()
-        last_scan = HistoryScan.objects.filter(user=user).order_by("-date").first()
+        first_scan = HistoryScan.objects.counted().filter(user=user).order_by("date").first()
+        last_scan = HistoryScan.objects.counted().filter(user=user).order_by("-date").first()
 
         if first_scan:
             impact_summary.first_scan_date = first_scan.date
@@ -527,7 +532,7 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
         achievements = []
 
         # Check for scan milestones using configurable thresholds
-        scan_count = HistoryScan.objects.filter(user=user).count()
+        scan_count = HistoryScan.objects.counted().filter(user=user).count()
         milestones = EngagementMilestones.SCAN_MILESTONES
 
         if scan_count >= milestones["EXPLORER"] and scan_count < milestones["EXPLORER"] + 5:

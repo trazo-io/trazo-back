@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 
 from django.core.cache import cache
 from django.db import connections, transaction
-from django.db.models import Prefetch, Q
+from django.db.models import Count, Prefetch, Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -28,6 +28,7 @@ from common.us_states import resolve_establishment_state
 from notifications.services import notification_service
 from product.models import Parcel, Product
 from reviews.models import Review
+from subscriptions.gating import require_compliance_exports
 from subscriptions.permissions import HasProductionCreationPermission
 
 from .constants import (
@@ -127,6 +128,54 @@ def _background_generate_qr(history_id):
         logger.exception("Background QR generation failed for history %s: %s", history_id, e)
     finally:
         connections.close_all()
+
+
+def _fit_label_text(canvas_obj, text, font, size, max_width, min_size=7.0, max_lines=2):
+    """Fit `text` into `max_width` by shrinking then word-wrapping. Never cuts characters.
+
+    A lot tag is a physical § 205.307 nonretail container label, so a clipped string is a
+    defective label rather than a cosmetic issue. The previous code sliced by CHARACTER
+    COUNT (`organic_line[:40]`, `farm_name[:32]`), which is blind to glyph width and to
+    where the string ends: a CCOF-certified grower's tag printed
+
+        "Certified organic by California Certifie"
+
+    because "Certified organic by California Certified Organic Farmers" is 57 characters.
+    Same class of bug as the audit-PDF truncation rule — measure with stringWidth, and
+    when it still does not fit, wrap instead of cut.
+
+    Returns (size, lines). Only the final line may be ellipsised, and only if the text
+    cannot be made to fit at `min_size` across `max_lines`.
+    """
+    words = (text or "").split()
+    if not words:
+        return size, []
+
+    def wrap_at(pt):
+        lines, current = [], ""
+        for word in words:
+            candidate = f"{current} {word}".strip()
+            if canvas_obj.stringWidth(candidate, font, pt) <= max_width or not current:
+                current = candidate
+            else:
+                lines.append(current)
+                current = word
+        lines.append(current)
+        return lines
+
+    pt = size
+    while pt >= min_size:
+        lines = wrap_at(pt)
+        if len(lines) <= max_lines and all(canvas_obj.stringWidth(ln, font, pt) <= max_width for ln in lines):
+            return pt, lines
+        pt -= 0.5
+
+    lines = wrap_at(min_size)[:max_lines]
+    while lines and canvas_obj.stringWidth(lines[-1] + "…", font, min_size) > max_width and len(lines[-1]) > 1:
+        lines[-1] = lines[-1][:-1]
+    if lines:
+        lines[-1] += "…"
+    return min_size, lines
 
 
 class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
@@ -318,6 +367,13 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 "soil_ph",
                 "extra_data",
                 "transparency_score",
+                # Traceability: the lot identifier a certifier traces forward from at
+                # inspection (§ 205.103(b)(2)). Read-only on the list; the editor is the
+                # finish-production form.
+                "lot_id",
+                # Legacy sale columns — see `sales_record_count` below for why both are read.
+                "sale_date",
+                "quantity_sold",
                 "product__id",
                 "product__name",
                 "parcel__id",
@@ -337,14 +393,29 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     + Count("history_pestmanagementevent_events", distinct=True)
                     + Count("history_businessevent_events", distinct=True)
                     + Count("history_weatherevent_events", distinct=True)
-                )
+                ),
+                # Annotated, not `.exists()` in the serializer: this list renders one card per
+                # season, so a per-row existence check is a textbook N+1.
+                sales_record_count=Count("sales_records", distinct=True),
             )
             .order_by("-start_date")
         )
 
+        # WS-6: list is always scoped to the caller's companies — before this the
+        # top-level /histories/ list had no tenant filter at all (the parcel-nested
+        # path masked it because parcel_pk narrowed the rows).
+        user = getattr(self.request, "user", None)
+        if user is not None and user.is_authenticated:
+            queryset = queryset.filter(parcel__establishment__company__in=user.companies.all())
+
         # Filter by parcel if parcel_pk is provided
         if parcel_pk:
             queryset = queryset.filter(parcel_id=parcel_pk)
+
+        # WS-6 Buyer Page: farm-level production list.
+        establishment_id = self.request.query_params.get("establishment")
+        if establishment_id:
+            queryset = queryset.filter(parcel__establishment_id=establishment_id)
 
         # Filter by product if provided as query param
         product_id = self.request.query_params.get("product")
@@ -530,6 +601,26 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             for field in required_fields:
                 if field not in data:
                     return Response({"error": f"Missing required field: {field}"}, status=status.HTTP_400_BAD_REQUEST)
+
+            # `production_method` reaches the model through a raw History(...) kwarg below —
+            # no serializer, no full_clean() — so Django's `choices` never ran and ANY string
+            # was persisted into a choices column. The start-production form offered
+            # "sustainable", which is not a model choice, so real rows carry a value that
+            # get_production_method_display() can only echo back raw, and that the consumer
+            # page and the certifier packet both read. Validate at the door instead.
+            submitted_method = data.get("production_method")
+            if submitted_method:
+                valid_methods = [c[0] for c in History.PRODUCTION_METHOD_CHOICES]
+                if submitted_method not in valid_methods:
+                    return Response(
+                        {
+                            "production_method": [
+                                f'"{submitted_method}" is not a valid choice. '
+                                f'Valid options: {", ".join(valid_methods)}.'
+                            ]
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
             # Get parcel
             try:
@@ -805,6 +896,99 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         7: "business",
     }
 
+    #: Never accepted from a template payload, whatever the model says. Identity, ownership
+    #: and audit columns are decided by the server, not by template data.
+    _TEMPLATE_FIELD_DENYLIST = frozenset(
+        {
+            "id",
+            "history",
+            "created_by",
+            "index",
+            "date",
+            "name",
+            "description",
+            "performed_by",
+            "image",
+            "album",
+            "created_at",
+            "updated_at",
+            "commonevent_ptr",
+        }
+    )
+
+    @staticmethod
+    def _drop_nulls_over_model_defaults(model, kwargs):
+        """Remove None values aimed at NOT NULL columns so the model's own default applies.
+
+        WHY (2026-08-12): the branches below pass `backend_fields.get("x")` for every column
+        they name. When a template does not carry "x" that evaluates to None, and an explicit
+        None OVERRIDES a model default — so `transportation_unit` (null=False, default="miles")
+        went in as NULL and the insert died on the constraint.
+
+        `_create_template_events` catches per-event exceptions and continues, so the failure
+        was INVISIBLE: the grower ticked the event, got no error, and the event simply was not
+        there. Measured on the seeded catalogue: **139 of 190 production-category templates
+        omit `transportation_unit`**, including "Season Irrigation Program", "Annual Structural
+        Pruning" and "Planting / Replanting" — verified failing end to end before this fix.
+
+        Mutates and returns ``kwargs``.
+        """
+        from django.core.exceptions import FieldDoesNotExist
+
+        for name, value in list(kwargs.items()):
+            if value is not None:
+                continue
+            try:
+                field = model._meta.get_field(name)
+            except FieldDoesNotExist:
+                continue
+            # Dropping the key hands the column to Django's own default (an explicit default,
+            # or "" for a blank-able string). Nullable columns keep the explicit None, which
+            # is a real value there.
+            if not field.null:
+                del kwargs[name]
+        return kwargs
+
+    @classmethod
+    def _template_extra_fields(cls, model, backend_fields, already_set):
+        """Template fields that map to real model columns but have no explicit kwarg above.
+
+        WHY (2026-08-12): every branch below is a hand-maintained kwarg list, so a field added
+        through the 7-step standard in `src/config/events/ADDING_FIELDS.md` reaches the model,
+        both serializers, the registry, the form and the packet — and is then silently dropped
+        by the template flow, which is the path most growers actually use. Measured at the time
+        of writing: **167 concrete fields across production / soil / chemical / pest existed on
+        the models and could not be set from a template.** The standard does not mention this
+        file, which is why nobody noticed.
+
+        Deliberately conservative rather than a blanket `**backend_fields`:
+
+          * only CONCRETE, EDITABLE fields of that exact model — an unknown key is ignored,
+            not passed to `create()` where it would raise
+          * never a RELATION, so a template cannot repoint `history` or `created_by`
+          * never a name already set explicitly above, so existing defaults keep winning
+          * never anything in the denylist, so identity and audit columns stay server-owned
+
+        The result is additive: every call site behaves exactly as before for the fields it
+        already named, and stops losing the ones it did not.
+        """
+        if not isinstance(backend_fields, dict):
+            return {}
+        concrete = {
+            f.name: f
+            for f in model._meta.get_fields()
+            if getattr(f, "concrete", False) and not f.auto_created and getattr(f, "editable", False)
+        }
+        extras = {}
+        for key, value in backend_fields.items():
+            if key in already_set or key in cls._TEMPLATE_FIELD_DENYLIST:
+                continue
+            field = concrete.get(key)
+            if field is None or field.is_relation:
+                continue
+            extras[key] = value
+        return extras
+
     def _create_single_template_event(self, history, event_data, index):
         """Create a single event from template data. Called inside a savepoint."""
         from datetime import datetime
@@ -877,7 +1061,7 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             extra_data = backend_fields.get("extra_data") or {}
             extra_data.setdefault("volume_unit", backend_fields.get("volume_unit", "L"))
             extra_data.setdefault("area_unit", backend_fields.get("area_unit", "ha"))
-            ChemicalEvent.objects.create(
+            _kwargs = dict(
                 history=history,
                 name=event_name,
                 description=description,
@@ -912,8 +1096,11 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 index=index,
                 created_by=history.operator,
             )
+            _kwargs.update(self._template_extra_fields(ChemicalEvent, backend_fields, _kwargs))
+            self._drop_nulls_over_model_defaults(ChemicalEvent, _kwargs)
+            ChemicalEvent.objects.create(**_kwargs)
         elif category == "weather":
-            WeatherEvent.objects.create(
+            _kwargs = dict(
                 history=history,
                 description=description,
                 performed_by=operator_name,
@@ -924,8 +1111,11 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 index=index,
                 created_by=history.operator,
             )
+            _kwargs.update(self._template_extra_fields(WeatherEvent, backend_fields, _kwargs))
+            self._drop_nulls_over_model_defaults(WeatherEvent, _kwargs)
+            WeatherEvent.objects.create(**_kwargs)
         elif category == "soil":
-            SoilManagementEvent.objects.create(
+            _kwargs = dict(
                 history=history,
                 name=event_name,
                 description=description,
@@ -954,8 +1144,11 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 index=index,
                 created_by=history.operator,
             )
+            _kwargs.update(self._template_extra_fields(SoilManagementEvent, backend_fields, _kwargs))
+            self._drop_nulls_over_model_defaults(SoilManagementEvent, _kwargs)
+            SoilManagementEvent.objects.create(**_kwargs)
         elif category == "pest":
-            PestManagementEvent.objects.create(
+            _kwargs = dict(
                 history=history,
                 description=description,
                 performed_by=operator_name,
@@ -983,8 +1176,11 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 index=index,
                 created_by=history.operator,
             )
+            _kwargs.update(self._template_extra_fields(PestManagementEvent, backend_fields, _kwargs))
+            self._drop_nulls_over_model_defaults(PestManagementEvent, _kwargs)
+            PestManagementEvent.objects.create(**_kwargs)
         elif category == "business":
-            BusinessEvent.objects.create(
+            _kwargs = dict(
                 history=history,
                 name=event_name,
                 description=description,
@@ -1004,8 +1200,11 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 index=index,
                 created_by=history.operator,
             )
+            _kwargs.update(self._template_extra_fields(BusinessEvent, backend_fields, _kwargs))
+            self._drop_nulls_over_model_defaults(BusinessEvent, _kwargs)
+            BusinessEvent.objects.create(**_kwargs)
         elif category == "production":
-            ProductionEvent.objects.create(
+            _kwargs = dict(
                 history=history,
                 name=event_name,
                 description=description,
@@ -1035,8 +1234,11 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 index=index,
                 created_by=history.operator,
             )
+            _kwargs.update(self._template_extra_fields(ProductionEvent, backend_fields, _kwargs))
+            self._drop_nulls_over_model_defaults(ProductionEvent, _kwargs)
+            ProductionEvent.objects.create(**_kwargs)
         elif category == "general":
-            GeneralEvent.objects.create(
+            _kwargs = dict(
                 history=history,
                 name=event_name or "General Event",
                 description=description,
@@ -1051,6 +1253,9 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 index=index,
                 created_by=history.operator,
             )
+            _kwargs.update(self._template_extra_fields(GeneralEvent, backend_fields, _kwargs))
+            self._drop_nulls_over_model_defaults(GeneralEvent, _kwargs)
+            GeneralEvent.objects.create(**_kwargs)
         else:
             # Final fallback — should not normally be reached
             logger.warning(
@@ -1058,7 +1263,7 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 category,
                 event_name,
             )
-            GeneralEvent.objects.create(
+            _kwargs = dict(
                 history=history,
                 name=event_name or "General Event",
                 description=description,
@@ -1067,6 +1272,9 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 index=index,
                 created_by=history.operator,
             )
+            _kwargs.update(self._template_extra_fields(GeneralEvent, backend_fields, _kwargs))
+            self._drop_nulls_over_model_defaults(GeneralEvent, _kwargs)
+            GeneralEvent.objects.create(**_kwargs)
 
     def _determine_template_event_type(self, event_name):
         """
@@ -1304,13 +1512,24 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 {"error": "establishment_id and company_id are required"}, status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Get scans for the establishment
+        # Get scans for the establishment.
+        #
+        # `.counted()` — the same definition the stat card, the dashboard charts and the billing
+        # quota use. This list previously showed every raw row, so a farmer reading "18 scans"
+        # under the table and a different total on the metrics screen was seeing two honest
+        # answers to two different questions, with nothing on screen saying so.
+        #
+        # The repeats are not thrown away: each surviving row carries `repeat_count`, the number
+        # of scans that were folded into it, so the information is attached to the visit it
+        # belongs to instead of inflating the list.
         scans_queryset = (
-            HistoryScan.objects.filter(
+            HistoryScan.objects.counted()
+            .filter(
                 history__parcel__establishment_id=establishment_id,
                 history__parcel__establishment__company_id=company_id,
             )
             .select_related("history", "history__product", "history__parcel", "history__parcel__establishment", "user")
+            .annotate(repeat_count=Count("historyscan", filter=Q(historyscan__is_duplicate=True), distinct=True))
             .order_by("-date")
         )
 
@@ -1342,11 +1561,19 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         if parcel_id:
             scans_queryset = scans_queryset.filter(history__parcel_id=parcel_id)
 
+        # Apply production (season) filtering if provided. `production_id` is the internal
+        # History pk — the same value this endpoint already emits as `production_id` on each
+        # row, so the client filters with a key it was handed rather than one it guessed.
+        production_id = request.query_params.get("production_id")
+        if production_id:
+            scans_queryset = scans_queryset.filter(history_id=production_id)
+
         # Apply search filtering if provided
         search = request.query_params.get("search")
         if search:
-            from django.db.models import Q
-
+            # `Q` comes from the module-level import. It used to be re-imported HERE, which made
+            # `Q` a function-local name for the WHOLE function — so the annotation above, which
+            # runs first, raised UnboundLocalError and the endpoint 500'd.
             scans_queryset = scans_queryset.filter(
                 Q(history__product__name__icontains=search)
                 | Q(user__first_name__icontains=search)
@@ -1357,6 +1584,41 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 | Q(country__icontains=search)
                 | Q(history__parcel__name__icontains=search)
             )
+
+        # Filter OPTIONS, derived from the scans that exist rather than from the farm's full
+        # inventory. A 25-parcel farm with scans on two blocks gets two parcel options, not 25 —
+        # a dropdown whose every entry returns rows. Computed from `facet_base` (establishment
+        # scope only, before any user filter), so choosing a crop does not erase the parcel
+        # options; otherwise each selection would strip the list that produced it.
+        # `.counted()` here too, or a production whose only scans were duplicates would offer an
+        # option that returns an empty table.
+        facet_base = HistoryScan.objects.counted().filter(
+            history__parcel__establishment_id=establishment_id,
+            history__parcel__establishment__company_id=company_id,
+        )
+        filter_options = {
+            "productions": [
+                {"id": row["history_id"], "name": row["history__name"]}
+                for row in facet_base.exclude(history__isnull=True)
+                .values("history_id", "history__name")
+                .distinct()
+                .order_by("history__name")
+            ],
+            "products": [
+                {"id": row["history__product_id"], "name": row["history__product__name"]}
+                for row in facet_base.exclude(history__product__isnull=True)
+                .values("history__product_id", "history__product__name")
+                .distinct()
+                .order_by("history__product__name")
+            ],
+            "parcels": [
+                {"id": row["history__parcel_id"], "name": row["history__parcel__name"]}
+                for row in facet_base.exclude(history__parcel__isnull=True)
+                .values("history__parcel_id", "history__parcel__name")
+                .distinct()
+                .order_by("history__parcel__name")
+            ],
+        }
 
         # Paginate results
         paginator = StandardResultsSetPagination()
@@ -1374,8 +1636,19 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     "location": scan.get_location_display() or "-",
                     "parcel": scan.history.parcel.name if scan.history.parcel else None,
                     "parcel_id": scan.history.parcel.id if scan.history.parcel else None,
+                    # The SEASON the scan belongs to. The payload carried product and parcel but
+                    # never the production, so a grower reading "Walnuts · North Orchard" twice
+                    # could not tell whether both scans were of the same season's page.
+                    "production": scan.history.name,
+                    "production_id": scan.history.id,
                     "comment": getattr(scan, "comment", ""),
                     "user": scan.user.get_full_name() if scan.user else "Anonymous",
+                    "scan_type": scan.scan_type,
+                    # How many scans were folded INTO this one by deduplication. Replaces the old
+                    # `is_duplicate` flag, which is now always False here because the queryset is
+                    # `.counted()` — a duplicate row can no longer reach this serializer, so the
+                    # flag could only ever have said "no".
+                    "repeat_count": getattr(scan, "repeat_count", 0),
                     "ip_address": scan.ip_address,
                     "qr_code": scan.history.qr_code.url if scan.history.qr_code else None,
                     "carbon_score": getattr(scan.history, "carbon_score", 0),
@@ -1383,9 +1656,11 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 }
                 scans_data.append(scan_data)
 
-            return paginator.get_paginated_response(scans_data)
+            response = paginator.get_paginated_response(scans_data)
+            response.data["filter_options"] = filter_options
+            return response
 
-        return Response([])
+        return Response({"count": 0, "next": None, "previous": None, "results": [], "filter_options": filter_options})
 
     @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated])
     def my_reviews(self, request):
@@ -1580,21 +1855,23 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         ):
             return Response({"error": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
 
-        # Organic line gated by the lot-level resolver (downgrade-only, same
-        # vocabulary as the consumer page and the audit PDF cross-checks).
-        organic_line = None
-        try:
-            from certifications.services.consumer_claim_validator import ConsumerClaimValidator
+        # § 205.307 container-labelling decision. Both halves of the rule live in the claim
+        # authority now — (a)(2) lot linkage and (a)(1) organic identification — so this view
+        # asks rather than decides, the same way every other public surface does.
+        #
+        # Previously this printed `LOT —` whenever lot_id was null (63% of published
+        # productions, measured 2026-08-10) and silently dropped the organic line on any gate
+        # failure. Both produce a non-compliant physical label; neither was visible to the
+        # grower, who is the only person able to fix it.
+        from .services.claim_authority import may_label_container
 
-            from .services.claim_resolver import resolve_lot_organic_eligibility
-
-            cert = ConsumerClaimValidator()._get_active_usda_organic_cert(establishment)
-            eligibility = resolve_lot_organic_eligibility(history, cert)
-            if eligibility.eligible is True and cert is not None:
-                certifier = (cert.certifier_name or "").split(" (")[0]
-                organic_line = f"Certified organic by {certifier}" if certifier else "Certified organic"
-        except Exception:
-            logger.warning("Lot-tag organic gate failed; omitting organic line", exc_info=True)
+        label_decision = may_label_container(history)
+        if not label_decision.may_print:
+            return Response(
+                {"error": label_decision.blocker, "code": "lot_id_required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        organic_line = label_decision.organic_line or None
 
         from django.conf import settings
 
@@ -1619,8 +1896,17 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         farm_name = establishment.name if establishment else "Farm"
         crop = history.product.name if history.product else "Crop"
-        lot = history.lot_id or "—"
+        # Guaranteed non-empty: may_label_container() refuses above when it is not.
+        lot = label_decision.lot_id
         harvest = history.finish_date.strftime("%b %d, %Y") if history.finish_date else "In progress"
+
+        # Constant across tags, and needed for the text width budget below: the organic
+        # statement is the lowest line and sits beside the QR block, so it gets a narrower
+        # column than the lines above it.
+        qr_size = 1.05 * inch
+        text_inset = 0.25 * inch
+        full_w = tag_w - 2 * text_inset
+        narrow_w = tag_w - qr_size - 0.22 * inch - text_inset - 6
 
         for row in range(rows):
             for col in range(cols):
@@ -1631,25 +1917,35 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 c.rect(x0 + 6, y0 + 6, tag_w - 12, tag_h - 12)
                 c.setDash()
 
-                text_x = x0 + 0.25 * inch
+                text_x = x0 + text_inset
                 cursor = y0 + tag_h - 0.45 * inch
-                c.setFont("Helvetica-Bold", 13)
-                c.drawString(text_x, cursor, farm_name[:32])
+
+                # leading_ratio 1.15 (not 0.82): at 10pt the old value gave 9.2pt of leading, so
+                # a wrapped certifying-agent name printed with its two lines almost touching —
+                # legible on screen, but on a physical container label it reads as a press fault.
+                def draw_fitted(text, font, size, width, max_lines=1, leading_ratio=1.15):
+                    """Draw `text` at the running cursor, shrinking/wrapping to fit `width`."""
+                    nonlocal cursor
+                    pt, lines = _fit_label_text(c, text, font, size, width, max_lines=max_lines)
+                    c.setFont(font, pt)
+                    for i, line in enumerate(lines):
+                        if i:
+                            cursor -= pt * leading_ratio + 1
+                        c.drawString(text_x, cursor, line)
+
+                draw_fitted(farm_name, "Helvetica-Bold", 13, full_w)
                 cursor -= 0.26 * inch
-                c.setFont("Helvetica", 11)
-                c.drawString(text_x, cursor, crop[:32])
+                draw_fitted(crop, "Helvetica", 11, full_w)
                 cursor -= 0.3 * inch
-                c.setFont("Helvetica-Bold", 14)
-                c.drawString(text_x, cursor, f"LOT {lot}"[:30])
+                draw_fitted(f"LOT {lot}", "Helvetica-Bold", 14, full_w)
                 cursor -= 0.26 * inch
-                c.setFont("Helvetica", 10)
-                c.drawString(text_x, cursor, f"Harvested {harvest}")
+                draw_fitted(f"Harvested {harvest}", "Helvetica", 10, full_w)
                 if organic_line:
                     cursor -= 0.24 * inch
-                    c.setFont("Helvetica-Bold", 10)
-                    c.drawString(text_x, cursor, organic_line[:40])
+                    # § 205.307(a)(1). Two lines allowed: certifying-agent names are long
+                    # ("California Certified Organic Farmers") and must print in full.
+                    draw_fitted(organic_line, "Helvetica-Bold", 10, narrow_w, max_lines=2)
 
-                qr_size = 1.05 * inch
                 c.drawImage(
                     qr_reader,
                     x0 + tag_w - qr_size - 0.22 * inch,
@@ -1664,9 +1960,36 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         c.save()
         buf.seek(0)
 
-        response = HttpResponse(buf.getvalue(), content_type="application/pdf")
+        # WS-3: file a dated copy in the DMS, then stream the same bytes.
+        from documents.services.filing import file_document
+
         safe_lot = (history.lot_id or str(history.public_id)[:8]).replace("/", "-")
+        file_document(
+            establishment=history.parcel.establishment,
+            source="lot_tag",
+            folder="exports",
+            title=f"Lot tags — {safe_lot}",
+            filename=f"lot-tags-{safe_lot}.pdf",
+            content=buf.getvalue(),
+            content_type="application/pdf",
+            history=history,
+            parcel=history.parcel,
+            created_by=request.user,
+        )
+        response = HttpResponse(buf.getvalue(), content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="lot-tags-{safe_lot}.pdf"'
+        if label_decision.warning:
+            # § 205.307(a)(1): the operation holds a certificate but this lot did not clear the
+            # organic gate, so the tags ship without organic identification. A file download has
+            # no body to put this in, so it rides a header the client surfaces — the previous
+            # behaviour was a server log the grower could never see.
+            #
+            # Force ASCII: Django RFC 2047-encodes any header value containing non-ASCII, so a
+            # single em-dash turns the message into `=?utf-8?q?...?=` and the CFR cite stops
+            # being readable by either a human or a test.
+            response["X-Trazo-Label-Warning"] = (
+                label_decision.warning.replace("\n", " ").encode("ascii", "replace").decode("ascii")
+            )
         return response
 
     @action(detail=False, methods=["get"], url_path="recent-inputs", permission_classes=[IsAuthenticated])
@@ -1723,6 +2046,75 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 break
         return Response(products, status=status.HTTP_200_OK)
 
+    @action(detail=False, methods=["get"], url_path="seed-suppliers")
+    def seed_suppliers(self, request):
+        """Seed suppliers this farm has recorded before, for the planting form's pickers.
+
+        WHY this shape. USDA Form 10 Part A is a PERSISTENT supplier list — its whole purpose
+        is to be referenced again next season, and a free-text string retyped per event cannot
+        do that. The Planting teardown called for a supplier entity.
+
+        This derives the list from the records the grower already wrote (the
+        `seed_supplier_name` column and the supplier names inside `seed_search_attempts`)
+        rather than introducing a curated `SeedSupplier` model with its own CRUD, permissions
+        and editor surface. The trade is deliberate and worth stating: a derived list cannot
+        hold a supplier the grower has never used, and it cannot carry contact details the
+        events do not have. What it does give — last season's suppliers, spelled the way this
+        farm spells them, one click away — is the part of Form 10 Part A that actually gets
+        used, and it mirrors `recent_inputs`, which solves the identical problem for chemical
+        products. A curated entity remains the right answer if suppliers ever need attributes
+        of their own (contact, certificate on file, expiry).
+
+        Owner-gated exactly like `recent_inputs`: a supplier list is commercial relationship
+        data, and it is the same class of counterparty name the consumer payload scrubs.
+        """
+        from common.field_registry import SEED_SOURCED_SUBTYPES
+        from company.models import Establishment
+        from users.models import WorksIn
+
+        establishment_id = request.query_params.get("establishment_id")
+        if not establishment_id:
+            return Response({"error": "establishment_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            establishment = Establishment.objects.get(id=establishment_id)
+        except (Establishment.DoesNotExist, ValueError):
+            return Response({"error": "Establishment not found"}, status=status.HTTP_404_NOT_FOUND)
+        if not WorksIn.objects.filter(user=request.user, company=establishment.company, role__in=["CA", "FM"]).exists():
+            return Response({"error": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
+
+        events = ProductionEvent.objects.filter(
+            history__parcel__establishment=establishment,
+            type__in=SEED_SOURCED_SUBTYPES,
+        ).order_by("-date")[:200]
+
+        seen = {}
+        for event in events:
+            when = event.date.date().isoformat() if event.date else None
+            candidates = [(event.seed_supplier_name, "purchase")]
+            # The search rows name suppliers the grower CONTACTED but did not buy from. Those
+            # are the ones hardest to remember next season and the ones § 205.204(a)(1) asks
+            # about, so they belong in the picker just as much as the one they bought from.
+            for attempt in getattr(event, "seed_search_attempts", None) or []:
+                if isinstance(attempt, dict):
+                    candidates.append((attempt.get("supplier_name") or attempt.get("supplier"), "search"))
+
+            for raw, origin in candidates:
+                name = (raw or "").strip()
+                if not name:
+                    continue
+                key = name.lower()
+                existing = seen.get(key)
+                if existing is None:
+                    seen[key] = {"supplier_name": name, "last_seen": when, "sources": [origin]}
+                else:
+                    if origin not in existing["sources"]:
+                        existing["sources"].append(origin)
+                    # Events are already newest-first, so the first date wins.
+                    if existing["last_seen"] is None:
+                        existing["last_seen"] = when
+
+        return Response(list(seen.values())[:40], status=status.HTTP_200_OK)
+
     @action(detail=False, methods=["get"], url_path="pur-export", permission_classes=[IsAuthenticated])
     def pur_export(self, request):
         """
@@ -1771,6 +2163,17 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
+        # Plan gate, and it goes AFTER the state check on purpose.
+        #
+        # Ordered the other way, a Florida farm on Starter was told to buy Compliance to unlock the
+        # CALIFORNIA Pesticide Use Report — a document that does not exist for their operation at
+        # any price. "Does not apply to you" has to win over "costs money", or the upsell is a lie.
+        #
+        # Resolved from the ESTABLISHMENT's company rather than the caller's active one: a user who
+        # works in two companies must not have one farm's plan authorise the other farm's filing.
+        # See subscriptions/gating.py.
+        require_compliance_exports(establishment.company, user=request.user)
+
         try:
             month = int(request.query_params.get("month", ""))
             year = int(request.query_params.get("year", ""))
@@ -1790,7 +2193,25 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         if export_format == "csv":
             buffer = service.to_csv()
-            response = FileResponse(buffer, content_type="text/csv; charset=utf-8")
+            # WS-3: file a dated copy in the DMS, then stream the same bytes.
+            from io import BytesIO
+
+            from documents.services.filing import file_document
+
+            data = buffer.getvalue() if hasattr(buffer, "getvalue") else buffer.read()
+            if isinstance(data, str):
+                data = data.encode("utf-8")
+            file_document(
+                establishment=establishment,
+                source="pur",
+                folder="exports",
+                title=f"California PUR — {year}-{month:02d}",
+                filename=f"trazo-pur-{establishment_id}-{year}-{month:02d}.csv",
+                content=data,
+                content_type="text/csv",
+                created_by=request.user,
+            )
+            response = FileResponse(BytesIO(data), content_type="text/csv; charset=utf-8")
             response["Content-Disposition"] = (
                 f'attachment; filename="trazo-pur-{establishment_id}-{year}-{month:02d}.csv"'
             )
@@ -1822,6 +2243,9 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         # Verify the requesting user belongs to this production's company
         self.check_write_permission(request, production)
+
+        # Plan gate, from the PRODUCTION's owning company (not the caller's active one).
+        require_compliance_exports(production.parcel.establishment.company, user=request.user)
 
         cert_type = request.query_params.get("certification", "all").lower()
         export_format = request.query_params.get("export_format", "pdf").lower()
@@ -1917,13 +2341,46 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         try:
             service = AuditExportService(production, certification_type=cert_type)
 
+            # WS-3: file a dated copy in the DMS, then stream the same bytes.
+            from io import BytesIO
+
+            from documents.services.filing import file_document
+
             if export_format == "csv":
                 buffer = service.generate_csv()
-                response = FileResponse(buffer, content_type="text/csv; charset=utf-8")
+                data = buffer.getvalue() if hasattr(buffer, "getvalue") else buffer.read()
+                if isinstance(data, str):
+                    data = data.encode("utf-8")
+                file_document(
+                    establishment=production.parcel.establishment,
+                    source="dossier",
+                    folder="exports",
+                    title=f"Audit export CSV — {production.name} ({cert_type})",
+                    filename=f"trazo-audit-{production.public_id}.csv",
+                    content=data,
+                    content_type="text/csv",
+                    history=production,
+                    parcel=production.parcel,
+                    created_by=request.user,
+                )
+                response = FileResponse(BytesIO(data), content_type="text/csv; charset=utf-8")
                 response["Content-Disposition"] = f'attachment; filename="trazo-audit-{production.public_id}.csv"'
             else:
                 buffer = service.generate_pdf(strict_ofpp=strict_ofpp)
-                response = FileResponse(buffer, content_type="application/pdf")
+                data = buffer.getvalue() if hasattr(buffer, "getvalue") else buffer.read()
+                file_document(
+                    establishment=production.parcel.establishment,
+                    source="dossier",
+                    folder="exports",
+                    title=f"Audit dossier — {production.name} ({cert_type})",
+                    filename=f"trazo-audit-{production.public_id}.pdf",
+                    content=data,
+                    content_type="application/pdf",
+                    history=production,
+                    parcel=production.parcel,
+                    created_by=request.user,
+                )
+                response = FileResponse(BytesIO(data), content_type="application/pdf")
                 response["Content-Disposition"] = f'attachment; filename="trazo-audit-{production.public_id}.pdf"'
 
             return response
@@ -2075,6 +2532,11 @@ def audit_export_by_uuid(request, public_id):
         if not WorksIn.objects.filter(user=request.user, company=company).exists():
             raise PermissionDenied("You do not have access to this production.")
 
+    # Plan gate. This is the UUID twin of HistoryViewSet.audit_export and produces the identical
+    # document, so it must carry the identical gate — a second door onto one artifact is exactly
+    # how a paywall ends up being enforced on only one of them.
+    require_compliance_exports(production.parcel.establishment.company, user=request.user)
+
     cert_type = request.query_params.get("certification", "all").lower()
     export_format = request.query_params.get("export_format", "pdf").lower()
     # strict_ofpp tri-state: unset → service-side default (True for
@@ -2160,13 +2622,50 @@ def audit_export_by_uuid(request, public_id):
     try:
         service = AuditExportService(production, certification_type=cert_type)
 
+        # File a dated copy in the DMS, then stream the same bytes — same
+        # behavior as the numeric-pk route above. This UUID route is the one
+        # the production "Export for Audit" button actually hits (the frontend
+        # passes public_id), so without this call the app's most prominent
+        # export was the only one that never appeared in Documents.
+        from io import BytesIO
+
+        from documents.services.filing import file_document
+
         if export_format == "csv":
             buffer = service.generate_csv()
-            response = FileResponse(buffer, content_type="text/csv; charset=utf-8")
+            data = buffer.getvalue() if hasattr(buffer, "getvalue") else buffer.read()
+            if isinstance(data, str):
+                data = data.encode("utf-8")
+            file_document(
+                establishment=production.parcel.establishment,
+                source="dossier",
+                folder="exports",
+                title=f"Audit export CSV — {production.name} ({cert_type})",
+                filename=f"trazo-audit-{production.public_id}.csv",
+                content=data,
+                content_type="text/csv",
+                history=production,
+                parcel=production.parcel,
+                created_by=request.user if request.user.is_authenticated else None,
+            )
+            response = FileResponse(BytesIO(data), content_type="text/csv; charset=utf-8")
             response["Content-Disposition"] = f'attachment; filename="trazo-audit-{production.public_id}.csv"'
         else:
             buffer = service.generate_pdf(strict_ofpp=strict_ofpp)
-            response = FileResponse(buffer, content_type="application/pdf")
+            data = buffer.getvalue() if hasattr(buffer, "getvalue") else buffer.read()
+            file_document(
+                establishment=production.parcel.establishment,
+                source="dossier",
+                folder="exports",
+                title=f"Audit dossier — {production.name} ({cert_type})",
+                filename=f"trazo-audit-{production.public_id}.pdf",
+                content=data,
+                content_type="application/pdf",
+                history=production,
+                parcel=production.parcel,
+                created_by=request.user if request.user.is_authenticated else None,
+            )
+            response = FileResponse(BytesIO(data), content_type="application/pdf")
             response["Content-Disposition"] = f'attachment; filename="trazo-audit-{production.public_id}.pdf"'
 
         return response
@@ -2789,10 +3288,14 @@ class HistoryScanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             date_kwargs["date__gte"] = datetime.now() - timedelta(days=365)
 
         # Get last 9 scans from the establishment
-        history_scans = HistoryScan.objects.filter(
-            history__parcel__establishment=self.establishment,
-            **date_kwargs,
-        ).order_by("-date")
+        history_scans = (
+            HistoryScan.objects.counted()
+            .filter(
+                history__parcel__establishment=self.establishment,
+                **date_kwargs,
+            )
+            .order_by("-date")
+        )
         if parcel is not None:
             history_scans = history_scans.filter(history__parcel__id=parcel)
         if product is not None:
@@ -2908,7 +3411,30 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         return super().dispatch(request, *args, **kwargs)
 
     def create(self, request, *args, **kwargs):
-        return super().create(request, *args, **kwargs)
+        response = super().create(request, *args, **kwargs)
+        self._attach_completeness_gaps(response, getattr(self, "_completeness_event", None))
+        return response
+
+    def _attach_completeness_gaps(self, response, event):
+        """Echo certifier-required fields still missing on a just-saved event.
+
+        Non-blocking by design: the farmer logs what they know standing in the orchard, so an
+        incomplete record must still save — but the response tells the UI what an inspector will
+        ask for (record_completeness.py, § 205.103(b)(2) / § 205.206(a) / § 205.204).
+
+        Covers ChemicalEvent and the seed-sourced production subtypes (PL/TR) as of 2026-08-15.
+        The registry itself decides — an event type with no registry returns no gaps, so the key
+        is simply omitted rather than asserting a record is complete.
+        """
+        if not isinstance(response.data, dict):
+            return
+        from .services.record_completeness import completeness_gap_keys
+
+        gaps = completeness_gap_keys(event)
+        if gaps or isinstance(event, ChemicalEvent):
+            # Chemical keeps emitting an empty list (the UI treats [] as "record complete");
+            # other types stay silent unless there is something to say.
+            response.data["completeness_gaps"] = gaps
 
     def get_serializer_class(self):
         event_type = (
@@ -3294,6 +3820,9 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # Bind the created row to the serializer so the 201 body carries the real id.
         # Without this the response serialises an unsaved instance and returns "id": null.
         serializer.instance = created_event
+        # create() cannot reach the serializer after super().create() returns, so stash the row
+        # for the completeness-gaps echo on the 201 body.
+        self._completeness_event = created_event
 
     def update(self, request, *args, **kwargs):
         """
@@ -3473,6 +4002,12 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             instance.history.update_trust_metrics()
         except Exception:
             pass  # Non-fatal: score will update on next calculation
+
+        if isinstance(instance, ChemicalEvent):
+            # `instance` predates super().update()'s save — DRF re-fetched and saved its own
+            # copy — so re-read before judging completeness of the row as it now stands.
+            instance.refresh_from_db()
+        self._attach_completeness_gaps(response, instance)
 
         return response
 
@@ -3913,6 +4448,43 @@ class SalesRecordViewSet(viewsets.GenericViewSet):
             return err
         records = self.get_queryset().filter(production=production)
         return Response(SalesRecordSerializer(records, many=True).data, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=["get"], url_path="harvest_lots")
+    def harvest_lots(self, request):
+        """The production's harvest passes, so a sale can name the lot(s) it drew from.
+
+        Lives here rather than on the public history payload because the lot code is an
+        OWNER-side identifier: it links a buyer to a block and a date (7 CFR 205.103(b)(2)),
+        which is a record for the operator and their certifier, not a consumer claim — the
+        public serializer deliberately omits it, so the sales editor had no source for the
+        picker until this existed.
+
+        Reuses `_production_for`, i.e. the same CA/FM company-role gate as the sales list. A
+        second, looser path to the same rows is how a lot list becomes a farm directory.
+        """
+        production_public_id = request.query_params.get("production_id")
+        if not production_public_id:
+            return Response({"error": "production_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+        production, err = self._production_for(request, production_public_id)
+        if err:
+            return err
+
+        lots = [
+            {
+                "id": event.id,
+                "lot_code": event.harvest_lot_code,
+                "date": event.date,
+                "yield_quantity": event.yield_quantity,
+                "yield_unit": event.yield_unit,
+            }
+            # A harvest with no code is one whose crop AND block are both blank — nothing an
+            # inspector could trace to, and nothing worth offering as a link target.
+            for event in production.history_productionevent_events.filter(type="HA")
+            .exclude(harvest_lot_code__isnull=True)
+            .exclude(harvest_lot_code="")
+            .order_by("date", "id")
+        ]
+        return Response(lots, status=status.HTTP_200_OK)
 
     def create(self, request):
         from .serializers import SalesRecordSerializer

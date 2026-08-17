@@ -40,6 +40,21 @@ class Parcel(models.Model):
     # Surfaced in the audit export's Field Map and Buffer Zone sections; empty/None
     # triggers a REVIEW flag for the inspector.
     buffer_zones = models.JSONField(blank=True, null=True)
+    # WS-5 (2026-08): container/greenhouse production flag (NOP § 205.2 crop production
+    # includes container systems; certifier parcel applications ask this directly —
+    # it changes which land-history questions apply, since container media is not land).
+    container_production = models.BooleanField(
+        default=False,
+        help_text="Whether this parcel produces in containers/greenhouse rather than in-ground",
+    )
+    # WS-5 Parcel Application: the FEW answers with no model home (county, livestock,
+    # attestations). Everything that has a real column binds via parcel_field instead —
+    # evidence lives once (plan Appendix A §f).
+    application_answers = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Parcel Application answers that have no dedicated model field",
+    )
     # CCOF Parcel Application identity — every parcel record keys to APN + S-T-R.
     apn = models.CharField(
         max_length=40,
@@ -316,6 +331,16 @@ class ParcelCropHistory(models.Model):
         max_length=200,
         help_text="Crop or cover crop grown during this year",
     )
+    # 2026-08 QO-parity: orchard reality is a main crop PLUS an alley/winter cover in
+    # the same year. One optional companion field keeps the one-row-per-year shape
+    # (and its unique_together) instead of forcing a second row that would read as a
+    # split field.
+    cover_crop = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        help_text="Cover crop grown between/under the main crop this year (e.g., 'bell beans + oats alley cover')",
+    )
     block_id = models.CharField(
         # 50 to match CommonEvent.block_id — same concept, same token, so a block name that fits
         # on an event must fit here. That model is nullable and this one is not: the difference is
@@ -347,6 +372,30 @@ class ParcelCropHistory(models.Model):
         blank=True,
         null=True,
         help_text="Summary of all substances applied during this year (for 36-month history)",
+    )
+    #: USDA Field History / Previous Land Use Record (form #1) asks for three columns per
+    #: material — "Material / Product Brand Name", "Manufacturer", "Application Date(s)".
+    #: `substances_applied` is a single prose blob and cannot answer them: a certifier
+    #: checking a 36-month window needs the DATE, and a blob reading "roundup, some 10-10-10"
+    #: does not have one.
+    #:
+    #: Added ALONGSIDE the blob rather than replacing it, and the blob is NEVER parsed into
+    #: this. Splitting prose means guessing which words are a manufacturer and which are a
+    #: product, and a guess here lands in an eligibility determination. Operators keep what
+    #: they wrote; new detail is entered structured.
+    #:
+    #: Shape: [{"material": str, "manufacturer": str, "application_dates": str}]
+    #: `application_dates` is free text on purpose — USDA's own column is plural
+    #: ("Date(s)"), growers write "3/14 and 6/2", and forcing one date would either lose
+    #: applications or invent precision.
+    substance_applications = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "Structured per-material rows for USDA's Field History form: "
+            '[{"material", "manufacturer", "application_dates"}]. Complements '
+            "substances_applied (free-text summary); never derived from it."
+        ),
     )
     last_prohibited_substance = models.CharField(
         max_length=200,

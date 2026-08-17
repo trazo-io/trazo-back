@@ -1,3 +1,4 @@
+import decimal
 import logging
 import os
 import uuid
@@ -18,17 +19,25 @@ from qrcode.image.styles.moduledrawers import RoundedModuleDrawer
 
 from carbon.choices import FUEL_TYPES
 from common.field_registry import (
+    AMOUNT_DETERMINATION,
     APPLICATION_METHOD,
+    APPLIED_SCOPE,
+    BUFFER_DISPOSITION,
     CHEMICAL_SUBTYPE,
+    CLEANING_ASSET_CLASS,
     ELECTRICITY_SOURCE,
     EQUIPMENT_OPERATION_TYPE,
     EQUIPMENT_TYPE,
     GROWTH_STAGE,
+    HARVEST_DESTINATION,
     HARVEST_QUALITY_GRADE,
     IRRIGATION_METHOD,
+    NON_ORGANIC_SEED_STATUSES,
     ORGANIC_APPROVED,
     PRODUCTION_EFFICIENCY,
     SEED_CERTIFICATION_STATUS,
+    SEED_NON_GMO_STATUS,
+    SEED_SOURCED_SUBTYPES,
     SEEDS_SOURCE,
     UNIT_AREA,
     UNIT_DEPTH,
@@ -43,9 +52,53 @@ from product.models import Parcel
 
 logger = logging.getLogger(__name__)
 
+#: The three labeling categories of 7 CFR § 205.301, which § 205.103(b)(3) requires records to
+#: identify products by — records must "identify agricultural products on these records as
+#: '100% organic,' 'organic,' or 'made with organic (specified ingredients or food group(s)).'"
+#:
+#: This exists because `organic_on_invoice` is a BOOLEAN and cannot express the requirement: it
+#: says *whether* the product was identified as organic, never *as which category*. The 2026-08
+#: USDA alignment audit recorded that as the one confirmed GAP in Baseline B.
+#:
+#: ⛔ Operator-set, never derived. It is tempting to infer "100 percent organic" for raw
+#: single-ingredient produce, and it is usually right — but the label category is the
+#: operation's own labeling decision and a wrong inference in a certifier packet is a
+#: fabricated claim. Same rule the PUR export follows: parse what the operator wrote.
+#:
+#: Blank means NOT DOCUMENTED, deliberately — following `SalesRecord.clean_transport_method`,
+#: because a defaulted value would read as an affirmative answer in evidence derivation.
+ORGANIC_LABEL_CATEGORY_CHOICES = [
+    ("100_percent_organic", "100 percent organic"),
+    ("organic", "Organic"),
+    ("made_with_organic", "Made with organic (specified ingredients or food group(s))"),
+]
+
 # Branded QR code configuration
 TRAZO_GREEN = (46, 125, 50)
 TRAZO_LEAF_LOGO = os.path.join(settings.BASE_DIR, "static", "img", "trazo-leaf.png")
+
+
+def compute_retention_until(finish_date):
+    """The § 205.103(b)(4) retention floor: five CALENDAR years past the finish date.
+
+    Was `finish + timedelta(days=5 * 365)` = 1825 days, which is 1-2 days short of five
+    calendar years because the window always contains at least one leap day. Measured on
+    live data 2026-08-10: a production finishing 2026-08-08 was stamped 2031-08-07. The
+    regulation says "not less than 5 years", and the deletion guard on this model enforces
+    the stored date literally, so an off-by-one here is an off-by-one in the wrong direction.
+
+    A module-level function rather than inline in `finalize()` so the arithmetic can be
+    tested without building and finalizing a production — the first version of the test
+    re-implemented this logic instead, which meant it passed against the broken code too.
+    """
+    if hasattr(finish_date, "date"):
+        finish_date = finish_date.date()
+    try:
+        return finish_date.replace(year=finish_date.year + 5)
+    except ValueError:
+        # 29 February has no counterpart five years later. Round FORWARD to 1 March:
+        # a day extra satisfies "not less than", where 28 February would be a day short.
+        return finish_date.replace(year=finish_date.year + 5, month=3, day=1)
 
 
 class History(models.Model):
@@ -283,6 +336,16 @@ class History(models.Model):
         default=False,
         help_text="Whether organic status is identified on sales documents (SOE requirement)",
     )
+    organic_label_category = models.CharField(
+        max_length=24,
+        choices=ORGANIC_LABEL_CATEGORY_CHOICES,
+        blank=True,
+        default="",
+        help_text=(
+            "Which § 205.301 labeling category this product is sold under. "
+            "Legacy single-sale path; SalesRecord carries the same field per sale."
+        ),
+    )
     transport_method = models.CharField(
         max_length=100,
         blank=True,
@@ -316,7 +379,7 @@ class History(models.Model):
         help_text="Scanned clean-transport affidavit for the off-farm transfer",
     )
 
-    # NOP Compliance: Record Retention (7 CFR 205.103(b)(3))
+    # NOP Compliance: Record Retention (7 CFR 205.103(b)(4))
     # Auto-set to finish_date + 5 years. Prevents deletion within retention period.
     retention_until = models.DateField(
         blank=True,
@@ -333,7 +396,7 @@ class History(models.Model):
 
             raise ValidationError(
                 f"Cannot delete: NOP requires record retention until {self.retention_until}. "
-                f"Records must be maintained for 5 years per 7 CFR 205.103(b)(3)."
+                f"Records must be maintained for 5 years per 7 CFR 205.103(b)(4)."
             )
         super().delete(*args, **kwargs)
 
@@ -729,7 +792,15 @@ class History(models.Model):
             finish_date = timezone.make_aware(finish_date)
 
         self.finish_date = finish_date
-        self.description = history_data.get("observation", "")
+        # Finalization NOTES are aliased onto `description`, which is the season header the
+        # farmer typed on the Start Production form and which ships on the consumer QR payload
+        # (PublicHistorySerializer). This used to assign unconditionally, so a blank
+        # Observations box — the field is OPTIONAL and the form never pre-loads the existing
+        # text — overwrote the description with "" on EVERY finish. Only write what the
+        # operator actually wrote; silence is not an instruction to erase.
+        observation = str(history_data.get("observation") or "").strip()
+        if observation:
+            self.description = observation
         self.published = True
         self.production_amount = history_data["production_amount"]
         self.lot_id = history_data["lot_id"]
@@ -739,14 +810,8 @@ class History(models.Model):
         self.quality_grade = history_data.get("quality_grade")
         self.harvest_method = history_data.get("harvest_method")
 
-        # NOP 7 CFR 205.103(b)(3): 5-year record retention
-        from datetime import timedelta
-
         if self.finish_date:
-            finish_dt = self.finish_date
-            if hasattr(finish_dt, "date"):
-                finish_dt = finish_dt.date()
-            self.retention_until = finish_dt + timedelta(days=5 * 365)
+            self.retention_until = compute_retention_until(self.finish_date)
 
         self.save()
 
@@ -1205,6 +1270,38 @@ class ChemicalEvent(CommonEvent):
     target_pest_disease = models.CharField(
         max_length=200, blank=True, null=True, help_text="What problem this application addresses for transparency"
     )
+    # USDA's Input Material Application Record has a "Purpose / Reason for Use" column, and its
+    # footnote 5 states the reason it matters: "Some materials, for example, are allowed for pest
+    # management but not as a soil amendment." § 205.601 lists synthetics BY USE, so the same
+    # substance can be allowed for one purpose and prohibited for another — which makes purpose
+    # part of the allowability record, not a nicety.
+    #
+    # `target_pest_disease` already covers the pest-targeting subtypes (PE/FU/HE) and
+    # `record_completeness` requires it there. FERTILIZER had no purpose field at all: the event
+    # `type` says "a fertilizer went on" and nothing says why, so a micronutrient applied to
+    # correct a documented deficiency — the § 205.601(j)(1) condition — was indistinguishable
+    # from routine feeding.
+    APPLICATION_PURPOSE_CHOICES = [
+        ("soil_fertility", "Soil fertility / crop nutrition"),
+        ("micronutrient_deficiency", "Correcting a documented micronutrient deficiency"),
+        ("soil_amendment", "Soil amendment / organic matter"),
+        ("ph_adjustment", "pH adjustment"),
+        ("pest_management", "Pest management"),
+        ("disease_management", "Disease management"),
+        ("weed_management", "Weed management"),
+        ("plant_growth", "Plant growth regulation"),
+        ("other", "Other (describe in notes)"),
+    ]
+    application_purpose = models.CharField(
+        max_length=32,
+        choices=APPLICATION_PURPOSE_CHOICES,
+        blank=True,
+        null=True,
+        help_text=(
+            "Why this input was applied (USDA Input Material Application Record, "
+            "'Purpose / Reason for Use'). Allowability under § 205.601 can depend on the use."
+        ),
+    )
 
     # Sprint 3 Epic 3.2: Consumer Trust Fields
     # Sprint 6 Fix: Expanded choices to match frontend organic certification options
@@ -1222,6 +1319,28 @@ class ChemicalEvent(CommonEvent):
         blank=True,
         null=True,
         help_text="Buffer zone maintained near water sources or sensitive habitats (meters)",
+    )
+
+    # WS-4 (2026-08) — § 205.103(b)(2): records must be auditable, which for an application
+    # means identifying WHERE it went.
+    #
+    # Corrected 2026-08-15: this cited (b)(1), which reads "Be adapted to the particular
+    # business that the certified operation is conducting" and says nothing about location.
+    # The location expectation is (b)(2) audit sufficiency plus USDA's Input Material
+    # Application Record, whose column 2 is "Location and Crop".
+    # Whole planting vs part; the detail names the part (rows/blocks/area).
+    applied_scope = models.CharField(
+        max_length=10,
+        choices=APPLIED_SCOPE,
+        blank=True,
+        null=True,
+        help_text="Whether this application covered the entire planting or part of it",
+    )
+    applied_scope_detail = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="Which rows/blocks/area were treated, when applied_scope is 'part'",
     )
 
     # EPA Worker Protection Standard (WPS) Compliance Fields - 40 CFR 170.309
@@ -1520,7 +1639,25 @@ class ChemicalEvent(CommonEvent):
             and self.phosphorus_percentage is not None
             and self.potassium_percentage is not None
         ):
-            total_npk = self.nitrogen_percentage + self.phosphorus_percentage + self.potassium_percentage
+            # These are DecimalFields, so a value loaded from the database is a Decimal —
+            # but a value assigned in Python (a float off deserialised JSON, a template
+            # default, a management command) stays a float until it round-trips. Summing a
+            # mix raises `TypeError: unsupported operand type(s) for +: 'decimal.Decimal'
+            # and 'float'`, which is an unhandled 500 out of clean()/full_clean() rather
+            # than a validation error. Reproduced 2026-08-10 on a bare instance with N as
+            # Decimal and P as float — no database or fixture involved.
+            #
+            # Decimal(str(x)) rather than Decimal(x): the latter converts a float's binary
+            # representation exactly, so 10.5 would become 10.5000000000000017763568394...
+            # and leak into the error message the grower reads.
+            def _as_decimal(value):
+                return value if isinstance(value, decimal.Decimal) else decimal.Decimal(str(value))
+
+            total_npk = (
+                _as_decimal(self.nitrogen_percentage)
+                + _as_decimal(self.phosphorus_percentage)
+                + _as_decimal(self.potassium_percentage)
+            )
             if total_npk > 100:
                 errors["__all__"] = (
                     f"Total NPK percentages cannot exceed 100%. "
@@ -1689,6 +1826,32 @@ class ProductionEvent(CommonEvent):
         help_text="Organic seed search documentation per NOP 5029. "
         "Format: [{supplier_name, date_contacted, result, notes}]",
     )
+    # USDA's "Seed Records Part B" asks for the "Reason for Commercial Nonavailability: form,
+    # quality, quantity". Those three words are not a UI convention — they are the statutory
+    # test. § 205.2 defines "commercially available" as "the ability to obtain a production
+    # input in an appropriate FORM, QUALITY, or QUANTITY to fulfil an essential function",
+    # and § 205.204(a)(1) permits non-organic seed only when that test fails.
+    #
+    # `seed_search_attempts` records WHO was contacted and WHEN, with the outcome as free text
+    # ("Available — certified organic Hass rootstock in stock"). Free text cannot be reviewed
+    # against a three-part statutory test, so the ground for the exemption was unstructured.
+    SEED_NONAVAILABILITY_REASON_CHOICES = [
+        ("none_offered", "Not offered organically by any supplier contacted"),
+        ("form", "Form — not available in the required form (§ 205.2)"),
+        ("quality", "Quality — available stock did not meet quality requirements (§ 205.2)"),
+        ("quantity", "Quantity — insufficient quantity available (§ 205.2)"),
+        ("other", "Other (explain in the search notes)"),
+    ]
+    seed_nonavailability_reason = models.CharField(
+        max_length=16,
+        choices=SEED_NONAVAILABILITY_REASON_CHOICES,
+        blank=True,
+        null=True,
+        help_text=(
+            "Statutory ground for using non-organic seed (§ 205.204(a)(1); the form/quality/"
+            "quantity test is § 205.2's definition of commercially available)."
+        ),
+    )
     # NOP Compliance: Seed Traceability (7 CFR 205.204 / NOP 5029)
     # Planting subtype (type="PL") only. Mirrors ChemicalEvent.supplier_name pattern (migration 0146).
     seed_supplier_name = models.CharField(
@@ -1730,6 +1893,136 @@ class ProductionEvent(CommonEvent):
         null=True,
         help_text="Seed coatings, inoculants, or pelleting materials applied (NOP 7 CFR 205.204(a)(2))",
     )
+    # USDA's "Seed Records Part C: Documentation of Allowability of Seed Treatments, Coatings,
+    # or Inoculants" pairs every named treatment with a "Documentation of Allowed Status"
+    # column. Trazo named the treatment and stopped there — the same "named but unjustified"
+    # shape as the 2026-08-09 OMRI leak, where an input was labelled OMRI Listed with no
+    # catalog row behind it.
+    #
+    # § 205.204(a)(2) permits untreated non-organic seed only when an equivalent organic
+    # variety is not commercially available, and any treatment applied must itself be an
+    # allowed substance (§ 205.601). "Neem oil coating" alone does not say which of those is
+    # true, so the record cannot be reviewed.
+    SEED_TREATMENT_BASIS_CHOICES = [
+        ("untreated", "Untreated — no coating, inoculant or pelleting applied"),
+        ("omri_listed", "OMRI-listed product (catalog entry on file)"),
+        ("national_list", "Allowed under National List § 205.601"),
+        ("certifier_approved", "Reviewed and approved by the certifying agent"),
+        ("organic_seed", "Certified organic seed — treatment allowed for organic production"),
+        ("not_documented", "Not documented yet"),
+    ]
+    seed_treatment_allowed_basis = models.CharField(
+        max_length=24,
+        choices=SEED_TREATMENT_BASIS_CHOICES,
+        blank=True,
+        null=True,
+        help_text=(
+            "Why this seed treatment is permitted (USDA Seed Records Part C, 'Documentation of "
+            "Allowed Status'). A named treatment with no basis is unreviewable under "
+            "§ 205.204(a)(2)."
+        ),
+    )
+    # ---- Harvest lot identity (HA) — added 2026-08-15 -------------------------------
+    #
+    # 🔴 The § 205.103(b)(2) join key, and the largest gap the 2026-08-15 audit found.
+    #
+    # `lot_id` lives on History — the PRODUCTION header — and `SalesRecord` points at the
+    # same header. So for a multi-pick operation, n harvest passes collapsed into one lot and
+    # one sales pool, and the operation could not say which pick went to which buyer. For the
+    # ICP — California wholesale avocado and citrus, picked over weeks — that is the normal
+    # case, not an edge case.
+    #
+    # USDA's Guide is explicit: growers "with multiple fields of the same crop will need to
+    # assign lot numbers to the crops harvested from different fields", and a lot links
+    # "products to the fields of origin and the year or date". Both halves — field AND date —
+    # are properties of the harvest pass, not of the season.
+    #
+    # Deliberately a free CharField, not a generated key: growers arrive with a lot scheme
+    # their buyers already use, and overwriting it would break the trace it exists to support.
+    # `suggest_harvest_lot_code()` offers one when the field is empty; it never overwrites.
+    harvest_lot_code = models.CharField(
+        max_length=60,
+        blank=True,
+        null=True,
+        help_text=(
+            "Lot identifier for THIS harvest pass (7 CFR 205.103(b)(2)). Links the pick to its "
+            "block and date, and is what a sales record references. Leave blank to accept the "
+            "suggested code."
+        ),
+    )
+
+    # ---- Perennial planting stock (PL/TR) — added 2026-08-15 ------------------------
+    #
+    # 🔴 These three had NO home. `rootstock` in particular was written by three seeders and
+    # sat on the consumer extra_data allow-list, so shoppers could be shown a rootstock the
+    # grower had no field to enter — and the certifier packet carried a written disclosure
+    # that "Trazo does not yet structure rootstock records in this export".
+    #
+    # For the ICP — California wholesale avocado, citrus and nut orchards — rootstock IS the
+    # identity of a planting. "40 Hass on Duke 7" is the sentence a grower says out loud, and
+    # the variety half of it was the only half that had a column. It also carries real
+    # § 205.204 weight: rootstock is planting stock, so its organic status and, for perennials,
+    # the (a)(4) twelve-month rule attach to it rather than to the scion variety.
+    rootstock = models.CharField(
+        max_length=120,
+        blank=True,
+        null=True,
+        help_text=(
+            "Rootstock the scion was grafted onto (e.g. 'Duke 7', 'Dusa clonal'). Planting "
+            "stock under 7 CFR 205.2; its organic status is what § 205.204 tests."
+        ),
+    )
+    plants_established = models.PositiveIntegerField(
+        blank=True,
+        null=True,
+        help_text=(
+            "How many trees/plants went in. On a perennial replant this is the number a "
+            "certifier reconciles against the nursery invoice — area alone does not say it."
+        ),
+    )
+    plant_spacing = models.CharField(
+        max_length=60,
+        blank=True,
+        null=True,
+        help_text=(
+            "Spacing or density as the grower records it (e.g. '27 ft x 22 ft', "
+            "'73 trees/ac'). Free text on purpose: COG Pro's export carries both forms in two "
+            "separate columns and growers use whichever their block plan uses."
+        ),
+    )
+
+    # ---- § 205.105(e) excluded methods + § 205.204(a)(4) — added 2026-08-15 ------------
+    #
+    # Both were named as gaps by the Planting teardown and neither had a column anywhere.
+    #
+    # `seed_non_gmo_status` is the third leg of USDA Form 11's allowed-status triple. The
+    # other two legs (on an allowed list / no prohibited treatment) are answered by
+    # `seed_certification_status` and `seed_treatment_allowed_basis`; excluded methods had
+    # no field, so the packet asserted an organic planting while saying nothing about the
+    # one § 205.105 prohibition that is unconditional.
+    seed_non_gmo_status = models.CharField(
+        max_length=32,
+        choices=SEED_NON_GMO_STATUS,
+        blank=True,
+        null=True,
+        help_text=(
+            "How the exclusion of GMO/excluded methods was established for this planting "
+            "stock (7 CFR 205.105(e)). Blank means the question was not answered — which is "
+            "NOT the same as 'not verified'."
+        ),
+    )
+    stock_organic_management_start = models.DateField(
+        blank=True,
+        null=True,
+        help_text=(
+            "Date this planting stock came under continuous organic management. 7 CFR "
+            "205.204(a)(4): PERENNIAL planting stock must be under organic management for at "
+            "least ONE YEAR before the crop it produces may be sold as organic. Without this "
+            "date the packet cannot show the year has elapsed — the grower's own nursery "
+            "invoice date is the usual answer."
+        ),
+    )
+
     # Updated 2025-12-06: Aligned with transparency-first frontend choices
     water_source = models.CharField(
         max_length=50,
@@ -1822,6 +2115,34 @@ class ProductionEvent(CommonEvent):
         null=True,
         help_text="Storage temperature in °F (quality control + FSMA 204 KDE)",
     )
+
+    # 2026-08 QO-parity — custom-harvest arrangements (§ 205.103(b)): ties the
+    # harvest record to the harvest contract when an uncertified custom
+    # harvester runs the pass (G6.1 module collects the standing arrangement;
+    # this field ties the individual harvest event to it).
+    harvest_contract_number = models.CharField(
+        max_length=80,
+        blank=True,
+        null=True,
+        help_text="Custom-harvest contract or work-order reference for this pass",
+    )
+    # 2026-08 QO-parity — whole-vs-part parcel coverage on harvest (HA) and
+    # planting (PL/TR), mirroring ChemicalEvent.applied_scope
+    # (§ 205.103(b)(2) audit sufficiency: records must identify WHERE the activity happened.
+    # NOT (b)(1), which is "adapted to the particular business". Corrected 2026-08-15.)
+    applied_scope = models.CharField(
+        max_length=10,
+        choices=APPLIED_SCOPE,
+        blank=True,
+        null=True,
+        help_text="Whether this activity covered the entire parcel/planting or part of it",
+    )
+    applied_scope_detail = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="Which rows/blocks/area, when applied_scope is 'part'",
+    )
     grain_moisture = models.DecimalField(
         max_digits=5,
         decimal_places=2,
@@ -1841,6 +2162,74 @@ class ProductionEvent(CommonEvent):
         help_text="Dry matter % at harvest — avocado/nut maturity (CA Hass legal min ~20.8%)",
     )
 
+    # WS-4 (2026-08) — harvest-record completeness for the HA subtype.
+    # § 205.103(b)(2): records must track product from production to sale AND be accurate.
+    amount_determination = models.CharField(
+        max_length=20,
+        choices=AMOUNT_DETERMINATION,
+        blank=True,
+        null=True,
+        help_text="How the harvest quantity was determined — estimated or scale-verified (weigh ticket)",
+    )
+    harvest_date_end = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Last day of a multi-day harvest window (event date is the first day)",
+    )
+    harvest_destination = models.CharField(
+        max_length=20,
+        choices=HARVEST_DESTINATION,
+        blank=True,
+        null=True,
+        help_text="First hop of the harvested lot — storage, direct sale, feed, or other",
+    )
+    # § 205.202(c): buffer-row crop may never be sold or represented as organic.
+    # NULL means the question was not answered, NOT that no buffer exists.
+    buffer_disposition = models.CharField(
+        max_length=30,
+        choices=BUFFER_DISPOSITION,
+        blank=True,
+        null=True,
+        help_text="Disposition of crop from buffer rows for this harvest (7 CFR 205.202(c))",
+    )
+    #: Dispositions that put the buffer crop into commerce. USDA's Buffer Crop Disposition
+    #: Record warns that these are the ones needing formal proof: "Commercial quantities of
+    #: crops require more formal documentation (delivery tags and nonorganic sales records) to
+    #: show that the buffer crop has not been represented as organic." A crop disked under or
+    #: left in the field cannot be mis-sold, so demanding paperwork there would be Trazo
+    #: inventing a requirement.
+    BUFFER_DISPOSITIONS_ENTERING_COMMERCE = frozenset(
+        {"sold_conventional", "fed_nonorganic_livestock", "given_away", "harvested_conventional"}
+    )
+    buffer_disposition_quantity = models.CharField(
+        max_length=60,
+        blank=True,
+        null=True,
+        help_text=(
+            "How much buffer crop was removed, in the grower's own units — USDA's form gives "
+            '"1 4x4 bin" as its example. Free text on purpose: buffer quantities are not '
+            "mass-balanced anywhere, and a forced unit would invite a fabricated conversion."
+        ),
+    )
+    buffer_disposition_evidence = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text=(
+            "Documentation type and location proving the buffer crop was not represented as "
+            'organic — USDA\'s "Documentation (type and location)" column, e.g. "Delivery tag '
+            "and sales record, Apple Bob's, buffer-crop folder\" (7 CFR 205.202(c))."
+        ),
+    )
+
+    def buffer_disposition_entered_commerce(self):
+        """True when this harvest's buffer disposition put the crop into someone else's hands.
+
+        The § 205.202(c) proof obligation attaches here and nowhere else — which is why the
+        packet asks for evidence on these dispositions and stays silent on the rest.
+        """
+        return (self.buffer_disposition or "") in self.BUFFER_DISPOSITIONS_ENTERING_COMMERCE
+
     # Item #13: Pump depth and electricity source for irrigation (IR) events.
     # These fields enable accurate energy calculation per USDA NRCS pump curve methodology.
     pump_depth_ft = models.DecimalField(
@@ -1858,7 +2247,16 @@ class ProductionEvent(CommonEvent):
         help_text="Electricity source for pump — affects CO2 emission factor",
     )
 
-    # NOP Compliance: Irrigation/Well Water Test (7 CFR 205.272 / 205.671)
+    # Irrigation/well water test — NOT a 7 CFR Part 205 requirement.
+    #
+    # 🔴 Corrected 2026-08-15. This block was headed "NOP Compliance" and cited § 205.272
+    # (handler commingling) and § 205.671 (exclusion from sale on residue exceedance).
+    # Neither requires a producer water test: § 205.670(b)-(c) puts residue testing on the
+    # CERTIFYING AGENT, at the agent's own expense, and USDA's Guide for Organic Crop
+    # Producers says plainly that "the USDA organic regulations have very little to say
+    # about irrigation and irrigation water quality." Microbial ag-water testing is FDA
+    # FSMA Produce Safety Rule (21 CFR 112), and some certifiers ask for it contractually.
+    # The certifier packet already states this correctly; these comments did not.
     # For the Irrigation (IR) subtype. CCOF requires an annual water-source analysis
     # demonstrating no prohibited substances / contamination. Mirrors the SoilManagementEvent
     # ST test_results pattern. Audit-only; never surfaced to consumers.
@@ -1894,6 +2292,14 @@ class ProductionEvent(CommonEvent):
         blank=True,
         null=True,
         help_text="Cleaning method used (pressure wash, manual scrub, steam, etc.)",
+    )
+    # 2026-08 QO-parity — WHAT was cleaned (§ 205.272(a) commingling prevention).
+    cleaning_asset_class = models.CharField(
+        max_length=20,
+        choices=CLEANING_ASSET_CLASS,
+        blank=True,
+        null=True,
+        help_text="Asset class this cleanout covers (equipment, bins, storage, transport)",
     )
     cleaning_materials_used = models.CharField(
         max_length=200,
@@ -2009,6 +2415,108 @@ class ProductionEvent(CommonEvent):
         ),
     )
 
+    def suggest_harvest_lot_code(self):
+        """A lot code for this harvest pass, in USDA's own shape: crop + place + date.
+
+        The Guide's worked examples are `OC0603` (Organic Corn, bin 06, 2003) and `B041433`
+        (Broccoli, field 04, Julian day 143, 2003) — both encode WHAT, WHERE and WHEN. This
+        produces a readable equivalent, e.g. `HAS-BLOCK2-20260410`, because a code a grower
+        cannot read is a code they will not use on a bin tag.
+
+        Returns None when the inputs for a meaningful code are missing — a lot code built from
+        nothing but a date would collide across blocks, which is the failure it exists to stop.
+
+        Two rules learned from running this over the existing records:
+
+        * Every token is stripped to alphanumerics, not just the block. A product named "QA "
+          produced the lot code `QA -BLOCKCEA-20251011` — a space inside an identifier that
+          gets typed onto a bin tag, read back off it, and matched against a sales record.
+        * Same crop + same block + same DAY is a real pattern (a morning pick and an afternoon
+          pick), and it was minting one code for both. A lot code that is not unique identifies
+          nothing, so a second pass on the same day gets a -2 suffix, a third -3, ordered by
+          creation so an existing pass never has its code change under it.
+        """
+        if self.type != "HA" or not self.date:
+            return None
+
+        def _token(value, length):
+            return "".join(ch for ch in (value or "") if ch.isalnum())[:length].upper()
+
+        crop = ""
+        history = getattr(self, "history", None)
+        if history is not None:
+            product = getattr(history, "product", None)
+            crop = _token(getattr(product, "name", ""), 3)
+        what = crop or _token(self.variety, 3)
+        where = _token(self.block_id, 8)
+        when = self.date.strftime("%Y%m%d")
+
+        if not what and not where:
+            return None
+        base = "-".join(part for part in (what, where, when) if part)
+
+        # Ordinal within the day/block, so a same-day second pick is distinguishable.
+        # Needs a saved row on both sides: an unsaved event cannot be ordered against its
+        # siblings, and `history` without a pk cannot be used as a filter value at all.
+        # (`exclude(pk=None)` is not a no-op — it becomes `pk IS NULL` and silently drops
+        # every row, which would make the first pick of a day look like the second.)
+        if history is None or not getattr(history, "pk", None) or not getattr(self, "pk", None):
+            return base
+        try:
+            earlier = (
+                type(self)
+                .objects.filter(
+                    history=history,
+                    type="HA",
+                    date__date=self.date.date(),
+                    block_id=self.block_id,
+                    id__lt=self.pk,
+                )
+                .count()
+            )
+        except Exception:
+            return base
+        return base if earlier == 0 else f"{base}-{earlier + 1}"
+
+    def save(self, *args, **kwargs):
+        """Assign a harvest lot code when the operator did not supply one.
+
+        Done here rather than in the serializer because a lot code that only exists when the
+        record arrived through the web form is not a traceability scheme — the same production
+        also gets harvest passes from templates, the API and the COG Pro import, and a pick
+        with no lot is exactly the row an inspector cannot follow to a sales record
+        (7 CFR 205.103(b)(2)).
+
+        Runs AFTER the insert on create: the same-day ordinal needs this row's own id to know
+        how many picks preceded it, so the code is written back in a second, narrow UPDATE.
+        Never overwrites a value already present — an operator's own scheme wins.
+        """
+        super().save(*args, **kwargs)
+
+        if self.type != "HA" or self.harvest_lot_code:
+            return
+
+        # Django's signature is save(force_insert, force_update, using, update_fields), and
+        # every one of those is legal POSITIONALLY. Reading only `kwargs` meant a caller
+        # writing `obj.save(False, False, None, ["description"])` looked like a full save, so
+        # the lot code got written on top of someone else's narrow update — the exact
+        # widening this guard exists to prevent. Resolve from args first, then kwargs.
+        using = args[2] if len(args) > 2 else kwargs.get("using")
+        update_fields = args[3] if len(args) > 3 else kwargs.get("update_fields")
+
+        # An explicit update_fields that does not mention the code means the caller is
+        # touching something else; assigning here would widen their write unexpectedly.
+        if update_fields is not None and "harvest_lot_code" not in update_fields:
+            return
+
+        suggested = self.suggest_harvest_lot_code()
+        if not suggested:
+            return
+        self.harvest_lot_code = suggested
+        # `using` is carried through so the write-back lands on the same connection as the
+        # insert it belongs to, rather than silently defaulting.
+        super().save(update_fields=["harvest_lot_code"], using=using)
+
     def clean(self):
         """Model-level validation for production event values and business logic"""
         errors = {}
@@ -2030,6 +2538,10 @@ class ProductionEvent(CommonEvent):
         # Validate equipment_hours - cannot be negative
         if self.equipment_hours is not None and self.equipment_hours < 0:
             errors["equipment_hours"] = "Equipment hours cannot be negative"
+
+        # WS-4: multi-day harvest window — end date cannot precede the start (event date)
+        if self.harvest_date_end and self.date and self.harvest_date_end < self.date.date():
+            errors["harvest_date_end"] = "Harvest end date cannot be before the harvest start date"
 
         # §E-5 — the cleaning link must be capable of being evidence.
         # A cleaning performed AFTER the organic pass does not protect that pass (§ 205.272), and
@@ -2074,18 +2586,28 @@ class ProductionEvent(CommonEvent):
                 f"Transportation distance ({self.transportation_distance} {self.transportation_unit}) is very long. Consider local processing to reduce carbon footprint."
             )
 
-        # NOP 5029 / 7 CFR 205.204(a)(1): Non-organic seed requires documented commercial
-        # availability search of at least 3 suppliers. Applies to planting events only.
-        if self.type == "PL" and self.seed_certification_status in (
-            "non_organic_untreated",
-            "non_organic_treated",
-        ):
+        # 7 CFR 205.204(a)(1): non-organic seed or planting stock is permitted only when an
+        # equivalent organic variety is not commercially available, so the record must show
+        # the ground for that determination. Zero documented suppliers means no ground at all.
+        #
+        # ⚠️ Not "at least 3". § 205.204 sets no count; three is a certifier expectation from
+        # USDA's optional Guide for Organic Crop Producers. Kept in step with the serializer
+        # (which is what the API actually runs — DRF never calls clean()) so the two cannot
+        # drift apart again. TR is included: transplanting non-organic nursery stock carries
+        # the same obligation and, on a perennial orchard, is the more common record.
+        if self.type in SEED_SOURCED_SUBTYPES and self.seed_certification_status in NON_ORGANIC_SEED_STATUSES:
             attempts = self.seed_search_attempts or []
-            if len(attempts) < 3:
+            documented = [
+                a
+                for a in attempts
+                if isinstance(a, dict) and str(a.get("supplier_name") or a.get("supplier") or "").strip()
+            ]
+            if not documented:
                 errors["seed_search_attempts"] = (
-                    "NOP 5029 (7 CFR 205.204(a)(1)) requires documentation of at least 3 "
-                    "supplier searches when using non-organic seed or planting stock. "
-                    f"Current search attempts: {len(attempts)}. Add more suppliers to seed_search_attempts."
+                    "Non-organic seed or planting stock may only be used when an equivalent "
+                    "organic variety is not commercially available (7 CFR 205.204(a)(1)). "
+                    "Record at least one supplier contacted in seed_search_attempts; "
+                    "certifiers typically look for three."
                 )
 
         # NOP 7 CFR 205.203(c)(1): Raw manure harvest interval. Blocks harvest entries
@@ -2205,7 +2727,14 @@ class GeneralEvent(CommonEvent):
         blank=True, null=True, help_text="Number of people involved in the activity"
     )
 
-    # NOP Compliance: Contamination Incident Reporting (7 CFR 205.201(b))
+    # Contamination incident reporting — § 205.400(f)(1) + § 205.272.
+    #
+    # 🔴 Corrected 2026-08-15. This cited § 205.201(b), which is the clause permitting a
+    # producer to SUBSTITUTE another government programme's plan for the OSP — nothing to do
+    # with contamination. The notification duty is § 205.400(f)(1) ("immediately notify the
+    # certifying agent concerning any... application, including drift, of a prohibited
+    # substance"); the prevention standard is § 205.272. The certifier packet already uses
+    # both correctly; the model and the registry never followed.
     CONTAMINATION_SOURCE_CHOICES = [
         ("spray_drift", "Spray Drift from Adjacent Land"),
         ("equipment", "Equipment Contamination"),
@@ -2216,7 +2745,7 @@ class GeneralEvent(CommonEvent):
     ]
     is_contamination_incident = models.BooleanField(
         default=False,
-        help_text="Whether this event documents a contamination incident (7 CFR 205.201(b))",
+        help_text="Whether this event documents a contamination incident (7 CFR 205.400(f)(1) / § 205.272)",
     )
     contamination_source = models.CharField(
         max_length=30,
@@ -2255,11 +2784,47 @@ class GeneralEvent(CommonEvent):
     extra_data = models.JSONField(blank=True, null=True)
 
 
+# Bot probability at or above which a scan is not counted as a person.
+#
+# Was written inline at two different values — 0.3 in `company/views.py`, 0.5 in
+# `analytics_service.py` — so the same farm's scan total depended on which screen asked.
+# 0.5 is the value the create path already uses to gate scan notifications and the one the
+# analytics service applies in five places; it is also the more forgiving of the two, so
+# unifying on it never silently drops borderline-human traffic from a farmer's own numbers.
+COUNTED_SCAN_BOT_SCORE_MAX = 0.5
+
+
+class HistoryScanQuerySet(models.QuerySet):
+    """Queryset for HistoryScan, carrying the ONE definition of a countable scan."""
+
+    def counted(self):
+        """
+        Scans that count as a visit — the single source of truth for every scan TOTAL.
+
+        Excludes:
+          - duplicates: another scan of the same production within
+            `DeduplicationService.DEFAULT_TIMEFRAME_MINUTES` from the same session
+            fingerprint (a reload or a re-scan, not a second person);
+          - likely bots: `bot_score >= COUNTED_SCAN_BOT_SCORE_MAX`.
+
+        Both fields are non-null with DB defaults (`is_duplicate=False`, `bot_score=0.0`), so
+        this filter never silently drops rows written by a path that does not set them —
+        `public_history` sets neither, and its scans still count.
+
+        Use this for every count, chart, quota and stat. Do NOT use it for the machinery that
+        has to see raw rows: deduplication lookups, GDPR retention cleanup, bot-detection
+        pattern analysis.
+        """
+        return self.filter(is_duplicate=False, bot_score__lt=COUNTED_SCAN_BOT_SCORE_MAX)
+
+
 class HistoryScan(models.Model):
     """
     Enhanced QR scan tracking with 2025 privacy, performance & security standards
     Supports dual functionality: page view analytics + consumer feedback collection
     """
+
+    objects = HistoryScanQuerySet.as_manager()
 
     # EXISTING CORE FIELDS
     history = models.ForeignKey(
@@ -2950,6 +3515,26 @@ class SoilManagementEvent(CommonEvent):
             "the NOP 5021 monitoring log. One reading per line."
         ),
     )
+    # USDA's Compost Production Record heads every sheet with the batch identity and how the
+    # temperature was taken. Without them a § 205.203(c)(2) log is unattributable: an inspector
+    # holding two piles and one temperature series cannot tell which pile it describes, and a
+    # reading with no stated depth or instrument cannot be reproduced.
+    compost_unit_id = models.CharField(
+        max_length=60,
+        blank=True,
+        null=True,
+        help_text="Compost pile, windrow or unit ID this batch's readings belong to (NOP 5021).",
+    )
+    compost_temp_reading_method = models.CharField(
+        max_length=160,
+        blank=True,
+        null=True,
+        help_text=(
+            "Where and how the temperature was taken — e.g. 'probe at 36 in depth, mid-windrow'. "
+            "USDA's form asks for the location AND method because a surface reading and a core "
+            "reading on the same pile disagree."
+        ),
+    )
 
     # NOP Compliance: Raw Manure Harvest Interval (7 CFR 205.203(c)(1))
     # (c)(1) governs raw animal manure pre-harvest intervals; composted materials
@@ -2973,6 +3558,15 @@ class SoilManagementEvent(CommonEvent):
         blank=True,
         null=True,
         help_text="Date raw manure was applied (used to calculate earliest safe harvest date)",
+    )
+    manure_harvest_date_planned = models.DateField(
+        blank=True,
+        null=True,
+        help_text=(
+            "Harvest date the grower planned when the manure went on. USDA's crop "
+            "documentation form records estimated AND actual harvest dates side by side; the "
+            "actual date is the harvest event itself, so this is the estimate."
+        ),
     )
 
     # NOP 5006 — Processed Animal Manures in Organic Crop Production.
@@ -3016,6 +3610,105 @@ class SoilManagementEvent(CommonEvent):
             "documentation basis for the raw-interval exemption."
         ),
     )
+
+    # ------------------------------------------------------------------
+    # USDA Manure Application / Food Crop Harvest Interval Record (form #9)
+    # ------------------------------------------------------------------
+    # The published form carries two columns Trazo had no home for:
+    #
+    #   "How Applied / Incorporated"     e.g. "Manure spreader disk in"
+    #   "Manure Type, Form and Source"   e.g. "Chicken, dry, on farm"
+    #
+    # USDA writes the second as ONE free-text column, but it is plainly three facets, and
+    # storing three enums lets the packet reconstruct "Chicken, dry, on farm" while keeping
+    # the data queryable. Splitting is safe here in a way it was NOT for
+    # `buffer_disposition_quantity` (kept free text): a bin count has no closed vocabulary,
+    # whereas the animal, the form and on/off-farm all do.
+    #
+    # None of these are added to `record_completeness`. The forms are OPTIONAL under
+    # § 205.103 — an operation may keep records in any format — and no CFR paragraph
+    # enumerates these facets. Requiring them would be Trazo inventing a rule, the same
+    # call already made for #7 `application_purpose`.
+    MANURE_APPLICATION_METHOD_CHOICES = [
+        ("broadcast_incorporated", "Broadcast, incorporated (disked or tilled in)"),
+        ("broadcast_surface", "Broadcast, left on the surface"),
+        ("injected", "Injected below the surface"),
+        ("banded", "Banded or side-dressed"),
+        ("fertigation", "Applied through irrigation (fertigation)"),
+        ("top_dressed", "Top-dressed / mulched around plantings"),
+        ("other", "Other — described in the notes"),
+    ]
+    manure_application_method = models.CharField(
+        max_length=32,
+        choices=MANURE_APPLICATION_METHOD_CHOICES,
+        blank=True,
+        null=True,
+        help_text=(
+            "How the manure was applied and whether it was incorporated — USDA's "
+            '"How Applied / Incorporated" column (example: "Manure spreader disk in"). '
+            "Recorded because the form asks; it does NOT change the 90/120-day interval, "
+            "which turns on edible-portion soil contact under § 205.203(c)(1)(ii)-(iii)."
+        ),
+    )
+    MANURE_ANIMAL_SOURCE_CHOICES = [
+        ("poultry", "Poultry (chicken, turkey, duck)"),
+        ("cattle", "Cattle / dairy"),
+        ("horse", "Horse"),
+        ("sheep_goat", "Sheep or goat"),
+        ("swine", "Swine"),
+        ("rabbit", "Rabbit"),
+        ("mixed", "Mixed livestock"),
+        ("other", "Other — described in the notes"),
+    ]
+    manure_animal_source = models.CharField(
+        max_length=16,
+        choices=MANURE_ANIMAL_SOURCE_CHOICES,
+        blank=True,
+        null=True,
+        help_text='Animal the manure came from — the "Chicken" in USDA\'s "Chicken, dry, on farm".',
+    )
+    MANURE_FORM_CHOICES = [
+        ("dry", "Dry / solid"),
+        ("bedded_pack", "Bedded pack (manure with bedding)"),
+        ("slurry", "Slurry"),
+        ("liquid", "Liquid"),
+        ("pelletized", "Pelletized or granulated"),
+    ]
+    manure_form = models.CharField(
+        max_length=16,
+        choices=MANURE_FORM_CHOICES,
+        blank=True,
+        null=True,
+        help_text='Physical form as applied — the "dry" in USDA\'s "Chicken, dry, on farm".',
+    )
+    MANURE_ORIGIN_CHOICES = [
+        ("on_farm", "Produced on this operation"),
+        ("off_farm", "Brought in from off the farm"),
+    ]
+    manure_origin = models.CharField(
+        max_length=16,
+        choices=MANURE_ORIGIN_CHOICES,
+        blank=True,
+        null=True,
+        help_text=(
+            'Where the manure came from — the "on farm" in USDA\'s "Chicken, dry, on farm". '
+            "For off-farm manure the supplier goes in `amendment_manufacturer`; a second "
+            "supplier field would be a second writer of one fact."
+        ),
+    )
+
+    def manure_type_form_source_display(self):
+        """USDA's single "Manure Type, Form and Source" column, rebuilt from the three facets.
+
+        Returns "" when nothing is recorded — the caller decides whether an empty column is a
+        gap, because these facets are form parity, not a § 205.103 requirement.
+        """
+        parts = [
+            self.get_manure_animal_source_display() if self.manure_animal_source else "",
+            self.get_manure_form_display() if self.manure_form else "",
+            self.get_manure_origin_display() if self.manure_origin else "",
+        ]
+        return ", ".join(p for p in parts if p)
 
     # Sprint 5.1 — Drift detector (same contract as ChemicalEvent.drift_warning).
     # Populated when amendment_type does not resolve to an approved input on
@@ -3618,8 +4311,13 @@ class BusinessEvent(CommonEvent):
         if self.business_type == "certification" and not self.certification_type:
             errors["certification_type"] = "Certification type is required for certification events"
 
-        # Business logic: carbon_credits events should have carbon_credits_earned
-        if self.business_type == "carbon_credits" and not self.carbon_credits_earned:
+        # Business logic: carbon_credits events should have carbon_credits_earned.
+        # `is None`, not falsy: Decimal("0.00") is falsy, so `not value` cannot tell "the
+        # grower left this blank" from "the grower recorded zero". Those are different facts,
+        # and a recorded zero is data. Same conflation class as the 2026-07-31 consumer
+        # incident where Boolean("not_organic") read as True. The sibling check in
+        # UpdateBusinessEventSerializer was corrected with it.
+        if self.business_type == "carbon_credits" and self.carbon_credits_earned is None:
             errors["carbon_credits_earned"] = "Carbon credits amount is required for carbon credit transactions"
 
         if errors:
@@ -3693,13 +4391,169 @@ class SalesRecord(models.Model):
         on_delete=models.CASCADE,
         related_name="sales_records",
     )
+    #: WHICH harvest pass(es) this sale drew from — the other half of the § 205.103(b)(2)
+    #: trace, added 2026-08-15.
+    #:
+    #: The production FK above says which SEASON; on a multi-pick operation that is not enough
+    #: to answer "which pick went to this buyer", which is exactly the question a trace-back
+    #: exercise asks. Many-to-many rather than a FK because a real load routinely combines
+    #: several picks — a packer takes a truckload, not a pass.
+    #:
+    #: Optional on purpose. A grower who sells one lot per season should not be forced to
+    #: build a link that carries no information, and pre-existing records have none; the
+    #: packet degrades to the production-level trace and says so, rather than printing a gap.
+    harvest_events = models.ManyToManyField(
+        "history.ProductionEvent",
+        blank=True,
+        related_name="sales_records",
+        limit_choices_to={"type": "HA"},
+        help_text=(
+            "Harvest pass(es) this sale drew from. Links buyer → lot → harvest for the "
+            "7 CFR 205.103(b)(2) trace-back."
+        ),
+    )
     sale_date = models.DateField()
     buyer_name = models.CharField(max_length=160)
     quantity = models.DecimalField(max_digits=12, decimal_places=2)
-    quantity_unit = models.CharField(max_length=20, default="kg")
+    #: MUST share History.UNIT_CHOICES — the harvest amount and the sale quantity are the two
+    #: halves of the mass balance, and the audit export only prints the Balance line and the
+    #: "sold exceeds harvest" review flag when `harvest_unit == sold_unit` (see
+    #: audit_export_service._build_mass_balance_section). This field was the one unit column in
+    #: the schema with no `choices` — History.production_unit and History.quantity_sold_unit
+    #: both had them — so the frontend drifted to its own vocabulary and offered `tonnes` where
+    #: harvest offers `tons`. Same pounds, different string, and § 205.103(b)(2) reconciliation
+    #: silently disappeared from the packet with no warning printed.
+    #:
+    #: `default="kg"` is deliberately left alone rather than flipped to "lb": the model cannot
+    #: know the farm's country, and the US-first resolution belongs in the editor
+    #: (useDefaultUnits, which now seeds this field from the production's own harvest unit).
+    quantity_unit = models.CharField(max_length=20, choices=History.UNIT_CHOICES, default="kg")
     invoice_number = models.CharField(max_length=80, blank=True, default="")
     # § 205.307 — sales documents for organic product must identify it as organic.
     organic_on_invoice = models.BooleanField(default=False)
+    # § 205.103(b)(3) — records must identify the product by its § 205.301 labeling category,
+    # which the boolean above cannot express. Blank = not documented (see the note on
+    # `clean_transport_method` below for why this is not a defaulted value).
+    organic_label_category = models.CharField(
+        max_length=24,
+        choices=ORGANIC_LABEL_CATEGORY_CHOICES,
+        blank=True,
+        default="",
+    )
+
+    # --- Shipment / transport block (§ 205.272(a); § 205.103(b)(2)) ---
+    # One row is one sale AND its shipment: in wholesale practice each load is
+    # invoiced, so the BOL pairs 1:1 with the invoice. The per-production
+    # History.transport_* fields remain as the single-shipment legacy path.
+    CLEAN_TRANSPORT_CHOICES = [
+        ("affidavit", "Clean-transport affidavit on file"),
+        ("inspected", "Inspected clean before loading"),
+        ("dedicated_organic", "Dedicated organic vehicle"),
+    ]
+    bill_of_lading = models.CharField(max_length=80, blank=True, default="")
+    carrier_name = models.CharField(max_length=120, blank=True, default="")
+    vehicle_id = models.CharField(max_length=60, blank=True, default="")
+    destination = models.CharField(
+        max_length=160,
+        blank=True,
+        default="",
+        help_text="Ship-to location when different from the buyer (packer, drop yard, port).",
+    )
+    # A set method IS the documentation that transport integrity was addressed;
+    # blank means not documented. Deliberately no separate boolean — a
+    # default=False bool reads as an explicit "no" in evidence derivation
+    # (see certifications.services.common_osp_records._has_content).
+    clean_transport_method = models.CharField(max_length=20, choices=CLEAN_TRANSPORT_CHOICES, blank=True, default="")
+
+    # --- USDA Clean Transport Affidavit (form #22) content ---
+    # `clean_transport_method` above answers "how do you know the unit was clean" (affidavit /
+    # inspected / dedicated). USDA's affidavit asks what that affidavit SAYS, and until now
+    # Trazo stored only the fact that a document existed — a certifier reading the packet
+    # learned a file was attached, not what it attested to.
+    TRANSPORT_CLEANING_CHOICES = [
+        ("swept", "Swept"),
+        ("vacuum", "Vacuum"),
+        ("air_blown", "Air blown"),
+        ("washed", "Washed"),
+        ("other", "Other — described in the notes"),
+        ("not_required", "Not required — dedicated organic unit"),
+    ]
+    transport_cleaning_method = models.CharField(
+        max_length=20,
+        choices=TRANSPORT_CLEANING_CHOICES,
+        blank=True,
+        default="",
+        help_text=(
+            "How the transport unit was cleaned before loading (USDA's Swept / Vacuum / Air "
+            "blown / Washed checkboxes). Distinct from clean_transport_method, which records "
+            "how transport INTEGRITY was assured rather than how the unit was cleaned. Blank "
+            "means not documented, never 'no cleaning'."
+        ),
+    )
+    #: USDA: "Only used for organic products? ☐ yes ☐ no — if no, state products transported
+    #: prior to organic." This is the single most useful line on the form when the unit is not
+    #: dedicated: it is what lets an inspector judge the contamination risk (grain vs treated
+    #: seed vs conventional produce are not equivalent).
+    prior_products_transported = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        help_text=(
+            "What the transport unit carried immediately before this organic load, when it is "
+            "not a dedicated organic unit (7 CFR 205.272). Blank means not documented — it "
+            "does NOT mean the unit was dedicated; `clean_transport_method` records that."
+        ),
+    )
+    #: USDA: "Inspected and found free of ☐ foreign odors ☐ residues ☐ conventional products
+    #: ☐ other". Conjunctive and multi-valued, so a list rather than the single-choice enum
+    #: used for disjunctive questions like seed nonavailability.
+    #:
+    #: An EMPTY list means no inspection findings were recorded. It must never be rendered as
+    #: "inspected and found clean" — that is an attestation nobody made.
+    TRANSPORT_INSPECTION_CODES = {
+        "foreign_odors": "Free of foreign odors",
+        "residues": "Free of residues",
+        "conventional_products": "Free of conventional products",
+        "other": "Other findings — see notes",
+    }
+    transport_inspected_free_of = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "What the pre-loading inspection found the unit free of — list of codes from "
+            "TRANSPORT_INSPECTION_CODES. Empty means no inspection was recorded, NOT a clean "
+            "finding."
+        ),
+    )
+    #: The notes both "Other" options above promise. TRANSPORT_CLEANING_CHOICES renders "Other —
+    #: described in the notes" and TRANSPORT_INSPECTION_CODES renders "Other findings — see
+    #: notes", and the packet printed both strings verbatim while this model had no notes column
+    #: at all: a certifier read a pointer to a document that could not exist. Either the labels
+    #: stop promising a description or the description exists; a compliance record earns more
+    #: from the second. `clean()` refuses "other" without it, so the pointer is never dangling.
+    transport_notes = models.CharField(
+        max_length=300,
+        blank=True,
+        default="",
+        help_text=(
+            "What the 'Other' cleaning method or 'Other' inspection finding actually was. "
+            "Required whenever either is selected; blank otherwise means nothing to add."
+        ),
+    )
+
+    def transport_inspection_display(self):
+        """USDA's "Inspected and found free of" line, or "" when nothing was recorded.
+
+        Unknown codes are passed through rather than dropped: a value someone stored is
+        evidence of something, and silently discarding it would be the packet editing the
+        record. Returns "" for empty so the caller decides how absence reads.
+        """
+        codes = self.transport_inspected_free_of
+        if not isinstance(codes, list):
+            return ""
+        labels = [self.TRANSPORT_INSPECTION_CODES.get(c, str(c)) for c in codes if c]
+        return ", ".join(labels)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -3709,6 +4563,60 @@ class SalesRecord(models.Model):
         indexes = [
             models.Index(fields=["production", "-sale_date"], name="salesrecord_prod_date_idx"),
         ]
+
+    def clean(self):
+        """A labeling category on a sale whose invoice does not identify it as organic is a
+        contradictory record, and the packet would print both halves.
+
+        Refuse rather than reconcile: which half is true is the operation's call, not ours.
+        """
+        from django.core.exceptions import ValidationError
+
+        if self.organic_label_category and not self.organic_on_invoice:
+            raise ValidationError(
+                {
+                    "organic_label_category": (
+                        "This sale records a § 205.301 labeling category but is not marked as "
+                        "identifying the product as organic on the invoice. Set "
+                        "'organic on invoice', or clear the labeling category."
+                    )
+                }
+            )
+
+        # "Other" is the only answer on this form that carries no information by itself, and
+        # both labels tell the certifier a description follows. Refuse the pointer without the
+        # target rather than print "Other — described in the notes" over an empty column.
+        # "Not required — dedicated organic unit" is an answer ABOUT the unit being dedicated.
+        # Against an affidavit/inspected load it is self-contradictory, and the packet would
+        # print both halves as fact. Same treatment as the labeling-category contradiction
+        # above: refuse rather than reconcile — which half is true is the operation's call.
+        if self.transport_cleaning_method == "not_required" and self.clean_transport_method in (
+            "affidavit",
+            "inspected",
+        ):
+            raise ValidationError(
+                {
+                    "transport_cleaning_method": (
+                        "'Not required — dedicated organic unit' contradicts a clean-transport "
+                        "method of affidavit or pre-load inspection, which both describe a "
+                        "NON-dedicated unit. Record how this unit was actually cleaned, or set "
+                        "clean transport to 'Dedicated organic vehicle'."
+                    )
+                }
+            )
+
+        codes = self.transport_inspected_free_of if isinstance(self.transport_inspected_free_of, list) else []
+        needs_notes = self.transport_cleaning_method == "other" or "other" in codes
+        if needs_notes and not (self.transport_notes or "").strip():
+            raise ValidationError(
+                {
+                    "transport_notes": (
+                        "'Other' was selected for the cleaning method or the pre-load "
+                        "inspection, and both print as 'see notes' in the certifier packet. "
+                        "Describe what it was, or choose a listed option."
+                    )
+                }
+            )
 
     def __str__(self):
         return f"{self.sale_date} {self.buyer_name} {self.quantity} {self.quantity_unit}"

@@ -73,7 +73,7 @@ def text(en: str, es: str) -> dict:
 # Branching
 # ---------------------------------------------------------------------------
 
-CONDITION_OPS = ("eq", "ne", "includes", "includes_any", "not_includes", "truthy", "falsy")
+CONDITION_OPS = ("eq", "ne", "includes", "includes_any", "one_of", "not_includes", "truthy", "falsy")
 
 
 @dataclass(frozen=True)
@@ -85,6 +85,8 @@ class Condition:
 
       eq / ne            — answer == value / answer != value
       includes           — value in answer (answer is a checkbox_group list)
+      one_of             — scalar answer is one of value (a list); false when
+                           unanswered — the radio counterpart of includes_any
       includes_any       — any of value (a list) in answer; the POSITIVE trigger op —
                            false while unanswered, so conditional pages stay hidden
                            until the trigger question is actually answered
@@ -285,6 +287,8 @@ def validate_module(module: Module, section_keys: tuple) -> list:
                 errors.append(f"{pwhere}: op '{cond.op}' requires a value")
             if cond.op == "includes_any" and not isinstance(cond.value, (list, tuple)):
                 errors.append(f"{pwhere}: op 'includes_any' requires a list value")
+            if cond.op == "one_of" and not isinstance(cond.value, (list, tuple)):
+                errors.append(f"{pwhere}: op 'one_of' requires a list value")
         for q in page.questions:
             qwhere = f"{pwhere} question '{q.key}'"
             if q.key in seen_keys:
@@ -313,6 +317,8 @@ def validate_module(module: Module, section_keys: tuple) -> list:
                     errors.append(f"{qwhere}: op '{cond.op}' requires a value")
                 if cond.op == "includes_any" and not isinstance(cond.value, (list, tuple)):
                     errors.append(f"{qwhere}: op 'includes_any' requires a list value")
+                if cond.op == "one_of" and not isinstance(cond.value, (list, tuple)):
+                    errors.append(f"{qwhere}: op 'one_of' requires a list value")
             if q.compiles_to and q.compiles_to.section_key and q.compiles_to.section_key not in section_keys:
                 errors.append(f"{qwhere}: compiles_to section '{q.compiles_to.section_key}' not in OSP_SECTION_KEYS")
             if q.kind == "info" and q.required:

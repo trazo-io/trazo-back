@@ -38,12 +38,14 @@ class AnalyticsService:
         start_date = timezone.now() - timedelta(days=days)
 
         # Base queryset - only high-quality scans
-        base_scans = HistoryScan.objects.filter(
-            history__parcel__establishment_id=establishment_id,
-            date__gte=start_date,
-            is_duplicate=False,  # Exclude duplicates
-            bot_score__lt=0.5,  # Exclude likely bots
-        ).select_related("history__product", "history__parcel")
+        base_scans = (
+            HistoryScan.objects.counted()
+            .filter(
+                history__parcel__establishment_id=establishment_id,
+                date__gte=start_date,
+            )
+            .select_related("history__product", "history__parcel")
+        )
 
         # Generate comprehensive insights
         insights = {
@@ -202,10 +204,16 @@ class AnalyticsService:
         # Average bot score
         avg_bot_score = scans.aggregate(avg_score=Avg("bot_score"))["avg_score"] or 0
 
-        # Quality distribution
+        # Quality distribution — GRADES scans that already passed `.counted()` into bands; these
+        # are not scan totals, so they legitimately use their own thresholds. Marked so the
+        # guard in `test_scan_count_consistency.py` does not read them as a second definition of
+        # "a scan that counts".
         quality_buckets = {
+            # not-a-total: grading band, not a scan total
             "high_quality": scans.filter(bot_score__lt=0.2, engagement_score__gt=0.3).count(),
+            # not-a-total: grading band, not a scan total
             "medium_quality": scans.filter(bot_score__lt=0.5, engagement_score__gt=0.1).count(),
+            # not-a-total: grading band, not a scan total
             "low_quality": scans.filter(Q(bot_score__gte=0.5) | Q(engagement_score__lte=0.1)).count(),
         }
 
@@ -298,19 +306,13 @@ class AnalyticsService:
         start_date = timezone.now() - timedelta(days=days)
 
         # This establishment's data
-        establishment_scans = HistoryScan.objects.filter(
+        establishment_scans = HistoryScan.objects.counted().filter(
             history__parcel__establishment_id=establishment_id,
             date__gte=start_date,
-            is_duplicate=False,
-            bot_score__lt=0.5,
         )
 
         # Industry averages (all establishments)
-        all_scans = HistoryScan.objects.filter(
-            date__gte=start_date,
-            is_duplicate=False,
-            bot_score__lt=0.5,
-        )
+        all_scans = HistoryScan.objects.counted().filter(date__gte=start_date)
 
         # Calculate metrics for comparison
         establishment_engagement = establishment_scans.aggregate(avg=Avg("engagement_score"))["avg"] or 0
@@ -372,11 +374,7 @@ class AnalyticsService:
         current_start = now - timedelta(days=30)
         previous_start = now - timedelta(days=60)
 
-        quality = HistoryScan.objects.filter(
-            history__parcel__establishment_id=establishment_id,
-            is_duplicate=False,
-            bot_score__lt=0.5,
-        )
+        quality = HistoryScan.objects.counted().filter(history__parcel__establishment_id=establishment_id)
 
         current = quality.filter(date__gte=current_start)
         previous = quality.filter(date__gte=previous_start, date__lt=current_start)
@@ -447,12 +445,10 @@ class AnalyticsService:
             week_start = timezone.now() - timedelta(weeks=week + 1)
             week_end = timezone.now() - timedelta(weeks=week)
 
-            week_scans = HistoryScan.objects.filter(
+            week_scans = HistoryScan.objects.counted().filter(
                 history__parcel__establishment_id=establishment_id,
                 date__gte=week_start,
                 date__lt=week_end,
-                is_duplicate=False,
-                bot_score__lt=0.5,
             )
 
             weeks.append(

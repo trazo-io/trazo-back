@@ -60,12 +60,15 @@ TIMEOUT = 30
 def _slice_section_xml(xml_body: str, section: str) -> str:
     """Return just the XML slice for the given § section within Subpart G.
 
-    Best-effort string-slice. eCFR's XML uses <DIV8 N="§ 205.601" TYPE="SECTION">
-    for section nodes; we find that opening tag and walk to the matching
-    closing tag. On any failure, we return the full body — hashing the whole
-    document still detects regulation change (it just can't attribute it).
+    Best-effort string-slice. eCFR's XML uses <DIV8 N="205.601" TYPE="SECTION">
+    for section nodes (no "§ " inside the N attribute — verified against the
+    live API 2026-08-09; the old '§ '-prefixed marker never matched, so both
+    sections silently hashed the full Subpart G document and drift could not
+    be attributed). We find the opening tag and walk to the matching closing
+    tag. On any failure, we return the full body — hashing the whole document
+    still detects regulation change (it just can't attribute it).
     """
-    open_marker = f'N="§ {section}"'
+    open_marker = f'N="{section}"'
     start = xml_body.find(open_marker)
     if start == -1:
         return xml_body

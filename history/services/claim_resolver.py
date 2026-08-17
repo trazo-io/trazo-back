@@ -239,11 +239,29 @@ def resolve_input_status(chemical_event) -> dict:
     the frontend currently re-derives this client-side; serving it keeps the
     chip vocabulary in one place and lets the audit export reuse it.
 
-        status: omri_listed | organic_approved | restricted_use
+        status: omri_listed | national_list_allowed | organic_approved
                 | conventional_documented | unclassified
+
+    The organic side of the vocabulary is NOT decided here — it is asked of
+    ``claim_authority.may_claim_input_listing``. Until 2026-08-09 this function
+    treated the farmer's ``organic_approved == "omri_listed"`` dropdown as
+    equivalent to a catalog match and published the label "OMRI Listed" on the
+    anonymous payload for inputs with no OMRI row and no National List row at
+    all. Deciding locally what a public surface may claim is the exact defect
+    class ``claim_authority`` exists to end; this function now only orders
+    severity (prohibited/restricted beat organic) and maps to a chip status.
     """
+    from history.services.claim_authority import (
+        LABEL_INPUT_GROWER_REPORTED,
+        LABEL_INPUT_NATIONAL_LIST,
+        LABEL_INPUT_NATIONAL_LIST_PROHIBITED,
+        LABEL_INPUT_OMRI_LISTED,
+        may_claim_input_listing,
+    )
+
     organic = event_organic_classification(chemical_event)
     restricted = event_is_restricted_use(chemical_event)
+    listing = may_claim_input_listing(chemical_event)
     # A linked OMRI product record (Sprint 3 catalog match) is stronger
     # evidence than the farmer's dropdown pick — treat it as OMRI Listed.
     has_omri_match = bool(getattr(chemical_event, "omri_product_id", None))
@@ -256,18 +274,28 @@ def resolve_input_status(chemical_event) -> dict:
     # "Restricted use — licensed applicator" put that same implication back in words, which is
     # worse than the field it replaced. A restricted-use product that is not organic-approved
     # is a conventional input, and the chip says so; the certifier PDF carries the RUP flag.
-    if restricted and not (organic == "omri_listed" or has_omri_match):
+    #
+    # Restricted-use still outranks the organic tier, but the test is now "is there real
+    # third-party evidence" (has_omri_match) rather than "did the farmer pick omri_listed".
+    # A grower's dropbox pick must not suppress the restricted-use ordering.
+    if restricted and not has_omri_match:
         status = "conventional_documented"
         label = "Conventional input · documented"
-    elif organic == "omri_listed" or has_omri_match:
+    elif organic in PROHIBITED_INPUT_VALUES or listing.safe_label == LABEL_INPUT_NATIONAL_LIST_PROHIBITED:
+        # Checked BEFORE the organic tiers: an explicitly not-organic input whose substance
+        # happens to carry a § 205.601 citation must not be chipped as an allowed input, and a
+        # § 205.602 prohibited match outranks whatever the grower picked from the dropdown.
+        status = "conventional_documented"
+        label = "Conventional input · documented"
+    elif listing.safe_label == LABEL_INPUT_OMRI_LISTED:
         status = "omri_listed"
-        label = "OMRI Listed"
-    elif organic in ORGANIC_APPROVED_VALUES:
+        label = LABEL_INPUT_OMRI_LISTED
+    elif listing.safe_label == LABEL_INPUT_NATIONAL_LIST:
+        status = "national_list_allowed"
+        label = LABEL_INPUT_NATIONAL_LIST
+    elif listing.safe_label == LABEL_INPUT_GROWER_REPORTED:
         status = "organic_approved"
-        label = "Organic Approved"
-    elif organic in PROHIBITED_INPUT_VALUES:
-        status = "conventional_documented"
-        label = "Conventional input · documented"
+        label = LABEL_INPUT_GROWER_REPORTED
     else:
         status = "unclassified"
         label = "Documented"

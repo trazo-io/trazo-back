@@ -1,3 +1,4 @@
+{% autoescape off %}
 VERIFY YOUR TRAZO ACCOUNT
 
 Hi {{ user.first_name|default:"there" }},
@@ -42,3 +43,4 @@ Your buyers want proof. Give it to them.
 
 Visit us: https://trazo.io
 Support: support@trazo.io
+{% endautoescape %}

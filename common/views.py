@@ -28,7 +28,7 @@ from rest_framework.response import Response
 
 from company.models import Establishment
 from product.models import Parcel
-from subscriptions.storage_utils import check_storage_quota
+from subscriptions.storage_utils import CATEGORY_MEDIA, check_storage_quota
 
 from .aws_utils import SecureAWSClient
 
@@ -77,9 +77,12 @@ def get_upload_urls(request):
     entity_type = request.data.get("entity_type", "misc")
     entity_id = request.data.get("entity_id", "")
 
-    # Storage quota check
+    # Storage quota check — MEDIA (hard-limited). Sizes here are CLIENT-REPORTED, so this
+    # check is advisory at the margin: a client that understates them buys itself one
+    # over-quota batch. It self-corrects rather than compounds — `GalleryImage.file_size`
+    # is written from the real object after upload, so the next check measures the truth.
     total_upload_bytes = sum(f.get("size", 0) for f in files_info)
-    allowed, error_detail = check_storage_quota(request.user, total_upload_bytes)
+    allowed, error_detail = check_storage_quota(request.user, total_upload_bytes, category=CATEGORY_MEDIA)
     if not allowed:
         return Response(error_detail, status=413)
 
@@ -154,9 +157,11 @@ def get_presigned_url(request):
     if not filename or not file_type:
         return Response({"error": "Filename and fileType are required"}, status=400)
 
-    # Storage quota check (fileSize sent by frontend, default 2MB estimate)
+    # Storage quota check — MEDIA (hard-limited). Same client-reported caveat as
+    # `get_upload_urls`: advisory at the margin, self-correcting once the real size lands
+    # on the GalleryImage row.
     file_size = request.data.get("fileSize", 2 * 1024 * 1024)
-    allowed, error_detail = check_storage_quota(request.user, file_size)
+    allowed, error_detail = check_storage_quota(request.user, file_size, category=CATEGORY_MEDIA)
     if not allowed:
         return Response(error_detail, status=413)
 
@@ -250,8 +255,9 @@ def local_file_upload(request):
             f"Processing file upload: {upload_file.name}, size: {upload_file.size}, type: {upload_file.content_type}"
         )
 
-        # Storage quota check
-        allowed, error_detail = check_storage_quota(request.user, upload_file.size)
+        # Storage quota check — MEDIA, the hard-limited category. The DMS document shelf
+        # is metered separately and never refused (`subscriptions.storage_accounting`).
+        allowed, error_detail = check_storage_quota(request.user, upload_file.size, category=CATEGORY_MEDIA)
         if not allowed:
             return Response(error_detail, status=413)
 

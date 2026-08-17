@@ -59,7 +59,7 @@ class CommonOSPRecordTypesAPITests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("summary", response.data)
-        self.assertEqual(len(response.data["record_types"]), 34)
+        self.assertEqual(len(response.data["record_types"]), 38)
         # Verbatim USDA labels — the generated section must read like the certifier's form.
         labels = [r["label"] for r in response.data["record_types"]]
         self.assertIn("Shared equipment cleaning log", labels)

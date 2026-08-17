@@ -46,6 +46,9 @@ def evaluate(cond: Condition, answers: dict) -> bool:
         return isinstance(value, (list, tuple)) and cond.value in value
     if cond.op == "includes_any":
         return isinstance(value, (list, tuple)) and any(v in value for v in cond.value)
+    if cond.op == "one_of":
+        # Scalar counterpart of includes_any: unanswered (None) is NOT one of anything.
+        return value is not None and value in cond.value
     if cond.op == "not_includes":
         # A missing/unanswered list does NOT include the value — deliberately True.
         return not (isinstance(value, (list, tuple)) and cond.value in value)
@@ -153,6 +156,51 @@ def invalid_choice_answers(module: Module, answers: dict) -> dict:
                 if unknown:
                     bad[key] = unknown
     return bad
+
+
+def invalid_typed_answers(module: Module, answers: dict) -> dict:
+    """{question_key: reason} for answers whose JSON type contradicts the question kind.
+
+    Load-bearing for the compiler: a boolean question answered with the STRING "no"
+    is truthy and would compile "…: Yes." into a certifier-bound narrative. Types are
+    enforced at the write boundary so the compiler can trust its inputs.
+    """
+    bad = {}
+    by_key = {q.key: q for page in module.pages for q in page.questions}
+    for key in answers or {}:
+        q = by_key.get(key)
+        if q is None:
+            continue
+        value = answer_value(answers, key)
+        if value is None:
+            continue
+        if q.kind == "boolean" and not isinstance(value, bool):
+            bad[key] = f"Expected true/false, got {type(value).__name__}"
+        elif q.kind == "date" and not isinstance(value, str):
+            bad[key] = f"Expected an ISO date string, got {type(value).__name__}"
+        elif q.kind in ("text", "textarea") and not isinstance(value, (str, int, float)):
+            bad[key] = f"Expected a string, got {type(value).__name__}"
+    return bad
+
+
+def exclusive_conflicts(module: Module, answers: dict) -> dict:
+    """{question_key: exclusive_value} where a none-of-the-above option is combined
+    with other selections ("None used" + "Organic, untreated" would compile a
+    self-contradictory sentence). The UI unchecks the others; the server refuses."""
+    conflicts = {}
+    by_key = {q.key: q for page in module.pages for q in page.questions}
+    for key in answers or {}:
+        q = by_key.get(key)
+        if q is None or q.kind != "checkbox_group":
+            continue
+        value = answer_value(answers, key)
+        if not isinstance(value, (list, tuple)) or len(value) < 2:
+            continue
+        exclusive_values = {o.value for o in q.options if o.exclusive}
+        chosen_exclusive = [v for v in value if v in exclusive_values]
+        if chosen_exclusive:
+            conflicts[key] = chosen_exclusive[0]
+    return conflicts
 
 
 def progress(module: Module, answers: dict, not_applicable: bool = False) -> dict:

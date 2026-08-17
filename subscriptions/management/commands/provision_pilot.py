@@ -231,6 +231,13 @@ class Command(BaseCommand):
             "max_productions_per_year",
             "monthly_scan_limit",
             "storage_limit_gb",
+            # Added 2026-08-14. This is now the ONLY entitlement that separates the paid tier from
+            # the free one — the capacity limits above are identical on Starter — so a pilot
+            # missing it would spend the season unable to produce the certifier packet, the audit
+            # exports, the PUR export or a certifier link. That is not a smaller pilot; it is a
+            # pilot of a product nobody is being asked to buy, which is exactly what the April
+            # conversion verdict must not be measuring.
+            "compliance_exports",
         )
         matches_compliance = bool(compliance) and all(
             pilot_features.get(k) == compliance_features.get(k) for k in entitlement_keys

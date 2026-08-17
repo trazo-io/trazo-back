@@ -20,34 +20,47 @@ from subscriptions.views import internal_plans, self_serve_plans
 class InternalPlansAreNotSelfServeTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.pilot = Plan.objects.create(
-            name="Pilot",
+        # `update_or_create`, not `create`. Migrations 0009/0011 SEED the pilot, starter and
+        # compliance-yearly rows, so `create` raises
+        #     UniqueViolation: Key (slug)=(pilot) already exists
+        # the moment the test database is built clean — which is what CI does. It passed only
+        # under `--keepdb`, against a database whose plan rows had already been reconciled.
+        # `test_starter_is_free_forever` fixed the same bug in itself on 2026-08-13 and left a
+        # comment naming THIS class as still carrying it; this is that fix.
+        cls.pilot, _ = Plan.objects.update_or_create(
             slug="pilot",
-            price=0,
-            interval="monthly",
-            is_active=True,
-            features={
-                "is_pilot": True,
-                "max_establishments": -1,
-                "max_parcels_per_establishment": -1,
-                "max_productions_per_year": -1,
+            defaults={
+                "name": "Pilot",
+                "price": 0,
+                "interval": "monthly",
+                "is_active": True,
+                "features": {
+                    "is_pilot": True,
+                    "max_establishments": -1,
+                    "max_parcels_per_establishment": -1,
+                    "max_productions_per_year": -1,
+                },
             },
         )
-        cls.starter = Plan.objects.create(
-            name="Starter",
+        cls.starter, _ = Plan.objects.update_or_create(
             slug="starter",
-            price=0,
-            interval="monthly",
-            is_active=True,
-            features={"max_establishments": 1, "max_parcels_per_establishment": -1},
+            defaults={
+                "name": "Starter",
+                "price": 0,
+                "interval": "monthly",
+                "is_active": True,
+                "features": {"max_establishments": 1, "max_parcels_per_establishment": -1},
+            },
         )
-        cls.compliance = Plan.objects.create(
-            name="Compliance",
+        cls.compliance, _ = Plan.objects.update_or_create(
             slug="compliance-yearly",
-            price=249,
-            interval="yearly",
-            is_active=True,
-            features={"max_establishments": 1, "max_parcels_per_establishment": -1},
+            defaults={
+                "name": "Compliance",
+                "price": 249,
+                "interval": "yearly",
+                "is_active": True,
+                "features": {"max_establishments": 1, "max_parcels_per_establishment": -1},
+            },
         )
 
     def test_pilot_is_not_in_the_public_plan_list(self):

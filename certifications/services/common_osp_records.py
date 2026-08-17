@@ -154,9 +154,14 @@ class EvidenceBundle:
             "history_pestmanagementevent_events",
             "history_generalevent_events",
             "history_businessevent_events",
+            "sales_records",
         )
 
         self.productions = list(qs)
+        # Parcel-level evidence (buffer_zones etc.) is not windowed — a documented buffer
+        # is a standing fact about the land, not an event inside the season.
+        self.parcels = list(establishment.parcels.all())
+        self.sales = [s for p in self.productions for s in p.sales_records.all()]
         self.chemical = [e for p in self.productions for e in p.history_chemicalevent_events.all()]
         self.production_events = [e for p in self.productions for e in p.history_productionevent_events.all()]
         self.soil = [e for p in self.productions for e in p.history_soilmanagementevent_events.all()]
@@ -415,12 +420,58 @@ COMMON_OSP_RECORD_TYPES: list[RecordType] = [
         ),
     ),
     RecordType(
+        # Label from the teardown's § 11 summary — verify verbatim against
+        # OSP_Crop_WildCrop_V1.docx before GA (same rule as every label here).
+        key="rotation_records",
+        label="Crop rotation records",
+        group=GROUP_CROP,
+        cfr_cite="7 CFR 205.205",
+        evidence=lambda b: _count(
+            b.with_field(b.prod("PL", "TR"), "variety"),
+            "planting record carrying crop identity for rotation history",
+            "planting records carrying crop identity for rotation history",
+        ),
+    ),
+    RecordType(
+        key="drift_prevention_records",
+        label="Drift prevention records",
+        group=GROUP_GENERAL,
+        cfr_cite="7 CFR 205.202(c)",
+        evidence=lambda b: _count(
+            [p for p in b.parcels if p.buffer_zones],
+            "parcel with documented buffer/adjoining-land records",
+            "parcels with documented buffer/adjoining-land records",
+        ),
+    ),
+    RecordType(
+        key="buffer_separation_records",
+        label="Buffer harvest and sales separation records",
+        group=GROUP_GENERAL,
+        cfr_cite="7 CFR 205.202(c)",
+        evidence=lambda b: _count(
+            b.with_field(b.prod("HA"), "buffer_disposition"),
+            "harvest record stating buffer-row disposition",
+            "harvest records stating buffer-row disposition",
+        ),
+    ),
+    RecordType(
+        key="supplier_verification_records",
+        label="Supplier and sourcing verification records",
+        group=GROUP_SALES,
+        cfr_cite="7 CFR 205.103(b)",
+        evidence=lambda b: _count(
+            b.with_field(b.chem(), "supplier_name"),
+            "input record naming its supplier",
+            "input records naming their supplier",
+        ),
+    ),
+    RecordType(
         key="storage_records",
         label="Storage records",
         group=GROUP_GENERAL,
         cfr_cite="7 CFR 205.272(a)",
-        # `storage_location` on harvest/post-harvest events is the only storage signal Trazo
-        # holds; there is no storage module and none is planned.
+        # `storage_location` on harvest/post-harvest events is the storage EVIDENCE signal;
+        # the G6.2 Storage module (WS-2.7) collects the practice narrative separately.
         evidence=lambda b: _count(
             b.with_field(b.prod("HA", "PH"), "storage_location"),
             "harvest/post-harvest record naming a storage location",
@@ -482,7 +533,13 @@ COMMON_OSP_RECORD_TYPES: list[RecordType] = [
         label="Bill of Lading",
         group=GROUP_SALES,
         cfr_cite="7 CFR 205.103(b)(2)",
-        evidence=lambda b: _count(b.business_extra("bill_of_lading"), "sale record carrying a bill of lading"),
+        # Two sources: legacy BusinessEvent extra_data + the per-shipment field on
+        # SalesRecord rows (2026-08 transport block).
+        evidence=lambda b: _count(
+            b.business_extra("bill_of_lading") + b.with_field(b.sales, "bill_of_lading"),
+            "sale record carrying a bill of lading",
+            "sale records carrying a bill of lading",
+        ),
     ),
     RecordType(
         key="delivery_slips",

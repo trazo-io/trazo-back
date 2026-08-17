@@ -240,18 +240,34 @@ class InputStatusResolverTests(TestCase):
             self.extra_data = extra_data
             self.omri_product_id = omri_product_id
 
-    def test_omri_listed(self):
+    def test_the_dropdown_alone_does_not_produce_an_omri_status(self):
+        # Changed 2026-08-09. This test previously asserted that
+        # organic_approved="omri_listed" yields status "omri_listed" — i.e. it asserted the
+        # defect: the grower's dropdown pick published as a listing by OMRI, a real
+        # third-party program, on the anonymous payload. See
+        # claim_authority.may_claim_input_listing. Only a catalog FK earns that status.
         status = resolve_input_status(self.FakeEvent(organic_approved="omri_listed"))
-        self.assertEqual(status["status"], "omri_listed")
+        self.assertEqual(status["status"], "organic_approved")
+        self.assertNotIn("OMRI", status["label"])
 
     def test_organic_approved_values(self):
         for value in ("usda_nop_approved", "organic_equivalent", "yes"):
             status = resolve_input_status(self.FakeEvent(organic_approved=value))
             self.assertEqual(status["status"], "organic_approved", value)
 
-    def test_restricted_use_wins(self):
+    def test_restricted_use_is_reported_as_conventional_not_as_rup(self):
+        # Was `test_restricted_use_wins`, asserting status "restricted_use" — a string the
+        # resolver has not been able to return since 2026-08-02, so this test was already
+        # failing before the 2026-08-09 claim-authority change and is not a regression from
+        # it. Restricted-use is an APPLICATOR-licensing category (40 CFR 152.175), not a
+        # consumer-facing residue signal, so it is deliberately not a public chip; what the
+        # consumer sees is that the input is conventional and documented.
         status = resolve_input_status(self.FakeEvent(organic_approved="omri_listed", restricted_use_pesticide=True))
-        self.assertEqual(status["status"], "restricted_use")
+        self.assertEqual(status["status"], "conventional_documented")
+
+    def test_restricted_use_does_not_override_a_real_catalog_match(self):
+        status = resolve_input_status(self.FakeEvent(omri_product_id=42, restricted_use_pesticide=True))
+        self.assertEqual(status["status"], "omri_listed")
 
     def test_not_organic_is_conventional_documented(self):
         status = resolve_input_status(self.FakeEvent(organic_approved="not_organic"))
@@ -265,9 +281,9 @@ class InputStatusResolverTests(TestCase):
         # Legacy rows: classification / RUP flag only in extra_data — the
         # resolver must see what the public serializer renders.
         status = resolve_input_status(self.FakeEvent(extra_data={"organic_certification": "omri_listed"}))
-        self.assertEqual(status["status"], "omri_listed")
+        self.assertEqual(status["status"], "organic_approved")
         status = resolve_input_status(self.FakeEvent(extra_data={"restricted_use_pesticide": True}))
-        self.assertEqual(status["status"], "restricted_use")
+        self.assertEqual(status["status"], "conventional_documented")
 
     def test_omri_catalog_match_wins_over_blank_classification(self):
         # A linked OMRI product record (Sprint 3 catalog) is stronger evidence

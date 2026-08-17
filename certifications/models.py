@@ -714,6 +714,36 @@ def _empty_osp_sections():
     return {key: {"narrative": "", "last_updated": None} for key in OSP_SECTION_KEYS}
 
 
+def _empty_module_responses():
+    """Default factory for `module_responses` (guided OSP modules, WS-2).
+
+    Shape (documented in certifications/osp_modules/schema.py and conditions.py):
+
+        {
+          "schema_version": 1,
+          "modules": {
+            "<module_key>": {
+              "status": "not_started|in_progress|completed|not_applicable",
+              "not_applicable": bool,
+              "na_attestation": {"by": <user_id>, "at": "<iso>"} | None,
+              "answers": {"<question_key>": {"value": <json>, "at": "<iso>"}},
+              "completed_at": "<iso>" | None,
+              "completed_by": <user_id> | None,
+              "definition_version": "<osp_modules.CONTENT_VERSION at last write>",
+            }
+          },
+          "parcel_modules": {"<parcel_id>": {...same shape...}},
+        }
+
+    Answers hold ONLY values the operator explicitly entered or explicitly accepted from a
+    prefill suggestion — nothing here is ever written by derivation (the
+    `common_osp_records.confirm()` red line applies to module answers identically).
+    Writes go exclusively through the module viewset action (select_for_update
+    read-modify-write); the serializer exposes this field read-only.
+    """
+    return {"schema_version": 1, "modules": {}, "parcel_modules": {}}
+
+
 class OrganicSystemPlan(models.Model):
     """
     Organic System Plan (OSP) — 7 CFR 205.201.
@@ -790,6 +820,15 @@ class OrganicSystemPlan(models.Model):
     sections = models.JSONField(
         default=_empty_osp_sections,
         help_text="Six required sections per 7 CFR 205.201(a)(1)-(6) as JSONB",
+    )
+
+    # Guided OSP module answers (WS-2). Rides this row's lifecycle deliberately:
+    # the draft edit-lock, new-version cloning, auditlog JSON diffs, and the
+    # immutable submit snapshot all apply to module answers for free. Shape and
+    # write rules documented on _empty_module_responses().
+    module_responses = models.JSONField(
+        default=_empty_module_responses,
+        help_text="Guided OSP module answers keyed by module key — see _empty_module_responses()",
     )
 
     # Uploaded PDF of the certifier-signed OSP (if the farm submitted a PDF form).
@@ -1070,13 +1109,87 @@ class LandownerAffidavit(models.Model):
     landowner_address = models.CharField(max_length=300, blank=True, null=True)
     landowner_phone = models.CharField(max_length=30, blank=True, null=True)
 
-    # 3-year history table (MOFGA field 5) — list of {year, land_use, inputs, applied_by}
-    # dicts. We store 3 years by convention but allow more (some certifiers ask for 5).
+    # 3-year history table (MOFGA field 5) — list of dicts covering the transition window.
+    # We store 3 years by convention but allow more (some certifiers ask for 5).
+    #
+    # 2026-08-12: the USDA Land Use History Verification form asks for "Material /
+    # Manufacturer" and "Date Applied" as separate columns. `inputs` alone answers neither
+    # — a 36-month eligibility determination turns on the DATE. New rows should carry
+    # `manufacturer` and `date_applied`; `inputs` stays for rows already on file and is
+    # never parsed into the new keys (splitting prose means guessing, and the guess would
+    # land in an eligibility determination).
+    #
+    # Shape: [{year, land_use, inputs, applied_by, manufacturer, date_applied}]
     yearly_history = models.JSONField(
         default=list,
         blank=True,
-        help_text=("List of {year, land_use, inputs, applied_by} dicts covering the " "3+ year transition window"),
+        help_text=(
+            "List of {year, land_use, inputs, applied_by, manufacturer, date_applied} dicts "
+            "covering the 3+ year transition window"
+        ),
     )
+
+    # ------------------------------------------------------------------
+    # USDA Land Use History Verification (form #2) — fields MOFGA's layout omits
+    # ------------------------------------------------------------------
+    #: USDA prints a "☐ No materials applied" checkbox. Without it an EMPTY `yearly_history`
+    #: is ambiguous in the worst possible direction: it could mean "the signer declared
+    #: nothing was applied" or "nobody filled this in yet", and a packet that renders the
+    #: second as the first manufactures a § 205.202(b) attestation nobody made.
+    #:
+    #: This is the same rule as `attestation_absence_is_not_denial`. Three states, not two:
+    #: True = affirmatively declared none, False = materials are listed, None = unanswered.
+    no_materials_applied = models.BooleanField(
+        blank=True,
+        null=True,
+        help_text=(
+            "Signer's affirmative declaration that NO materials were applied during their "
+            "management (USDA's checkbox). NULL means the question was never answered — "
+            "which is NOT the same as a declaration of none, and must never be rendered as one."
+        ),
+    )
+    #: USDA asks for the "Dates of management/control" the signer is attesting FOR. Without
+    #: the window, the affidavit does not say which part of the 36 months it covers, and a
+    #: signer who managed the land for one of the three years reads as covering all three.
+    management_period_start = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Start of the period the signer managed or controlled this land (USDA 'Dates of management/control')",
+    )
+    management_period_end = models.DateField(
+        blank=True,
+        null=True,
+        help_text="End of the period the signer managed or controlled this land",
+    )
+    #: USDA: "assessor's parcel number, county, township/section/range, or other regulatory
+    #: description". `field_name` is the operation's internal name for the block, which is
+    #: not something a certifier or a county office can look up.
+    parcel_legal_description = models.CharField(
+        max_length=300,
+        blank=True,
+        null=True,
+        help_text=(
+            "Regulatory description of the land — assessor's parcel number, county, "
+            "township/section/range, or equivalent. Distinct from field_name, which is the "
+            "operation's own label for the block."
+        ),
+    )
+
+    def declared_no_materials_applied(self):
+        """True only when the signer AFFIRMATIVELY declared no materials were applied.
+
+        Named to mirror its backing field `no_materials_applied`, and deliberately NOT
+        `declares_no_materials` — that is a real BooleanField on the sibling
+        `AdjoiningLandAffidavit`. Two models one screen apart, one where the name is a column
+        and one where it is a method, is a trap: `aff.declares_no_materials` without parens
+        returns a bound method, which is always truthy, and would have rendered
+        "None applied (declared)" for every affidavit ever filed.
+
+        Deliberately not `not self.yearly_history`. An empty history is an unanswered
+        question, and treating it as a declaration would fabricate the exact attestation
+        § 205.202(b) eligibility rests on.
+        """
+        return self.no_materials_applied is True
 
     # MOFGA field 6 — the critical date for § 205.202(b) 36-month calculation.
     last_prohibited_date = models.DateField(
@@ -1142,6 +1255,173 @@ class LandownerAffidavit(models.Model):
 # ---------------------------------------------------------------------------
 # Sprint 5.1 GA — Approved-inputs change log
 # ---------------------------------------------------------------------------
+
+
+class AdjoiningLandAffidavit(models.Model):
+    """Neighbor-signed adjoining-land attestation (USDA form #25, 7 CFR 205.202(c)).
+
+    Deliberately a separate model from `Parcel.buffer_zones`, not extra keys on it. They
+    answer the same question from two different authorities:
+
+        buffer_zones            what the OPERATOR says about the boundary
+        AdjoiningLandAffidavit  what the NEIGHBOR signs about their own practices
+
+    Folding the second into the first would let an operator's own entry render as a
+    third-party attestation, which is the claim-shape failure this codebase has hit
+    repeatedly. Distance is stored in FEET because that is the unit USDA's form prints and
+    the unit a neighbour will say out loud; `buffer_zones.buffer_width_m` is metres, and
+    converting between them silently is how a 25 ft buffer becomes a 25 m one.
+
+    Follows the `LandownerAffidavit` pattern — one row per neighbour per bordering side.
+    """
+
+    MATERIAL_CHOICES = {
+        "synthetic_fertilizers": "Synthetic fertilizers",
+        "herbicides": "Herbicides",
+        "insecticides": "Insecticides",
+        "fungicides": "Fungicides",
+        "treated_wood": "Treated wood",
+        "other": "Other",
+    }
+
+    BORDER_SIDE_CHOICES = [
+        ("N", "North"),
+        ("E", "East"),
+        ("S", "South"),
+        ("W", "West"),
+        ("NE", "Northeast"),
+        ("NW", "Northwest"),
+        ("SE", "Southeast"),
+        ("SW", "Southwest"),
+    ]
+
+    public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, db_index=True)
+    parcel = models.ForeignKey(
+        "product.Parcel",
+        on_delete=models.CASCADE,
+        related_name="adjoining_land_affidavits",
+        help_text="Parcel whose boundary this attestation covers",
+    )
+
+    neighbor_name = models.CharField(max_length=200)
+    neighbor_farm_name = models.CharField(max_length=200, blank=True, default="")
+    neighbor_address = models.CharField(max_length=300, blank=True, default="")
+    neighbor_phone = models.CharField(max_length=30, blank=True, default="")
+    border_side = models.CharField(
+        max_length=2,
+        choices=BORDER_SIDE_CHOICES,
+        blank=True,
+        default="",
+        help_text="Which side of the organic parcel this neighbour borders",
+    )
+
+    #: TRI-STATE. NULL means the neighbour did not answer, which is NOT "they are not
+    #: organic" — an unanswered question rendered as a negative is the same fabrication the
+    #: landowner affidavit's `no_materials_applied` exists to prevent.
+    neighbor_is_certified_organic = models.BooleanField(
+        blank=True,
+        null=True,
+        help_text=(
+            "Neighbour's own declaration that they are certified organic (or exempt by sales "
+            "volume). NULL means unanswered — never render it as 'not organic'."
+        ),
+    )
+    neighbor_certifier_name = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        help_text="Certifying agent named by the neighbour, when they declared they are certified",
+    )
+
+    #: USDA prints "☐ none of the above" alongside the material checkboxes, so absence of
+    #: ticks and an affirmative "none" are different answers and are stored differently:
+    #: an empty list is unanswered; `declares_no_materials` True is the signed negative.
+    materials_used = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Codes from MATERIAL_CHOICES the neighbour routinely uses. Empty = unanswered.",
+    )
+    declares_no_materials = models.BooleanField(
+        blank=True,
+        null=True,
+        help_text=(
+            "Neighbour ticked USDA's 'none of the above'. NULL means unanswered — distinct "
+            "from an affirmative declaration that they use none of the listed materials."
+        ),
+    )
+    not_used_on_adjoining_fields = models.BooleanField(
+        blank=True,
+        null=True,
+        help_text=(
+            "Neighbour uses the materials above but NOT on the fields adjoining this parcel "
+            "(USDA's separate checkbox). NULL means unanswered."
+        ),
+    )
+    distance_to_organic_property_ft = models.PositiveIntegerField(
+        blank=True,
+        null=True,
+        help_text=(
+            "Distance in FEET from the neighbour's material use to the organic property, as "
+            "the neighbour states it. Feet because that is the unit USDA's form prints — "
+            "buffer_zones.buffer_width_m is metres and the two must not be silently mixed."
+        ),
+    )
+    agrees_to_notify = models.BooleanField(
+        blank=True,
+        null=True,
+        help_text=(
+            "Neighbour agreed to notify the operation before applying materials "
+            "(§ 205.400(f)(1) drift-notification readiness). NULL means unanswered."
+        ),
+    )
+
+    neighbor_signed_date = models.DateField(blank=True, null=True)
+    signed_document = models.FileField(
+        upload_to="adjoining_land_affidavits/",
+        blank=True,
+        null=True,
+        help_text="Scanned copy of the signed attestation",
+    )
+    notes = models.TextField(blank=True, default="")
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_adjoining_land_affidavits",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Adjoining Land Affidavit"
+        verbose_name_plural = "Adjoining Land Affidavits"
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["parcel", "border_side"])]
+
+    def __str__(self):
+        return f"Adjoining-land affidavit — {self.neighbor_name} ({self.get_border_side_display() or '—'})"
+
+    def materials_display(self):
+        """The neighbour's declared materials, or "" when nothing was recorded.
+
+        Returns "" rather than "none" for an empty list: absence of ticks is an unanswered
+        question, and `declares_no_materials` is where an affirmative "none" lives.
+        Unknown codes pass through instead of being dropped.
+        """
+        codes = self.materials_used
+        if not isinstance(codes, list):
+            return ""
+        return ", ".join(self.MATERIAL_CHOICES.get(c, str(c)) for c in codes if c)
+
+    def is_signed(self):
+        """A third-party attestation is only third-party evidence once the third party signed.
+
+        Without this the packet would present a form someone typed on a neighbour's behalf as
+        a signed statement from that neighbour.
+        """
+        return bool(self.neighbor_signed_date or self.signed_document)
 
 
 class ApprovedInputChangeLog(models.Model):
@@ -1379,6 +1659,25 @@ class OSPChangeNotification(models.Model):
     @property
     def is_immediate(self):
         return self.change_category == self.CATEGORY_PROHIBITED_SUBSTANCE
+
+    def clean(self):
+        """Only the impossible is refused: a notification dated in the future.
+
+        A blank `date_notified` is deliberately still allowed, including for the § 205.400(f)(1)
+        immediate category. Requiring it there was tried and reverted: a grower discovering drift
+        this morning must be able to RECORD it before they have phoned the certifier, and a hard
+        requirement makes the most urgent category the only one that cannot be entered promptly.
+        Blank means "not documented", exactly as everywhere else in this schema — the certifier
+        packet names the gap instead (see the (f)(1) review flag in the audit export), which
+        surfaces it without refusing a legitimate record.
+
+        A future date IS refused: it cannot have happened, and a typo'd year silently reorders
+        the packet's audit trail, which sorts on this column.
+        """
+        from django.core.exceptions import ValidationError
+
+        if self.date_notified and self.date_notified > timezone.localdate():
+            raise ValidationError({"date_notified": "The certifier cannot have been notified on a future date."})
 
     def __str__(self):
         return f"{self.get_change_category_display()} on OSP v{self.osp.version_number}"

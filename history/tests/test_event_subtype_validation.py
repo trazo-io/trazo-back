@@ -24,6 +24,8 @@ drive-by. The consumer-side harm is already mitigated: ``humanizeEnumFallback``
 bad row no longer renders "LA" or "H" at a shopper.
 """
 
+import decimal
+
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.utils import timezone
@@ -96,3 +98,44 @@ class EventSubtypeValidationTests(TestCase):
             "H",
             "raw ORM writes bypass choice validation — see this module's docstring",
         )
+
+
+class NpkMixedNumericTypeTests(TestCase):
+    """`ChemicalEvent.clean()` must not explode when NPK values have mixed numeric types.
+
+    Found 2026-08-10 while baselining the history suite (4 errors traced to one line,
+    `history/models.py` NPK total). N/P/K are `DecimalField`s, so a value read back from the
+    database is a `Decimal` — but a value assigned in Python stays whatever it was: a float
+    off deserialised JSON, a template default, a management command. Summing the mix raised
+
+        TypeError: unsupported operand type(s) for +: 'decimal.Decimal' and 'float'
+
+    which escapes `clean()` as an unhandled 500 rather than a validation error, on the
+    fertiliser path — the most-used event type in the ICP. Reproduced on a bare instance with
+    no database or fixture involved, so it was never a test artefact.
+
+    These tests are typed deliberately as MIXED. An all-Decimal or all-float test passes
+    against the broken code and would have pinned nothing.
+    """
+
+    def _event(self, n, p, k):
+        return ChemicalEvent(nitrogen_percentage=n, phosphorus_percentage=p, potassium_percentage=k)
+
+    def test_mixed_types_under_limit_validate_cleanly(self):
+        self._event(decimal.Decimal("10.00"), 10.5, decimal.Decimal("5.00")).clean()
+
+    def test_mixed_types_over_limit_raise_validation_not_type_error(self):
+        with self.assertRaises(ValidationError) as ctx:
+            self._event(decimal.Decimal("60.00"), 50.5, decimal.Decimal("5.00")).clean()
+        self.assertIn("cannot exceed 100%", str(ctx.exception))
+
+    def test_error_message_does_not_leak_float_representation(self):
+        # Decimal(str(x)) not Decimal(x): the latter converts the binary representation
+        # exactly, so a 10.5 would surface to the grower as 10.50000000000000177635683940025046...
+        with self.assertRaises(ValidationError) as ctx:
+            self._event(60.1, 30.2, 20.3).clean()
+        self.assertNotIn("0000000", str(ctx.exception))
+
+    def test_all_float_still_validates(self):
+        with self.assertRaises(ValidationError):
+            self._event(60.0, 50.5, 5.0).clean()

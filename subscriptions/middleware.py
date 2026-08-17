@@ -62,10 +62,14 @@ class UsageTrackingMiddleware:
 
                         period_start = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-                    current_scans = HistoryScan.objects.filter(
-                        history__parcel__establishment__company=company,
-                        date__gte=period_start,
-                    ).count()
+                    current_scans = (
+                        HistoryScan.objects.counted()
+                        .filter(
+                            history__parcel__establishment__company=company,
+                            date__gte=period_start,
+                        )
+                        .count()
+                    )
 
                     if current_scans >= monthly_limit:
                         logger.info(

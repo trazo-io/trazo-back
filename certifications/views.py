@@ -14,8 +14,10 @@ from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 
 from backend.permissions import CompanyNestedViewSet
+from subscriptions.gating import require_compliance_exports
 
 from .models import (
+    AdjoiningLandAffidavit,
     ApprovedInputChangeLog,
     Certification,
     CertifierAccessLink,
@@ -29,6 +31,7 @@ from .models import (
     StateOrganicRegistration,
 )
 from .serializers import (
+    AdjoiningLandAffidavitSerializer,
     CertificationSerializer,
     CertifierAccessLinkSerializer,
     LandownerAffidavitSerializer,
@@ -43,6 +46,24 @@ from .services.common_osp_workbooks import WORKBOOKS_BY_KEY, build_workbook, wor
 from .services.omri_verifier import OMRIProductVerifier
 
 logger = logging.getLogger(__name__)
+
+
+# Farmer-facing phrasing for OSP.status, for use inside a sentence. The model's
+# own get_status_display() strings ("Draft (not yet submitted)", "Active /
+# Approved") are label text for a select box and read badly mid-sentence. These
+# messages surface verbatim in the app's error toasts, so they name the state and
+# the next action — never an endpoint path.
+_OSP_STATUS_PHRASE = {
+    "draft": "a draft",
+    "submitted": "submitted to your certifier",
+    "active": "approved and active",
+    "superseded": "superseded by a newer version",
+    "withdrawn": "withdrawn",
+}
+
+
+def osp_status_phrase(osp_status):
+    return _OSP_STATUS_PHRASE.get(osp_status, f"in status '{osp_status}'")
 
 
 @api_view(["GET"])
@@ -276,11 +297,30 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             raise ValidationError(
                 {
                     "status": (
-                        f"Cannot edit an OSP in status '{osp.status}'. Start a new "
-                        "version instead (POST /new-version/)."
+                        f"This plan is {osp_status_phrase(osp.status)}, so it can no longer be "
+                        "edited — it is the record your certifier reviewed. Start a new version "
+                        "to make changes: it copies everything across and leaves this one intact."
                     )
                 }
             )
+        # WS-2.3 — a client PATCH of `sections` writes MANUAL text only. Whatever the
+        # client sends as `narrative` is normalized into `narrative_manual` (generated
+        # prose has exactly one author: the compiler), then the composed narrative is
+        # rebuilt so every downstream reader of `narrative` stays coherent.
+        if "sections" in serializer.validated_data:
+            from certifications.services.osp_module_compiler import (
+                compile_modules_to_sections,
+                normalize_incoming_sections,
+            )
+
+            normalized = normalize_incoming_sections(osp.sections, serializer.validated_data["sections"])
+            merged = dict(osp.sections or {})
+            merged.update(normalized)
+            serializer.validated_data["sections"] = merged
+            instance = serializer.save()
+            compile_modules_to_sections(instance)
+            instance.save(update_fields=["sections", "updated_at"])
+            return
         serializer.save()
 
     # Minimum narrative length to consider a § 205.201(a) section materially filled.
@@ -333,9 +373,20 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         osp = self.get_object()
         if osp.status != "draft":
             return Response(
-                {"error": f"Cannot submit OSP in status '{osp.status}'. Must be 'draft'."},
+                {
+                    "error": (
+                        f"This plan is {osp_status_phrase(osp.status)}, so there is nothing to "
+                        "submit. Only a draft can be sent to your certifier."
+                    )
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        # WS-2.3 — idempotent recompile so the submitted narrative (and its frozen
+        # snapshot PDF) reflects the final module answers, not the last PUT's view.
+        from certifications.services.osp_module_compiler import compile_modules_to_sections
+
+        if compile_modules_to_sections(osp):
+            osp.save(update_fields=["sections", "updated_at"])
         missing = self._missing_osp_sections(osp)
         if missing:
             return Response(
@@ -371,6 +422,20 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 pdf_bytes = generate_osp_snapshot_pdf(osp)
                 filename = f"osp_v{osp.version_number}_{osp.public_id}_" f"{osp.submitted_at.date().isoformat()}.pdf"
                 osp.submission_pdf.save(filename, ContentFile(pdf_bytes), save=True)
+
+                # WS-3: the frozen snapshot also lands on the farm's document shelf.
+                from documents.services.filing import file_document
+
+                file_document(
+                    establishment=osp.establishment,
+                    source="osp_snapshot",
+                    folder="organic_system_plan",
+                    title=f"OSP v{osp.version_number} submission snapshot",
+                    filename=filename,
+                    content=pdf_bytes,
+                    content_type="application/pdf",
+                    created_by=request.user,
+                )
         except Exception as e:
             logger.error(f"OSP snapshot PDF generation failed for OSP {osp.id}: {e}")
             return Response(
@@ -411,8 +476,9 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             return Response(
                 {
                     "error": (
-                        f"Cannot activate OSP in status '{osp.status}'. Must be "
-                        "'submitted' (certifier review must be complete)."
+                        f"This plan is {osp_status_phrase(osp.status)}, so its approval cannot "
+                        "be recorded yet. It must be submitted to your certifier first — then "
+                        "come back and record their approval here."
                     )
                 },
                 status=status.HTTP_400_BAD_REQUEST,
@@ -536,9 +602,9 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             raise ValidationError(
                 {
                     "status": (
-                        f"Cannot modify approved inputs on an OSP in status "
-                        f"'{osp.status}'. Wait for certifier review to complete, "
-                        "or start a new version to revise the inputs list."
+                        f"This plan is {osp_status_phrase(osp.status)}, so its approved-inputs "
+                        "list is locked until that review finishes. Wait for your certifier to "
+                        "approve the plan, or start a new version now to revise the list."
                     )
                 }
             )
@@ -760,6 +826,8 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 previous_version=source,
                 status="draft",
                 sections=source.sections,
+                # Next season starts guided from last year's answers (Appendix A §h.5).
+                module_responses=source.module_responses,
                 certifier_template_name=source.certifier_template_name,
                 certifier_template_url=source.certifier_template_url,
                 created_by=self.request.user,
@@ -820,6 +888,93 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         rows = derive_record_types(establishment, osp=osp)
         return Response({"summary": summarize(rows), "record_types": rows})
 
+    @action(detail=True, methods=["get"], url_path="module-pdf")
+    def module_pdf(self, request, **kwargs):
+        """One module as a certifier-readable PDF (WS-2.5).
+
+        `?module=<key>` — farm-wide module from the registry.
+        `?module=parcel_application&parcel=<id>` — one parcel's application,
+        rendered from LIVE model state.
+        Files a dated copy in the DMS, then streams the same bytes.
+        """
+        from io import BytesIO
+
+        from django.http import FileResponse
+
+        from certifications.services.osp_module_pdf import generate_module_pdf
+        from documents.services.filing import file_document
+
+        osp = self.get_object()
+        establishment = osp.establishment
+        # Plan gate. The module PDFs are the COMPONENTS of the renewal packet, so gating only the
+        # ZIP would leave the whole artifact reassemblable one download at a time — a paywall with
+        # a documented way around it is not a paywall.
+        require_compliance_exports(establishment.company, user=request.user)
+        module_key = request.query_params.get("module")
+        if not module_key:
+            raise ValidationError({"module": "Required."})
+
+        parcel = None
+        if module_key == "parcel_application":
+            parcel_id = request.query_params.get("parcel")
+            if not parcel_id:
+                raise ValidationError({"parcel": "Required for parcel_application."})
+            parcel = get_object_or_404(establishment.parcels.all(), pk=parcel_id)
+
+        try:
+            data = generate_module_pdf(osp, module_key, parcel=parcel)
+        except ValueError as exc:
+            raise ValidationError({"module": str(exc)})
+
+        stem = slugify(establishment.name) or "operation"
+        suffix = f"-{slugify(parcel.name)}" if parcel is not None else ""
+        filename = f"{stem}-osp-v{osp.version_number}-{module_key}{suffix}.pdf"
+        file_document(
+            establishment=establishment,
+            source="module_pdf",
+            folder="organic_system_plan",
+            title=f"OSP module PDF — {module_key}{f' ({parcel.name})' if parcel else ''}",
+            filename=filename,
+            content=data,
+            content_type="application/pdf",
+            created_by=request.user if request.user.is_authenticated else None,
+        )
+        return FileResponse(BytesIO(data), as_attachment=True, filename=filename)
+
+    @action(detail=True, methods=["get"], url_path="packet")
+    def packet(self, request, **kwargs):
+        """The renewal packet ZIP (WS-2.6) — cover, narrative, module PDFs,
+        one Parcel Application per parcel, four workbooks. Single generator
+        function is the DMS seam; this action files and streams its bytes."""
+        from io import BytesIO
+
+        from django.http import FileResponse
+
+        from certifications.services.osp_module_pdf import generate_osp_packet
+        from documents.services.filing import file_document
+
+        osp = self.get_object()
+        establishment = osp.establishment
+        # Plan gate, before generating anything. `generate_osp_packet` builds every module PDF,
+        # a Parcel Application per parcel and four workbooks — running all of that and then
+        # refusing to hand it over would burn the work and file a document (see file_document
+        # below) that the farm is not entitled to download.
+        require_compliance_exports(establishment.company, user=request.user)
+        data = generate_osp_packet(osp)
+        stem = slugify(establishment.name) or "operation"
+        filename = f"{stem}-osp-v{osp.version_number}-packet.zip"
+        file_document(
+            establishment=establishment,
+            source="packet",
+            folder="organic_system_plan",
+            title=f"OSP renewal packet — v{osp.version_number}",
+            filename=filename,
+            content=data,
+            content_type="application/zip",
+            created_by=request.user if request.user.is_authenticated else None,
+        )
+        return FileResponse(BytesIO(data), as_attachment=True, filename=filename)
+
     @action(detail=True, methods=["get"], url_path="attachments")
     def attachments(self, request, **kwargs):
         """
@@ -846,13 +1001,42 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 {"workbook": f"Unknown workbook. Expected one of: {', '.join(sorted(WORKBOOKS_BY_KEY))}"}
             )
 
+        # Plan gate — on the DOWNLOAD branch only.
+        #
+        # The four Common OSP attachment workbooks are named on the price list as part of what
+        # Compliance buys, and this streams them as .xlsx. It was the seventh export door and the
+        # one the inventory test originally missed: its route is named "attachments", which
+        # matched none of the hint words, so widening those hints was part of the same fix.
+        #
+        # The `?workbook=`-less branch above is left open deliberately: it returns a per-workbook
+        # row count and a count of cells Trazo could not fill. That is a progress figure the
+        # operator needs in order to decide whether the packet is worth buying — a number about
+        # their own records, not a document they hand to anyone.
+        require_compliance_exports(establishment.company, user=request.user)
+
         spec = WORKBOOKS_BY_KEY[key]
         buffer = build_workbook(establishment, key)
+        # WS-3: file a dated copy in the DMS, then stream the same bytes.
+        from io import BytesIO
+
+        from documents.services.filing import file_document
+
+        data = buffer.getvalue() if hasattr(buffer, "getvalue") else buffer.read()
+        stem = slugify(establishment.name) or "operation"
+        file_document(
+            establishment=establishment,
+            source="workbook",
+            folder="organic_system_plan",
+            title=f"Common OSP workbook — {spec.filename}",
+            filename=f"{stem}-{spec.filename}.xlsx",
+            content=data,
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            created_by=request.user,
+        )
         response = FileResponse(
-            buffer,
+            BytesIO(data),
             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
-        stem = slugify(establishment.name) or "operation"
         response["Content-Disposition"] = f'attachment; filename="{stem}-{spec.filename}.xlsx"'
         return response
 
@@ -874,6 +1058,278 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         self.get_object()  # 404/permission gate; payload is OSP-independent today
         return Response(serialize_registry())
+
+    # ------------------------------------------------------------------
+    # Guided OSP modules — responses (WS-2.2)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _module_status(entry: dict, module=None) -> str:
+        """Status as it stands against the CURRENT questionnaire, not as it was stamped.
+
+        Adding a required question to a shipped module makes every previously-completed
+        answer set incomplete. `completed_at` stays in storage — it is the audit record of
+        when the operator first completed the module — but reporting "completed" while
+        required questions are unanswered would put a green tick on a module a certifier
+        will send back. The stamped `definition_version` records which questionnaire the
+        answers were given against; this makes the status honest about the current one.
+
+        Downgrades to `in_progress` rather than inventing a status: every surface already
+        handles it, and the module genuinely is in progress again.
+        """
+        if entry.get("not_applicable"):
+            return "not_applicable"
+        if entry.get("completed_at"):
+            if module is not None:
+                from certifications.osp_modules.conditions import missing_required
+
+                if missing_required(module, entry.get("answers") or {}):
+                    return "in_progress"
+            return "completed"
+        if entry.get("answers"):
+            return "in_progress"
+        return "not_started"
+
+    def _module_progress_row(self, module, entry: dict) -> dict:
+        from certifications.osp_modules.conditions import progress
+
+        return {
+            "key": module.key,
+            "code": module.code,
+            "status": self._module_status(entry, module),
+            "not_applicable": bool(entry.get("not_applicable")),
+            "na_attestation": entry.get("na_attestation"),
+            "completed_at": entry.get("completed_at"),
+            "completed_by": entry.get("completed_by"),
+            "definition_version": entry.get("definition_version"),
+            "progress": progress(
+                module,
+                entry.get("answers") or {},
+                not_applicable=bool(entry.get("not_applicable")),
+            ),
+        }
+
+    @action(detail=True, methods=["get"], url_path="modules")
+    def modules(self, request, **kwargs):
+        """Per-module progress for the module list page (farm-wide modules).
+
+        Per-parcel module rows land with WS-5 (they are computed against live Parcel
+        state, not against module_responses — Appendix A §f).
+        """
+        from certifications.osp_modules import MODULE_REGISTRY
+
+        osp = self.get_object()
+        responses = (osp.module_responses or {}).get("modules", {})
+        rows = [self._module_progress_row(m, responses.get(m.key) or {}) for m in MODULE_REGISTRY]
+        return Response({"modules": rows})
+
+    @action(detail=True, methods=["get", "put"], url_path=r"modules/(?P<module_key>[a-z0-9_]+)")
+    def module_detail(self, request, module_key=None, **kwargs):
+        """One module's answers — read (GET) and the operator's writes (PUT).
+
+        PUT payload — all keys optional:
+          answers          {question_key: value} merged into stored answers; value null
+                           deletes the answer. Values are enveloped {"value", "at"} on
+                           write; only operator-entered/accepted values ever arrive here
+                           (prefill suggestions are resolved on GET and never stored).
+          not_applicable   bool — module-level attestation; stamps who/when. Refused for
+                           modules that don't allow it.
+          complete         true → server-side required-if-visible validation, then stamps
+                           completed_at/by. Any later content write clears the stamp — a
+                           completed module that changes must be re-completed (the honest
+                           version of QO's "re-generate after edits" warning).
+
+        Draft-only, same rule as perform_update: answers on a submitted/active OSP are an
+        attested record; changes go through a new version.
+        """
+        from certifications.osp_modules import CONTENT_VERSION, MODULES_BY_KEY, serialize_module
+        from certifications.osp_modules.conditions import (
+            exclusive_conflicts,
+            invalid_choice_answers,
+            invalid_typed_answers,
+            missing_required,
+            validate_answer_keys,
+        )
+
+        module = MODULES_BY_KEY.get(module_key)
+        if module is None:
+            raise Http404(f"Unknown module '{module_key}'")
+        if module.repeat_per_parcel:
+            raise ValidationError({"module": "Per-parcel modules are addressed via WS-5 endpoints."})
+
+        if request.method == "GET":
+            from certifications.services.osp_prefill import resolve_suggestions
+
+            osp = self.get_object()
+            entry = ((osp.module_responses or {}).get("modules", {})).get(module.key) or {}
+            return Response(
+                {
+                    "definition": serialize_module(module),
+                    "content_version": CONTENT_VERSION,
+                    "response": self._module_progress_row(module, entry),
+                    "answers": entry.get("answers") or {},
+                    # Evidence → suggestion only. Resolved fresh on every GET, never
+                    # stored; the sole path into `answers` is the operator accepting
+                    # one in the wizard (§ 205.201(a) — the producer authors the plan).
+                    "suggestions": resolve_suggestions(module, osp.establishment),
+                }
+            )
+
+        with transaction.atomic():
+            osp = (
+                OrganicSystemPlan.objects.select_for_update()
+                .select_related("establishment")
+                .get(pk=self.get_object().pk)
+            )
+            if osp.status != "draft":
+                raise ValidationError(
+                    {
+                        "status": (
+                            f"This plan is {osp_status_phrase(osp.status)}, so its answers are "
+                            "locked — it is the record your certifier reviewed. Start a new "
+                            "version to make changes: it copies your answers across and leaves "
+                            "this plan intact."
+                        )
+                    }
+                )
+
+            responses = osp.module_responses or {"schema_version": 1, "modules": {}, "parcel_modules": {}}
+            responses.setdefault("modules", {})
+            entry = responses["modules"].setdefault(
+                module.key,
+                {
+                    "status": "not_started",
+                    "not_applicable": False,
+                    "na_attestation": None,
+                    "answers": {},
+                    "completed_at": None,
+                    "completed_by": None,
+                    "definition_version": CONTENT_VERSION,
+                },
+            )
+            from django.utils import timezone as dj_tz
+
+            now = dj_tz.now().isoformat()
+            user_id = request.user.id if request.user.is_authenticated else None
+            content_changed = False
+
+            # Entries cloned or written by earlier shapes may lack keys — never KeyError
+            # on a farmer's own data.
+            entry.setdefault("answers", {})
+
+            if "answers" in request.data:
+                incoming = request.data.get("answers")
+                if not isinstance(incoming, dict):
+                    raise ValidationError({"answers": "Must be an object of {question_key: value}."})
+                unknown = validate_answer_keys(module, incoming)
+                if unknown:
+                    raise ValidationError({"answers": f"Unknown question key(s): {', '.join(unknown)}"})
+                bad = invalid_choice_answers(module, incoming)
+                if bad:
+                    raise ValidationError(
+                        {"answers": {k: f"Value not among the defined options: {v}" for k, v in bad.items()}}
+                    )
+                mistyped = invalid_typed_answers(module, incoming)
+                if mistyped:
+                    raise ValidationError({"answers": mistyped})
+                conflicted = exclusive_conflicts(module, incoming)
+                if conflicted:
+                    raise ValidationError(
+                        {
+                            "answers": {
+                                k: (
+                                    f"'{v}' is a none-of-the-above option and cannot be "
+                                    "combined with other selections."
+                                )
+                                for k, v in conflicted.items()
+                            }
+                        }
+                    )
+                for key, value in incoming.items():
+                    if value is None:
+                        if key in entry["answers"]:
+                            entry["answers"].pop(key)
+                            content_changed = True
+                    else:
+                        previous = (entry["answers"].get(key) or {}).get("value")
+                        if previous != value:
+                            entry["answers"][key] = {"value": value, "at": now}
+                            content_changed = True
+
+            if "not_applicable" in request.data:
+                flag = request.data.get("not_applicable")
+                if not isinstance(flag, bool):
+                    raise ValidationError({"not_applicable": "Must be a boolean."})
+                if flag and not module.allows_not_applicable:
+                    raise ValidationError(
+                        {
+                            "not_applicable": (
+                                f"Module '{module.key}' has no not-applicable path — its "
+                                "questions apply to every operation."
+                            )
+                        }
+                    )
+                if flag != bool(entry.get("not_applicable")):
+                    content_changed = True
+                entry["not_applicable"] = flag
+                entry["na_attestation"] = {"by": user_id, "at": now} if flag else None
+
+            # A content change after completion invalidates the completion stamp —
+            # the module must be reviewed and completed again.
+            if content_changed and entry.get("completed_at") and not request.data.get("complete"):
+                entry["completed_at"] = None
+                entry["completed_by"] = None
+
+            if request.data.get("complete"):
+                stored = entry.get("answers") or {}
+                missing = missing_required(
+                    module,
+                    stored,
+                    not_applicable=bool(entry.get("not_applicable")),
+                )
+                if missing:
+                    raise ValidationError(
+                        {
+                            "complete": ("Required questions are unanswered: " + ", ".join(missing)),
+                            "missing": missing,
+                        }
+                    )
+                # Belt: stored answers written before a validator existed must not be
+                # sealed into a completion — completion re-checks the whole stored set,
+                # not just this request's delta.
+                stale_bad = {**invalid_typed_answers(module, stored), **invalid_choice_answers(module, stored)}
+                stale_conflicts = exclusive_conflicts(module, stored)
+                if stale_bad or stale_conflicts:
+                    raise ValidationError(
+                        {
+                            "complete": "Stored answers need correction before completing.",
+                            "invalid": {
+                                **stale_bad,
+                                **{k: f"conflicts with '{v}'" for k, v in stale_conflicts.items()},
+                            },
+                        }
+                    )
+                entry["completed_at"] = now
+                entry["completed_by"] = user_id
+
+            entry["definition_version"] = CONTENT_VERSION
+            entry["status"] = self._module_status(entry, module)
+            osp.module_responses = responses
+
+            # Recompile the § 205.201(a) narratives from the new answers in the same
+            # transaction — the sections a certifier reads are never stale relative to
+            # module answers (WS-2.3).
+            from certifications.services.osp_module_compiler import compile_modules_to_sections
+
+            compile_modules_to_sections(osp)
+            osp.save(update_fields=["module_responses", "sections", "updated_at"])
+
+        return Response(
+            {
+                "response": self._module_progress_row(module, entry),
+                "answers": entry.get("answers") or {},
+            }
+        )
 
 
 class OSPAnnualUpdateViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
@@ -931,6 +1387,42 @@ class LandownerAffidavitViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     def get_serializer(self, *args, **kwargs):
         serializer = super().get_serializer(*args, **kwargs)
         # Cross-tenant FK guard: the affidavit's parcel must belong to THIS establishment.
+        est_pk = self.kwargs.get("establishment_pk")
+        fields = getattr(serializer, "fields", None)
+        if est_pk and fields and "parcel" in fields and hasattr(fields["parcel"], "queryset"):
+            from product.models import Parcel
+
+            fields["parcel"].queryset = Parcel.objects.filter(establishment_id=est_pk)
+        return serializer
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+
+class AdjoiningLandAffidavitViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
+    """CRUD for neighbour-signed adjoining-land attestations (USDA form #25, § 205.202(c)).
+
+    Nested under /companies/{company_pk}/establishments/{establishment_pk}/adjoining-land/.
+    Filter by parcel via ?parcel=<id>. Mirrors LandownerAffidavitViewSet, including its
+    cross-tenant FK guard — without it a client could attach an attestation to another
+    company's parcel by posting a foreign id.
+    """
+
+    serializer_class = AdjoiningLandAffidavitSerializer
+    lookup_field = "pk"
+
+    def get_queryset(self):
+        qs = AdjoiningLandAffidavit.objects.filter(
+            parcel__establishment_id=self.kwargs.get("establishment_pk"),
+            parcel__establishment__company=self.company,
+        ).select_related("parcel")
+        parcel_id = self.request.query_params.get("parcel")
+        if parcel_id:
+            qs = qs.filter(parcel_id=parcel_id)
+        return qs
+
+    def get_serializer(self, *args, **kwargs):
+        serializer = super().get_serializer(*args, **kwargs)
         est_pk = self.kwargs.get("establishment_pk")
         fields = getattr(serializer, "fields", None)
         if est_pk and fields and "parcel" in fields and hasattr(fields["parcel"], "queryset"):
@@ -1170,6 +1662,13 @@ class CertifierAccessLinkViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # reviewer has read it — the moment to stop them is BEFORE sharing, not
         # inside the PDF the certifier also opens.
         from history.services.operation_readiness_service import OperationReadinessService
+
+        # Plan gate first. The certifier link is a Compliance artifact like the packet, and the
+        # readiness evaluation below walks the whole operation — no reason to spend that on a
+        # request that cannot mint a link anyway. Checked on CREATE only: revoking a link and
+        # listing the ones already issued must keep working if a farm lapses to Starter, or
+        # lapsing would leave live tokens the grower can see but not withdraw.
+        require_compliance_exports(self.establishment.company, user=self.request.user)
 
         certification_type = serializer.validated_data.get("certification_type", "organic")
         readiness = OperationReadinessService(self.establishment, certification_type).evaluate()

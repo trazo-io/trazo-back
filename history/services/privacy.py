@@ -106,6 +106,123 @@ def _strip_unless_negated(text, pattern):
     return pattern.sub(replace, text)
 
 
+#: Fields whose value names a commercial counterparty that is DELIBERATELY WITHHELD from the
+#: anonymous payload. `redact_own_vendor_names` removes those same names from free text on the
+#: SAME event, so withholding the column is not defeated by the grower's own prose.
+#:
+#: Scoped to exactly the two supplier fields the serializer already strips as commercially
+#: sensitive. `manufacturer` is deliberately NOT here: an input's maker is legitimate public
+#: product information (the consumer card names the product itself), so redacting it out of a
+#: description would mangle honest copy to protect something that was never withheld.
+#: `applicator_name` is a PERSON and is certifier-only, but "[supplier withheld]" is the wrong
+#: label for a human name — that needs its own treatment, not this one.
+VENDOR_NAME_FIELDS = ("seed_supplier_name", "supplier_name")
+
+#: Words that are far too common in farm prose to use as a vendor match on their own. Without
+#: this, a supplier stored as "Organic Seeds Inc" reduces to the stem "Organic" and redacts the
+#: word out of every sentence on the card — "Certified [supplier withheld] planting stock".
+_VENDOR_STEM_STOPWORDS = frozenset(
+    {
+        "organic",
+        "certified",
+        "natural",
+        "valley",
+        "green",
+        "sun",
+        "west",
+        "north",
+        "south",
+        "east",
+        "coast",
+        "hill",
+        "hills",
+        "creek",
+        "river",
+        "premium",
+        "quality",
+        "family",
+        "heritage",
+        "pacific",
+        "california",
+        "american",
+        "national",
+        "united",
+        "tree",
+        "trees",
+        "plant",
+        "plants",
+        "crop",
+        "crops",
+        "agri",
+        "agro",
+    }
+)
+
+#: Corporate suffixes to shed when deriving the distinctive part of a vendor name, so that a
+#: stored "Brokaw Nursery, Saticoy CA" also matches a prose mention of "Brokaw Nursery" or
+#: "Brokaw". Order matters: longest first.
+_VENDOR_NOISE = re.compile(
+    r"(?i),.*$|\b(inc|llc|ltd|co|corp|company|nursery|nurseries|seeds?|supply|farms?|ranch|"
+    r"orchards?|growers?|brothers|bros)\b\.?",
+)
+
+_REDACTED = "[supplier withheld]"
+
+
+def redact_own_vendor_names(text, event):
+    """Remove the vendors named on THIS event from a public free-text string.
+
+    🔴 2026-08-15, measured on the live anonymous endpoint. `seed_supplier_name` was correctly
+    stripped from the payload — and the same nursery was published verbatim inside
+    `description`:
+
+        seed_supplier_name : (stripped)
+        description        : "Ordered and received organic Hass avocado nursery stock from
+                              Saticoy Grove Nursery for replanting 28 trees..."
+
+    The regression test that guards this passed throughout, because it asserted the absence of
+    the FULL stored string ("Brokaw Nursery, Saticoy CA") while the prose named the vendor
+    without the city. Withholding a column means nothing if the same fact rides out in the
+    sentence beside it.
+
+    Scoped deliberately to names the operator already recorded on this event: a general-purpose
+    company-name detector would redact crop varieties, place names and the farm's own brand.
+    """
+    if not isinstance(text, str) or not text:
+        return text
+    for field_name in VENDOR_NAME_FIELDS:
+        raw = getattr(event, field_name, None)
+        if not isinstance(raw, str) or not raw.strip():
+            continue
+        candidates = {raw.strip()}
+        # The name without its address tail: "Saticoy Grove Nursery, Saticoy CA"
+        #                                 -> "Saticoy Grove Nursery"
+        # This one matters most: prose almost always names the business without the city, and
+        # matching it whole avoids leaving a dangling "Nursery" behind in the sentence.
+        head = raw.split(",")[0].strip()
+        if len(head) >= 4:
+            candidates.add(head)
+        # The distinctive stem: "Saticoy Grove Nursery" -> "Saticoy Grove".
+        stem = _VENDOR_NOISE.sub("", raw).strip(" ,.-")
+        # Guard against over-matching. A 1-3 character stem ("CA") would hit ordinary words, and
+        # a single common word ("Organic", "Valley") is worse still — it survives inside normal
+        # sentences. A multi-word stem is specific enough to be safe on its own.
+        if len(stem) >= 4 and (" " in stem or stem.lower() not in _VENDOR_STEM_STOPWORDS):
+            candidates.add(stem)
+        # Longest first, so the fullest form wins and shorter forms only mop up what is left.
+        for candidate in sorted(candidates, key=len, reverse=True):
+            text = re.sub(re.escape(candidate), _REDACTED, text, flags=re.IGNORECASE)
+    # Collapse a redaction that swallowed part of a name and left its tail behind
+    # ("[supplier withheld] Nursery" -> "[supplier withheld]").
+    text = re.sub(
+        rf"{re.escape(_REDACTED)}(\s+(?:nursery|nurseries|seeds?|supply|farms?|inc|llc|ltd|co)\b\.?)+",
+        _REDACTED,
+        text,
+        flags=re.IGNORECASE,
+    )
+    return re.sub(r"\s{2,}", " ", text).strip()
+
+
 def public_free_text(value):
     """Strip farm financials and unsupportable market claims from a public free-text field."""
     if not isinstance(value, str) or not value:

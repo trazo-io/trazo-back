@@ -30,6 +30,7 @@ from .serializers import (
     InvoiceSerializer,
     PaymentMethodSerializer,
     PlanSerializer,
+    SubscriptionAddOnSerializer,
     SubscriptionSerializer,
 )
 
@@ -163,8 +164,14 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["post"], url_path="start-trial")
     def start_trial(self, request):
-        """Start a free 14-day Starter trial.
-        Creates a local subscription with no Stripe involvement."""
+        """Put a company on Starter — FREE FOREVER, no card, no Stripe, no clock.
+
+        Named `start_trial` for URL compatibility only; there is no trial any more. Starter used
+        to be created as `status="trialing"` with a 14-day `trial_end` that `expire_trials`
+        canceled, which contradicted the October plan ("Starter free forever") and the COG Pro
+        migration page's anti-lock-in promise. The free tier is bounded by its LIMITS — one
+        production a year, 2 GB, 1000 scans a month — not by a countdown.
+        """
         user = request.user
         company_id = request.data.get("company_id")
 
@@ -177,10 +184,13 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         if not user.companies.filter(id=company.id).exists():
             return Response({"error": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
 
-        # Check company doesn't already have a subscription (trial is one-time)
+        # One subscription per company. Not because the free tier is rationed — Starter is free
+        # forever and a company may sit on it indefinitely — but because `Company.subscription`
+        # is one-to-one, and re-running this would silently replace a PAID Compliance
+        # subscription with the free tier.
         if hasattr(company, "subscription") or Subscription.objects.filter(company=company).exists():
             return Response(
-                {"error": "Company already has or had a subscription. Trial is one-time only."},
+                {"error": "Company already has a subscription."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -192,24 +202,17 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Create local-only subscription (no Stripe)
-        now = timezone.now()
-        trial_end = now + timezone.timedelta(days=settings.TRIAL_PERIOD_DAYS)
-
+        # Create local-only subscription (no Stripe). Active with no end date — see the docstring.
         subscription = Subscription.objects.create(
             company=company,
             plan=starter_plan,
-            status="trialing",
-            current_period_start=now,
-            current_period_end=trial_end,
-            trial_end=trial_end,
+            status="active",
+            current_period_start=timezone.now(),
+            current_period_end=None,
+            trial_end=None,
         )
 
-        logger.info(
-            "Starter trial created: Company %s, trial ends %s",
-            company.id,
-            trial_end.isoformat(),
-        )
+        logger.info("Free-forever Starter plan started for company %s", company.id)
 
         return Response(
             {
@@ -363,82 +366,132 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def add_addon(self, request, pk=None):
-        """Add an add-on to the subscription with Stripe checkout"""
+        """Attach an add-on to the EXISTING subscription as a line item.
+
+        Not a checkout session.
+        ----------------------
+        This used to call `stripe.checkout.Session.create(..., mode="subscription")`, which
+        opens a SECOND Stripe subscription for the same company. One farm then had two
+        subscriptions, two invoices and two renewal dates, and nothing in the product ever
+        told the farmer which was which. Trazo sells one thing per farm — a yearly
+        Compliance plan — and Extra Farm extends it; extending is a subscription ITEM, which
+        is exactly the object Stripe provides for it.
+
+        Adding an item also gets proration right for free: Stripe bills the remainder of the
+        current period at the item's rate and folds the add-on into the SAME renewal from
+        then on. A second subscription would have charged a full period immediately and then
+        renewed on its own anniversary.
+        """
         subscription = self.get_object()
         addon_id = request.data.get("addon_id")
-        quantity = int(request.data.get("quantity", 1))
-        return_url = request.data.get("return_url", None)
+        try:
+            quantity = int(request.data.get("quantity", 1))
+        except (TypeError, ValueError):
+            return Response({"error": "quantity must be a whole number"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Better validation
         if not addon_id:
             return Response({"error": "addon_id is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         if quantity <= 0:
             return Response({"error": "quantity must be greater than 0"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Add request logging for debugging
-        logger.info(
-            f"Creating checkout session for addon {addon_id} with quantity {quantity} to subscription {subscription.id}"
-        )
-
         try:
             addon = AddOn.objects.get(id=addon_id, is_active=True)
-
-            # Get the frontend URL from settings or use a default
-            frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000")
-
-            # Create a Stripe checkout session for the add-on
-            # CRITICAL: Include session_id and company_id for frontend verification
-            # {CHECKOUT_SESSION_ID} is a Stripe placeholder that gets replaced with actual session ID
-            success_url_params = (
-                f"success=true&session_id={{CHECKOUT_SESSION_ID}}"
-                f"&company_id={str(subscription.company.id)}&from_addon=true"
-            )
-
-            # If return_url is provided, URL-encode it to prevent param collision
-            if return_url:
-                from urllib.parse import quote
-
-                success_url_params += f"&return_url={quote(return_url, safe='')}"
-
-            success_url = f"{frontend_url}/admin/dashboard/stripe-success?{success_url_params}"
-            cancel_url = f"{frontend_url}/admin/dashboard/subscription"
-
-            # Create the checkout session
-            checkout_session = stripe.checkout.Session.create(
-                payment_method_types=["card"],
-                line_items=[
-                    {
-                        "price": addon.stripe_price_id,
-                        "quantity": quantity,
-                    }
-                ],
-                mode="subscription",
-                customer=subscription.stripe_customer_id,
-                success_url=success_url,
-                cancel_url=cancel_url,
-                metadata={
-                    "company_id": str(subscription.company.id),
-                    "subscription_id": str(subscription.id),
-                    "addon_id": str(addon.id),
-                    "quantity": str(quantity),
-                    "addon_type": addon.slug,
-                    "is_addon_purchase": "true",
-                    "return_url": return_url,
-                },
-            )
-
-            # Return the session URL
-            logger.info(f"Created checkout session: {checkout_session.id}")
-            return Response({"url": checkout_session.url, "session_id": checkout_session.id})
-
         except AddOn.DoesNotExist:
             logger.error("Addon not found: %s", addon_id)
             return Response({"error": "Add-on not found"}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            logger.error("Error creating checkout session for add-on: %s", e, exc_info=True)
+
+        # An add-on with no verified Stripe price must not be sold.
+        #
+        # Migration 0016 NULLed `extra-establishment.stripe_price_id` because it still
+        # pointed at a $30/MONTH price after 0014 repriced the add-on to $149/YEAR — a
+        # Stripe Price is immutable, so repricing means minting a new one, and the row had
+        # never been repointed. Refusing loudly here is the whole value of that NULL: the
+        # alternative is handing Stripe an id that bills an amount the UI never showed.
+        if not addon.stripe_price_id:
+            logger.error("Add-on %s has no stripe_price_id; refusing to sell it", addon.slug)
             return Response(
-                {"error": "Failed to create add-on checkout. Please try again."},
+                {
+                    "error": (
+                        "This add-on is not available for self-service purchase yet. "
+                        "Contact support and we'll add it to your plan."
+                    ),
+                    "code": "ADDON_PRICE_UNAVAILABLE",
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        if not subscription.stripe_subscription_id:
+            return Response(
+                {
+                    "error": "An active billing subscription is required before adding an add-on.",
+                    "code": "NO_STRIPE_SUBSCRIPTION",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        logger.info(
+            "Attaching addon %s x%d to subscription %s (stripe %s)",
+            addon.slug,
+            quantity,
+            subscription.id,
+            subscription.stripe_subscription_id,
+        )
+
+        try:
+            existing = SubscriptionAddOn.objects.filter(subscription=subscription, addon=addon).first()
+
+            if existing and existing.stripe_item_id:
+                # Already on the invoice — raise the quantity on the SAME item rather than
+                # adding a second line for the same product.
+                new_quantity = existing.quantity + quantity
+                stripe.SubscriptionItem.modify(
+                    existing.stripe_item_id,
+                    quantity=new_quantity,
+                    proration_behavior="create_prorations",
+                )
+                item_id = existing.stripe_item_id
+            else:
+                item = stripe.SubscriptionItem.create(
+                    subscription=subscription.stripe_subscription_id,
+                    price=addon.stripe_price_id,
+                    quantity=quantity,
+                    proration_behavior="create_prorations",
+                    metadata={
+                        "company_id": str(subscription.company.id),
+                        "addon_id": str(addon.id),
+                        "addon_slug": addon.slug,
+                    },
+                )
+                item_id = item.id
+                new_quantity = (existing.quantity + quantity) if existing else quantity
+
+            with transaction.atomic():
+                # Written HERE, not in a webhook. There is no checkout session to complete,
+                # so `checkout.session.completed` never fires for this path — the entitlement
+                # has to land in the same request that created the Stripe item, or the farmer
+                # is billed for a farm they still cannot create.
+                subscription_addon, _ = SubscriptionAddOn.objects.update_or_create(
+                    subscription=subscription,
+                    addon=addon,
+                    defaults={"quantity": new_quantity, "stripe_item_id": item_id},
+                )
+
+            logger.info("Addon %s now at quantity %d on subscription %s", addon.slug, new_quantity, subscription.id)
+            return Response(
+                {
+                    # No `url`: nothing to redirect to. The client treats a missing url as
+                    # "applied immediately" and refetches, which is now the truth.
+                    "url": None,
+                    "addon": SubscriptionAddOnSerializer(subscription_addon).data,
+                    "prorated": True,
+                }
+            )
+
+        except Exception as e:
+            logger.error("Error attaching add-on to subscription: %s", e, exc_info=True)
+            return Response(
+                {"error": "Failed to add the add-on. Please try again."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -661,63 +714,26 @@ class CheckoutViewSet(ViewSet):
 
             # For add-on purchases, we use a different flow
             if addon_type:
-                # Make sure the company has an active subscription
-                if not hasattr(company, "subscription") or not company.subscription.stripe_subscription_id:
-                    return Response(
-                        {"error": "Company must have an active subscription to purchase add-ons"},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-
-                # Get the add-on
-                addon_slug_map = {
-                    "extraEstablishment": "extra-establishment",
-                    "extraProduction": "extra-production",
-                    "extraParcel": "extra-parcel",
-                    "extraStorage": "extra-storage",
-                }
-
-                try:
-                    addon = AddOn.objects.get(slug=addon_slug_map[addon_type], is_active=True)
-                except AddOn.DoesNotExist:
-                    return Response({"error": "Add-on not found"}, status=status.HTTP_404_NOT_FOUND)
-
-                # Determine success and cancel URLs
-                success_url_params = (
-                    f"success=true&session_id={{CHECKOUT_SESSION_ID}}&company_id={str(company.id)}&addon=true"
-                )
-
-                # Add return_url parameter if provided
-                if success_url:
-                    success_url_params += f"&return_url={success_url}"
-
-                success_url_final = (
-                    success_url or f"{settings.FRONTEND_URL}/admin/dashboard/stripe-success?{success_url_params}"
-                )
-                cancel_url_final = cancel_url or f"{settings.FRONTEND_URL}/admin/dashboard/plan-usage?canceled=true"
-
-                # Create checkout session for add-on
-                checkout_session = stripe.checkout.Session.create(
-                    customer=customer_id,
-                    payment_method_types=["card"],
-                    line_items=[
-                        {
-                            "price": addon.stripe_price_id,
-                            "quantity": quantity,
-                        }
-                    ],
-                    mode="subscription",  # Add-on prices are recurring
-                    success_url=success_url_final,
-                    cancel_url=cancel_url_final,
-                    metadata={
-                        "company_id": company.id,
-                        "addon_id": addon.id,
-                        "quantity": quantity,
-                        "addon_type": addon_type,
-                        "return_url": success_url,
+                # Add-ons are no longer sold through a checkout session.
+                #
+                # This branch opened a SECOND Stripe subscription for the same company
+                # (`mode="subscription"` with the add-on as the only line item), duplicating
+                # `SubscriptionViewSet.add_addon` — which now attaches the add-on to the
+                # EXISTING subscription as an item, so it prorates correctly and renews on the
+                # one date the farmer already knows. Two code paths that bill differently for
+                # the same purchase is worse than either of them.
+                #
+                # Its slug map also offered `extraProduction`, `extraParcel` and `extraStorage`,
+                # all deactivated by migrations 0006/0010 — a menu of things that cannot be
+                # bought, kept alive only by a dictionary nobody re-read.
+                return Response(
+                    {
+                        "error": "Add-ons are added to your existing subscription, not bought separately.",
+                        "code": "USE_ADD_ADDON_ENDPOINT",
+                        "endpoint": "/subscriptions/{subscription_id}/add_addon/",
                     },
+                    status=status.HTTP_410_GONE,
                 )
-
-                return Response({"url": checkout_session.url})
 
             # Regular subscription flow. self_serve_plans keeps the free unlimited pilot plan out
             # of checkout even if a caller supplies its id directly.
