@@ -648,6 +648,7 @@ _PRODUCTION_STANDARDS = (
         ),
         implementation=(
             "trazo-back/certifications/services/national_list_aliases.py",
+            "trazo-back/certifications/management/commands/seed_national_list.py",
             "trazo-back/certifications/osp_modules/g5_0_pest.py",
         ),
         tests=(
@@ -662,9 +663,10 @@ _PRODUCTION_STANDARDS = (
             "implementation, which covers (e)(1) and touches neither (e)(2) nor (e)(3). The "
             "rationale sentence mentioned burning, so the mapping read as covered while no "
             "field, question or export existed for it. A clause map is only as honest as its "
-            "weakest `implementation` tuple. (e)(2) sewage sludge remains unasked — it is a "
-            "flat prohibition on a material no orchard input catalog carries, so it is covered "
-            "by the same input-allowability path as (e)(1) rather than by its own question."
+            "weakest `implementation` tuple. (e)(2) sewage sludge has no question of its own "
+            "and does not need one: it is a seeded prohibited entry — `seed_national_list.py` "
+            "row ('f', 'amendment', 'Sewage sludge (biosolids)') — so naming it as an input "
+            "resolves against the prohibited list on the same path as (e)(1)."
         ),
     ),
     Clause(

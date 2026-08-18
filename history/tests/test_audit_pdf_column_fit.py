@@ -55,6 +55,10 @@ WORST_CASE_TOKENS = {
     "Lot #": "NH2025-04127",
 }
 
+#: Headers render BOLD, which is wider than the regular face used for values. Sizing a column
+#: from a regular-weight measurement leaves the header itself wrapping.
+HEADER_FONT = "Helvetica-Bold"
+
 WIDTH_LISTS = {
     "MASS_BALANCE_PURCHASE_WIDTHS": svc.MASS_BALANCE_PURCHASE_WIDTHS,
     "INPUT_TRACEABILITY_WIDTHS_CA": svc.INPUT_TRACEABILITY_WIDTHS_CA,
@@ -91,6 +95,36 @@ class ColumnFitTests(SimpleTestCase):
                         f"different identifier than the one on file.",
                     )
 
+    def test_every_column_fits_its_own_header_word(self):
+        """Headers are atomic too — and they are BOLD.
+
+        A header is a single developer-authored word per line; it cannot wrap gracefully, so
+        "Qty Purchased" rendering as "Qty Purchas / ed" is the same defect as a split invoice
+        number. This nearly recurred on 2026-08-18: two columns were sized from a
+        REGULAR-weight measurement of "Purchased" (0.47in) when the header actually draws at
+        0.52in bold, leaving them 0.01in short.
+
+        Checks the widest single word, not the whole header — multi-word headers are expected
+        to wrap between words.
+        """
+        for name, headers in svc.TABLE_HEADERS.items():
+            widths = WIDTH_LISTS[name]
+            self.assertEqual(
+                len(headers),
+                len(widths),
+                f"{name} has {len(widths)} columns but {len(headers)} headers — the guard "
+                f"would be comparing the wrong pairs.",
+            )
+            for index, (width, header) in enumerate(zip(widths, headers)):
+                widest_word = max(stringWidth(w, HEADER_FONT, CELL_FONT_SIZE) for w in header.split())
+                with self.subTest(table=name, column=header):
+                    self.assertGreaterEqual(
+                        width,
+                        widest_word + CELL_PADDING,
+                        f"{name}[{index}] ({header}) is {width / inch:.3f}in but its widest "
+                        f"header word needs {(widest_word + CELL_PADDING) / inch:.3f}in in bold.",
+                    )
+
     def test_the_identifier_index_map_matches_the_lists(self):
         """Guards the guard: an index that points past the end tests nothing.
 
@@ -100,10 +134,38 @@ class ColumnFitTests(SimpleTestCase):
         """
         for name, columns in svc.IDENTIFIER_COLUMNS.items():
             widths = WIDTH_LISTS[name]
+            headers = svc.TABLE_HEADERS[name]
             for index, label in columns.items():
                 with self.subTest(table=name, column=label):
                     self.assertLess(index, len(widths), f"{name} has no column {index}")
                     self.assertIn(label, WORST_CASE_TOKENS, f"no worst-case token for '{label}'")
+                    # The map must describe the SAME column the header list does. Bounds
+                    # alone are not enough: inserting a column shifts every later index, and
+                    # the assertions above would keep passing while silently measuring a
+                    # prose column against an identifier token.
+                    self.assertEqual(
+                        headers[index],
+                        label,
+                        f"{name}[{index}] is '{headers[index]}' but IDENTIFIER_COLUMNS calls "
+                        f"it '{label}' — a column was inserted without updating the map.",
+                    )
+
+    def test_the_two_traceability_variants_stay_in_lockstep(self):
+        """CA is the non-CA table plus one column, and nothing else.
+
+        The render code builds one header list and appends "CA DPR Permit" for California, so
+        any other difference between the two width lists means one of them no longer matches
+        what is drawn. This is the shape of the defect found on 2026-08-18: the non-CA list
+        carried EIGHT widths against NINE headers, because "Cert #" was appended
+        unconditionally by the builder but never given a width.
+        """
+        ca_headers = svc.TABLE_HEADERS["INPUT_TRACEABILITY_WIDTHS_CA"]
+        non_ca_headers = svc.TABLE_HEADERS["INPUT_TRACEABILITY_WIDTHS_NON_CA"]
+        self.assertEqual(ca_headers, non_ca_headers + ["CA DPR Permit"])
+        self.assertEqual(
+            len(svc.INPUT_TRACEABILITY_WIDTHS_CA),
+            len(svc.INPUT_TRACEABILITY_WIDTHS_NON_CA) + 1,
+        )
 
     def test_prose_columns_are_not_claimed_as_identifiers(self):
         """Product / Supplier / Applicator wrap on word boundaries and must stay exempt.

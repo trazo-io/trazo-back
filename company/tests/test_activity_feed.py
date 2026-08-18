@@ -138,3 +138,31 @@ class ActivityFeedTests(TestCase):
         self.client.force_authenticate(user=outsider)
         r = self.client.get(self._url())
         self.assertIn(r.status_code, (403, 404))
+
+    def test_rows_carry_production_finished_false_while_open(self):
+        """The detail modal gates Edit/Delete on this; an open season must stay editable."""
+        r = self.client.get(self._url())
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(all(row["production_finished"] is False for row in r.data["activities"]))
+
+    def test_rows_report_production_finished_once_the_season_closes(self):
+        """Events on a finished production are locked server-side (423).
+
+        The feed row is the ONLY thing the activity list knows about an event, so without
+        this flag the detail modal offered Edit and Delete on closed seasons and both
+        simply failed — after the farmer had refilled the wizard.
+        """
+        self.history.finish_date = date(2026, 9, 1)
+        self.history.save(update_fields=["finish_date"])
+
+        r = self.client.get(self._url())
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(all(row["production_finished"] is True for row in r.data["activities"]))
+
+    def test_published_alone_also_marks_the_row_finished(self):
+        """The server-side lock keys on `finish_date is not None OR published` — match it."""
+        self.history.published = True
+        self.history.save(update_fields=["published"])
+
+        r = self.client.get(self._url())
+        self.assertTrue(all(row["production_finished"] is True for row in r.data["activities"]))

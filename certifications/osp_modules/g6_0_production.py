@@ -516,7 +516,7 @@ G6_0_PRODUCTION = Module(
         #
         # NOT gated on `split_operation`: a wholly organic farm still keeps diesel, treated
         # lumber, and shop cleaners, and § 205.272(a) applies to those exactly as it does to
-        # a conventional block's fertiliser.
+        # a conventional block's fertilizer.
         ModulePage(
             key="d_prohibited_material_storage",
             title=text(
@@ -529,7 +529,7 @@ G6_0_PRODUCTION = Module(
                     "that keep organic production and product away from prohibited "
                     "substances, and § 205.272(a) restates the same duty as a practice "
                     "standard. Materials count even when they are never applied to organic "
-                    "ground — conventional fertiliser held for a leased block, shop "
+                    "ground — conventional fertilizer held for a leased block, shop "
                     "solvents, treated lumber, and fuel additives are all in scope. Describe "
                     "where they live and what separates them.",
                     "El § 205.201(a)(5) exige que su plan describa las barreras físicas que "
@@ -552,8 +552,8 @@ G6_0_PRODUCTION = Module(
                         "en la producción orgánica?",
                     ),
                     coaching=text(
-                        "Includes conventional fertilisers and pesticides, treated lumber, "
-                        "nonorganic cleaners and sanitisers, and fuel or shop chemicals — "
+                        "Includes conventional fertilizers and pesticides, treated lumber, "
+                        "nonorganic cleaners and sanitizers, and fuel or shop chemicals — "
                         "whether or not they are ever used on organic ground.",
                         "Incluye fertilizantes y pesticidas convencionales, madera tratada, "
                         "limpiadores y desinfectantes no orgánicos, y combustible o químicos "

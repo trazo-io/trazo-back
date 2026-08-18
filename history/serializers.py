@@ -2897,7 +2897,55 @@ class HistoryWriteSerializer(serializers.ModelSerializer):
                     )
                 }
             )
+
+        self._reject_closed_record_rewrites(attrs)
         return attrs
+
+    # The lot header a finished season is identified BY. Events on a finished production
+    # are hard-locked (EventViewSet returns 423/403), but these travelled through the
+    # ordinary PATCH with no guard at all — so a closed record's lot number and yield
+    # could be silently rewritten while the spray records underneath them could not be
+    # corrected. That is backwards: `lot_id` and `production_amount` are the traceability
+    # spine 7 CFR 205.103(b)(2) asks to be auditable back to the last certified operation.
+    _CLOSED_RECORD_FIELDS = (
+        "lot_id",
+        "production_amount",
+        "production_unit",
+        "quality_grade",
+        "harvest_method",
+    )
+
+    def _reject_closed_record_rewrites(self, attrs):
+        """Freeze the lot header, and `finish_date` itself, once a production is finished.
+
+        `finish_date` is included deliberately. It was writable, and HistoryViewSet.update
+        guards only the reverse direction (`published=True` while `finish_date is None`),
+        so `PATCH {"finish_date": null}` cleared every event lock at once — an undocumented
+        reopen with no reason recorded. It also desynchronised retention: `retention_until`
+        is computed ONLY inside History.finish() and is read-only here, so moving
+        `finish_date` afterwards left the 5-year floor keyed to the old date.
+
+        Corrections to a closed season are a real need and must not be smuggled through
+        this endpoint; they belong in an amendment trail that preserves the original.
+        """
+        instance = self.instance
+        if instance is None or instance.finish_date is None:
+            return
+
+        errors = {}
+        for field in self._CLOSED_RECORD_FIELDS:
+            if field in attrs and attrs[field] != getattr(instance, field, None):
+                errors[field] = (
+                    "This production is finished; its harvest record cannot be changed. "
+                    "Finished records are retained as filed."
+                )
+        if "finish_date" in attrs and attrs["finish_date"] != instance.finish_date:
+            errors["finish_date"] = (
+                "A finished production cannot be re-opened or re-dated. Its 5-year "
+                "retention period is calculated from the recorded finish date."
+            )
+        if errors:
+            raise serializers.ValidationError(errors)
 
     def update(self, instance, validated_data):
         crop_type_id = validated_data.pop("crop_type_id", None)

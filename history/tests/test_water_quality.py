@@ -83,9 +83,22 @@ class WaterQualityExportTests(TestCase):
         self.assertNotIn("[REVIEW]", text)
 
     def test_irrigation_without_water_test_fires_review(self):
+        """The REVIEW still fires — but it must NOT be labelled 7 CFR 205.272.
+
+        This asserted "[REVIEW] 7 CFR 205.272" until 2026-08-18. The service relabelled it
+        deliberately, and the new wording says why in the body: water-quality testing is a
+        CCOF / FDA FSMA Produce Safety Rule (21 CFR 112) expectation, NOT a Part 205
+        requirement. Citing § 205.272 for it told a certifier the NOP requires something it
+        does not — the same over-citation the "cite § 205.103, never 'USDA-required forms'"
+        rule exists to prevent. § 205.272 remains the correct citation for the transport /
+        commingling reviews, which is where the service still uses it.
+        """
         self._ir()  # irrigation logged, no water analysis on file
         text = self._text()
-        self.assertIn("[REVIEW] 7 CFR 205.272", text)
+        self.assertIn("[REVIEW]", text)
+        self.assertIn("21 CFR 112", text)
+        self.assertIn("not itself a 7 CFR Part 205 requirement", text)
+        self.assertNotIn("[REVIEW] 7 CFR 205.272", text)
 
     def test_water_test_not_leaked_to_consumer(self):
         self._ir(

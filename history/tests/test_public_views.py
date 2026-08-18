@@ -3,11 +3,12 @@ Test cases for enhanced public views tracking with bot filtering and unique visi
 """
 
 from django.contrib.sessions.backends.db import SessionStore
-from django.test import RequestFactory, TestCase
+from django.db import connection
+from django.test import RequestFactory, TestCase, TransactionTestCase
 
 from company.models import Company, Establishment
 from history.models import History
-from product.models import Product
+from product.models import Parcel, Product
 
 
 class PublicViewsTrackingTestCase(TestCase):
@@ -22,12 +23,34 @@ class PublicViewsTrackingTestCase(TestCase):
 
         self.establishment = Establishment.objects.create(company=self.company, name="Test Farm", year_established=2020)
 
-        # Create test product
-        self.product = Product.objects.create(name="Test Crop", parcel_id=1)  # Assuming a parcel exists
+        # Create test product.
+        #
+        # This read `Product.objects.create(name="Test Crop", parcel_id=1)  # Assuming a parcel
+        # exists`, and the assumption was never true: `parcel` is the REVERSE side of
+        # Parcel.product, not a concrete column, so Django raised
+        # "Product() got unexpected keyword arguments: 'parcel_id'" before a single assertion
+        # ran. Every test in this class errored in setUp — seven of them — which is why the
+        # module contributed pure noise to the suite rather than coverage.
+        self.product = Product.objects.create(name="Test Crop")
+
+        # A real parcel, so `History.parcel` is populated the way production data is. Several
+        # tests below reach through the production to its parcel/establishment; leaving it
+        # null was the source of the HistoryScan foreign-key IntegrityErrors.
+        self.parcel = Parcel.objects.create(
+            name="Test Parcel",
+            establishment=self.establishment,
+            product=self.product,
+            area=1.0,
+        )
 
         # Create test production
         self.production = History.objects.create(
-            name="Test Production 2024", product=self.product, published=True, public_views=0, unique_visitors=0
+            name="Test Production 2024",
+            product=self.product,
+            parcel=self.parcel,
+            published=True,
+            public_views=0,
+            unique_visitors=0,
         )
 
     def test_basic_view_increment(self):
@@ -154,32 +177,66 @@ class PublicViewsTrackingTestCase(TestCase):
         self.assertEqual(self.production.public_views, initial_views + 1)
         self.assertEqual(self.production.unique_visitors, 0)  # No unique tracking without session
 
+
+class ConcurrentViewIncrementTests(TransactionTestCase):
+    """The concurrency check, on a TransactionTestCase — and that is the whole point.
+
+    This lived in PublicViewsTrackingTestCase (a plain TestCase) and asserted `0 != 5`
+    forever. A TestCase wraps each test in a transaction that is never committed, and every
+    thread `threading.Thread` spawns opens its OWN database connection — which cannot see
+    uncommitted rows. So the five workers each looked up a production that did not exist for
+    them, every increment failed, and the assertion measured the fixture rather than the
+    atomicity it claims to test.
+
+    TransactionTestCase commits, so the workers can see the row. Thread exceptions are also
+    captured now: they were being swallowed, which is why the failure said "0 != 5" instead of
+    naming the cause.
+    """
+
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.company = Company.objects.create(name="Test Farm Co")
+        self.establishment = Establishment.objects.create(company=self.company, name="Test Farm", year_established=2020)
+        self.product = Product.objects.create(name="Test Crop")
+        self.parcel = Parcel.objects.create(
+            name="Test Parcel", establishment=self.establishment, product=self.product, area=1.0
+        )
+        self.production = History.objects.create(
+            name="Test Production 2024",
+            product=self.product,
+            parcel=self.parcel,
+            published=True,
+            public_views=0,
+            unique_visitors=0,
+        )
+
     def test_concurrent_view_increments(self):
-        """Test atomic increments prevent race conditions"""
+        """Atomic increments must not lose writes under concurrency."""
         import threading
 
         initial_views = self.production.public_views
         results = []
+        errors = []
 
         def increment_views():
-            request = self.factory.get("/test/")
-            request.session = SessionStore()
-            request.session.create()
-            result = self.production.increment_public_views(request)
-            results.append(result)
+            try:
+                request = self.factory.get("/test/")
+                request.session = SessionStore()
+                request.session.create()
+                results.append(self.production.increment_public_views(request))
+            except Exception as exc:  # noqa: BLE001 - surfaced in the assertion below
+                errors.append(exc)
+            finally:
+                # Each thread opened its own connection; leaking them breaks teardown.
+                connection.close()
 
-        # Create multiple threads to simulate concurrent requests
-        threads = []
-        for _ in range(5):
-            thread = threading.Thread(target=increment_views)
-            threads.append(thread)
+        threads = [threading.Thread(target=increment_views) for _ in range(5)]
+        for thread in threads:
             thread.start()
-
-        # Wait for all threads to complete
         for thread in threads:
             thread.join()
 
-        # Verify all increments succeeded and final count is correct
+        self.assertEqual(errors, [], f"worker threads raised: {errors}")
         self.assertEqual(len([r for r in results if r["views_incremented"]]), 5)
         self.production.refresh_from_db()
         self.assertEqual(self.production.public_views, initial_views + 5)

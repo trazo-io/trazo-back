@@ -26,7 +26,7 @@ G7_0_LABELING = Module(
     key="g7_0_labeling",
     code="G7.0",
     title=text("Labeling", "Etiquetado"),
-    nop_cites=("§ 205.300", "§ 205.303", "§ 205.307"),
+    nop_cites=("§ 205.300", "§ 205.301", "§ 205.303", "§ 205.307"),
     education=(
         text(
             'The word "organic" may identify only product that is certified organic (§ 205.300); a '
@@ -122,6 +122,57 @@ G7_0_LABELING = Module(
                     ),
                     visible_when=(Condition("product_leaves_as", "includes", "other"),),
                     compiles_to=CompileRule(template="Additional product form: {answer}."),
+                ),
+                # § 205.301 defines four labeling categories and § 205.103(b)(3) requires the
+                # records to IDENTIFY the product by the one it is sold under. The per-sale
+                # column (`SalesRecord.organic_label_category`) records what each load went out
+                # as; this asks the plan-level question — which categories this operation uses
+                # at all — because a certifier reviews the categories before reviewing the loads.
+                #
+                # Values mirror `history.models.ORGANIC_LABEL_CATEGORY_CHOICES` EXACTLY. A
+                # second vocabulary for one fact is how the two surfaces silently stop agreeing.
+                Question(
+                    key="organic_label_categories",
+                    kind="checkbox_group",
+                    label=text(
+                        "Which labeling categories does this operation sell under?",
+                        "¿Bajo qué categorías de etiquetado vende esta operación?",
+                    ),
+                    coaching=text(
+                        'A raw agricultural crop sold whole is normally "100 percent organic". '
+                        '"Organic" allows up to 5% nonorganic ingredients, and "made with '
+                        'organic" is a multi-ingredient category — both are handler-side, so a '
+                        "grower who only sells whole crop picks the first. Pick every category "
+                        "that appears on a label, an invoice, or a bill of lading.",
+                        'Un cultivo agrícola crudo vendido entero normalmente es "100 por ciento '
+                        'orgánico". "Orgánico" admite hasta 5% de ingredientes no orgánicos, y '
+                        '"elaborado con orgánicos" es una categoría multi-ingrediente — ambas '
+                        "corresponden al procesador, por lo que un productor que solo vende "
+                        "cultivo entero elige la primera. Marque cada categoría que aparezca en "
+                        "una etiqueta, una factura o una carta de porte.",
+                    ),
+                    nop_cite="§ 205.301",
+                    options=(
+                        Option(
+                            "100_percent_organic",
+                            text("100 percent organic", "100 por ciento orgánico"),
+                        ),
+                        Option("organic", text("Organic", "Orgánico")),
+                        Option(
+                            "made_with_organic",
+                            text(
+                                "Made with organic (specified ingredients or food group(s))",
+                                "Elaborado con orgánicos (ingredientes o grupos de alimentos " "especificados)",
+                            ),
+                        ),
+                    ),
+                    # No section_key override: this rides the module default like every other
+                    # G7.0 question. (a)(2) would be wrong — that clause is the INPUT list —
+                    # and inventing a lone routing exception for one question is how a module's
+                    # narrative ends up split across two sections for no stated reason.
+                    compiles_to=CompileRule(
+                        template="Organic product is sold under the following labeling categories: {answer}."
+                    ),
                 ),
                 Question(
                     key="label_states_certifier",

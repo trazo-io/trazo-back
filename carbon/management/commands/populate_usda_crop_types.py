@@ -1274,6 +1274,64 @@ class Command(BaseCommand):
                 "usda_factors_used": False,
                 "data_source": "Provisional - interpolated from comparable CA perennial systems",
             },
+            # ---------------------------------------------------------------------------
+            # Pears — added 2026-08-18, for the same reason the five above were: the picker is a
+            # CLOSED list and pears had no slug and no umbrella. `stone_fruit` covers cherry,
+            # peach, plum, apricot and nectarine; `apples` covers only apples. A pear grower
+            # could not create a production at all.
+            #
+            # Found by the Sep-30 named list (`documentation/gtm-v3/NAMED-LIST-2026-09.md`), not
+            # by an audit: 30 of the 252 qualifying farms grow pears, and 11 of them are in the
+            # top tier — Washington orchards, median 67 acres, all reachable by email. Blocking
+            # 11 of the best 62 leads on a missing catalog row is not a product gap we can carry
+            # into the November outreach.
+            #
+            # Provenance is provisional on the same terms as the 2026-08-07 block: the emissions
+            # figures are interpolated from apples (the pome sibling already in the catalog) and
+            # are placeholders for ordering and comparison, NOT measured values.
+            # ---------------------------------------------------------------------------
+            {
+                "name": "Pears",
+                "slug": "pears",
+                "category": "tree_fruit",
+                "description": "Pear orchards, concentrated in Washington's Wenatchee and Okanogan river valleys "
+                "and Oregon's Hood River and Rogue valleys — together the large majority of the US crop. "
+                "Pear psylla is the dominant and hardest pest pressure, and fire blight is the disease that "
+                "can take out a block; both drive the dormant and delayed-dormant spray calendar.",
+                # Range, not a guess: the 62 Washington pome farms on the Sep-30 named list run
+                # 25-1,654 acres (10-669 ha), median 67 acres (27 ha).
+                "typical_farm_size": "10-250 hectares",
+                "growing_season": "12 months (deciduous)",
+                "harvest_season": "August - October",
+                "usda_benchmark_source": "pear_wa_provisional",
+                "benchmark_verified": False,
+                "emissions_calculation_method": "usda_lca_methodology",
+                "emissions_per_hectare": 3200.0,
+                "industry_average": 3200.0,
+                "best_practice": 2200.0,
+                "carbon_credit_potential": 520.0,
+                "typical_cost_per_hectare": 3000.0,
+                "fertilizer_cost_per_hectare": 460.0,
+                "fuel_cost_per_hectare": 380.0,
+                "irrigation_cost_per_hectare": 560.0,
+                "labor_cost_per_hectare": 1600.0,
+                # ⚠️ Premium strings are UNSOURCED placeholders carried over from the apples row,
+                # like every other crop in this file. `organic_premium` IS in CropTypeSerializer
+                # (serializers.py:66) but no frontend renders it today — if one ever does, all 32
+                # crops start promising price outcomes to farmers, which compliance.md forbids
+                # ("positioning", never "earn premium prices"). Flagged, not invented here.
+                "organic_premium": "40-70%",
+                "sustainable_premium": "15-30%",
+                "local_premium": "15-30%",
+                "sustainability_opportunities": [
+                    "Build predatory bug and mite populations so psylla needs fewer sprays",
+                    "Dormant and delayed-dormant oil instead of in-season broad-spectrum passes",
+                    "Prune out fire blight strikes in dry weather rather than spraying through them",
+                    "Micro-sprinkler or drip conversion with soil-moisture scheduling",
+                ],
+                "usda_factors_used": False,
+                "data_source": "Provisional - interpolated from comparable pome-fruit systems",
+            },
             {
                 "name": "Blueberries",
                 "slug": "blueberries",

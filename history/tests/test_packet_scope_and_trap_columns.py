@@ -166,8 +166,27 @@ class PacketScopeAndTrapColumnTests(TestCase):
             applied_scope_detail="south half only",
         )
         txt = _flowable_text(self._service()._build_production_events())
-        self.assertIn("Partial-Area Harvests", txt)
+        self.assertIn("Partial-Area Operations", txt)
         self.assertIn("south half only", txt)
+
+    def test_partial_planting_is_in_the_same_table(self):
+        """ProductionTab collects the scope on Planting too, and it has the same consequence.
+
+        Trees-per-acre computed against the whole block is wrong by whatever fraction went
+        unplanted, so a partial planting cannot be filtered out as a harvest-only concern.
+        """
+        ProductionEvent.objects.create(
+            history=self.history,
+            type="PL",
+            date=timezone.now(),
+            description="Replant of frost losses",
+            applied_scope="part",
+            applied_scope_detail="rows 1-4 replanted only",
+        )
+        txt = _flowable_text(self._service()._build_production_events())
+        self.assertIn("Partial-Area Operations", txt)
+        self.assertIn("Planting", txt)
+        self.assertIn("rows 1-4 replanted only", txt)
 
     def test_whole_planting_harvest_does_not_open_the_partial_table(self):
         """Listing every full harvest would bury the exception the table exists to surface."""
@@ -179,4 +198,38 @@ class PacketScopeAndTrapColumnTests(TestCase):
             applied_scope="all",
         )
         txt = _flowable_text(self._service()._build_production_events())
-        self.assertNotIn("Partial-Area Harvests", txt)
+        self.assertNotIn("Partial-Area Operations", txt)
+
+    # ---- CSV: the sibling surface the same certifier reads ----
+
+    def test_csv_carries_the_trap_triple_and_the_scope_locator(self):
+        """A fix on the PDF that skips the CSV is the "alive on its sibling" failure again."""
+        PestManagementEvent.objects.create(
+            history=self.history,
+            type="TM",
+            date=timezone.now(),
+            description="Weekly NOW trap check",
+            trap_type="pheromone",
+            trap_count=24,
+            pest_catch_count=180,
+        )
+        ChemicalEvent.objects.create(
+            history=self.history,
+            type=ChemicalEvent.PESTICIDE,
+            commercial_name="Entrust SC",
+            date=timezone.now(),
+            applied_scope="part",
+            applied_scope_detail="rows 12-18",
+        )
+        ProductionEvent.objects.create(
+            history=self.history,
+            type="HA",
+            date=timezone.now(),
+            description="First shake",
+            applied_scope="part",
+            applied_scope_detail="south half only",
+        )
+        csv_text = self._service().generate_csv().getvalue().decode("utf-8-sig")
+        self.assertIn("Traps: Pheromone lure, 24 traps, 180 caught", csv_text)
+        self.assertIn("Treated scope: Part — rows 12-18", csv_text)
+        self.assertIn("Applied scope: Part — south half only", csv_text)

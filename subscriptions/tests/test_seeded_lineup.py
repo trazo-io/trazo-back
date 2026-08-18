@@ -156,6 +156,43 @@ class SeededLineupTests(TestCase):
         self.assertIsNotNone(crossover, "no number of Extra Farms ever exceeds Operation — the ceiling is unreachable")
         self.assertLessEqual(crossover, 12, f"Operation only wins at {crossover} extra farms — the ceiling is too high")
 
+    def test_reseeding_repairs_a_drifted_plan(self):
+        """`create_plans` is the source of truth for what a plan grants, so it has to APPLY it.
+
+        The skip used to be `price == 0 or existing_plan.stripe_price_id`, which meant a FREE
+        plan was passed over for the sole reason that a row existed. Starter and pilot were
+        therefore written once, at first seed, and never updated again — every later change to
+        their definition in that file silently failed to reach any environment already seeded.
+        MEASURED on both the dev database and a production-shaped simulation: `ai_event_templates`
+        is set on Starter in `create_plans`, appears in no migration, and was missing from both.
+
+        A seeder that declines to apply its own definitions is not idempotent, it is write-once,
+        and it produces exactly the two-seeding-paths-disagree class that migrations 0015 and
+        0016 exist to clean up after.
+        """
+        self._seed_with_stripe()
+
+        starter = Plan.objects.get(slug="starter")
+        original = dict(starter.features or {})
+        self.assertTrue(original, "starter seeded with no features — the assertion below would be vacuous")
+
+        # Drift it the way a real long-lived row drifts: a key the definition gained after the
+        # row was first written, and a value a later decision changed.
+        drifted = dict(original)
+        drifted.pop("ai_event_templates", None)
+        drifted["storage_limit_gb"] = 2
+        starter.features = drifted
+        starter.save(update_fields=["features"])
+
+        self._seed_with_stripe()
+
+        repaired = Plan.objects.get(slug="starter").features
+        self.assertEqual(
+            repaired,
+            original,
+            "re-running create_plans left a free plan drifted — the seeder is write-once again",
+        )
+
     def test_the_retired_ladder_is_seeded_inactive(self):
         self._seed_with_stripe()
 

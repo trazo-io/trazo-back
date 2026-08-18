@@ -568,13 +568,28 @@ class Command(BaseCommand):
                 )
                 continue
 
-            # Check if we already have this plan
+            # Skip only what re-running would COST something to redo.
+            #
+            # The condition used to be `price == 0 or existing_plan.stripe_price_id`, so a FREE
+            # plan was skipped for the sole reason that a row existed — meaning Starter and pilot
+            # were written once, at first seed, and never updated again. Every later change to
+            # their definition in this file silently failed to reach any environment that had
+            # already been seeded. MEASURED 2026-08-17 on both the dev database and a
+            # production-shaped simulation: `ai_event_templates` is set on Starter here, lives in
+            # no migration, and was absent from both — so the app's pricing card quietly dropped
+            # the templates row from the free tier.
+            #
+            # This file is the source of truth for what a plan grants. A seeder that declines to
+            # apply its own definitions is not idempotent, it is write-once — and it produced
+            # exactly the two-seeding-paths-disagree class that migrations 0015 and 0016 exist to
+            # clean up after.
+            #
+            # A PAID plan with a `stripe_price_id` still short-circuits: re-running it would mean
+            # re-verifying a live price against Stripe, which is what `--force` is for.
             existing_plan = Plan.objects.filter(slug=plan_data["slug"]).first()
-            if existing_plan and not self.force:
-                # For free plans, check if DB record exists; for paid, check stripe_price_id
-                if plan_data["price"] == 0 or existing_plan.stripe_price_id:
-                    self.stdout.write(self.style.WARNING(f"Plan already exists: {product_name}"))
-                    continue
+            if existing_plan and not self.force and existing_plan.stripe_price_id:
+                self.stdout.write(self.style.WARNING(f"Plan already exists: {product_name}"))
+                continue
 
             try:
                 # Free plans (Starter, Pilot) never need Stripe. Neither does anything else when

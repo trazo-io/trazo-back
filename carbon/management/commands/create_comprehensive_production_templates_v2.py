@@ -103,8 +103,13 @@ CROP_CUSTOMIZATIONS = {
         "herbicide": "Suppress EC (caprylic/capric acid)",
         "herbicide_subtype": "organic_herbicide",
         # Organic pesticide (from demo orange finished #17)
+        # ⚠️ `organic_pesticide` is read by nothing; the organic citrus programme comes from
+        # ORGANIC_OVERRIDES. Left in place, but it reaches no template.
         "organic_pesticide": "Surround WP (kaolin clay)",
-        "pesticide_subtype": "organic_pesticide",
+        # Was `organic_pesticide`, while the material this event actually renders is Delegate WG
+        # below — spinetoram, which is NOT on the National List (only Spinosad is). The event was
+        # telling a conventional grower their insecticide was organic-approved. Fixed 2026-08-18.
+        "pesticide_subtype": "synthetic_pesticide",
         "pesticide_target": "Sunburn protection, Pest barrier",
         # Synthetic pesticide (from demo orange finished #4)
         "synthetic_pesticide": "Delegate WG (spinetoram)",
@@ -853,7 +858,11 @@ CROP_CUSTOMIZATIONS = {
         "fungicide_target": "Olive knot, peacock spot (Spilocaea oleagina)",
         "copper_fungicide": "Kocide 3000 (copper hydroxide)",
         "primary_pesticide": "GF-120 NF Naturalyte Fruit Fly Bait (spinosad)",
-        "pesticide_subtype": "synthetic_pesticide",
+        # Spinosad IS on the National List, and GF-120 is the standard olive fruit fly bait in
+        # conventional and organic groves alike. The `synthetic_pesticide` label was invisible
+        # while the material rendered as "Targeted insecticide"; now that the material shows, the
+        # label shows with it — and it also selects the emission factor. Fixed 2026-08-18.
+        "pesticide_subtype": "organic_pesticide",
         "pesticide_target": "Olive fruit fly (Bactrocera oleae)",
         "herbicide": "Roundup PowerMax 3 (glyphosate)",
         "herbicide_subtype": "synthetic_herbicide",
@@ -886,12 +895,16 @@ CROP_CUSTOMIZATIONS = {
         "commercial_name": "YaraMila Complex 12-11-18",
         "secondary_fertilizer": "Urea 46-0-0",
         "slow_release_fertilizer": "Osmocote Plus 15-9-12",
+        # Elemental sulfur is a mineral ON the National List, not a synthetic — on both the
+        # fungicide and the miticide line. The pesticide label was invisible until the material
+        # started rendering (it used to fall back to "Targeted insecticide"); the fungicide label
+        # has been visible and wrong all along. Both fixed 2026-08-18.
         "primary_fungicide": "Elemental sulfur dust",
-        "fungicide_subtype": "synthetic_fungicide",
+        "fungicide_subtype": "sulfur_fungicide",
         "fungicide_target": "Black scorch, inflorescence rot",
         "copper_fungicide": "Kocide 3000 (copper hydroxide)",
         "primary_pesticide": "Elemental sulfur dust",
-        "pesticide_subtype": "synthetic_pesticide",
+        "pesticide_subtype": "organic_pesticide",
         "pesticide_target": "Old world date mite (Oligonychus afrasiaticus)",
         "herbicide": "Roundup PowerMax 3 (glyphosate)",
         "herbicide_subtype": "synthetic_herbicide",
@@ -924,8 +937,10 @@ CROP_CUSTOMIZATIONS = {
         "commercial_name": "Balanced Blend 10-10-10",
         "secondary_fertilizer": "Urea 46-0-0",
         "slow_release_fertilizer": "Osmocote Plus 15-9-12",
+        # Elemental sulfur is a mineral on the National List, not a synthetic. Fixed 2026-08-18.
+        # The insecticide here (Malathion) genuinely is synthetic and keeps its label.
         "primary_fungicide": "Elemental sulfur dust",
-        "fungicide_subtype": "synthetic_fungicide",
+        "fungicide_subtype": "sulfur_fungicide",
         "fungicide_target": "Fig souring, Botrytis limb blight",
         "copper_fungicide": "Kocide 3000 (copper hydroxide)",
         "primary_pesticide": "Malathion 8 Aquamul",
@@ -991,6 +1006,64 @@ CROP_CUSTOMIZATIONS = {
         "timing_harvest": "September - November",
         "yield_per_ha": 20000.0,
         "yield_unit": "kg",
+    },
+    # ---------------------------------------------------------------------------
+    # Pears — added 2026-08-18 alongside the catalog entry. Pacific Northwest programme, not a
+    # California one: the target cohort is Washington's Wenatchee/Okanogan and Yakima valleys
+    # (`documentation/gtm-v3/NAMED-LIST-2026-09.md`, tier T1). `typical_area` is the measured
+    # median of those 62 farms — 67 acres ≈ 27 ha — not a round guess.
+    # ---------------------------------------------------------------------------
+    "pears": {
+        "npk": "12-12-12",
+        "nitrogen_pct": 12.0,
+        "phosphorus_pct": 12.0,
+        "potassium_pct": 12.0,
+        "commercial_name": "Pome Fruit Blend 12-12-12",
+        # The secondary-fertigation event reads `secondary_npk` / `secondary_*_pct` and falls
+        # back to the PRIMARY analysis when they are missing (line ~2531) — which would print
+        # "Calcium Nitrate 15.5-0-0" at 12-12-12 with 12% N, a wrong analysis attached to a named
+        # product, and feed that N figure to the carbon calculation. 11 other entries in this
+        # dict have exactly that mismatch today (pistachios, olives, dates, figs, pomegranates,
+        # pecans, hazelnuts, hops, blueberries, spinach, mixed_vegetables) — separate fix.
+        "secondary_fertilizer": "Calcium Nitrate 15.5-0-0",
+        "secondary_npk": "15.5-0-0",
+        "secondary_nitrogen_pct": 15.5,
+        "secondary_phosphorus_pct": 0.0,
+        "secondary_potassium_pct": 0.0,
+        "slow_release_fertilizer": "Osmocote Plus 15-9-12",
+        "primary_fungicide": "Ziram 76DF (ziram)",
+        "fungicide_subtype": "synthetic_fungicide",
+        "fungicide_target": "Pear scab (Venturia pirina), Fabraea leaf spot",
+        "copper_fungicide": "Kocide 3000 (copper hydroxide)",
+        "copper_target": "Fire blight (Erwinia amylovora) — dormant and delayed dormant",
+        # `synthetic_pesticide` is the most specific key the insecticide event reads; it also
+        # accepts `primary_pesticide` since the 2026-08-18 fallback fix, which is what the other
+        # 13 crops use. Verified by reading the generated event rows, not by trusting the dict.
+        "pesticide_subtype": "synthetic_pesticide",
+        "synthetic_pesticide": "Movento HL (spirotetramat)",
+        "synthetic_pesticide_target": "Pear psylla (Cacopsylla pyricola), pear rust mite",
+        "herbicide": "Roundup PowerMax 3 (glyphosate)",
+        "herbicide_subtype": "synthetic_herbicide",
+        "primary_pest_species": "Pear psylla (Cacopsylla pyricola)",
+        "common_pests": "Pear psylla, codling moth, pear rust mite, leafrollers",
+        "beneficial_insects": "Anthocoris and Deraeocoris predatory bugs, predatory mites, lacewings",
+        "beneficial_release_quantity": "per hectare",
+        "certification_type": "global_gap",
+        "certification_standard": "GLOBALG.A.P. IFA v6",
+        "certification_body": "SCS Global Services",
+        "irrigation_method": "sprinkler",
+        "water_source": "surface_water",
+        "soil_type": "sandy_loam",
+        "typical_area": 27.0,
+        "region": "Wenatchee, Okanogan and Yakima valleys, Washington",
+        "timing_soil": "November - February",
+        "timing_plant": "March - April",
+        "timing_fertilize": "March - May",
+        "timing_irrigate": "April - September",
+        "timing_pest": "April - August",
+        "timing_harvest": "August - September",
+        "yield_per_ha": 35.0,
+        "yield_unit": "tons",
     },
 }
 
@@ -1577,6 +1650,73 @@ ORGANIC_OVERRIDES = {
         "certification_type": "organic_usda",
         "certification_standard": "USDA NOP (7 CFR Part 205)",
         "certification_body": "CCOF (California Certified Organic Farmers)",
+    },
+    # ---------------------------------------------------------------------------
+    # Pears — organic variant, added 2026-08-18.
+    #
+    # Every material below is in the seeded National List: Lime sulfur, Copper hydroxide,
+    # Spinosad and "Microbial products (Bacillus thuringiensis, etc.)". Three materials a pear
+    # grower might expect are deliberately ABSENT:
+    #   · streptomycin / oxytetracycline — the standard organic fire blight materials until their
+    #     § 205.601 listings expired in 2014. Suggesting them would suggest a prohibited input.
+    #   · Blossom Protect (Aureobasidium pullulans) and kaolin (Surround) — both legitimate and
+    #     widely used organically, both missing from the seeded list, so the classifier could not
+    #     place them and the certifier packet would render them "Self-reported".
+    # Horticultural oil is the backbone of organic psylla control and IS on the list, but this
+    # dict has no key for it and nothing downstream would read one — the oil belongs in the
+    # grower's own logged events, not in an invented template key.
+    #
+    # Certification body is WSDA, not CCOF: 60 of the 62 pear/pome farms in the Sep-30 named list
+    # are WSDA-certified.
+    # ---------------------------------------------------------------------------
+    "pears": {
+        "primary_fertilizer": "North Country Organics Pro-Start 2-3-3",
+        "npk": "2-3-3",
+        "nitrogen_pct": 2.0,
+        "phosphorus_pct": 3.0,
+        "potassium_pct": 3.0,
+        "secondary_fertilizer": "Fertrell Super N 4-2-4",
+        "secondary_npk": "4-2-4",
+        "secondary_n": 4.0,
+        "secondary_p": 2.0,
+        "secondary_k": 4.0,
+        "slow_release_fertilizer": "Sustane 8-2-4 Organic Granular",
+        # Sulfur, not a biological: the subtype is `sulfur_fungicide` — the same call the grapes
+        # entry makes. `biological_fungicide` would both mis-describe it to the grower and pick
+        # the biological manufacturing emission factor (carbon/views.py:987 selects the factor
+        # off this subtype).
+        #
+        # The product is the one the grapes entry already uses, deliberately. Every generated
+        # organic chemical event is stamped `organic_approved="omri_listed"` — HARDCODED in the
+        # generators (line ~3506), not read from this dict — so whatever is named here is
+        # asserted to be an OMRI-listed PRODUCT. A bare substance string ("lime sulfur") would
+        # therefore be stamped as a product OMRI has never listed. Naming an already-vetted
+        # product keeps the assertion true. Lime sulfur is the other standard organic pear
+        # material and is on the National List, but it is not encoded for that reason.
+        # The active ingredient is spelled "elemental sulfur", the National List's own wording, so
+        # the auto-classifier's forward substring pass can cite § 205.601 off it. The grapes entry
+        # writes "(micronized sulfur)" for the same product and therefore classifies as NOTHING —
+        # it renders "Self-reported" on the certifier packet. Same trap as brand-vs-substance in
+        # the COG Pro rehearsal: name the substance the list names.
+        "primary_fungicide": "Microthiol Disperss (elemental sulfur) — OMRI Listed",
+        "fungicide_subtype": "sulfur_fungicide",
+        "fungicide_target": "Pear scab (Venturia pirina), powdery mildew",
+        "copper_fungicide": "Kocide 3000 (copper hydroxide) — OMRI Listed",
+        "copper_target": "Fire blight (Erwinia amylovora) — dormant and delayed dormant",
+        "primary_pesticide": "Entrust SC (spinosad) — OMRI Listed",
+        "pesticide_subtype": "organic_pesticide",
+        "pesticide_target": "Pear psylla nymphs (Cacopsylla pyricola), codling moth",
+        # Required even though pears is a TREE crop and the tree generator never reads this key:
+        # `get_annual_crop_organic_events` reads it as `oa['biological_pesticide']` (line ~4650,
+        # bracket access, inside an efficiency tip), and the organic-template test exercises BOTH
+        # generators for every crop. Omitting it raises KeyError rather than degrading — every
+        # ORGANIC_OVERRIDES entry must carry it.
+        "biological_pesticide": "DiPel DF (Bacillus thuringiensis kurstaki) — OMRI Listed",
+        "herbicide": None,
+        "organic_approved_default": "omri_listed",
+        "certification_type": "organic_usda",
+        "certification_standard": "USDA NOP (7 CFR Part 205)",
+        "certification_body": "Washington State Department of Agriculture Organic Program",
     },
 }
 
@@ -2571,11 +2711,26 @@ def get_tree_crop_events(crop_slug, crop_data):
                 subtype="PE",
                 name="Pesticide Treatment",
                 chemical_subtype=crop_data.get("pesticide_subtype", "synthetic_pesticide"),
-                commercial_name=crop_data.get("synthetic_pesticide", "Targeted insecticide"),
+                # FIXED 2026-08-18. This read only `synthetic_pesticide`, a key exactly ONE crop
+                # sets (citrus). The other 13 crops carrying a named insecticide put it in
+                # `primary_pesticide` — which is read only off ORGANIC_OVERRIDES — so their
+                # conventional pest event silently rendered the literal string "Targeted
+                # insecticide" and the generic `common_pests` list. A dict key nothing downstream
+                # reads: same class as the template-flow blindness of 2026-08-12.
+                #
+                # Chain, most specific first. The 17 crops that name no insecticide at all still
+                # land on the generic fallback, which for them is correct — there is nothing to
+                # lose, and inventing a material would be worse than a generic label.
+                commercial_name=crop_data.get(
+                    "synthetic_pesticide", crop_data.get("primary_pesticide", "Targeted insecticide")
+                ),
                 concentration="25",
                 volume=3.0,
                 area=area,
-                target_pest_disease=crop_data.get("synthetic_pesticide_target", crop_data["common_pests"]),
+                target_pest_disease=crop_data.get(
+                    "synthetic_pesticide_target",
+                    crop_data.get("pesticide_target", crop_data["common_pests"]),
+                ),
                 fuel_consumed=8.0,
                 fuel_unit="gal",
                 application_method="airblast",
@@ -5213,7 +5368,7 @@ def get_shared_extra_events(crop_slug, crop_data, start_order=7, crop_category="
     crop_category: one of "grain", "vegetable", "berry" — controls weather event subtype.
     """
     area = crop_data["typical_area"]
-    return [
+    events = [
         # Soil Test
         {
             "name": "Soil Analysis",
@@ -5338,7 +5493,7 @@ def get_shared_extra_events(crop_slug, crop_data, start_order=7, crop_category="
             "backend_event_type": 1,
             "is_default_enabled": True,
             "is_required": False,
-            "order_sequence": start_order + 3,
+            "order_sequence": start_order + 4,
             "backend_event_fields": build_production_event_fields(
                 subtype="EM",
                 name="Equipment Maintenance",
@@ -5370,7 +5525,7 @@ def get_shared_extra_events(crop_slug, crop_data, start_order=7, crop_category="
             "backend_event_type": 6,
             "is_default_enabled": True,
             "is_required": True,
-            "order_sequence": start_order + 4,
+            "order_sequence": start_order + 5,
             "backend_event_fields": build_pest_event_fields(
                 subtype="SC",
                 pest_species=crop_data.get("primary_pest_species", crop_data["common_pests"]),
@@ -5393,7 +5548,7 @@ def get_shared_extra_events(crop_slug, crop_data, start_order=7, crop_category="
             ),
         },
         # Weather Event — subtype varies by crop category
-        _build_shared_weather_event(crop_slug, crop_category, start_order + 5),
+        _build_shared_weather_event(crop_slug, crop_category, start_order + 6),
         # Certification Audit
         {
             "name": "Certification Audit",
@@ -5413,7 +5568,7 @@ def get_shared_extra_events(crop_slug, crop_data, start_order=7, crop_category="
             "backend_event_type": 7,
             "is_default_enabled": True,
             "is_required": False,
-            "order_sequence": start_order + 6,
+            "order_sequence": start_order + 7,
             "backend_event_fields": build_business_event_fields(
                 subtype="CE",
                 name=crop_data.get("certification_standard", "Food Safety Certification"),
@@ -5443,7 +5598,7 @@ def get_shared_extra_events(crop_slug, crop_data, start_order=7, crop_category="
             "backend_event_type": 3,
             "is_default_enabled": True,
             "is_required": False,
-            "order_sequence": start_order + 7,
+            "order_sequence": start_order + 8,
             "backend_event_fields": build_general_event_fields(
                 activity_type="training",
                 name="Quality Control & Training",
@@ -5454,6 +5609,70 @@ def get_shared_extra_events(crop_slug, crop_data, start_order=7, crop_category="
             ),
         },
     ]
+
+    # Insecticide — added 2026-08-18, and CONDITIONAL on purpose.
+    #
+    # Only the tree path built a chemical insecticide event. Berry, vegetable, grain and fiber
+    # crops got "Pest Management"/"Pest Scouting" (backend_event_type=6, scouting and beneficial
+    # releases) and no spray event at all, so a conventional blueberry template had nowhere to
+    # record the spotted-wing-drosophila sprays that define the season. Same for hops (aphid and
+    # mite work) and spinach.
+    #
+    # ⛔ Emitted ONLY when the crop's dict actually names a material. The tree path falls back to
+    # the literal "Targeted insecticide" for crops with no data; copying that here would add an
+    # event suggesting a spray to ~17 crops nobody wrote a programme for. A template suggests
+    # ACTIVITIES and must not invent FACTS — an absent material means no event, not a placeholder.
+    insecticide = crop_data.get("synthetic_pesticide") or crop_data.get("primary_pesticide")
+    if insecticide:
+        events.append(
+            {
+                "name": "Pesticide Treatment",
+                "event_type": "fertilization",
+                "description": "Insecticide application when pest thresholds are exceeded",
+                "timing": crop_data["timing_pest"],
+                "frequency": "as_needed",
+                "carbon_category": "medium",
+                "cost_estimate": 130.0,
+                "carbon_impact": 50.0,
+                "labor_hours": 2.0,
+                "typical_duration": "3-5 hours",
+                "efficiency_tips": "Spray only when scouting confirms the threshold is exceeded",
+                "sustainability_score": 5,
+                "qr_visibility": "high",
+                "consumer_message": "Targeted treatment only when necessary",
+                "backend_event_type": 2,
+                # Off by default, like the tree path's equivalent: a suggested spray must be an
+                # opt-in, never something a grower accepts without noticing.
+                "is_default_enabled": False,
+                "is_required": False,
+                # Grouped with the other chemical events — Fungicide (+1), Herbicide (+2),
+                # this (+3) — rather than parked after the certification audit. The five events
+                # that used to hold +3..+7 were shifted one place to open the slot; nothing pins
+                # these numbers (they are display order only, checked in tests and frontend).
+                # When a crop names no insecticide the slot is simply unused, which is fine.
+                "order_sequence": start_order + 3,
+                "backend_event_fields": build_chemical_event_fields(
+                    subtype="PE",
+                    name="Pesticide Treatment",
+                    chemical_subtype=crop_data.get("pesticide_subtype", "synthetic_pesticide"),
+                    commercial_name=insecticide,
+                    concentration="25",
+                    volume=area * 2.0,
+                    area=area,
+                    target_pest_disease=crop_data.get(
+                        "synthetic_pesticide_target",
+                        crop_data.get("pesticide_target", crop_data["common_pests"]),
+                    ),
+                    fuel_consumed=6.0,
+                    fuel_unit="L",
+                    # Not "airblast": these are berry rows, beds and bines, not orchard canopy.
+                    application_method="broadcast",
+                    observation=f"Insecticide treatment for {crop_slug}",
+                ),
+            }
+        )
+
+    return events
 
 
 def get_grain_events(crop_slug, crop_data):

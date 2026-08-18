@@ -257,7 +257,7 @@ G4_2_NATURAL_RESOURCES = Module(
                         Option(
                             "land_trust",
                             text(
-                                "Land trust or stewardship organisation",
+                                "Land trust or stewardship organization",
                                 "Fideicomiso de tierras u organización de custodia",
                             ),
                         ),

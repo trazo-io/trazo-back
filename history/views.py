@@ -5,6 +5,7 @@ import uuid
 from datetime import datetime, timedelta
 
 from django.core.cache import cache
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import connections, transaction
 from django.db.models import Count, Prefetch, Q
 from django.shortcuts import get_object_or_404
@@ -522,7 +523,25 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # Get parcel_id before deletion
         parcel_id = self.kwargs.get("parcel_pk")
 
-        response = super().destroy(request, *args, **kwargs)
+        # History.delete() refuses to erase a record inside its 7 CFR 205.103(b)(4)
+        # five-year retention window by raising Django's ValidationError. DRF's
+        # exception_handler only translates Http404, Django's PermissionDenied and
+        # APIException — and this project sets no EXCEPTION_HANDLER, while
+        # common/middleware/error_handling_middleware.py is not in MIDDLEWARE. So the
+        # guard worked and the farmer got an opaque 500 whose body matched neither
+        # `detail` nor `message`, leaving the UI to show a generic failure toast and
+        # the actual answer ("retained until 2031-08-17") to reach no one.
+        try:
+            response = super().destroy(request, *args, **kwargs)
+        except DjangoValidationError as exc:
+            return Response(
+                {
+                    "error": "Record retention period active",
+                    "detail": " ".join(exc.messages),
+                    "retention_until": (instance.retention_until.isoformat() if instance.retention_until else None),
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
 
         # Invalidate cache for this parcel's history list
         if parcel_id:
@@ -3658,7 +3677,33 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         if hasattr(self, "establishment") and self.establishment is not None:
             queryset = queryset.filter(history__parcel__establishment=self.establishment)
 
-        return queryset
+        return self._scope_to_caller(queryset)
+
+    def _scope_to_caller(self, queryset):
+        """Tenancy floor: never return an event outside the caller's own companies.
+
+        `events` is registered BOTH nested under /companies/<pk>/... and FLAT at
+        /api/events/ (history/urls.py). On the flat route there is no `company_pk`, so
+        `CompanyNestedViewSet.initial` leaves `self.company` None, the two filters above
+        are skipped, and `ReadOnlyForViewers.has_permission` short-circuits to True for
+        exactly that case (backend/permissions.py) — while `AuthPermission` checks only
+        that someone is logged in. The composite therefore collapsed to "is
+        authenticated", and no permission class implements `has_object_permission`, so
+        `check_object_permissions` added nothing. Result: any authenticated user could
+        GET/PATCH/DELETE any other farm's event by numeric id.
+
+        Scoping here rather than in `ReadOnlyForViewers` because that class backs many
+        viewsets; the blanket-allow branch is load-bearing for legitimately unscoped
+        collections and narrowing it globally would be a much larger blast radius. This
+        keeps the fix on the one queryset that leaks, and it is applied on BOTH read and
+        write paths (get_queryset and get_object) so a PATCH cannot reach a foreign row.
+        """
+        user = self.request.user
+        if not user.is_authenticated:
+            return queryset.none()
+        if user.is_superuser:
+            return queryset
+        return queryset.filter(history__parcel__establishment__company__in=user.companies.all())
 
     def get_object(self):
         """
@@ -3684,6 +3729,11 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     if hasattr(self, "establishment") and self.establishment is not None:
                         queryset = queryset.filter(history__parcel__establishment=self.establishment)
 
+                    # Same tenancy floor as get_queryset — this path serves retrieve,
+                    # update and partial_update by id, so skipping it here would leave
+                    # the write paths reachable cross-tenant even with reads locked down.
+                    queryset = self._scope_to_caller(queryset)
+
                     obj = queryset.get(pk=event_id)
                     # Check permissions
                     self.check_object_permissions(self.request, obj)
@@ -3697,8 +3747,13 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
                 raise Http404(f"Event with ID {event_id} not found in event type {event_type}")
 
-        # For actions without event_type parameter, search across all event types
-        if self.action in ["update", "partial_update", "retrieve"]:
+        # For actions without event_type parameter, search across all event types.
+        # "amend" is in this list deliberately: without it a correction POST that omits
+        # ?event_type= falls through to super().get_object(), whose queryset defaults to
+        # GeneralEvent — so correcting a chemical or production record would 404 for no
+        # visible reason. The UI always sends the parameter; the endpoint should not
+        # depend on that.
+        if self.action in ["update", "partial_update", "retrieve", "amend"]:
             # Try to find the event across all event types
 
             # Apply company/establishment filtering to each model
@@ -3712,6 +3767,11 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
                     if hasattr(self, "establishment") and self.establishment is not None:
                         queryset = queryset.filter(history__parcel__establishment=self.establishment)
+
+                    # Same tenancy floor as get_queryset — this path serves retrieve,
+                    # update and partial_update by id, so skipping it here would leave
+                    # the write paths reachable cross-tenant even with reads locked down.
+                    queryset = self._scope_to_caller(queryset)
 
                     obj = queryset.get(pk=event_id)
                     # Check permissions
@@ -4003,8 +4063,10 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     "error": "Event is locked",
                     # No "reopen it" — no such CONTROL exists. (It is still reachable via
                     # PATCH /histories/<id>/ {"finish_date": null}; see the add-event guard.)
-                    "detail": "Events cannot be modified after a production has been completed. "
-                    "A finished production is a closed record.",
+                    "detail": "This production is finished, so its events are kept as filed. "
+                    "If something on this record is wrong, correct it instead — the "
+                    "original value is kept alongside the correction for your certifier.",
+                    "correctable": True,
                     "production_id": history.id,
                     "production_finished": history.finish_date is not None,
                     "production_published": history.published,
@@ -4176,6 +4238,129 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         return response
 
+    @action(detail=True, methods=["get", "post"], url_path="amend")
+    def amend(self, request, *args, **kwargs):
+        """Correct a field on this event, keeping the original.
+
+        GET  -> the fields that can be corrected, plus the corrections already on record.
+        POST -> {field_name, new_value, reason} applies one correction.
+
+        This deliberately does NOT go through update(), which refuses a finished
+        production with 423. A closed season is exactly when a correction matters: the
+        record is filed, the certifier packet is built from it, and the farmer has just
+        noticed the yield reads 200 lb instead of 2,000. Refusing that leaves a wrong
+        number in the packet, which is worse for an audit than a documented correction.
+
+        Write permission is the same as for an ordinary edit — this is not a privileged
+        operation, it is the honest version of the one the farmer already wanted.
+        """
+        from history.amendments import AmendmentError, amendable_fields, apply_amendment, has_value
+        from history.constants import EVENT_TYPE_TO_MODEL
+        from history.models import EventAmendment
+
+        instance = self.get_object()
+        event_type = getattr(self, "_determined_event_type", None)
+        if event_type is None:
+            event_type = next(
+                (t for t, m in EVENT_TYPE_TO_MODEL.items() if isinstance(instance, m)),
+                None,
+            )
+
+        if request.method == "GET":
+            all_fields = amendable_fields(type(instance))
+            fields_on_record = [f for f in all_fields if has_value(instance, f)]
+            fields_not_recorded = [f for f in all_fields if not has_value(instance, f)]
+            amendments = EventAmendment.objects.filter(event_type=event_type, event_id=instance.id).order_by(
+                "-created_at"
+            )
+            return Response(
+                {
+                    "event_type": event_type,
+                    # Split, not one flat list. A harvest event has ~79 correctable
+                    # columns and a real record fills a handful; offering all of them at
+                    # once turns a 30-second fix into a search through a dropdown. What
+                    # is ON the record comes first because that is what a farmer is
+                    # looking at when they notice something is wrong. The rest stay
+                    # available as the secondary case — recording something that was
+                    # missed rather than correcting something that is wrong.
+                    "fields": [
+                        {
+                            "name": f.name,
+                            "label": str(getattr(f, "verbose_name", "") or f.name),
+                            "current_value": getattr(instance, f.name, None),
+                        }
+                        for f in fields_on_record
+                    ],
+                    "blank_fields": [
+                        {
+                            "name": f.name,
+                            "label": str(getattr(f, "verbose_name", "") or f.name),
+                            "current_value": None,
+                        }
+                        for f in fields_not_recorded
+                    ],
+                    "amendments": [
+                        {
+                            "id": a.id,
+                            "field_name": a.field_name,
+                            "field_label": a.field_label,
+                            "original_value": a.original_value,
+                            "corrected_value": a.corrected_value,
+                            "reason": a.reason,
+                            "amended_by": a.amended_by_name,
+                            "created_at": a.created_at,
+                        }
+                        for a in amendments
+                    ],
+                }
+            )
+
+        # Same CA/FM role test HistoryViewSet.check_write_permission applies. Inlined
+        # rather than called across classes: that method lives on HistoryViewSet and
+        # EventViewSet does not inherit it, so `self.check_write_permission(...)` would
+        # have raised AttributeError at request time — a 500 on the correction path.
+        from users.models import WorksIn
+
+        history = instance.history
+        company = history.parcel.establishment.company if history.parcel else None
+        if not request.user.is_superuser:
+            if company is None:
+                raise PermissionDenied("Cannot determine company for this production.")
+            can_write = WorksIn.objects.filter(
+                user=request.user,
+                company=company,
+                role__in=[WorksIn.COMPANY_ADMIN, WorksIn.FARM_MANAGER],
+            ).exists()
+            if not can_write:
+                raise PermissionDenied("You do not have permission to correct this record.")
+
+        try:
+            amendment = apply_amendment(
+                event=instance,
+                event_type=event_type,
+                field_name=request.data.get("field_name"),
+                new_value=request.data.get("new_value"),
+                reason=request.data.get("reason"),
+                user=request.user,
+            )
+        except AmendmentError as exc:
+            detail = exc.message_dict if hasattr(exc, "message_dict") else {"detail": str(exc)}
+            return Response(detail, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            {
+                "id": amendment.id,
+                "field_name": amendment.field_name,
+                "field_label": amendment.field_label,
+                "original_value": amendment.original_value,
+                "corrected_value": amendment.corrected_value,
+                "reason": amendment.reason,
+                "amended_by": amendment.amended_by_name,
+                "created_at": amendment.created_at,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
     def destroy(self, request, *args, **kwargs):
         """Prevent deletion of events on completed productions."""
         instance = self.get_object()
@@ -4186,10 +4371,12 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     "error": "Event is locked",
                     # No "reopen it" — no such CONTROL exists. (It is still reachable via
                     # PATCH /histories/<id>/ {"finish_date": null}; see the add-event guard.)
-                    # Deletion stays refused regardless: 7 CFR 205.103(b)(3) requires the
+                    # Deletion stays refused regardless: 7 CFR 205.103(b)(4) requires the
                     # record be kept 5 years, which is what History.retention_until enforces.
-                    "detail": "Events cannot be deleted after a production has been completed. "
-                    "A finished production is a closed record.",
+                    "detail": "This production is finished, so its records must be kept "
+                    "(5 years, per organic certification). If something on this record is "
+                    "wrong, correct it — the original is kept alongside the correction.",
+                    "correctable": True,
                     "production_id": history.id,
                 },
                 status=status.HTTP_423_LOCKED,

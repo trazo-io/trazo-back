@@ -124,7 +124,7 @@ class PdfFieldCoverageTests(TestCase):
 
     # ---- Soil section -----------------------------------------------------
 
-    def test_working_depth_texture_and_moisture_reach_the_soil_section(self):
+    def test_working_depth_and_texture_reach_the_soil_section(self):
         SoilManagementEvent.objects.create(
             history=self.history,
             type="TI",
@@ -139,7 +139,12 @@ class PdfFieldCoverageTests(TestCase):
         text = flowable_text(self._service()._build_soil_section())
         self.assertIn("6.00 in", text)
         self.assertIn("sandy_loam", text)
-        self.assertIn("field_capacity", text)
+        # `soil_moisture` is deliberately NOT printed (dropped 2026-08-15). Its input was
+        # removed from SoilManagementTab because it duplicated the Weather event, so the
+        # column could only ever render "—" for any record created since — an empty promise
+        # on a certifier's desk. The model column survives so pre-removal rows still render
+        # elsewhere; this asserts the packet stays quiet about it.
+        self.assertNotIn("field_capacity", text)
 
     def test_soil_condition_subtable_absent_when_nothing_recorded(self):
         SoilManagementEvent.objects.create(

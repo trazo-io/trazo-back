@@ -217,6 +217,50 @@ class NeverGuessTests(_Base):
         cell = self._data_rows(self._sheet("materials_list"))[0][0]
         self.assertTrue(cell.startswith("'"), f"formula not defused: {cell!r}")
 
+    def test_beneficial_organism_suppliers_reach_the_supplier_list(self):
+        """🔴 Regression, second instance. The workbook's USDA instruction line opens with
+        "live animals", and a beneficial-insect release is bought from a named supplier exactly
+        like a fertiliser is. `PestManagementEvent.beneficial_supplier` had held it since the BR
+        subtype shipped and no row was ever emitted — the same omission soil amendments had.
+        """
+        from history.models import PestManagementEvent
+
+        history = History.objects.create(
+            name="2026",
+            parcel=self.parcel,
+            product=Product.objects.create(name="Walnut"),
+            start_date=date(2026, 3, 1),
+        )
+        PestManagementEvent.objects.create(
+            history=history,
+            type="BR",
+            date=date(2026, 5, 1),
+            beneficial_species="Trichogramma platneri",
+            beneficial_supplier="Rincon-Vitova Insectaries",
+        )
+        row = next(r for r in self._data_rows(self._sheet("supplier_list")) if r[1] == "Rincon-Vitova Insectaries")
+        self.assertEqual(row[0], "Trichogramma platneri")
+        self.assertIsNone(row[2], "certifier must be blank, not guessed")
+
+    def test_beneficial_supplier_without_a_species_still_names_the_category(self):
+        """A row reading "— / Rincon-Vitova" tells a certifier nothing about what was released."""
+        from history.models import PestManagementEvent
+
+        history = History.objects.create(
+            name="2026",
+            parcel=self.parcel,
+            product=Product.objects.create(name="Walnut"),
+            start_date=date(2026, 3, 1),
+        )
+        PestManagementEvent.objects.create(
+            history=history,
+            type="BR",
+            date=date(2026, 5, 1),
+            beneficial_supplier="Rincon-Vitova Insectaries",
+        )
+        row = next(r for r in self._data_rows(self._sheet("supplier_list")) if r[1] == "Rincon-Vitova Insectaries")
+        self.assertEqual(row[0], "Beneficial organisms")
+
     def test_supplier_certifier_column_is_never_invented(self):
         """The supplier's certifier comes off THEIR organic certificate, which Trazo lacks."""
         history = History.objects.create(

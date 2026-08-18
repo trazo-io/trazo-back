@@ -430,17 +430,26 @@ class History(models.Model):
         super().delete(*args, **kwargs)
 
     def __str__(self) -> str:
-        return (
-            "[ "
-            + str(self.start_date.strftime("%m/%d/%Y"))
-            + " - "
-            + (str(self.finish_date.strftime("%m/%d/%Y")) if self.finish_date else "present")
-            + " ]"
-            + " - "
-            + self.product.name
-            if self.product
-            else ""
-        )
+        """Two defects fixed 2026-08-18; both were reachable from an ordinary save.
+
+        1. `start_date` is nullable (`DateTimeField(null=True, blank=True)`) and this called
+           `.strftime()` on it unconditionally. Any History without a start date raised
+           `AttributeError: 'NoneType' object has no attribute 'strftime'` — and because
+           django-auditlog's `log_create` calls `smart_str(instance)` to build `object_repr`,
+           the crash happened on SAVE, not merely on display. White-glove / COG Pro import
+           targets are created by hand without every field set, which is exactly this path.
+
+        2. Operator precedence. `+` binds tighter than a conditional expression, so
+           `... + self.product.name if self.product else ""` applied the guard to the WHOLE
+           concatenation rather than to the product name. A production with no product
+           therefore stringified to "" — an empty object_repr in the audit log, on records
+           whose audit trail is the thing being sold.
+        """
+        start = self.start_date.strftime("%m/%d/%Y") if self.start_date else "?"
+        finish = self.finish_date.strftime("%m/%d/%Y") if self.finish_date else "present"
+        label = f"[ {start} - {finish} ]"
+        product_name = self.product.name if self.product else ""
+        return f"{label} - {product_name}" if product_name else label
 
     def get_involved_users(self):
         users = (
@@ -2162,7 +2171,9 @@ class ProductionEvent(CommonEvent):
         help_text="Custom-harvest contract or work-order reference for this pass",
     )
     # 2026-08 QO-parity — whole-vs-part parcel coverage on harvest (HA) and
-    # planting (PL/TR), mirroring ChemicalEvent.applied_scope
+    # planting (PL), mirroring ChemicalEvent.applied_scope. ProductionTab gates the
+    # payload on HA or PL only — TR reuses the seed widget but not this pair, so do not
+    # read this comment as evidence that a transplant carries a scope answer.
     # (§ 205.103(b)(2) audit sufficiency: records must identify WHERE the activity happened.
     # NOT (b)(1), which is "adapted to the particular business". Corrected 2026-08-15.)
     applied_scope = models.CharField(
@@ -4846,3 +4857,82 @@ class LabelImage(models.Model):
 
     def __str__(self):
         return f"{self.get_label_type_display()} label for production {self.history_id}"
+
+
+class EventAmendment(models.Model):
+    """A correction to an event on a CLOSED season, recorded the way paper does it.
+
+    Events on a finished production are locked (EventViewSet answers 423/403) because a
+    filed record must not be quietly rewritten. But a farmer who typed 200 lb instead of
+    2,000 lb, or fat-fingered a lot number, still has to be able to fix it — and until
+    this model existed the answer was "you cannot", which is worse for an audit than the
+    correction would have been. An uncorrectable wrong record is still a wrong record.
+
+    Nothing here is a new idea. Paper organic records are corrected with a single
+    strikethrough, the new value beside it, initialled and dated; the original stays
+    legible. This is that, in a table:
+
+        - the event carries the CURRENT (corrected) value, so exports, the QR page and
+          the certifier packet all read the truth without special-casing;
+        - the amendment carries the ORIGINAL, who changed it, when, and WHY.
+
+    `reason` is mandatory on purpose. A correction with a reason answers an inspector's
+    question; a correction without one raises it. That is also the line NOP enforcement
+    draws — the violation category is falsification or CONCEALMENT of records (NOP 4002),
+    and an unexplained post-hoc rewrite is the shape that resembles concealment. Recording
+    the original and the reason is what makes this a correction rather than a rewrite.
+
+    Regulatory hook: 7 CFR 205.103(b)(3) requires records to "include audit trail
+    documentation", and (b)(2) requires them to be "readily understood and audited".
+
+    Keyed by (event_type, event_id) rather than a GenericForeignKey because there are 8
+    concrete event models and the whole codebase already addresses them that way
+    (history.constants.EVENT_TYPE_TO_MODEL). A contenttypes FK would add a second,
+    competing convention for the same job.
+    """
+
+    event_type = models.PositiveSmallIntegerField(
+        help_text="history.constants EVENT_TYPE_TO_MODEL key identifying the concrete event model."
+    )
+    event_id = models.PositiveIntegerField(db_index=True)
+
+    # Denormalised so the amendment survives its event being deleted, and so the
+    # certifier packet can gather a season's corrections in one query rather than eight.
+    history = models.ForeignKey("history.History", on_delete=models.CASCADE, related_name="amendments")
+
+    field_name = models.CharField(max_length=100)
+    field_label = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Human-readable field name as shown to the farmer, captured at amendment time "
+        "so the packet does not depend on today's UI labels to explain an old correction.",
+    )
+    # TEXT, not the field's own type: this table spans 8 models and every column type on
+    # them. The rendered value is what an inspector reads, and storing it as written means
+    # a later schema change cannot silently reinterpret a historical record.
+    original_value = models.TextField(blank=True)
+    corrected_value = models.TextField(blank=True)
+
+    reason = models.TextField(help_text="Why the record was corrected. Required — see class docstring.")
+
+    amended_by = models.ForeignKey(
+        "users.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="event_amendments",
+    )
+    # Captured as text as well as by FK: SET_NULL keeps the amendment when a user is
+    # deleted, but an audit trail that reads "amended by (nobody)" is not an audit trail.
+    amended_by_name = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["event_type", "event_id"]),
+            models.Index(fields=["history", "-created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"Amendment: {self.field_name} on event {self.event_type}/{self.event_id}"

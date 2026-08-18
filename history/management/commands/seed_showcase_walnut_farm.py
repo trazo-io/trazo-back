@@ -37,6 +37,13 @@ Honesty constraints held here on purpose
   September to October, so a 2026 season cannot be finished in August — dating one that way to
   get a fresher number on a screenshot would be the same class of lie this file exists to undo.
   Once the real harvest window closes, `--close-current` rolls the current season shut.
+* DEMO THE CURRENT SEASON, not the closed one. Every record here is created at seed time and
+  `auditlog` stamps the real wall-clock time — correctly, and it must not be forged, because
+  that log is what the packet's Record Change History offers as proof the records were not
+  fabricated. On the closed season that yields events dated last autumn with entries stamped
+  today, which reads to a certifier as one back-entered batch. The current season is in
+  progress, its events run to today, and entries sit naturally against them. The command
+  prints which production to open.
 
 Usage
 -----
@@ -583,11 +590,42 @@ class Command(BaseCommand):
             est.company.name = COMPANY_NAME
             est.company.save(update_fields=["name"])
         est.description = FARM_DESCRIPTION
-        est.farming_method = "Certified Organic"
+        # "organic", NOT "Certified Organic".
+        #
+        # `farming_method` is a free-text CharField describing the PRACTICE. Seeding a
+        # certification NAME into it made the audit export print "Farming Method: Certified
+        # Organic" in Farm Overview, several pages above the Active Certification Summary
+        # that actually substantiates the claim — an unearned second assertion of status, on
+        # the one farm we show certifiers. `_farming_method_phrase` now labels any
+        # non-practice term as operator-entered, so leaving it would have printed a caveat on
+        # the showcase packet. The real claim belongs to the certification record, which
+        # `_seed_certifications` writes.
+        est.farming_method = "organic"
         est.city = est.city or "Winters"
         est.state = est.state or "CA"
+        est.country = est.country or "United States"
         est.zone = est.zone or "Yolo County"
         est.zip_code = est.zip_code or "95694"
+        # Farm Overview printed five of nine rows as "(not provided)" / "—" on the flagship
+        # demo packet: country, all three contacts, GPS, total acreage and year established.
+        # A certifier reading that sees an operation that has not filled in its own header —
+        # exactly the impression a recordkeeping product must not give. Every value below is
+        # consistent with the rest of the fixture (Winters CA, the two blocks' acreage, and
+        # the planting years named in the OSP narrative).
+        est.contact_person = est.contact_person or FARM_MANAGER
+        est.contact_phone = est.contact_phone or "(530) 795-4180"
+        est.contact_email = est.contact_email or "paula@blueoakwalnut.example"
+        est.email = est.email or "paula@blueoakwalnut.example"
+        est.phone = est.phone or "(530) 795-4180"
+        # Orchard centroid near Winters, Yolo County — the same coordinates the parcel
+        # geometry is drawn around, so the Field Map and the Farm Overview agree.
+        est.latitude = est.latitude if est.latitude is not None else 38.5381
+        est.longitude = est.longitude if est.longitude is not None else -121.9764
+        # Sum of the two blocks, and the figure the OSP (a)(1) narrative already states.
+        est.total_acreage = est.total_acreage or float(sum(b["acres"] for b in BLOCKS))
+        # The OSP narrative says the blocks were planted 1998 and 2004; the operation dates
+        # from the earlier planting.
+        est.year_established = est.year_established or 1998
         # § 205.201(a)(3): the plan itself is authored in OSP module G2.0 below; the profile
         # flags mirror it so the OFPP row cites a date rather than a filename guess.
         est.fraud_prevention_plan_uploaded = True
@@ -1825,6 +1863,58 @@ class Command(BaseCommand):
 
     # ------------------------------------------------------------------ verification
 
+    def _print_demo_guidance(self, est):
+        """Say which season to open in a demo, and why it is not the closed one.
+
+        The readiness card below reports the CLOSED season, because that is the one with a
+        complete packet — finish date, lot, sale, mass balance. But it is the wrong season to
+        walk a prospect through, and the reason is the audit trail.
+
+        Every record this command writes is created NOW. `auditlog` stamps each LogEntry with
+        the real wall-clock time, which is correct and must not be forged — that log is the
+        artifact the packet's Record Change History section offers as proof the records were
+        not fabricated, and back-dating it to look contemporaneous would falsify exactly the
+        thing it exists to prove. On the CLOSED (prior-year) season that produces a packet
+        whose events are dated last autumn and whose entries are all stamped today: to a
+        certifier that reads as a season back-entered in one sitting.
+
+        The CURRENT season does not have that problem in the same way. It is in progress, its
+        events run up to today, and records entered now sit naturally against them — which is
+        also the true story of any operation that adopts recordkeeping software mid-season.
+
+        So: demo the current season. Export the closed one only to show what a finished
+        packet contains, and say out loud that it is seeded historical data.
+        """
+        current_year = timezone.localdate().year
+        current = (
+            History.objects.filter(parcel__establishment=est, start_date__year=current_year)
+            .order_by("-start_date")
+            .first()
+        )
+        if current is None:
+            return
+        self.stdout.write("")
+        self.stdout.write(self.style.MIGRATE_HEADING("Demo this season"))
+        self.stdout.write(f"  {current.name} (id {current.id}, public_id {current.public_id})")
+        if current.finish_date is None:
+            self.stdout.write(
+                "  In progress, events run to today, and its entry timestamps sit naturally against them."
+            )
+        else:
+            # --close-current was used, so "in progress" would be a false claim about the very
+            # artifact this note exists to keep honest.
+            self.stdout.write(
+                "  Closed this crop year (--close-current). Its events are recent, so the entry "
+                "timestamps still read far more naturally than the prior season's."
+            )
+        self.stdout.write(
+            self.style.WARNING(
+                "  The closed season below has a fuller packet but every record was entered "
+                "today, so its Record Change History reads as one back-entered batch. Show it "
+                "for packet CONTENT, not as a live audit trail."
+            )
+        )
+
     def _verify(self, est):
         """Print exactly what the dashboard card will show. No separate implementation."""
         from history.services.audit_export_service import AuditExportService
@@ -1839,6 +1929,8 @@ class Command(BaseCommand):
         if production is None:
             self.stdout.write(self.style.ERROR("  No production on this farm."))
             return
+
+        self._print_demo_guidance(est)
 
         rows = AuditExportService(production, certification_type="organic").compliance_snapshot_rows()
         findings = [r for r in rows if r["status"] != "PASS"]

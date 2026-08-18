@@ -14,6 +14,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from backend.permissions import CompanyNestedViewSet
+from history.retention import assert_deletable
 from history.serializers import HistorySerializer
 from product.services.buffer_zones import BufferZoneError, normalize_buffer_rows
 from subscriptions.permissions import HasParcelCreationPermission
@@ -329,6 +330,16 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         # Use the optimized serializer that avoids expensive operations
         return Response(OptimizedHistoryListSerializer(histories, many=True, context={"request": request}).data)
+
+    def perform_destroy(self, instance):
+        """Refuse to delete a parcel that still carries a production inside retention.
+
+        Deleting the parcel cascades to its productions in bulk, which never calls
+        History.delete() and so never reaches the NOP retention guard. See
+        history/retention.py — the same check guards farms and companies.
+        """
+        assert_deletable("parcel", parcel=instance)
+        super().perform_destroy(instance)
 
     @action(detail=True, methods=["post"])
     @transaction.atomic

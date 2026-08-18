@@ -184,8 +184,15 @@ def _supplier_rows(establishment):
     🔴 2026-08-16: soil amendments were absent entirely, because `SoilManagementEvent` had no
     supplier column. On an organic orchard the compost supplier is usually the largest single
     line on this form, and the generated workbook simply did not have it.
+
+    🔴 2026-08-17, the SECOND instance of that same defect: beneficial-organism suppliers were
+    absent. The workbook's own USDA instruction line opens with "live animals", and a
+    Trichogramma or lacewing release is bought from a named supplier exactly like a fertiliser
+    is — `PestManagementEvent.beneficial_supplier` has held it since the BR subtype shipped and
+    no row was ever emitted. Every event model that carries a supplier string belongs here; the
+    lesson from two rounds is to enumerate the MODELS, not to remember the ones that came up.
     """
-    from history.models import ChemicalEvent, ProductionEvent, SoilManagementEvent
+    from history.models import ChemicalEvent, PestManagementEvent, ProductionEvent, SoilManagementEvent
 
     seen = {}
     for e in ChemicalEvent.objects.filter(history__parcel__establishment=establishment):
@@ -210,6 +217,13 @@ def _supplier_rows(establishment):
         product = _blank(getattr(e.history.product, "name", None) or getattr(e.history.crop_type, "name", None))
         if supplier and (product, supplier) not in seen:
             seen[(product, supplier)] = ("seed", product, supplier)
+    for e in PestManagementEvent.objects.filter(history__parcel__establishment=establishment):
+        supplier = _blank(e.beneficial_supplier)
+        # The organism, falling back to the generic category. A row reading "— / Rincon-Vitova"
+        # tells a certifier nothing about what was released.
+        product = _blank(e.beneficial_species) or "Beneficial organisms"
+        if supplier and (product, supplier) not in seen:
+            seen[(product, supplier)] = ("input", product, supplier)
     return list(seen.values())
 
 

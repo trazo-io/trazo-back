@@ -15,6 +15,7 @@ from rest_framework.response import Response
 
 from backend.permissions import CompanyNestedViewSet, IsCompanyAdmin
 from history.models import History, HistoryScan
+from history.retention import assert_deletable
 from history.serializers import HistoryListOptionsSerializer
 from history.services.transparency_calculator import TransparencyCalculator
 from product.models import Parcel, Product
@@ -48,6 +49,12 @@ ACTIVITY_FEED_TOTAL_CAP = 800
 
 
 class CompanyViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
+
+    def perform_destroy(self, instance):
+        """A company cannot be deleted while any of its farms hold retained records."""
+        assert_deletable("company", parcel__establishment__company=instance)
+        super().perform_destroy(instance)
+
     queryset = Company.objects.all()
     filter_backends = [filters.OrderingFilter]
 
@@ -121,6 +128,16 @@ class CompanyViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
 
 class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
+
+    def perform_destroy(self, instance):
+        """A farm cannot be deleted while it holds productions inside NOP retention.
+
+        Establishment -> Parcel -> History is CASCADE the whole way, so this delete
+        erased retained productions in bulk without ever calling History.delete().
+        """
+        assert_deletable("farm", parcel__establishment=instance)
+        super().perform_destroy(instance)
+
     queryset = (
         Establishment.objects.select_related("company", "album").prefetch_related("parcels", "parcels__product").all()
     )
@@ -705,6 +722,13 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                         "parcel_id": event.history.parcel_id,
                         "parcel_name": event.history.parcel.name,
                         "history_id": event.history_id,
+                        # Whether the season this event belongs to is closed. Without it
+                        # the activity feed had no way to know, so ActivityDetailModal
+                        # rendered Edit and Delete on events from finished productions and
+                        # both simply returned 423 — the farmer refilled an entire wizard
+                        # to be told at save time that the record was locked. `history` is
+                        # already select_related above, so this costs no extra query.
+                        "production_finished": event.history.finish_date is not None or event.history.published,
                         "performed_by": getattr(event, "performed_by", "") or "",
                         # WS-4 auto-narrative: structured VALUES only — the frontend
                         # composes localized wording (config/events/narrative.ts).

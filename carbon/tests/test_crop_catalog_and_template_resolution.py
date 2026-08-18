@@ -5,7 +5,9 @@ Two defects, both found 2026-08-07:
 1. **Five California perennial crops were absent from the catalog entirely** — pistachios, olives,
    dates, figs and pomegranates. The crop picker is a CLOSED list with no "Other" and no free-text
    entry, so a California pistachio grower (a top-three CA tree nut by acreage) could not create a
-   production at all.
+   production at all. **Pears joined them 2026-08-18** — same defect, found the same way, this time
+   by the Sep-30 named list rather than an audit (30 qualifying farms grow pears, 11 in the top
+   Washington tier).
 
 2. **The template seeder fabricated practices for any crop it had no data for.** It fell back to
    `CROP_CUSTOMIZATIONS["corn_field"]`, so a newly added perennial silently received a full
@@ -32,6 +34,11 @@ class IcpCropCoverageTests(TestCase):
         "dates",
         "figs",
         "pomegranates",
+        # Added 2026-08-18. Pears had no slug and no umbrella (`stone_fruit` is cherry/peach/
+        # plum/apricot/nectarine; `apples` is apples only). 30 farms on the Sep-30 named list
+        # grow pears, 11 of them in the top Washington tier — see
+        # documentation/gtm-v3/NAMED-LIST-2026-09.md.
+        "pears",
     ]
 
     def test_every_icp_crop_is_defined_in_the_seed_data(self):
@@ -46,9 +53,9 @@ class IcpCropCoverageTests(TestCase):
             f"'Other' option, so a grower of these cannot onboard at all.",
         )
 
-    PROVISIONAL_CROPS = {"pistachios", "olives", "dates", "figs", "pomegranates"}
+    PROVISIONAL_CROPS = {"pistachios", "olives", "dates", "figs", "pomegranates", "pears"}
 
-    def test_the_five_added_crops_carry_honest_benchmark_provenance(self):
+    def test_the_added_crops_carry_honest_benchmark_provenance(self):
         # Their emissions figures are interpolated from comparable systems, not measured. They
         # must not claim verification, or the carbon numbers would be a fabricated attribution.
         #

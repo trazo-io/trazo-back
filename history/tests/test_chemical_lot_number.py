@@ -92,6 +92,12 @@ class ChemicalLotNumberTests(TestCase):
     def test_block_id_folded_into_application_log(self):
         # Table 1 is at the 7.0" width budget, so block rides the Area cell rather than a
         # separate column (Production/Pest/Irrigation keep dedicated Block columns).
+        #
+        # This asserted "Blk Block A" until 2026-08-18. The blind "Blk " prefix was removed
+        # from the service deliberately — growers name their blocks "Block 1", so prefixing
+        # unconditionally printed "Blk Block 1" on the live export. The prefix now applies
+        # only to a BARE designator that would otherwise read as a stray number. The test was
+        # asserting the bug.
         ChemicalEvent.objects.create(
             history=self.history,
             type=ChemicalEvent.PESTICIDE,
@@ -100,7 +106,21 @@ class ChemicalLotNumberTests(TestCase):
             date=timezone.now(),
         )
         text = _all_table_text(self._svc()._build_chemical_log())
-        self.assertIn("Blk Block A", text)
+        self.assertIn("Block A", text)
+        self.assertNotIn("Blk Block A", text)
+
+    def test_a_bare_block_designator_still_gets_the_prefix(self):
+        """The other half of the rule — without this the fix above could silently regress
+        into never prefixing anything, and a lone "7" in the Area cell reads as a quantity."""
+        ChemicalEvent.objects.create(
+            history=self.history,
+            type=ChemicalEvent.PESTICIDE,
+            commercial_name="Horticultural oil",
+            block_id="B-7",
+            date=timezone.now(),
+        )
+        text = _all_table_text(self._svc()._build_chemical_log())
+        self.assertIn("Blk B-7", text)
 
     def test_active_ingredient_and_manufacturer_in_traceability(self):
         # NOP input identity: the traceability table must name the material, not just the brand.

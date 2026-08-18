@@ -363,9 +363,11 @@ def _make_history(crop_name=""):
     Kept local rather than reaching for a shared factory: these assertions depend on the crop
     NAME (it becomes the lot code's first token), so the fixture has to be explicit about it.
 
-    `start_date` is set because `History.__str__` formats it unconditionally, and auditlog
-    stringifies every instance it records — a production without one raises inside the signal
-    before any assertion here is reached.
+    `start_date` is set because these are realistic productions, not because it is required:
+    `History.__str__` used to format it unconditionally, so a production without one raised
+    inside auditlog's signal (it stringifies every instance it records) before any assertion
+    here was reached. That was fixed at source on 2026-08-18 — see test_history_str_repr.py —
+    so this is no longer a workaround.
     """
     product = Product.objects.create(name=crop_name) if crop_name else None
     return History.objects.create(

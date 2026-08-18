@@ -532,23 +532,69 @@ INPUT_TRACEABILITY_WIDTHS_CA = [
     0.60 * inch,  # Purchase Date — "2025-03-10" = 0.50in
     0.78 * inch,  # Invoice #     — "YAS-2025-4417" = 0.69in, must not split
     0.75 * inch,  # Lot #         — "NH2025-04127" = 0.66in, must not split
-    0.57 * inch,  # Qty Purchased — header word "Purchased" = 0.47in
-    0.55 * inch,  # Applicator    — wraps
+    0.62 * inch,  # Qty Purchased — header "Purchased" is 0.52in in BOLD, not 0.47in
+    0.62 * inch,  # Applicator    — header word is 0.50in in bold; values wrap below it
     0.55 * inch,  # Cert #
     0.60 * inch,  # CA DPR Permit
 ]
 
-#: Same table for a non-California operation — the DPR column is dropped, not left blank.
+#: Same table for a non-California operation — ONLY the DPR column is dropped.
+#:
+#: 🔴 This list had EIGHT entries against NINE headers until 2026-08-18. The header builder
+#: always appended "Cert #" and added "CA DPR Permit" on top of it for California, so the
+#: non-CA table handed ReportLab nine columns and eight widths. Kept in lockstep with the CA
+#: list below (CA == this + "CA DPR Permit") so the two can no longer disagree.
 INPUT_TRACEABILITY_WIDTHS_NON_CA = [
     0.60 * inch,  # Date Applied  — "2025-03-23" = 0.50in
-    1.15 * inch,  # Product       — wraps on word boundaries
-    1.15 * inch,  # Supplier      — wraps on word boundaries
+    1.10 * inch,  # Product       — wraps on word boundaries
+    1.10 * inch,  # Supplier      — wraps on word boundaries
     0.60 * inch,  # Purchase Date
     0.78 * inch,  # Invoice #     — must not split
     0.75 * inch,  # Lot #         — must not split
-    0.57 * inch,  # Qty Purchased
-    0.60 * inch,  # Applicator    — wraps
+    0.62 * inch,  # Qty Purchased — header "Purchased" is 0.52in in BOLD
+    0.62 * inch,  # Applicator    — header word is 0.50in in bold
+    0.55 * inch,  # Cert #
 ]
+
+#: Header row for each width list, in column order. Kept beside the widths because HEADERS
+#: render in Helvetica-BOLD, which is wider than the 7pt regular used for values — sizing a
+#: column from a regular-weight measurement (as "Qty Purchased" and "Applicator" briefly were)
+#: leaves the header itself wrapping, the same "Pestici / de" defect recorded above.
+TABLE_HEADERS = {
+    "MASS_BALANCE_PURCHASE_WIDTHS": [
+        "Date",
+        "Product",
+        "Type",
+        "Supplier",
+        "Invoice #",
+        "Lot #",
+        "Qty Purchased",
+        "Unit",
+    ],
+    "INPUT_TRACEABILITY_WIDTHS_CA": [
+        "Date Applied",
+        "Product",
+        "Supplier",
+        "Purchase Date",
+        "Invoice #",
+        "Lot #",
+        "Qty Purchased",
+        "Applicator",
+        "Cert #",
+        "CA DPR Permit",
+    ],
+    "INPUT_TRACEABILITY_WIDTHS_NON_CA": [
+        "Date Applied",
+        "Product",
+        "Supplier",
+        "Purchase Date",
+        "Invoice #",
+        "Lot #",
+        "Qty Purchased",
+        "Applicator",
+        "Cert #",
+    ],
+}
 
 #: Index of every column in the lists above that carries an ATOMIC identifier, i.e. one that
 #: must never be split. Keyed by constant name so the guard reports which column failed.
@@ -565,7 +611,7 @@ def _fmt_qty(value):
     52500 -> "52,500"; 52500.5 -> "52,500.5". Matches how `_fmt_mass` renders the same
     number in the Output Reconciliation block, so the two cannot look like different figures.
     """
-    if value is None:
+    if value is None or str(value).strip() == "":
         return "\u2014"
     try:
         number = float(value)
@@ -3909,19 +3955,14 @@ class AuditExportService:
             # because the farm's state field is blank or wrong.
             show_dpr_permit = self._establishment_state() == "CA" or any(ev.ca_dpr_permit_number for ev in events)
 
-            trace_headers = [
-                "Date Applied",
-                "Product",
-                "Supplier",
-                "Purchase Date",
-                "Invoice #",
-                "Lot #",
-                "Qty Purchased",
-                "Applicator",
-                "Cert #",
-            ]
-            if show_dpr_permit:
-                trace_headers.append("CA DPR Permit")
+            # Same source as the widths (see TABLE_HEADERS). The CA list IS the non-CA list
+            # plus the DPR column, mirroring how the two width constants relate, so slicing
+            # keeps one definition rather than two that must be kept in step by hand.
+            trace_headers = list(
+                TABLE_HEADERS["INPUT_TRACEABILITY_WIDTHS_CA"]
+                if show_dpr_permit
+                else TABLE_HEADERS["INPUT_TRACEABILITY_WIDTHS_NON_CA"]
+            )
             trace_header_row = [self._hdr(h) for h in trace_headers]
             trace_data = [trace_header_row]
             missing_supplier = 0
@@ -4384,9 +4425,10 @@ class AuditExportService:
                 self._sub_header_style(),
             ),
         ]
-        # Six columns, 7.00". Treated Scope takes 0.60" from Product and 0.30" from
-        # Crop Stage; it needs the room because the answer is a free-text locator
-        # ("rows 12-18, north end") and a wrapped locator is a useless locator.
+        # Six columns, 7.00" (was five at 6.40"). Treated Scope's 1.90" is 0.60" of unused
+        # width plus 0.30" each off Product and Crop Stage, 0.20" off Fertigated, 0.45" off
+        # Authorised By and 0.05" off Date. It needs the room because the answer is a
+        # free-text locator ("rows 12-18, north end") and a wrapped locator is a useless one.
         table = Table(
             [[self._hdr(h) for h in ("Date", "Product", "Crop Stage", "Fertigated", "Treated Scope", "Authorised By")]]
             + rows,
@@ -4829,21 +4871,29 @@ class AuditExportService:
                     ]
                 )
 
-            # Eleven columns, 7.45in — inside the 7.5in text block.
-            # Twelve columns, 7.44in — inside the 7.5in text block. Lot gets the widest cell
-            # after Method because a code like "HAS-BLOCK2-20260410" is the thing an inspector
-            # reads across from a sales record, and a wrapped lot code is a misread lot code.
+            # Twelve columns, 7.00in.
+            #
+            # 🔴 CORRECTED 2026-08-17. This said "7.44in — inside the 7.5in text block". There
+            # is no 7.5in text block: the document is letter with 0.75in margins on both sides
+            # (see SimpleDocTemplate above), so the frame is 8.5 - 1.5 = 7.00in. The table was
+            # overflowing 0.44in into the right margin and the Operator column was printing
+            # outside the printable area. Every other table in this file budgets 7.00 — this
+            # one and Itemized Sales were the two that inherited the wrong premise.
+            #
+            # Lot keeps the widest cell after Method because a code like "HAS-BLOCK2-20260410"
+            # is the thing an inspector reads across from a sales record, and a wrapped lot
+            # code is a misread lot code. The 0.44in came off the eight widest other columns.
             ha_widths = [
                 0.58 * inch,  # Date
-                0.98 * inch,  # Lot
-                0.62 * inch,  # Block
+                0.92 * inch,  # Lot
+                0.57 * inch,  # Block
                 0.52 * inch,  # Variety
-                0.6 * inch,  # Yield
-                0.62 * inch,  # Determined By
-                0.6 * inch,  # Quality Grade
-                0.68 * inch,  # Method
-                0.62 * inch,  # Brix / Moisture
-                0.58 * inch,  # Destination
+                0.55 * inch,  # Yield
+                0.56 * inch,  # Determined By
+                0.55 * inch,  # Quality Grade
+                0.62 * inch,  # Method
+                0.56 * inch,  # Brix / Moisture
+                0.53 * inch,  # Destination
                 0.52 * inch,  # Storage
                 0.52 * inch,  # Operator
             ]
@@ -4851,40 +4901,48 @@ class AuditExportService:
             ha_table.setStyle(self._base_table_style())
             elements.append(ha_table)
 
-            # --- Partial-Area Harvests (7 CFR 205.103(b)(2)) ---
-            # A pick that covered only part of a planting is the one harvest row whose
-            # yield cannot be read against the block's full acreage. The scope answer
-            # lives on the event and reached no export; the main table is at 7.44" of a
-            # 7.5" block and has no room for a free-text locator, so partial picks get
-            # their own short table. Whole-planting harvests are omitted deliberately:
-            # listing every one would bury the exception this table exists to surface.
-            partial_ha = [ev for ev in ha_events if getattr(ev, "applied_scope", None) == "part"]
-            if partial_ha:
-                elements.append(Spacer(1, 10))
-                elements.append(
-                    Paragraph(
-                        "<b>Partial-Area Harvests (7 CFR 205.103(b)(2))</b>",
-                        self._sub_header_style(),
-                    )
+        # --- Partial-Area Operations (7 CFR 205.103(b)(2)) ---
+        # An operation that covered only part of a planting is the row whose quantity cannot
+        # be read against the block's full acreage. The scope answer lives on the event and
+        # reached no export; the harvest table is at 7.44" of a 7.5" block and has no room for
+        # a free-text locator, so partial passes get their own short table.
+        #
+        # Deliberately OUTSIDE the `if ha_events` block and not filtered to HA: ProductionTab
+        # collects `applied_scope` on Planting as well as Harvest, and a partial planting has
+        # the same audit consequence — trees-per-acre computed against the whole block is
+        # wrong by whatever fraction went unplanted.
+        #
+        # Whole-planting operations are omitted: listing every one would bury the exception
+        # this table exists to surface.
+        partial_scope_events = [ev for ev in events if getattr(ev, "applied_scope", None) == "part"]
+        if partial_scope_events:
+            elements.append(Spacer(1, 10))
+            elements.append(
+                Paragraph(
+                    "<b>Partial-Area Operations (7 CFR 205.103(b)(2))</b>",
+                    self._sub_header_style(),
                 )
-                pa_data = [[self._hdr(h) for h in ("Date", "Lot", "Block", "Variety", "Area Harvested")]]
-                for ev in partial_ha:
-                    pa_data.append(
-                        [
-                            self._cell(_fmt_date(ev.date)),
-                            self._cell(getattr(ev, "harvest_lot_code", None)),
-                            self._cell(ev.block_id),
-                            self._cell(ev.variety),
-                            self._cell(self._applied_scope_display(ev)),
-                        ]
-                    )
-                pa_table = Table(
-                    pa_data,
-                    colWidths=[0.75 * inch, 1.15 * inch, 0.8 * inch, 0.8 * inch, 3.5 * inch],
-                    repeatRows=1,
+            )
+            pa_data = [[self._hdr(h) for h in ("Date", "Operation", "Lot", "Block", "Variety", "Area Covered")]]
+            for ev in partial_scope_events:
+                pa_data.append(
+                    [
+                        self._cell(_fmt_date(ev.date)),
+                        self._cell(PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type))),
+                        self._cell(getattr(ev, "harvest_lot_code", None)),
+                        self._cell(ev.block_id),
+                        self._cell(ev.variety),
+                        self._cell(self._applied_scope_display(ev)),
+                    ]
                 )
-                pa_table.setStyle(self._base_table_style())
-                elements.append(pa_table)
+            pa_table = Table(
+                pa_data,
+                # Six columns, 7.00" — the real text block (letter, 0.75" margins each side).
+                colWidths=[0.7 * inch, 1.0 * inch, 1.1 * inch, 0.75 * inch, 0.75 * inch, 2.7 * inch],
+                repeatRows=1,
+            )
+            pa_table.setStyle(self._base_table_style())
+            elements.append(pa_table)
 
         # --- Production Event Notes (Field Notes / observation) ---
         # The main Production Events table keeps one row per event compact (Date,
@@ -5232,8 +5290,8 @@ class AuditExportService:
 
             # Description dropped from this table: it repeats the narrative already printed
             # in the event log above, and the row is now carrying the columns a certifier
-            # actually reconciles. Widths sum to 7.0in, inside the 7.5in text block.
-            # Ten columns, 7.0in — still inside the 7.5in text block.
+            # actually reconciles. Widths sum to 7.0in — the full text block (letter,
+            # 0.75in margins each side). Ten columns, 7.0in exactly.
             pl_widths = [
                 0.6 * inch,
                 0.6 * inch,
@@ -5362,7 +5420,7 @@ class AuditExportService:
         elements = [self._spacer(0.12)]
         elements.append(
             Paragraph(
-                "<b>Amendment Supplier &amp; Purchase Traceability (7 CFR 205.103(b)(1))</b>",
+                "<b>Amendment Supplier &amp; Purchase Traceability (7 CFR 205.103(b)(2))</b>",
                 self._sub_header_style(),
             )
         )
@@ -6352,13 +6410,13 @@ class AuditExportService:
                         ),
                     ]
                 )
-            # Nine columns, 7.00" — letter portrait with 0.75" margins. "Traps" took 0.50"
-            # from Supplier (1.30 -> 1.00), the widest cell and the one least often filled
-            # on a trap row; no other column was narrowed.
+            # Nine columns, 7.00" — letter portrait with 0.75" margins. The table had 0.50"
+            # of unused width, which is exactly what "Traps" costs, so NO existing column was
+            # narrowed to make room for it.
             detail_widths = [
                 0.7 * inch,  # Date
                 0.9 * inch,  # Type
-                1.0 * inch,  # Supplier
+                1.3 * inch,  # Supplier
                 0.8 * inch,  # Lot #
                 0.65 * inch,  # Organic OK
                 0.9 * inch,  # Trap Type
@@ -6703,7 +6761,7 @@ class AuditExportService:
                         ]
                     )
 
-                # Ten columns, 7.45in total — inside the 7.5in text block.
+                # Ten columns, 6.95in — inside the 7.00in text block (letter, 0.75in margins).
                 cl_widths = [
                     0.95 * inch,
                     0.85 * inch,
@@ -8718,7 +8776,10 @@ class AuditExportService:
         elements.append(self._spacer(0.05))
 
         if purchased_rows:
-            input_headers = ["Date", "Product", "Type", "Supplier", "Invoice #", "Lot #", "Qty Purchased", "Unit"]
+            # From the constant the column-fit guard measures, so the headers and the widths
+            # cannot drift apart — a header list that grows a column while the width list
+            # does not is how a table silently squeezes every other column.
+            input_headers = TABLE_HEADERS["MASS_BALANCE_PURCHASE_WIDTHS"]
             input_header_row = [self._hdr(h) for h in input_headers]
             input_data = [input_header_row] + purchased_rows
             # MEASURED, same rule as the Input Application Log below:
@@ -8906,17 +8967,21 @@ class AuditExportService:
                         self._cell("Yes" if s.organic_on_invoice else "No"),
                     ]
                 )
-            # Eight columns, 7.45in — inside the 7.5in text block. The Amount column is paid
-            # for out of Invoice #, which had 1.85in and wraps cleanly.
+            # Eight columns, 7.00in.
+            #
+            # 🔴 CORRECTED 2026-08-17, same defect as ha_widths above: "inside the 7.5in text
+            # block" was false. Letter with 0.75in margins gives a 7.00in frame, so this was
+            # 0.45in over and the organic-on-invoice column printed into the right margin.
+            # The Amount column is still paid for out of Invoice #, which wraps cleanly.
             sales_widths = [
-                0.8 * inch,
-                1.3 * inch,
-                1.2 * inch,
-                0.7 * inch,
-                0.45 * inch,
-                0.85 * inch,
-                1.4 * inch,
-                0.75 * inch,
+                0.75 * inch,  # Date
+                1.2 * inch,  # Buyer
+                1.15 * inch,  # Lot(s)
+                0.7 * inch,  # Quantity
+                0.45 * inch,  # Unit
+                0.85 * inch,  # Amount
+                1.2 * inch,  # Invoice #
+                0.7 * inch,  # Organic on invoice
             ]
             st = Table(sales_data, colWidths=sales_widths, repeatRows=1)
             st.setStyle(self._base_table_style())
@@ -11596,7 +11661,8 @@ class AuditExportService:
         elements.append(self._spacer(0.05))
 
         headers = ["Event Date", "Event Type", "Input", "Reason", "Resolution", "Verified"]
-        col_widths = [0.75 * inch, 0.95 * inch, 1.4 * inch, 1.95 * inch, 1.15 * inch, 0.85 * inch]
+        # 7.00in exactly — was 7.05in, five hundredths into the right margin.
+        col_widths = [0.75 * inch, 0.95 * inch, 1.4 * inch, 1.9 * inch, 1.15 * inch, 0.85 * inch]
 
         def _format_verified_cell(dw):
             """Render per-catalog lookup timestamps as a compact string.
@@ -12869,6 +12935,125 @@ class AuditExportService:
                 )
             )
 
+        # --- Documented corrections -------------------------------------------
+        #
+        # The table above lists WHICH fields changed; it deliberately does not print
+        # values, because an auditlog diff spans every field on every model and would
+        # bury the page. But "application rate changed" answers nothing an inspector
+        # asked. A correction to a FILED record is the case where the values are the
+        # whole point, so those get their own table, in the shape a paper record uses:
+        # the original, the correction, and the reason, on one line.
+        #
+        # 7 CFR 205.103(b)(3) requires records to "include audit trail documentation";
+        # (b)(2) requires them to be "readily understood and audited". A trail an
+        # inspector cannot read the values of satisfies neither.
+        elements.extend(self._amendments_table())
+
+        return elements
+
+    # Event-type keys (history.constants) to the words this document already uses for a
+    # record elsewhere. "Event #423" is a primary key: it tells an inspector nothing and
+    # cannot be cross-referenced against the rest of the packet, which identifies records
+    # by kind and date.
+    _AMENDMENT_RECORD_KINDS = {
+        0: "Weather",
+        1: "Production",
+        2: "Input application",
+        3: "General",
+        4: "Equipment",
+        5: "Soil management",
+        6: "Pest management",
+        7: "Sales & compliance",
+    }
+
+    def _amended_record_label(self, amendment):
+        """Which record was corrected, in terms an inspector can look up.
+
+        Resolved at render time rather than denormalised onto the amendment: the event is
+        locked and undeletable for the retention period, so it is still there, and reading
+        it live means a later correction to the event's own date is reflected here too.
+        Falls back to the id if the row is somehow gone — an unlabelled correction is
+        still better than a missing one.
+
+        Plain text with a comma, NOT a "<br/>": `_cell` runs values through `_esc`, so
+        markup injected here prints literally ("Sales & compliance<br/>2025-10-17" — seen
+        in a rendered proof). That escaping is deliberate operator-input protection and is
+        not something this label should be routed around; the column wraps on its own.
+        """
+        kind = self._AMENDMENT_RECORD_KINDS.get(amendment.event_type, "Record")
+        try:
+            from history.constants import EVENT_TYPE_TO_MODEL
+
+            model = EVENT_TYPE_TO_MODEL.get(amendment.event_type)
+            event = model.objects.filter(pk=amendment.event_id).only("date").first() if model else None
+            if event is not None and getattr(event, "date", None):
+                return f"{kind}, {event.date.strftime('%Y-%m-%d')}"
+        except Exception:  # noqa: BLE001 - a label must never break the dossier
+            pass
+        return f"{kind}, #{amendment.event_id}"
+
+    def _amendments_table(self):
+        """Corrections made to this season's events after it was filed.
+
+        Renders nothing when there are none — an empty "Corrections" heading invites the
+        question "why is this here?", and the answer ("nothing was corrected") is better
+        told by the section's absence than by an empty table.
+        """
+        from history.models import EventAmendment
+
+        amendments = list(
+            EventAmendment.objects.filter(history=self.production).select_related("amended_by").order_by("created_at")
+        )
+        if not amendments:
+            return []
+
+        elements = [
+            self._spacer(0.15),
+            self._section_header("Documented Corrections"),
+            Paragraph(
+                "Corrections made to this season's records after it was finished. The original "
+                "entry is retained beside each correction, with the reason given at the time.",
+                self._styles["footer_note"],
+            ),
+            self._spacer(0.05),
+        ]
+
+        headers = ["Corrected", "Record corrected", "Field", "Originally recorded", "Corrected to", "Reason", "By"]
+        data = [[self._hdr(h) for h in headers]]
+        for a in amendments:
+            data.append(
+                [
+                    self._cell(a.created_at.strftime("%Y-%m-%d")),
+                    self._cell(self._amended_record_label(a)),
+                    self._cell(a.field_label or a.field_name),
+                    # An empty original means the field was blank before. Say so, rather
+                    # than leaving a cell an inspector has to interpret.
+                    self._cell(a.original_value or "(blank)"),
+                    self._cell(a.corrected_value or "(blank)"),
+                    self._cell(a.reason),
+                    self._cell((a.amended_by_name or "").strip() or "-"),
+                ]
+            )
+
+        # Seven columns, 7.00in — the frame is letter minus 0.75in margins each side
+        # (SimpleDocTemplate above). This first shipped summing to 7.30in, overflowing
+        # 0.30in into the right margin so the "By" column printed outside the printable
+        # area: the same wrong premise corrected elsewhere in this file on 2026-08-17.
+        # Budget goes to Reason (a sentence, and the thing that makes a correction
+        # legible to an inspector) and to the two value columns; Date, Record and By are
+        # short and predictable.
+        col_widths = [
+            0.70 * inch,  # Corrected (date; rows are ordered oldest-first)
+            1.30 * inch,  # Record corrected (kind + the record's own date)
+            0.80 * inch,  # Field
+            0.95 * inch,  # Originally recorded
+            0.95 * inch,  # Corrected to
+            1.45 * inch,  # Reason
+            0.85 * inch,  # By
+        ]
+        t = Table(data, colWidths=col_widths, repeatRows=1)
+        t.setStyle(self._base_table_style())
+        elements.append(t)
         return elements
 
     def _photo_reuse_findings(self, category_events):
@@ -13094,6 +13279,15 @@ class AuditExportService:
                 # documentation for thinning/pruning/etc.)
                 method_val = _val(extra.get("method") or extra.get("production_method"), "")
 
+            # A partial pick is the one harvest row whose yield cannot be read against the
+            # block's full acreage, and the per-area Rate column is computed from
+            # area_covered regardless. The PDF gets a Partial-Area Harvests table; the CSV
+            # carries the same locator in Notes.
+            prod_notes = _val(ev.observation)
+            prod_scope = self._applied_scope_display(ev)
+            if prod_scope:
+                prod_notes = (prod_notes + " | " if prod_notes else "") + f"Applied scope: {prod_scope}"
+
             all_rows.append(
                 (
                     ev.date,
@@ -13110,7 +13304,7 @@ class AuditExportService:
                         _val(ev.performed_by),
                         str(_photo_count(ev)),
                         "",
-                        _val(ev.observation),
+                        prod_notes,
                     ]
                     + nop_pad,
                 )
@@ -13128,6 +13322,13 @@ class AuditExportService:
             # Same label map as the PDF's Input Application Log: the CSV is read by the same
             # certifier, so it must not be the one that says "air_blast".
             method = _method_label(ev.application_method_structured or ev.way_of_application)
+            # Same § 205.103(b)(2) locator the PDF's Application Context table prints. Appended
+            # to Notes rather than given a column so the CSV header stays stable for anyone
+            # who already has a saved import mapping.
+            chem_notes = _val(ev.observation)
+            chem_scope = self._applied_scope_display(ev)
+            if chem_scope:
+                chem_notes = (chem_notes + " | " if chem_notes else "") + f"Treated scope: {chem_scope}"
             all_rows.append(
                 (
                     ev.date,
@@ -13144,7 +13345,7 @@ class AuditExportService:
                         _val(ev.applicator_name or ev.performed_by),
                         str(_photo_count(ev)),
                         "",
-                        _val(ev.observation),
+                        chem_notes,
                         # NOP traceability columns
                         _val(ev.supplier_name),
                         _fmt_date(ev.purchase_date) if ev.purchase_date else "",
@@ -13284,6 +13485,18 @@ class AuditExportService:
                 notes = (notes + " | " if notes else "") + f"ID by: {ev.get_identified_by_display()}"
             if ev.threshold_rationale:
                 notes = (notes + " | " if notes else "") + f"Rationale: {ev.threshold_rationale[:60]}"
+            # The PDF's Beneficial-Release & Trap Detail table carries the trap triple; the CSV
+            # is read by the same certifier, so it must not be the surface where the monitoring
+            # evidence disappears. A catch is meaningless without the trap count beside it.
+            trap_bits = []
+            if ev.trap_type:
+                trap_bits.append(ev.get_trap_type_display())
+            if ev.trap_count is not None:
+                trap_bits.append(f"{ev.trap_count} traps")
+            if ev.pest_catch_count is not None:
+                trap_bits.append(f"{ev.pest_catch_count} caught")
+            if trap_bits:
+                notes = (notes + " | " if notes else "") + "Traps: " + ", ".join(trap_bits)
             all_rows.append(
                 (
                     ev.date,

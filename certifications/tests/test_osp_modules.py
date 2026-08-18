@@ -262,6 +262,37 @@ class ClauseBackedQuestionTests(TestCase):
             [("packaging_free_of_prohibited", "one_of", ["unconfirmed", "no"])],
         )
 
+    def test_label_category_is_askable_and_shares_one_vocabulary(self):
+        """7 CFR 205.301 / 205.103(b)(3) — records must identify the product BY CATEGORY.
+
+        The per-sale column has existed since migration 0195. The plan-level question did not,
+        so G7.0 cited § 205.303 in its own docstring while asking nothing about which category
+        the operation actually sells under.
+        """
+        from history.models import ORGANIC_LABEL_CATEGORY_CHOICES
+
+        q = self._keys("g7_0_labeling")
+        self.assertIn("organic_label_categories", q)
+        self.assertEqual(q["organic_label_categories"].nop_cite, "§ 205.301")
+        # ONE vocabulary for one fact. A second set of values is how the OSP answer and the
+        # SalesRecord column silently stop describing the same thing.
+        self.assertEqual(
+            [opt.value for opt in q["organic_label_categories"].options],
+            [value for value, _label in ORGANIC_LABEL_CATEGORY_CHOICES],
+        )
+
+    def test_planting_stock_supplier_attestation_has_a_generated_list_behind_it(self):
+        """Asking a grower to confirm a list the product cannot hold would be an empty ask.
+
+        It is not empty: `common_osp_workbooks` generates a Supplier List from the supplier
+        strings on chemical, soil, production and pest events. Pinned together so removing the
+        workbook would fail the question's own justification.
+        """
+        from certifications.services.common_osp_workbooks import WORKBOOKS_BY_KEY
+
+        self.assertIn("suppliers_on_supplier_list", self._keys("g3_2_planting_stock"))
+        self.assertIn("supplier_list", WORKBOOKS_BY_KEY)
+
 
 class ModuleDefinitionsEndpointTests(TestCase):
     def setUp(self):

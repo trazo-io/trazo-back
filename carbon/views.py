@@ -2854,9 +2854,33 @@ class GreenPointsViewSet(viewsets.ModelViewSet):
 
 
 class CarbonAuditLogViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = CarbonAuditLog.objects.all()
+    """Audit rows the CALLER generated. Superusers see everything.
+
+    This was `queryset = CarbonAuditLog.objects.all()` with `IsAuthenticated` and no
+    scoping of any kind, so any logged-in user could page every company's audit rows —
+    including `ip_address`, which the serializer exposes. Nothing in the frontend calls
+    this endpoint (grep over trazo-app/src returns no hits), so narrowing it costs no
+    working behaviour.
+
+    Scoped by `user` rather than by company because the model has no company FK: its
+    `carbon_entry`/`certification`/`report` FKs are all NULL on the rows written for
+    event edits and deletes (history/views.py writes only a `details` JSON blob), so a
+    company join would silently drop exactly the rows an operator would come here for.
+    """
+
+    # Present only so the DRF router can infer a basename from the model; every request
+    # is served by get_queryset below. Deliberately `.none()` and not `.all()` so that a
+    # future code path which forgets to call get_queryset fails closed rather than
+    # re-opening the leak.
+    queryset = CarbonAuditLog.objects.none()
     serializer_class = CarbonAuditLogSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_superuser:
+            return CarbonAuditLog.objects.all()
+        return CarbonAuditLog.objects.filter(user=user)
 
 
 class CarbonOffsetProjectViewSet(viewsets.ModelViewSet):
