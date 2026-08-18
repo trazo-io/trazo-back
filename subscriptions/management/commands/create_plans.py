@@ -243,6 +243,36 @@ class Command(BaseCommand):
             "compliance_exports": True,
         }
 
+        # Operation — the ceiling. DERIVED from Compliance, one size up.
+        #
+        # 2026-08-17: the lineup had exactly ONE paid product, capped at one farm, with nothing
+        # above it. The ladder therefore inverted at the top: farms #2 onward cost $149 each, so a
+        # six-farm business paid $994 — against $4,250 that Quick Organics charges the same
+        # operation, and $3,300 that Croptracker charges before it will talk to you at all.
+        # Competitive at the bottom, giving the product away at the top.
+        #
+        # This is NOT a new value metric, which is what the 2026-08-14 memo was right to refuse
+        # without usage data. It is the SAME metric — the operation buys certification paperwork
+        # per farm — expressed per OPERATION at the size where counting farms stops making sense.
+        #
+        # $1,200 is set by two anchors, not by a margin target: it stays under QO's $4,250 top band
+        # for the same customer, and it clears the $500–5,000 ACV churn band's floor rather than
+        # sitting a fifth below it like $249 does.
+        #
+        # Extra Farm ($149/yr) STAYS. It is the right answer for 2–6 farms and the crossover lands
+        # naturally at ~7 ($249 + 6 × $149 = $1,143), so the two prices select themselves and the
+        # marginal farm never costs more than the first one.
+        operation_features = {
+            **compliance_features,
+            # The one thing being bought. Everything else is inherited so the two tiers cannot
+            # drift — a change to what Compliance includes is automatically in Operation.
+            "max_establishments": -1,
+            # 4x Compliance, not unlimited. Unlimited is Enterprise's line in the one-pager, and
+            # a bounded number here keeps the storage meter meaningful (photo uploads are still
+            # hard-limited; see `subscriptions/storage_accounting.py`).
+            "storage_limit_gb": 100,
+        }
+
         # Pilot — Compliance, comped. DERIVED, never hand-listed.
         #
         # It used to grant unlimited farms, 50 GB and 12hr support: entitlements no customer can
@@ -378,6 +408,20 @@ class Command(BaseCommand):
                 "interval": "yearly",
                 "features": compliance_features,
             },
+            # Operation — every farm in the business, one price. See `operation_features` above
+            # for why this tier exists and how $1,200 was set.
+            {
+                "name": "Operation",
+                "slug": "operation-yearly",
+                "description": (
+                    "Every farm in your operation on one renewal: unlimited farms and "
+                    "certifiers, the OSP renewal packet and audit export for each of them, the "
+                    "CA PUR export per site, and a buyer page per production."
+                ),
+                "price": 1200.00,
+                "interval": "yearly",
+                "features": operation_features,
+            },
             # ---- RETIRED 2026-08-07 (migration subscriptions/0009) -------------------------
             # The monthly ladder below is seeded INACTIVE so a fresh environment matches a
             # migrated one. Kept rather than deleted: Subscription.plan is PROTECT, and a plan
@@ -471,14 +515,6 @@ class Command(BaseCommand):
         for plan_data in plans:
             product_name = f"Trazo {plan_data['name']} ({plan_data['interval'].title()})"
 
-            # Check if we already have this plan
-            existing_plan = Plan.objects.filter(slug=plan_data["slug"]).first()
-            if existing_plan and not self.force:
-                # For free plans, check if DB record exists; for paid, check stripe_price_id
-                if plan_data["price"] == 0 or existing_plan.stripe_price_id:
-                    self.stdout.write(self.style.WARNING(f"Plan already exists: {product_name}"))
-                    continue
-
             # A RETIRED plan must never reach Stripe, and must never come back active.
             #
             # 2026-08-16: this guard did not exist and the Stripe branch below hardcoded
@@ -502,6 +538,13 @@ class Command(BaseCommand):
             #     an account meant to have no such thing.
             #
             # MEASURED on a pristine `migrate` + `create_plans` database, 2026-08-16.
+            #
+            # It runs BEFORE the "already exists" skip below, and that order is the whole
+            # remedy. Placed after it, the guard only protected databases that had never been
+            # seeded — every environment ALREADY broken by the old behaviour hit
+            # "Plan already exists" (the row has a stripe_price_id), skipped, and stayed on
+            # sale forever. Re-running `create_plans` is the documented fix for a bad
+            # environment, so it has to actually fix one.
             if not plan_data.get("is_active", True):
                 Plan.objects.update_or_create(
                     slug=plan_data["slug"],
@@ -512,12 +555,26 @@ class Command(BaseCommand):
                         "interval": plan_data["interval"],
                         "features": plan_data["features"],
                         "is_active": False,
+                        # Detached, same reasoning as migration 0016 for the add-on side: a
+                        # withdrawn product must not keep a billable price object pointed at
+                        # it. Inactive already keeps it out of `self_serve_plans`, so this is
+                        # belt and braces — but a repaired row should end up in the same state
+                        # a fresh one does, or the two seeding paths disagree again.
+                        "stripe_price_id": None,
                     },
                 )
                 self.stdout.write(
                     self.style.WARNING(f"⊘ Skipped Stripe for retired plan: {product_name} (local row seeded inactive)")
                 )
                 continue
+
+            # Check if we already have this plan
+            existing_plan = Plan.objects.filter(slug=plan_data["slug"]).first()
+            if existing_plan and not self.force:
+                # For free plans, check if DB record exists; for paid, check stripe_price_id
+                if plan_data["price"] == 0 or existing_plan.stripe_price_id:
+                    self.stdout.write(self.style.WARNING(f"Plan already exists: {product_name}"))
+                    continue
 
             try:
                 # Free plans (Starter, Pilot) never need Stripe. Neither does anything else when

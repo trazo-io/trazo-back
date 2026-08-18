@@ -396,8 +396,18 @@ COMMON_OSP_RECORD_TYPES: list[RecordType] = [
         label="Purchase receipts / invoices",
         group=GROUP_INPUTS,
         cfr_cite="7 CFR 205.103(b)(1)",
+        # Amendments count as inputs here (2026-08-16). CCOF's grower checklist names
+        # "fertilizer, compost, soil amendments, planting mixes" in one line and asks for
+        # receipts; reading only ChemicalEvent told a compost-fed orchard it kept no input
+        # purchase records at all.
         evidence=lambda b: _count(
-            b.with_field(b.chemical, "purchase_invoice", "purchase_date", "supplier_name"),
+            b.with_field(b.chemical, "purchase_invoice", "purchase_date", "supplier_name")
+            + b.with_field(
+                b.soil,
+                "amendment_purchase_invoice",
+                "amendment_purchase_date",
+                "amendment_supplier_name",
+            ),
             "input purchase record",
         ),
     ),
@@ -460,7 +470,7 @@ COMMON_OSP_RECORD_TYPES: list[RecordType] = [
         group=GROUP_SALES,
         cfr_cite="7 CFR 205.103(b)",
         evidence=lambda b: _count(
-            b.with_field(b.chem(), "supplier_name"),
+            b.with_field(b.chem(), "supplier_name") + b.with_field(b.soil, "amendment_supplier_name"),
             "input record naming its supplier",
             "input records naming their supplier",
         ),
@@ -564,6 +574,7 @@ COMMON_OSP_RECORD_TYPES: list[RecordType] = [
         cfr_cite="7 CFR 205.103(b)(1)",
         evidence=lambda b: _count(
             b.with_field(b.chemical, "supplier_name", "purchase_date")
+            + b.with_field(b.soil, "amendment_supplier_name", "amendment_purchase_date")
             + b.with_field(b.prod("PL", "TR"), "seed_supplier_name", "seed_purchase_date"),
             "purchase record",
         ),
@@ -573,8 +584,15 @@ COMMON_OSP_RECORD_TYPES: list[RecordType] = [
         label="Invoices",
         group=GROUP_SALES,
         cfr_cite="7 CFR 205.103(b)(2)",
+        # 🔴 2026-08-16: `b.sales` was consulted exactly once in this whole registry, for
+        # `bill_of_lading` — so an operation that recorded every sale WITH its invoice number
+        # through the current sales editor was told it held no invoice records, and the § 11
+        # checkbox arrived unsuggested. The legacy BusinessEvent extra_data path and the
+        # production-level `organic_on_invoice` flag stay as fallbacks for pre-SalesRecord data.
         evidence=lambda b: _count(
-            b.business_extra("invoice_number") + [p for p in b.productions if _has_content(p.organic_on_invoice)],
+            b.with_field(b.sales, "invoice_number")
+            + b.business_extra("invoice_number")
+            + [p for p in b.productions if _has_content(p.organic_on_invoice)],
             "invoice record",
         ),
     ),
@@ -600,7 +618,7 @@ COMMON_OSP_RECORD_TYPES: list[RecordType] = [
         group=GROUP_SALES,
         cfr_cite="7 CFR 205.103(b)(1)",
         evidence=lambda b: _count(
-            b.with_field(b.chemical, "purchase_invoice"),
+            b.with_field(b.chemical, "purchase_invoice") + b.with_field(b.soil, "amendment_purchase_invoice"),
             "input purchase receipt",
         ),
     ),

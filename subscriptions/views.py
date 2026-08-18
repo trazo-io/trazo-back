@@ -37,6 +37,10 @@ from .serializers import (
 stripe.api_key = settings.STRIPE_SECRET_KEY
 logger = logging.getLogger(__name__)
 
+# Ceiling on a single add-on purchase. Guards a BILLING endpoint against a typo or a crafted
+# request; beyond this the answer is the Operation tier, not fifty Extra Farm line items.
+MAX_ADDON_QUANTITY_PER_REQUEST = 20
+
 
 def stripe_ts(ts):
     """Convert a Stripe unix timestamp to a timezone-aware datetime."""
@@ -395,6 +399,23 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         if quantity <= 0:
             return Response({"error": "quantity must be greater than 0"}, status=status.HTTP_400_BAD_REQUEST)
 
+        # An upper bound, because this endpoint bills.
+        #
+        # There was none: a typo or a crafted request could send `quantity: 10000` and mint a
+        # Stripe item for $1.49M in prorated charges. No real operation adds fifty farms in one
+        # click, and the ones that would are an Operation-tier conversation anyway.
+        if quantity > MAX_ADDON_QUANTITY_PER_REQUEST:
+            return Response(
+                {
+                    "error": (
+                        f"You can add up to {MAX_ADDON_QUANTITY_PER_REQUEST} at a time. "
+                        "Contact support for a larger operation."
+                    ),
+                    "code": "ADDON_QUANTITY_TOO_LARGE",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         try:
             addon = AddOn.objects.get(id=addon_id, is_active=True)
         except AddOn.DoesNotExist:
@@ -438,24 +459,34 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
             subscription.stripe_subscription_id,
         )
 
-        try:
-            existing = SubscriptionAddOn.objects.filter(subscription=subscription, addon=addon).first()
+        existing = SubscriptionAddOn.objects.filter(subscription=subscription, addon=addon).first()
+        previous_quantity = existing.quantity if existing else 0
 
+        # The quantity Stripe must END AT, computed once and used for BOTH sides.
+        #
+        # The create branch used to send `quantity=quantity` (the increment) while storing
+        # `previous + quantity` locally. That only agreed when there was no existing row —
+        # and a row with no `stripe_item_id` is exactly what the legacy webhook path and any
+        # half-finished attempt leave behind. In that case a farm holding 3 extra farms who
+        # bought 1 more was billed for 1 and granted 4.
+        target_quantity = previous_quantity + quantity
+
+        try:
             if existing and existing.stripe_item_id:
                 # Already on the invoice — raise the quantity on the SAME item rather than
                 # adding a second line for the same product.
-                new_quantity = existing.quantity + quantity
                 stripe.SubscriptionItem.modify(
                     existing.stripe_item_id,
-                    quantity=new_quantity,
+                    quantity=target_quantity,
                     proration_behavior="create_prorations",
                 )
                 item_id = existing.stripe_item_id
+                created_item = False
             else:
                 item = stripe.SubscriptionItem.create(
                     subscription=subscription.stripe_subscription_id,
                     price=addon.stripe_price_id,
-                    quantity=quantity,
+                    quantity=target_quantity,
                     proration_behavior="create_prorations",
                     metadata={
                         "company_id": str(subscription.company.id),
@@ -464,8 +495,16 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
                     },
                 )
                 item_id = item.id
-                new_quantity = (existing.quantity + quantity) if existing else quantity
+                created_item = True
+        except Exception as e:
+            # Nothing billed, nothing written. Safe to retry.
+            logger.error("Stripe refused the add-on item: %s", e, exc_info=True)
+            return Response(
+                {"error": "Failed to add the add-on. Please try again."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
+        try:
             with transaction.atomic():
                 # Written HERE, not in a webhook. There is no checkout session to complete,
                 # so `checkout.session.completed` never fires for this path — the entitlement
@@ -474,26 +513,45 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
                 subscription_addon, _ = SubscriptionAddOn.objects.update_or_create(
                     subscription=subscription,
                     addon=addon,
-                    defaults={"quantity": new_quantity, "stripe_item_id": item_id},
+                    defaults={"quantity": target_quantity, "stripe_item_id": item_id},
                 )
-
-            logger.info("Addon %s now at quantity %d on subscription %s", addon.slug, new_quantity, subscription.id)
-            return Response(
-                {
-                    # No `url`: nothing to redirect to. The client treats a missing url as
-                    # "applied immediately" and refetches, which is now the truth.
-                    "url": None,
-                    "addon": SubscriptionAddOnSerializer(subscription_addon).data,
-                    "prorated": True,
-                }
-            )
-
         except Exception as e:
-            logger.error("Error attaching add-on to subscription: %s", e, exc_info=True)
+            # Billed but not entitled — the one outcome that must never survive a response.
+            # Undo the Stripe side so the farmer is not charged for something they did not
+            # get, and so a retry cannot stack a second item on the subscription.
+            logger.error("Add-on entitlement write failed after billing; reverting Stripe: %s", e, exc_info=True)
+            try:
+                if created_item:
+                    stripe.SubscriptionItem.delete(item_id)
+                else:
+                    stripe.SubscriptionItem.modify(
+                        item_id, quantity=previous_quantity, proration_behavior="create_prorations"
+                    )
+            except Exception:
+                # Both halves failed. Log loudly with everything needed to fix it by hand —
+                # this is the case that has to reach a human, not a retry.
+                logger.exception(
+                    "MANUAL RECONCILIATION NEEDED: stripe item %s on subscription %s bills "
+                    "quantity %d but no SubscriptionAddOn row was written",
+                    item_id,
+                    subscription.stripe_subscription_id,
+                    target_quantity,
+                )
             return Response(
-                {"error": "Failed to add the add-on. Please try again."},
+                {"error": "Failed to add the add-on. Nothing was charged. Please try again."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        logger.info("Addon %s now at quantity %d on subscription %s", addon.slug, target_quantity, subscription.id)
+        return Response(
+            {
+                # No `url`: nothing to redirect to. The client treats a missing url as
+                # "applied immediately" and refetches, which is now the truth.
+                "url": None,
+                "addon": SubscriptionAddOnSerializer(subscription_addon).data,
+                "prorated": True,
+            }
+        )
 
 
 class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):

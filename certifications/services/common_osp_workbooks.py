@@ -176,16 +176,27 @@ def _material_rows(establishment):
 
 
 def _supplier_rows(establishment):
-    """Distinct suppliers of purchased products — inputs and seed.
+    """Distinct suppliers of purchased products — inputs, amendments and seed.
 
     Keyed on (product, supplier) because the USDA form wants one row per product per supplier,
     not one row per supplier.
+
+    🔴 2026-08-16: soil amendments were absent entirely, because `SoilManagementEvent` had no
+    supplier column. On an organic orchard the compost supplier is usually the largest single
+    line on this form, and the generated workbook simply did not have it.
     """
-    from history.models import ChemicalEvent, ProductionEvent
+    from history.models import ChemicalEvent, ProductionEvent, SoilManagementEvent
 
     seen = {}
     for e in ChemicalEvent.objects.filter(history__parcel__establishment=establishment):
         product, supplier = _blank(e.commercial_name), _blank(e.supplier_name)
+        if supplier and (product, supplier) not in seen:
+            seen[(product, supplier)] = ("input", product, supplier)
+    for e in SoilManagementEvent.objects.filter(history__parcel__establishment=establishment):
+        supplier = _blank(e.amendment_supplier_name)
+        # The product name, falling back to the generic category — a Supplier List row reading
+        # "— / Bu's Compost Co." tells a certifier nothing about what was bought.
+        product = _blank(e.amendment_product_name) or _blank(e.amendment_type)
         if supplier and (product, supplier) not in seen:
             seen[(product, supplier)] = ("input", product, supplier)
     seed_events = ProductionEvent.objects.filter(

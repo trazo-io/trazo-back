@@ -58,6 +58,9 @@ class PostHarvestFacilitySerializer(serializers.ModelSerializer):
         read_only_fields = [
             "id",
             "public_id",
+            # The nested route owns this — the facility belongs to the establishment in the
+            # URL, never to one named in the body.
+            "establishment",
             "verification_status",
             "last_verified_at",
             "verification_source",

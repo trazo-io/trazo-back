@@ -55,7 +55,10 @@ REVIEWED_ANONYMOUS_ENDPOINTS = {
     "transparency_explanation::AllowAny": "static methodology copy, no farm data",
     "verify_blockchain::AllowAny": "integrity check for a published production",
     "HistoryViewSet::AllowAny": "public_history action only — the @action carries AllowAny",
-    "PublicHistoryScanViewSet::AllowAny": "shopper scan tally; consent gating in PrivacyService",
+    "PublicHistoryScanViewSet::AllowAny": (
+        "shopper scan tally; consent gating in PrivacyService. The `consent` action is also "
+        "anonymous but authorised by claim_token (256-bit, unique, never enumerable)"
+    ),
     # --- Certifier review links. Bearer-token in the URL is the credential. ---
     "certifier_review_metadata::AllowAny": "opaque review token",
     "certifier_review_readiness::AllowAny": "opaque review token",

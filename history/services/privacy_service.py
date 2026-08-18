@@ -7,11 +7,13 @@ import hashlib
 import hmac
 import ipaddress
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, Optional
 
 from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
+
+from .geoip_service import GeoIPService
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
@@ -26,17 +28,38 @@ class PrivacyService:
     @staticmethod
     def get_client_ip(request) -> Optional[str]:
         """
-        Extract real client IP considering proxies and load balancers
-        Returns None if IP cannot be determined
+        Extract the real client IP, preferring headers the client cannot forge.
+
+        ⚠️ The left-most entry of X-Forwarded-For is ATTACKER-CONTROLLED. A proxy
+        APPENDS to that header, so a request sent as
+
+            X-Forwarded-For: 8.8.8.8
+
+        arrives at the origin as "8.8.8.8, <real client>" and left-most picks the
+        attacker's value. That was harmless while geolocation was broken; now that
+        it resolves, a forged header would put a location of the caller's choosing
+        on a farmer's dashboard, and would poison `ip_hash` — which deduplication
+        and rate limiting both key on.
+
+        `CF-Connecting-IP` is set by Cloudflare and OVERWRITTEN on every request, so
+        a client-supplied value cannot survive. Production is behind Cloudflare (the
+        `__cf_bm` cookie on `.api.trazo.io`), so it is the trustworthy source there.
+
+        Residual risk: a request reaching the origin DIRECTLY, bypassing Cloudflare,
+        has no CF header and falls back to X-Forwarded-For. Closing that needs
+        origin-level enforcement — restricting the DO app to Cloudflare's published
+        ranges, or an authenticated-origin-pull secret — not application code.
         """
-        # Check for forwarded IP (load balancers, CDNs)
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            # Take the first IP in the chain (original client)
-            ip = x_forwarded_for.split(",")[0].strip()
-        else:
-            # Direct connection
-            ip = request.META.get("REMOTE_ADDR")
+        # Cloudflare's own header first: the client cannot forge it through CF.
+        ip = request.META.get("HTTP_CF_CONNECTING_IP")
+
+        if not ip:
+            # Fall back for local development and any non-Cloudflare path.
+            x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+            if x_forwarded_for:
+                ip = x_forwarded_for.split(",")[0].strip()
+            else:
+                ip = request.META.get("REMOTE_ADDR")
 
         # Validate IP address format
         if ip:
@@ -130,48 +153,12 @@ class PrivacyService:
         # Consented data follows normal retention policy
         return timezone.now() + timedelta(days=PrivacyService.DEFAULT_RETENTION_DAYS)
 
-    @staticmethod
-    def extract_region_from_location(city: str, country: str) -> Tuple[Optional[str], Optional[str]]:
-        """
-        Extract privacy-safe location info (region instead of city)
-        Returns (country_code, region) tuple
-        """
-        # This is a simplified version - in production, you'd use a geolocation service
-        # that can convert city -> region and country -> ISO code
-
-        country_code = None
-        region = None
-
-        # Basic country to ISO code mapping (extend as needed)
-        country_mapping = {
-            "united states": "US",
-            "usa": "US",
-            "canada": "CA",
-            "mexico": "MX",
-            "united kingdom": "GB",
-            "germany": "DE",
-            "france": "FR",
-            "spain": "ES",
-            "italy": "IT",
-            "brazil": "BR",
-            "argentina": "AR",
-            "colombia": "CO",
-            "peru": "PE",
-            "chile": "CL",
-            "uruguay": "UY",
-        }
-
-        if country:
-            country_normalized = country.lower().strip()
-            country_code = country_mapping.get(country_normalized, country[:2].upper())
-
-        # For regions, we could implement a city -> state/province mapping
-        # For now, we'll use the city as region if it looks like a state/province
-        if city:
-            # This is very basic - in production, use proper geolocation service
-            region = city
-
-        return country_code, region
+    # `extract_region_from_location` lived here. It mapped a country NAME to an
+    # ISO code via a 15-entry dict and fell back to `country[:2].upper()`, so
+    # every country outside the list got a fabricated code — Portugal -> "PO",
+    # Japan -> "JA". Those pass the `!= "XX"` placeholder check, so they
+    # rendered as plausible-looking garbage rather than an honest em dash.
+    # GeoIPService returns a real ISO 3166-1 alpha-2 code; nothing needs to guess.
 
     @staticmethod
     def process_scan_consent(request, explicit_consent: Optional[bool] = None) -> Dict:
@@ -208,33 +195,19 @@ class PrivacyService:
 
         raw_ip = PrivacyService.get_client_ip(request)
 
-        # Process location data (from request data first, fallback to IP geolocation)
-        country = request.data.get("country", "") if hasattr(request, "data") else ""
-        city = request.data.get("city", "") if hasattr(request, "data") else ""
-
-        # IP geolocation fallback — only after consent is confirmed
-        if not city and not country and raw_ip:
-            try:
-                import logging as _logging
-
-                import requests as _requests
-
-                _logger = _logging.getLogger(__name__)
-                geo_response = _requests.get(f"https://ipapi.co/{raw_ip}/json/", timeout=2)
-                if geo_response.status_code == 200:
-                    geo_data = geo_response.json()
-                    if not geo_data.get("reserved"):
-                        city = geo_data.get("city", "")
-                        country = geo_data.get("country_name", "")
-                        _logger.debug(
-                            "IP geolocation resolved: city=%s, country=%s",
-                            city,
-                            country,
-                        )
-            except Exception:
-                pass  # Geolocation is best-effort, don't block scan creation
-
-        country_code, region = PrivacyService.extract_region_from_location(city, country)
+        # Geolocation from the local GeoLite2 database — only after consent is
+        # confirmed. The request body is NOT consulted: `city`/`country` there
+        # are attacker-controlled on a public unauthenticated endpoint, and a
+        # farmer reading their own dashboard must not be shown a location a
+        # scanner chose for them.
+        country_code, region = None, None
+        location = GeoIPService.lookup(raw_ip)
+        if location:
+            country_code = location.country_code
+            # `region` is a state/province by design — see the field's help_text
+            # ("State/region only (no city for privacy)"). The previous code
+            # copied the city in here, contradicting the schema it shipped with.
+            region = location.subdivision
 
         return {
             # Privacy-safe processed data (only computed after consent)

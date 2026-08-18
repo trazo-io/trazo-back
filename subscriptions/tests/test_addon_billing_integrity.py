@@ -22,6 +22,8 @@ that is a pricing decision and it will change. They check that whatever it costs
 surface agrees, and that nothing can be sold through a price the app cannot verify.
 """
 
+from unittest import mock
+
 from django.test import TestCase
 from django.urls import reverse
 
@@ -195,6 +197,88 @@ class AddOnSaleRequiresVerifiedPriceTests(TestCase):
         self.assertEqual(r.status_code, 409, r.content)
         self.assertEqual(r.json()["code"], "ADDON_PRICE_UNAVAILABLE")
         # Refused means refused: no entitlement may be granted on the way out.
+        self.assertFalse(SubscriptionAddOn.objects.filter(subscription=self.subscription, addon=addon).exists())
+
+    def test_stripe_is_billed_the_same_quantity_that_is_granted(self):
+        """The number sent to Stripe must equal the number stored locally.
+
+        The create branch sent the INCREMENT while storing `previous + increment`. Those only
+        agree when no local row exists — and a row with no `stripe_item_id` is exactly what the
+        legacy webhook path and any half-finished attempt leave behind. A farm holding 3 extra
+        farms who bought 1 more was billed for 1 and granted 4.
+        """
+        addon = AddOn.objects.create(
+            name="Quantity Guard",
+            slug="test-addon-quantity",
+            description="fixture",
+            price=149,
+            interval="yearly",
+            stripe_price_id="price_qty_guard",
+            is_active=True,
+        )
+        # A pre-existing entitlement with NO Stripe item — the state that exposed the bug.
+        SubscriptionAddOn.objects.create(subscription=self.subscription, addon=addon, quantity=3, stripe_item_id=None)
+
+        with mock.patch("subscriptions.views.stripe") as fake_stripe:
+            fake_stripe.SubscriptionItem.create.return_value = mock.Mock(id="si_new")
+            r = self.client.post(
+                reverse("subscription-add-addon", args=[self.subscription.id]),
+                {"addon_id": addon.id, "quantity": 1},
+                format="json",
+            )
+
+        self.assertEqual(r.status_code, 200, r.content)
+        billed = fake_stripe.SubscriptionItem.create.call_args.kwargs["quantity"]
+        granted = SubscriptionAddOn.objects.get(subscription=self.subscription, addon=addon).quantity
+        self.assertEqual(granted, 4, "the local entitlement should be 3 + 1")
+        self.assertEqual(billed, granted, f"Stripe billed {billed} while the farm was granted {granted}")
+
+    def test_quantity_is_bounded(self):
+        """This endpoint bills. An unbounded quantity is an unbounded charge."""
+        addon = AddOn.objects.create(
+            name="Bound Guard",
+            slug="test-addon-bound",
+            description="fixture",
+            price=149,
+            interval="yearly",
+            stripe_price_id="price_bound_guard",
+            is_active=True,
+        )
+        with mock.patch("subscriptions.views.stripe") as fake_stripe:
+            r = self.client.post(
+                reverse("subscription-add-addon", args=[self.subscription.id]),
+                {"addon_id": addon.id, "quantity": 10000},
+                format="json",
+            )
+        self.assertEqual(r.status_code, 400, r.content)
+        self.assertEqual(r.json()["code"], "ADDON_QUANTITY_TOO_LARGE")
+        fake_stripe.SubscriptionItem.create.assert_not_called()
+
+    def test_a_failed_entitlement_write_does_not_leave_the_farm_billed(self):
+        """Billed-but-not-entitled is the one outcome that must never survive a response."""
+        addon = AddOn.objects.create(
+            name="Rollback Guard",
+            slug="test-addon-rollback",
+            description="fixture",
+            price=149,
+            interval="yearly",
+            stripe_price_id="price_rollback_guard",
+            is_active=True,
+        )
+        with mock.patch("subscriptions.views.stripe") as fake_stripe:
+            fake_stripe.SubscriptionItem.create.return_value = mock.Mock(id="si_rollback")
+            with mock.patch(
+                "subscriptions.views.SubscriptionAddOn.objects.update_or_create",
+                side_effect=RuntimeError("db down"),
+            ):
+                r = self.client.post(
+                    reverse("subscription-add-addon", args=[self.subscription.id]),
+                    {"addon_id": addon.id, "quantity": 1},
+                    format="json",
+                )
+
+        self.assertEqual(r.status_code, 400, r.content)
+        fake_stripe.SubscriptionItem.delete.assert_called_once_with("si_rollback")
         self.assertFalse(SubscriptionAddOn.objects.filter(subscription=self.subscription, addon=addon).exists())
 
     def test_one_row_per_subscription_and_addon(self):

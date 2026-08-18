@@ -51,6 +51,22 @@ UNIT_VOLUME = [
     ("lbs", "Pounds"),
 ]
 
+# Soil-amendment mass/volume units.
+# Used in: SoilManagementEvent.amendment_amount_unit, .amendment_quantity_purchased_unit
+#
+# Hoisted out of an inline `choices=[...]` on the model 2026-08-16, when the purchase-quantity
+# field was added beside it. The APPLIED amount and the PURCHASED amount are the two halves of
+# the § 205.103(b)(2) mass balance, and the export can only subtract them when the two unit
+# strings match — the same trap that silently deleted sale-vs-harvest reconciliation from the
+# packet when SalesRecord offered `tonnes` and the harvest form offered `tons`. One list, both
+# columns; adding a unit means adding it here and in the frontend's AMENDMENT_UNITS.
+UNIT_AMENDMENT = [
+    ("kg", "Kilograms"),
+    ("lbs", "Pounds"),
+    ("tons", "Tons"),
+    ("gal", "Gallons"),
+]
+
 # Fuel units (diesel, gasoline, electricity)
 # Used in: ChemicalEvent.application_fuel_unit, ProductionEvent.fuel_unit,
 #          SoilManagementEvent.fuel_unit, PestManagementEvent.fuel_unit, EquipmentEvent.fuel_unit
@@ -273,6 +289,16 @@ AMOUNT_DETERMINATION = [
 HARVEST_DESTINATION = [
     ("stored", "Stored on farm"),
     ("sold_direct", "Sold / shipped from field"),
+    # 🔴 2026-08-16, CCOF grower-checklist audit. Item 6 — "if you send your crops to another
+    # certified organic operation for handling or processing" — had NO expressible answer here:
+    # the four options were stored / sold / feed / other, and shipping a lot to a custom huller
+    # is none of those. Title does not change, so it is not a sale; a grower with nowhere to
+    # record it would enter the huller as the BUYER on a SalesRecord, which puts a non-sale in
+    # the § 205.307 itemized sales table, double-counts against the real sale when the finished
+    # product ships, and breaks the mass balance in a way that reads as the operation's
+    # recordkeeping failure. For the California tree-nut ICP this is the normal path, not an
+    # edge case.
+    ("handler", "Sent to an off-farm handler (huller, dryer, cold store, packer)"),
     ("livestock_feed", "Livestock feed"),
     ("other", "Other"),
 ]

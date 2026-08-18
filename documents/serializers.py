@@ -116,3 +116,13 @@ class DocumentUploadSerializer(serializers.Serializer):
     )
     linked_section = serializers.CharField(max_length=64, required=False, allow_blank=True, default="")
     tags = serializers.ListField(child=serializers.CharField(max_length=64), required=False, default=list)
+    # 🔴 2026-08-16 (CCOF grower-checklist audit). Four of the eight checklist items name a
+    # DOCUMENT as the record — purchase receipts, the handler's organic certificate, delivery
+    # documents, pack-out summaries — and each of those belongs to a specific lot or field. The
+    # model has carried `history` and `parcel` since WS-3 and the upload endpoint never accepted
+    # them, so every farmer upload landed unattached in a flat "uploads" folder and no export
+    # could find it. Integers rather than PrimaryKeyRelatedField: the view resolves them against
+    # the URL's establishment, so an unscoped default queryset never gets the chance to accept
+    # another farm's row.
+    history = serializers.IntegerField(required=False, allow_null=True)
+    parcel = serializers.IntegerField(required=False, allow_null=True)

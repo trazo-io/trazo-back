@@ -25,7 +25,7 @@ G5_0_PEST = Module(
     key="g5_0_pest",
     code="G5.0",
     title=text("Crop Pest, Weed & Disease Management", "Manejo de Plagas, Malezas y Enfermedades de Cultivos"),
-    nop_cites=("§ 205.206", "§ 205.601"),
+    nop_cites=("§ 205.206", "§ 205.601", "§ 205.203(e)(3)"),
     education=(
         text(
             "The organic rule requires pest, weed, and disease management to start with "
@@ -209,6 +209,105 @@ G5_0_PEST = Module(
                     label=text("Describe the other practice", "Describa la otra práctica"),
                     visible_when=(Condition("prevention_practices", "includes", "other"),),
                     compiles_to=CompileRule(template="Additional prevention practice: {answer}."),
+                ),
+                # § 205.203(e)(3) — burning crop residue is PROHIBITED as a means of
+                # disposal, and permitted only "to suppress the spread of disease or to
+                # stimulate seed germination". It sits on this page rather than under soil
+                # management because both lawful reasons are disease/weed reasons, which is
+                # also where the federal template puts the question.
+                #
+                # It records, it does not block. An operation that burns for a reason
+                # outside the exception has a real compliance problem, and the product's job
+                # is to make that visible to the operator and their certifier — not to
+                # refuse the record and push it onto paper nobody audits.
+                Question(
+                    key="burns_crop_residue",
+                    kind="boolean",
+                    label=text(
+                        "Do you burn crop residue on this operation?",
+                        "¿Quema residuos de cultivo en esta operación?",
+                    ),
+                    coaching=text(
+                        "Includes prunings, brush, and orchard removals burned in place or "
+                        "in a pile. Burning as a way to dispose of crop residue is "
+                        "prohibited; burning is allowed only to suppress the spread of "
+                        "disease or to stimulate seed germination.",
+                        "Incluye podas, ramas y arranques de huerto quemados en el lugar o en "
+                        "pila. Quemar como forma de eliminar residuos de cultivo está "
+                        "prohibido; solo se permite quemar para suprimir la propagación de "
+                        "una enfermedad o para estimular la germinación de semillas.",
+                    ),
+                    nop_cite="§ 205.203(e)(3)",
+                    compiles_to=CompileRule(template="Crop residue is burned on this operation: {answer}."),
+                ),
+                Question(
+                    key="burn_crops",
+                    kind="text",
+                    label=text(
+                        "Which crops or residues are burned?",
+                        "¿Qué cultivos o residuos se queman?",
+                    ),
+                    nop_cite="§ 205.203(e)(3)",
+                    visible_when=(Condition("burns_crop_residue", "truthy"),),
+                    compiles_to=CompileRule(template="Crops or residues burned: {answer}."),
+                ),
+                Question(
+                    key="burn_reason",
+                    kind="checkbox_group",
+                    label=text("Why is it burned?", "¿Por qué se queman?"),
+                    coaching=text(
+                        "The rule names exactly two allowed reasons. If neither applies, say "
+                        "so here — an accurate record your certifier can act on is worth more "
+                        "than a tidy one.",
+                        "La normativa nombra exactamente dos razones permitidas. Si ninguna "
+                        "aplica, indíquelo aquí — un registro exacto sobre el que su "
+                        "certificadora pueda actuar vale más que uno prolijo.",
+                    ),
+                    nop_cite="§ 205.203(e)(3)",
+                    visible_when=(Condition("burns_crop_residue", "truthy"),),
+                    options=(
+                        Option(
+                            "disease_suppression",
+                            text(
+                                "To suppress the spread of disease",
+                                "Para suprimir la propagación de una enfermedad",
+                            ),
+                        ),
+                        Option(
+                            "seed_germination",
+                            text(
+                                "To stimulate seed germination",
+                                "Para estimular la germinación de semillas",
+                            ),
+                        ),
+                        Option(
+                            "other",
+                            text(
+                                "Another reason (describe below)",
+                                "Otra razón (describa abajo)",
+                            ),
+                        ),
+                    ),
+                    compiles_to=CompileRule(template="Reason for burning crop residue: {answer}."),
+                ),
+                Question(
+                    key="burn_reason_other",
+                    kind="textarea",
+                    label=text(
+                        "Describe the other reason for burning",
+                        "Describa la otra razón para quemar",
+                    ),
+                    coaching=text(
+                        "§ 205.203(e)(3) allows burning only for disease suppression or seed "
+                        "germination, so a reason outside those two needs to be raised with "
+                        "your certifying agent rather than left in the plan unexplained.",
+                        "El § 205.203(e)(3) solo permite la quema para suprimir enfermedades o "
+                        "estimular la germinación, por lo que una razón fuera de esas dos debe "
+                        "plantearse a su agencia certificadora en lugar de quedar sin explicar "
+                        "en el plan.",
+                    ),
+                    visible_when=(Condition("burn_reason", "includes", "other"),),
+                    compiles_to=CompileRule(template="Other stated reason for burning crop residue: {answer}"),
                 ),
             ),
         ),

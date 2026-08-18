@@ -44,6 +44,7 @@ def collapse_duplicate_addons(apps, schema_editor):
     SubscriptionAddOn = apps.get_model("subscriptions", "SubscriptionAddOn")
 
     seen = {}
+    merged = {}
     duplicates = []
     # Oldest first, so the first row of each pair is the one that survives.
     for row in SubscriptionAddOn.objects.order_by("created_at", "pk").iterator():
@@ -55,9 +56,12 @@ def collapse_duplicate_addons(apps, schema_editor):
         keeper.quantity = (keeper.quantity or 0) + (row.quantity or 0)
         if not keeper.stripe_item_id and row.stripe_item_id:
             keeper.stripe_item_id = row.stripe_item_id
+        # Only rows that actually absorbed a duplicate get rewritten. Saving every survivor
+        # would issue one UPDATE per add-on row in the table to change nothing.
+        merged[key] = keeper
         duplicates.append(row.pk)
 
-    for keeper in seen.values():
+    for keeper in merged.values():
         keeper.save(update_fields=["quantity", "stripe_item_id"])
 
     if duplicates:

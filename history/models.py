@@ -39,6 +39,7 @@ from common.field_registry import (
     SEED_NON_GMO_STATUS,
     SEED_SOURCED_SUBTYPES,
     SEEDS_SOURCE,
+    UNIT_AMENDMENT,
     UNIT_AREA,
     UNIT_DEPTH,
     UNIT_DISTANCE,
@@ -99,6 +100,28 @@ def compute_retention_until(finish_date):
         # 29 February has no counterpart five years later. Round FORWARD to 1 March:
         # a day extra satisfies "not less than", where 28 February would be a day short.
         return finish_date.replace(year=finish_date.year + 5, month=3, day=1)
+
+
+# Strings the finish form can send for "do not publish". The value reaches
+# History.finish() through a multipart QueryDict, so it is a STRING — and
+# bool("false") is True, which would publish the buyer page while the farmer
+# was looking at an unchecked box.
+_FALSEY_PUBLISH_VALUES = {"false", "0", "off", "no", ""}
+
+
+def _parse_publish_flag(raw):
+    """Whether finishing should publish the buyer page. Absent key => True.
+
+    Publishing is the default: every caller predating the finish-dialog checkbox
+    (and any direct API finish) must keep publishing. Only an explicit negative
+    withholds it, and only a recognised one — an unparseable value publishes,
+    matching the historical behaviour rather than silently hiding the season.
+    """
+    if raw is None:
+        return True
+    if isinstance(raw, bool):
+        return raw
+    return str(raw).strip().lower() not in _FALSEY_PUBLISH_VALUES
 
 
 class History(models.Model):
@@ -396,6 +419,12 @@ class History(models.Model):
 
             raise ValidationError(
                 f"Cannot delete: NOP requires record retention until {self.retention_until}. "
+                # (b)(4) is the retention clause under the CURRENT rule: the Strengthening
+                # Organic Enforcement rule restructured 205.103(b) into five subsections,
+                # inserting audit-trail documentation as (b)(3) and pushing "maintained for
+                # not less than 5 years beyond their creation" from (b)(3) to (b)(4).
+                # Pre-SOE texts (and most search results) still show the four-item list —
+                # verify against eCFR before "correcting" this citation.
                 f"Records must be maintained for 5 years per 7 CFR 205.103(b)(4)."
             )
         super().delete(*args, **kwargs)
@@ -801,7 +830,13 @@ class History(models.Model):
         observation = str(history_data.get("observation") or "").strip()
         if observation:
             self.description = observation
-        self.published = True
+        # Publishing the buyer page is the DEFAULT at finish, but it is the farmer's
+        # call — the finish dialog ships a checked-by-default checkbox. Absent key
+        # means publish (every caller that predates the checkbox, and the mobile/API
+        # path, keeps the old behaviour). Only an explicit negative withholds it.
+        # NOTE: this arrives from a multipart QueryDict, so it is the STRING "false",
+        # not the bool — bool("false") is True and would silently publish anyway.
+        self.published = _parse_publish_flag(history_data.get("published"))
         self.production_amount = history_data["production_amount"]
         self.lot_id = history_data["lot_id"]
 
@@ -2181,7 +2216,71 @@ class ProductionEvent(CommonEvent):
         choices=HARVEST_DESTINATION,
         blank=True,
         null=True,
-        help_text="First hop of the harvested lot — storage, direct sale, feed, or other",
+        help_text="First hop of the harvested lot — storage, off-farm handler, direct sale, feed, or other",
+    )
+
+    # --- Off-farm handling round trip (7 CFR 205.272 · CCOF G6.1) -------------------------
+    #
+    # 🔴 2026-08-16, CCOF grower-checklist audit. Item 6 asks for four facts about crop sent to
+    # another certified operation: "what you sent, where you sent it, when you sent it, and what
+    # you received as the outcome". Trazo could answer "where" (History.post_harvest_facility)
+    # and nothing else. The finished quantity was only ever INFERRED, as shrinkage between
+    # harvest and sale at a ±10% tolerance — which is a plausibility check, not a record.
+    #
+    # These live on the harvest event rather than on History because a multi-pick season sends
+    # several loads to the same huller on different dates, and the pack-out comes back per load.
+    #
+    # All optional: a grower who sells field-run answers none of them, and the packet says the
+    # crop did not leave the farm for handling rather than printing a gap.
+    sent_to_handler_date = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Date this lot was delivered to the off-farm handler (CCOF: 'when you sent it').",
+    )
+    quantity_sent_to_handler = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        help_text="How much left the farm for handling (CCOF: 'what you sent').",
+    )
+    quantity_returned_from_handler = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        help_text=(
+            "Finished quantity received back — the pack-out / outturn figure (CCOF: 'what you "
+            "received as the outcome'). For tree nuts this is normally a different unit from "
+            "what was sent (in-shell in, shelled out), so the two carry separate units."
+        ),
+    )
+    handler_quantity_unit = models.CharField(
+        max_length=20,
+        choices=UNIT_YIELD,
+        blank=True,
+        null=True,
+        help_text="Unit for the quantity SENT to the handler.",
+    )
+    handler_return_unit = models.CharField(
+        max_length=20,
+        choices=UNIT_YIELD,
+        blank=True,
+        null=True,
+        help_text=(
+            "Unit for the quantity RECEIVED BACK. Separate from handler_quantity_unit on "
+            "purpose — hulling changes the unit, and forcing one unit would invent a "
+            "conversion nobody measured."
+        ),
+    )
+    handler_document_reference = models.CharField(
+        max_length=120,
+        blank=True,
+        null=True,
+        help_text=(
+            "Pack-out summary, settlement statement or receiving-document number from the "
+            "handler — CCOF's 'invoices, pack-out summaries, or other final statements'."
+        ),
     )
     # § 205.202(c): buffer-row crop may never be sold or represented as organic.
     # NULL means the question was not answered, NOT that no buffer exists.
@@ -3186,8 +3285,68 @@ class SoilManagementEvent(CommonEvent):
         max_length=200,
         blank=True,
         null=True,
-        help_text="Manufacturer / supplier of the amendment product.",
+        help_text="Who MAKES the product (label attribution). Not who sold it — see amendment_supplier_name.",
     )
+
+    # --- Amendment purchase traceability (7 CFR 205.103(b)(1)-(2)) -------------------------
+    #
+    # 🔴 2026-08-16, CCOF grower-checklist audit. CCOF item 1 names "fertilizer, compost, soil
+    # amendments, planting mixes" in one breath and asks for receipts. `ChemicalEvent` has
+    # carried supplier / purchase date / invoice / quantity / lot since Sprint 3; this model
+    # carried a product name and a manufacturer and nothing else. On a certified organic
+    # orchard compost is routinely the largest purchased input by tonnage AND by dollar, so
+    # the one input a grower most needs to trace was the one input with no purchase record.
+    #
+    # The consequence was not theoretical: the packet's mass-balance section builds its
+    # "Inputs Purchased" table from ChemicalEvent alone and prints
+    # "[REVIEW] Mass balance cannot be reconciled" when it finds nothing — a flag a
+    # compost-fed operation could not clear no matter how carefully it logged.
+    #
+    # Field names mirror ChemicalEvent's deliberately (`*_supplier_name`, `*_purchase_date`,
+    # `*_purchase_invoice`, `*_lot_number`) so the export, the Supplier List workbook and the
+    # § 11 evidence lambdas can treat the two models the same way.
+    #
+    # ⛔ Never seed these from a template. A template that fills in a supplier and an invoice
+    # number writes a purchase that did not happen into an audit file (see the Smart Setup
+    # backdated-glyphosate incident, 2026-08-02).
+    amendment_supplier_name = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="Who the amendment was BOUGHT from — the name on the receipt (CCOF Input Record).",
+    )
+    amendment_purchase_date = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Date on the purchase receipt / invoice for this amendment.",
+    )
+    amendment_purchase_invoice = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Invoice or receipt number, so the packet points an inspector at the paper record.",
+    )
+    amendment_quantity_purchased = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        help_text="Total amount bought on this invoice (for the § 205.103(b)(2) mass balance).",
+    )
+    amendment_quantity_purchased_unit = models.CharField(
+        max_length=20,
+        choices=UNIT_AMENDMENT,
+        blank=True,
+        null=True,
+        help_text="Unit for the purchased quantity. Same vocabulary as amendment_amount_unit.",
+    )
+    amendment_lot_number = models.CharField(
+        max_length=80,
+        blank=True,
+        null=True,
+        help_text="Manufacturer lot / batch number from the bag, tote or delivery ticket.",
+    )
+
     test_results = models.JSONField(null=True, blank=True)  # Store complex test data
     # §E-2 — WHAT was sampled. The results themselves stay in `test_results` (where the soil-test
     # form has always written them, so historical ST rows keep working); the read serializer
@@ -3271,12 +3430,7 @@ class SoilManagementEvent(CommonEvent):
     )
     amendment_amount_unit = models.CharField(
         max_length=10,
-        choices=[
-            ("kg", "Kilograms"),
-            ("lbs", "Pounds"),
-            ("tons", "Tons"),
-            ("gal", "Gallons"),
-        ],
+        choices=UNIT_AMENDMENT,
         default="kg",
         blank=True,
         help_text="Unit for amendment_amount_numeric",
@@ -4429,6 +4583,32 @@ class SalesRecord(models.Model):
     #: (useDefaultUnits, which now seeds this field from the production's own harvest unit).
     quantity_unit = models.CharField(max_length=20, choices=History.UNIT_CHOICES, default="kg")
     invoice_number = models.CharField(max_length=80, blank=True, default="")
+
+    #: What the operation was PAID for this sale.
+    #:
+    #: 🔴 2026-08-16, CCOF grower-checklist audit. CCOF item 7 has four parts — "what you sell,
+    #: how much you sell, who you sold it to, and how much money you received" — and this model
+    #: answered the first three and had no column for the fourth. The itemized sales table in
+    #: the certifier packet had no value column either, so an inspector could verify volume but
+    #: not consideration, and the operation could not produce the "sales summaries" CCOF names
+    #: as an acceptable record.
+    #:
+    #: NULL, not 0.00. A recorded zero (a donation, a rejected load taken at no charge) is a
+    #: fact; "not entered" is the absence of one, and collapsing them is the same conflation
+    #: that made `Boolean("not_organic")` read as True on the consumer page (2026-07-31) and
+    #: that `BusinessEvent.clean` tests with `is None` for exactly this reason.
+    #:
+    #: No currency column: Trazo has one market (US) and inventing a per-row currency the UI
+    #: never asks for would put an unattested "USD" on a regulatory document. When a second
+    #: market arrives, currency belongs on the OPERATION, not on each sale.
+    sale_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        help_text="Amount received for this sale, in USD. Blank means not recorded, never zero.",
+    )
+
     # § 205.307 — sales documents for organic product must identify it as organic.
     organic_on_invoice = models.BooleanField(default=False)
     # § 205.103(b)(3) — records must identify the product by its § 205.301 labeling category,

@@ -201,6 +201,68 @@ class G30BranchingTests(TestCase):
         self.assertEqual(p["missing"], ["planting_stock_used"])
 
 
+class ClauseBackedQuestionTests(TestCase):
+    """Questions that exist because a binding clause has nowhere else to be answered.
+
+    Each of these was found by walking the AMS Common OSP template against the registry
+    (2026-08-17) and confirming the prompt had NO home in any of the 19 modules. They are
+    pinned by key here because deleting one silently re-opens the gap — the registry
+    validator only checks that a definition is well-formed, never that a clause is covered.
+    """
+
+    @staticmethod
+    def _keys(module_key):
+        module = MODULES_BY_KEY[module_key]
+        return {q.key: q for page in module.pages for q in page.questions}
+
+    def test_crop_residue_burning_is_askable(self):
+        """7 CFR 205.203(e)(3) — burning is prohibited as disposal, allowed only for two reasons."""
+        q = self._keys("g5_0_pest")
+        self.assertIn("burns_crop_residue", q)
+        self.assertEqual(q["burns_crop_residue"].nop_cite, "§ 205.203(e)(3)")
+        # The two statutory exceptions must both be offerable, and "another reason" must be
+        # offerable too — an operation burning outside the exception has to be able to say so.
+        reasons = {opt.value for opt in q["burn_reason"].options}
+        self.assertEqual(reasons, {"disease_suppression", "seed_germination", "other"})
+        # The follow-ups are gated on the yes answer, not shown to every grower.
+        for key in ("burn_crops", "burn_reason"):
+            self.assertEqual([(c.question, c.op) for c in q[key].visible_when], [("burns_crop_residue", "truthy")])
+
+    def test_prohibited_material_storage_is_askable(self):
+        """7 CFR 205.201(a)(5) / 205.272(a) — where prohibited substances physically sit."""
+        q = self._keys("g6_0_production")
+        self.assertIn("prohibited_materials_on_site", q)
+        self.assertIn("prohibited_materials_storage", q)
+        # NOT gated on split_operation: a wholly organic farm still keeps diesel and treated
+        # lumber, and the clause applies to those the same way.
+        gate = q["prohibited_materials_on_site"].visible_when
+        self.assertEqual(gate, ())
+        self.assertEqual(
+            [(c.question, c.op) for c in q["prohibited_materials_storage"].visible_when],
+            [("prohibited_materials_on_site", "truthy")],
+        )
+        # (a)(5) is the commingling/contact narrative — not the general practices one.
+        self.assertEqual(q["prohibited_materials_storage"].compiles_to.section_key, "commingling_barriers")
+
+    def test_packaging_composition_is_askable_and_distinct_from_reuse(self):
+        """7 CFR 205.272(b)(1) composition vs (b)(2) reuse — two clauses, two questions."""
+        q = self._keys("g6_1_harvest_transport")
+        self.assertEqual(q["packaging_free_of_prohibited"].nop_cite, "§ 205.272(b)(1)")
+        # The reuse question used to carry the (b)(1) citation, so the module cited a clause
+        # it did not implement while the clause it did implement went uncited.
+        self.assertEqual(q["containers_reused_from_prohibited"].nop_cite, "§ 205.272(b)(2)")
+        # A supplier fact the grower may not have confirmed. Forcing a yes/no would
+        # manufacture an attestation; the middle option is what keeps the answer honest.
+        self.assertEqual(
+            {opt.value for opt in q["packaging_free_of_prohibited"].options},
+            {"confirmed", "unconfirmed", "no"},
+        )
+        self.assertEqual(
+            [(c.question, c.op, c.value) for c in q["packaging_prohibited_detail"].visible_when],
+            [("packaging_free_of_prohibited", "one_of", ["unconfirmed", "no"])],
+        )
+
+
 class ModuleDefinitionsEndpointTests(TestCase):
     def setUp(self):
         self.client = APIClient()

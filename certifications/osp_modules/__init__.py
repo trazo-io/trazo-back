@@ -52,7 +52,7 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 # (establishment record, commercial-availability justification, the § 205.204(a)(4)
 # one-year rule, records) — the question every orchard and vineyard answers. 12 depth
 # modules + Materials Application + 4 N/A-able stubs remain.
-CONTENT_VERSION = "2026.08.13"
+CONTENT_VERSION = "2026.08.17"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

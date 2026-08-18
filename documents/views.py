@@ -48,6 +48,28 @@ class GeneratedDocumentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             qs = qs.filter(title__icontains=search)
         return qs
 
+    @staticmethod
+    def _resolve_link(pk, establishment, kind):
+        """Resolve an optional production / parcel link, scoped to this establishment.
+
+        Returns None when nothing was sent. Raises rather than silently dropping an id the
+        caller supplied: an upload that quietly loses its link looks filed and is not, and the
+        farmer finds out at inspection.
+        """
+        if pk in (None, ""):
+            return None
+        if kind == "history":
+            from history.models import History
+
+            obj = History.objects.filter(pk=pk, parcel__establishment=establishment).first()
+        else:
+            from product.models import Parcel
+
+            obj = Parcel.objects.filter(pk=pk, establishment=establishment).first()
+        if obj is None:
+            raise ValidationError({kind: f"No {kind} with id {pk} belongs to this farm."})
+        return obj
+
     def create(self, request, *args, **kwargs):
         """Farmer upload — multipart. Generated rows are created only by filing.py."""
         upload = DocumentUploadSerializer(data=request.data)
@@ -80,12 +102,21 @@ class GeneratedDocumentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             return Response(error_detail, status=413)
 
         establishment = get_object_or_404(self.company.establishment_set.all(), pk=self.kwargs.get("establishment_pk"))
+
+        # Context links are resolved against THIS establishment, never taken on trust from the
+        # body. An unscoped lookup would let one farm file a document against another farm's
+        # production, and the certifier packet reads these links.
+        history = self._resolve_link(payload.get("history"), establishment, "history")
+        parcel = self._resolve_link(payload.get("parcel"), establishment, "parcel")
+
         doc = file_document(
             establishment=establishment,
             source="upload",
             folder=payload.get("folder") or "uploads",
             title=(payload.get("title") or f.name)[:255],
             filename=f.name,
+            history=history,
+            parcel=parcel,
             # Streamed, not `f.read()`. The old form pulled the entire file into memory
             # before a byte reached storage, on an endpoint that had no size cap either.
             file_obj=f,

@@ -11,8 +11,10 @@ A. Who harvests — the operation's own crew, a custom-hired harvester, or the b
    custom-hired harvester brings equipment from other operations onto organic fields, so that
    branch adds an equipment-cleanout check and asks how the operator is instructed.
 B. Containers & handling — what touches the product at harvest, whether those containers are
-   new, dedicated, or cleaned before use, and the narrower case of reusing a container that
-   once held a prohibited substance (§ 205.272(b)(1)).
+   new, dedicated, or cleaned before use, the narrower case of reusing a container that once
+   held a prohibited substance (§ 205.272(b)(2)), and whether the packaging itself CONTAINS a
+   synthetic fungicide, preservative, or fumigant (§ 205.272(b)(1) — a flat prohibition, and a
+   supplier question rather than a practice the operator can describe from memory).
 C. Transport & lot identity — who moves product off the operation, whether transport units are
    inspected clean, and the lot identification that lets § 205.103(b)(2) records trace a load
    back to its field and harvest date. When the operation does not control the transport leg
@@ -235,17 +237,21 @@ G6_1_HARVEST_TRANSPORT = Module(
                         "no orgánico)?",
                     ),
                     coaching=text(
-                        "§ 205.272(b)(1) forbids reusing a container for organic product "
+                        "§ 205.272(b)(2) forbids reusing a container for organic product "
                         "when the reuse would compromise its organic integrity — a container "
                         "that held a prohibited substance may be reused only behind a "
                         "protective barrier or after cleaning that removes the residue.",
-                        "El § 205.272(b)(1) prohíbe reutilizar un contenedor para producto "
+                        "El § 205.272(b)(2) prohíbe reutilizar un contenedor para producto "
                         "orgánico cuando la reutilización comprometa su integridad orgánica — "
                         "un contenedor que contuvo una sustancia prohibida solo puede "
                         "reutilizarse con una barrera protectora o tras una limpieza que "
                         "elimine el residuo.",
                     ),
-                    nop_cite="§ 205.272(b)(1)",
+                    # (b)(1) is the packaging-COMPOSITION prohibition, asked separately below;
+                    # (b)(2) is REUSE, which is what this question is about. The two were
+                    # conflated here, so the module cited a clause it did not implement while
+                    # the clause it did implement went uncited.
+                    nop_cite="§ 205.272(b)(2)",
                     compiles_to=CompileRule(
                         template=(
                             "Containers that previously held a prohibited substance are ever "
@@ -262,6 +268,78 @@ G6_1_HARVEST_TRANSPORT = Module(
                     ),
                     visible_when=(Condition("containers_reused_from_prohibited", "truthy"),),
                     compiles_to=CompileRule(template="Protective barrier or cleaning applied before reuse: {answer}"),
+                ),
+                # § 205.272(b)(1) — the packaging-COMPOSITION prohibition. Distinct from
+                # reuse above: this one is about what the container is MADE WITH, and it is
+                # a flat prohibition, not a practice to describe. A grower cannot answer it
+                # from memory of their own operation — it is a supplier question, which is
+                # why the middle option exists.
+                Question(
+                    key="packaging_free_of_prohibited",
+                    kind="radio",
+                    label=text(
+                        "Are your packaging materials, storage containers, and bins free of "
+                        "synthetic fungicides, preservatives, and fumigants?",
+                        "¿Sus materiales de empaque, contenedores de almacenamiento y cajones "
+                        "están libres de fungicidas, conservantes y fumigantes sintéticos?",
+                    ),
+                    coaching=text(
+                        "§ 205.272(b)(1) prohibits outright the use of packaging materials, "
+                        "storage containers, or bins that CONTAIN a synthetic fungicide, "
+                        "preservative, or fumigant — treated wooden bins and fungicide-"
+                        "impregnated liners are the usual cases. This is a supplier question: "
+                        "if you have not confirmed it in writing, say so rather than guessing. "
+                        "An unconfirmed answer is a task for your certifier review; a wrong "
+                        "'yes' is a misstatement in your organic system plan.",
+                        "El § 205.272(b)(1) prohíbe de plano el uso de materiales de empaque, "
+                        "contenedores de almacenamiento o cajones que CONTENGAN un fungicida, "
+                        "conservante o fumigante sintético — los cajones de madera tratada y "
+                        "los forros impregnados con fungicida son los casos habituales. Esta "
+                        "es una pregunta para su proveedor: si no lo ha confirmado por "
+                        "escrito, indíquelo en lugar de suponer. Una respuesta sin confirmar "
+                        "es una tarea para la revisión de su certificadora; un 'sí' erróneo es "
+                        "una declaración falsa en su plan orgánico.",
+                    ),
+                    nop_cite="§ 205.272(b)(1)",
+                    options=(
+                        Option(
+                            "confirmed",
+                            text(
+                                "Yes — confirmed with the supplier or from product documentation",
+                                "Sí — confirmado con el proveedor o mediante documentación del producto",
+                            ),
+                        ),
+                        Option(
+                            "unconfirmed",
+                            text(
+                                "Believed free of them, but not yet confirmed in writing",
+                                "Se cree que están libres, pero aún no se ha confirmado por escrito",
+                            ),
+                        ),
+                        Option(
+                            "no",
+                            text(
+                                "No — some packaging or containers contain one of these",
+                                "No — algún empaque o contenedor contiene alguno de estos",
+                            ),
+                        ),
+                    ),
+                    compiles_to=CompileRule(
+                        template=(
+                            "Packaging materials, storage containers, and bins free of "
+                            "synthetic fungicides, preservatives, and fumigants: {answer}."
+                        )
+                    ),
+                ),
+                Question(
+                    key="packaging_prohibited_detail",
+                    kind="textarea",
+                    label=text(
+                        "Which packaging or containers, and what is your plan to replace or " "confirm them?",
+                        "¿Qué empaques o contenedores, y cuál es su plan para reemplazarlos o " "confirmarlos?",
+                    ),
+                    visible_when=(Condition("packaging_free_of_prohibited", "one_of", ["unconfirmed", "no"]),),
+                    compiles_to=CompileRule(template="Packaging awaiting confirmation or replacement: {answer}"),
                 ),
             ),
         ),

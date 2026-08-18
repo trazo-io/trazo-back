@@ -41,6 +41,20 @@ def check_storage_quota(user, upload_size_bytes, category=CATEGORY_MEDIA, compan
         tuple: (allowed: bool, error_detail: dict | None)
     """
     try:
+        # Coerce the size before anything reads it.
+        #
+        # On the pre-signed-URL paths this number is CLIENT-SUPPLIED (`fileSize`, and the
+        # per-file `size` entries). A non-numeric value used to reach `Decimal(...)` further
+        # down, raise InvalidOperation, and land in the fail-open `except` at the bottom —
+        # so `{"fileSize": "abc"}` skipped the media quota entirely. Anything unreadable is
+        # now treated as 0 extra bytes, which still measures existing usage against the
+        # limit instead of waving the request through.
+        try:
+            upload_size_bytes = max(0, int(float(upload_size_bytes or 0)))
+        except (TypeError, ValueError):
+            logger.warning("Unreadable upload size %r; treating as 0", upload_size_bytes)
+            upload_size_bytes = 0
+
         # Prefer the company the CALLER resolved.
         #
         # `get_active_company()` returns the first company the user belongs to that has an

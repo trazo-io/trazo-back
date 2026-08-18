@@ -81,7 +81,16 @@ def get_upload_urls(request):
     # check is advisory at the margin: a client that understates them buys itself one
     # over-quota batch. It self-corrects rather than compounds — `GalleryImage.file_size`
     # is written from the real object after upload, so the next check measures the truth.
-    total_upload_bytes = sum(f.get("size", 0) for f in files_info)
+    #
+    # Summed defensively: `files_info` comes off the request body, so a `size` of `"abc"` or
+    # `None` used to raise TypeError inside `sum()` and return a 500 from a quota check.
+    def _reported_size(entry):
+        try:
+            return max(0, int(float((entry or {}).get("size", 0) or 0)))
+        except (TypeError, ValueError, AttributeError):
+            return 0
+
+    total_upload_bytes = sum(_reported_size(f) for f in files_info)
     allowed, error_detail = check_storage_quota(request.user, total_upload_bytes, category=CATEGORY_MEDIA)
     if not allowed:
         return Response(error_detail, status=413)

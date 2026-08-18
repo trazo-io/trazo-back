@@ -636,19 +636,35 @@ _PRODUCTION_STANDARDS = (
         verbatim="The producer must not use:",
         disposition=Disposition.SOFTWARE_SUPPORTS,
         rationale=(
-            "Three flat prohibitions: non-listed synthetics, sewage sludge, and burning crop "
-            "residues except to suppress disease or stimulate germination. The National List "
-            "seed data carries the prohibited entries so a farmer's input can be checked "
-            "against them, but Trazo does not block a record describing a prohibited practice "
-            "— it is a recordkeeping system, and refusing to record what happened would "
-            "destroy the audit trail rather than protect it."
+            "Three flat prohibitions: (e)(1) non-listed synthetics, (e)(2) sewage sludge, and "
+            "(e)(3) burning crop residues except to suppress disease or stimulate germination. "
+            "The National List alias data carries the prohibited entries so a farmer's input "
+            "can be checked against them — that is the (e)(1) leg. The (e)(3) leg is asked "
+            "directly in G5.0: whether residue is burned, which residues, and which of the two "
+            "statutory reasons applies, with an explicit 'another reason' branch that a "
+            "certifier can act on. Trazo does not block a record describing a prohibited "
+            "practice — it is a recordkeeping system, and refusing to record what happened "
+            "would destroy the audit trail rather than protect it."
         ),
-        implementation=("trazo-back/certifications/services/national_list_aliases.py",),
-        tests=("trazo-back/certifications/tests/test_national_list_aliases.py",),
+        implementation=(
+            "trazo-back/certifications/services/national_list_aliases.py",
+            "trazo-back/certifications/osp_modules/g5_0_pest.py",
+        ),
+        tests=(
+            "trazo-back/certifications/tests/test_national_list_aliases.py",
+            "trazo-back/certifications/tests/test_osp_modules.py",
+        ),
         note=(
             "Deliberate design position: the product records reality and flags it. A system "
             "that silently refuses to store a non-compliant event teaches operators to keep "
-            "the real record somewhere else."
+            "the real record somewhere else. "
+            "2026-08-17: this clause previously named ONLY the National List crosswalk as its "
+            "implementation, which covers (e)(1) and touches neither (e)(2) nor (e)(3). The "
+            "rationale sentence mentioned burning, so the mapping read as covered while no "
+            "field, question or export existed for it. A clause map is only as honest as its "
+            "weakest `implementation` tuple. (e)(2) sewage sludge remains unasked — it is a "
+            "flat prohibition on a material no orchard input catalog carries, so it is covered "
+            "by the same input-allowability path as (e)(1) rather than by its own question."
         ),
     ),
     Clause(

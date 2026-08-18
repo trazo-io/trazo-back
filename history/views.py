@@ -84,6 +84,22 @@ from .serializers import (
 logger = logging.getLogger(__name__)
 
 
+def _require_int_param(request, name):
+    """Read an id-shaped query param, rejecting garbage with a 400 instead of a 500.
+
+    Django coerces a filter value to int at the ORM layer, so a caller that sends
+    "[object Object]" (a stringified JS object) blows up as an unhandled ValueError.
+    Returns None when the param is absent or empty.
+    """
+    raw = request.query_params.get(name)
+    if raw in (None, ""):
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        raise ValidationError({name: [f"Expected a numeric id, got {raw!r}."]})
+
+
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 20
     page_size_query_param = "page_size"
@@ -266,6 +282,9 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     "parcel__establishment",
                     "operator",
                     "album",
+                    # HistorySerializer.get_post_harvest_facility_detail reads it on every
+                    # retrieve; without this the handler card costs one query per production.
+                    "post_harvest_facility",
                 )
                 .prefetch_related(
                     Prefetch(
@@ -413,12 +432,14 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             queryset = queryset.filter(parcel_id=parcel_pk)
 
         # WS-6 Buyer Page: farm-level production list.
-        establishment_id = self.request.query_params.get("establishment")
+        # A caller that stringifies an object lands here as "[object Object]"; without the
+        # int() guard that reaches the ORM and raises a 500 instead of a 400.
+        establishment_id = _require_int_param(self.request, "establishment")
         if establishment_id:
             queryset = queryset.filter(parcel__establishment_id=establishment_id)
 
         # Filter by product if provided as query param
-        product_id = self.request.query_params.get("product")
+        product_id = _require_int_param(self.request, "product")
         if product_id:
             queryset = queryset.filter(product_id=product_id)
 
@@ -1417,35 +1438,21 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         history_scan = None
         if not is_owner:
-            x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-            if x_forwarded_for:
-                ip_address = x_forwarded_for.split(",")[0]
-            else:
-                ip_address = request.META.get("REMOTE_ADDR")
+            # Consent gate + geolocation are shared with PublicHistoryScanViewSet.
+            # This path used to parse X-Forwarded-For itself and store the RAW ip,
+            # the city and the country with no consent check whatsoever — the exact
+            # inverse of the other writer, which refuses to geolocate without one.
+            # It also wrote the legacy city/country columns while the other wrote
+            # country_code/region, so the same "Ubicación" column was fed two
+            # different formats depending on which endpoint recorded the scan.
+            from .services.privacy_service import PrivacyService
 
-            city = None
-            country = None
-
-            # Get city and country from IP using free API (no GDAL required)
-            if ip_address:
-                try:
-                    import requests
-
-                    response = requests.get(f"https://ipapi.co/{ip_address}/json/", timeout=2)
-                    if response.status_code == 200:
-                        data = response.json()
-                        if not data.get("reserved"):
-                            city = data.get("city")
-                            country = data.get("country_name")
-                except Exception as e:
-                    logger.debug("IP geolocation failed: %s", e)
+            privacy_data = PrivacyService.process_scan_consent(request)
 
             history_scan = HistoryScan.objects.create(
                 history=history,
                 user=request.user if request.user.is_authenticated else None,
-                ip_address=ip_address,
-                city=city,
-                country=country,
+                **privacy_data,
             )
 
             # Send notification to product owner about the scan
@@ -1580,6 +1587,13 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 | Q(user__last_name__icontains=search)
                 | Q(user__email__icontains=search)
                 | Q(comment__icontains=search)
+                # Location lives in country_code/region. The legacy city/country
+                # columns are still searched so historical rows written before the
+                # writers were unified stay findable, but nothing writes them now.
+                # "Unknown"/"XX" are placeholders meaning "no location" — matching
+                # them would make a search for "un" return every unresolved scan.
+                | (Q(region__icontains=search) & ~Q(region="Unknown"))
+                | (Q(country_code__iexact=search) & ~Q(country_code="XX"))
                 | Q(city__icontains=search)
                 | Q(country__icontains=search)
                 | Q(history__parcel__name__icontains=search)
@@ -1822,6 +1836,68 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 {"error": f"Error generating download URL: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="post_harvest_facility",
+        permission_classes=[IsAuthenticated],
+    )
+    def post_harvest_facility_link(self, request, pk=None):
+        """Which off-farm handler this lot was sent to — CCOF G6.1 / 7 CFR 205.272.
+
+        OWNER-side on purpose, for the same reason harvest lot codes are: the handler's
+        identity is supply-chain data, and `PublicHistorySerializer` deliberately omits it
+        (same policy as ChemicalEvent supplier fields). The producer page therefore cannot
+        read the link off the public payload it already loads, and this is the cheap read
+        that replaces it — a handler summary, not the whole production.
+
+        `cert_is_current` is returned TRI-STATE: true / false / null, where null means no
+        effective date is on file. Callers must render that third state as an ask; collapsing
+        it into either of the others asserts something the operation never recorded.
+        """
+        import uuid as uuid_module
+
+        from users.models import WorksIn
+
+        try:
+            public_uuid = uuid_module.UUID(str(pk))
+            history = get_object_or_404(
+                History.objects.select_related("parcel__establishment__company", "post_harvest_facility"),
+                public_id=public_uuid,
+            )
+        except (ValueError, AttributeError):
+            history = self.get_object()
+
+        establishment = history.parcel.establishment if history.parcel else None
+        if not (
+            establishment
+            and WorksIn.objects.filter(user=request.user, company=establishment.company, role__in=["CA", "FM"]).exists()
+        ):
+            return Response({"error": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
+
+        facility = history.post_harvest_facility
+        if facility is None:
+            return Response({"post_harvest_facility": None, "detail": None}, status=status.HTTP_200_OK)
+
+        return Response(
+            {
+                "post_harvest_facility": facility.id,
+                "detail": {
+                    "id": facility.id,
+                    "name": facility.name,
+                    "facility_type": facility.facility_type,
+                    "facility_type_display": facility.get_facility_type_display(),
+                    "certification_number": facility.certification_number,
+                    "certifier_name": facility.certifier_name,
+                    "effective_date": facility.effective_date,
+                    "expiry_date": facility.expiry_date,
+                    "verification_status": facility.verification_status,
+                    "cert_is_current": facility.cert_is_current,
+                },
+            },
+            status=status.HTTP_200_OK,
+        )
 
     @action(detail=True, methods=["get"], url_path="lot-tag", permission_classes=[IsAuthenticated])
     def lot_tag(self, request, pk=None):
@@ -2869,6 +2945,82 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
 
             return Response({"error": "Failed to record scan"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    # Window in which a scan may still be upgraded to consented. Long enough for
+    # someone to read the banner and decide, short enough that a hoarded token
+    # cannot be used to attach a location to a visit that is long over.
+    CONSENT_UPGRADE_WINDOW = timedelta(minutes=30)
+
+    @action(detail=False, methods=["post"], url_path="consent", permission_classes=[AllowAny])
+    def upgrade_consent(self, request):
+        """
+        Attach consented analytics to a scan that was already recorded anonymously.
+
+        WHY THIS EXISTS
+        ---------------
+        The scan is POSTed when the page mounts; the consent banner renders ~100ms
+        later. So on a first visit the row is ALWAYS written before the visitor can
+        possibly have consented — and for QR traffic the first visit is the only
+        visit. Accepting the banner previously wrote a cookie and sent nothing, so
+        consent could only ever take effect on a subsequent page view that never
+        came. Every real scan recorded country_code="XX".
+
+        Recording a second row instead would trade an undercount for an overcount
+        (`anonymous_mode` skips deduplication, so there is no identity to collapse
+        the pair against). Upgrading the row we already have keeps the count exact.
+
+        Identified and authorised SOLELY by `claim_token` — 256 bits from
+        `secrets.token_urlsafe(32)`, unique and indexed, already returned to this
+        client at create time and already the anti-IDOR token for scan claiming.
+        The scan id is never accepted here, so there is nothing to enumerate.
+
+        Consent itself is re-derived from the cookie by `process_scan_consent`, never
+        taken from the body — same rule as creation. A caller holding a valid token
+        but no cookie changes nothing.
+        """
+        claim_token = request.data.get("claim_token") or ""
+        if not isinstance(claim_token, str) or not claim_token.strip():
+            return Response({"error": "claim_token is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            scan = HistoryScan.objects.get(claim_token=claim_token.strip())
+        except HistoryScan.DoesNotExist:
+            # Deliberately the same shape as a stale/expired token — a caller
+            # probing tokens learns nothing about which ones exist.
+            return Response({"error": "Scan not found or no longer upgradeable"}, status=status.HTTP_404_NOT_FOUND)
+
+        if scan.consent_given:
+            # Already consented. Idempotent: a double-fire of the banner event, or
+            # a retry, must not re-stamp consent_timestamp or re-run the lookup.
+            return Response({"status": "already_consented"}, status=status.HTTP_200_OK)
+
+        if timezone.now() - scan.date > self.CONSENT_UPGRADE_WINDOW:
+            return Response({"error": "Scan not found or no longer upgradeable"}, status=status.HTTP_404_NOT_FOUND)
+
+        privacy_data = self.privacy_service.process_scan_consent(request)
+        if not privacy_data["consent_given"]:
+            # No cookie -> nothing to upgrade. Not an error the visitor caused.
+            return Response({"status": "no_consent"}, status=status.HTTP_200_OK)
+
+        # Conditional UPDATE rather than read-modify-save: the `consent_given` check
+        # above and the write must be one atomic step, or two concurrent requests
+        # (a double-fired banner event, a retry racing the original) both observe
+        # False and both write, re-stamping consent_timestamp. The WHERE clause makes
+        # the loser a no-op. Writing the dict directly also keeps the saved columns
+        # in lockstep with whatever `process_scan_consent` returns — a hand-listed
+        # `update_fields` would silently stop persisting any field added later.
+        #
+        # Deliberately NOT re-running deduplication. This row was already counted
+        # while anonymous; retro-marking it as a duplicate would silently lower a
+        # number the farmer has already seen. Dedup still applies to every
+        # subsequent scan, which now has hashes to match against.
+        #
+        # `date` is auto_now_add, so neither this UPDATE nor a later save moves it.
+        updated = HistoryScan.objects.filter(pk=scan.pk, consent_given=False).update(**privacy_data)
+        if not updated:
+            return Response({"status": "already_consented"}, status=status.HTTP_200_OK)
+
+        return Response({"status": "upgraded"}, status=status.HTTP_200_OK)
+
     def _validate_scan_request(self, request):
         """
         Validate scan request data and headers
@@ -3671,8 +3823,19 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 # Immutability guard: prevent adding events to completed productions
                 if history.finish_date is not None or history.published:
                     raise PermissionDenied(
+                        # Was "...; reopen it to add events." There is no reopen CONTROL —
+                        # no UI, no command, no dedicated endpoint — so the message sent
+                        # farmers hunting for a button that does not exist.
+                        # ⚠️ It is nonetheless reachable: `finish_date` and `published` are
+                        # both writable on HistoryWriteSerializer (serializers.py fields list,
+                        # absent from read_only_fields), and HistoryViewSet.update guards only
+                        # `published=True while finish_date is None` — nothing rejects setting
+                        # finish_date back to null. So PATCH /histories/<id>/ {"finish_date":
+                        # null} clears this lock wholesale, with no record of the reopen.
+                        # That is a gap to close deliberately, not a feature to advertise here.
                         "Cannot add events to a completed production. "
-                        "A finished production is a closed record; reopen it to add events."
+                        "A finished production is a closed record. Log this activity "
+                        "against the parcel's current or next production instead."
                     )
 
                 index = (
@@ -3838,8 +4001,10 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             return Response(
                 {
                     "error": "Event is locked",
+                    # No "reopen it" — no such CONTROL exists. (It is still reachable via
+                    # PATCH /histories/<id>/ {"finish_date": null}; see the add-event guard.)
                     "detail": "Events cannot be modified after a production has been completed. "
-                    "A finished production is a closed record; reopen it to add events.",
+                    "A finished production is a closed record.",
                     "production_id": history.id,
                     "production_finished": history.finish_date is not None,
                     "production_published": history.published,
@@ -4019,8 +4184,12 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             return Response(
                 {
                     "error": "Event is locked",
+                    # No "reopen it" — no such CONTROL exists. (It is still reachable via
+                    # PATCH /histories/<id>/ {"finish_date": null}; see the add-event guard.)
+                    # Deletion stays refused regardless: 7 CFR 205.103(b)(3) requires the
+                    # record be kept 5 years, which is what History.retention_until enforces.
                     "detail": "Events cannot be deleted after a production has been completed. "
-                    "A finished production is a closed record; reopen it to add events.",
+                    "A finished production is a closed record.",
                     "production_id": history.id,
                 },
                 status=status.HTTP_423_LOCKED,

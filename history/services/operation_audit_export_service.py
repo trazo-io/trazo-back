@@ -52,6 +52,10 @@ class OperationAuditExportService:
         "state_organic_registration",
         "soe_compliance",
         "certifications",
+        # The DMS is farm-scoped, so the document index belongs here — per-production it would
+        # repeat the farm's whole shelf once per season. `documents_scope` below widens the
+        # builder to list every upload, each labelled with the production it belongs to.
+        "attached_documents",
     )
     # Sections that describe a PARCEL — render once per parcel.
     PARCEL_LEVEL = (
@@ -217,6 +221,9 @@ class OperationAuditExportService:
 
         # --- Operation-wide sections (once) ---
         story.append(header_svc._section_header("Operation-Wide Records"))
+        # The document index is farm-scoped here, not lot-scoped: this dossier covers the whole
+        # operation, so a certifier reading it should see every uploaded record once.
+        header_svc.documents_scope = "establishment"
         est_builders = header_svc._section_builders()
         for k in est_keys:
             story += est_builders[k]()

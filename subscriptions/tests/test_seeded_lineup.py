@@ -35,8 +35,16 @@ from django.test import TestCase, override_settings
 from subscriptions.models import AddOn, Plan
 from subscriptions.views import internal_plans, self_serve_plans
 
-# What Trazo sells, in public, to anyone. Two rows.
-PUBLIC_LINEUP = {"starter", "compliance-yearly"}
+# What Trazo sells, in public, to anyone.
+#
+# `operation-yearly` joined on 2026-08-17. It is the CEILING the lineup did not have: one paid
+# product capped at one farm meant the ladder inverted at the top — farms #2 onward at $149 each
+# put a six-farm business at $994 against QO's $4,250 for the same operation.
+PUBLIC_LINEUP = {"starter", "compliance-yearly", "operation-yearly"}
+
+# The paid tiers, cheapest first. Order is load-bearing: a lineup whose prices do not ascend is a
+# packaging bug, not a display one.
+PAID_LADDER = ["compliance-yearly", "operation-yearly"]
 
 # Hand-provisioned only. Real, never listed.
 INTERNAL_LINEUP = {"pilot"}
@@ -79,6 +87,74 @@ class SeededLineupTests(TestCase):
             "the public pricing API is an offer to the world; this is the whole October lineup",
         )
         self.assertEqual({p.slug for p in internal_plans()}, INTERNAL_LINEUP)
+
+    def test_the_paid_ladder_ascends_and_each_step_buys_something(self):
+        """A higher tier must cost more AND grant more. Both halves have been wrong here before.
+
+        Price alone is not enough: `pilot` once granted unlimited farms and 50 GB, entitlements no
+        customer could buy, which made conversion a DOWNGRADE. And capacity alone is not enough
+        either — the ladder inverted at the top for months because nothing checked that the most
+        expensive product was also the largest.
+        """
+        self._seed_with_stripe()
+
+        rungs = [Plan.objects.get(slug=slug) for slug in PAID_LADDER]
+
+        for lower, higher in zip(rungs, rungs[1:]):
+            self.assertLess(
+                lower.price,
+                higher.price,
+                f"{higher.slug} does not cost more than {lower.slug}",
+            )
+
+            def cap(plan, key):
+                """-1 (unlimited) sorts above every finite value."""
+                value = (plan.features or {}).get(key, 0)
+                return float("inf") if value == -1 else value
+
+            for key in ("max_establishments", "storage_limit_gb"):
+                self.assertGreaterEqual(
+                    cap(higher, key),
+                    cap(lower, key),
+                    f"{higher.slug} costs more than {lower.slug} but grants less {key}",
+                )
+
+            # The paid tiers share one entitlement set by construction (`operation_features`
+            # spreads `compliance_features`). If that spread is ever replaced by a hand-written
+            # dict, this catches the first thing to silently go missing.
+            self.assertTrue(
+                (higher.features or {}).get("compliance_exports"),
+                f"{higher.slug} is a paid tier without the certifier documents",
+            )
+
+    def test_extra_farm_stays_cheaper_than_the_first_farm(self):
+        """The marginal farm must never cost more than farm #1.
+
+        At $30/MONTH the add-on made farm #2 cost 45% MORE than farm #1. That is fixed, and this
+        pins the DIRECTION rather than the number so a future reprice cannot re-invert it. It also
+        checks the crossover: buying enough Extra Farms must eventually cost more than Operation,
+        or the ceiling tier is unreachable and nobody ever climbs to it.
+        """
+        self._seed_with_stripe()
+
+        compliance = Plan.objects.get(slug="compliance-yearly")
+        operation = Plan.objects.get(slug="operation-yearly")
+        extra_farm = AddOn.objects.get(slug="extra-establishment")
+
+        self.assertEqual(extra_farm.interval, "yearly", "an add-on on a yearly plan must bill yearly")
+        self.assertLess(
+            extra_farm.price,
+            compliance.price,
+            "farm #2 costs more than farm #1 — the marginal price is running the wrong way",
+        )
+
+        # Somewhere below a sane farm count, Operation has to win.
+        crossover = next(
+            (n for n in range(1, 50) if compliance.price + n * extra_farm.price > operation.price),
+            None,
+        )
+        self.assertIsNotNone(crossover, "no number of Extra Farms ever exceeds Operation — the ceiling is unreachable")
+        self.assertLessEqual(crossover, 12, f"Operation only wins at {crossover} extra farms — the ceiling is too high")
 
     def test_the_retired_ladder_is_seeded_inactive(self):
         self._seed_with_stripe()
@@ -126,7 +202,7 @@ class SeededLineupTests(TestCase):
                 )
         self.assertGreater(checked, 0, "nothing was on sale — the assertion above proved nothing")
 
-    def test_only_the_priced_plan_on_sale_carries_a_stripe_price(self):
+    def test_only_plans_on_sale_carry_a_stripe_price(self):
         self._seed_with_stripe()
 
         with_price = {p.slug for p in Plan.objects.exclude(stripe_price_id=None).exclude(stripe_price_id="")}

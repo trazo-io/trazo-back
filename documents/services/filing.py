@@ -50,10 +50,17 @@ def file_document(
     Django's `FieldFile.save` writes a `File` through `.chunks()`, so handing it the
     upload directly keeps peak memory at one chunk regardless of file size.
     """
-    if (content is None) == (file_obj is None):
-        raise ValueError("file_document() takes exactly one of `content` or `file_obj`")
-
     try:
+        # Checked INSIDE the try, deliberately.
+        #
+        # This module's contract is that filing never breaks the download — "failures log
+        # loudly and the response proceeds". A `raise` here sat outside the try and broke
+        # exactly that: a caller who forgot the kwarg would take down the generator view it
+        # was filing for, which is the one thing the whole try/except exists to prevent.
+        # `logger.exception` below is the "loudly"; the stack trace names the bad call site.
+        if (content is None) == (file_obj is None):
+            raise ValueError("file_document() takes exactly one of `content` or `file_obj`")
+
         if file_obj is not None:
             payload = File(file_obj, name=filename)
             size_bytes = getattr(file_obj, "size", None)

@@ -312,7 +312,15 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 "crop_type__category",
                 "crop_type__slug",
             )
-            .filter(published=True)
+            # Completed seasons for this parcel. This filtered on `published=True` for as
+            # long as finishing a production also published it unconditionally, so the two
+            # were the same set and the flag read as a synonym for "finished". Finishing no
+            # longer implies publishing — the confirm dialog carries a checkbox — and this
+            # is a company-scoped PRODUCER endpoint (CompanyNestedViewSet already enforces
+            # tenancy), so `published` is not doing access control here. Left as-is it would
+            # hide a farmer's own finished season from their own parcel history the moment
+            # they chose not to publish it.
+            .filter(finish_date__isnull=False)
             .order_by("-id")
         )
 

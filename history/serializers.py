@@ -259,6 +259,26 @@ def coerce_blank_nullable_dates(serializer, data):
                 data[name] = None
 
 
+def coerce_blank_nullable_numbers(serializer, data):
+    """The same bug as `coerce_blank_nullable_dates`, one field type over.
+
+    The add-event form posts every field for every subtype, so a numeric column irrelevant to
+    the chosen subtype arrives as "" — which DRF's Decimal/Integer/FloatField rejects, 400ing
+    the whole event. Several serializers already work around it with hand-maintained lists
+    (`decimal_null_fields`, `integer_fields` in the soil serializer), and a hand-maintained
+    list is exactly what let `cleaning_date` slip past the date version of this check.
+
+    Only nullable fields are touched, so a genuinely required number still errors correctly.
+    Mutates ``data`` in place; call before super().
+    """
+    from rest_framework import serializers as _drf
+
+    for name, field in serializer.fields.items():
+        if isinstance(field, (_drf.DecimalField, _drf.IntegerField, _drf.FloatField)) and field.allow_null:
+            if name in data and data[name] == "":
+                data[name] = None
+
+
 class CustomFieldsMixin:
     """
     Mixin for event serializers to handle custom fields.
@@ -792,6 +812,9 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
         # Coerce blank nullable date fields (purchase_date, ca_dpr_permit_expires, cleaning_date)
         # to None — the form posts them "" on subtypes that don't use them, which 400s the event.
         coerce_blank_nullable_dates(self, data)
+        # Same class, numeric columns: quantity_sent_to_handler / quantity_returned_from_handler
+        # arrive as "" on every non-harvest subtype (2026-08-16).
+        coerce_blank_nullable_numbers(self, data)
 
         internal_value = super().to_internal_value(data)
 
@@ -1822,6 +1845,15 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
             "amount_determination",
             "harvest_date_end",
             "harvest_destination",
+            # Off-farm handling round trip (7 CFR 205.272 / CCOF G6.1) — what was sent, when,
+            # and what came back. Added 2026-08-16; before it, "what you received as the
+            # outcome" existed only as inferred shrinkage.
+            "sent_to_handler_date",
+            "quantity_sent_to_handler",
+            "quantity_returned_from_handler",
+            "handler_quantity_unit",
+            "handler_return_unit",
+            "handler_document_reference",
             "buffer_disposition",
             "buffer_disposition_quantity",
             "buffer_disposition_evidence",
@@ -1968,6 +2000,9 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
         # cleaning_date="" — DRF's DateField rejects "" and the whole event 400s. Introspect every
         # nullable date field so no hand-maintained list can miss one (cleaning_date was missed).
         coerce_blank_nullable_dates(self, data)
+        # Same class, numeric columns: quantity_sent_to_handler / quantity_returned_from_handler
+        # arrive as "" on every non-harvest subtype (2026-08-16).
+        coerce_blank_nullable_numbers(self, data)
 
         internal_value = super().to_internal_value(data)
 
@@ -2298,6 +2333,15 @@ class ProductionEventSerializer(CustomFieldsMixin, EventSerializer):
             "amount_determination",
             "harvest_date_end",
             "harvest_destination",
+            # Off-farm handling round trip (7 CFR 205.272 / CCOF G6.1) — what was sent, when,
+            # and what came back. Added 2026-08-16; before it, "what you received as the
+            # outcome" existed only as inferred shrinkage.
+            "sent_to_handler_date",
+            "quantity_sent_to_handler",
+            "quantity_returned_from_handler",
+            "handler_quantity_unit",
+            "handler_return_unit",
+            "handler_document_reference",
             "buffer_disposition",
             "buffer_disposition_quantity",
             "buffer_disposition_evidence",
@@ -2817,6 +2861,27 @@ class HistoryWriteSerializer(serializers.ModelSerializer):
     # existing crop — events, templates, and PUR rows are keyed to it.
     crop_type_id = serializers.IntegerField(write_only=True, required=False)
 
+    def validate_post_harvest_facility(self, facility):
+        """A lot may only be sent to a handler this establishment actually registered.
+
+        The default ``PrimaryKeyRelatedField`` queryset is every row in the table, so without
+        this a production could be linked to another company's facility — and that facility's
+        organic certificate would then print in this operation's certifier packet as if it
+        covered these lots.
+        """
+        if facility is None:
+            return facility
+        establishment_id = None
+        parcel = getattr(self.instance, "parcel", None)
+        if parcel is not None:
+            establishment_id = parcel.establishment_id
+        if establishment_id is not None and facility.establishment_id != establishment_id:
+            raise serializers.ValidationError(
+                "That post-harvest facility belongs to a different farm. Add the handler on this "
+                "farm before linking it to a production."
+            )
+        return facility
+
     def validate(self, attrs):
         # A season cannot end before it starts. Cross-field, merged with the
         # instance so a PATCH that sends only one of the pair is still checked
@@ -2896,6 +2961,10 @@ class HistoryWriteSerializer(serializers.ModelSerializer):
             "transport_vehicle_id",
             "transport_affidavit_on_file",
             "transport_affidavit_document",
+            # CCOF G6.1 / 7 CFR 205.272 — the off-farm handler this lot was sent to. Writable
+            # since 2026-08-16; before that the FK existed on the model and in the audit
+            # export and could be set only from Django admin.
+            "post_harvest_facility",
             "retention_until",
         ]
         read_only_fields = ["id", "public_id", "events_status", "retention_until"]
@@ -2926,6 +2995,7 @@ class HistorySerializer(serializers.ModelSerializer):
     images = serializers.SerializerMethodField()
     operator = BasicUserSerializer(read_only=True)
     crop_type = serializers.SerializerMethodField()
+    post_harvest_facility_detail = serializers.SerializerMethodField()
 
     class Meta:
         model = History
@@ -2974,6 +3044,8 @@ class HistorySerializer(serializers.ModelSerializer):
             "transport_vehicle_id",
             "transport_affidavit_on_file",
             "transport_affidavit_document",
+            "post_harvest_facility",
+            "post_harvest_facility_detail",
             "retention_until",
         ]
         read_only_fields = [
@@ -2997,6 +3069,29 @@ class HistorySerializer(serializers.ModelSerializer):
 
     def get_certificate_percentage(self, history):
         return history.certificate_percentage
+
+    def get_post_harvest_facility_detail(self, history):
+        """Enough of the handler to render the card without a second request.
+
+        `cert_is_current` is tri-state on purpose — True / False / None where None means no
+        effective date is on file. The UI must render that third state as "confirm", never as
+        a pass or a fail (7 CFR 205.272 / CCOF G6.1 15-month rule).
+        """
+        facility = history.post_harvest_facility
+        if facility is None:
+            return None
+        return {
+            "id": facility.id,
+            "name": facility.name,
+            "facility_type": facility.facility_type,
+            "facility_type_display": facility.get_facility_type_display(),
+            "certification_number": facility.certification_number,
+            "certifier_name": facility.certifier_name,
+            "effective_date": facility.effective_date,
+            "expiry_date": facility.expiry_date,
+            "verification_status": facility.verification_status,
+            "cert_is_current": facility.cert_is_current,
+        }
 
     def get_crop_type(self, history):
         if history.crop_type:
@@ -3220,7 +3315,23 @@ class PublicParcelSerializer(serializers.ModelSerializer):
             "map_metadata",
             "location_disclosure_level",
             "establishment",
-            "agricultural_details",
+            # 🔴 `agricultural_details` REMOVED 2026-08-17 — the second half of a fix that
+            # only landed on one of its two paths.
+            #
+            # carbon/views.py `_build_public_parcel` dropped this field on 2026-08-07 for
+            # exactly the reasons repeated here: it is a free-form JSONField the parcel form
+            # writes into, published RAW on an anonymous endpoint, carrying the grower's
+            # private agronomy — soil test results (pH, organic matter, N, P), irrigation
+            # efficiency, and `water_allocation_acre_feet`, which is commercially sensitive in
+            # California. This serializer is the OTHER path to the same data: it is nested as
+            # `PublicHistorySerializer.parcel`, and `HistoryViewSet.public_history` serves that
+            # under permission_classes=[AllowAny]. Scanning a QR code returned the blob.
+            #
+            # No consumer surface reads it. ProductDetail.tsx reads a FLAT
+            # `parcel.sustainability_practices` (which neither path emits, so it is already
+            # undefined) — never `parcel.agricultural_details`. Removing it costs zero
+            # consumer content, and the certifier keeps full access through the audit export,
+            # which reads the model directly.
         ]
 
     def get_polygon(self, parcel):
@@ -5884,6 +5995,15 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "amendment_amount",
             "amendment_product_name",
             "amendment_manufacturer",
+            # Amendment purchase traceability (7 CFR 205.103(b)(1)-(2)) — added 2026-08-16.
+            # Compost is usually the largest purchased input on an organic orchard and was the
+            # one input with no receipt fields; the packet's mass balance could not see it.
+            "amendment_supplier_name",
+            "amendment_purchase_date",
+            "amendment_purchase_invoice",
+            "amendment_quantity_purchased",
+            "amendment_quantity_purchased_unit",
+            "amendment_lot_number",
             "test_results",
             # §E-2 — lab analysis (LA)
             "sample_matrix",
@@ -5989,13 +6109,22 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "compost_initial_cn_ratio",
             "processed_manure_temp_f",
             "area_covered",
+            # 7 CFR 205.103(b)(2) mass-balance input leg (2026-08-16). The form posts every
+            # amendment field on every soil event, so a tillage pass arrives with
+            # amendment_quantity_purchased="" — which DecimalField rejects with a 400.
+            "amendment_quantity_purchased",
         ]
         for field_name in decimal_null_fields:
             if field_name in data and data[field_name] in ("", None):
                 data[field_name] = None
 
         # Convert empty strings to None for optional date fields
-        date_fields = ["manure_application_date", "manure_harvest_date_planned", "habitat_install_date"]
+        date_fields = [
+            "manure_application_date",
+            "manure_harvest_date_planned",
+            "habitat_install_date",
+            "amendment_purchase_date",
+        ]
         for field_name in date_fields:
             if field_name in data and data[field_name] in ("", None):
                 data[field_name] = None
@@ -6233,6 +6362,15 @@ class SoilManagementEventSerializer(EventSerializer):
             "amendment_amount",
             "amendment_product_name",
             "amendment_manufacturer",
+            # Amendment purchase traceability (7 CFR 205.103(b)(1)-(2)) — added 2026-08-16.
+            # Compost is usually the largest purchased input on an organic orchard and was the
+            # one input with no receipt fields; the packet's mass balance could not see it.
+            "amendment_supplier_name",
+            "amendment_purchase_date",
+            "amendment_purchase_invoice",
+            "amendment_quantity_purchased",
+            "amendment_quantity_purchased_unit",
+            "amendment_lot_number",
             "test_results",
             # §E-2 — lab analysis (LA)
             "sample_matrix",
@@ -6889,6 +7027,9 @@ class SalesRecordSerializer(serializers.ModelSerializer):
             "quantity",
             "quantity_unit",
             "invoice_number",
+            # CCOF item 7's fourth part — "how much money you received". NULL means not
+            # recorded; the packet prints an em-dash rather than a zero.
+            "sale_amount",
             "organic_on_invoice",
             # § 205.103(b)(3) labeling category. Owner-facing only, like the rest of this
             # serializer — it is a record field, not a consumer claim.

@@ -20,7 +20,7 @@ G6_0_PRODUCTION = Module(
     key="g6_0_production",
     code="G6.0",
     title=text("Organic Production & Split Operations", "Producción orgánica y operaciones divididas"),
-    nop_cites=("§ 205.202(c)", "§ 205.201(a)"),
+    nop_cites=("§ 205.202(c)", "§ 205.201(a)", "§ 205.272(a)"),
     education=(
         text(
             "Field or farm parcels under organic management must have distinct, defined "
@@ -502,6 +502,148 @@ G6_0_PRODUCTION = Module(
                             "substance is suspected: {answer}"
                         ),
                         # § 205.201(a)(5) — commingling and contact prevention.
+                        section_key="commingling_barriers",
+                    ),
+                ),
+            ),
+        ),
+        # § 205.201(a)(5) names two things a plan must describe: the barriers that prevent
+        # COMMINGLING of product, and the barriers that prevent CONTACT with prohibited
+        # substances. Pages A-C cover the first and the drift half of the second. Where the
+        # prohibited substances physically sit — the barn shelf above the organic bins — had
+        # no home anywhere in the product, and it is the first thing an inspector walks to on
+        # a split operation.
+        #
+        # NOT gated on `split_operation`: a wholly organic farm still keeps diesel, treated
+        # lumber, and shop cleaners, and § 205.272(a) applies to those exactly as it does to
+        # a conventional block's fertiliser.
+        ModulePage(
+            key="d_prohibited_material_storage",
+            title=text(
+                "D. Where prohibited materials are kept",
+                "D. Dónde se guardan los materiales prohibidos",
+            ),
+            education=(
+                text(
+                    "§ 205.201(a)(5) requires your plan to describe the physical barriers "
+                    "that keep organic production and product away from prohibited "
+                    "substances, and § 205.272(a) restates the same duty as a practice "
+                    "standard. Materials count even when they are never applied to organic "
+                    "ground — conventional fertiliser held for a leased block, shop "
+                    "solvents, treated lumber, and fuel additives are all in scope. Describe "
+                    "where they live and what separates them.",
+                    "El § 205.201(a)(5) exige que su plan describa las barreras físicas que "
+                    "mantienen la producción y el producto orgánico alejados de las "
+                    "sustancias prohibidas, y el § 205.272(a) reitera el mismo deber como "
+                    "norma de práctica. Los materiales cuentan aunque nunca se apliquen en "
+                    "terreno orgánico — fertilizante convencional guardado para un lote "
+                    "arrendado, solventes de taller, madera tratada y aditivos de "
+                    "combustible están todos incluidos. Describa dónde se guardan y qué los "
+                    "separa.",
+                ),
+            ),
+            questions=(
+                Question(
+                    key="prohibited_materials_on_site",
+                    kind="boolean",
+                    label=text(
+                        "Are any materials prohibited in organic production kept anywhere on " "this operation?",
+                        "¿Se guarda en algún lugar de esta operación algún material prohibido "
+                        "en la producción orgánica?",
+                    ),
+                    coaching=text(
+                        "Includes conventional fertilisers and pesticides, treated lumber, "
+                        "nonorganic cleaners and sanitisers, and fuel or shop chemicals — "
+                        "whether or not they are ever used on organic ground.",
+                        "Incluye fertilizantes y pesticidas convencionales, madera tratada, "
+                        "limpiadores y desinfectantes no orgánicos, y combustible o químicos "
+                        "de taller — se usen o no en terreno orgánico.",
+                    ),
+                    nop_cite="§ 205.272(a)",
+                    compiles_to=CompileRule(
+                        template="Materials prohibited in organic production are kept on site: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    key="prohibited_materials_storage",
+                    kind="checkbox_group",
+                    label=text(
+                        "How are those materials stored and kept away from organic product, " "inputs, and equipment?",
+                        "¿Cómo se almacenan esos materiales y se mantienen alejados del "
+                        "producto, insumos y equipo orgánicos?",
+                    ),
+                    nop_cite="§ 205.201(a)(5)",
+                    visible_when=(Condition("prohibited_materials_on_site", "truthy"),),
+                    options=(
+                        Option(
+                            "separate_building",
+                            text(
+                                "In a separate building or shed from organic product and inputs",
+                                "En un edificio o galpón separado del producto e insumos orgánicos",
+                            ),
+                        ),
+                        Option(
+                            "locked_or_enclosed",
+                            text(
+                                "In a locked or enclosed cabinet, cage, or room",
+                                "En un gabinete, jaula o sala cerrada con llave",
+                            ),
+                        ),
+                        Option(
+                            "labeled_dedicated_area",
+                            text(
+                                "In a labeled, dedicated area within a shared building",
+                                "En un área rotulada y dedicada dentro de un edificio compartido",
+                            ),
+                        ),
+                        Option(
+                            "physically_below",
+                            text(
+                                "Stored below organic materials so a spill or leak cannot reach them",
+                                "Almacenados por debajo de los materiales orgánicos para que un "
+                                "derrame o fuga no pueda alcanzarlos",
+                            ),
+                        ),
+                        Option(
+                            "secondary_containment",
+                            text(
+                                "In secondary containment (bunded pallet, spill tray, sealed drum)",
+                                "En contención secundaria (pallet de retención, bandeja "
+                                "antiderrames, tambor sellado)",
+                            ),
+                        ),
+                        Option(
+                            "dedicated_equipment",
+                            text(
+                                "Handled with dedicated equipment that never touches organic product",
+                                "Manipulados con equipo dedicado que nunca toca producto orgánico",
+                            ),
+                        ),
+                        Option(
+                            "off_site",
+                            text(
+                                "Stored off site, not on this operation's premises",
+                                "Almacenados fuera del sitio, no en las instalaciones de esta operación",
+                            ),
+                        ),
+                        Option("other", text("Other (describe below)", "Otra (describa abajo)")),
+                    ),
+                    compiles_to=CompileRule(
+                        template="Prohibited materials are stored and separated as follows: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    key="prohibited_materials_storage_other",
+                    kind="text",
+                    label=text(
+                        "Describe the other storage or separation measure",
+                        "Describa la otra medida de almacenamiento o separación",
+                    ),
+                    visible_when=(Condition("prohibited_materials_storage", "includes", "other"),),
+                    compiles_to=CompileRule(
+                        template="Additional prohibited-material separation measure: {answer}.",
                         section_key="commingling_barriers",
                     ),
                 ),

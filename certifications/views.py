@@ -28,6 +28,7 @@ from .models import (
     OrganicSystemPlan,
     OSPAnnualUpdate,
     OSPChangeNotification,
+    PostHarvestFacility,
     StateOrganicRegistration,
 )
 from .serializers import (
@@ -39,6 +40,7 @@ from .serializers import (
     OrganicSystemPlanSerializer,
     OSPAnnualUpdateSerializer,
     OSPChangeNotificationSerializer,
+    PostHarvestFacilitySerializer,
     StateOrganicRegistrationSerializer,
 )
 from .services.common_osp_records import RECORD_TYPES_BY_KEY, confirm, derive_record_types, summarize
@@ -221,6 +223,76 @@ class CertificationViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             lambda: threading.Thread(
                 target=_bg_verify,
                 args=(certification.id,),
+                daemon=True,
+            ).start()
+        )
+
+
+class PostHarvestFacilityViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
+    """CRUD for off-farm post-harvest handlers — CCOF G6.1 / 7 CFR 205.272.
+
+    🔴 2026-08-16. The model, its serializer and the audit export's
+    ``_facility_cert_block`` all shipped; this route did not, and neither did a write path
+    on ``History.post_harvest_facility``. So the one record CCOF's grower checklist calls
+    for when a crop is sent to another certified operation — the handler's current organic
+    certificate — was reachable only from Django admin, and the packet's G6.1 block could
+    never render for a real operation. The export was already compensating by scraping
+    handler names out of free-text narratives with a regex.
+
+    Verification mirrors ``CertificationViewSet``: a background thread calls the same USDA
+    Organic Integrity Database verifier the farm's own certificates use, and a no-match
+    degrades to ``self_reported`` rather than asserting the handler is uncertified.
+    """
+
+    serializer_class = PostHarvestFacilitySerializer
+
+    def get_queryset(self):
+        return PostHarvestFacility.objects.filter(
+            establishment_id=self.kwargs.get("establishment_pk"),
+            establishment__company=self.company,
+        ).select_related("establishment")
+
+    def perform_create(self, serializer):
+        facility = serializer.save(
+            establishment_id=self.kwargs["establishment_pk"],
+            created_by=self.request.user if self.request.user.is_authenticated else None,
+        )
+        self._trigger_background_verification(facility)
+
+    @action(detail=True, methods=["post"])
+    def verify(self, request, **kwargs):
+        """Re-check this handler against the USDA Organic Integrity Database."""
+        facility = self.get_object()
+        self._trigger_background_verification(facility)
+        return Response(
+            {"status": "verification_initiated", "facility_id": facility.id},
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+    def _trigger_background_verification(self, facility):
+        def _bg_verify(facility_id):
+            try:
+                connections.close_all()
+                target = PostHarvestFacility.objects.get(id=facility_id)
+                target.verify()
+                target.save(
+                    update_fields=[
+                        "verification_status",
+                        "last_verified_at",
+                        "verification_source",
+                        "raw_api_response",
+                        "updated_at",
+                    ]
+                )
+            except Exception as e:
+                logger.error(f"Background verification failed for post-harvest facility {facility_id}: {e}")
+            finally:
+                connections.close_all()
+
+        transaction.on_commit(
+            lambda: threading.Thread(
+                target=_bg_verify,
+                args=(facility.id,),
                 daemon=True,
             ).start()
         )

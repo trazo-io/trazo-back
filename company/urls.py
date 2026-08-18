@@ -9,6 +9,7 @@ from certifications.views import (
     LandownerAffidavitViewSet,
     OrganicSystemPlanViewSet,
     OSPAnnualUpdateViewSet,
+    PostHarvestFacilityViewSet,
     StateOrganicRegistrationViewSet,
 )
 from documents.views import GeneratedDocumentViewSet
@@ -47,6 +48,14 @@ establishment_router.register(
     r"state-organic-registrations",
     StateOrganicRegistrationViewSet,
     basename="establishment-state-organic-registrations",
+)
+# CCOF G6.1 / 7 CFR 205.272 — the off-farm huller / dryer / cold store / packer a lot is
+# sent to, and its organic certificate. Registered 2026-08-16; the model, serializer and
+# audit-export block predate this route by months.
+establishment_router.register(
+    r"post-harvest-facilities",
+    PostHarvestFacilityViewSet,
+    basename="establishment-post-harvest-facilities",
 )
 establishment_router.register(
     r"certifier-links",
