@@ -212,14 +212,22 @@ NO_TREATMENT_ANSWERS = {
 }
 
 
-# Production subtypes that put seed or planting stock in the ground, and are therefore
-# subject to 7 CFR 205.204. Transplanting belongs here with Planting: the seedling or
-# nursery stock is still seed/planting stock for § 205.204 purposes, common_osp_records
-# already scores prod("PL", "TR") together, and the planting form shows the seed block for
-# both. Testing "PL" alone — as the serializer and model validators did until 2026-08-15 —
-# let a transplant of non-organic nursery stock skip the commercial-availability
-# requirement entirely, which on a perennial orchard is the MORE common of the two records.
-SEED_SOURCED_SUBTYPES = ("PL", "TR")
+# Production subtypes carrying 7 CFR 205.204 seed / planting-stock obligations.
+# Transplanting belongs here with Planting: the seedling or nursery stock is still
+# seed/planting stock for § 205.204 purposes, common_osp_records already scores
+# prod("PL", "TR") together, and the planting form shows the seed block for both. Testing
+# "PL" alone — as the serializer and model validators did until 2026-08-15 — let a
+# transplant of non-organic nursery stock skip the commercial-availability requirement
+# entirely, which on a perennial orchard is the MORE common of the two records.
+#
+# 🔴 "SS" (Seed Search) added 2026-08-19. It does not put stock in the ground — it is the
+# § 205.204(a)(1) commercial-availability search itself — so the old name read as excluding
+# it, and it WAS excluded: an SS row declaring non-organic seed with zero documented
+# supplier attempts validated clean, which is the one record the obligation exists to
+# demand. The form has rendered the seed block and the attempts table for SS since the
+# subtype shipped, so including it here costs the grower nothing they were not already
+# being asked for.
+SEED_SOURCED_SUBTYPES = ("PL", "TR", "SS")
 
 # The two seed_certification_status values that trigger the § 205.204(a)(1)
 # commercial-availability obligation. Transitional is NOT among them here only because the
@@ -334,11 +342,19 @@ APPLIED_SCOPE = [
 # an inspector reads cleanout logs per asset class (harvester vs bin vs truck),
 # not as one undifferentiated "cleaning" pile.
 # Used in: ProductionEvent.cleaning_asset_class (EM cleaning ops)
+# Aligned with the seven options Quick Organics offers on its Cleanout activity (verified in
+# their live form, 2026-08-19). Trazo had the first four; the last three were unreachable, so a
+# packing-line or a barn cleanout could only be misfiled as generic "equipment" — and § 205.272
+# turns on WHICH surface the organic product touched, so the class is the substance of the
+# record, not a label on it.
 CLEANING_ASSET_CLASS = [
     ("equipment", "Field / harvest equipment"),
     ("harvest_bins", "Harvest bins / totes"),
     ("storage", "Storage area / cooler"),
     ("transport_vehicle", "Transport vehicle / trailer"),
+    ("processing_line", "Processing equipment or line"),
+    ("livestock_housing", "Livestock housing"),
+    ("other", "Other"),
 ]
 
 

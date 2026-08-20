@@ -199,6 +199,151 @@ def may_claim_certifier_attestation(establishment, certification_type=None):
     return ClaimDecision(False, "no database-verified certification", LABEL_SELF_REPORTED)
 
 
+# ---------------------------------------------------------------------------
+# Which certification types a public surface may NAME at all.
+# ---------------------------------------------------------------------------
+#
+# Every other gate in this module asks "is this verified?". This one asks a question that had
+# no gate: "may this be published at all?" — because for one family of claims the honest
+# answer to the first question does not cure the second.
+#
+# `may_claim_certifier_attestation` correctly labels a non-USDA certification "Self-Reported".
+# That is the right treatment for "Rainforest Alliance" — a named programme, a checkable fact,
+# qualified as the operation's own statement. It is NOT sufficient for "Carbon Neutral
+# Certification": FTC 16 CFR 260.6 governs general environmental benefit claims themselves,
+# not merely their attribution, and ECGT 2024/825 (2026-09-27) bans self-created sustainability
+# labels outright. "Carbon Neutral — Self-Reported" is still a net-zero claim on a product page.
+#
+# THE LINE DRAWN, so future entries are decided by a rule rather than case by case:
+#   publishable — the label names an issuing body ("Rainforest Alliance", "Fair Trade
+#                 Certified", "CCOF") or a specific, checkable attribute ("Non-GMO",
+#                 "Kosher", "GlobalG.A.P."). Stating that a certificate exists is a fact.
+#   withheld    — the label asserts a general environmental benefit or a net position with no
+#                 issuing body attached. That is a claim about outcomes, and Trazo has no
+#                 evidence for it.
+#
+# RECORDING IS UNTOUCHED. The operation may still log any of these — its § 205.103 records are
+# its own, and an inspector may want them. Only the consumer surface withholds.
+_WITHHELD_CERTIFICATION_TYPES = {
+    "carbon_neutral": (
+        "'Carbon neutral' is a general environmental benefit claim (16 CFR 260.6) and the exact "
+        "phrase compliance.md marks UNSAFE. It also contradicts Trazo's own stated methodology "
+        "— direct operational emissions, not a full LCA — so publishing it beside Trazo's own "
+        "figures reads as Trazo substantiating a neutrality claim it cannot compute."
+    ),
+    "sustainable_agriculture": (
+        "'Sustainable Agriculture Standard' names no issuing body, so there is nothing for a "
+        "shopper to check it against. An unattributed sustainability label is precisely the "
+        "self-created label ECGT 2024/825 bans; a named programme is a fact and stays."
+    ),
+}
+
+# Exhaustive over BOTH vocabularies — BusinessEvent.CERTIFICATION_TYPE_CHOICES and
+# certifications.constants.CERTIFICATION_TYPE_CHOICES, which diverged and are not
+# interconvertible (see _CERT_TYPE_ALIASES). A caller may hold either, and a gate that
+# recognised only one would pass the other straight through as "unknown".
+_PUBLISHABLE_CERTIFICATION_TYPES = frozenset(
+    {
+        # BusinessEvent vocabulary
+        "organic_usda",
+        "regenerative",
+        "cng",
+        "non_gmo",
+        "rainforest_alliance",
+        # Narrow and resource-specific rather than a general benefit claim — the closest call
+        # in this list. Revisit if the displayed label ever generalises beyond water.
+        "water_stewardship",
+        "global_gap",
+        "fair_trade",
+        "food_safety",
+        "kosher",
+        # certifications app vocabulary
+        "usda_organic",
+        "ccof",
+        "real_organic_project",
+        "roc",
+        "korean_organic",
+        "non_gmo_project",
+        "sqf",
+        "other",
+    }
+)
+
+
+# ---------------------------------------------------------------------------
+# Which production subtypes a consumer surface may show at all.
+# ---------------------------------------------------------------------------
+#
+# Some activities are records for an INSPECTOR and are actively misleading to a shopper. The
+# four below were verified against real events on 2026-08-19; the structured fields are already
+# withheld from the anonymous payload, but the farmer-authored name/description/observation are
+# not, and for these subtypes that free text IS the disclosure:
+#
+#   BU  "Buffer rows cut, sold conventional"  — correct under § 205.202(c), which REQUIRES
+#       buffer crop to be sold non-organic. To a shopper it reads as an admission that part of
+#       what they are holding was not organic, and it is about a different crop entirely.
+#   SS  "none could supply certified organic"  — the § 205.204(a)(1) commercial-unavailability
+#       allowance, which reads as "not fully organic" without the regulation beside it.
+#   EM  "Huller line purge before organic run" — reveals a split operation and conventional
+#       product on the same line, out of the context that makes it a compliance STRENGTH.
+#   TP  "Load to Sac Valley Hulling"          — names the operation's processor. Who handles a
+#       farm's crop is commercial information, and publishing it is the supplier-chain leak
+#       class this module already guards for inputs.
+#
+# Withholding is not hiding a problem: each of these is evidence of CORRECT practice, and each
+# is read as its opposite by an audience that does not have the CFR open. They stay in the
+# certifier packet, which is where they persuade.
+_CONSUMER_WITHHELD_PRODUCTION_SUBTYPES = {
+    "BU": "buffer-zone disposition reads as a non-organic admission out of § 205.202(c) context",
+    "SS": "commercial-unavailability search reads as 'not fully organic' without § 205.204(a)(1)",
+    "EM": "cleanout/purge narrative reveals split-operation handling out of context",
+    "TP": "transport names the operation's handler — commercial supply-chain information",
+}
+
+
+def may_publish_production_subtype(subtype):
+    """May a consumer surface show an event of this production subtype?
+
+    Allow-by-default, unlike `may_publish_certification_type`, and deliberately so: the
+    subtypes here are the ordinary field activities a QR page exists to show — planting,
+    irrigation, harvest — and defaulting those to withheld would empty the page every time a
+    new one is added. What is enumerated is the small set whose free text misleads, and
+    `test_consumer_production_subtypes` pins that set against the model vocabulary so a new
+    subtype forces a decision to be recorded rather than defaulted silently.
+    """
+    key = str(subtype).strip().upper() if subtype else ""
+    if key in _CONSUMER_WITHHELD_PRODUCTION_SUBTYPES:
+        return ClaimDecision(False, _CONSUMER_WITHHELD_PRODUCTION_SUBTYPES[key], LABEL_SELF_REPORTED)
+    return ClaimDecision(True, "ordinary field activity", LABEL_SELF_REPORTED)
+
+
+def may_publish_certification_type(certification_type):
+    """May a public surface name this certification type at all?
+
+    Fails CLOSED on anything unrecognised. That is the whole design: a denylist would encode
+    only the incident that prompted it, so a certification type added later would publish
+    itself by default and the next audit would find the same class of defect one row down.
+    Here an unclassified value is withheld until someone classifies it, and
+    `test_claim_authority_certification_types` fails the moment either model vocabulary grows
+    a value this module has not seen — so the decision cannot be skipped, only made.
+    """
+    if not certification_type:
+        return ClaimDecision(False, "no certification type", LABEL_SELF_REPORTED)
+
+    key = str(certification_type).strip().lower()
+    if key in _WITHHELD_CERTIFICATION_TYPES:
+        return ClaimDecision(False, _WITHHELD_CERTIFICATION_TYPES[key], LABEL_SELF_REPORTED)
+    if key in _PUBLISHABLE_CERTIFICATION_TYPES:
+        return ClaimDecision(True, "named programme or specific attribute", LABEL_SELF_REPORTED)
+
+    logger.warning(
+        "may_publish_certification_type: unclassified certification type %r withheld from public "
+        "surfaces. Classify it in claim_authority.py.",
+        key,
+    )
+    return ClaimDecision(False, "unclassified certification type", LABEL_SELF_REPORTED)
+
+
 def public_certifier_name(certifier_name, establishment, certification_type=None):
     """The certifier name a public surface may show, or None.
 

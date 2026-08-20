@@ -298,19 +298,11 @@ class History(models.Model):
         help_text="Crop type for this production",
     )
 
-    # Background event creation status
-    EVENTS_STATUS_CHOICES = [
-        ("pending", "Pending"),
-        ("ready", "Ready"),
-        ("failed", "Failed"),
-        ("no_events", "No Events"),
-    ]
-    events_status = models.CharField(
-        max_length=20,
-        choices=EVENTS_STATUS_CHOICES,
-        default="no_events",
-        help_text="Status of background template event creation",
-    )
+    # `events_status` was removed 2026-08-19. It tracked a background thread that created
+    # event rows from a crop template — a flow that no longer exists (see ProductionPlanItem),
+    # and a status NO client ever read: the frontend was supposed to poll it for "progressive
+    # event loading" and never did, in either repo. Building the season plan is one
+    # bulk_create, so there is nothing left to wait for.
 
     # NOP Compliance: Post-Harvest Sales & Traceability (7 CFR 205.103)
     # These fields are filled AFTER production is finalized (post-finish).
@@ -445,8 +437,19 @@ class History(models.Model):
            therefore stringified to "" — an empty object_repr in the audit log, on records
            whose audit trail is the thing being sold.
         """
-        start = self.start_date.strftime("%m/%d/%Y") if self.start_date else "?"
-        finish = self.finish_date.strftime("%m/%d/%Y") if self.finish_date else "present"
+
+        # Format defensively: these may still be STRINGS here. Django does not coerce a
+        # `start_date="2026-01-01"` kwarg until the instance is reloaded, and django-auditlog
+        # stringifies the instance from a post_save receiver on every create — so a caller
+        # passing an ISO string (a fixture, a management command, an importer) crashed the
+        # save itself with "'str' object has no attribute 'strftime'", not the display.
+        def _fmt(value, empty):
+            if not value:
+                return empty
+            return value.strftime("%m/%d/%Y") if hasattr(value, "strftime") else str(value)
+
+        start = _fmt(self.start_date, "?")
+        finish = _fmt(self.finish_date, "present")
         label = f"[ {start} - {finish} ]"
         product_name = self.product.name if self.product else ""
         return f"{label} - {product_name}" if product_name else label
@@ -1769,6 +1772,21 @@ class ProductionEvent(CommonEvent):
     FROST_PROTECTION = "FP"  # Wind machines / heaters / under-tree sprinklers on cold nights
     MOWING = "MO"  # Orchard-floor mowing / mulching / cover-crop or herbicide-strip management
 
+    # Batch 4 (2026-08-19): parity with the activities Quick Organics offers a crop operation.
+    # All three facts were already recordable — but only as FIELDS on some other event, which
+    # is the wrong shape whenever the activity does not belong to that event:
+    #   * a load leaves for the handler days after the harvest it came from, and one harvest
+    #     can ship on several dates (§ 205.272 commingling turns on the LOAD, not the pick);
+    #   * buffer-zone crop is disposed of on its own schedule and must never be sold as
+    #     organic (§ 205.202(c));
+    #   * an organic-seed search precedes planting and covers varieties that may never be
+    #     planted — recording it only on a planting event loses the searches that succeeded.
+    # They reuse the existing columns (handler/destination, buffer_disposition*,
+    # seed_search_attempts), so this adds a shape, not a second home for the same fact.
+    TRANSPORT = "TP"  # A load moving off-farm: destination, quantity, cleanout reference
+    BUFFER_USE = "BU"  # Harvest or disposal from a § 205.202(c) buffer zone
+    SEED_SEARCH = "SS"  # § 205.204(a)(1) organic-seed commercial-availability search
+
     PRODUCTION_EVENTS = (
         (PLANTING, "Planting"),
         (HARVESTING, "Harvesting"),
@@ -1786,6 +1804,10 @@ class ProductionEvent(CommonEvent):
         # Batch 3 additions
         (FROST_PROTECTION, "Frost Protection"),  # Wind machines / heaters (Scope-1 fuel)
         (MOWING, "Mowing / Orchard-Floor"),  # Mowing, mulching, floor management
+        # Batch 4 additions — see the note on the constants above
+        (TRANSPORT, "Transport"),
+        (BUFFER_USE, "Buffer Use"),
+        (SEED_SEARCH, "Seed Search"),
     )
 
     type = models.CharField(max_length=2, choices=PRODUCTION_EVENTS)
@@ -2397,6 +2419,52 @@ class ProductionEvent(CommonEvent):
         null=True,
         help_text="Date equipment was cleaned (for shared equipment compliance)",
     )
+    # ---- Purge records (§ 205.272) — parity with Quick Organics' Cleanout activity ----
+    #
+    # A purge is how a shared line, auger or bin is cleared: you run material through it and
+    # discard the first output. Trazo recorded the cleaning METHOD and MATERIALS but had no
+    # concept of a purge, so the question § 205.272 actually turns on — what happened to the
+    # purged material — had nowhere to go. QO asks all three (verified in their live form,
+    # 2026-08-19), and the third is the one an inspector cares about: purge material fed to
+    # livestock, sold as conventional or discarded are different compliance stories.
+    purge_material = models.CharField(
+        max_length=120,
+        blank=True,
+        null=True,
+        help_text="Material run through the equipment to purge it (§ 205.272).",
+    )
+    purge_quantity = models.CharField(
+        max_length=60,
+        blank=True,
+        null=True,
+        help_text="Quantity of purge material used, including its unit (e.g. '200 lb').",
+    )
+    purge_material_end_use = models.TextField(
+        blank=True,
+        null=True,
+        help_text=(
+            "What happened to the purge material afterwards — fed to livestock, sold as "
+            "conventional, discarded. § 205.272 turns on this, not on the purge itself."
+        ),
+    )
+
+    # ---- Transport endpoints (§ 205.272 / § 205.307) — parity with QO's Transport activity ----
+    #
+    # `harvest_destination` is a CATEGORY (stored / sold / handler / feed). It answers "what
+    # kind of move" and not "to whom, where" — and for a load going to a custom huller there is
+    # no sale, so no SalesRecord carries the counterparty either. QO asks for the name and
+    # address of both endpoints, with an explicit "it is on other documentation" escape.
+    transport_origin = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Name and address the load left from. Blank if recorded on other documentation.",
+    )
+    transport_destination_address = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Name and address the load went to. Blank if recorded on other documentation.",
+    )
+
     cleaning_method = models.CharField(
         max_length=200,
         blank=True,
@@ -4345,10 +4413,16 @@ class BusinessEvent(CommonEvent):
         (INSPECTION, "Inspection"),
     ]
 
-    # Carbon-focused business activity types
+    # Business activity types.
+    #
+    # "carbon_credits" was withdrawn (2026-08-18). The `carbon_credits_earned` / `_unit`
+    # columns are kept so any historical row keeps its data, but the activity is no longer
+    # offerable: Trazo's methodology is direct operational emissions (§ Scope 1 only, EPA/USDA
+    # factors), not the credit-grade accounting a traded credit implies, and a credit figure
+    # on a public product page is the self-created sustainability claim EU ECGT 2024/825
+    # (live 2026-09-27) and FTC 16 CFR 260.6 both reach. Do not re-add.
     BUSINESS_ACTIVITY_CHOICES = [
-        ("certification", "Certification Event (Organic, Carbon, etc.)"),
-        ("carbon_credits", "Carbon Credits Transaction"),
+        ("certification", "Certification Event (organic, food safety, trade)"),
         ("sustainability_audit", "Sustainability Audit/Assessment"),
         ("verification", "Third-Party Verification"),
         ("compliance", "Regulatory Compliance Activity"),
@@ -4407,7 +4481,7 @@ class BusinessEvent(CommonEvent):
         max_length=30,
         choices=BUSINESS_ACTIVITY_CHOICES,
         default="certification",
-        help_text="Type of carbon-relevant business activity",
+        help_text="Type of business or compliance activity recorded for this production",
     )
     certification_type = models.CharField(
         max_length=50,
@@ -4475,15 +4549,6 @@ class BusinessEvent(CommonEvent):
         # Business logic: certification events should have certification_type
         if self.business_type == "certification" and not self.certification_type:
             errors["certification_type"] = "Certification type is required for certification events"
-
-        # Business logic: carbon_credits events should have carbon_credits_earned.
-        # `is None`, not falsy: Decimal("0.00") is falsy, so `not value` cannot tell "the
-        # grower left this blank" from "the grower recorded zero". Those are different facts,
-        # and a recorded zero is data. Same conflation class as the 2026-07-31 consumer
-        # incident where Boolean("not_organic") read as True. The sibling check in
-        # UpdateBusinessEventSerializer was corrected with it.
-        if self.business_type == "carbon_credits" and self.carbon_credits_earned is None:
-            errors["carbon_credits_earned"] = "Carbon credits amount is required for carbon credit transactions"
 
         if errors:
             raise ValidationError(errors)
@@ -4936,3 +5001,161 @@ class EventAmendment(models.Model):
 
     def __str__(self) -> str:
         return f"Amendment: {self.field_name} on event {self.event_type}/{self.event_id}"
+
+
+class ProductionPlanItem(models.Model):
+    """One SUGGESTED activity on a production's season plan. Never a record.
+
+    ⛔ A plan item is not an event, and the two must never be conflated again.
+
+    WHY (2026-08-19): until this model existed, picking a crop template at production
+    start wrote real ``CommonEvent`` rows — dated, attributed to the grower by name,
+    printed into the certifier audit packet indistinguishable from something the grower
+    actually observed. The date was invented outright: the frontend parsed a template's
+    prose window ("December - February") and emitted **the 15th of that month**, off the
+    season start, so the rows were routinely backdated. That is the defect class behind
+    the 2026-08-02 Smart Setup incident (a backdated glyphosate application written into
+    a certified-organic farm's own audit trail).
+
+    Content fixes — organic-first template ordering, ``ORGANIC_OVERRIDES``,
+    ``isTemplateEventProhibited`` — closed the glyphosate instance and left the class
+    open: software still authored dated assertions of fact on the operator's behalf.
+
+    § 205.201(a) makes the PRODUCER the author of the plan, and § 205.103(b)(2) requires
+    records that "fully disclose all activities and transactions ... in sufficient detail
+    as to be readily understood and audited." A row nobody performed fails both, and it
+    fails them at the inspector's trace-back, where the unit of audit is a crop cycle.
+
+    So a template now produces a PLAN. The plan carries a window, never a day. The record
+    is authored when the operator logs the activity, supplies the real date, and saves —
+    at which point ``fulfilled_by`` links the two and the item's status becomes ``logged``.
+
+    This is the same suggest→confirm red line already honoured by the OSP § 11 panel
+    (derived checkboxes render as *suggested* until the operator confirms each one) and by
+    the event-wizard template accelerators (``config/events/templateAccelerators.ts``).
+    """
+
+    PENDING = "pending"
+    LOGGED = "logged"
+    SKIPPED = "skipped"
+    STATUS_CHOICES = [
+        (PENDING, "Planned"),
+        (LOGGED, "Logged"),
+        (SKIPPED, "Not applicable"),
+    ]
+
+    history = models.ForeignKey(
+        History,
+        on_delete=models.CASCADE,
+        related_name="plan_items",
+        help_text="The production season this plan belongs to.",
+    )
+
+    # Provenance. SET_NULL rather than CASCADE: re-seeding the template catalogue must not
+    # silently delete a grower's season plan, and an item whose template is gone is still a
+    # legitimate plan item — it just no longer points at a catalogue row.
+    source_template = models.ForeignKey(
+        "carbon.EventTemplate",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="plan_items",
+        help_text="Catalogue template this suggestion came from, when it came from one.",
+    )
+
+    name = models.CharField(max_length=150, help_text="e.g. Winter Pruning")
+    description = models.TextField(blank=True, help_text="What the practice involves. Advisory text.")
+
+    # Routing for the add-activity wizard: which event model and subtype the operator will
+    # be dropped into when they act on this item.
+    event_type = models.IntegerField(
+        help_text="Backend event type (0 weather, 1 production, 2 chemical, 3 general, "
+        "4 equipment, 5 soil, 6 pest, 7 business).",
+    )
+    event_subtype = models.CharField(
+        max_length=20,
+        blank=True,
+        help_text="Subtype code within the event type, when the template names one.",
+    )
+
+    # ⛔ A WINDOW, never a date. Storing a DateField here would re-open the whole defect:
+    # any concrete day on a plan item is a day somebody invented.
+    planned_window = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text='Agronomic window as written by the template, e.g. "December - February".',
+    )
+    # Parsed first month of the window, 1-12, for ordering and "what is coming up" views.
+    # A month is an attribute of a PLAN and states no fact about what was done; a day would.
+    planned_month = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(1), MaxValueValidator(12)],
+        help_text="First month of planned_window (1-12), when it could be parsed.",
+    )
+    order_sequence = models.IntegerField(default=0, help_text="Typical order within the season.")
+
+    # ⛔ NO VALUES. A plan item says WHICH practice and roughly WHEN. It does not carry the
+    # catalogue's field values, and it must not start to.
+    #
+    # A `prefill` JSONField was written here first and removed before it shipped. The wizard's
+    # `cleanEventData` is a PASSTHROUGH — it copies every key it is handed onto the payload,
+    # with no allowlist — so a merged catalogue field set reaches the record whether or not
+    # the form renders it. `build_soil_event_fields` alone emits `soil_ph: 6.5`,
+    # `organic_matter_percentage: 3.0`, `fuel_consumed`, `equipment_hours` and
+    # `amendment_type: "Crimson Clover + White Mustard seed mix"`. Silently writing those is a
+    # fabricated MEASUREMENT and a fabricated INPUT IDENTITY — the same class as the backdated
+    # record this model was built to stop, and a direct breach of the mutation-payload rule
+    # (a payload sends only fields its UI renders) and of the never-auto-populate-a-product
+    # rule that came out of the OMRI listing leak.
+    #
+    # The sanctioned way to prefill VALUES already exists and is render-verified: the wizard's
+    # own template accelerators (`config/events/templateAccelerators.ts` over
+    # `quickEventFields`), which the operator picks explicitly. If plan items should ever
+    # prefill, the route is to map an item to one of those — not to widen this model.
+
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=PENDING, db_index=True)
+    # Set when the operator logs a real activity against this item.
+    #
+    # This is a LOOSE reference, not an FK, so nothing in the database maintains it: when the
+    # record is deleted, `EventViewSet.destroy` puts the item back on the plan explicitly. It
+    # has to, because an item reading "logged" while the record it names is gone is exactly
+    # the assertion-with-nothing-behind-it this model exists to prevent.
+    # Keyed (event_type, event_id) rather than a GenericForeignKey, matching EventAmendment
+    # and the rest of the codebase — history.constants.EVENT_TYPE_TO_MODEL is already how the
+    # 8 concrete event models are addressed everywhere else.
+    fulfilled_by_event_type = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text="EVENT_TYPE_TO_MODEL key of the record that fulfilled this item.",
+    )
+    fulfilled_by_id = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Primary key of the record that fulfilled this item.",
+    )
+    fulfilled_at = models.DateTimeField(null=True, blank=True)
+    skipped_reason = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Why the operator marked this practice not applicable this season.",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "history_production_plan_item"
+        ordering = ["order_sequence", "planned_month", "id"]
+        verbose_name = "Production plan item"
+        verbose_name_plural = "Production plan items"
+        indexes = [
+            models.Index(fields=["history", "status"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.get_status_display()})"
+
+    @property
+    def is_open(self) -> bool:
+        return self.status == self.PENDING

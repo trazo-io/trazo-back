@@ -311,11 +311,19 @@ def filter_certifications_for_consumer(certifications: List) -> List:
     active. Intended to run alongside ConsumerClaimValidator so a self-reported
     organic cert never surfaces as a badge on the QR page.
 
-    Non-USDA Organic certs pass through unchanged — they are governed by their own
-    verification workflow and this function only polices the USDA Organic badge.
+    Other certification types are then put to `claim_authority.may_publish_certification_type`,
+    which withholds any whose LABEL asserts a general environmental benefit with no issuing
+    body behind it. This used to read "non-USDA Organic certs pass through unchanged" — true,
+    and the reason this surface would have leaked a "Carbon Neutral Certification" badge that
+    the anonymous event payload had already been taught to withhold. A chokepoint that only
+    one of two public surfaces consults is not a chokepoint.
 
     Returns a new list.
     """
+    # Local import: `history.services.claim_authority` reaches back into `certifications.models`
+    # for the attestation gate, so importing it at module scope closes a cycle.
+    from history.services.claim_authority import may_publish_certification_type
+
     today = timezone.now().date()
     out = []
     for cert in certifications:
@@ -324,5 +332,7 @@ def filter_certifications_for_consumer(certifications: List) -> List:
                 continue
             if cert.expiry_date and cert.expiry_date < today:
                 continue
+        elif not may_publish_certification_type(cert.certification_type).allowed:
+            continue
         out.append(cert)
     return out

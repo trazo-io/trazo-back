@@ -231,7 +231,32 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             establishment__in=establishments.all(),
         )
 
-        if not parcel.current_history:
+        # `current_history` is a denormalised pointer; the fact it stands for is "a production
+        # on this parcel that has not been finished yet". The two can drift — the pointer is
+        # only maintained by the production-create and finish paths, so anything that writes a
+        # History another way (an import, a fixture, a data repair) leaves it null while the
+        # season is plainly open.
+        #
+        # 🔴 2026-08-19: that drift is visible ON ONE SCREEN. The parcel page renders this
+        # endpoint as "Current Production" and, beside it, a Productions list that derives its
+        # own status from `finish_date`. A parcel with an open season showed "No current
+        # production yet" next to "1 ongoing" and the season itself. Two demo seeders already
+        # shipped a `fix_parcel_current_history` helper, which is the tell: the derivation is
+        # the real source of truth and the pointer is a cache.
+        #
+        # So fall back to deriving it, and heal the pointer when it was simply missing.
+        current = parcel.current_history
+        if current is None:
+            current = (
+                History.objects.filter(parcel=parcel, finish_date__isnull=True)
+                .order_by("-start_date", "-id")
+                .first()
+            )
+            if current is not None:
+                parcel.current_history = current
+                parcel.save(update_fields=["current_history"])
+
+        if current is None:
             return Response(None)
 
         # Optimized query with prefetch to avoid N+1 queries
@@ -271,7 +296,7 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 ),
                 # Note: 'members' is a SerializerMethodField, not a relation, so it can't be prefetched
             )
-            .get(pk=parcel.current_history.id)
+            .get(pk=current.id)
         )
 
         return Response(HistorySerializer(current_history, context={"request": request}).data)

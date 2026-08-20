@@ -95,6 +95,35 @@ class NOPSeedSearchValidatorTests(TestCase):
             event.full_clean()
         self.assertIn("seed_search_attempts", ctx.exception.message_dict)
 
+    def test_seed_search_subtype_carries_the_same_obligation(self):
+        """SS was exempt until 2026-08-19 — the search activity skipped the search rule.
+
+        Seed Search shipped as its own subtype so a grower had somewhere to record the
+        § 205.204(a)(1) commercial-availability search that used to be buried on the planting
+        record. It was not added to SEED_SOURCED_SUBTYPES, so an SS row could declare
+        non-organic seed with zero documented suppliers and validate clean — the one record
+        the obligation exists to demand, exempted from the obligation.
+        """
+        event = self._planting_event(
+            type="SS",
+            seed_certification_status="non_organic_untreated",
+            seed_search_attempts=[],
+        )
+        with self.assertRaises(ValidationError) as ctx:
+            event.full_clean()
+        self.assertIn("seed_search_attempts", ctx.exception.message_dict)
+
+    def test_seed_search_with_documented_suppliers_is_accepted(self):
+        event = self._planting_event(
+            type="SS",
+            seed_certification_status="non_organic_untreated",
+            seed_search_attempts=[
+                {"supplier_name": "Kamprath Seed", "date_contacted": "2025-02-04", "result": "quantity"},
+                {"supplier_name": "Peaceful Valley", "date_contacted": "2025-02-05", "result": "quantity"},
+            ],
+        )
+        event.full_clean()  # must not raise
+
     def test_a_row_with_no_supplier_name_does_not_count_as_documentation(self):
         """An empty row is not evidence: 205.204(a)(1) turns on WHO was contacted."""
         event = self._planting_event(

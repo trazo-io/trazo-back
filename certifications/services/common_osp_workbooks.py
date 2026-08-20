@@ -200,7 +200,16 @@ def _supplier_rows(establishment):
         if supplier and (product, supplier) not in seen:
             seen[(product, supplier)] = ("input", product, supplier)
     for e in SoilManagementEvent.objects.filter(history__parcel__establishment=establishment):
-        supplier = _blank(e.amendment_supplier_name)
+        # Off-farm MANURE puts its supplier in `amendment_manufacturer`, by the convention
+        # stated in SoilManagementEvent.manure_origin's own help_text ("a second supplier
+        # field would be a second writer of one fact"). Reading only amendment_supplier_name
+        # emitted zero Supplier List rows for exactly the operators who followed the model —
+        # the third instance of this omission, after soil amendments (08-16) and beneficial
+        # organisms (08-17). Those two enumerated the MODELS; this one is the FIELDS on a
+        # model that can hold a supplier.
+        supplier = _blank(e.amendment_supplier_name) or (
+            _blank(e.amendment_manufacturer) if e.manure_origin == "off_farm" else None
+        )
         # The product name, falling back to the generic category — a Supplier List row reading
         # "— / Bu's Compost Co." tells a certifier nothing about what was bought.
         product = _blank(e.amendment_product_name) or _blank(e.amendment_type)

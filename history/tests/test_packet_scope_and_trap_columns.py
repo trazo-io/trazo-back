@@ -16,6 +16,7 @@ render as "Entire planting". Absence of an answer is not an attestation of full 
 """
 
 import re
+from decimal import Decimal
 
 from django.test import TestCase
 from django.utils import timezone
@@ -72,12 +73,16 @@ class PacketScopeAndTrapColumnTests(TestCase):
             description="Weekly NOW trap check",
             pest_species="Navel orangeworm",
             trap_type="pheromone",
-            trap_count=24,
+            # 137/180 rather than 24/12: the flattened section contains the rendered event
+            # DATE, so a one- or two-digit count passes vacuously on the matching day of the
+            # month (and "12" passes for all of December). A three-digit count cannot occur in
+            # a rendered date.
+            trap_count=137,
             pest_catch_count=180,
         )
         txt = _flowable_text(self._service()._build_pest_section())
         self.assertIn("Traps", txt, "the trap-count COLUMN is missing from the detail table")
-        self.assertIn("24", txt, "the trap count itself never printed")
+        self.assertIn("137", txt, "the trap count itself never printed")
         # The two figures it sits between must still be there.
         self.assertIn("Pheromone lure", txt)
         self.assertIn("180", txt)
@@ -93,13 +98,36 @@ class PacketScopeAndTrapColumnTests(TestCase):
             type="TM",
             date=timezone.now(),
             description="Trap deployment",
-            trap_count=12,
+            trap_count=143,  # 3-digit: cannot collide with the rendered date (see above)
         )
         txt = _flowable_text(self._service()._build_pest_section())
         # `_flowable_text` strips tags but not entities, so the header arrives as "&amp;".
         self.assertIn("Beneficial-Release", txt)
         self.assertIn("Trap Detail (7 CFR 205.206)", txt)
-        self.assertIn("12", txt)
+        self.assertIn("143", txt)
+
+    def test_zero_traps_and_zero_catch_still_print(self):
+        """0 is a real answer: traps were checked and nothing was caught.
+
+        Every guard here is `is not None`, so this passes today. It exists because the obvious
+        "simplification" to `if ev.trap_count:` in the row filter, the PDF cell or the CSV
+        would drop the record and leave every other test in this file green.
+        """
+        PestManagementEvent.objects.create(
+            history=self.history,
+            type="TM",
+            date=timezone.now(),
+            description="Trap check, clean",
+            trap_type="sticky",
+            trap_count=0,
+            pest_catch_count=0,
+        )
+        txt = _flowable_text(self._service()._build_pest_section())
+        self.assertIn("Trap Detail (7 CFR 205.206)", txt, "a zero-count trap check opened no table")
+        self.assertIn("Sticky card", txt, "the trap TYPE vanished alongside the zeroes")
+        csv_text = self._service().generate_csv().getvalue().decode("utf-8-sig")
+        self.assertIn("0 traps", csv_text, "zero traps rendered as an em-dash in the CSV")
+        self.assertIn("0 caught", csv_text, "zero catch rendered as an em-dash in the CSV")
 
     # ---- applied_scope on inputs (7 CFR 205.103(b)(2)) ----
 
@@ -162,12 +190,21 @@ class PacketScopeAndTrapColumnTests(TestCase):
             date=timezone.now(),
             description="First shake",
             block_id="Block 2",
+            area_covered=Decimal("11.5"),
+            area_unit="acres",
             applied_scope="part",
             applied_scope_detail="south half only",
         )
         txt = _flowable_text(self._service()._build_production_events())
         self.assertIn("Partial-Area Operations", txt)
         self.assertIn("south half only", txt)
+        # The HEADERS, not just the values. The locator shipped under an "Area Covered" header
+        # while the acreage was absent entirely, so an inspector read
+        # "Area Covered: Part — south half only". No test asserted the header row, which is
+        # exactly why it went unnoticed.
+        self.assertIn("Applied Scope", txt, "the locator column lost its own header")
+        self.assertIn("Area Covered", txt, "the acreage column is missing")
+        self.assertIn("11.5", txt, "the acreage itself never printed next to the locator")
 
     def test_partial_planting_is_in_the_same_table(self):
         """ProductionTab collects the scope on Planting too, and it has the same consequence.
@@ -185,7 +222,9 @@ class PacketScopeAndTrapColumnTests(TestCase):
         )
         txt = _flowable_text(self._service()._build_production_events())
         self.assertIn("Partial-Area Operations", txt)
-        self.assertIn("Planting", txt)
+        # NOT assertIn("Planting"): the main Production Events table already prints that label
+        # for this same event, so the assertion passed even with the Operation column deleted.
+        # The locator is unique to this table.
         self.assertIn("rows 1-4 replanted only", txt)
 
     def test_whole_planting_harvest_does_not_open_the_partial_table(self):
@@ -198,6 +237,10 @@ class PacketScopeAndTrapColumnTests(TestCase):
             applied_scope="all",
         )
         txt = _flowable_text(self._service()._build_production_events())
+        # Read-proof FIRST. A bare assertNotIn passes when the event was never created or the
+        # section short-circuited — the failure mode this project's own rule names: a negative
+        # assertion must prove it read something.
+        self.assertIn("First shake", txt, "the harvest event never rendered — the assertNotIn below is vacuous")
         self.assertNotIn("Partial-Area Operations", txt)
 
     # ---- CSV: the sibling surface the same certifier reads ----

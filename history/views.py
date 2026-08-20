@@ -54,6 +54,7 @@ from .models import (
     HistoryScan,
     PestManagementEvent,
     ProductionEvent,
+    ProductionPlanItem,
     SalesRecord,
     SoilManagementEvent,
     WeatherEvent,
@@ -69,6 +70,8 @@ from .serializers import (
     OptimizedHistoryListSerializer,
     PestManagementEventSerializer,
     ProductionEventSerializer,
+    ProductionPlanItemSerializer,
+    ProductionPlanItemStatusSerializer,
     PublicHistorySerializer,
     SoilManagementEventSerializer,
     UpdateBusinessEventSerializer,
@@ -81,6 +84,7 @@ from .serializers import (
     UpdateWeatherEventSerializer,
     WeatherEventSerializer,
 )
+from .services import season_plan_service
 
 logger = logging.getLogger(__name__)
 
@@ -105,34 +109,6 @@ class StandardResultsSetPagination(PageNumberPagination):
     page_size = 20
     page_size_query_param = "page_size"
     max_page_size = 100
-
-
-def _background_create_events(viewset_instance, history_id, template_events, template_id):
-    """
-    Create template events and QR code in a background thread.
-
-    Called via transaction.on_commit() after the History is committed to the DB.
-    Each thread gets its own DB connection which is cleaned up in finally.
-
-    TODO(celery): When Celery is available, convert to @shared_task and call
-    via .delay(). Remove connections.close_all() and transaction.on_commit wrapper.
-    """
-    try:
-        history = History.objects.get(id=history_id)
-
-        # Create events FIRST so they appear in polling immediately (~1s)
-        viewset_instance._create_template_events(history, template_events, template_id=template_id)
-        History.objects.filter(id=history_id).update(events_status="ready")
-        logger.info("Background event creation completed for history %s", history_id)
-
-        # Generate QR code AFTER events (takes ~40s for Pillow + S3 upload)
-        history.generate_qr_code(is_new=True)
-        logger.info("Background QR code generated for history %s", history_id)
-    except Exception as e:
-        logger.exception("Background event creation failed for history %s: %s", history_id, e)
-        History.objects.filter(id=history_id).update(events_status="failed")
-    finally:
-        connections.close_all()
 
 
 def _background_generate_qr(history_id):
@@ -620,11 +596,19 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         permission_classes=[IsAuthenticated, HasProductionCreationPermission],
     )
     def start_production(self, request):
-        """
-        Enhanced production creation endpoint with crop selection and blockchain integration.
+        """Create a production, optionally with a season plan.
 
-        Returns the production immediately (<1s). Template events are created in a
-        background thread — the frontend polls for progressive event loading.
+        `plan_item_ids` are `carbon.EventTemplate` ids the operator ticked on the crop
+        template. They become `ProductionPlanItem` rows — a to-do list of practices the
+        crop usually needs.
+
+        ⛔ This endpoint creates ZERO event records. It used to: a ticked suggestion was
+        written as a real, dated `CommonEvent` attributed to the grower, with the day
+        invented by the client from the template's prose window. See
+        `history.models.ProductionPlanItem` for the full history and the CFR reasoning.
+        Guarded by `history/tests/test_season_plan_not_records.py`.
+
+        Returns the production immediately (<1s); the QR code is generated in background.
         """
         import time as _time
 
@@ -734,9 +718,11 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 if data.get(field):
                     extra_data[field] = data[field]
 
-            # Determine if we'll create template events in background
-            template_events = data.get("template_events")
-            has_templates = bool(template_events)
+            # The season plan: which catalogue suggestions the operator ticked, by
+            # EventTemplate id. ⛔ These become ProductionPlanItem rows, NEVER events —
+            # see history.models.ProductionPlanItem for why. Records are authored by the
+            # operator when they log the activity and supply the real date.
+            plan_item_ids = data.get("plan_item_ids") or []
             _t3 = _time.monotonic()
             logger.info("start_production TIMING: pre-create done in %.3fs (total %.3fs)", _t3 - _t2, _t3 - _t0)
 
@@ -756,7 +742,6 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     type=data.get("type", "OR"),
                     description=data.get("description", ""),
                     operator=request.user if request.user.is_authenticated else None,
-                    events_status="pending" if has_templates else "no_events",
                 )
                 history.save(skip_qr=True)
 
@@ -764,27 +749,21 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 parcel.current_history = history
                 parcel.save(update_fields=["current_history"])
 
-                # Spawn background thread for QR generation + template event creation
-                # QR code is deferred here because it takes ~30-40s (image gen + S3 upload)
-                # TODO(celery): Replace with create_template_events_task.delay(history.id, ...)
-                if has_templates:
-                    template_id = data.get("template_id")
-                    transaction.on_commit(
-                        lambda: threading.Thread(
-                            target=_background_create_events,
-                            args=(self, history.id, template_events, template_id),
-                            daemon=True,
-                        ).start()
-                    )
-                else:
-                    # No template events, but still need QR code generated in background
-                    transaction.on_commit(
-                        lambda: threading.Thread(
-                            target=_background_generate_qr,
-                            args=(history.id,),
-                            daemon=True,
-                        ).start()
-                    )
+                # Build the season plan inline. It used to be a background thread because
+                # it wrote up to ~25 event rows across 8 concrete models with per-row
+                # savepoints; a plan is one bulk_create of one table, so the thread (and
+                # the `events_status` polling state it existed to drive, which no client
+                # ever read) is gone.
+                plan_items = season_plan_service.build_plan_items(history, data.get("template_id"), plan_item_ids)
+
+                # QR code stays deferred: image generation + S3 upload takes ~30-40s.
+                transaction.on_commit(
+                    lambda: threading.Thread(
+                        target=_background_generate_qr,
+                        args=(history.id,),
+                        daemon=True,
+                    ).start()
+                )
 
             _t4 = _time.monotonic()
             logger.info(
@@ -804,7 +783,9 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 "start_date": history.start_date.isoformat() if history.start_date else None,
                 "finish_date": history.finish_date.isoformat() if history.finish_date else None,
                 "product": product.name if product else None,
-                "events_status": history.events_status,
+                # How many suggestions the operator put on their season plan. Zero events
+                # were created — the plan is a to-do list, not a record set.
+                "plan_items_created": len(plan_items),
                 "crop_type": (
                     {
                         "id": crop_type.id,
@@ -871,539 +852,6 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 return "nuts"
 
         return "other"
-
-    def _create_template_events(self, history, template_events, template_id=None):
-        """
-        Helper method to create events from template data.
-
-        IMPORTANT: Template data contains 'backend_event_fields' with all the
-        actual field values that should be used for event creation.
-        This method properly maps template data to event model fields.
-
-        If backend_event_fields is not in the payload, we look it up from the
-        database using template_id and event name for backwards compatibility.
-        """
-        from datetime import datetime
-
-        from django.utils import timezone
-
-        from carbon.models import EventTemplate
-
-        # Pre-fetch all EventTemplates for this template to avoid N+1 queries
-        template_events_db = {}
-        if template_id:
-            for et in EventTemplate.objects.filter(production_template_id=template_id):
-                template_events_db[et.name.lower()] = et.backend_event_fields or {}
-
-        # Get current event count once
-        current_event_count = 0
-
-        logger.debug("Processing %d template events", len(template_events))
-
-        for event_data in template_events:
-            event_name = event_data.get("name", "Unknown")
-
-            if not event_data.get("enabled", True):
-                logger.debug("Skipping disabled event: %s", event_name)
-                continue
-
-            logger.debug("Processing event: %s", event_name)
-
-            try:
-                # Use a savepoint so that a failure in one event doesn't
-                # poison the outer @transaction.atomic block.
-                with transaction.atomic():
-                    self._create_single_template_event(
-                        history,
-                        event_data,
-                        current_event_count,
-                    )
-
-            except Exception as e:
-                logger.exception("Error creating template event %s", event_data.get("name", "Unknown"))
-                # Continue with other events even if one fails
-                continue
-
-    # Map backend_event_type integers to category strings for fallback routing
-    _BACKEND_TYPE_TO_CATEGORY = {
-        0: "weather",
-        1: "production",
-        2: "chemical",
-        3: "general",
-        4: "equipment",
-        5: "soil",
-        6: "pest",
-        7: "business",
-    }
-
-    #: Never accepted from a template payload, whatever the model says. Identity, ownership
-    #: and audit columns are decided by the server, not by template data.
-    _TEMPLATE_FIELD_DENYLIST = frozenset(
-        {
-            "id",
-            "history",
-            "created_by",
-            "index",
-            "date",
-            "name",
-            "description",
-            "performed_by",
-            "image",
-            "album",
-            "created_at",
-            "updated_at",
-            "commonevent_ptr",
-        }
-    )
-
-    @staticmethod
-    def _drop_nulls_over_model_defaults(model, kwargs):
-        """Remove None values aimed at NOT NULL columns so the model's own default applies.
-
-        WHY (2026-08-12): the branches below pass `backend_fields.get("x")` for every column
-        they name. When a template does not carry "x" that evaluates to None, and an explicit
-        None OVERRIDES a model default — so `transportation_unit` (null=False, default="miles")
-        went in as NULL and the insert died on the constraint.
-
-        `_create_template_events` catches per-event exceptions and continues, so the failure
-        was INVISIBLE: the grower ticked the event, got no error, and the event simply was not
-        there. Measured on the seeded catalogue: **139 of 190 production-category templates
-        omit `transportation_unit`**, including "Season Irrigation Program", "Annual Structural
-        Pruning" and "Planting / Replanting" — verified failing end to end before this fix.
-
-        Mutates and returns ``kwargs``.
-        """
-        from django.core.exceptions import FieldDoesNotExist
-
-        for name, value in list(kwargs.items()):
-            if value is not None:
-                continue
-            try:
-                field = model._meta.get_field(name)
-            except FieldDoesNotExist:
-                continue
-            # Dropping the key hands the column to Django's own default (an explicit default,
-            # or "" for a blank-able string). Nullable columns keep the explicit None, which
-            # is a real value there.
-            if not field.null:
-                del kwargs[name]
-        return kwargs
-
-    @classmethod
-    def _template_extra_fields(cls, model, backend_fields, already_set):
-        """Template fields that map to real model columns but have no explicit kwarg above.
-
-        WHY (2026-08-12): every branch below is a hand-maintained kwarg list, so a field added
-        through the 7-step standard in `src/config/events/ADDING_FIELDS.md` reaches the model,
-        both serializers, the registry, the form and the packet — and is then silently dropped
-        by the template flow, which is the path most growers actually use. Measured at the time
-        of writing: **167 concrete fields across production / soil / chemical / pest existed on
-        the models and could not be set from a template.** The standard does not mention this
-        file, which is why nobody noticed.
-
-        Deliberately conservative rather than a blanket `**backend_fields`:
-
-          * only CONCRETE, EDITABLE fields of that exact model — an unknown key is ignored,
-            not passed to `create()` where it would raise
-          * never a RELATION, so a template cannot repoint `history` or `created_by`
-          * never a name already set explicitly above, so existing defaults keep winning
-          * never anything in the denylist, so identity and audit columns stay server-owned
-
-        The result is additive: every call site behaves exactly as before for the fields it
-        already named, and stops losing the ones it did not.
-        """
-        if not isinstance(backend_fields, dict):
-            return {}
-        concrete = {
-            f.name: f
-            for f in model._meta.get_fields()
-            if getattr(f, "concrete", False) and not f.auto_created and getattr(f, "editable", False)
-        }
-        extras = {}
-        for key, value in backend_fields.items():
-            if key in already_set or key in cls._TEMPLATE_FIELD_DENYLIST:
-                continue
-            field = concrete.get(key)
-            if field is None or field.is_relation:
-                continue
-            extras[key] = value
-        return extras
-
-    def _create_single_template_event(self, history, event_data, index):
-        """Create a single event from template data. Called inside a savepoint."""
-        from datetime import datetime
-
-        from django.utils import timezone
-
-        # Parse the scheduled date
-        scheduled_date_str = event_data.get("scheduled_date")
-        if scheduled_date_str:
-            scheduled_date = datetime.fromisoformat(scheduled_date_str.replace("Z", "+00:00"))
-            if scheduled_date.tzinfo is None:
-                scheduled_date = timezone.make_aware(scheduled_date)
-        else:
-            scheduled_date = timezone.now()
-
-        # Extract backend_event_fields
-        backend_fields = event_data.get("backend_event_fields", {})
-
-        # Determine event type: prefer explicit backend_event_type over name-parsing
-        backend_event_type = event_data.get("backend_event_type")
-        if backend_event_type is not None:
-            category = self._BACKEND_TYPE_TO_CATEGORY.get(backend_event_type)
-            if category is None:
-                logger.warning(
-                    "Unknown backend_event_type=%s for '%s', falling back to name detection",
-                    backend_event_type,
-                    event_data.get("name"),
-                )
-                event_type_info = self._determine_template_event_type(event_data.get("name", "").lower())
-                category = event_type_info["category"]
-        else:
-            # Fallback for legacy templates without backend_event_type
-            event_type_info = self._determine_template_event_type(event_data.get("name", "").lower())
-            category = event_type_info["category"]
-            logger.debug(
-                "No backend_event_type for '%s', name-detected category='%s'",
-                event_data.get("name"),
-                category,
-            )
-
-        # Route deprecated Equipment (type 4) to ProductionEvent EM
-        if backend_event_type == 4 or category == "equipment":
-            logger.info(
-                "Routing equipment event '%s' to ProductionEvent EM",
-                event_data.get("name"),
-            )
-            category = "production"
-            backend_fields.setdefault("type", "EM")
-
-        logger.debug(
-            "Event '%s' → category='%s', backend_event_type=%s",
-            event_data.get("name"),
-            category,
-            backend_event_type,
-        )
-
-        # Use template description field; fall back to name if empty
-        description = event_data.get("description", "") or event_data.get("name", "Event")
-
-        # Get operator name for performed_by
-        operator_name = ""
-        if history.operator:
-            operator_name = history.operator.get_full_name() or ""
-
-        event_name = event_data.get("name", "")
-
-        # Create appropriate event based on category
-        if category == "chemical":
-            # Build extra_data: start with template extra_data, add volume/area units
-            extra_data = backend_fields.get("extra_data") or {}
-            extra_data.setdefault("volume_unit", backend_fields.get("volume_unit", "L"))
-            extra_data.setdefault("area_unit", backend_fields.get("area_unit", "ha"))
-            _kwargs = dict(
-                history=history,
-                name=event_name,
-                description=description,
-                performed_by=operator_name,
-                date=scheduled_date,
-                type=backend_fields.get("type", "FE"),
-                commercial_name=backend_fields.get("commercial_name", ""),
-                volume=str(backend_fields.get("volume", "")) if backend_fields.get("volume") else "",
-                concentration=backend_fields.get("concentration"),
-                area=str(backend_fields.get("area", "")) if backend_fields.get("area") else "",
-                way_of_application=backend_fields.get("way_of_application"),
-                time_period=backend_fields.get("time_period"),
-                observation=backend_fields.get("observation"),
-                extra_data=extra_data,
-                chemical_subtype=backend_fields.get("chemical_subtype"),
-                nitrogen_percentage=backend_fields.get("nitrogen_percentage"),
-                phosphorus_percentage=backend_fields.get("phosphorus_percentage"),
-                potassium_percentage=backend_fields.get("potassium_percentage"),
-                application_method_structured=backend_fields.get("application_method_structured"),
-                application_fuel_type=backend_fields.get("application_fuel_type", ""),
-                application_fuel_consumed=backend_fields.get("application_fuel_consumed"),
-                application_fuel_unit=backend_fields.get("application_fuel_unit", "L"),
-                weather_conditions=backend_fields.get("weather_conditions"),
-                application_timing=backend_fields.get("application_timing"),
-                target_pest_disease=backend_fields.get("target_pest_disease"),
-                organic_approved=backend_fields.get("organic_approved"),
-                buffer_zone_meters=backend_fields.get("buffer_zone"),
-                applicator_name=backend_fields.get("applicator_name"),
-                restricted_use_pesticide=backend_fields.get("restricted_use_pesticide"),
-                rei_hours=backend_fields.get("rei_hours"),
-                phi_days=backend_fields.get("phi_days"),
-                index=index,
-                created_by=history.operator,
-            )
-            _kwargs.update(self._template_extra_fields(ChemicalEvent, backend_fields, _kwargs))
-            self._drop_nulls_over_model_defaults(ChemicalEvent, _kwargs)
-            ChemicalEvent.objects.create(**_kwargs)
-        elif category == "weather":
-            _kwargs = dict(
-                history=history,
-                description=description,
-                performed_by=operator_name,
-                date=scheduled_date,
-                type=backend_fields.get("type", "HT"),
-                observation=backend_fields.get("observation", ""),
-                extra_data=backend_fields.get("extra_data"),
-                index=index,
-                created_by=history.operator,
-            )
-            _kwargs.update(self._template_extra_fields(WeatherEvent, backend_fields, _kwargs))
-            self._drop_nulls_over_model_defaults(WeatherEvent, _kwargs)
-            WeatherEvent.objects.create(**_kwargs)
-        elif category == "soil":
-            _kwargs = dict(
-                history=history,
-                name=event_name,
-                description=description,
-                performed_by=operator_name,
-                date=scheduled_date,
-                type=backend_fields.get("type", "ST"),
-                area_covered=backend_fields.get("area_covered"),
-                area_unit=backend_fields.get("area_unit", "ha"),
-                working_depth=backend_fields.get("working_depth"),
-                depth_unit=backend_fields.get("depth_unit", "cm"),
-                soil_texture=backend_fields.get("soil_texture"),
-                soil_moisture=backend_fields.get("soil_moisture"),
-                soil_ph=backend_fields.get("soil_ph", 7.0),
-                organic_matter_percentage=backend_fields.get("organic_matter_percentage")
-                or backend_fields.get("organic_matter", 3.5),
-                fuel_consumed=backend_fields.get("fuel_consumed"),
-                fuel_unit=backend_fields.get("fuel_unit", "L"),
-                fuel_type=backend_fields.get("fuel_type", "diesel"),
-                amendment_type=backend_fields.get("amendment_type", "organic_mulch"),
-                amendment_amount=backend_fields.get("amendment_amount", ""),
-                equipment_hours=backend_fields.get("equipment_hours"),
-                production_efficiency=backend_fields.get("production_efficiency", "normal"),
-                equipment_used=backend_fields.get("equipment_used"),
-                test_results=backend_fields.get("test_results"),
-                extra_data=backend_fields.get("extra_data"),
-                index=index,
-                created_by=history.operator,
-            )
-            _kwargs.update(self._template_extra_fields(SoilManagementEvent, backend_fields, _kwargs))
-            self._drop_nulls_over_model_defaults(SoilManagementEvent, _kwargs)
-            SoilManagementEvent.objects.create(**_kwargs)
-        elif category == "pest":
-            _kwargs = dict(
-                history=history,
-                description=description,
-                performed_by=operator_name,
-                date=scheduled_date,
-                type=backend_fields.get("type", "SC"),
-                pest_species=backend_fields.get("pest_species") or backend_fields.get("pest_type", "general pest"),
-                pest_pressure_level=backend_fields.get("pest_pressure_level")
-                or backend_fields.get("severity_level", "low"),
-                beneficial_species=backend_fields.get("beneficial_species") or "",
-                release_quantity=backend_fields.get("release_quantity") or "",
-                ipm_strategy=backend_fields.get("ipm_strategy", "monitoring"),
-                beneficial_insects_used=backend_fields.get("beneficial_insects_used"),
-                chemical_free_period_days=backend_fields.get("chemical_free_period_days"),
-                trap_count=backend_fields.get("trap_count"),
-                damage_percentage=backend_fields.get("damage_percentage"),
-                action_threshold_met=backend_fields.get("action_threshold_met", False),
-                area_covered=backend_fields.get("area_covered"),
-                area_unit=backend_fields.get("area_unit", "ha"),
-                fuel_consumed=backend_fields.get("fuel_consumed"),
-                fuel_unit=backend_fields.get("fuel_unit"),
-                fuel_type=backend_fields.get("fuel_type"),
-                equipment_hours=backend_fields.get("equipment_hours"),
-                production_efficiency=backend_fields.get("production_efficiency"),
-                extra_data=backend_fields.get("extra_data"),
-                index=index,
-                created_by=history.operator,
-            )
-            _kwargs.update(self._template_extra_fields(PestManagementEvent, backend_fields, _kwargs))
-            self._drop_nulls_over_model_defaults(PestManagementEvent, _kwargs)
-            PestManagementEvent.objects.create(**_kwargs)
-        elif category == "business":
-            _kwargs = dict(
-                history=history,
-                name=event_name,
-                description=description,
-                performed_by=operator_name,
-                date=scheduled_date,
-                type=backend_fields.get("type", "CE"),
-                business_type=backend_fields.get("business_type"),
-                certification_type=backend_fields.get("certification_type", "organic"),
-                verification_status=backend_fields.get("verification_status"),
-                verified_certifier_name=backend_fields.get("verified_certifier_name"),
-                certificate_number=backend_fields.get("certificate_number"),
-                sustainability_practice=backend_fields.get("sustainability_practice"),
-                carbon_credits_earned=backend_fields.get("carbon_credits_earned"),
-                carbon_credits_unit=backend_fields.get("carbon_credits_unit"),
-                observation=backend_fields.get("observation"),
-                extra_data=backend_fields.get("extra_data"),
-                index=index,
-                created_by=history.operator,
-            )
-            _kwargs.update(self._template_extra_fields(BusinessEvent, backend_fields, _kwargs))
-            self._drop_nulls_over_model_defaults(BusinessEvent, _kwargs)
-            BusinessEvent.objects.create(**_kwargs)
-        elif category == "production":
-            _kwargs = dict(
-                history=history,
-                name=event_name,
-                description=description,
-                performed_by=operator_name,
-                date=scheduled_date,
-                type=backend_fields.get("type", "IR"),
-                observation=backend_fields.get("observation"),
-                area_covered=backend_fields.get("area_covered"),
-                area_unit=backend_fields.get("area_unit", "ha"),
-                seeds_source=backend_fields.get("seeds_source"),
-                yield_quantity=backend_fields.get("yield_quantity"),
-                yield_unit=backend_fields.get("yield_unit", "kg"),
-                fuel_consumed=backend_fields.get("fuel_consumed"),
-                fuel_unit=backend_fields.get("fuel_unit", "L"),
-                fuel_type=backend_fields.get("fuel_type", "diesel"),
-                equipment_hours=backend_fields.get("equipment_hours"),
-                production_efficiency=backend_fields.get("production_efficiency", "normal"),
-                water_source=backend_fields.get("water_source"),
-                irrigation_method=backend_fields.get("irrigation_method"),
-                irrigation_depth=backend_fields.get("irrigation_depth"),
-                transportation_distance=backend_fields.get("transportation_distance"),
-                transportation_unit=backend_fields.get("transportation_unit"),
-                harvest_quality_grade=backend_fields.get("harvest_quality_grade"),
-                equipment_type=backend_fields.get("equipment_type"),
-                equipment_operation_type=backend_fields.get("equipment_operation_type"),
-                extra_data=backend_fields.get("extra_data"),
-                index=index,
-                created_by=history.operator,
-            )
-            _kwargs.update(self._template_extra_fields(ProductionEvent, backend_fields, _kwargs))
-            self._drop_nulls_over_model_defaults(ProductionEvent, _kwargs)
-            ProductionEvent.objects.create(**_kwargs)
-        elif category == "general":
-            _kwargs = dict(
-                history=history,
-                name=event_name or "General Event",
-                description=description,
-                performed_by=operator_name,
-                date=scheduled_date,
-                observation=backend_fields.get("observation"),
-                activity_type=backend_fields.get("activity_type"),
-                activity_name=backend_fields.get("activity_name"),
-                duration=backend_fields.get("duration"),
-                people_involved=backend_fields.get("people_involved"),
-                extra_data=backend_fields.get("extra_data"),
-                index=index,
-                created_by=history.operator,
-            )
-            _kwargs.update(self._template_extra_fields(GeneralEvent, backend_fields, _kwargs))
-            self._drop_nulls_over_model_defaults(GeneralEvent, _kwargs)
-            GeneralEvent.objects.create(**_kwargs)
-        else:
-            # Final fallback — should not normally be reached
-            logger.warning(
-                "Unrecognized category '%s' for event '%s', creating GeneralEvent",
-                category,
-                event_name,
-            )
-            _kwargs = dict(
-                history=history,
-                name=event_name or "General Event",
-                description=description,
-                performed_by=operator_name,
-                date=scheduled_date,
-                index=index,
-                created_by=history.operator,
-            )
-            _kwargs.update(self._template_extra_fields(GeneralEvent, backend_fields, _kwargs))
-            self._drop_nulls_over_model_defaults(GeneralEvent, _kwargs)
-            GeneralEvent.objects.create(**_kwargs)
-
-    def _determine_template_event_type(self, event_name):
-        """
-        Legacy name-based event type detection. Only used as fallback when
-        backend_event_type is not set on the template data.
-        Returns: {"category": str, "sub_type": str}
-        """
-        name = event_name.lower() if event_name else ""
-
-        # Chemical events (fertilizers, pesticides, herbicides, fungicides)
-        if any(term in name for term in ["fertiliz", "nutrient", "nitrogen", "phosphor", "potassium"]):
-            return {"category": "chemical", "sub_type": ChemicalEvent.FERTILIZER}
-        if any(term in name for term in ["spray", "pesticide", "insecticide", "pest control"]):
-            return {"category": "chemical", "sub_type": ChemicalEvent.PESTICIDE}
-        if any(term in name for term in ["herbicide", "weed", "glyphosate"]):
-            return {"category": "chemical", "sub_type": ChemicalEvent.HERBICIDE}
-        if any(term in name for term in ["fungicide", "fungus", "disease control"]):
-            return {"category": "chemical", "sub_type": ChemicalEvent.FUNGICIDE}
-
-        # Equipment-like events → route to production EM (Equipment type 4 is deprecated)
-        if any(term in name for term in ["maintenance", "repair", "service", "calibration"]):
-            return {"category": "production", "sub_type": "EM"}
-        if any(term in name for term in ["equipment", "machinery", "tractor", "harvester"]):
-            return {"category": "production", "sub_type": "EM"}
-        if any(term in name for term in ["fuel", "diesel", "gasoline"]):
-            return {"category": "production", "sub_type": "EM"}
-        if "field preparation" in name or "planting/seeding" in name:
-            return {"category": "production", "sub_type": ProductionEvent.PLANTING}
-        if any(term in name for term in ["preparation", "tillage", "cultivation", "plowing"]) and "soil" not in name:
-            return {"category": "production", "sub_type": ProductionEvent.CULTIVATION}
-
-        # Pruning and harvest → production events
-        if any(term in name for term in ["pruning", "prune", "trimming", "cutting back"]):
-            return {"category": "production", "sub_type": ProductionEvent.PRUNING}
-        if any(term in name for term in ["harvest", "picking", "collection"]):
-            return {"category": "production", "sub_type": ProductionEvent.HARVESTING}
-
-        # Weather events (frost, drought, storms, temperature monitoring)
-        if any(term in name for term in ["weather", "climate", "temperature", "monitoring weather"]):
-            return {"category": "weather", "sub_type": WeatherEvent.HIGH_TEMPERATURE}
-        if any(term in name for term in ["frost", "freeze", "cold protection"]):
-            return {"category": "weather", "sub_type": WeatherEvent.FROST}
-        if any(term in name for term in ["drought", "water stress", "irrigation need"]):
-            return {"category": "weather", "sub_type": WeatherEvent.DROUGHT}
-        if any(term in name for term in ["storm", "wind", "hail", "rain"]):
-            return {"category": "weather", "sub_type": WeatherEvent.TROPICAL_STORM}
-
-        # Soil events (testing, amendments, management, mulching)
-        if "soil" in name and any(term in name for term in ["test", "analysis", "ph"]):
-            return {"category": "soil", "sub_type": SoilManagementEvent.SOIL_TEST}
-        if any(term in name for term in ["soil amendment", "lime", "compost", "organic matter"]):
-            return {"category": "soil", "sub_type": SoilManagementEvent.ORGANIC_MATTER}
-        if any(term in name for term in ["soil preparation", "soil management"]):
-            return {"category": "soil", "sub_type": SoilManagementEvent.TILLAGE}
-        if "soil" in name and "tillage" in name:
-            return {"category": "soil", "sub_type": SoilManagementEvent.TILLAGE}
-        if any(term in name for term in ["ph management", "ph adjustment", "ph control"]):
-            return {"category": "soil", "sub_type": SoilManagementEvent.PH_ADJUSTMENT}
-        if any(term in name for term in ["mulch", "mulching", "cover crop"]):
-            return {"category": "soil", "sub_type": SoilManagementEvent.ORGANIC_MATTER}
-
-        # Pest management events (scouting, monitoring, biological control)
-        if any(term in name for term in ["scout", "monitoring", "inspection", "pest monitoring"]):
-            return {"category": "pest", "sub_type": PestManagementEvent.SCOUTING}
-        if any(term in name for term in ["biological control", "beneficial", "predator"]):
-            return {"category": "pest", "sub_type": PestManagementEvent.BENEFICIAL_RELEASE}
-        if any(term in name for term in ["trap", "pheromone", "ipm"]):
-            return {"category": "pest", "sub_type": PestManagementEvent.TRAP_MONITORING}
-
-        # Business events (certification, audit, training)
-        if any(term in name for term in ["certif", "organic", "audit", "compliance"]):
-            return {"category": "business", "sub_type": BusinessEvent.CERTIFICATION}
-        if any(term in name for term in ["training", "education", "workshop"]):
-            return {"category": "business", "sub_type": BusinessEvent.CERTIFICATION}
-        if any(term in name for term in ["record", "documentation", "reporting"]):
-            return {"category": "business", "sub_type": BusinessEvent.COMPLIANCE}
-
-        # Production events (biological/manual operations)
-        if any(term in name for term in ["irrigation", "watering", "water application"]):
-            return {"category": "production", "sub_type": ProductionEvent.IRRIGATION}
-        if "planting" in name and not any(term in name for term in ["equipment", "seeding"]):
-            return {"category": "production", "sub_type": ProductionEvent.PLANTING}
-        if any(term in name for term in ["bloom", "flower", "pollination"]):
-            return {"category": "production", "sub_type": ProductionEvent.PLANTING}
-        if any(term in name for term in ["thinning", "selective removal", "crop management"]):
-            return {"category": "production", "sub_type": ProductionEvent.THINNING}
-
-        # Default fallback to production
-        return {"category": "production", "sub_type": ProductionEvent.IRRIGATION}
 
     # gzip: the QR page is the most mobile-critical surface in the product (<500 ms budget,
     # opened on a phone in a shop or a field on cell data) and this payload grows with the
@@ -1855,6 +1303,126 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 {"error": f"Error generating download URL: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+    def _owned_history_or_403(self, request, pk):
+        """Resolve a production by UUID or pk and confirm the caller runs the operation.
+
+        `get_queryset` falls through to `History.objects.all()` for non-list actions, so
+        ownership is NOT implied by resolution here — it has to be asserted. Mirrors
+        `post_harvest_facility_link`.
+        """
+        import uuid as uuid_module
+
+        from users.models import WorksIn
+
+        try:
+            public_uuid = uuid_module.UUID(str(pk))
+            history = get_object_or_404(
+                History.objects.select_related("parcel__establishment__company"),
+                public_id=public_uuid,
+            )
+        except (ValueError, AttributeError):
+            history = self.get_object()
+
+        establishment = history.parcel.establishment if history.parcel else None
+        if not (
+            establishment
+            and WorksIn.objects.filter(user=request.user, company=establishment.company, role__in=["CA", "FM"]).exists()
+        ):
+            return None, Response({"error": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
+        return history, None
+
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="season_plan",
+        permission_classes=[IsAuthenticated],
+    )
+    def season_plan(self, request, pk=None):
+        """This production's planned practices and how many have been logged.
+
+        PRODUCER-ONLY. A season plan is a list of things that have NOT happened yet; it is
+        not evidence and must never reach a consumer or a certifier surface as if it were.
+        `PublicHistorySerializer` does not carry it, and this endpoint requires the caller
+        to run the operation.
+
+        `completeness` is the number this replaces the old event COUNT with: "you planned
+        12 practices, you have logged 9" is a recordkeeping fact about the season. A raw
+        event tally is not, and rewarding volume is what let a template inflate it.
+        """
+        history, denied = self._owned_history_or_403(request, pk)
+        if denied is not None:
+            return denied
+
+        items = ProductionPlanItem.objects.filter(history=history)
+        return Response(
+            {
+                # The NUMERIC pk, even when the caller looked the production up by UUID.
+                # "Log this" has to post `history` explicitly: without it the event endpoint
+                # falls back to `parcel.current_history`, so logging against a plan item on
+                # any production that is not the parcel's current one would write the record
+                # to a DIFFERENT season — and then fail to close the plan item, because the
+                # item and the record would no longer share a history. Silent, and exactly
+                # the wrong kind of silent for an audit trail.
+                "history_id": history.id,
+                "items": ProductionPlanItemSerializer(items, many=True).data,
+                "completeness": season_plan_service.plan_completeness(history),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @action(
+        detail=True,
+        methods=["patch"],
+        url_path=r"season_plan/(?P<item_id>[0-9]+)",
+        permission_classes=[IsAuthenticated],
+    )
+    def season_plan_item(self, request, pk=None, item_id=None):
+        """Set a plan item aside as not applicable this season, or put it back.
+
+        ⛔ `logged` is deliberately NOT accepted here. An item becomes logged only in
+        `EventViewSet.perform_create`, in the same request that writes the record it points
+        at — otherwise a checklist could report a practice as done with nothing behind it,
+        which is the assertion-without-a-record failure this model exists to prevent.
+        """
+        history, denied = self._owned_history_or_403(request, pk)
+        if denied is not None:
+            return denied
+
+        # A finished season is a closed record, and its plan is the account of what that
+        # season planned. The frontend already hides these controls; a gate only the client
+        # honours is not a gate.
+        if history.finish_date is not None or history.published:
+            return Response(
+                {
+                    "error": "Production is finished",
+                    "detail": (
+                        "This season is closed, so its plan is closed with it. Log this "
+                        "practice against the parcel's current or next production instead."
+                    ),
+                },
+                status=status.HTTP_423_LOCKED,
+            )
+
+        item = get_object_or_404(ProductionPlanItem, id=item_id, history=history)
+        if item.status == ProductionPlanItem.LOGGED:
+            return Response(
+                {
+                    "error": (
+                        "This practice is already logged against a record. Amend or delete "
+                        "the record itself — the plan follows the records, not the reverse."
+                    )
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        serializer = ProductionPlanItemStatusSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        item.status = serializer.validated_data["status"]
+        item.skipped_reason = serializer.validated_data.get("skipped_reason", "")
+        item.save(update_fields=["status", "skipped_reason", "updated_at"])
+
+        return Response(ProductionPlanItemSerializer(item).data, status=status.HTTP_200_OK)
 
     @action(
         detail=True,
@@ -4047,6 +3615,50 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # for the completeness-gaps echo on the 201 body.
         self._completeness_event = created_event
 
+        # Close the loop on the season plan. THIS is the only place an item becomes
+        # "logged": a plan item may not claim to be done except by pointing at a record
+        # that was actually written, in the same request that wrote it. (Same reason the
+        # status serializer refuses to accept `logged` from a client.)
+        self._fulfil_plan_item(created_event, int(event_type))
+
+    def _fulfil_plan_item(self, event, event_type):
+        """Mark the season-plan item this record answers, when the caller named one.
+
+        Silent no-op when no `plan_item_id` is sent, when it belongs to another
+        production, or when it is already closed — a plan is an aid, and failing the
+        grower's save because a checklist link went stale would be the wrong trade.
+        """
+        plan_item_id = self.request.data.get("plan_item_id")
+        if not plan_item_id:
+            return
+        try:
+            plan_item_id = int(plan_item_id)
+        except (TypeError, ValueError):
+            logger.warning("Ignoring non-numeric plan_item_id %r", plan_item_id)
+            return
+
+        # PENDING or SKIPPED: a record is stronger evidence than an earlier "not this season"
+        # decision, so logging one closes the item either way and clears the stale reason.
+        # LOGGED is excluded — a second record must not silently repoint an item away from the
+        # record it already names.
+        updated = ProductionPlanItem.objects.filter(
+            id=plan_item_id,
+            history=event.history,
+            status__in=[ProductionPlanItem.PENDING, ProductionPlanItem.SKIPPED],
+        ).update(
+            status=ProductionPlanItem.LOGGED,
+            fulfilled_by_event_type=event_type,
+            fulfilled_by_id=event.id,
+            fulfilled_at=timezone.now(),
+            skipped_reason="",
+        )
+        if not updated:
+            logger.info(
+                "plan_item_id=%s did not match an open plan item on history %s",
+                plan_item_id,
+                event.history_id,
+            )
+
     def update(self, request, *args, **kwargs):
         """
         Override update to prevent changing event types after creation
@@ -4401,7 +4013,37 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         except Exception as e:
             logger.warning("Event audit log failed: %s", e)
 
+        # Captured BEFORE the delete: after it, `instance.id` is still readable but the row
+        # is gone, and we want the reopen to happen only if the delete actually succeeded.
+        deleted_event_type = next(
+            (type_id for type_id, model in EVENT_TYPE_TO_MODEL.items() if type(instance) is model),
+            None,
+        )
+        deleted_event_id = instance.id
+
         response = super().destroy(request, *args, **kwargs)
+
+        # A plan item that says "logged" while the record it names is gone is precisely the
+        # assertion-with-nothing-behind-it that ProductionPlanItem exists to prevent, so the
+        # practice goes back on the checklist as still to do.
+        if deleted_event_type is not None:
+            reopened = ProductionPlanItem.objects.filter(
+                history=history,
+                status=ProductionPlanItem.LOGGED,
+                fulfilled_by_event_type=deleted_event_type,
+                fulfilled_by_id=deleted_event_id,
+            ).update(
+                status=ProductionPlanItem.PENDING,
+                fulfilled_by_event_type=None,
+                fulfilled_by_id=None,
+                fulfilled_at=None,
+            )
+            if reopened:
+                logger.info(
+                    "Reopened %d season-plan item(s) on history %s after its record was deleted",
+                    reopened,
+                    history.id,
+                )
 
         # Update transparency score after deleting event
         try:

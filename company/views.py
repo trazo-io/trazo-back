@@ -30,6 +30,14 @@ from users.serializers import WorksInSerializer
 logger = logging.getLogger(__name__)
 
 from .constants import ALLOWED_PERIODS
+
+# The compliance-snapshot statuses a grower can actually act on.
+#
+# `AuditExportService.compliance_snapshot_rows()` emits PASS, REVIEW, FAIL, NA and
+# "NOT ASSESSED". The certifier-readiness card models two states (FAIL = missing,
+# everything else = needs attention), so anything forwarded to it that is not genuinely
+# actionable is displayed as an action item and counted in the headline.
+ACTIONABLE_READINESS_STATUSES = frozenset({"REVIEW", "FAIL"})
 from .models import Company, Establishment
 from .serializers import (
     CreateCompanySerializer,
@@ -809,7 +817,21 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 "finish_date": production.finish_date,
                 "is_finished": production.finish_date is not None,
             },
-            # Only rows needing attention. A PASS row is not an action item.
+            # Only rows needing attention.
+            #
+            # `compliance_snapshot_rows()` emits FIVE statuses, not two: PASS, REVIEW, FAIL,
+            # NA and "NOT ASSESSED". Only REVIEW and FAIL are things a grower can act on.
+            # NA means the practice does not occur in this period; NOT ASSESSED means there
+            # are no records of that kind to judge. The packet already renders both as a grey
+            # "N/A" — a deliberate fourth state, per the comment on its own colour map.
+            #
+            # 🔴 2026-08-19: this filtered out PASS alone, so NA and NOT ASSESSED reached the
+            # card, which models exactly two statuses and paints anything that is not FAIL as
+            # amber "Needs attention". A walnut orchard was told that "No raw manure events
+            # this period" and "No pest-control applications and no threshold records on file"
+            # needed its attention, and both were counted in the open-items headline. Telling
+            # a grower to fix the absence of a practice they do not do is the same cry-wolf
+            # failure as a flag that fires on every season: it teaches them to ignore the card.
             "findings": [
                 {
                     "label": r["label"],
@@ -818,7 +840,7 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     "section_hint": r["section_hint"],
                 }
                 for r in rows
-                if r["status"] != "PASS"
+                if r["status"] in ACTIONABLE_READINESS_STATUSES
             ],
             "checked_count": len(rows),
         }

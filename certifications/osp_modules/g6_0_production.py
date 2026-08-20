@@ -626,6 +626,12 @@ G6_0_PRODUCTION = Module(
                                 "Stored off site, not on this operation's premises",
                                 "Almacenados fuera del sitio, no en las instalaciones de esta operación",
                             ),
+                            # Exclusive: this question is only visible when the operator said
+                            # prohibited materials ARE kept on site, so combining "stored off
+                            # site" with an on-site separation measure compiles a sentence that
+                            # contradicts itself into the § 205.201(a)(5) narrative. The sibling
+                            # buffer group flags its escape hatch the same way.
+                            exclusive=True,
                         ),
                         Option("other", text("Other (describe below)", "Otra (describa abajo)")),
                     ),

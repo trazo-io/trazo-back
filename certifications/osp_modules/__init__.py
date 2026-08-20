@@ -32,6 +32,29 @@ from .materials_application import MATERIALS_APPLICATION
 from .schema import Module, serialize_module, validate_module
 from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_SALES_SOE, W2_0_WILD_CROP
 
+# NEWEST FIRST. Every bump must land a line here — the version exists so a certifier can
+# know which questionnaire text an answer was given against, and a version that moves with
+# no record of what moved does not deliver that.
+#
+# 2026.08.18: citation and coaching corrections found by a fresh-eyes CFR audit. No question
+# was added or removed; question COUNT is unchanged at 196.
+#   * G6.4 `own_products_only` + the module education (both locales) cited § 205.101(b) — the
+#     RETAIL-ESTABLISHMENT exemption — and told growers they "may be exempt from a separate
+#     handler certification". § 205.101 has no such exemption. Rewritten around § 205.100(a)
+#     ("each operation OR PORTION of an operation that produces or handles") as scope, not
+#     exemption, and explicitly the certifying agent's determination.
+#   * G6.4 `uses_water` cited § 205.272(b); (b) is a closed two-item list (packaging
+#     composition, container reuse) and mentions water nowhere. Now § 205.272(a).
+#   * G6.1 container reuse: coaching, page education and the follow-up question title offered
+#     reuse "behind a protective barrier OR after cleaning". § 205.272(b)(2) allows reuse only
+#     where the container "has been thoroughly cleaned and poses no risk of contact" — there is
+#     no barrier route. Question relabelled; `compiles_to` template changed accordingly, so the
+#     sentence written into the packet changes too.
+#   * G6.0 `prohibited_materials_storage.off_site` is now `exclusive=True`. BEHAVIOURAL: the
+#     option is only visible when the operator said materials ARE kept on site, so combining it
+#     with an on-site measure compiled a self-contradicting sentence into § 205.201(a)(5). Any
+#     stored answer set that pairs them will now fail `exclusive_conflicts` on complete.
+#
 # WS-2.7 (2026-08-08): full crop-scope registry — 10 depth modules + Materials
 # Application + 6 N/A-able stubs. Bumped from 2026.08.1 (3-module pilot).
 # 2026.08.4: G6.4 Handling graduated from thin stub to full depth (applicability
@@ -52,7 +75,7 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 # (establishment record, commercial-availability justification, the § 205.204(a)(4)
 # one-year rule, records) — the question every orchard and vineyard answers. 12 depth
 # modules + Materials Application + 4 N/A-able stubs remain.
-CONTENT_VERSION = "2026.08.17"
+CONTENT_VERSION = "2026.08.18"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

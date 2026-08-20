@@ -11,8 +11,8 @@ Document every step of how your food is grown, earn transparency scores, and giv
 What you can do with Trazo:
 • Document agricultural practices with transparency scores
 • Generate QR codes so consumers see how food was grown
-• Track 7 event types across 20 pre-configured US crops
-• Build consumer trust with blockchain-recorded data
+• Track 7 event types across 33 pre-configured US crops
+• Build buyer trust with dated, photo-backed records
 • Manage your team with role-based access
 
 Get started: https://app.trazo.io
@@ -25,7 +25,7 @@ What you can discover:
 • Transparency scores showing how food was grown
 • Documented farming practices and events
 • Farm-to-table production journey
-• Photo evidence and blockchain-recorded data
+• Photo evidence attached to the practices you logged
 
 Get started: https://consumer.trazo.io
 {% endif %}

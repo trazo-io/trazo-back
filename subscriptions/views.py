@@ -130,25 +130,90 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"])
     def dashboard(self, request):
-        """Return all billing data in a single request"""
+        """Return all billing data for ONE company in a single request.
+
+        SCOPED TO A COMPANY, DELIBERATELY.
+
+        This used to be `Subscription.objects.filter(company__in=user.companies.all()).first()`
+        — no ordering, no company. A user who belongs to more than one company got whichever
+        row Postgres happened to return from the heap, and the subscription page rendered THAT
+        company's plan, price, billing period and usage limits beside the ACTIVE company's
+        counts. Measured 2026-08-19: a demo account in two companies showed "Corporate
+        $149/Monthly, Farms 1/4, Parcels 3/16" (a retired tier held by an unrelated company)
+        while every other surface correctly read Compliance. The meter's numerator came from
+        one company and its denominator from another.
+
+        `Company.subscription` is a OneToOne, so "which subscription" is entirely decided by
+        "which company" — the caller should say. `company_id` reuses the parameter name every
+        other action here already takes (start_trial, create_session; they read it from the
+        body, this one from the query string because it is a GET), and it is validated against
+        the caller's own companies so it cannot be used to read someone else's billing.
+
+        Omitting it does NOT mean "all of them". The response still describes exactly one
+        company — the one owning the newest subscription — because a plan from one company
+        beside cards from every company is the same defect only half fixed: a billing tab
+        listing a card that cannot pay the plan printed above it.
+        """
         try:
             user = request.user
-            companies = user.companies.all()
 
-            # Get subscription - typically just one per user/company
+            # Resolve the ONE company this payload describes, before anything else is queried.
+            company_id = request.query_params.get("company_id")
+            if company_id:
+                try:
+                    company_pk = int(company_id)
+                except (TypeError, ValueError):
+                    # `Company.id` is an AutoField, so `filter(id="undefined")` raises
+                    # ValueError from inside the ORM. Under the blanket `except` below that
+                    # surfaced as a 500 plus an ERROR-level traceback for what is only a
+                    # malformed query string — and `?company_id=undefined` is one JavaScript
+                    # template literal away from happening for real.
+                    return Response(
+                        {"error": "company_id must be an integer"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                company = user.companies.filter(id=company_pk).first()
+                if company is None:
+                    # Not 403: whether the company exists is not this caller's business.
+                    return Response(
+                        {"error": "Company not found"},
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
+            else:
+                # No company named. Still answer for exactly one — the newest subscription's —
+                # rather than mixing one company's plan with every company's cards. Half-scoping
+                # is the same defect: a billing tab listing a card that cannot pay the plan
+                # above it. Falls back to a company with no subscription at all so a brand-new
+                # account still gets its own (empty) billing page.
+                newest = self.get_queryset().select_related("company").order_by("-id").first()
+                company = newest.company if newest else user.companies.order_by("id").first()
+
+            # `__in=[]` for a user who belongs to no company: an empty result, without
+            # `company=None` quietly turning into `company_id IS NULL`.
+            companies = [company] if company is not None else []
+
+            # `-id` is the ordering the unscoped branch above depends on. Kept here too so the
+            # queryset is deterministic on its own terms rather than by luck of the heap.
             subscriptions = (
-                self.get_queryset().select_related("plan", "pending_plan", "company").prefetch_related("addons__addon")
+                self.get_queryset()
+                .filter(company__in=companies)
+                .select_related("plan", "pending_plan", "company")
+                .prefetch_related("addons__addon")
+                .order_by("-id")
             )
-            subscription = subscriptions.first() if subscriptions.exists() else None
+            subscription = subscriptions.first()
 
             # Get available add-ons
             addons = AddOn.objects.filter(is_active=True)
 
-            # Get payment methods for user's companies
-            payment_methods = PaymentMethod.objects.filter(company__in=companies)
-
-            # Get invoices for user's companies
-            invoices = Invoice.objects.filter(company__in=companies).order_by("-invoice_date")
+            # Payment methods and invoices for the scoped company. Both ORDERED: an unordered
+            # queryset is exactly what produced the bug this method now guards against, and a
+            # card list that reshuffles between loads is the same class of surprise. Default
+            # card first, then newest.
+            payment_methods = PaymentMethod.objects.filter(company__in=companies).order_by(
+                "-is_default", "-created_at", "-id"
+            )
+            invoices = Invoice.objects.filter(company__in=companies).order_by("-invoice_date", "-id")
 
             # Return all data in one response
             response_data = {

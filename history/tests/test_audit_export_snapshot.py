@@ -67,10 +67,44 @@ class ComplianceSnapshotTests(TestCase):
 
     # ---- Input traceability § 205.103 ----
 
-    def test_input_traceability_no_chemicals_is_pass(self):
+    def test_no_absence_row_renders_as_the_pass_state(self):
+        """Structural guard, not a per-row assertion.
+
+        The defect this file now encodes was systemic: FOUR separate rows printed DOCUMENTED
+        with a detail that said nothing existed to check. Asserting them one at a time only
+        pins the ones someone remembered. This walks every row the snapshot emits and fails if
+        any row marked DOCUMENTED describes an absence.
+        """
+        rows = self._rows_by_requirement()
+        self.assertTrue(rows, "snapshot emitted no rows — the assertions below would be vacuous")
+        offenders = [
+            f"{req}: {detail!r}"
+            for req, (status, detail) in rows.items()
+            if status == "DOCUMENTED"
+            and re.search(r"\bno\b[^.]*\b(events?|records?|inputs?|findings?)\b", detail or "", re.I)
+            # "No equipment shared with conventional operations" is a genuine positive finding
+            # about the operation, not an absence of records. Same for a zero incident count on
+            # an active log.
+            and "shared with conventional" not in (detail or "") and "logging system active" not in (detail or "")
+        ]
+        self.assertEqual(
+            offenders,
+            [],
+            "These rows render the PASS word for an absence of records:\n  " + "\n  ".join(offenders),
+        )
+
+    def test_input_traceability_no_chemicals_is_not_applicable_not_a_pass(self):
+        """No inputs applied is NOT the same as inputs verified.
+
+        This asserted DOCUMENTED until 2026-08-18. The snapshot had three states, so an
+        absence of records and a verified record printed the same green word, and a certifier
+        reading down the Documentation column could not tell them apart. N/A is the fourth state. Compare the contamination-log row, which always got this right by wording
+        ("0 incidents (logging system active)").
+        """
         rows = self._rows_by_requirement()
         status, detail = rows["Input traceability (§ 205.103)"]
-        self.assertEqual(status, "DOCUMENTED")
+        self.assertEqual(status, "N/A")
+        self.assertNotEqual(status, "DOCUMENTED", "an absence must never render as the pass state")
         self.assertIn("No chemical inputs", detail)
 
     def test_input_traceability_missing_supplier_is_fail(self):

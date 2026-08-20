@@ -665,8 +665,12 @@ _PRODUCTION_STANDARDS = (
             "field, question or export existed for it. A clause map is only as honest as its "
             "weakest `implementation` tuple. (e)(2) sewage sludge has no question of its own "
             "and does not need one: it is a seeded prohibited entry — `seed_national_list.py` "
-            "row ('f', 'amendment', 'Sewage sludge (biosolids)') — so naming it as an input "
-            "resolves against the prohibited list on the same path as (e)(1)."
+            "row ('g', 'amendment', 'Sewage sludge (biosolids)') — so naming it as an input "
+            "resolves against the prohibited list on the same path as (e)(1). "
+            "2026-08-18: that row was seeded as subsection ('f') and is now ('g'). Sewage "
+            "sludge is § 205.105(g); (f) is ionizing radiation. Three § 205.105 rows were "
+            "each a letter early, and this note cited one of them as proof of conformance — "
+            "evidence named in a clause map is only as good as the row it points at."
         ),
     ),
     Clause(

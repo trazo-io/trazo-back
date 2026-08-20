@@ -7106,7 +7106,10 @@ def get_crop_templates(request):
                 "carbon_potential": (
                     float(template.projected_emissions_reduction) if template.projected_emissions_reduction else 0
                 ),
-                "avg_revenue": 1200.0,  # Default estimated cost per acre
+                # `avg_revenue: 1200.0` removed (2026-08-19) — same class as
+                # `setup_time_minutes` below: a hardcoded literal, identical for every crop,
+                # presented as a revenue figure. Nothing rendered it and nothing could have
+                # measured it (pre-revenue, no pilots). 16 CFR 260.6.
                 # `setup_time_minutes` removed (2026-08-16). It was the literal `8`, hardcoded
                 # here with the comment "Estimated time savings" — not measured, not derived
                 # from the template, identical for every crop. The template picker rendered it
@@ -7137,18 +7140,20 @@ def get_crop_templates(request):
                     for event in template.event_templates.all()[:3]  # First 3 events
                 ],
                 "sustainability_practices": [],  # Will be populated from template data
-                "roi_projection": {
-                    "carbon_credits_value": (
-                        float(template.projected_emissions_reduction) * 15
-                        if template.projected_emissions_reduction
-                        else 0
-                    ),
-                    "premium_pricing": template.premium_pricing_potential,
-                    "cost_savings": "15-25%",
-                },
+                # `roi_projection` removed (2026-08-19). It carried `premium_pricing` (the
+                # model's "25-40%"-shaped `premium_pricing_potential`), a
+                # `carbon_credits_value` computed as `reduction * 15` against no named market,
+                # and a literal `"cost_savings": "15-25%"`. .claude/rules/compliance.md rules
+                # out "Earn premium prices"/"20-40% premium" outright: Trazo positions, it does
+                # not promise pricing outcomes. Nothing rendered any of it.
+                #
+                # `is_verified: template.usda_reviewed` removed with it — a boolean literally
+                # named "verified" on a payload about USDA practices is the "USDA Verified"
+                # claim the same rules file forbids. The flag means "somebody at Trazo checked
+                # this template against USDA guidance", which is not third-party verification
+                # of anything on the farm.
                 "system_type": template.farming_approach,
                 "management_intensity": template.complexity_level,
-                "is_verified": template.usda_reviewed,
                 "source": template.compliance_notes,
             }
             crop_templates.append(template_data)
@@ -7366,24 +7371,27 @@ def get_crop_template_detail(request, template_id):
             "carbon_credit_potential": (
                 float(template.projected_emissions_reduction) if template.projected_emissions_reduction else 0
             ),
-            "estimated_revenue": 1200.0,  # Default estimated cost per acre
             "sustainability_opportunities": [],  # Will be populated from template data
             "efficiency_tips": [event["efficiency_tips"] for event in events_data if event["efficiency_tips"]],
-            "premium_pricing_potential": "10-25%",
-            "typical_costs": 1200.0,  # Default estimated cost per acre
-            "target_yield": {"estimate": "400-600 boxes/acre"},  # Default
-            "labor_hours_per_acre": 25.0,  # Default
-            "sustainability_score": 75,  # Default
             "source": template.compliance_notes,
-            "is_verified": template.usda_reviewed,
-            "roi_analysis": {
-                "setup_time_saved": "37 minutes",
-                "carbon_credits_annual": (
-                    float(template.projected_emissions_reduction) if template.projected_emissions_reduction else 0
-                ),
-                "premium_pricing": "10-25%",
-                "efficiency_savings": "15-25%",
-            },
+            # Removed 2026-08-19, none of it rendered, all of it unsourced and several pieces
+            # forbidden outright by .claude/rules/compliance.md:
+            #
+            #   estimated_revenue / typical_costs  1200.0 literal, same for every crop
+            #   premium_pricing_potential          "10-25%" literal — "Earn premium prices"
+            #   target_yield                       "400-600 boxes/acre" for ALL 32 crops
+            #   labor_hours_per_acre               25.0 literal
+            #   sustainability_score               75 literal — a Trazo-authored grade
+            #   is_verified                        `usda_reviewed`, i.e. "USDA Verified"
+            #   roi_analysis.setup_time_saved      "37 minutes" — the figure already deleted
+            #                                      from the picker subtitle and from
+            #                                      `setup_time_minutes` on the list payload
+            #   roi_analysis.premium_pricing       "10-25%" again
+            #   roi_analysis.efficiency_savings    "15-25%"
+            #
+            # A crop template's job in the October product is to seed a season PLAN. Revenue,
+            # yield and premium projections are 2024-era carbon-marketplace framing with no
+            # measurement behind them and no surface asking for them.
         }
 
         return Response(detailed_template, status=status.HTTP_200_OK)

@@ -53,6 +53,16 @@ class BusinessEventValidationTestCase(APITestCase):
         # assumption is dropped rather than replaced with a different hardcoded id.
         self.history = History.objects.create(name="Test Production", parcel=self.parcel)
 
+    # `carbon_credits` was withdrawn as a business activity (2026-08-18), so these cases now
+    # run on "compliance". What they exercise is unchanged and still worth guarding: the
+    # `carbon_credits_earned` COLUMN and its non-negative / upper-bound validation were kept on
+    # purpose, so that historical rows keep their data and any future import path stays
+    # checked. Only the two tests asserting the withdrawn TYPE's own "amount is required" rule
+    # were dropped — that rule is gone from both the model and the serializer.
+    #
+    # Pinning them to a valid choice also matters for honesty: with "carbon_credits" they would
+    # still pass, because full_clean() now raises on the invalid choice too — the assertion
+    # would be satisfied by an error the test does not name.
     def _create_valid_business_event_data(self):
         """Create valid business event data for testing"""
         return {
@@ -89,7 +99,7 @@ class BusinessEventValidationTestCase(APITestCase):
                 description="Invalid carbon credits",
                 date="2024-01-15T10:30:00Z",
                 history=self.history,
-                business_type="carbon_credits",
+                business_type="compliance",
                 carbon_credits_earned=Decimal("-10.5"),
             )
 
@@ -99,7 +109,7 @@ class BusinessEventValidationTestCase(APITestCase):
             description="Test event",
             date="2024-01-15T10:30:00Z",
             history=self.history,
-            business_type="carbon_credits",
+            business_type="compliance",
             carbon_credits_earned=Decimal("-5.0"),
         )
 
@@ -122,7 +132,7 @@ class BusinessEventValidationTestCase(APITestCase):
             description="Test event",
             date="2024-01-15T10:30:00Z",
             history=self.history,
-            business_type="carbon_credits",
+            business_type="compliance",
             carbon_credits_earned=Decimal("15000.0"),  # Larger than 10000 limit
         )
 
@@ -178,26 +188,6 @@ class BusinessEventValidationTestCase(APITestCase):
             [str(e.message) for e in context.exception.error_dict["certification_type"]],
         )
 
-    def test_model_validation_carbon_credits_requires_amount(self):
-        """Test that carbon_credits business type requires carbon_credits_earned"""
-        event = BusinessEvent(
-            description="Test carbon credits",
-            date="2024-01-15T10:30:00Z",
-            history=self.history,
-            business_type="carbon_credits",
-            carbon_credits_earned=None,  # Missing carbon credits amount
-        )
-
-        with self.assertRaises(ValidationError) as context:
-            event.full_clean()
-
-        self.assertIn("carbon_credits_earned", context.exception.error_dict)
-        # Membership, not position — see the note on the other model-validation tests.
-        self.assertIn(
-            "Carbon credits amount is required for carbon credit transactions",
-            [str(e.message) for e in context.exception.error_dict["carbon_credits_earned"]],
-        )
-
     def test_serializer_validation_negative_carbon_credits(self):
         """Test serializer validation for negative carbon credits with helpful messages"""
         data = self._create_valid_business_event_data()
@@ -251,19 +241,6 @@ class BusinessEventValidationTestCase(APITestCase):
         self.assertIn("Certification type is required for certification events", errors[0])
         self.assertIn("Examples: USDA Organic, Carbon Neutral", errors[2])
 
-    def test_serializer_validation_carbon_credits_missing_amount(self):
-        """Test serializer validation for carbon_credits without amount"""
-        data = self._create_valid_business_event_data()
-        data["business_type"] = "carbon_credits"
-        data["carbon_credits_earned"] = None
-
-        serializer = UpdateBusinessEventSerializer(data=data)
-        self.assertFalse(serializer.is_valid())
-
-        errors = serializer.errors["carbon_credits_earned"]
-        self.assertIn("Carbon credits amount is required for carbon credit transactions", errors[0])
-        self.assertIn("Please enter the number of credits generated or traded", errors[1])
-
     def test_serializer_validation_verification_status(self):
         """Test serializer validation for verification events with pending status"""
         data = self._create_valid_business_event_data()
@@ -280,7 +257,6 @@ class BusinessEventValidationTestCase(APITestCase):
         """Test all valid business types work correctly"""
         valid_types = [
             "certification",
-            "carbon_credits",
             "sustainability_audit",
             "verification",
             "compliance",
@@ -292,9 +268,7 @@ class BusinessEventValidationTestCase(APITestCase):
             data["business_type"] = business_type
 
             # Adjust required fields based on business type
-            if business_type == "carbon_credits":
-                data["carbon_credits_earned"] = Decimal("1.5")
-            elif business_type == "certification":
+            if business_type == "certification":
                 data["certification_type"] = "organic_usda"
             elif business_type == "verification":
                 data["verification_status"] = "verified"
@@ -310,7 +284,7 @@ class BusinessEventValidationTestCase(APITestCase):
 
         for amount in valid_amounts:
             data = self._create_valid_business_event_data()
-            data["business_type"] = "carbon_credits"
+            data["business_type"] = "compliance"
             data["carbon_credits_earned"] = Decimal(str(amount))
 
             serializer = UpdateBusinessEventSerializer(data=data)
@@ -320,7 +294,7 @@ class BusinessEventValidationTestCase(APITestCase):
         """Test boundary values for carbon credits"""
         # Test exactly at the upper boundary
         data = self._create_valid_business_event_data()
-        data["business_type"] = "carbon_credits"
+        data["business_type"] = "compliance"
         data["carbon_credits_earned"] = Decimal("10000.0")  # Exactly at limit
 
         serializer = UpdateBusinessEventSerializer(data=data)
@@ -334,7 +308,7 @@ class BusinessEventValidationTestCase(APITestCase):
     def test_zero_carbon_credits(self):
         """Test that zero carbon credits is allowed"""
         data = self._create_valid_business_event_data()
-        data["business_type"] = "carbon_credits"
+        data["business_type"] = "compliance"
         data["carbon_credits_earned"] = Decimal("0.0")
 
         serializer = UpdateBusinessEventSerializer(data=data)

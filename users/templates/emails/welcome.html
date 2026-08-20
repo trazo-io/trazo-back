@@ -22,8 +22,8 @@
         <ul style="margin: 16px 0; padding-left: 20px; color: #4b5563;">
             <li>Document agricultural practices with transparency scores</li>
             <li>Generate QR codes so consumers see how food was grown</li>
-            <li>Track 7 event types across 20 pre-configured US crops</li>
-            <li>Build consumer trust with blockchain-recorded data</li>
+            <li>Track 7 event types across 33 pre-configured US crops</li>
+            <li>Build buyer trust with dated, photo-backed records</li>
             <li>Manage your team with role-based access</li>
         </ul>
     {% else %}
@@ -34,14 +34,18 @@
             <li>Transparency scores showing how food was grown</li>
             <li>Documented farming practices and events</li>
             <li>Farm-to-table production journey</li>
-            <li>Photo evidence and blockchain-recorded data</li>
+            <li>Photo evidence attached to the practices you logged</li>
         </ul>
     {% endif %}
 {% endblock %}
 
 {% block content %}
     <div class="btn-container">
-        <a href="{% if user_type == 'producer' %}https://producer.trazo.io{% else %}https://consumer.trazo.io{% endif %}" 
+        {# 🔴 2026-08-19: this pointed at a producer.* subdomain that has never resolved, so
+           the welcome email's only button was dead for every producer who clicked it. The
+           producer app is app.trazo.io, which the plain-text half of this email already said.
+           Guarded by users/tests/test_onboarding_email_claims.py. #}
+        <a href="{% if user_type == 'producer' %}https://app.trazo.io{% else %}https://consumer.trazo.io{% endif %}" 
            class="btn {% if user_type == 'consumer' %}consumer{% endif %}">
             {% if user_type == 'producer' %}
                 Go to My Dashboard

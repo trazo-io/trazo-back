@@ -129,7 +129,7 @@ W2_0_WILD_CROP = Module(
 # and washing/packing (fruit) are "handling" under 7 CFR 205.270 / 205.272 even
 # when the operator never receives another grower's product — this module collects
 # that description for the OSP; it does not determine the operation's separate
-# handler-certification status (§ 205.101(b) — see the module education below).
+# handler-certification status (§ 205.100(a) — see the module education below).
 #
 # Four pages: (A) an applicability gate, so an operation that ships everything
 # field-run skips the rest of the module; (B) what is handled, for whom, and
@@ -146,20 +146,22 @@ G6_4_HANDLING = Module(
         text(
             "Washing, hulling, shelling, drying, sorting, grading, cooling, and packing your own "
             "crop are all handling activities under the organic regulations — not just a separate "
-            "handler's job. An operation that handles only its own crop, and never receives "
-            "product from another grower, may be exempt from a separate handler certification "
-            "(§ 205.101(b)), but that possible exemption does not remove the requirement to "
-            "describe those on-farm handling steps in this system plan. Confirm your operation's "
-            "certification scope with your certifying agent — do not assume exempt status without "
-            "that confirmation.",
+            "handler's job. Certification covers each operation OR PORTION of an operation that "
+            "produces or handles (§ 205.100(a)), so handling your own crop is normally scoped "
+            "inside your existing certification rather than certified as a separate handler "
+            "operation — but that is your certifying agent's determination, not an exemption you "
+            "can claim. Either way it does not remove the requirement to describe those on-farm "
+            "handling steps in this system plan. Confirm your operation's certification scope "
+            "with your certifying agent.",
             "Lavar, descascarar, pelar, secar, seleccionar, clasificar, enfriar y empacar su propio "
             "cultivo son actividades de manejo bajo la normativa orgánica — no solo tarea de un "
-            "manejador aparte. Una operación que maneja únicamente su propio cultivo, y nunca "
-            "recibe producto de otro productor, puede estar exenta de una certificación de "
-            "manejador separada (§ 205.101(b)), pero esa posible exención no elimina el requisito "
-            "de describir esos pasos de manejo en la finca dentro de este plan de sistema. Confirme "
-            "el alcance de la certificación de su operación con su agente certificador — no asuma "
-            "la condición de exento sin esa confirmación.",
+            "manejador aparte. La certificación cubre cada operación O PARTE de una operación que "
+            "produce o maneja (§ 205.100(a)), así que manejar su propio cultivo normalmente queda "
+            "dentro del alcance de su certificación actual en lugar de certificarse como una "
+            "operación de manejador aparte — pero eso lo determina su agente certificador, no es "
+            "una exención que usted pueda invocar. En cualquier caso, no elimina el requisito de "
+            "describir esos pasos de manejo en la finca dentro de este plan de sistema. Confirme "
+            "el alcance de la certificación de su operación con su agente certificador.",
         ),
     ),
     allows_not_applicable=True,
@@ -277,7 +279,11 @@ G6_4_HANDLING = Module(
                         "descascarador de nueces o almendras atiende a varias huertas vecinas. No "
                         "incluye comprarles el cultivo una vez que ya se lo vendieron cosechado.",
                     ),
-                    nop_cite="§ 205.101(b)",
+                    # § 205.100(a) — "each operation OR PORTION of an operation that produces or
+                    # handles". This was § 205.101(b) until 2026-08-18; that clause is the RETAIL
+                    # ESTABLISHMENT exemption and says nothing about handling your own crop, so it
+                    # printed a wrong regulatory basis into a certifier-facing packet.
+                    nop_cite="§ 205.100(a)",
                     compiles_to=CompileRule(template="On-farm handling covers: {answer}."),
                     options=(
                         Option("own", text("Only our own crop", "Únicamente nuestro propio cultivo")),
@@ -396,7 +402,11 @@ G6_4_HANDLING = Module(
                         "Does any step use water — washing, rinsing, or hydrocooling?",
                         "¿Algún paso usa agua — lavado, enjuague o hidroenfriado?",
                     ),
-                    nop_cite="§ 205.272(b)",
+                    # § 205.272(a) — the duty to prevent CONTACT with prohibited substances. Was
+                    # § 205.272(b) until 2026-08-18; (b) is a closed two-item list — (b)(1)
+                    # packaging containing a synthetic fungicide/preservative/fumigant and
+                    # (b)(2) reuse of a contaminated container — and mentions water nowhere.
+                    nop_cite="§ 205.272(a)",
                     visible_when=(Condition("handling_activities", "includes_any", ("washing", "cooling")),),
                     compiles_to=CompileRule(template="Water used in washing, rinsing, or hydrocooling: {answer}."),
                 ),

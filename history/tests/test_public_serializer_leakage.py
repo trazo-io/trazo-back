@@ -220,13 +220,20 @@ class PublicSerializerSupplierLeakageTests(TestCase):
 
 
 class PublicSerializerBusinessCarbonCreditsGatingTests(TestCase):
-    """Regression: carbon_credits_unit must NOT surface when carbon_credits_earned is null/zero.
+    """Carbon credits must not reach a shopper AT ALL (2026-08-18).
 
-    A row with business_type='certification' (or any non-carbon-credits activity) but a
-    legacy carbon_credits_unit='tCO2e' default (the BusinessEvent model field default)
-    would otherwise render an orphan "Carbon Credits Unit: tCO2e" card on the consumer
-    QR page. Bug class: stale conditional field surfaces when parent context changes.
-    Fix mechanism mirrors Standard Fix #5 (gate in hand-rolled get_events() dict).
+    This class used to enforce a GATE: the unit was allowed on the public wire when a real
+    earned amount was present, and suppressed when it was null or zero — the concern then was
+    an orphan "Carbon Credits Unit: tCO2e" card left behind by the model default.
+
+    The activity type has since been withdrawn (see BUSINESS_ACTIVITY_CHOICES). A traded-credit
+    figure is a tradeable-offset claim, and Trazo measures direct operational emissions with
+    EPA/USDA factors — not the credit-grade accounting such a figure asserts. That is the
+    self-created sustainability claim EU ECGT 2024/825 (live 2026-09-27) reaches, and an
+    unsubstantiated benefit claim under FTC 16 CFR 260.6.
+
+    So the assertion inverts: not "surfaces only when legitimate" but "never surfaces". The
+    columns still exist and historical rows keep their values; the shopper does not see them.
     """
 
     def setUp(self):
@@ -281,11 +288,15 @@ class PublicSerializerBusinessCarbonCreditsGatingTests(TestCase):
             "unit must be gated on truthy earned amount; legacy 'tCO2e' default leaked",
         )
 
-    def test_unit_preserved_when_credits_earned(self):
-        """Carbon credits event with real earned amount: unit must surface (legitimate use)."""
+    def test_a_historical_credits_row_still_shows_a_shopper_nothing(self):
+        """The inverted case. A row written before the withdrawal keeps its stored amount —
+        and the public payload must carry neither the figure nor its unit."""
         BusinessEvent.objects.create(
             history=self.history,
             type=BusinessEvent.CERTIFICATION,
+            # Written directly: 'carbon_credits' is no longer in BUSINESS_ACTIVITY_CHOICES, so
+            # no serializer would accept it today. That is the point — the row predates the
+            # withdrawal, and the wire must still be clean.
             business_type="carbon_credits",
             carbon_credits_earned=5.0,
             carbon_credits_unit="tCO2e",
@@ -294,8 +305,18 @@ class PublicSerializerBusinessCarbonCreditsGatingTests(TestCase):
         events = self._public_business_events()
         self.assertEqual(len(events), 1)
         ev = events[0]
-        self.assertEqual(ev.get("carbon_credits_earned"), 5.0)
-        self.assertEqual(ev.get("carbon_credits_unit"), "tCO2e")
+        self.assertNotIn("carbon_credits_earned", ev, "a credit figure reached a shopper")
+        self.assertNotIn("carbon_credits_unit", ev, "a credit unit reached a shopper")
+
+    def test_the_activity_type_can_no_longer_be_chosen(self):
+        """Guards the removal itself: without this, re-adding the choice breaks nothing."""
+        from history.models import BusinessEvent as _BE
+
+        self.assertNotIn(
+            "carbon_credits",
+            [c[0] for c in _BE.BUSINESS_ACTIVITY_CHOICES],
+            "carbon_credits was re-added as a loggable business activity",
+        )
 
     def test_unit_dropped_when_credits_zero(self):
         """Edge case: explicit zero earned amount must drop unit (not just null)."""
@@ -310,8 +331,10 @@ class PublicSerializerBusinessCarbonCreditsGatingTests(TestCase):
         events = self._public_business_events()
         self.assertEqual(len(events), 1)
         ev = events[0]
-        self.assertIsNone(ev.get("carbon_credits_earned"))
-        self.assertIsNone(ev.get("carbon_credits_unit"))
+        # `assertNotIn`, not `assertIsNone`: the keys are gone from the payload, and a
+        # .get() returning None cannot tell "absent" from "present and null".
+        self.assertNotIn("carbon_credits_earned", ev)
+        self.assertNotIn("carbon_credits_unit", ev)
 
 
 class PublicSerializerSeedSupplierLeakageTests(TestCase):

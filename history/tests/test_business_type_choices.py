@@ -26,7 +26,6 @@ class BusinessTypeChoiceParityTests(TestCase):
         "verification",
         "sustainability_audit",
         "transparency",
-        "carbon_credits",
         "compliance",
     ]
 

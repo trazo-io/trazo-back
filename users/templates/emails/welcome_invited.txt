@@ -29,7 +29,7 @@ What you can do with Trazo:
 • Document agricultural practices with transparency scores
 • Generate QR codes so consumers see how food was grown
 • Access EPA/USDA-sourced environmental data
-• Build consumer trust with blockchain-recorded data
+• Build buyer trust with dated, photo-backed records
 • Collaborate with your team on sustainability goals
 
 Your account is ready and you're automatically logged in. Start exploring your dashboard and see how {{ company.name }} is leading the way in agricultural transparency.

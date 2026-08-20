@@ -158,3 +158,116 @@ class ManureColumnsReachBothExportsTests(TestCase):
         event.save()
         event.refresh_from_db()
         self.assertEqual(event.manure_harvest_interval, "120")
+
+
+class PlannedHarvestInsideIntervalTests(TestCase):
+    """The plan itself, not the label on it (§ 205.203(c)(1)).
+
+    Two independent checks live on this data and only one existed. The crop-rule check asks
+    whether the farmer picked the interval their crop requires — it validates the LABEL. It
+    says nothing about the dates. A soil-contact crop with the correct 120 days selected
+    clears that check and still violates the rule if harvest is planned 60 days after
+    application, and the packet printed both dates side by side in black without comparing
+    them. The field's own help text promised otherwise: "so the 90/120-day interval can be
+    checked against your plan".
+
+    The negative case matters as much as the positive one here: a check that fires on a
+    compliant plan would train farmers to ignore it.
+    """
+
+    def setUp(self):
+        user = User.objects.create_user(email="interval@test.com", password="x")
+        company = Company.objects.create(name="Interval Co")
+        establishment = Establishment.objects.create(name="IC1", company=company)
+        parcel = Parcel.objects.create(name="Block 9", establishment=establishment, area=10)
+        product = Product.objects.create(name="Walnuts")
+        self.history = History.objects.create(
+            name="Interval Production",
+            start_date=timezone.now(),
+            product=product,
+            parcel=parcel,
+            operator=user,
+            earning=0.0,
+            production_amount=0.0,
+            reputation=0.0,
+            confidence_score=0.0,
+            transparency_score=0.0,
+            public_views=0,
+            unique_visitors=0,
+            is_outdoor=True,
+            published=True,
+        )
+
+    def _event(self, applied, planned, interval="120"):
+        import datetime
+
+        return SoilManagementEvent.objects.create(
+            history=self.history,
+            type="OM",
+            date=timezone.now(),
+            amendment_type="manure",
+            manure_application_date=datetime.date.fromisoformat(applied),
+            manure_harvest_date_planned=datetime.date.fromisoformat(planned),
+            manure_harvest_interval=interval,
+        )
+
+    def _pdf_text(self):
+        from pdfminer.high_level import extract_text
+
+        buf = AuditExportService(self.history, certification_type="organic").generate_pdf(strict_ofpp=False)
+        return re.sub(r"\s+", " ", extract_text(io.BytesIO(buf.getvalue())))
+
+    def test_flags_a_plan_that_lands_inside_the_interval_it_declares(self):
+        # 2026-06-01 + 120 days = 2026-09-29. Planned 2026-07-31 is 60 days short.
+        self._event("2026-06-01", "2026-07-31")
+        text = self._pdf_text()
+        self.assertIn("60 days", text, "the shortfall was not quantified anywhere in the packet")
+        self.assertIn(
+            "205.203(c)(1)",
+            text,
+            "the finding must cite the clause the inspector will look up",
+        )
+
+    def test_stays_silent_when_the_plan_clears_the_interval(self):
+        # 2026-06-01 + 120 days = 2026-09-29; planning 2026-10-15 is compliant.
+        self._event("2026-06-01", "2026-10-15")
+        text = self._pdf_text()
+        self.assertNotIn(
+            "days short",
+            text,
+            "a compliant plan was flagged — a check that cries wolf gets ignored",
+        )
+
+    def test_a_correct_label_does_not_excuse_a_short_plan(self):
+        """The regression this exists for: crop-rule check passes, dates do not."""
+        self._event("2026-06-01", "2026-07-31", interval="120")
+        text = self._pdf_text()
+        # 120 is the right label for a soil-contact crop, so the LABEL check has nothing to
+        # say. The finding must come from the dates regardless.
+        self.assertIn("days short", text)
+
+    def test_reports_reversed_dates_as_a_typo_not_a_shortfall(self):
+        """Harvest planned BEFORE the manure went on.
+
+        `actual_gap` goes negative, which the first cut of this check reported as
+        "N days short" — sending the farmer to widen an interval when the real fault is one of
+        the two dates. The two cases need different words because they need different fixes.
+        """
+        self._event("2026-07-01", "2026-06-01")
+        text = self._pdf_text()
+        self.assertIn("out of order", text)
+        self.assertIn("30 days EARLIER", text)
+        self.assertNotIn("days short", text, "a reversed pair was reported as an interval shortfall")
+
+    def test_an_unparseable_date_costs_the_finding_not_the_export(self):
+        """A date column holding an ISO string is a real shape in this codebase.
+
+        `str - date` raises TypeError, and the idiom around this code catches only
+        (ValueError, AttributeError) — so the export died rather than skipping one row.
+        """
+        ev = self._event("2026-06-01", "2026-07-31")
+        # Bypass the ORM's date coercion the way a raw write would.
+        SoilManagementEvent.objects.filter(pk=ev.pk).update(manure_harvest_date_planned=None)
+        ev.refresh_from_db()
+        text = self._pdf_text()  # must not raise
+        self.assertIn("Manure Handling Records", text, "the manure section vanished entirely")

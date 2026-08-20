@@ -23,7 +23,7 @@ Once your account is verified, you'll have full access to all Trazo features:
 {% if user_type == 'producer' %}
 • Transparency score tracking and calculation
 • EPA/USDA-sourced environmental data
-• Blockchain-recorded production data
+• A certifier packet built from the records you already keep
 • QR code generation for products
 • Team management and role assignments
 {% else %}

@@ -36,6 +36,7 @@ from .models import (
     HistoryScan,
     PestManagementEvent,
     ProductionEvent,
+    ProductionPlanItem,
     SalesRecord,
     SoilManagementEvent,
     WeatherEvent,
@@ -300,9 +301,25 @@ class CustomFieldsMixin:
         Returns the validated custom_fields list (or None if not provided).
         """
         custom_fields = data.pop("custom_fields", None)
-        if custom_fields is not None:
+        if custom_fields is None:
+            return None
+        try:
             return validate_custom_fields(custom_fields)
-        return None
+        except ValueError as exc:
+            # `custom_fields.py` raises plain ValueError in TEN places — wrong type, empty
+            # label, over-long label, bad URL, duplicate id, too many fields. DRF does not
+            # translate ValueError, so every one of them escaped to_internal_value() as a 500
+            # with an alert, rather than a 400 telling the client which field was wrong.
+            #
+            # Converted HERE rather than at the ten raise sites: this is the single door every
+            # client comes through, and the validator stays a plain function that a management
+            # command or a script can call without importing DRF.
+            #
+            # The payload that actually triggers this is the string "[object Object]" —
+            # SoilManagementTab runs String() over every key to dodge Decimal serialization
+            # and catches the custom_fields ARRAY with it. That is fixed on the client too;
+            # this is the half that must hold when the next client gets it wrong.
+            raise serializers.ValidationError({"custom_fields": [str(exc)]}) from exc
 
     def merge_custom_fields(self, extra_data, custom_fields, instance=None):
         """
@@ -1825,6 +1842,12 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
             "drift_warning",
             "cleaning_date",
             "cleaning_method",
+            # QO-parity purge + transport endpoints (§ 205.272 / § 205.307)
+            "purge_material",
+            "purge_quantity",
+            "purge_material_end_use",
+            "transport_origin",
+            "transport_destination_address",
             "cleaning_materials_used",
             "cleaned_by",
             "shared_with_conventional",
@@ -2313,6 +2336,12 @@ class ProductionEventSerializer(CustomFieldsMixin, EventSerializer):
             "drift_warning",
             "cleaning_date",
             "cleaning_method",
+            # QO-parity purge + transport endpoints (§ 205.272 / § 205.307)
+            "purge_material",
+            "purge_quantity",
+            "purge_material_end_use",
+            "transport_origin",
+            "transport_destination_address",
             "cleaning_materials_used",
             "cleaned_by",
             "shared_with_conventional",
@@ -2994,7 +3023,6 @@ class HistoryWriteSerializer(serializers.ModelSerializer):
             "quality_grade",
             "harvest_method",
             "description",
-            "events_status",
             # Consumer QR hero/cover override (see PublicHistorySerializer.get_images)
             "cover_image_url",
             # Post-harvest traceability (§ 205.103 + SOE 2024 non-retail invoice)
@@ -3015,7 +3043,7 @@ class HistoryWriteSerializer(serializers.ModelSerializer):
             "post_harvest_facility",
             "retention_until",
         ]
-        read_only_fields = ["id", "public_id", "events_status", "retention_until"]
+        read_only_fields = ["id", "public_id", "retention_until"]
 
     def get_product(self, history):
         return history.product.name if history.product else None
@@ -3079,7 +3107,6 @@ class HistorySerializer(serializers.ModelSerializer):
             "quality_grade",
             "harvest_method",
             "description",
-            "events_status",
             # NOP compliance — post-finish sales & traceability
             "sold_to",
             "sale_date",
@@ -3102,7 +3129,6 @@ class HistorySerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "certificate_percentage",
-            "events_status",
             "retention_until",
         ]
 
@@ -4495,7 +4521,20 @@ class PublicHistorySerializer(serializers.ModelSerializer):
             # - No .only() because prefetch already selected the right fields
             # This reduces queries from 232 → ~15 (90% reduction)
             chemical_events = history.history_chemicalevent_events.all()
-            production_events = history.history_productionevent_events.all()
+            # ASK, do not decide — see history/services/claim_authority. Four production
+            # subtypes are records for an INSPECTOR whose farmer-authored name/observation
+            # reads as its own opposite to a shopper: buffer disposition (§ 205.202(c)
+            # REQUIRES the crop be sold non-organic), the seed commercial-unavailability
+            # search, a line purge, and a transport that names the operation's handler.
+            # The structured fields were already withheld; this withholds the free text with
+            # them, which was the actual disclosure.
+            from history.services.claim_authority import may_publish_production_subtype
+
+            production_events = [
+                ev
+                for ev in history.history_productionevent_events.all()
+                if may_publish_production_subtype(getattr(ev, "type", None)).allowed
+            ]
             weather_events = history.history_weatherevent_events.all()
             equipment_events = history.history_equipmentevent_events.all()
             soil_events = history.history_soilmanagementevent_events.all()
@@ -5507,9 +5546,21 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                     if hasattr(event, "get_business_type_display")
                     else event.business_type
                 )
+                # ASK, do not decide — see history/services/claim_authority. A certification
+                # type is withheld from public surfaces when its label asserts a general
+                # environmental benefit with no issuing body behind it ("Carbon Neutral
+                # Certification"). Labelling such a claim "Self-Reported" does not cure it:
+                # 16 CFR 260.6 governs the claim, and ECGT 2024/825 bans self-created
+                # sustainability labels outright. The event keeps the value; the shopper
+                # does not see it.
+                from history.services.claim_authority import may_publish_certification_type
+
+                cert_publishable = may_publish_certification_type(getattr(event, "certification_type", None)).allowed
                 certification_display = (
                     event.get_certification_type_display()
-                    if hasattr(event, "get_certification_type_display") and event.certification_type
+                    if cert_publishable
+                    and hasattr(event, "get_certification_type_display")
+                    and event.certification_type
                     else None
                 )
 
@@ -5555,24 +5606,19 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "growth_stage": getattr(event, "growth_stage", None),
                         "business_type": getattr(event, "business_type", None),
                         "business_event_type": getattr(event, "type", None),
-                        "certification_type": getattr(event, "certification_type", None),
+                        "certification_type": (
+                            getattr(event, "certification_type", None) if cert_publishable else None
+                        ),
                         "certification_type_display": certification_display,
                         "certificate_number": getattr(event, "certificate_number", None),
                         "verification_status": getattr(event, "verification_status", None),
                         "sustainability_practice": getattr(event, "sustainability_practice", None),
-                        # Gate carbon_credits_unit on truthy carbon_credits_earned to prevent
-                        # an orphan "Carbon Credits Unit: tCO2e" card on the consumer QR when
-                        # business_type changed from 'carbon_credits' to 'certification' but the
-                        # model's default 'tCO2e' unit value persisted on the row. Bug class:
-                        # stale conditional field surfaces when parent context changes. Fix
-                        # mechanism mirrors Standard Fix #5 (gate in hand-rolled get_events()
-                        # dict), even though the field is not commercially sensitive.
-                        "carbon_credits_earned": float(getattr(event, "carbon_credits_earned", None) or 0) or None,
-                        "carbon_credits_unit": (
-                            getattr(event, "carbon_credits_unit", None)
-                            if (getattr(event, "carbon_credits_earned", None) or 0)
-                            else None
-                        ),
+                        # carbon_credits_earned / _unit are deliberately NOT on the wire.
+                        # The activity type was withdrawn (see BUSINESS_ACTIVITY_CHOICES), and
+                        # a credit figure on a public product page is a tradeable-offset claim
+                        # Trazo's direct-operational methodology cannot support. The columns
+                        # still exist for any historical row; the shopper does not see them.
+                        #
                         # FARMER-TYPED free text — the `verified_` prefix is a naming lie.
                         # Published beside a certificate number it reads as third-party
                         # attestation. Withheld unless a USDA Organic Integrity Database match
@@ -6878,7 +6924,7 @@ class UpdateBusinessEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
                 {
                     "business_type": [
                         "Business type is required.",
-                        "Please select the type of business activity (certification, carbon credits, etc.)",
+                        "Please select the type of business activity (certification, inspection, etc.)",
                     ]
                 }
             )
@@ -6891,20 +6937,6 @@ class UpdateBusinessEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
                         "Certification type is required for certification events.",
                         "Please specify what type of certification was obtained.",
                         "Examples: USDA Organic, Carbon Neutral, Rainforest Alliance",
-                    ]
-                }
-            )
-
-        # Business logic: carbon_credits events should have carbon_credits_earned.
-        # `is None`, not falsy — Decimal("0.00") is falsy, so `not value` rejected a
-        # legitimately-recorded zero as if the field were blank. See BusinessEvent.clean().
-        if business_type == "carbon_credits" and carbon_credits_earned is None:
-            raise serializers.ValidationError(
-                {
-                    "carbon_credits_earned": [
-                        "Carbon credits amount is required for carbon credit transactions.",
-                        "Please enter the number of credits generated or traded.",
-                        "If no credits were generated, consider using a different business type.",
                     ]
                 }
             )
@@ -7202,4 +7234,58 @@ class SalesRecordSerializer(serializers.ModelSerializer):
                     )
                 }
             )
+        return attrs
+
+
+class ProductionPlanItemSerializer(serializers.ModelSerializer):
+    """A season-plan suggestion, read by the production page's plan checklist.
+
+    ⛔ Fully read-only on purpose. Every field comes from the catalogue or from what the
+    operator did, and letting a client rewrite any of it would turn the plan back into a
+    place where free-text claims can be authored without going through an event. The only
+    thing a client may change is whether the practice applies this season — see
+    `ProductionPlanItemStatusSerializer`.
+
+    ⛔ Carries no field VALUES. See `ProductionPlanItem` for why.
+    """
+
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = ProductionPlanItem
+        fields = [
+            "id",
+            "name",
+            "description",
+            "event_type",
+            "event_subtype",
+            "planned_window",
+            "planned_month",
+            "order_sequence",
+            "status",
+            "status_display",
+            "fulfilled_by_event_type",
+            "fulfilled_by_id",
+            "fulfilled_at",
+            "skipped_reason",
+        ]
+        read_only_fields = fields
+
+
+class ProductionPlanItemStatusSerializer(serializers.Serializer):
+    """What the operator may change about a plan item: whether it happened.
+
+    `logged` requires the record that fulfils it, because a plan item that claims to be
+    logged without pointing at a record is exactly the untraceable assertion this whole
+    model exists to prevent — an inspector following the plan would find nothing at the
+    other end.
+    """
+
+    status = serializers.ChoiceField(choices=[ProductionPlanItem.PENDING, ProductionPlanItem.SKIPPED])
+    skipped_reason = serializers.CharField(required=False, allow_blank=True, max_length=255)
+
+    def validate(self, attrs):
+        if attrs.get("status") == ProductionPlanItem.PENDING:
+            # Re-opening an item clears whatever reason was given for setting it aside.
+            attrs["skipped_reason"] = ""
         return attrs

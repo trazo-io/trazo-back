@@ -281,10 +281,20 @@ class OperationReadinessService:
             return {
                 "key": "osp",
                 "status": "warning",
-                "title": "The Organic System Plan is still a draft",
+                "title": "The Organic System Plan has not been submitted from Trazo",
+                # 🔴 2026-08-19: this read "the plan has never been submitted to or approved by
+                # a certifier" — a claim about the world that Trazo cannot make. All it knows
+                # is its own `status`. An operation certified by CCOF already has an OSP agreed
+                # with its agent, on CCOF's own forms; for that grower the sentence was simply
+                # false, on a card they were being asked to trust.
+                #
+                # § 205.201(a) does require the plan be "agreed to by the producer and an
+                # accredited certifying agent", so this remains a real item — unlike the
+                # certificate or the photo count. It is the phrasing that overreached.
                 "detail": (
                     f"{filled} of {len(OSP_SECTION_KEYS)} § 205.201(a) sections have content, "
-                    "but the plan has never been submitted to or approved by a certifier."
+                    "but this plan has not been submitted from Trazo. If your certifier already "
+                    "holds an agreed OSP, submitting here keeps the two in step."
                 ),
                 "fix": "Finish the OSP sections and submit it to your certifier.",
             }
@@ -351,6 +361,30 @@ class OperationReadinessService:
                 unsupported.append(
                     "G3.0b attests that planting stock suppliers are on the Supplier List, "
                     "but the Supplier List is empty"
+                )
+
+        # 🔴 2026-08-19, found the same way the two above were — by reading a finished packet
+        # as a certifier would. G3.0b answered "no search records kept yet" while the Seed &
+        # Planting Stock section of the very same packet printed three documented nursery
+        # searches per planting event, and G3.0 two lines earlier said searches ARE
+        # documented. § 205.204(a)(1) turns on those records; a plan that disowns evidence the
+        # packet contains is worse than one that simply lacks it.
+        if _answer("g3_2_planting_stock", "stock_search_records") == ["none_yet"]:
+            from history.models import ProductionEvent
+
+            documented = any(
+                any(
+                    isinstance(row, dict) and str(row.get("supplier_name") or row.get("supplier") or "").strip()
+                    for row in (ev.seed_search_attempts or [])
+                )
+                for ev in ProductionEvent.objects.filter(
+                    history__parcel__establishment=self.establishment
+                ).exclude(seed_search_attempts__isnull=True)
+            )
+            if documented:
+                unsupported.append(
+                    "G3.0b attests that no commercial-availability search records are kept, "
+                    "but the packet prints documented supplier searches against planting events"
                 )
 
         if not unsupported:

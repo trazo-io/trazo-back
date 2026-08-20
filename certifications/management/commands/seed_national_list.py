@@ -227,12 +227,19 @@ SECTION_105_PROHIBITED = [
     ("a", "fertilizer", "Ammonium nitrate", "Synthetic nitrogen fertilizer; not on § 205.601."),
     ("a", "fertilizer", "Anhydrous ammonia", "Synthetic nitrogen fertilizer; not on § 205.601."),
     ("a", "fertilizer", "Diammonium phosphate", "Synthetic fertilizer (DAP); not on § 205.601."),
-    # (d) excluded methods — genetic engineering
-    ("d", "prohibited_method", "Genetically engineered / excluded-method inputs", "Prohibited under § 205.105(d)."),
-    # (e) ionizing radiation
-    ("e", "prohibited_method", "Ionizing radiation (irradiation)", "Prohibited under § 205.105(e)."),
-    # (f) sewage sludge
-    ("f", "amendment", "Sewage sludge (biosolids)", "Prohibited under § 205.105(f)."),
+    # § 205.105 paragraph letters, verified against the frozen CFR corpus 2026-08-18:
+    #   (a) synthetic  (b) nonsynthetic per .602/.604  (c) nonagricultural in processed
+    #   (d) nonorganic agricultural in processed  (e) EXCLUDED METHODS
+    #   (f) IONIZING RADIATION  (g) SEWAGE SLUDGE
+    # The three rows below were seeded as (d)/(e)/(f) — every one shifted a letter early, so
+    # operator-facing prohibited-substance rationales named the wrong clause. (d) is the
+    # processed-product nonorganic-ingredient paragraph, not genetic engineering.
+    # (e) excluded methods — genetic engineering
+    ("e", "prohibited_method", "Genetically engineered / excluded-method inputs", "Prohibited under § 205.105(e)."),
+    # (f) ionizing radiation
+    ("f", "prohibited_method", "Ionizing radiation (irradiation)", "Prohibited under § 205.105(f)."),
+    # (g) sewage sludge
+    ("g", "amendment", "Sewage sludge (biosolids)", "Prohibited under § 205.105(g)."),
 ]
 
 

@@ -26,7 +26,12 @@ _INCHES = re.compile(r"([0-9.]+)\s*\*\s*inch")
 # Inline `colWidths=[...]` and named `*widths* = [...]` / `col_widths = [...]` lists.
 _WIDTH_LISTS = (
     re.compile(r"colWidths=\[([^\]]*)\]", re.S),
-    re.compile(r"(?:\w*widths\w*|col_widths)\s*=\s*\[([^\]]*)\]", re.S),
+    # re.I so UPPERCASE module constants are seen — MASS_BALANCE_PURCHASE_WIDTHS and the two
+    # INPUT_TRACEABILITY_WIDTHS_* lists were invisible to this guard until 2026-08-18.
+    re.compile(r"(?:\w*widths\w*|col_widths)\s*=\s*\[([^\]]*)\]", re.S | re.I),
+    # Any local list of `N * inch` values assigned to a short name. `sw = [1.5 * inch, ...]`
+    # was covered by no guard at all: it names neither "widths" nor "col_widths".
+    re.compile(r"^\s*[a-z_][a-z0-9_]*\s*=\s*\[((?:[^\]]*?\*\s*inch[^\]]*?))\]", re.S | re.M),
 )
 
 
@@ -45,10 +50,24 @@ class PacketTableWidthTests(SimpleTestCase):
 
         source = SERVICE.read_text()
         offenders = []
+        unmeasured = []
+        seen_spans = set()
         for pattern in _WIDTH_LISTS:
             for match in pattern.finditer(source):
+                # Three patterns overlap; measure each list once.
+                if match.span(1) in seen_spans:
+                    continue
+                seen_spans.add(match.span(1))
                 widths = [float(x) for x in _INCHES.findall(match.group(1))]
                 if not widths:
+                    # A width list this guard cannot read is NOT a pass. `col_widths = [62, 48,
+                    # 120, ...]` is in POINTS (a valid ReportLab unit), matched the pattern,
+                    # found no `* inch` and was skipped in silence — so a points-valued table
+                    # that went over would never be reported. A skip in a guard must be loud.
+                    body = " ".join(match.group(1).split())
+                    if body.strip():
+                        line = source[: match.start()].count("\n") + 1
+                        unmeasured.append(f"  line {line}: {body[:70]}")
                     continue
                 total = round(sum(widths), 4)
                 if total > budget + 1e-4:
@@ -61,4 +80,13 @@ class PacketTableWidthTests(SimpleTestCase):
             offenders,
             [],
             "These tables print past the right margin of an inspector-facing PDF:\n" + "\n".join(offenders),
+        )
+
+        # Points-valued lists are legal ReportLab and legal here — but they must be converted
+        # so the budget can be checked, not left for the guard to skip quietly.
+        self.assertEqual(
+            unmeasured,
+            [],
+            "Width lists this guard could not measure (express them in `* inch` so the 7.00in "
+            "budget applies):\n" + "\n".join(unmeasured),
         )

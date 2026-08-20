@@ -7,6 +7,8 @@ Export-only P2 fixes (2026-06 NOP-alignment audit):
   section (previously the OSP section queried OrganicSystemPlan only and never showed it).
 """
 
+from datetime import date, timedelta
+
 from django.test import TestCase
 from django.utils import timezone
 
@@ -90,11 +92,59 @@ class IrrigationBlockTests(_Base):
 
 
 class OspAnnualUpdateTests(_Base):
+    def _certify(self, effective):
+        """Give the operation a NOP certificate — § 205.406 binds certified operations only."""
+        from certifications.models import Certification
+
+        return Certification.objects.create(
+            establishment=self.establishment,
+            certification_type="usda_organic",
+            certification_number="CCOF-TEST-1",
+            certifier_name="CCOF",
+            effective_date=effective,
+        )
+
     def test_missing_annual_update_fires_review(self):
+        self._certify(date(2020, 1, 1))
         OrganicSystemPlan.objects.create(establishment=self.establishment, version_number=1, status="active")
         text = _section_text(self._svc()._build_osp_reference_section())
         self.assertIn("Annual Continuation", text)
         self.assertIn("[REVIEW] 7 CFR 205.406", text)
+
+    def test_an_uncertified_applicant_is_not_flagged_for_a_continuation(self):
+        """§ 205.406 binds a CERTIFIED operation.
+
+        An operation seeking initial certification owes a § 205.401 application, not a
+        continuation. Amber against it is the cry-wolf pattern: nothing the grower can do
+        today would clear it, and it teaches the reader to skim past the flags that matter.
+        """
+        OrganicSystemPlan.objects.create(establishment=self.establishment, version_number=1, status="active")
+        text = _section_text(self._svc()._build_osp_reference_section())
+        self.assertNotIn("[REVIEW] 7 CFR 205.406", text)
+        self.assertIn("§ 205.401 application", text)
+
+    def test_a_first_year_operation_is_told_when_the_first_update_falls_due(self):
+        """Not yet due is not the same as missing — and the date is the useful part."""
+        self._certify(date.today() - timedelta(days=30))
+        OrganicSystemPlan.objects.create(establishment=self.establishment, version_number=1, status="active")
+        text = _section_text(self._svc()._build_osp_reference_section())
+        self.assertNotIn("[REVIEW] 7 CFR 205.406", text)
+        self.assertIn("falls due on", text)
+
+    def test_a_non_nop_certificate_does_not_create_the_duty(self):
+        """A Non-GMO or GlobalG.A.P. certificate puts nobody under 7 CFR Part 205."""
+        from certifications.models import Certification
+
+        Certification.objects.create(
+            establishment=self.establishment,
+            certification_type="global_gap",
+            certification_number="GG-1",
+            certifier_name="SCS",
+            effective_date=date(2019, 1, 1),
+        )
+        OrganicSystemPlan.objects.create(establishment=self.establishment, version_number=1, status="active")
+        text = _section_text(self._svc()._build_osp_reference_section())
+        self.assertNotIn("[REVIEW] 7 CFR 205.406", text)
 
     def test_annual_update_renders(self):
         # Year must match the production's own year — the exporter selects the filing that

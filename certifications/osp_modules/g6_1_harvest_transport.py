@@ -156,13 +156,14 @@ G6_1_HARVEST_TRANSPORT = Module(
                 text(
                     "Every container, bin, or trailer that touches the crop after harvest "
                     "must be new, dedicated to organic use, or cleaned before that use. A "
-                    "container that once held a prohibited substance may be reused only "
-                    "behind a barrier or cleaning that prevents contact (§ 205.272(b)).",
+                    "container that once held a prohibited substance may be reused only after "
+                    "it has been thoroughly cleaned and poses no risk of contact "
+                    "(§ 205.272(b)(2)).",
                     "Todo contenedor, cajón o remolque que toque el cultivo después de la "
                     "cosecha debe ser nuevo, estar dedicado al uso orgánico o haberse "
                     "limpiado antes de ese uso. Un contenedor que alguna vez contuvo una "
-                    "sustancia prohibida solo puede reutilizarse con una barrera o limpieza "
-                    "que impida el contacto (§ 205.272(b)).",
+                    "sustancia prohibida solo puede reutilizarse después de una limpieza "
+                    "a fondo que no deje riesgo de contacto (§ 205.272(b)(2)).",
                 ),
             ),
             questions=(
@@ -238,14 +239,15 @@ G6_1_HARVEST_TRANSPORT = Module(
                     ),
                     coaching=text(
                         "§ 205.272(b)(2) forbids reusing a container for organic product "
-                        "when the reuse would compromise its organic integrity — a container "
-                        "that held a prohibited substance may be reused only behind a "
-                        "protective barrier or after cleaning that removes the residue.",
+                        "when the reuse would compromise its organic integrity. The clause "
+                        "allows exactly one route back: the container must have been "
+                        "THOROUGHLY CLEANED and pose no risk of contact. A liner or other "
+                        "barrier over an uncleaned container is not an alternative to that.",
                         "El § 205.272(b)(2) prohíbe reutilizar un contenedor para producto "
-                        "orgánico cuando la reutilización comprometa su integridad orgánica — "
-                        "un contenedor que contuvo una sustancia prohibida solo puede "
-                        "reutilizarse con una barrera protectora o tras una limpieza que "
-                        "elimine el residuo.",
+                        "orgánico cuando la reutilización comprometa su integridad orgánica. "
+                        "La norma permite una sola vía: el contenedor debe haberse LIMPIADO A "
+                        "FONDO y no presentar riesgo de contacto. Un forro u otra barrera "
+                        "sobre un contenedor sin limpiar no sustituye esa limpieza.",
                     ),
                     # (b)(1) is the packaging-COMPOSITION prohibition, asked separately below;
                     # (b)(2) is REUSE, which is what this question is about. The two were
@@ -263,11 +265,13 @@ G6_1_HARVEST_TRANSPORT = Module(
                     key="containers_reused_barrier",
                     kind="textarea",
                     label=text(
-                        "What protective barrier or cleaning is applied before reuse?",
-                        "¿Qué barrera protectora o limpieza se aplica antes de reutilizarlo?",
+                        "How is the container thoroughly cleaned before reuse, and how do you "
+                        "confirm it poses no risk of contact?",
+                        "¿Cómo se limpia a fondo el contenedor antes de reutilizarlo, y cómo "
+                        "confirma que no presenta riesgo de contacto?",
                     ),
                     visible_when=(Condition("containers_reused_from_prohibited", "truthy"),),
-                    compiles_to=CompileRule(template="Protective barrier or cleaning applied before reuse: {answer}"),
+                    compiles_to=CompileRule(template="Cleaning verified before reuse: {answer}"),
                 ),
                 # § 205.272(b)(1) — the packaging-COMPOSITION prohibition. Distinct from
                 # reuse above: this one is about what the container is MADE WITH, and it is

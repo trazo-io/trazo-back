@@ -204,3 +204,174 @@ class EstablishmentLimitTests(TestCase):
         for i in range(6):
             _farm(company, f"Farm {i}")
         self.assertTrue(company.can_create_establishment())
+
+
+class ProductionQuotaAsksTheRightCompany(TestCase):
+    """A quota question is asked of the subscription that will be BILLED.
+
+    Found by driving the real app 2026-08-19: the demo account works in two companies. The
+    ACTIVE one sat on a retired `corporate-*` plan capped at 6 productions/year and already at
+    6; the parcel belonged to the OTHER company (Compliance, unlimited). Starting a season
+    answered 403 — `HasProductionCreationPermission` read the quota off `get_active_company()`
+    while the view creates the production on `parcel.establishment.company`.
+
+    The false negative is the visible half. The false POSITIVE is the one that matters: switch
+    active company to any unlimited one and the exhausted company's cap is bypassed entirely.
+    A limit defeated by a dropdown is not a limit.
+    """
+
+    def setUp(self):
+        from unittest.mock import patch
+
+        from company.models import Establishment
+        from product.models import Parcel
+        from subscriptions.permissions import HasProductionCreationPermission
+        from users.models import User, WorksIn
+
+        self.permission = HasProductionCreationPermission()
+        self.user = User.objects.create_user(email="two.hats@trazo.test", password="x")
+        self._patch = patch
+        self.WorksIn = WorksIn
+
+        self.capped = _company_on(_plan("legacy-corporate", max_productions_per_year=0))
+        self.owner = _company_on(_plan("compliance-unlimited", max_productions_per_year=-1))
+        for company in (self.capped, self.owner):
+            WorksIn.objects.create(user=self.user, company=company, role=WorksIn.COMPANY_ADMIN)
+
+        self.parcel = Parcel.objects.create(
+            establishment=Establishment.objects.create(company=self.owner, name="Home Ranch"),
+            name="Block A",
+            area=5.0,
+        )
+        self.capped_parcel = Parcel.objects.create(
+            establishment=Establishment.objects.create(company=self.capped, name="Capped Ranch"),
+            name="Block Z",
+            area=5.0,
+        )
+
+    def _request(self, parcel_id, active_company):
+        from rest_framework.parsers import JSONParser
+        from rest_framework.request import Request
+        from rest_framework.test import APIRequestFactory
+
+        # Wrapped in a DRF Request on purpose: APIRequestFactory returns a plain Django
+        # WSGIRequest, which has no `.data`. The permission class reads `request.data`, so an
+        # unwrapped request tests nothing but its own AttributeError.
+        request = Request(
+            APIRequestFactory().post("/api/histories/start-production/", {"parcel_id": parcel_id}, format="json"),
+            parsers=[JSONParser()],
+        )
+        request.user = self.user
+        patcher = self._patch.object(type(self.user), "get_active_company", return_value=active_company)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return request
+
+    def test_an_exhausted_active_company_does_not_block_another_companys_parcel(self):
+        self.assertTrue(self.permission.has_permission(self._request(self.parcel.id, self.capped), view=None))
+
+    def test_an_unlimited_active_company_does_not_unlock_an_exhausted_one(self):
+        """The bypass — the half a false-negative-only fix would have left open."""
+        self.assertFalse(self.permission.has_permission(self._request(self.capped_parcel.id, self.owner), view=None))
+
+    def test_with_no_parcel_in_the_payload_it_falls_back_to_the_active_company(self):
+        self.assertTrue(self.permission.has_permission(self._request("", self.owner), view=None))
+
+    def test_a_garbage_parcel_id_defers_to_the_view_rather_than_403ing(self):
+        """The view answers a specific 404 for a bad parcel; a permission class that refused
+        first would replace it with a misleading "your plan has reached its maximum"."""
+        self.assertTrue(self.permission.has_permission(self._request("not-a-number", self.owner), view=None))
+
+
+class FarmAndParcelQuotasAskTheRightCompany(TestCase):
+    """The same audit, applied to the two siblings of the production quota.
+
+    `HasEstablishmentCreationPermission` is the worst of the three, because farms are the
+    metric Trazo actually BILLS: Extra Farm is $149/yr and the Operation tier exists precisely
+    to lift the farm cap. The permission asked `get_active_company()`, while
+    `EstablishmentViewSet` has no `perform_create` override and `company` is a writable field
+    on `UpdateEstablishmentSerializer` — so the row is created on whatever company the PAYLOAD
+    names. Point active at a company with headroom, post `company: <exhausted company>`, and
+    the farm cap is gone.
+
+    `HasParcelCreationPermission` was bypass-SAFE by accident: it looked the establishment up
+    through `company.establishment_set`, so a foreign establishment raised DoesNotExist. But it
+    answered False for a legitimate multi-company user, and its bare `except Exception` turned
+    every programming error into a polite "your plan does not allow this".
+    """
+
+    def setUp(self):
+        from unittest.mock import patch
+
+        from company.models import Establishment
+        from subscriptions.permissions import HasEstablishmentCreationPermission, HasParcelCreationPermission
+        from users.models import User, WorksIn
+
+        self.farm_perm = HasEstablishmentCreationPermission()
+        self.parcel_perm = HasParcelCreationPermission()
+        self.user = User.objects.create_user(email="multi.co@trazo.test", password="x")
+        self._patch = patch
+
+        # Exhausted on BOTH metrics.
+        self.capped = _company_on(_plan("capped-co", max_establishments=0, max_parcels_per_establishment=0))
+        # Room on both.
+        self.roomy = _company_on(_plan("roomy-co", max_establishments=-1, max_parcels_per_establishment=-1))
+        for company in (self.capped, self.roomy):
+            WorksIn.objects.create(user=self.user, company=company, role=WorksIn.COMPANY_ADMIN)
+
+        self.capped_farm = Establishment.objects.create(company=self.capped, name="Capped Ranch")
+        self.roomy_farm = Establishment.objects.create(company=self.roomy, name="Roomy Ranch")
+
+    def _request(self, payload, active_company):
+        from rest_framework.parsers import JSONParser
+        from rest_framework.request import Request
+        from rest_framework.test import APIRequestFactory
+
+        request = Request(
+            APIRequestFactory().post("/api/whatever/", payload, format="json"),
+            parsers=[JSONParser()],
+        )
+        request.user = self.user
+        patcher = self._patch.object(type(self.user), "get_active_company", return_value=active_company)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return request
+
+    # --- farms: the billed metric -------------------------------------------------
+    def test_an_unlimited_active_company_does_not_unlock_an_exhausted_ones_farm_cap(self):
+        """The bypass. Farms are what Extra Farm ($149/yr) and the Operation tier price."""
+        request = self._request({"company": self.capped.id}, self.roomy)
+        self.assertFalse(self.farm_perm.has_permission(request, view=None))
+
+    def test_an_exhausted_active_company_does_not_block_a_farm_on_another_company(self):
+        request = self._request({"company": self.roomy.id}, self.capped)
+        self.assertTrue(self.farm_perm.has_permission(request, view=None))
+
+    def test_with_no_company_in_the_payload_it_falls_back_to_the_active_company(self):
+        self.assertTrue(self.farm_perm.has_permission(self._request({}, self.roomy), view=None))
+        self.assertFalse(self.farm_perm.has_permission(self._request({}, self.capped), view=None))
+
+    # --- parcels ------------------------------------------------------------------
+    def test_an_unlimited_active_company_does_not_unlock_an_exhausted_ones_parcel_cap(self):
+        request = self._request({"establishment": self.capped_farm.id}, self.roomy)
+        self.assertFalse(self.parcel_perm.has_permission(request, view=None))
+
+    def test_an_exhausted_active_company_does_not_block_a_parcel_on_another_company(self):
+        """The false negative the old `company.establishment_set.get()` lookup produced."""
+        request = self._request({"establishment": self.roomy_farm.id}, self.capped)
+        self.assertTrue(self.parcel_perm.has_permission(request, view=None))
+
+    def test_a_parcel_on_an_establishment_the_user_does_not_work_in_is_refused(self):
+        from company.models import Company, Establishment
+
+        stranger = Company.objects.create(name="Stranger Co")
+        foreign_farm = Establishment.objects.create(company=stranger, name="Not Mine")
+        request = self._request({"establishment": foreign_farm.id}, self.roomy)
+        self.assertFalse(self.parcel_perm.has_permission(request, view=None))
+
+    def test_a_farm_on_a_company_the_user_does_not_work_in_is_refused(self):
+        from company.models import Company
+
+        stranger = Company.objects.create(name="Stranger Co 2")
+        request = self._request({"company": stranger.id}, self.roomy)
+        self.assertFalse(self.farm_perm.has_permission(request, view=None))
