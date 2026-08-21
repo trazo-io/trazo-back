@@ -58,17 +58,36 @@ def _option_labels_en(question) -> dict:
     return {o.value: (o.label.get("en") or o.value) for o in question.options}
 
 
+def _unrecognised_option(value) -> str:
+    """Render a stored option value that is not in the question's option list.
+
+    🔴 2026-08-20 — `str(value)` printed the raw slug straight into a certifier PDF:
+    "buffer_areas_flagged; roadside_utility_registration" appeared in the § 205.201(a)
+    narrative snapshot and the G6.0 module PDF. An inspector reads machine identifiers with no
+    way to tell whether the operation claimed something or the software lost a label.
+
+    An option value that no longer exists in the registry means the answer was written by an
+    older content version, an importer, or a hand edit — and none of those entitle the document
+    to assert what it means. Same rule as `_organic_basis_label` in the audit export: name the
+    stored value, but do not dress it up as a label the operator chose.
+    """
+    text = str(value).strip()
+    if not text:
+        return ""
+    return f'"{text}" (unrecognised option — not in the current form)'
+
+
 def _format_answer_en(question, value) -> str:
     """Render an answer as the EN text the operator saw when selecting it."""
     if question.kind == "boolean":
         return "Yes" if value else "No"
     if question.kind in ("radio", "select"):
-        return _option_labels_en(question).get(value, str(value))
+        return _option_labels_en(question).get(value, _unrecognised_option(value))
     if question.kind == "checkbox_group":
         labels = _option_labels_en(question)
         if not isinstance(value, (list, tuple)):
-            return str(value)
-        return "; ".join(labels.get(v, str(v)) for v in value)
+            return _unrecognised_option(value)
+        return "; ".join(labels.get(v, _unrecognised_option(v)) for v in value)
     return str(value).strip()
 
 
@@ -134,7 +153,68 @@ def compile_module_contributions(osp) -> dict:
             paragraph = _module_heading_en(module) + "\n" + "\n".join(sentences)
             contributions.setdefault(section_key, []).append(paragraph)
 
+    _append_materials_registry(osp, contributions)
     return contributions
+
+
+def _append_materials_registry(osp, contributions: dict) -> None:
+    """Name every approved input in the (a)(2) narrative.
+
+    § 205.201(a)(2) wants "a description of the … substances to be used as production
+    inputs", and the audit snapshot enforces it by checking each registry entry against
+    the `inputs_list` narrative — REVIEW at 1-3 unreferenced, FAIL at 4+.
+
+    🔴 2026-08-21 — nothing wrote those names. The Materials Application module is
+    attestations plus a structured panel, and no question anywhere in the 19 modules is a
+    free-text field for the substances, so a farm that had entered its whole materials list
+    correctly still read "8 registry entries unreferenced" on the face of its own packet:
+    the document listed the inputs in one table and reported them as undescribed two pages
+    earlier. Found filling a real OSP.
+
+    The registry IS the description — product name, manufacturer, and the OMRI / WSDA /
+    National List reference that verifies it — so the compiler states it in the narrative
+    rather than asking the operator to retype a list they already entered. Nothing here is
+    invented: every line comes from an entry the operator added and Trazo resolved.
+    """
+    # An unsaved OSP has no pk, and Django raises on any M2M access against one. This runs on
+    # the packet/snapshot path, where the standing rule is that a cross-check never takes the
+    # document down — an OSP with no primary key simply has no registry to state.
+    if not getattr(osp, "pk", None):
+        return
+
+    lines = []
+    for product in osp.approved_omri_products.all():
+        name = (product.product_name or "").strip()
+        if not name:
+            continue
+        maker = (product.manufacturer or "").strip()
+        omri_id = (product.omri_id or "").strip()
+        detail = ", ".join(x for x in (maker, f"OMRI #{omri_id}" if omri_id else "") if x)
+        lines.append(f"{name} — OMRI listed{f' ({detail})' if detail else ''}.")
+    for material in osp.approved_wsda_materials.all():
+        name = (material.brand_name or "").strip()
+        if not name:
+            continue
+        maker = (material.manufacturer or "").strip()
+        wsda_id = (material.wsda_id or "").strip()
+        detail = ", ".join(x for x in (maker, wsda_id) if x)
+        lines.append(f"{name} — WSDA listed{f' ({detail})' if detail else ''}.")
+    for substance in osp.approved_national_list_substances.all():
+        name = (substance.substance_name or "").strip()
+        if not name:
+            continue
+        cfr = (substance.cfr_section or "").strip()
+        lines.append(f"{name} — National List{f' § {cfr}' if cfr else ''}.")
+
+    if not lines:
+        return
+    paragraph = (
+        "[Approved input materials]\n"
+        "The following substances are used or planned as production inputs on this "
+        "operation. Each was resolved against OMRI, the WSDA Materials List or the "
+        "National List when it was added to this plan:\n" + "\n".join(lines)
+    )
+    contributions.setdefault("inputs_list", []).append(paragraph)
 
 
 def _split_section(section: dict) -> dict:

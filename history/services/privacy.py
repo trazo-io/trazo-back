@@ -313,7 +313,13 @@ def public_parcel_geo(parcel) -> dict:
 
     Returns {"polygon": ..., "map_metadata": ..., "level": str}.
     """
-    level = getattr(parcel, "location_disclosure_level", "exact") or "exact"
+    # Fail CLOSED. This used to default to "exact", so a parcel arriving without the column
+    # set — a blank string, a stub object, a pre-0013 fixture — published the full field
+    # polygon. Grandfathered parcels carry "exact" in the DB (migration 0013 wrote it
+    # explicitly), so nothing legitimate depends on the fallback; the only rows it can reach
+    # are the ones whose disclosure level is unknown, and an unknown level must not publish a
+    # boundary. Matches Parcel.location_disclosure_level's own model default.
+    level = getattr(parcel, "location_disclosure_level", "approximate") or "approximate"
 
     if level == "exact":
         return {

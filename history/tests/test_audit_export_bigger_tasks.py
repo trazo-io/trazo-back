@@ -89,12 +89,21 @@ class BiggerTasksAuditTests(TestCase):
         txt = _flowable_text(AuditExportService(self.history)._facility_cert_block(f))
         self.assertIn("Test Huller", txt)
         self.assertIn("DOCUMENTED", txt)
-        self.assertNotIn("[GAP]", txt)
+        self.assertNotIn("[REVIEW]", txt)
 
-    def test_facility_block_stale_shows_gap(self):
+    def test_facility_block_stale_asks_for_a_current_copy_without_claiming_expiry(self):
+        """A NOP certificate does not expire (§ 205.404(d)) — the copy on file goes stale.
+
+        The flag used to read "expired or older than 15 months", contradicting this same
+        document's Active Certification Summary footnote two pages earlier. It was also the
+        only [GAP] in a packet that otherwise flags REVIEW / WARNING / NON-CONFORMANCE.
+        """
         f = self._facility(effective_date=timezone.now().date() - timedelta(days=600))
         txt = _flowable_text(AuditExportService(self.history)._facility_cert_block(f))
-        self.assertIn("[GAP]", txt)
+        self.assertIn("[REVIEW]", txt)
+        self.assertIn("more than 15 months old", txt)
+        self.assertNotIn("expired", txt)
+        self.assertNotIn("[GAP]", txt)
 
     # ---- #4 OSP-approved stamp ----
 
@@ -120,7 +129,11 @@ class BiggerTasksAuditTests(TestCase):
 
     def test_input_on_osp_shows_osp_approved(self):
         txt = _flowable_text(self._osp_with_input(on_osp=True)._build_chemical_log())
-        self.assertIn("OSP Approval (CCOF)", txt)
+        # Header de-branded 2026-08-20: it read "OSP Approval (CCOF)" on every packet,
+        # including a WSDA one. The OSP material list is a requirement across accredited
+        # certifiers, so the column names the artifact, not one certifier.
+        self.assertIn("OSP Approval", txt)
+        self.assertNotIn("(CCOF)", txt)
         self.assertIn("OSP-approved", txt)
 
     def test_input_not_on_osp_shows_review_gap(self):

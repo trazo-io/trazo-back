@@ -89,6 +89,26 @@ ALIASES: dict[str, str] = {
     "b t": "Microbial products (Bacillus thuringiensis, etc.)",
     "btk": "Microbial products (Bacillus thuringiensis, etc.)",
     "bacillus thuringiensis kurstaki": "Microbial products (Bacillus thuringiensis, etc.)",
+    # 2026-08-21 — the SUBSPECIES forms. MEASURED, not assumed: the reverse pass needs the
+    # farmer's text to be a substring of the listing, so a bare "Bacillus thuringiensis"
+    # resolves and **"Bacillus thuringiensis subsp. kurstaki" does not** — appending the
+    # subspecies, which is the precise and correct way to name the organism, made the entry
+    # LESS placeable than the vague one. A grower writing the exact organism on their spray
+    # record should not be the one who gets "Self-reported" in the packet.
+    #
+    # The subspecies matter agronomically (kurstaki is a caterpillar material and does
+    # nothing to a beetle; tenebrionis is the potato-beetle one) and not at all to
+    # § 205.601(e)(3), which lists the class. So they all map to the class.
+    "bacillus thuringiensis subsp kurstaki": "Microbial products (Bacillus thuringiensis, etc.)",
+    "bacillus thuringiensis var kurstaki": "Microbial products (Bacillus thuringiensis, etc.)",
+    "bt kurstaki": "Microbial products (Bacillus thuringiensis, etc.)",
+    "bacillus thuringiensis subsp tenebrionis": "Microbial products (Bacillus thuringiensis, etc.)",
+    "bacillus thuringiensis var tenebrionis": "Microbial products (Bacillus thuringiensis, etc.)",
+    "bt tenebrionis": "Microbial products (Bacillus thuringiensis, etc.)",
+    "bacillus thuringiensis subsp aizawai": "Microbial products (Bacillus thuringiensis, etc.)",
+    "bt aizawai": "Microbial products (Bacillus thuringiensis, etc.)",
+    "bacillus thuringiensis subsp israelensis": "Microbial products (Bacillus thuringiensis, etc.)",
+    "bti": "Microbial products (Bacillus thuringiensis, etc.)",
     # § 205.601(e)(7) narrow range oils. Growers name them by season of use, not by the listing.
     "horticultural oil": "Horticultural oils",
     "hort oil": "Horticultural oils",
@@ -115,6 +135,21 @@ AMBIGUOUS_NEVER_AUTO_RESOLVE: dict[str, tuple[str, ...]] = {
     ),
     "soaps": (
         "Soap-based algicide/demossers",
+        "Soap-based herbicides",
+        "Ammonium soaps",
+        "Insecticidal soaps",
+    ),
+    # 2026-08-21 — the CHEMICAL name of a soap, which is why it looks like a safe alias and is
+    # not. Potassium salts of fatty acids are the active in M-Pede (an insecticidal soap) AND
+    # in the soap-based herbicides listed under a different subsection. Auto-resolving it would
+    # pick a § citation for the operator; which one it is depends on what they sprayed it FOR,
+    # and only they know that.
+    "potassium salts of fatty acids": (
+        "Soap-based herbicides",
+        "Ammonium soaps",
+        "Insecticidal soaps",
+    ),
+    "potassium salts of fatty acid": (
         "Soap-based herbicides",
         "Ammonium soaps",
         "Insecticidal soaps",

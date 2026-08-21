@@ -248,3 +248,61 @@ class ApprovedInputMustNotResetTheClockTests(TestCase):
 
         self.assertIs(ORGANIC_APPROVED_VALUES, ORGANIC_APPROVED_OK_VALUES)
         self.assertIs(ORGANIC_OK_VALUES, ORGANIC_APPROVED_OK_VALUES)
+
+
+class UnclassifiedApplicationsAreNamedTests(TestCase):
+    """An unclassified application must be named, not counted.
+
+    The note used to read "2 chemical application(s) ... have no organic status recorded
+    (most recent 2026-06-24)". A grower cannot act on that and an inspector cannot check it:
+    neither knows which two records to open. Same rule the packet applies to every other
+    value — a compliance document names the thing it is asking about.
+    """
+
+    def setUp(self):
+        from datetime import timedelta
+
+        from carbon.models import CropType
+        from company.models import Company, Establishment
+        from history.models import ChemicalEvent, History
+        from product.models import Parcel, Product
+
+        company = Company.objects.create(name="Named Co")
+        est = Establishment.objects.create(name="Named Farm", company=company)
+        self.parcel = Parcel.objects.create(name="P", establishment=est, area=1.0)
+        crop = CropType.objects.create(
+            name="Walnut",
+            slug="walnut-named",
+            category="tree_nut",
+            description="d",
+            typical_farm_size="1",
+            growing_season="s",
+            harvest_season="h",
+            emissions_per_hectare=0.0,
+            industry_average=0.0,
+            best_practice=0.0,
+            carbon_credit_potential=0.0,
+            typical_cost_per_hectare=0.0,
+            has_soil_contact=True,
+        )
+        product = Product.objects.create(name="Walnut")
+        history = History.objects.create(
+            parcel=self.parcel,
+            product=product,
+            crop_type=crop,
+            start_date=timezone.now() - timedelta(days=300),
+        )
+        for name, days in (("Entrust SC", 40), ("Serenade ASO", 200)):
+            ChemicalEvent.objects.create(
+                history=history,
+                type="FU",
+                date=timezone.now() - timedelta(days=days),
+                commercial_name=name,
+                organic_approved="",
+            )
+
+    def test_each_unclassified_product_is_named_with_its_date(self):
+        status = compute_transition_status(self.parcel)
+        self.assertIn("Entrust SC", status.note)
+        self.assertIn("Serenade ASO", status.note)
+        self.assertIn("no organic status recorded", status.note)

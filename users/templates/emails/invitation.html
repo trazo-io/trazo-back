@@ -5,17 +5,17 @@
 {% block header_title %}You're Invited!{% endblock %}
 
 {% block header_subtitle %}
-    Join {{ company.name }} on Trazo's agricultural transparency platform
+    Join {{ company.name }} on Trazo, the organic recordkeeping platform
 {% endblock %}
 
 {% block greeting %}Hi {{ invitee_name|default:"there" }},{% endblock %}
 
 {% block message %}
-    <p><strong>{{ inviter.first_name }} {{ inviter.last_name }}</strong> has invited you to join <strong>{{ company.name }}</strong> on Trazo, the transparency platform for specialty crop farms.</p>
+    <p><strong>{{ inviter.first_name }} {{ inviter.last_name }}</strong> has invited you to join <strong>{{ company.name }}</strong> on Trazo, the organic recordkeeping platform for specialty crop farms.</p>
     
     <p>You've been assigned the role of <strong>{{ role_display }}</strong>, which will give you access to the tools and features needed for your responsibilities.</p>
     
-    <div style="background-color: #f0fdf4; border-left: 4px solid #4CAF50; padding: 16px; margin: 24px 0; border-radius: 4px;">
+    <div style="background-color: #f9fafb; border-left: 4px solid #d1d5db; padding: 16px; margin: 24px 0; border-radius: 4px;">
         <h3 style="color: #388E3C; margin-bottom: 8px; font-size: 16px;">Company Details</h3>
         <p style="margin-bottom: 4px; color: #374151;"><strong>Company:</strong> {{ company.name }}</p>
         <p style="margin-bottom: 4px; color: #374151;"><strong>Your Role:</strong> {{ role_display }}</p>
@@ -31,24 +31,24 @@
     {% if role == 'CA' %}
         <ul style="margin: 16px 0; padding-left: 20px; color: #4b5563;">
             <li>Manage all company operations and team members</li>
-            <li>Access complete transparency tracking and reporting</li>
-            <li>Generate QR codes for consumer trust</li>
+            <li>Access every record across the operation</li>
+            <li>Generate QR codes for buyer pages</li>
             <li>Configure company settings and integrations</li>
-            <li>View comprehensive analytics and insights</li>
+            <li>Review readiness checks across the operation</li>
         </ul>
     {% elif role == 'DS' %}
         <ul style="margin: 16px 0; padding-left: 20px; color: #4b5563;">
             <li>Supervise specific agricultural domains</li>
-            <li>Track transparency scores for assigned areas</li>
+            <li>Track record completeness for assigned areas</li>
             <li>Generate reports for your domains</li>
             <li>Manage domain workers and activities</li>
-            <li>Monitor sustainability metrics</li>
+            <li>Monitor activity logs and input use</li>
         </ul>
     {% elif role == 'DW' %}
         <ul style="margin: 16px 0; padding-left: 20px; color: #4b5563;">
             <li>Record agricultural activities and events</li>
             <li>Track inputs and outputs for assigned areas</li>
-            <li>Document farming practices for transparency scores</li>
+            <li>Document farming practices for the record</li>
             <li>Generate QR codes for products</li>
             <li>View domain-specific reports</li>
         </ul>
@@ -58,7 +58,7 @@
             <li>Track distribution and sales data</li>
             <li>Generate customer-facing reports</li>
             <li>Monitor product traceability</li>
-            <li>Support transparency initiatives</li>
+            <li>Share buyer pages for the products you carry</li>
         </ul>
     {% endif %}
 {% endblock %}
@@ -84,6 +84,6 @@
             If you believe you received this invitation in error, you can safely ignore this email or contact our support team.
         </p>
         
-        <p style="margin-top: 16px; color: #4CAF50; font-weight: 600;">The Trazo Team</p>
+        <p style="margin-top: 16px; color: #2E7D32; font-weight: 600;">The Trazo Team</p>
     </div>
 {% endblock %}

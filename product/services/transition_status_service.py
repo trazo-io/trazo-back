@@ -168,9 +168,21 @@ def compute_transition_status(parcel) -> TransitionStatus:
     # clock, but the inspector must be told the basis is incomplete.
     unclassified_note = ""
     if unclassified:
+        # Name them. "2 applications are unclassified" tells the grower there is work but
+        # not WHICH work, and an inspector cannot check an unnamed record — the same reason
+        # the packet stopped truncating values. Capped so a parcel with a hundred blanks
+        # does not swallow the paragraph, and the cap announces itself.
+        _shown = unclassified[:5]
+        # rsplit, not split: the description is f"{label} — organic status not recorded", and a
+        # product legitimately named with an em dash ("Kocide 3000-O — copper") would lose half
+        # its name to a left split.
+        _named = "; ".join(f"{f.description.rsplit(' — ', 1)[0]} ({f.date_observed})" for f in _shown)
+        _rest = len(unclassified) - len(_shown)
+        if _rest > 0:
+            _named += f"; and {_rest} more"
         unclassified_note = (
             f" {len(unclassified)} chemical application(s) on this parcel have no organic "
-            f"status recorded (most recent {unclassified[0].date_observed}); the transition "
+            f"status recorded ({_named}); the transition "
             f"date cannot be confirmed until they are classified."
         )
 

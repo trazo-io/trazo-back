@@ -27,7 +27,7 @@
 {% block content %}
     {% if verification_code %}
         <div class="verification-code">
-            <div class="code {% if user_type == 'consumer' %}consumer{% endif %}">{{ verification_code }}</div>
+            <div class="code">{{ verification_code }}</div>
             <div class="code-instructions">
                 Enter this code in the verification screen to activate your account
             </div>
@@ -36,12 +36,12 @@
     
     {% if verification_link %}
         <div class="btn-container">
-            <a href="{{ verification_link }}" class="btn {% if user_type == 'consumer' %}consumer{% endif %}">
+            <a href="{{ verification_link }}" class="btn">
                 Verify My Account
             </a>
         </div>
         
-        <div class="alt-link {% if user_type == 'consumer' %}consumer{% endif %}">
+        <div class="alt-link">
             <div class="alt-link-title">Having trouble with the button?</div>
             <div class="alt-link-url">Copy and paste this link in your browser:<br>{{ verification_link }}</div>
         </div>
@@ -52,18 +52,18 @@
         
         {% if user_type == 'producer' %}
             <ul style="margin: 16px 0; padding-left: 20px; color: #4b5563;">
-                <li>Transparency score tracking and calculation</li>
+                <li>Activity logging with certifier-required detail checks</li>
                 <li>EPA/USDA-sourced environmental data</li>
-                <li>A certifier packet built from the records you already keep</li>
+                <li>A certifier packet built from those records, on the Compliance plan</li>
                 <li>QR code generation for products</li>
                 <li>Team management and role assignments</li>
             </ul>
         {% else %}
             <ul style="margin: 16px 0; padding-left: 20px; color: #4b5563;">
-                <li>QR code scanning for product transparency</li>
-                <li>See how your food was grown</li>
+                <li>Scan a product's QR code to open its record</li>
+                <li>See how your food was grown, in plain language</li>
                 <li>Farm-to-table production journey</li>
-                <li>Transparency scores and farming practices</li>
+                <li>Documented farming practices, with dates and photos</li>
             </ul>
         {% endif %}
         
@@ -71,6 +71,6 @@
             This verification link will expire in 24 hours. If you didn't create an account with Trazo, you can safely ignore this email.
         </p>
         
-        <p style="margin-top: 16px; color: #4CAF50; font-weight: 600;">The Trazo Team</p>
+        <p style="margin-top: 16px; color: #2E7D32; font-weight: 600;">The Trazo Team</p>
     </div>
 {% endblock %}

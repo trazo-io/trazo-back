@@ -106,6 +106,15 @@ class AmbiguousTermsAreRefusedTests(TestCase):
 class AliasResolutionTests(TestCase):
     """The four real misses from the walnut import, plus the shorthand the guard blocked."""
 
+    @classmethod
+    def setUpTestData(cls):
+        # Seeded because two tests below assert through the CLASSIFIER, not just the alias
+        # table. `history/signals.py` health-checks the list first and returns early when it is
+        # empty, so without this those assertions would report "unexpectedly None" for terms
+        # that resolve perfectly well — a vacuous failure, which is the mirror of the vacuous
+        # pass this file exists to prevent.
+        call_command("seed_national_list", stdout=StringIO(), stderr=StringIO())
+
     def test_the_four_misses_from_the_walnut_season_now_resolve(self):
         expected = {
             "sulfur": "Elemental sulfur",
@@ -127,6 +136,63 @@ class AliasResolutionTests(TestCase):
         """The full binomial reaches the classifier's reverse pass, but that pass requires >= 12
         characters and a space — so the shorthand every grower writes was blocked."""
         self.assertEqual(resolve_alias("bt"), "Microbial products (Bacillus thuringiensis, etc.)")
+
+    def test_the_bt_SUBSPECIES_resolve_too(self):
+        """🔴 2026-08-21, MEASURED. A bare "Bacillus thuringiensis" reached the classifier's
+        reverse pass and resolved; **"Bacillus thuringiensis subsp. kurstaki" did not** — the
+        reverse pass needs the operator's text to be a SUBSTRING of the listing, and the
+        subspecies is not in it. So writing the organism PRECISELY, which is the correct way to
+        name it and the only way to say whether it works on a caterpillar or a beetle, made the
+        record LESS placeable than the vague form and printed "Self-reported" in the packet.
+
+        The subspecies is agronomically load-bearing and regulatorily irrelevant: § 205.601's
+        listing is the class, so every subspecies maps to the same row."""
+        listing = "Microbial products (Bacillus thuringiensis, etc.)"
+        terms = (
+            "Bacillus thuringiensis subsp. kurstaki",
+            "Bacillus thuringiensis var. kurstaki",
+            "Bt kurstaki",
+            "Bacillus thuringiensis subsp. tenebrionis",
+            "Bt tenebrionis",
+            "Bacillus thuringiensis subsp. aizawai",
+            "Bti",
+        )
+        for term in terms:
+            self.assertEqual(resolve_alias(term), listing, term)
+
+        # And end to end through the classifier, on the field the grower actually fills. The
+        # alias table is one of four passes; asserting only the table proves the entry exists,
+        # not that a record reaches it.
+        from history.models import ChemicalEvent
+        from history.signals import auto_classify_chemical_against_national_list as classify
+
+        for term in terms:
+            event = ChemicalEvent(commercial_name="DiPel DF", extra_data={"active_ingredient": term})
+            classify(ChemicalEvent, event)
+            self.assertIsNotNone(event.national_list_substance, term)
+            self.assertEqual(event.national_list_substance.substance_name, listing, term)
+
+    def test_the_chemical_name_of_a_soap_is_never_auto_resolved(self):
+        """Potassium salts of fatty acids are the active in M-Pede (an insecticidal soap) AND in
+        the soap-based herbicides listed under a different subsection. Resolving it would pick a
+        § citation for the operator based on a use only they know — the same reason bare "soap"
+        and bare "copper" are in this table."""
+        self.assertIsNone(resolve_alias("potassium salts of fatty acids"))
+        self.assertIn("potassium salts of fatty acids", AMBIGUOUS_NEVER_AUTO_RESOLVE)
+
+        # …while the name that DOES pick a subsection still places, asserted through the
+        # CLASSIFIER rather than through `resolve_alias`. The crosswalk is one of four passes
+        # (exact → alias → forward substring → reverse substring), and "insecticidal soap"
+        # resolves on the LAST of them because it is a substring of the listing's plural. A
+        # test at the alias layer would report a miss for a term the product places correctly —
+        # which is exactly the wrong-layer mistake this file's own header warns about.
+        from history.models import ChemicalEvent
+        from history.signals import auto_classify_chemical_against_national_list as classify
+
+        event = ChemicalEvent(commercial_name="M-Pede", extra_data={"active_ingredient": "Insecticidal soap"})
+        classify(ChemicalEvent, event)
+        self.assertIsNotNone(event.national_list_substance)
+        self.assertEqual(event.national_list_substance.substance_name, "Insecticidal soaps")
 
     def test_pheromone_traps_are_not_confused_with_applied_pheromones(self):
         """ "Pheromone traps" is a separate listing — a monitoring device, not an application."""

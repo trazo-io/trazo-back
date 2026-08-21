@@ -79,6 +79,12 @@ G6_0_PRODUCTION = Module(
                         "pequeña.",
                     ),
                     nop_cite="§ 205.201(a)(5)",
+                    # F25 — this answer OWNS the fact; the write-through in
+                    # OSPViewSet.module_detail keeps `Establishment.has_split_operation`
+                    # (read by the § 205.272 SOE table and by seed_osp_template) in step.
+                    # Before the binding the farm profile was a second editor and the two
+                    # could disagree inside one packet.
+                    establishment_field="has_split_operation",
                     compiles_to=CompileRule(
                         template=(
                             "Split operation (organic and conventional production under "
@@ -107,6 +113,10 @@ G6_0_PRODUCTION = Module(
                     ),
                     nop_cite="§ 205.201(a)(5)",
                     visible_when=(Condition(question="split_operation", op="truthy"),),
+                    # F25 — pairs with `has_split_operation`: the audit export flags
+                    # "declares a split operation but files no separation plan" off this
+                    # column, so it has to travel with the boolean.
+                    establishment_field="split_operation_plan",
                     compiles_to=CompileRule(
                         template="Separation between organic and conventional production: {answer}",
                         # § 205.201(a)(5) — commingling and contact prevention.

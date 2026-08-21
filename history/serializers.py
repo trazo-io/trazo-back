@@ -1,3 +1,5 @@
+import re
+
 from django.core.exceptions import ValidationError as DjangoValidationError
 
 from rest_framework import serializers
@@ -626,6 +628,66 @@ class EventSerializer(serializers.ModelSerializer):
         return "self_reported"
 
 
+#: A grouped US number: "1,200", "52,500.25". Groups must be exactly three digits, which is
+#: what separates a thousands separator from a decimal comma.
+_GROUPED_NUMBER = re.compile(r"^\s*-?\d{1,3}(?:,\d{3})+(?:\.\d+)?(?=$|[^\d,])")
+
+#: A plain number, with or without a leading digit: "12.5", "1200", ".5", "-3".
+_LEADING_NUMBER = re.compile(r"^\s*(-?(?:\d+(?:\.\d+)?|\.\d+))(?=$|[^\d.])")
+
+#: Digits followed by a comma that did NOT match _GROUPED_NUMBER — "12,5", "1,2345", "1,23".
+#: A decimal comma, a typo, or a malformed group; not a thousands separator either way.
+_AMBIGUOUS_COMMA = re.compile(r"^\s*-?\d+,")
+
+
+def _leading_number(raw_value):
+    """The numeric part of a value the event form posts, or None.
+
+    Accepts a plain number, a numeric string ("12.5", ".5"), a US-grouped one ("1,200 lb")
+    and the combined form the older templates wrote ("400 kg/ha").
+
+    Returns None for anything it cannot read WITHOUT GUESSING, so a blank — or an ambiguous
+    value — stays NULL rather than becoming a wrong measurement. That matters more here than
+    coverage: this feeds the certifier packet's rate-per-area, the mass balance and the CA PUR
+    export, and a silently wrong number in any of those is worse than a visibly absent one.
+
+    Two cases earn the refusal:
+
+      "1,200 lb"  a naive leading-digit match returns 1.0 — a 1,200 lb compost application
+                  recorded as 1 lb. Handled: three-digit groups are unambiguous, so the
+                  separators are stripped and the value parses.
+      "12,5"      a decimal comma, or a typo. Anything after a comma that is not a clean
+                  three-digit group is not a thousands separator, and reading "12,5" as 12 or
+                  "1,2345" as 1 records a measurement the operator did not make. Refused.
+    """
+    if raw_value is None or raw_value == "":
+        return None
+    if isinstance(raw_value, bool):
+        return None
+    if isinstance(raw_value, (int, float)):
+        return float(raw_value)
+
+    text = str(raw_value)
+
+    grouped = _GROUPED_NUMBER.match(text)
+    if grouped:
+        try:
+            return float(grouped.group(0).strip().replace(",", ""))
+        except ValueError:
+            return None
+
+    if _AMBIGUOUS_COMMA.match(text):
+        return None
+
+    match = _LEADING_NUMBER.match(text)
+    if not match:
+        return None
+    try:
+        return float(match.group(1))
+    except ValueError:
+        return None
+
+
 class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializer):
     # 🚨 FIELD ALIASING: Accept frontend field names and map to backend model fields
     # This allows the frontend to send consistent field names while the backend
@@ -790,6 +852,27 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
         # Keep backward-compat: if only legacy extra_data style was sent, store there too.
         volume_unit = data.get("volume_unit", None)
         area_unit = data.get("area_unit", None)
+
+        # 🔴 2026-08-19 — the numeric twins were never derived on write.
+        #
+        # One fact, two columns: `volume` / `area` are the legacy CharFields the event form
+        # posts, and `volume_numeric` / `area_numeric` are what every computation reads —
+        # the packet's rate-per-area, the audit CSV, the CA PUR export, record completeness.
+        # The form has never sent the numeric twin, and nothing here derived it, so a
+        # farmer-entered spray stored area="12.5", area_unit="acres", area_numeric=NULL and
+        # the certifier packet printed "8 oz" with no rate beside it while the seeded demo
+        # events — which set the twins directly — printed the rate correctly. The defect was
+        # invisible to anyone comparing the two.
+        #
+        # Derived, not required of the client: the string is what the UI owns, and asking two
+        # writers for the same fact is how they drift. Only fills a MISSING twin — an
+        # explicit numeric value from any caller still wins.
+        for _string_key, _numeric_key in (("volume", "volume_numeric"), ("area", "area_numeric")):
+            if data.get(_numeric_key) not in (None, ""):
+                continue
+            _parsed = _leading_number(data.get(_string_key))
+            if _parsed is not None:
+                data[_numeric_key] = _parsed
 
         # SPRINT 6 FIX (2025-12-24): Extract frontend's extra_data BEFORE super() call
         # Frontend sends fields like active_ingredient, application_details, weather_conditions, etc.
@@ -2890,26 +2973,32 @@ class HistoryWriteSerializer(serializers.ModelSerializer):
     # existing crop — events, templates, and PUR rows are keyed to it.
     crop_type_id = serializers.IntegerField(write_only=True, required=False)
 
-    def validate_post_harvest_facility(self, facility):
-        """A lot may only be sent to a handler this establishment actually registered.
+    def validate_post_harvest_facilities(self, facilities):
+        """A lot may only be sent to handlers this establishment actually registered.
 
         The default ``PrimaryKeyRelatedField`` queryset is every row in the table, so without
         this a production could be linked to another company's facility — and that facility's
         organic certificate would then print in this operation's certifier packet as if it
         covered these lots.
+
+        Checks EVERY id in the list, not the first: this became a many-relation on 2026-08-21
+        (a lot ships its fresh grade and its process grade to two different certified handlers),
+        and a per-object validator that stopped at one would leave the rest unchecked.
         """
-        if facility is None:
-            return facility
         establishment_id = None
         parcel = getattr(self.instance, "parcel", None)
         if parcel is not None:
             establishment_id = parcel.establishment_id
-        if establishment_id is not None and facility.establishment_id != establishment_id:
+        if establishment_id is None:
+            return facilities
+        foreign = [f.name for f in facilities if f.establishment_id != establishment_id]
+        if foreign:
             raise serializers.ValidationError(
-                "That post-harvest facility belongs to a different farm. Add the handler on this "
-                "farm before linking it to a production."
+                f"{'These handlers belong' if len(foreign) > 1 else 'That handler belongs'} to a "
+                f"different farm ({', '.join(foreign)}). Add the handler on this farm before "
+                "linking it to a production."
             )
-        return facility
+        return facilities
 
     def validate(self, attrs):
         # A season cannot end before it starts. Cross-field, merged with the
@@ -3037,10 +3126,11 @@ class HistoryWriteSerializer(serializers.ModelSerializer):
             "transport_vehicle_id",
             "transport_affidavit_on_file",
             "transport_affidavit_document",
-            # CCOF G6.1 / 7 CFR 205.272 — the off-farm handler this lot was sent to. Writable
+            # CCOF G6.1 / 7 CFR 205.272 — the off-farm handlers this lot was sent to. Writable
             # since 2026-08-16; before that the FK existed on the model and in the audit
-            # export and could be set only from Django admin.
-            "post_harvest_facility",
+            # export and could be set only from Django admin. Many since 2026-08-21 — a lot
+            # with a fresh grade and a process grade goes to TWO certified operations.
+            "post_harvest_facilities",
             "retention_until",
         ]
         read_only_fields = ["id", "public_id", "retention_until"]
@@ -3071,7 +3161,7 @@ class HistorySerializer(serializers.ModelSerializer):
     images = serializers.SerializerMethodField()
     operator = BasicUserSerializer(read_only=True)
     crop_type = serializers.SerializerMethodField()
-    post_harvest_facility_detail = serializers.SerializerMethodField()
+    post_harvest_facilities_detail = serializers.SerializerMethodField()
 
     class Meta:
         model = History
@@ -3119,8 +3209,8 @@ class HistorySerializer(serializers.ModelSerializer):
             "transport_vehicle_id",
             "transport_affidavit_on_file",
             "transport_affidavit_document",
-            "post_harvest_facility",
-            "post_harvest_facility_detail",
+            "post_harvest_facilities",
+            "post_harvest_facilities_detail",
             "retention_until",
         ]
         read_only_fields = [
@@ -3144,28 +3234,37 @@ class HistorySerializer(serializers.ModelSerializer):
     def get_certificate_percentage(self, history):
         return history.certificate_percentage
 
-    def get_post_harvest_facility_detail(self, history):
-        """Enough of the handler to render the card without a second request.
+    def get_post_harvest_facilities_detail(self, history):
+        """Enough of each handler to render the card without a second request.
 
         `cert_is_current` is tri-state on purpose — True / False / None where None means no
         effective date is on file. The UI must render that third state as "confirm", never as
         a pass or a fail (7 CFR 205.272 / CCOF G6.1 15-month rule).
+
+        A LIST since 2026-08-21. It used to be one object because the link was a ForeignKey,
+        and the operator of a lot with a fresh grade and a process grade could record only one
+        of the two certified handlers it actually went to.
         """
-        facility = history.post_harvest_facility
-        if facility is None:
-            return None
-        return {
-            "id": facility.id,
-            "name": facility.name,
-            "facility_type": facility.facility_type,
-            "facility_type_display": facility.get_facility_type_display(),
-            "certification_number": facility.certification_number,
-            "certifier_name": facility.certifier_name,
-            "effective_date": facility.effective_date,
-            "expiry_date": facility.expiry_date,
-            "verification_status": facility.verification_status,
-            "cert_is_current": facility.cert_is_current,
-        }
+        return [
+            {
+                "id": facility.id,
+                "name": facility.name,
+                "facility_type": facility.facility_type,
+                "facility_type_display": facility.get_facility_type_display(),
+                "certification_number": facility.certification_number,
+                "certifier_name": facility.certifier_name,
+                "effective_date": facility.effective_date,
+                "expiry_date": facility.expiry_date,
+                "verification_status": facility.verification_status,
+                "cert_is_current": facility.cert_is_current,
+            }
+            # `sorted(...)` over `.all()`, NOT `.all().order_by("name")`. The queryset is
+            # prefetched by `HistoryViewSet.get_queryset`, and adding an `order_by` to a
+            # prefetched relation throws the cache away and issues a fresh query per
+            # production — the exact cost the prefetch was added to remove. Case-insensitive
+            # so "WVF" and "Willamette" do not sort by ASCII accident.
+            for facility in sorted(history.post_harvest_facilities.all(), key=lambda f: (f.name or "").lower())
+        ]
 
     def get_crop_type(self, history):
         if history.crop_type:
@@ -3523,6 +3622,19 @@ class PublicHistorySerializer(serializers.ModelSerializer):
     # deferred to a paired backend+frontend change; transparency_score below is the
     # unambiguous self-graded metric and IS stripped.
     _CERTIFIER_ONLY_EVENT_FIELDS = (
+        # 🔴 2026-08-21 — the real database id of the event, OWNER ONLY.
+        #
+        # Every event on this payload is keyed `chemical_0`, `production_3` — synthetic and
+        # POSITIONAL. That is right for a shopper (a public endpoint should not hand out
+        # enumerable primary keys) and it left the producer's own Production Profile unable to
+        # address its own records: the page renders these very events and had no id to open a
+        # correction against, so the only per-event affordance anywhere was on season-plan
+        # rows, and an input logged outside the plan had none at all.
+        #
+        # Owner-only for the same reason `drift_warning` is: this list is popped for every
+        # non-owner and for the owner previewing the consumer view (`force_public_view`), so
+        # the shopper payload is unchanged.
+        "record_id",
         "rei_hours",
         "phi_days",
         "restricted_use_pesticide",
@@ -4530,10 +4642,23 @@ class PublicHistorySerializer(serializers.ModelSerializer):
             # them, which was the actual disclosure.
             from history.services.claim_authority import may_publish_production_subtype
 
+            # 🔴 2026-08-21 — this filter ran for EVERY caller, including the producer looking
+            # at their own timeline. `may_publish_production_subtype` asks "may a CONSUMER
+            # surface show this?" (its own docstring), and the four subtypes it withholds —
+            # buffer disposition, seed search, equipment cleanout/purge, transport — are all
+            # records the operator is REQUIRED to keep and the certifier explicitly asks for
+            # (§ 205.202(c), § 205.204(a)(1), § 205.272). Withholding them from the grower's
+            # own dashboard meant a farmer logged an equipment cleaning, saw it vanish from
+            # the production timeline, and had no way to tell whether it saved.
+            #
+            # The owner boundary already exists and is used everywhere else in this
+            # serializer (`_is_owner`, which `force_public_view` turns off so the producer can
+            # preview the real shopper view). Use it here too rather than filtering blind.
+            viewer_is_owner = self._is_owner(history)
             production_events = [
                 ev
                 for ev in history.history_productionevent_events.all()
-                if may_publish_production_subtype(getattr(ev, "type", None)).allowed
+                if viewer_is_owner or may_publish_production_subtype(getattr(ev, "type", None)).allowed
             ]
             weather_events = history.history_weatherevent_events.all()
             equipment_events = history.history_equipmentevent_events.all()
@@ -4565,6 +4690,13 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                 events_data.append(
                     {
                         "id": f"chemical_{i}",
+                        "record_id": event.id,
+                        # Every other family emits its numeric family code and this one did
+                        # not, so a caller holding a chemical event had `type: "chemical"` and
+                        # no way to name it in the API's own vocabulary. 2 = ChemicalEvent
+                        # (history.constants.EVENT_TYPE_TO_MODEL); the correction endpoint
+                        # takes exactly this value as `?event_type=`.
+                        "event_type": 2,
                         "date": event.date.isoformat() if event.date else None,
                         "description": _public_event_text(event.description or "Chemical Application", event),
                         "observation": _public_event_text(getattr(event, "observation", ""), event),
@@ -4742,6 +4874,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                 events_data.append(
                     {
                         "id": f"production_{i}",
+                        "record_id": event.id,
                         "date": event.date.isoformat() if event.date else None,
                         "description": _public_event_text(event.description or "Production Activity", event),
                         "observation": _public_event_text(event.observation or "", event),
@@ -5064,6 +5197,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                 events_data.append(
                     {
                         "id": f"weather_{i}",
+                        "record_id": event.id,
                         "date": event.date.isoformat() if event.date else None,
                         "description": _public_event_text(event.description or "Weather Event", event),
                         "observation": _public_event_text(event.observation or "", event),
@@ -5118,6 +5252,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                 events_data.append(
                     {
                         "id": f"equipment_{i}",
+                        "record_id": event.id,
                         "date": event.date.isoformat() if event.date else None,
                         "description": _public_event_text(event.description or "Equipment Use", event),
                         "observation": _public_event_text(getattr(event, "observation", ""), event),
@@ -5187,6 +5322,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                 events_data.append(
                     {
                         "id": f"soil_{i}",
+                        "record_id": event.id,
                         "date": event.date.isoformat() if event.date else None,
                         "description": _public_event_text(event.description or "Soil Management", event),
                         "observation": _public_event_text(getattr(event, "observation", ""), event),
@@ -5352,6 +5488,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                 events_data.append(
                     {
                         "id": f"pest_{i}",
+                        "record_id": event.id,
                         "date": event.date.isoformat() if event.date else None,
                         "description": event.description or "Pest Management",
                         "observation": getattr(event, "observation", ""),
@@ -5471,6 +5608,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                 events_data.append(
                     {
                         "id": f"general_{i}",
+                        "record_id": event.id,
                         "date": event.date.isoformat() if event.date else None,
                         "description": event.name or event.description or "General Event",
                         "observation": event.observation or "",
@@ -5584,6 +5722,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                 events_data.append(
                     {
                         "id": f"business_{i}",
+                        "record_id": event.id,
                         "date": event.date.isoformat() if event.date else None,
                         "description": event.name or event.description or f"Business Event - {business_display}",
                         "observation": event.observation or "",
@@ -6601,6 +6740,42 @@ class UpdatePestManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "review_date",
         ]
         read_only_fields = ["id"]
+
+    def validate(self, attrs):
+        """§ 205.206(a): a cultural-control event must name the practice it performed.
+
+        `PestManagementEvent.clean()` has carried this rule since §E-4, and DRF never calls
+        `full_clean()` on `objects.create()` / `update()` — so no write path ran it and a CU
+        event saved with a blank `cultural_practice`. The packet then printed "Practice: —" in
+        the Preventive Cultural Practices table under a § 205.206(a) heading, and raised
+        "[WARNING] 1 pest event(s) missing IPM strategy" pointing at a different field.
+
+        "We did cultural control" supports nothing at inspection; "December mummy shake" is the
+        record that later justifies, under § 205.206(e), applying a substance when the practice
+        proved insufficient.
+
+        Scoped deliberately to this one rule rather than running the whole clean(), matching
+        how the SoilManagementEvent manure rules and the WeatherEvent probe rules are mirrored.
+        """
+        attrs = super().validate(attrs)
+        instance = getattr(self, "instance", None)
+
+        def _field(name):
+            if name in attrs:
+                return attrs[name]
+            return getattr(instance, name, None) if instance is not None else None
+
+        if _field("type") == PestManagementEvent.CULTURAL_CONTROL and not _field("cultural_practice"):
+            raise serializers.ValidationError(
+                {
+                    "cultural_practice": (
+                        "Select the preventive practice performed (mummy removal, sanitation "
+                        "shake, shredding, pruning removal, field sanitation or trap crop). "
+                        "\u00a7 205.206(a) is documented by the specific practice, not the category."
+                    )
+                }
+            )
+        return attrs
 
     def to_internal_value(self, data):
         """

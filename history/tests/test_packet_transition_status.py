@@ -92,8 +92,7 @@ class PacketTransitionStatusTests(TestCase):
         self.assertNotIn(
             "In transition",
             status,
-            "with no prohibited-substance date on record there is no clock to count down; "
-            f"got {status!r}",
+            "with no prohibited-substance date on record there is no clock to count down; " f"got {status!r}",
         )
         self.assertIn("Not established", status)
         self.assertIn("205.202(b)", status)

@@ -13,6 +13,7 @@ Two consent-gated surfaces:
 
 import json
 import re
+from types import SimpleNamespace
 
 from django.test import TestCase
 from django.urls import reverse
@@ -161,6 +162,27 @@ class ParcelDisclosureTests(_Base):
         self.parcel.save()
         blob = json.dumps(self._payload(), default=str)
         self.assertNotIn("34.3414", blob, "exact latitude leaked at approximate disclosure level")
+
+    def test_unknown_disclosure_level_fails_closed(self):
+        """
+        An unreadable level must not publish the field boundary.
+
+        public_parcel_geo() used to fall back to "exact", so a parcel whose column was blank
+        — a stub object, a fixture written before product migration 0013, a row cleared by
+        hand — published the full polygon to any anonymous caller. Grandfathered parcels
+        carry "exact" IN THE DATABASE (0013 wrote it explicitly), so nothing legitimate
+        depends on the fallback; the only rows it can reach are the ones whose level is
+        unknown, and unknown must mean withheld.
+        """
+        self.parcel.location_disclosure_level = ""
+        self.parcel.save(update_fields=["location_disclosure_level"])
+        geo = public_parcel_geo(self.parcel)
+        self.assertEqual(geo["level"], "approximate")
+        self.assertIsNone(geo["polygon"], "blank disclosure level published the field boundary")
+
+        # Same guarantee for an object that never had the attribute at all.
+        stub = SimpleNamespace(polygon={"type": "Polygon"}, map_metadata={"center": {"lat": 1.0, "lng": 2.0}})
+        self.assertIsNone(public_parcel_geo(stub)["polygon"])
 
     def test_helper_handles_missing_metadata(self):
         self.parcel.location_disclosure_level = "approximate"

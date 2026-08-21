@@ -33,6 +33,7 @@ from django.test import SimpleTestCase
 from reportlab.lib.units import inch
 from reportlab.pdfbase.pdfmetrics import stringWidth
 
+from common.field_registry import AMOUNT_DETERMINATION, HARVEST_DESTINATION
 from history.services import audit_export_service as svc
 
 #: letter (8.5in) less the 0.75in margins the document sets on both sides.
@@ -53,6 +54,7 @@ WORST_CASE_TOKENS = {
     "Purchase Date": "2025-03-10",
     "Invoice #": "YAS-2025-4417",
     "Lot #": "NH2025-04127",
+    "Lot": "HAS-BLOCK2-20260410",
 }
 
 #: Headers render BOLD, which is wider than the regular face used for values. Sizing a column
@@ -63,6 +65,13 @@ WIDTH_LISTS = {
     "MASS_BALANCE_PURCHASE_WIDTHS": svc.MASS_BALANCE_PURCHASE_WIDTHS,
     "INPUT_TRACEABILITY_WIDTHS_CA": svc.INPUT_TRACEABILITY_WIDTHS_CA,
     "INPUT_TRACEABILITY_WIDTHS_NON_CA": svc.INPUT_TRACEABILITY_WIDTHS_NON_CA,
+    # 2026-08-19: these three were inline literals inside their render methods, so nothing
+    # here could reach them — and the Production Events Date column was splitting
+    # "2026-02-04" into "2026-02-0" / "4" on every row of a live packet.
+    "PRODUCTION_EVENT_WIDTHS_CARBON": svc.PRODUCTION_EVENT_WIDTHS_CARBON,
+    "PRODUCTION_EVENT_WIDTHS_PLAIN": svc.PRODUCTION_EVENT_WIDTHS_PLAIN,
+    "HARVEST_ANALYTICS_WIDTHS": svc.HARVEST_ANALYTICS_WIDTHS,
+    "PEST_EVENT_WIDTHS": svc.PEST_EVENT_WIDTHS,
 }
 
 
@@ -177,3 +186,95 @@ class ColumnFitTests(SimpleTestCase):
         claimed = {label for columns in svc.IDENTIFIER_COLUMNS.values() for label in columns.values()}
         for prose in ("Product", "Supplier", "Applicator", "Type"):
             self.assertNotIn(prose, claimed)
+
+
+class EveryTableInTheFileFitsTheFrameTests(SimpleTestCase):
+    """The frame rule, applied to tables whose widths are still inline literals.
+
+    The registered WIDTH_LISTS above are the tables whose columns carry atomic identifiers,
+    and only those can be checked token-by-token. But `colWidths` is written inline at 20-odd
+    other call sites, and an inline list is invisible to a constant-based guard — which is how
+    the Production Events table sat 2.2pt under an ISO date and split every row of a live
+    packet before anyone noticed.
+
+    So this walks the module's own AST, finds every `Table(..., colWidths=[...])` whose
+    elements are `N * inch` literals, and holds the one rule that applies to all of them:
+    a table wider than the frame makes ReportLab squeeze EVERY column, so one careless
+    addition silently narrows eleven other columns that were correct.
+    """
+
+    @staticmethod
+    def _inches(node):
+        import ast
+
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Mult):
+            parts = [node.left, node.right]
+            nums = [p.value for p in parts if isinstance(p, ast.Constant) and isinstance(p.value, (int, float))]
+            names = [p.id for p in parts if isinstance(p, ast.Name)]
+            if len(nums) == 1 and names == ["inch"]:
+                return nums[0]
+        return None
+
+    def test_no_inline_colwidths_list_exceeds_the_frame(self):
+        import ast
+        import io
+
+        path = svc.__file__.replace(".pyc", ".py")
+        tree = ast.parse(io.open(path, encoding="utf-8").read())
+
+        checked = 0
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "Table"):
+                continue
+            for kw in node.keywords:
+                if kw.arg != "colWidths" or not isinstance(kw.value, ast.List):
+                    continue
+                values = [self._inches(e) for e in kw.value.elts]
+                if any(v is None for v in values):
+                    continue  # computed width — not something this guard can measure
+                checked += 1
+                total = sum(values)
+                with self.subTest(line=node.lineno):
+                    self.assertLessEqual(
+                        round(total, 4),
+                        7.0,
+                        f"audit_export_service.py:{node.lineno} — a {len(values)}-column table "
+                        f"totals {total:.2f}in against a 7.00in frame.",
+                    )
+        # If the walk stops finding tables, the guard has quietly stopped guarding.
+        self.assertGreater(checked, 15, "AST walk found almost no inline colWidths lists — has the shape changed?")
+
+
+class EnumColumnsFitTheirVocabularyTests(SimpleTestCase):
+    """A column fed by a FIXED vocabulary can be sized exactly — so it must be.
+
+    The pest table's Type column renders PEST_TYPE_LABELS and nothing else. At 0.52in it could
+    not hold "Identification" (0.63in) or "Implementation" (0.75in), and a live packet printed
+    "Pest Iden / tification" and "Threshold Assessm / ent". Unlike a product name or a farmer's
+    note, there is no uncertainty here about what the cell will contain.
+    """
+
+    #: table name -> {column index: the label vocabulary it renders}
+    ENUM_COLUMNS = {
+        "PEST_EVENT_WIDTHS": {1: svc.PEST_TYPE_LABELS},
+        "HARVEST_ANALYTICS_WIDTHS": {
+            5: dict(AMOUNT_DETERMINATION),
+            9: dict(HARVEST_DESTINATION),
+        },
+    }
+
+    def test_every_enum_column_fits_its_widest_label_word(self):
+        for name, columns in self.ENUM_COLUMNS.items():
+            widths = WIDTH_LISTS[name]
+            for index, labels in columns.items():
+                for label in labels.values():
+                    for word in str(label).split():
+                        needed = stringWidth(word, CELL_FONT, CELL_FONT_SIZE) + CELL_PADDING
+                        with self.subTest(table=name, column=index, word=word):
+                            self.assertGreaterEqual(
+                                widths[index],
+                                needed,
+                                f"{name}[{index}] is {widths[index] / inch:.3f}in but the label "
+                                f'word "{word}" needs {needed / inch:.3f}in — ReportLab will '
+                                f"split it mid-word.",
+                            )

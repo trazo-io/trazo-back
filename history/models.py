@@ -30,7 +30,6 @@ from common.field_registry import (
     EQUIPMENT_TYPE,
     GROWTH_STAGE,
     HARVEST_DESTINATION,
-    HARVEST_QUALITY_GRADE,
     IRRIGATION_METHOD,
     NON_ORGANIC_SEED_STATUSES,
     ORGANIC_APPROVED,
@@ -49,6 +48,7 @@ from common.field_registry import (
     WATER_SOURCE,
 )
 from common.models import Gallery
+from history.harvest_grades import MAX_GRADE_LENGTH
 from product.models import Parcel
 
 logger = logging.getLogger(__name__)
@@ -197,19 +197,36 @@ class History(models.Model):
         help_text="Unit of measurement for production amount",
     )
 
-    QUALITY_CHOICES = [
-        ("premium", "Premium Grade"),
-        ("grade_a", "Grade A"),
-        ("grade_b", "Grade B"),
-        ("standard", "Standard"),
-        ("processing", "Processing Grade"),
-    ]
+    # 🔴 F5 (2026-08-21) — this used to be its OWN list (Premium / Grade A / Grade B /
+    # Standard / Processing) while `ProductionEvent.harvest_quality_grade` offered a DIFFERENT
+    # one (Export Quality / Grade A / B / C / Domestic / Processing). One fact, two
+    # vocabularies: a lot header and the picks underneath it could not agree, the packet
+    # printed both, and neither carried a grade a certifier can match to a packing record
+    # ("Grade A is not an apple grade" — a certifier reviewer, verbatim). Both columns now
+    # draw on `history/harvest_grades.py`, which is crop-aware and carries the USDA families.
+    # ⛔ NO `choices`, deliberately — and that is the second half of the F5 fix.
+    #
+    # The catalogue in `history/harvest_grades.py` is what the FORMS offer, crop by crop, and
+    # it always ends in "Other — as stated on the packing record" because private buyer grades
+    # and state marks are real. Declaring the catalogue as `choices` here made DRF generate a
+    # ChoiceField on every serializer that exposes this column, so the escape hatch answered
+    # **400 "…is not a valid choice"**: the UI rendered a text box the API refused to accept.
+    # That is the render-gate-without-a-payload-path shape this rehearsal keeps finding, and I
+    # shipped it once before catching it.
+    #
+    # `choices` also broke the packet in the other direction: `get_quality_grade_display()`
+    # would have printed a row written before this change as **"Grade A (legacy)"** — the
+    # word "legacy" is a note to us, not something a certifier should read. The packet renders
+    # this column through `_humanize_enum` instead, which reproduces a real grade verbatim and
+    # still turns an old `grade_a` slug into "Grade A".
     quality_grade = models.CharField(
-        max_length=20,
-        choices=QUALITY_CHOICES,
+        max_length=MAX_GRADE_LENGTH,
         blank=True,
         null=True,
-        help_text="Quality grade of the harvest",
+        help_text=(
+            "Grade this lot was packed to, as stated on the packing record. Free text: the "
+            "crop-aware suggestions live in history/harvest_grades.py."
+        ),
     )
 
     HARVEST_METHOD_CHOICES = [
@@ -226,15 +243,21 @@ class History(models.Model):
     )
     qr_code = models.ImageField(upload_to="qr_codes", blank=True)
     album = models.ForeignKey("common.Gallery", on_delete=models.CASCADE, blank=True, null=True)
-    # Off-farm post-harvest handler (huller / dryer / cold storage) this lot was
-    # sent to. CCOF G6.1 / 7 CFR 205.272 — the handler's organic certificate is
-    # surfaced in the audit export's Post-Harvest section. SET_NULL so deleting a
-    # facility record never deletes the production.
-    post_harvest_facility = models.ForeignKey(
+    # Off-farm post-harvest handlers (huller / dryer / cold storage / packer) this
+    # lot was sent to. CCOF G6.1 / 7 CFR 205.272 — each handler's organic certificate
+    # is surfaced in the audit export's Post-Harvest section.
+    #
+    # 🔴 2026-08-21 — this was a single ForeignKey, and one lot routinely has MORE THAN
+    # ONE handler: Calapooia Bend ships each blueberry season's fresh grade to Organically
+    # Grown Company and its process grade to Willamette Valley Fruit, two certified
+    # operations, on separate loads. Five of that farm's nine shipped lots did exactly
+    # that, so the operator could record at most half the § 205.272 requirement — and the
+    # packet's "no handler certificate on file" warning cleared as soon as ONE was linked,
+    # which is worse than the warning: the second handler's certificate silently stopped
+    # being asked for. M2M, so the record can hold what actually happened.
+    post_harvest_facilities = models.ManyToManyField(
         "certifications.PostHarvestFacility",
-        on_delete=models.SET_NULL,
         blank=True,
-        null=True,
         related_name="productions",
     )
     cover_image_url = models.URLField(
@@ -2157,13 +2180,19 @@ class ProductionEvent(CommonEvent):
         help_text="Type of equipment operation (for Equipment Maintenance events)",
     )
 
-    # MVP Target Market Fields
+    # 🔴 F5 (2026-08-21) — see `History.quality_grade` above. Both columns share one
+    # crop-aware vocabulary now (`history/harvest_grades.py`); this one used to offer
+    # Export Quality / Grade A / B / C / Domestic / Processing, which is not a grade family
+    # any US packing record uses, and disagreed with the season header besides.
     harvest_quality_grade = models.CharField(
-        max_length=20,
-        choices=HARVEST_QUALITY_GRADE,
+        max_length=MAX_GRADE_LENGTH,
         blank=True,
         null=True,
-        help_text="Harvest quality grade for premium fruit operations (CA citrus, Uruguay exports)",
+        help_text=(
+            "Grade this pick was packed to, as stated on the packing record. Free text: the "
+            "crop-aware suggestions live in history/harvest_grades.py. No `choices` — see "
+            "History.quality_grade for why."
+        ),
     )
 
     # Sprint 3.2 — Post-harvest storage traceability (NOP 205.272 commingling; FSMA 204 prep).
@@ -2256,7 +2285,7 @@ class ProductionEvent(CommonEvent):
     #
     # 🔴 2026-08-16, CCOF grower-checklist audit. Item 6 asks for four facts about crop sent to
     # another certified operation: "what you sent, where you sent it, when you sent it, and what
-    # you received as the outcome". Trazo could answer "where" (History.post_harvest_facility)
+    # you received as the outcome". Trazo could answer "where" (History.post_harvest_facilities)
     # and nothing else. The finished quantity was only ever INFERRED, as shrinkage between
     # harvest and sale at a ±10% tolerance — which is a plausibility check, not a record.
     #
@@ -4434,6 +4463,9 @@ class BusinessEvent(CommonEvent):
         # Organic & Food Safety Certifications
         ("organic_usda", "USDA Organic"),
         ("regenerative", "Regenerative Organic Certified (ROC)"),
+        # 2026-08-21: the ROP add-on (on top of USDA Organic) — a pilot farm held it and had
+        # nowhere to log its certificate or inspection.
+        ("real_organic", "Real Organic Project (ROP)"),
         ("cng", "Certified Naturally Grown (CNG)"),
         ("non_gmo", "Non-GMO Project Verified"),
         # Environmental & Sustainability Certifications
@@ -4477,12 +4509,33 @@ class BusinessEvent(CommonEvent):
     name = models.CharField(max_length=150, blank=True, null=True, help_text="Event name")
 
     # New carbon-focused fields
+    # 🔴 2026-08-20 — this defaulted to "certification", and the consumer page keys its copy
+    # off this column: `business_type: "certification"` renders as a 🏆 **"Certification
+    # Achievement"** with the line "A third-party certification was recorded for this crop",
+    # at HIGH impact.
+    #
+    # So an INSPECTION (`type="IN"`) or a CDFA registration renewal (`type="CM"`) saved
+    # without an explicit business_type was announced to shoppers as a third-party
+    # certification the crop had achieved. A database default manufacturing an unearned
+    # certification claim is exactly what FTC 16 CFR 260.6 reaches, and it is the same class
+    # as the withdrawn carbon-credits activity documented above.
+    #
+    # No default now: `save()` derives it from the event's own subtype, which is the fact the
+    # farmer actually chose.
     business_type = models.CharField(
         max_length=30,
         choices=BUSINESS_ACTIVITY_CHOICES,
-        default="certification",
+        blank=True,
         help_text="Type of business or compliance activity recorded for this production",
     )
+
+    #: Event subtype -> the activity it IS. `type` is what the farmer picked in the wizard;
+    #: `business_type` is what the consumer page and the packet describe it as. They must agree.
+    SUBTYPE_TO_BUSINESS_ACTIVITY = {
+        "CE": "certification",
+        "IN": "verification",
+        "CM": "compliance",
+    }
     certification_type = models.CharField(
         max_length=50,
         choices=CERTIFICATION_TYPE_CHOICES,
@@ -4525,6 +4578,18 @@ class BusinessEvent(CommonEvent):
 
     observation = models.TextField(blank=True, null=True)
     extra_data = models.JSONField(blank=True, null=True)
+
+    def save(self, *args, **kwargs):
+        """Keep `business_type` honest about what the record actually is.
+
+        The consumer page describes the event from this column, so a wrong value here is a
+        wrong CLAIM on a public page — an inspection announced as a certification the crop
+        achieved. Derive it from the subtype the farmer chose whenever the caller did not set
+        it explicitly, rather than defaulting every unsaid case to the strongest claim.
+        """
+        if not (self.business_type or "").strip():
+            self.business_type = self.SUBTYPE_TO_BUSINESS_ACTIVITY.get(self.type, "compliance")
+        super().save(*args, **kwargs)
 
     def clean(self):
         """Model-level validation for business event values and business logic"""
@@ -4954,15 +5019,40 @@ class EventAmendment(models.Model):
     concrete event models and the whole codebase already addresses them that way
     (history.constants.EVENT_TYPE_TO_MODEL). A contenttypes FK would add a second,
     competing convention for the same job.
+
+    ## Two kinds of target (2026-08-21, F7)
+
+    An amendment corrects EITHER one event (`event_type` + `event_id` set) OR the SEASON
+    HEADER itself (`event_type` and `event_id` both NULL — `history` is the target). The
+    header — `production_amount`, `lot_id`, `quality_grade`, `harvest_method` — is frozen
+    by the closed-record guard once a season is finished, correctly: it is the traceability
+    spine § 205.103(b)(2) asks to be auditable. But it had no correction path AT ALL, while
+    the events underneath it did. A farmer who finished a season with the wrong yield — and
+    the Finish form used to prefill that number from the wrong event, so it happened — could
+    neither edit it (423) nor amend it. The only way out was a developer with ORM access,
+    which is not an audit trail; it is the absence of one.
+
+    ONE table, deliberately, rather than a `HistoryAmendment` twin: the packet's "Documented
+    Corrections" section is what a certifier reads, and a header correction belongs in the
+    same chronological list as an event correction, not in a second table beside it.
     """
 
+    # NULL on both = this amendment corrects the season header (`history`) itself.
+    # The CheckConstraint below makes "half a target" impossible.
     event_type = models.PositiveSmallIntegerField(
-        help_text="history.constants EVENT_TYPE_TO_MODEL key identifying the concrete event model."
+        null=True,
+        blank=True,
+        help_text=(
+            "history.constants EVENT_TYPE_TO_MODEL key identifying the concrete event model. "
+            "NULL together with event_id when the correction targets the season header."
+        ),
     )
-    event_id = models.PositiveIntegerField(db_index=True)
+    event_id = models.PositiveIntegerField(null=True, blank=True, db_index=True)
 
-    # Denormalised so the amendment survives its event being deleted, and so the
-    # certifier packet can gather a season's corrections in one query rather than eight.
+    # The season this correction belongs to. For an event amendment this is denormalised so
+    # the amendment survives its event being deleted and the certifier packet can gather a
+    # season's corrections in one query rather than eight; for a header amendment it IS the
+    # corrected record.
     history = models.ForeignKey("history.History", on_delete=models.CASCADE, related_name="amendments")
 
     field_name = models.CharField(max_length=100)
@@ -4998,8 +5088,27 @@ class EventAmendment(models.Model):
             models.Index(fields=["event_type", "event_id"]),
             models.Index(fields=["history", "-created_at"]),
         ]
+        constraints = [
+            # Exactly one kind of target. A row with an event_type but no event_id (or the
+            # reverse) points at nothing an inspector can look up, and the packet would print
+            # a correction against a record that cannot be found.
+            models.CheckConstraint(
+                check=(
+                    models.Q(event_type__isnull=False, event_id__isnull=False)
+                    | models.Q(event_type__isnull=True, event_id__isnull=True)
+                ),
+                name="amendment_targets_an_event_or_the_header",
+            ),
+        ]
+
+    @property
+    def targets_the_season_header(self) -> bool:
+        """True when this corrects the lot header rather than one event on the season."""
+        return self.event_type is None and self.event_id is None
 
     def __str__(self) -> str:
+        if self.targets_the_season_header:
+            return f"Amendment: {self.field_name} on season header {self.history_id}"
         return f"Amendment: {self.field_name} on event {self.event_type}/{self.event_id}"
 
 

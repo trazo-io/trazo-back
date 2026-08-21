@@ -32,14 +32,25 @@ class OSPRowDistinctnessTests(TestCase):
         self.est = Establishment.objects.create(name="O Block", company=company)
         parcel = Parcel.objects.create(name="P1", establishment=self.est, area=1.0)
         crop = CropType.objects.create(
-            name="Walnuts", slug="walnuts-osprow", category="tree_nut", description="n",
-            typical_farm_size="10", growing_season="s", harvest_season="h",
-            emissions_per_hectare=0.0, industry_average=0.0, best_practice=0.0,
-            carbon_credit_potential=0.0, typical_cost_per_hectare=0.0, has_soil_contact=True,
+            name="Walnuts",
+            slug="walnuts-osprow",
+            category="tree_nut",
+            description="n",
+            typical_farm_size="10",
+            growing_season="s",
+            harvest_season="h",
+            emissions_per_hectare=0.0,
+            industry_average=0.0,
+            best_practice=0.0,
+            carbon_credit_potential=0.0,
+            typical_cost_per_hectare=0.0,
+            has_soil_contact=True,
         )
         product = Product.objects.create(name="Walnuts")
         self.history = History.objects.create(
-            parcel=parcel, product=product, crop_type=crop,
+            parcel=parcel,
+            product=product,
+            crop_type=crop,
             start_date=timezone.now() - timedelta(days=200),
             finish_date=timezone.now() - timedelta(days=10),
         )
@@ -79,10 +90,17 @@ class OSPRowDistinctnessTests(TestCase):
             establishment=self.est,
             status="draft",
             version_number=1,
-            sections={k: {"narrative": long_enough} for k in (
-                "practices_procedures", "inputs_list", "monitoring_plan",
-                "recordkeeping_description", "commingling_barriers", "additional_certifier_info",
-            )},
+            sections={
+                k: {"narrative": long_enough}
+                for k in (
+                    "practices_procedures",
+                    "inputs_list",
+                    "monitoring_plan",
+                    "recordkeeping_description",
+                    "commingling_barriers",
+                    "additional_certifier_info",
+                )
+            },
         )
         detail = self._osp_row()["detail"]
         self.assertNotIn("below the narrative floor", detail)

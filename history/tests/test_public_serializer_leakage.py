@@ -1345,12 +1345,48 @@ class PublicSerializerWorkerNameAndLabBlobTests(TestCase):
         self.assertEqual(soil[0].get("lab_name"), "A&L Western Laboratories")
         self.assertEqual(soil[0].get("lab_report_date"), "2026-07-18")
 
-    def test_cleaning_evidence_still_survives(self):
-        """Dropping the worker name must not remove the cleaning evidence itself."""
+    def test_the_whole_cleanout_event_is_withheld_from_shoppers(self):
+        """SUPERSEDED 2026-08-21. This test used to assert the opposite, and was right to.
+
+        Written 2026-07-31, when the policy was "mask the worker name, keep the cleaning
+        evidence" — the fix for `cleaned_by` rendering a real name on the consumer card. A
+        later decision went further: `claim_authority._CONSUMER_WITHHELD_PRODUCTION_SUBTYPES`
+        withholds the entire `EM` subtype from consumer surfaces because a cleanout/purge
+        narrative "reveals split-operation handling out of context" — a shopper reading
+        "pressure-washed the line before the organic run" infers the farm also runs
+        conventional product, which § 205.272 requires the operation to MANAGE, not to
+        justify on a QR page.
+
+        The stricter rule supersedes the looser one, so this now pins the current behaviour.
+        The evidence itself is not lost — it is on the producer's own timeline
+        (`OwnerSeesWithheldSubtypesTests` in test_consumer_production_subtypes) and in the
+        certifier packet, which builds from AuditExportService and never applies this filter.
+        Those are the two audiences § 205.272 is written for.
+        """
         # The production block sets "type" to the SUBTYPE code (here "EM"); event_type is
         # the numeric family (1 = production).
         prod = [e for e in self._events() if e.get("event_type") == 1]
-        self.assertEqual(len(prod), 1)
+        self.assertEqual(prod, [], "an equipment cleanout reached the anonymous QR payload")
+
+    def test_the_cleaning_evidence_still_reaches_the_operator(self):
+        """The other half: withholding it from shoppers must not delete it.
+
+        A farmer who logs an equipment cleaning has to be able to see it — this was broken
+        until 2026-08-21, when the consumer filter was found running against the owner's own
+        timeline too.
+        """
+        from django.test import RequestFactory
+
+        from users.models import User as UserModel
+
+        owner = UserModel.objects.create_user(email="cleanowner@test.com", password="x")
+        owner.companies.add(self.company)
+        request = RequestFactory().get("/x/")
+        request.user = owner
+
+        events = PublicHistorySerializer(self.history, context={"request": request}).data.get("events") or []
+        prod = [e for e in events if e.get("event_type") == 1]
+        self.assertEqual(len(prod), 1, "the producer lost their own equipment-cleaning record")
         self.assertEqual(prod[0].get("cleaning_method"), "Pressure wash + manual scrub")
         self.assertEqual(prod[0].get("cleaning_materials_used"), "Water, BioSafe SaniDate")
 
@@ -1868,3 +1904,80 @@ class PublicPayloadFinalAuditTests(TestCase):
         event = [e for e in (data.get("events") or []) if e.get("is_contamination_incident")][0]
         self.assertIn("CCOF", event["corrective_action_taken"])
         self.assertTrue(event["certifier_notified"])
+
+
+class RecordIdIsOwnerOnlyTests(TestCase):
+    """The real event pk reaches the producer and never a shopper.
+
+    Added 2026-08-21. Every event on this payload is keyed `chemical_0` / `production_3` —
+    synthetic and POSITIONAL. That is correct for a public endpoint (primary keys are
+    enumerable) and it left the producer's own Production Profile unable to address the very
+    records it renders: there was no id to open a correction against, so the only per-event
+    affordance in the product sat on season-plan rows, and an input logged outside the plan —
+    a bloom fungicide, say — had none at all.
+
+    `record_id` is therefore owner-only, on the same list and the same mechanism as
+    `drift_warning`: popped for every non-owner, and popped for the owner previewing the
+    consumer view through `force_public_view`.
+    """
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from django.utils import timezone
+
+        from company.models import Company, Establishment
+        from history.models import ChemicalEvent, History
+        from product.models import Parcel, Product
+
+        User = get_user_model()
+        self.user = User.objects.create_user(email="recordid@test.com", password="x")
+        self.company = Company.objects.create(name="RecordId Farm")
+        self.user.companies.add(self.company)
+        est = Establishment.objects.create(name="RI1", company=self.company, state="WA")
+        parcel = Parcel.objects.create(name="RIP1", establishment=est, area=5.0)
+        self.history = History.objects.create(
+            name="RecordId Production",
+            start_date=timezone.now(),
+            product=Product.objects.create(name="Apple"),
+            parcel=parcel,
+            published=True,
+        )
+        self.event = ChemicalEvent.objects.create(
+            history=self.history,
+            type=ChemicalEvent.FUNGICIDE,
+            commercial_name="Rex Lime Sulfur",
+            date=timezone.now(),
+        )
+
+    def _events(self, **context):
+        from history.serializers import PublicHistorySerializer
+
+        return PublicHistorySerializer(self.history, context=context).data.get("events") or []
+
+    def _owner_request(self):
+        from django.test import RequestFactory
+
+        req = RequestFactory().get("/x/")
+        req.user = self.user
+        return req
+
+    def test_the_owner_can_address_the_record(self):
+        events = self._events(request=self._owner_request())
+        self.assertTrue(events)
+        self.assertEqual(events[0].get("record_id"), self.event.id)
+
+    def test_a_chemical_event_names_its_family_like_every_other_one(self):
+        """The correction endpoint takes this as `?event_type=`; chemical alone omitted it."""
+        events = self._events(request=self._owner_request())
+        self.assertEqual(events[0].get("event_type"), 2)
+
+    def test_an_anonymous_shopper_gets_no_database_ids(self):
+        for event in self._events():
+            self.assertIsNone(event.get("record_id"))
+            # The synthetic, positional key stays — that is what the consumer page keys on.
+            self.assertTrue(str(event.get("id", "")).startswith("chemical_"))
+
+    def test_the_owner_previewing_the_consumer_view_gets_none_either(self):
+        events = self._events(request=self._owner_request(), force_public_view=True)
+        for event in events:
+            self.assertIsNone(event.get("record_id"))

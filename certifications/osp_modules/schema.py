@@ -184,6 +184,21 @@ class Question:
     # answers for bound questions are routed through ParcelSerializer, not stored in
     # module_responses.
     parcel_field: Optional[str] = None
+    # Binding to an `Establishment` column for a farm-wide module. Unlike `parcel_field`
+    # the answer IS still stored in `module_responses` (the OSP is the record a certifier
+    # reads); the column is kept in step by a WRITE-THROUGH in `OSPViewSet.module_detail`
+    # so a regulated fact has ONE editor.
+    #
+    # 🔴 2026-08-21 (F25) — `Establishment.has_split_operation` (a farm-profile checkbox)
+    # and this module's `split_operation` answer recorded the same § 205.201(a)(5) fact
+    # with nothing binding them, so a farm that answered "yes, we sell the buffer rows
+    # conventional" in the OSP still filed a packet whose § 205.272 row read
+    # "Split Operation: No" — followed by a REVIEW telling the operator the two statements
+    # in their own packet disagree. The export was taught to prefer the OSP answer, which
+    # removed the contradiction from the document; this binding removes the divergence at
+    # the source. The column stays because the packet, the "declares split but files no
+    # separation plan" check and `seed_osp_template` all read it.
+    establishment_field: Optional[str] = None
     # Embeds an existing panel as this question's body. v1 embeds:
     #   "s11_record_types" — the Common OSP § 11 registry panel (G8.0)
     #   "approved_inputs"  — the ApprovedInputs flow (Materials Application, later)
@@ -351,6 +366,7 @@ def _serialize_question(q: Question) -> dict:
         "nop_cite": q.nop_cite,
         "prefill": {"source": q.prefill.source} if q.prefill else None,
         "parcel_field": q.parcel_field,
+        "establishment_field": q.establishment_field,
         "embed": q.embed,
         "placeholder": dict(q.placeholder) if q.placeholder else None,
         "max_length": q.max_length,

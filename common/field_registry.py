@@ -272,9 +272,18 @@ PRODUCTION_EFFICIENCY = [
     ("low", "Low Efficiency"),
 ]
 
-# Harvest quality grade (premium fruit operations — CA citrus, UY exports)
-# Used in: ProductionEvent.harvest_quality_grade
-HARVEST_QUALITY_GRADE = [
+# ⛔ RETIRED 2026-08-21 (F5). Kept as the legacy record, referenced by NOTHING.
+#
+# This list, and the DIFFERENT one on `History.quality_grade` (Premium / Grade A / Grade B /
+# Standard / Processing), were two vocabularies for one fact — so a lot header and the harvest
+# picks underneath it could not agree, and the certifier packet printed both. Neither carried a
+# grade a US packing record uses: real records read "U.S. No. 1", "U.S. Commercial",
+# "WA Extra Fancy". A certifier reviewer put it plainly — *"Grade A is not an apple grade."*
+#
+# The replacement is crop-aware and lives in `history/harvest_grades.py` (mirrored in
+# `trazo-app/src/config/harvestGrades.ts`). These slugs survive there as
+# `LEGACY_GRADE_LABELS` so rows written before the change still render a label.
+_RETIRED_HARVEST_QUALITY_GRADE = [
     ("export_quality", "Export Quality"),
     ("grade_a", "Grade A"),
     ("grade_b", "Grade B"),

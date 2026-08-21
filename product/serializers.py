@@ -269,6 +269,12 @@ class CreateParcelSerializer(USContactFieldsMixin, ModelSerializer):
     )
     # `consumer_story` write field removed 2026-08-07 — the parcel form no longer collects
     # it and no surface renders it. See product/models.py where the getter was removed.
+    # The model carries MinValueValidator(0.0001) on `area`, but DRF calls full_clean() on
+    # neither create() nor update(), so a model validator alone guards nothing on the API path
+    # — the same gap that let a cultural-control pest event save without its practice. Declared
+    # here so the floor actually holds where parcels are actually written.
+    area = serializers.FloatField(min_value=0.0001, help_text="Parcel area in hectares")
+
     crop_focus = serializers.CharField(required=False, write_only=True, help_text="Primary crop grown for transparency")
     transparency_ready = serializers.BooleanField(
         required=False, write_only=True, help_text="Parcel ready for consumer transparency"

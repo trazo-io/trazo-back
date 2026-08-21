@@ -450,7 +450,14 @@ class InputListingAuthorityTests(SimpleTestCase):
         )
         self.assertFalse(decision.allowed)
         self.assertNotIn("Allowed", decision.safe_label)
-        self.assertIn("205.602", decision.safe_label)
+        self.assertIn("Prohibited", decision.safe_label)
+        # The clause is NOT asserted here any more, and deliberately so. This label covers
+        # both § 205.602 (nonsynthetics prohibited in crop production) and § 205.105
+        # (synthetics not on § 205.601 — glyphosate and friends, which are not on the
+        # National List at all), so a hardcoded "§ 205.602" cited the wrong clause for most
+        # rows that reach it. The row's actual `cfr_section` is printed beside the substance
+        # name in the packet, which is where a citation can be accurate.
+        self.assertNotIn("205.602", decision.safe_label)
 
     def test_no_classification_is_documented_not_conventional(self):
         # The inverse error: absence of a classification is not evidence the input was

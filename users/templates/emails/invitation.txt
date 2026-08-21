@@ -3,7 +3,7 @@ YOU'RE INVITED TO JOIN {{ company.name|upper }} ON TRAZO!
 
 Hi {{ invitee_name|default:"there" }},
 
-{{ inviter.first_name }} {{ inviter.last_name }} has invited you to join {{ company.name }} on Trazo, the transparency platform for specialty crop farms.
+{{ inviter.first_name }} {{ inviter.last_name }} has invited you to join {{ company.name }} on Trazo, the organic recordkeeping platform for specialty crop farms.
 
 COMPANY DETAILS:
 • Company: {{ company.name }}
@@ -17,20 +17,20 @@ As a member of {{ company.name }}, you'll be able to:
 
 {% if role == 'CA' %}
 • Manage all company operations and team members
-• Access complete transparency tracking and reporting
-• Generate QR codes for consumer trust
+• Access every record across the operation
+• Generate QR codes for buyer pages
 • Configure company settings and integrations
-• View comprehensive analytics and insights
+• Review readiness checks across the operation
 {% elif role == 'DS' %}
 • Supervise specific agricultural domains
-• Track transparency scores for assigned areas
+• Track record completeness for assigned areas
 • Generate reports for your domains
 • Manage domain workers and activities
-• Monitor sustainability metrics
+• Monitor activity logs and input use
 {% elif role == 'DW' %}
 • Record agricultural activities and events
 • Track inputs and outputs for assigned areas
-• Document farming practices for transparency scores
+• Document farming practices for the record
 • Generate QR codes for products
 • View domain-specific reports
 {% elif role == 'DE' %}
@@ -38,7 +38,7 @@ As a member of {{ company.name }}, you'll be able to:
 • Track distribution and sales data
 • Generate customer-facing reports
 • Monitor product traceability
-• Support transparency initiatives
+• Share buyer pages for the products you carry
 {% endif %}
 
 ACCEPT YOUR INVITATION:
@@ -53,8 +53,8 @@ If you believe you received this invitation in error, you can safely ignore this
 The Trazo Team
 
 ---
-Trazo - Agricultural Transparency Platform
-Your buyers want proof. Give it to them.
+Trazo - Organic recordkeeping for specialty crop farms
+One entry, two outputs. Your certifier gets the record. Your buyer gets the story.
 
 Visit us: https://trazo.io
 Support: support@trazo.io

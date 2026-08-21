@@ -1,923 +1,340 @@
+"""Parcel model behaviour — the accessors the consumer and carbon surfaces read.
+
+REWRITTEN 2026-08-20. The previous file was aspirational: it tested a `Parcel` with `city`,
+`state`, `latitude`, `longitude`, `irrigation_type`, `organic_certified` and `created_by`
+(none of which the model has), and it defined its own fake `CropTemplate` and
+`ProductCertification` classes whose "manager" built an object out of whatever kwargs the
+test passed. Those two suites therefore asserted that a dict contains what the test had just
+put in it — they could not fail, no matter what the product did. The rest raised
+`TypeError: Parcel() got unexpected keyword arguments` on setUp.
+
+33 of its 38 tests errored and the remaining 5 proved nothing, so the file read as coverage
+while providing none. Replaced with tests against the model as it actually is.
+
+Scope is deliberately narrow: parcel area units live in `test_parcel_area_units.py`, the area
+floor in `test_parcel_area_floor.py`, buffers in `test_buffer_zones.py`, the § 205.202 wizard
+in `test_parcel_application.py`, and season targeting in `test_finish_targets_named_season.py`.
+What had NO coverage anywhere — and is what this file now covers — are the eight
+`agricultural_details` accessors that the consumer QR page and the carbon readiness surfaces
+read on every request.
 """
-Comprehensive test suite for Product app functionality.
-Tests cover parcel management, geospatial validation, and product certification.
 
-Test Coverage:
-- Parcel CRUD operations and validation
-- Geospatial data validation and calculations
-- Area calculations and boundary management
-- Product certification and quality controls
-- Integration with establishments and history
-- Public and private data handling
-- Performance optimizations for large datasets
-"""
-
-from datetime import timedelta
-from decimal import Decimal
-
-from django.contrib.auth import get_user_model
-from django.core.exceptions import ValidationError
-from django.db.models import Avg, Count, Q, Sum
-from django.test import TestCase, TransactionTestCase
-from django.urls import reverse
-from django.utils import timezone
-
-from rest_framework import status
-from rest_framework.test import APIClient, APITestCase
+from django.db.models import Avg, Count, Sum
+from django.test import TestCase
 
 from company.models import Company, Establishment
-from history.models import History
-from product.models import Parcel
-
-# Skip CropTemplate and ProductCertification imports - models not implemented in product.models
-from subscriptions.models import Subscription
-from users.models import User, WorksIn
-
-User = get_user_model()
+from product.models import Parcel, Product
 
 
-# Mock CropTemplate and ProductCertification since models don't exist
-class CropTemplate:
-    objects = type(
-        "MockManager",
-        (),
-        {
-            "create": lambda **kwargs: type("MockCropTemplate", (), kwargs)(),
-            "filter": lambda **kwargs: [],
-            "get": lambda **kwargs: type("MockCropTemplate", (), kwargs)(),
-        },
-    )()
+class ParcelTestBase(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.company = Company.objects.create(name="Ridgeline Growers")
+        cls.establishment = Establishment.objects.create(name="Ridge Farm", company=cls.company)
+
+    def parcel(self, **kwargs):
+        kwargs.setdefault("name", "Ridge Block")
+        kwargs.setdefault("establishment", self.establishment)
+        kwargs.setdefault("area", 11.4931)
+        return Parcel.objects.create(**kwargs)
 
 
-class ProductCertification:
-    objects = type(
-        "MockManager",
-        (),
-        {
-            "create": lambda **kwargs: type("MockProductCertification", (), kwargs)(),
-            "filter": lambda **kwargs: [],
-            "get": lambda **kwargs: type("MockProductCertification", (), kwargs)(),
-        },
-    )()
+class ParcelCoreTests(ParcelTestBase):
+    """The fields a parcel cannot exist without, and the ones it can."""
 
-
-class ParcelModelTestCase(TestCase):
-    """Test Parcel model functionality and validation."""
-
-    def setUp(self):
-        self.user = User.objects.create_user(
-            email="farmer@test.com", password="testpass123", first_name="John", last_name="Farmer"
-        )
-
-        self.company = Company.objects.create(name="Test Farm Co.")
-
-        self.establishment = Establishment.objects.create(
-            name="North Field Farm", company=self.company, latitude=Decimal("36.7378"), longitude=Decimal("-119.7871")
-        )
-
-    def test_parcel_creation_valid(self):
-        """Test creating a parcel with valid data."""
-        parcel = Parcel.objects.create(
-            name="Field A1",
-            establishment=self.establishment,
-            description="Prime agricultural land for corn production",
-            area=25.5,
-            address="123 Farm Road, Section A1",
-            city="Fresno",
-            state="CA",
-            country="US",
-            zip_code="93721",
-            latitude=Decimal("36.7400"),
-            longitude=Decimal("-119.7900"),
-            soil_type="clay_loam",
-            irrigation_type="drip",
-            organic_certified=True,
-            created_by=self.user,
-        )
-
-        self.assertEqual(parcel.name, "Field A1")
+    def test_a_parcel_needs_only_a_name_an_establishment_and_an_area(self):
+        parcel = self.parcel()
+        self.assertEqual(parcel.name, "Ridge Block")
         self.assertEqual(parcel.establishment, self.establishment)
-        self.assertEqual(parcel.area, 25.5)
-        self.assertEqual(parcel.soil_type, "clay_loam")
-        self.assertEqual(parcel.irrigation_type, "drip")
-        self.assertTrue(parcel.organic_certified)
-        self.assertIn("Field A1", str(parcel))
+        self.assertEqual(parcel.area, 11.4931)
 
-    def test_parcel_creation_minimal(self):
-        """Test creating a parcel with minimal required data."""
-        parcel = Parcel.objects.create(name="Minimal Field", establishment=self.establishment, area=10.0)
+    def test_optional_fields_default_to_empty_rather_than_none(self):
+        """`agricultural_details` must be a dict on a fresh row.
 
-        self.assertEqual(parcel.name, "Minimal Field")
-        self.assertEqual(parcel.establishment, self.establishment)
-        self.assertEqual(parcel.area, 10.0)
+        Every accessor below calls `.get()` on it directly, with no guard, so a `None`
+        default would turn the consumer QR page into an AttributeError for any parcel the
+        farmer had not filled in.
+        """
+        parcel = self.parcel()
+        self.assertEqual(parcel.agricultural_details, {})
+        self.assertEqual(parcel.application_answers, {})
+        self.assertFalse(parcel.certified)
+        self.assertFalse(parcel.container_production)
 
-    def test_parcel_name_validation(self):
-        """Test parcel name length validation."""
-        # Test maximum length (100 characters based on CLAUDE.md)
-        long_name = "A" * 101
-        with self.assertRaises(ValidationError):
-            parcel = Parcel(name=long_name, establishment=self.establishment, area=10.0)
-            parcel.full_clean()
+    def test_str_identifies_the_parcel_and_its_farm(self):
+        parcel = self.parcel(name="Creek Block")
+        self.assertIn("Creek Block", str(parcel))
+        self.assertIn("Ridge Farm", str(parcel))
 
-    def test_parcel_area_validation(self):
-        """Test area validation (must be positive)."""
-        # Positive area should work
-        parcel = Parcel.objects.create(name="Valid Area", establishment=self.establishment, area=15.75)
-        self.assertEqual(parcel.area, 15.75)
+    def test_a_parcel_may_carry_a_product(self):
+        product = Product.objects.create(name="Apples")
+        parcel = self.parcel(product=product)
+        parcel.refresh_from_db()
+        self.assertEqual(parcel.product, product)
 
-        # Zero area should be invalid
-        with self.assertRaises(ValidationError):
-            parcel = Parcel(name="Zero Area", establishment=self.establishment, area=0.0)
-            parcel.full_clean()
 
-        # Negative area should be invalid
-        with self.assertRaises(ValidationError):
-            parcel = Parcel(name="Negative Area", establishment=self.establishment, area=-5.0)
-            parcel.full_clean()
+class ParcelAgriculturalDetailTests(ParcelTestBase):
+    """The `agricultural_details` accessors, including the aliases they tolerate.
 
-    def test_parcel_geospatial_validation(self):
-        """Test geospatial coordinate validation."""
-        # Valid coordinates
-        parcel = Parcel.objects.create(
-            name="Valid Coordinates",
-            establishment=self.establishment,
-            area=10.0,
-            latitude=Decimal("36.7378"),
-            longitude=Decimal("-119.7871"),
+    Each of these reads more than one key because the parcel form has changed field names
+    over time and older rows still hold the old ones. That fallback chain is the behaviour
+    worth pinning: drop a key from it and historic parcels silently go blank on the consumer
+    page rather than erroring anywhere a deploy would catch.
+    """
+
+    def test_primary_crop_falls_back_to_the_older_key(self):
+        self.assertEqual(
+            self.parcel(agricultural_details={"primary_crop": "Honeycrisp"}).get_primary_crop(), "Honeycrisp"
         )
-        self.assertIsNotNone(parcel.latitude)
-        self.assertIsNotNone(parcel.longitude)
+        self.assertEqual(self.parcel(agricultural_details={"crop_focus": "Gala"}).get_primary_crop(), "Gala")
 
-        # Test coordinate boundaries
-        # Latitude should be between -90 and 90
-        with self.assertRaises(ValidationError):
-            parcel = Parcel(
-                name="Invalid Latitude",
-                establishment=self.establishment,
-                area=10.0,
-                latitude=Decimal("91.0"),  # Invalid latitude
-                longitude=Decimal("-119.7871"),
-            )
-            parcel.full_clean()
+    def test_primary_crop_prefers_the_current_key_when_both_are_present(self):
+        parcel = self.parcel(agricultural_details={"primary_crop": "Honeycrisp", "crop_focus": "Gala"})
+        self.assertEqual(parcel.get_primary_crop(), "Honeycrisp")
 
-        # Longitude should be between -180 and 180
-        with self.assertRaises(ValidationError):
-            parcel = Parcel(
-                name="Invalid Longitude",
-                establishment=self.establishment,
-                area=10.0,
-                latitude=Decimal("36.7378"),
-                longitude=Decimal("181.0"),  # Invalid longitude
-            )
-            parcel.full_clean()
+    def test_primary_crop_is_a_string_when_nothing_is_recorded(self):
+        """Never None: callers concatenate this into consumer copy."""
+        self.assertEqual(self.parcel().get_primary_crop(), "")
 
-    def test_parcel_soil_type_validation(self):
-        """Test soil type validation."""
-        valid_soil_types = [
-            "clay",
-            "sandy",
-            "loam",
-            "clay_loam",
-            "sandy_loam",
-            "silt",
-            "silt_loam",
-            "peat",
-            "chalk",
-            "other",
+    def test_sustainability_practices_reads_three_keys_in_order(self):
+        cases = [
+            ({"sustainability_practices": "Permanent grass alleyway"}, "Permanent grass alleyway"),
+            ({"cover_crop_management": "Resident winter cover"}, "Resident winter cover"),
+            ({"carbon_sequestration_practices": "Compost banded in the tree row"}, "Compost banded in the tree row"),
+            ({}, ""),
         ]
+        for details, expected in cases:
+            with self.subTest(details=details):
+                self.assertEqual(self.parcel(agricultural_details=details).get_sustainability_practices(), expected)
 
-        for soil_type in valid_soil_types:
-            parcel = Parcel.objects.create(
-                name=f"Test {soil_type}", establishment=self.establishment, area=10.0, soil_type=soil_type
-            )
-            self.assertEqual(parcel.soil_type, soil_type)
+    def test_transparency_description_is_the_parcel_description(self):
+        self.assertEqual(
+            self.parcel(description="Twenty-eight acres of Honeycrisp").get_transparency_description(),
+            "Twenty-eight acres of Honeycrisp",
+        )
+        self.assertEqual(self.parcel().get_transparency_description(), "")
 
-    def test_parcel_irrigation_type_validation(self):
-        """Test irrigation type validation."""
-        valid_irrigation_types = [
-            "drip",
-            "sprinkler",
-            "flood",
-            "furrow",
-            "center_pivot",
-            "micro_spray",
-            "subsurface",
-            "rain_fed",
-            "other",
-        ]
+    def test_agricultural_detail_get_and_set_round_trip(self):
+        parcel = self.parcel()
+        parcel.set_agricultural_detail("soil_ph", 6.4)
+        parcel.save(update_fields=["agricultural_details"])
+        parcel.refresh_from_db()
+        self.assertEqual(parcel.get_agricultural_detail("soil_ph"), 6.4)
+        self.assertIsNone(parcel.get_agricultural_detail("missing_key"))
+        self.assertEqual(parcel.get_agricultural_detail("missing_key", "fallback"), "fallback")
 
-        for irrigation_type in valid_irrigation_types:
-            parcel = Parcel.objects.create(
-                name=f"Test {irrigation_type}",
-                establishment=self.establishment,
-                area=10.0,
-                irrigation_type=irrigation_type,
-            )
-            self.assertEqual(parcel.irrigation_type, irrigation_type)
 
-    def test_parcel_boundary_calculation(self):
-        """Test parcel boundary calculations."""
-        # Create parcel with coordinates
-        parcel = Parcel.objects.create(
-            name="Boundary Test",
-            establishment=self.establishment,
-            area=100.0,
-            latitude=Decimal("36.7378"),
-            longitude=Decimal("-119.7871"),
+class ParcelTransparencyScoreTests(ParcelTestBase):
+    """`get_transparency_score` — a PRODUCER-side readiness figure, not a consumer grade.
+
+    Withheld from the consumer payload deliberately (see .claude/rules/transparency-first.md):
+    a self-assigned sustainability score on a shopper-facing surface is the class of claim
+    EU ECGT 2024/825 bans. These tests pin the bands so a refactor cannot quietly change what
+    the producer dashboard tells a farmer their parcel is worth documenting.
+    """
+
+    def test_no_data_scores_zero(self):
+        self.assertEqual(self.parcel().get_transparency_score(), 0)
+
+    def test_description_length_drives_three_bands(self):
+        for length, expected in ((10, 20), (50, 30), (100, 40)):
+            with self.subTest(length=length):
+                self.assertEqual(self.parcel(description="x" * length).get_transparency_score(), expected)
+
+    def test_a_description_under_ten_characters_scores_nothing(self):
+        """The floor exists so "n/a" or "orchard" cannot buy points."""
+        self.assertEqual(self.parcel(description="orchard").get_transparency_score(), 0)
+
+    def test_practices_add_thirty_regardless_of_which_key_holds_them(self):
+        for key in ("sustainability_practices", "cover_crop_management", "carbon_sequestration_practices"):
+            with self.subTest(key=key):
+                parcel = self.parcel(agricultural_details={key: "Permanent grass alleyway"})
+                self.assertEqual(parcel.get_transparency_score(), 30)
+
+    def test_description_and_practices_combine(self):
+        parcel = self.parcel(
+            description="x" * 100,
+            agricultural_details={"sustainability_practices": "Permanent grass alleyway"},
+        )
+        self.assertEqual(parcel.get_transparency_score(), 70)
+
+    def test_the_score_is_capped_at_one_hundred(self):
+        parcel = self.parcel(
+            description="x" * 500,
+            agricultural_details={
+                "sustainability_practices": "a",
+                "cover_crop_management": "b",
+                "carbon_sequestration_practices": "c",
+            },
+        )
+        self.assertLessEqual(parcel.get_transparency_score(), 100)
+
+
+class ParcelTransparencyReadyTests(ParcelTestBase):
+    """`is_transparency_ready` — description AND (practices OR photos)."""
+
+    def test_a_description_alone_is_not_ready(self):
+        """Prose without a practice or a photo is an assertion with nothing behind it."""
+        self.assertFalse(self.parcel(description="x" * 100).is_transparency_ready())
+
+    def test_practices_alone_are_not_ready(self):
+        self.assertFalse(
+            self.parcel(agricultural_details={"sustainability_practices": "Cover crop"}).is_transparency_ready()
         )
 
-        # Test boundary polygon creation (if implemented)
-        # This would test methods like get_boundary_polygon()
-        self.assertIsNotNone(parcel.latitude)
-        self.assertIsNotNone(parcel.longitude)
-
-    def test_parcel_history_relationship(self):
-        """Test relationship between parcel and history events."""
-        parcel = Parcel.objects.create(name="History Test Parcel", establishment=self.establishment, area=20.0)
-
-        # Create history events for this parcel
-        history1 = History.objects.create(
-            title="Planting Event",
-            establishment=self.establishment,
-            parcel=parcel,
-            event_date=timezone.now().date(),
-            event_type="planting",
-            created_by=self.user,
+    def test_description_plus_practices_is_ready(self):
+        parcel = self.parcel(
+            description="Twenty-eight acres of Honeycrisp on a two-wire trellis",
+            agricultural_details={"sustainability_practices": "Permanent grass alleyway"},
         )
+        self.assertTrue(parcel.is_transparency_ready())
 
-        history2 = History.objects.create(
-            title="Harvest Event",
-            establishment=self.establishment,
-            parcel=parcel,
-            event_date=timezone.now().date(),
-            event_type="harvesting",
-            created_by=self.user,
+    def test_a_short_description_does_not_qualify_even_with_practices(self):
+        parcel = self.parcel(description="orchard", agricultural_details={"sustainability_practices": "Cover crop"})
+        self.assertFalse(parcel.is_transparency_ready())
+
+
+class ParcelCarbonReadinessTests(ParcelTestBase):
+    """Carbon-readiness completeness checks over `agricultural_details`."""
+
+    def test_readiness_score_is_the_share_of_thirty_seven_fields_filled(self):
+        parcel = self.parcel(agricultural_details={f"field_{i}": "value" for i in range(37)})
+        self.assertEqual(parcel.calculate_carbon_readiness_score(), 100)
+
+        half = self.parcel(agricultural_details={f"field_{i}": "value" for i in range(18)})
+        self.assertAlmostEqual(half.calculate_carbon_readiness_score(), 18 / 37 * 100, places=4)
+
+    def test_empty_values_do_not_count_toward_readiness(self):
+        """A key present with a blank value is not a recorded fact.
+
+        `calculate_carbon_readiness_score` filters on truthiness, which is the right call and
+        the opposite of what `has_complete_soil_data` does — see the test below.
+        """
+        parcel = self.parcel(agricultural_details={"soil_ph": "", "soil_nitrogen": None, "cover_crop": "rye"})
+        self.assertAlmostEqual(parcel.calculate_carbon_readiness_score(), 1 / 37 * 100, places=4)
+
+    def test_readiness_score_is_capped_at_one_hundred(self):
+        parcel = self.parcel(agricultural_details={f"field_{i}": "value" for i in range(80)})
+        self.assertEqual(parcel.calculate_carbon_readiness_score(), 100)
+
+    def test_soil_completeness_needs_all_five_fields(self):
+        soil = {"soil_ph": 6.4, "soil_organic_matter": 2.8, "soil_nitrogen": 12, "soil_phosphorus": 30}
+        self.assertFalse(self.parcel(agricultural_details=soil).has_complete_soil_data())
+        self.assertTrue(self.parcel(agricultural_details={**soil, "soil_potassium": 180}).has_complete_soil_data())
+
+    def test_soil_completeness_counts_a_blank_value_as_complete(self):
+        """⚠️ Documented weakness, not an endorsement.
+
+        `has_complete_soil_data` tests `field in self.agricultural_details` — presence of the
+        KEY — while `update_usda_compliance_status` on the same model tests presence AND
+        truthiness. So a parcel whose form was opened and saved without values reports
+        complete soil data to anything that asks.
+
+        Pinned rather than fixed because the method currently has NO callers in production
+        code (checked 2026-08-20; grep usage, not definition). Wire it up and this becomes a
+        real bug — it is the "blank is not a value" class that has already bitten the carbon
+        activity sweep. The assertion below is what it does today, so a fix will fail here
+        loudly and deliberately.
+        """
+        blank = dict.fromkeys(
+            ["soil_ph", "soil_organic_matter", "soil_nitrogen", "soil_phosphorus", "soil_potassium"], ""
         )
+        self.assertTrue(self.parcel(agricultural_details=blank).has_complete_soil_data())
 
-        # Test parcel history relationship
-        parcel_histories = History.objects.filter(parcel=parcel)
-        self.assertEqual(parcel_histories.count(), 2)
-        self.assertIn(history1, parcel_histories)
-        self.assertIn(history2, parcel_histories)
-
-    def test_parcel_certification_fields(self):
-        """Test certification-related fields."""
-        parcel = Parcel.objects.create(
-            name="Certified Parcel",
-            establishment=self.establishment,
-            area=15.0,
-            organic_certified=True,
-            fair_trade_certified=True,
-            gmo_free=True,
-            certification_body="USDA Organic",
-            certification_number="ORG-2024-001",
-            certification_expiry_date=timezone.now().date() + timedelta(days=365),
-        )
-
-        self.assertTrue(parcel.organic_certified)
-        self.assertTrue(parcel.fair_trade_certified)
-        self.assertTrue(parcel.gmo_free)
-        self.assertEqual(parcel.certification_body, "USDA Organic")
-        self.assertEqual(parcel.certification_number, "ORG-2024-001")
-        self.assertIsNotNone(parcel.certification_expiry_date)
-
-
-class CropTemplateTestCase(TestCase):
-    """Test crop template functionality."""
-
-    def setUp(self):
-        self.user = User.objects.create_user(email="agronomist@test.com", password="testpass123")
-
-    def test_crop_template_creation(self):
-        """Test creating crop templates."""
-        template = CropTemplate.objects.create(
-            name="Corn - Field Corn",
-            crop_type="corn",
-            variety="Yellow Dent #2",
-            description="Standard field corn for grain production",
-            growing_season_days=120,
-            water_requirements=600,  # mm per season
-            fertilizer_requirements={"nitrogen": 180, "phosphorus": 80, "potassium": 120},  # kg/ha
-            optimal_temperature_min=15,  # Celsius
-            optimal_temperature_max=30,
-            soil_ph_min=6.0,
-            soil_ph_max=7.5,
-            planting_depth=5.0,  # cm
-            row_spacing=75.0,  # cm
-            plant_spacing=20.0,  # cm
-            created_by=self.user,
-        )
-
-        self.assertEqual(template.name, "Corn - Field Corn")
-        self.assertEqual(template.crop_type, "corn")
-        self.assertEqual(template.growing_season_days, 120)
-        self.assertEqual(template.fertilizer_requirements["nitrogen"], 180)
-
-    def test_crop_template_validation(self):
-        """Test crop template validation."""
-        # Test growing season validation
-        with self.assertRaises(ValidationError):
-            template = CropTemplate(
-                name="Invalid Season", crop_type="corn", growing_season_days=0, created_by=self.user  # Invalid
-            )
-            template.full_clean()
-
-        # Test temperature range validation
-        with self.assertRaises(ValidationError):
-            template = CropTemplate(
-                name="Invalid Temperature",
-                crop_type="tomato",
-                optimal_temperature_min=35,  # Min > Max
-                optimal_temperature_max=30,
-                created_by=self.user,
-            )
-            template.full_clean()
-
-    def test_crop_template_calculations(self):
-        """Test crop template calculations."""
-        template = CropTemplate.objects.create(
-            name="Tomato Template",
-            crop_type="tomato",
-            growing_season_days=90,
-            water_requirements=400,
-            created_by=self.user,
-        )
-
-        # Test water requirements per day
-        daily_water = template.water_requirements / template.growing_season_days
-        self.assertAlmostEqual(daily_water, 4.44, places=2)
-
-
-class ProductCertificationTestCase(TestCase):
-    """Test product certification functionality."""
-
-    def setUp(self):
-        self.user = User.objects.create_user(email="farmer@test.com", password="testpass123")
-
-        self.company = Company.objects.create(name="Certified Farm")
-
-        self.establishment = Establishment.objects.create(name="Certified Field", company=self.company)
-
-        self.parcel = Parcel.objects.create(
-            name="Certified Parcel", establishment=self.establishment, area=30.0, organic_certified=True
-        )
-
-    def test_certification_creation(self):
-        """Test creating product certifications."""
-        certification = ProductCertification.objects.create(
-            parcel=self.parcel,
-            certification_type="organic",
-            certification_body="USDA Organic",
-            certificate_number="USDA-ORG-2024-001",
-            issue_date=timezone.now().date(),
-            expiry_date=timezone.now().date() + timedelta(days=365),
-            scope="All crops grown on parcel",
-            status="active",
-            created_by=self.user,
-        )
-
-        self.assertEqual(certification.parcel, self.parcel)
-        self.assertEqual(certification.certification_type, "organic")
-        self.assertEqual(certification.certification_body, "USDA Organic")
-        self.assertEqual(certification.status, "active")
-
-    def test_certification_expiry_validation(self):
-        """Test certification expiry date validation."""
-        # Expiry date should be after issue date
-        with self.assertRaises(ValidationError):
-            certification = ProductCertification(
-                parcel=self.parcel,
-                certification_type="organic",
-                issue_date=timezone.now().date(),
-                expiry_date=timezone.now().date() - timedelta(days=1),  # Before issue date
-                created_by=self.user,
-            )
-            certification.full_clean()
-
-    def test_certification_status_validation(self):
-        """Test certification status validation."""
-        valid_statuses = ["active", "expired", "suspended", "revoked", "pending"]
-
-        for status in valid_statuses:
-            certification = ProductCertification.objects.create(
-                parcel=self.parcel,
-                certification_type="fair_trade",
-                issue_date=timezone.now().date(),
-                expiry_date=timezone.now().date() + timedelta(days=365),
-                status=status,
-                created_by=self.user,
-            )
-            self.assertEqual(certification.status, status)
-
-    def test_certification_active_status(self):
-        """Test certification active status checking."""
-        # Active certification
-        active_cert = ProductCertification.objects.create(
-            parcel=self.parcel,
-            certification_type="organic",
-            issue_date=timezone.now().date() - timedelta(days=30),
-            expiry_date=timezone.now().date() + timedelta(days=330),
-            status="active",
-            created_by=self.user,
-        )
-
-        self.assertTrue(active_cert.is_active())
-
-        # Expired certification
-        expired_cert = ProductCertification.objects.create(
-            parcel=self.parcel,
-            certification_type="gmo_free",
-            issue_date=timezone.now().date() - timedelta(days=400),
-            expiry_date=timezone.now().date() - timedelta(days=35),
-            status="active",  # Status active but date expired
-            created_by=self.user,
-        )
-
-        self.assertFalse(expired_cert.is_active())
-
-
-class ParcelViewSetTestCase(APITestCase):
-    """Test Parcel API endpoints and permissions."""
-
-    def setUp(self):
-        self.client = APIClient()
-
-        # Create users with different roles
-        self.owner = User.objects.create_user(
-            email="owner@test.com", password="testpass123", first_name="Farm", last_name="Owner"
-        )
-
-        self.manager = User.objects.create_user(
-            email="manager@test.com", password="testpass123", first_name="Field", last_name="Manager"
-        )
-
-        self.worker = User.objects.create_user(
-            email="worker@test.com", password="testpass123", first_name="Farm", last_name="Worker"
-        )
-
-        # Create company and establishment
-        self.company = Company.objects.create(name="API Test Farm")
-
-        self.establishment = Establishment.objects.create(name="API Test Field", company=self.company)
-
-        # Set up user roles
-        WorksIn.objects.create(user=self.manager, company=self.company, role=WorksIn.FARM_MANAGER)
-
-        WorksIn.objects.create(user=self.worker, company=self.company, role=WorksIn.VIEWER)
-
-        # Create test parcel
-        self.parcel = Parcel.objects.create(
-            name="Test Parcel",
-            establishment=self.establishment,
-            area=25.0,
-            soil_type="loam",
-            irrigation_type="drip",
-            organic_certified=True,
-        )
-
-    def test_list_parcels_authenticated(self):
-        """Test listing parcels requires authentication."""
-        url = reverse("parcel-list")
-
-        # Unauthenticated request should fail
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
-
-        # Authenticated request should succeed
-        self.client.force_authenticate(user=self.owner)
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-
-    def test_list_parcels_filtered_by_access(self):
-        """Test that users only see parcels they have access to."""
-        # Create parcel for different company
-        other_user = User.objects.create_user(email="other@test.com", password="testpass123")
-        other_company = Company.objects.create(name="Other Company")
-        other_establishment = Establishment.objects.create(name="Other Establishment", company=other_company)
-        other_parcel = Parcel.objects.create(name="Other Parcel", establishment=other_establishment, area=15.0)
-
-        self.client.force_authenticate(user=self.owner)
-        url = reverse("parcel-list")
-        response = self.client.get(url)
-
-        # Should only see own company's parcels
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["name"], "Test Parcel")
-
-    def test_create_parcel_valid(self):
-        """Test creating parcel via API."""
-        self.client.force_authenticate(user=self.owner)
-        url = reverse("parcel-list")
-
-        data = {
-            "name": "New API Parcel",
-            "establishment": self.establishment.id,
-            "description": "Created via API",
-            "area": 18.5,
-            "address": "456 API Road",
-            "city": "Modesto",
-            "state": "CA",
-            "latitude": "37.6391",
-            "longitude": "-120.9969",
-            "soil_type": "sandy_loam",
-            "irrigation_type": "sprinkler",
-            "organic_certified": False,
+    def test_conservation_completeness_needs_all_four_fields(self):
+        conservation = {
+            "cover_crop_management": "Resident winter cover",
+            "crop_rotation_pattern": "Perennial",
+            "carbon_sequestration_practices": "Compost",
         }
+        self.assertFalse(self.parcel(agricultural_details=conservation).has_complete_conservation_data())
+        complete = {**conservation, "integrated_pest_management": "Mating disruption"}
+        self.assertTrue(self.parcel(agricultural_details=complete).has_complete_conservation_data())
 
-        response = self.client.post(url, data, format="json")
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data["name"], "New API Parcel")
-        self.assertEqual(response.data["area"], 18.5)
-        self.assertEqual(response.data["soil_type"], "sandy_loam")
+    def test_usda_compliance_requires_every_field_to_be_non_empty(self):
+        """The contrast case: this one is written correctly."""
+        fields = {
+            "soil_organic_matter": 2.8,
+            "nrcs_practices": "EQIP",
+            "organic_certification_status": "certified",
+            "cover_crop_management": "Resident winter cover",
+            "irrigation_efficiency": 0.85,
+        }
+        parcel = self.parcel(agricultural_details=fields)
+        parcel.update_usda_compliance_status()
+        self.assertTrue(parcel.usda_compliance_eligible)
 
-    def test_create_parcel_invalid_data(self):
-        """Test creating parcel with invalid data."""
-        self.client.force_authenticate(user=self.owner)
-        url = reverse("parcel-list")
-
-        # Missing required name
-        data = {"establishment": self.establishment.id, "area": 10.0}
-
-        response = self.client.post(url, data, format="json")
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("name", response.data)
-
-        # Invalid area (negative)
-        data = {"name": "Invalid Parcel", "establishment": self.establishment.id, "area": -5.0}
-
-        response = self.client.post(url, data, format="json")
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-
-    def test_update_parcel_permissions(self):
-        """Test parcel update permissions."""
-        url = reverse("parcel-detail", kwargs={"pk": self.parcel.pk})
-
-        data = {"name": "Updated Parcel Name", "description": "Updated description"}
-
-        # Owner should be able to update
-        self.client.force_authenticate(user=self.owner)
-        response = self.client.patch(url, data, format="json")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["name"], "Updated Parcel Name")
-
-        # Manager should be able to update
-        self.client.force_authenticate(user=self.manager)
-        response = self.client.patch(url, {"area": 30.0}, format="json")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-
-        # Worker should not be able to update
-        self.client.force_authenticate(user=self.worker)
-        response = self.client.patch(url, {"name": "Worker update"}, format="json")
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-
-    def test_delete_parcel_permissions(self):
-        """Test parcel deletion permissions."""
-        url = reverse("parcel-detail", kwargs={"pk": self.parcel.pk})
-
-        # Worker should not be able to delete
-        self.client.force_authenticate(user=self.worker)
-        response = self.client.delete(url)
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-
-        # Manager should be able to delete
-        self.client.force_authenticate(user=self.manager)
-        response = self.client.delete(url)
-        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
-        self.assertFalse(Parcel.objects.filter(pk=self.parcel.pk).exists())
-
-    def test_parcel_public_data_filtering(self):
-        """Test that sensitive data is filtered in public endpoints."""
-        # This would test a public endpoint that shows parcel data
-        # without sensitive information like contact details
-
-        # Create parcel with sensitive data
-        sensitive_parcel = Parcel.objects.create(
-            name="Public Parcel",
-            establishment=self.establishment,
-            area=20.0,
-            address="123 Secret Location",  # Should not be public
-            contact_person="Private Person",  # Should not be public
-            contact_phone="+1-555-PRIVATE",  # Should not be public
-            contact_email="private@farm.com",  # Should not be public
-        )
-
-        # Test that public view filters sensitive data
-        # Implementation would depend on having a public serializer
-        self.assertIsNotNone(sensitive_parcel.id)
+        blanked = self.parcel(agricultural_details={**fields, "nrcs_practices": ""})
+        blanked.update_usda_compliance_status()
+        self.assertFalse(blanked.usda_compliance_eligible)
 
 
-class ParcelGeospatialTestCase(TestCase):
-    """Test geospatial functionality for parcels."""
+class ParcelAggregationTests(ParcelTestBase):
+    """The aggregate queries the farm dashboard and the certifier dossier both run.
+
+    The dossier reconciles a farm's stated acreage against the sum of its parcels, so these
+    aggregates are load-bearing rather than decorative.
+    """
 
     def setUp(self):
-        self.user = User.objects.create_user(email="gis@test.com", password="testpass123")
+        self.parcel(name="Ridge Block", area=11.4931, certified=True, soil_type="clay_loam")
+        self.parcel(name="Creek Block", area=6.7987, certified=True, soil_type="clay_loam")
+        self.parcel(name="Bench Block", area=5.7465, certified=False, soil_type="sandy_loam")
 
-        self.company = Company.objects.create(name="GIS Test Farm")
+    def test_total_area_sums_across_parcels(self):
+        total = Parcel.objects.filter(establishment=self.establishment).aggregate(total=Sum("area"))["total"]
+        self.assertAlmostEqual(total, 24.0383, places=4)
 
-        self.establishment = Establishment.objects.create(
-            name="GIS Test Field", company=self.company, latitude=Decimal("36.7378"), longitude=Decimal("-119.7871")
-        )
-
-    def test_parcel_coordinate_precision(self):
-        """Test coordinate precision handling."""
-        parcel = Parcel.objects.create(
-            name="Precision Test",
-            establishment=self.establishment,
-            area=10.0,
-            latitude=Decimal("36.7378456789"),  # High precision
-            longitude=Decimal("-119.7871123456"),
-        )
-
-        # Verify precision is maintained
-        self.assertEqual(str(parcel.latitude), "36.7378456789")
-        self.assertEqual(str(parcel.longitude), "-119.7871123456")
-
-    def test_parcel_distance_calculations(self):
-        """Test distance calculations between parcels."""
-        parcel1 = Parcel.objects.create(
-            name="Parcel 1",
-            establishment=self.establishment,
-            area=10.0,
-            latitude=Decimal("36.7378"),
-            longitude=Decimal("-119.7871"),
-        )
-
-        parcel2 = Parcel.objects.create(
-            name="Parcel 2",
-            establishment=self.establishment,
-            area=10.0,
-            latitude=Decimal("36.7400"),  # Slightly north
-            longitude=Decimal("-119.7900"),  # Slightly west
-        )
-
-        # Test distance calculation (would need to be implemented)
-        # distance = parcel1.distance_to(parcel2)
-        # self.assertGreater(distance, 0)
-
-        # For now, just verify both parcels have coordinates
-        self.assertIsNotNone(parcel1.latitude)
-        self.assertIsNotNone(parcel2.latitude)
-
-    def test_parcel_area_conversion(self):
-        """Test area unit conversions."""
-        parcel = Parcel.objects.create(name="Area Test", establishment=self.establishment, area=10.0)  # hectares
-
-        # Test conversions (would need to be implemented as methods)
-        # acres = parcel.area_in_acres()
-        # self.assertAlmostEqual(acres, 24.71, places=2)  # 10 hectares = ~24.71 acres
-
-        # For now, just verify area is stored correctly
-        self.assertEqual(parcel.area, 10.0)
-
-    def test_parcel_boundary_polygon(self):
-        """Test parcel boundary polygon creation."""
-        parcel = Parcel.objects.create(
-            name="Boundary Test",
-            establishment=self.establishment,
-            area=100.0,
-            latitude=Decimal("36.7378"),
-            longitude=Decimal("-119.7871"),
-        )
-
-        # Test polygon boundary creation (if implemented)
-        # This would typically create a rough square/rectangle based on area and center point
-        # polygon = parcel.get_boundary_polygon()
-        # self.assertIsInstance(polygon, Polygon)
-
-        # For now, verify coordinates exist
-        self.assertIsNotNone(parcel.latitude)
-        self.assertIsNotNone(parcel.longitude)
-
-
-class ParcelAnalyticsTestCase(TestCase):
-    """Test parcel analytics and reporting."""
-
-    def setUp(self):
-        self.user = User.objects.create_user(email="analytics@test.com", password="testpass123")
-
-        self.company = Company.objects.create(name="Analytics Farm")
-
-        self.establishment = Establishment.objects.create(name="Analytics Field", company=self.company)
-
-        # Create multiple parcels for analytics
-        self.parcels = []
-        for i in range(5):
-            parcel = Parcel.objects.create(
-                name=f"Parcel {i+1}",
-                establishment=self.establishment,
-                area=float(10 + i * 5),  # 10, 15, 20, 25, 30
-                soil_type="loam" if i % 2 == 0 else "sandy",
-                irrigation_type="drip" if i % 3 == 0 else "sprinkler",
-                organic_certified=i % 2 == 0,
-            )
-            self.parcels.append(parcel)
-
-    def test_total_area_calculation(self):
-        """Test total area calculations."""
-        total_area = sum(parcel.area for parcel in self.parcels)
-        expected_total = 10 + 15 + 20 + 25 + 30  # 100
-
-        self.assertEqual(total_area, expected_total)
+    def test_total_area_in_acres_matches_the_per_parcel_conversion(self):
+        """The dossier prints acres; the column is stored in hectares."""
+        parcels = Parcel.objects.filter(establishment=self.establishment)
+        self.assertAlmostEqual(sum(p.area_acres for p in parcels), 59.4, places=1)
 
     def test_soil_type_distribution(self):
-        """Test soil type distribution analytics."""
-        loam_parcels = [p for p in self.parcels if p.soil_type == "loam"]
-        sandy_parcels = [p for p in self.parcels if p.soil_type == "sandy"]
+        counts = {
+            row["soil_type"]: row["n"]
+            for row in Parcel.objects.filter(establishment=self.establishment)
+            .values("soil_type")
+            .annotate(n=Count("id"))
+        }
+        self.assertEqual(counts, {"clay_loam": 2, "sandy_loam": 1})
 
-        self.assertEqual(len(loam_parcels), 3)  # Parcels 0, 2, 4
-        self.assertEqual(len(sandy_parcels), 2)  # Parcels 1, 3
+    def test_certified_parcel_count(self):
+        qs = Parcel.objects.filter(establishment=self.establishment)
+        self.assertEqual(qs.filter(certified=True).count(), 2)
+        self.assertEqual(qs.count(), 3)
 
-    def test_irrigation_distribution(self):
-        """Test irrigation type distribution."""
-        drip_parcels = [p for p in self.parcels if p.irrigation_type == "drip"]
-        sprinkler_parcels = [p for p in self.parcels if p.irrigation_type == "sprinkler"]
+    def test_average_parcel_area(self):
+        avg = Parcel.objects.filter(establishment=self.establishment).aggregate(avg=Avg("area"))["avg"]
+        self.assertAlmostEqual(avg, 24.0383 / 3, places=4)
 
-        self.assertEqual(len(drip_parcels), 2)  # Parcels 0, 3 (i % 3 == 0)
-        self.assertEqual(len(sprinkler_parcels), 3)  # Remaining parcels
+    def test_aggregates_are_scoped_to_the_establishment(self):
+        """A farm's totals must not pick up another company's parcels."""
+        other_company = Company.objects.create(name="Unrelated Co")
+        other_est = Establishment.objects.create(name="Unrelated Farm", company=other_company)
+        Parcel.objects.create(name="Elsewhere", establishment=other_est, area=100.0)
 
-    def test_certification_statistics(self):
-        """Test certification statistics."""
-        organic_parcels = [p for p in self.parcels if p.organic_certified]
-        conventional_parcels = [p for p in self.parcels if not p.organic_certified]
-
-        self.assertEqual(len(organic_parcels), 3)  # Even indices: 0, 2, 4
-        self.assertEqual(len(conventional_parcels), 2)  # Odd indices: 1, 3
-
-        # Calculate organic area percentage
-        organic_area = sum(p.area for p in organic_parcels)  # 10 + 20 + 30 = 60
-        total_area = sum(p.area for p in self.parcels)  # 100
-        organic_percentage = (organic_area / total_area) * 100
-
-        self.assertEqual(organic_percentage, 60.0)
+        total = Parcel.objects.filter(establishment=self.establishment).aggregate(total=Sum("area"))["total"]
+        self.assertAlmostEqual(total, 24.0383, places=4)
 
 
-class ParcelPerformanceTestCase(TestCase):
-    """Test performance optimizations for large datasets."""
+class ParcelQueryEfficiencyTests(ParcelTestBase):
+    """`select_related` on the establishment chain, which every parcel list renders."""
 
     def setUp(self):
-        self.user = User.objects.create_user(email="performance@test.com", password="testpass123")
+        for i in range(10):
+            self.parcel(name=f"Block {i}", area=1.0 + i)
 
-        self.company = Company.objects.create(name="Large Farm Co.")
-
-        self.establishment = Establishment.objects.create(name="Large Field", company=self.company)
-
-    def test_bulk_parcel_creation(self):
-        """Test bulk creation of parcels."""
-        # Create many parcels efficiently
-        parcels_data = []
-        for i in range(100):
-            parcels_data.append(
-                Parcel(
-                    name=f"Bulk Parcel {i}",
-                    establishment=self.establishment,
-                    area=float(i + 1),
-                    soil_type="loam",
-                    irrigation_type="drip",
-                )
+    def test_listing_parcels_with_their_farm_takes_one_query(self):
+        with self.assertNumQueries(1):
+            rows = list(
+                Parcel.objects.filter(establishment=self.establishment).select_related("establishment__company")
             )
+            # Touch the far end of the join — without select_related this is 20 more queries.
+            self.assertEqual({p.establishment.company.name for p in rows}, {"Ridgeline Growers"})
 
-        # Bulk create
-        created_parcels = Parcel.objects.bulk_create(parcels_data)
-
-        self.assertEqual(len(created_parcels), 100)
-        self.assertEqual(Parcel.objects.filter(establishment=self.establishment).count(), 100)
-
-    def test_parcel_queryset_optimization(self):
-        """Test queryset optimizations."""
-        # Create test data
-        parcels = []
-        for i in range(20):
-            parcel = Parcel.objects.create(name=f"Query Test {i}", establishment=self.establishment, area=float(i + 1))
-            parcels.append(parcel)
-
-            # Create history for some parcels
-            if i % 3 == 0:
-                History.objects.create(
-                    title=f"Event for Parcel {i}",
-                    establishment=self.establishment,
-                    parcel=parcel,
-                    event_date=timezone.now().date(),
-                    created_by=self.user,
-                )
-
-        # Test select_related optimization
-        parcels_with_establishment = Parcel.objects.select_related("establishment").all()
-        self.assertEqual(len(list(parcels_with_establishment)), 20)
-
-        # Test prefetch_related optimization
-        parcels_with_history = Parcel.objects.prefetch_related("history_set").all()
-        self.assertEqual(len(list(parcels_with_history)), 20)
-
-    def test_parcel_aggregation_queries(self):
-        """Test aggregation query performance."""
-        # Create test parcels
-        for i in range(50):
-            Parcel.objects.create(
-                name=f"Agg Test {i}", establishment=self.establishment, area=float(i + 1), organic_certified=i % 2 == 0
-            )
-
-        # Test aggregation queries
-        stats = Parcel.objects.filter(establishment=self.establishment).aggregate(
-            total_area=Sum("area"),
-            average_area=Avg("area"),
-            parcel_count=Count("id"),
-            organic_count=Count("id", filter=Q(organic_certified=True)),
+    def test_bulk_create_writes_every_parcel(self):
+        Parcel.objects.bulk_create(
+            [Parcel(name=f"Bulk {i}", establishment=self.establishment, area=2.0) for i in range(25)]
         )
-
-        self.assertIsNotNone(stats["total_area"])
-        self.assertIsNotNone(stats["average_area"])
-        self.assertEqual(stats["parcel_count"], 50)
-        self.assertEqual(stats["organic_count"], 25)  # Half are organic
-
-
-class ParcelIntegrationTestCase(TransactionTestCase):
-    """Test integration between parcels and other system components."""
-
-    def setUp(self):
-        self.user = User.objects.create_user(email="integration@test.com", password="testpass123")
-
-        self.company = Company.objects.create(name="Integration Farm")
-
-        self.establishment = Establishment.objects.create(name="Integration Field", company=self.company)
-
-    def test_parcel_subscription_limits(self):
-        """Test parcel creation with subscription limits."""
-        # Create subscription with parcel limits
-        subscription = Subscription.objects.create(
-            company=self.company,
-            plan_type="basic",
-            status="active",
-            max_parcels_per_establishment=3,
-            current_period_start=timezone.now(),
-            current_period_end=timezone.now() + timedelta(days=30),
-        )
-
-        # Should be able to create up to limit
-        for i in range(3):
-            parcel = Parcel.objects.create(name=f"Limited Parcel {i}", establishment=self.establishment, area=10.0)
-            self.assertIsNotNone(parcel.id)
-
-        # Test that 4th parcel would be blocked (implementation dependent)
-        # This would be handled by middleware or service layer
-
-    def test_parcel_carbon_calculation_integration(self):
-        """Test integration with carbon calculation system."""
-        parcel = Parcel.objects.create(
-            name="Carbon Test Parcel",
-            establishment=self.establishment,
-            area=25.0,
-            soil_type="loam",
-            organic_certified=True,
-        )
-
-        # Create production history with carbon implications
-        history = History.objects.create(
-            title="Fertilizer Application",
-            establishment=self.establishment,
-            parcel=parcel,
-            event_date=timezone.now().date(),
-            event_type="fertilizing",
-            fertilizer_type="nitrogen",
-            quantity=100.0,
-            unit="kg",
-            created_by=self.user,
-        )
-
-        # Test that carbon calculations consider parcel characteristics
-        # This would test integration with carbon calculation services
-        self.assertEqual(history.parcel, parcel)
-        self.assertTrue(parcel.organic_certified)
-
-    def test_parcel_certification_workflow(self):
-        """Test complete certification workflow."""
-        parcel = Parcel.objects.create(
-            name="Certification Workflow",
-            establishment=self.establishment,
-            area=50.0,
-            organic_certified=False,  # Start as conventional
-        )
-
-        # Apply for organic certification
-        certification = ProductCertification.objects.create(
-            parcel=parcel,
-            certification_type="organic",
-            certification_body="USDA Organic",
-            certificate_number="PENDING-2024-001",
-            issue_date=timezone.now().date(),
-            expiry_date=timezone.now().date() + timedelta(days=365),
-            status="pending",
-            created_by=self.user,
-        )
-
-        # Approve certification
-        certification.status = "active"
-        certification.save()
-
-        # Update parcel status
-        parcel.organic_certified = True
-        parcel.certification_body = certification.certification_body
-        parcel.certification_number = certification.certificate_number
-        parcel.save()
-
-        self.assertTrue(parcel.organic_certified)
-        self.assertTrue(certification.is_active())
+        self.assertEqual(Parcel.objects.filter(establishment=self.establishment, name__startswith="Bulk").count(), 25)

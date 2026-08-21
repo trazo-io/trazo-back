@@ -332,3 +332,103 @@ class AmendmentValidationEdgeTests(TestCase):
         """Skipping model.clean() must not mean skipping the corrected field's own rules."""
         with self.assertRaises(AmendmentError):
             self._amend(field_name="performed_by", new_value="x" * 5000)
+
+
+class LockedEventResponseContractTests(TestCase):
+    """The 423 body is a UI contract, not just an error message.
+
+    Wired 2026-08-21: the edit form reads `status === 423 && data.correctable` to swap the
+    wizard for a "this record is filed" view carrying a Correct-this-record button, and it
+    renders `data.detail` verbatim as the explanation. Drop or rename either key and the
+    farmer silently goes back to filling three wizard steps before being refused — the exact
+    dead end the wiring removed. `production_id` is what the view navigates back to.
+
+    Guarded here rather than in the frontend because the shape is the server's to keep.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        from datetime import timedelta
+
+        from django.contrib.auth import get_user_model
+        from django.utils import timezone
+
+        from carbon.models import CropType
+        from company.models import Company, Establishment
+        from history.models import History, ProductionEvent
+        from product.models import Parcel, Product
+        from users.models import WorksIn
+
+        User = get_user_model()
+        cls.user = User.objects.create_user(email="lockcontract@test.com", password="x")
+        cls.company = Company.objects.create(name="Lock Contract Co")
+        cls.user.companies.add(cls.company)
+        WorksIn.objects.create(user=cls.user, company=cls.company, role="CA")
+        est = Establishment.objects.create(name="LC1", company=cls.company, state="WA")
+        parcel = Parcel.objects.create(name="LCP", establishment=est, area=5.0)
+        crop = CropType.objects.create(
+            name="Apple",
+            slug="apple-lockcontract",
+            category="tree_fruit",
+            description="d",
+            typical_farm_size="1",
+            growing_season="s",
+            harvest_season="h",
+            emissions_per_hectare=0.0,
+            industry_average=0.0,
+            best_practice=0.0,
+            carbon_credit_potential=0.0,
+            typical_cost_per_hectare=0.0,
+            has_soil_contact=True,
+        )
+        cls.history = History.objects.create(
+            parcel=parcel,
+            product=Product.objects.create(name="Apple"),
+            crop_type=crop,
+            start_date=timezone.now() - timedelta(days=200),
+            finish_date=timezone.now() - timedelta(days=10),
+            published=True,
+        )
+        cls.event = ProductionEvent.objects.create(
+            history=cls.history,
+            type="HA",
+            date=timezone.now() - timedelta(days=30),
+            description="Harvest",
+            yield_quantity=1000,
+            yield_unit="lbs",
+        )
+
+    def _edit(self):
+        from rest_framework.test import APIRequestFactory, force_authenticate
+
+        from history.views import EventViewSet
+
+        request = APIRequestFactory().patch(
+            f"/events/{self.event.pk}/?event_type=1", {"yield_quantity": 999}, format="json"
+        )
+        force_authenticate(request, user=self.user)
+        return EventViewSet.as_view({"patch": "partial_update"})(request, pk=self.event.pk)
+
+    def test_editing_a_filed_record_is_refused_with_423(self):
+        self.assertEqual(self._edit().status_code, 423)
+
+    def test_the_refusal_carries_the_keys_the_edit_form_reads(self):
+        data = self._edit().data
+        self.assertTrue(data.get("correctable"), "the UI swaps to the correction view on this key")
+        self.assertEqual(data.get("production_id"), self.history.id)
+        self.assertTrue(data.get("production_finished"))
+
+    def test_the_detail_sentence_points_at_correcting_not_at_reopening(self):
+        """It is rendered verbatim to the farmer, so it has to say the useful thing.
+
+        There is no reopen CONTROL, so telling them to reopen would be advice they cannot
+        follow; the honest instruction is that the original is kept beside the correction.
+        """
+        detail = self._edit().data.get("detail") or ""
+        self.assertIn("correct", detail.lower())
+        self.assertNotIn("reopen", detail.lower())
+
+    def test_the_yield_is_unchanged_by_the_refused_edit(self):
+        self._edit()
+        self.event.refresh_from_db()
+        self.assertEqual(float(self.event.yield_quantity), 1000.0)

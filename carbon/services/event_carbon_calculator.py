@@ -2337,10 +2337,13 @@ class EventCarbonCalculator:
             # Get area managed - critical for proper scaling
             # CRITICAL: pass event so area_unit is read correctly (acres vs hectares).
             # Without event, _convert_area_to_hectares defaults to 'ha' and treats 85 acres as 85 ha.
-            area_hectares = self._convert_area_to_hectares(
-                getattr(event, "area_covered", None) or getattr(event, "area", "0"),
-                event=event,
-            )
+            # `a or b` treats a legitimate 0 as absent (Decimal("0") is falsy), so a zero
+            # area fell through to the "0" string and then to the 1-hectare default.
+            # Only None means the field was not supplied.
+            _area_raw = getattr(event, "area_covered", None)
+            if _area_raw is None:
+                _area_raw = getattr(event, "area", None)
+            area_hectares = self._convert_area_to_hectares(_area_raw, event=event)
 
             # ENHANCED: Calculate fuel consumption emissions (standardized across event types)
             fuel_consumed_raw = getattr(event, "fuel_consumed", None)
@@ -3492,17 +3495,28 @@ class EventCarbonCalculator:
             }
 
         except Exception as e:
-            logger.warning(f"Error extracting production data, using zero defaults: {e}")
-            return {
-                "production_type": "general production",
-                "crop_name": "unknown",
-                "area_covered": 0.0,
-                "fuel_consumed": None,
-                "equipment_hours": None,
-                "water_volume_gallons": None,
-                "method": None,
-                "structured_data": {},
-            }
+            # ⛔ This used to `return` zero defaults and let the caller carry on, which turned
+            # ANY extraction error into a confident-looking carbon figure computed from
+            # nothing: area 0, fuel None, water None. The number still rendered in the
+            # activity wizard and printed into the certifier packet, indistinguishable from a
+            # real calculation — there was no field anywhere in the result saying "this came
+            # from a failure". That is the fabricated-number class this codebase already
+            # removed from the wizard's API-failure fallback.
+            #
+            # It also actively hid bugs: the IR preview/saved parity suite read 34.32 instead
+            # of 85.37 for two months and looked like a dropped-auxiliary-diesel defect in the
+            # calculator, when the real cause was an AttributeError swallowed right here.
+            #
+            # Re-raised so the caller's own handler decides. `calculate_production_event_impact`
+            # already wraps this call in a try/except that returns an explicit error result.
+            logger.error(
+                "Failed to extract production data for event %s (type=%s): %s",
+                getattr(event, "id", "unsaved"),
+                getattr(event, "type", "unknown"),
+                e,
+                exc_info=True,
+            )
+            raise
 
     def _get_production_type_name(self, event_type: str, crop_name: str) -> str:
         """Get descriptive production type name for EPA calculations - handles ALL frontend types"""
@@ -3891,7 +3905,12 @@ class EventCarbonCalculator:
 
             if isinstance(area_str, (int, float, Decimal)):
                 # Direct numeric value — check area_unit on the event
-                area_value = float(area_str) if area_str else 1.0
+                # `if area_str else 1.0` treated an EXPLICIT ZERO as missing, because
+                # Decimal("0"), 0 and 0.0 are all falsy. SoilManagementEvent stores
+                # area_covered as a Decimal, so a zero area became 1 acre and a tillage
+                # record with no area reported 151.2 kg CO2e invented out of nothing.
+                # Zero is a value the operator can enter; only None means "not told".
+                area_value = 1.0 if area_str is None else float(area_str)
                 area_unit = getattr(event, "area_unit", "ha") if event else "ha"
                 if area_unit and area_unit.lower() in ["acre", "acres", "ac"]:
                     return area_value * 0.404686  # acres to hectares
@@ -3909,8 +3928,13 @@ class EventCarbonCalculator:
             area_str = str(area_str).lower()
             number = self._extract_numeric_value(area_str)
 
-            # If extraction failed, use intelligent defaults
-            if number == 0.0 and event:
+            # If extraction failed, use intelligent defaults.
+            # `number == 0.0` cannot distinguish "no digits in the string" from the string
+            # "0", so an explicit zero area was routed to the intelligent default (1 ha) and
+            # came back as a full hectare of emissions. Check that the string actually
+            # contained a digit before deciding extraction failed.
+            has_digit = any(ch.isdigit() for ch in area_str)
+            if number == 0.0 and not has_digit and event:
                 defaults = self._get_intelligent_defaults(event, crop_name)
                 return defaults["area"]
 

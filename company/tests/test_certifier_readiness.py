@@ -78,7 +78,18 @@ class CertifierReadinessTests(TestCase):
             self.assertIn(finding["status"], ("REVIEW", "FAIL"), "a PASS row was served as an action item")
 
     def test_matches_the_audit_pdf_rows_exactly(self):
-        # The whole point of the endpoint: one source of truth with the certifier packet.
+        """One source of truth with the certifier packet — and one definition of "actionable".
+
+        The card and the PDF read the same `compliance_snapshot_rows()`. They differ in what
+        they SHOW, deliberately: the packet prints every row so a certifier can see what Trazo
+        did and did not assess, while the card is a to-do list and only REVIEW / FAIL is
+        something the grower can act on. `NA`, `NOT ASSESSED` and `INFO` are none of those —
+        serving them as findings is the cry-wolf pattern that put amber on a farm with nothing
+        to fix. The filter is `ACTIONABLE_READINESS_STATUSES` in company/views.py; this test
+        used to spell it `!= "PASS"`, which quietly included all three.
+        """
+        from company.views import ACTIONABLE_READINESS_STATUSES
+
         expected = [
             r for r in AuditExportService(self.finished, certification_type="organic").compliance_snapshot_rows()
         ]
@@ -87,9 +98,18 @@ class CertifierReadinessTests(TestCase):
         self.assertEqual(body["checked_count"], len(expected))
         self.assertEqual(
             [f["label"] for f in body["findings"]],
-            [r["label"] for r in expected if r["status"] != "PASS"],
+            [r["label"] for r in expected if r["status"] in ACTIONABLE_READINESS_STATUSES],
             "dashboard findings diverged from the audit export's snapshot rows",
         )
+        # Guard the filter itself: a non-actionable row must never reach the card, and if the
+        # fixture stops producing one this assertion says so rather than passing vacuously.
+        non_actionable = [
+            r for r in expected if r["status"] not in ACTIONABLE_READINESS_STATUSES and r["status"] != "PASS"
+        ]
+        self.assertTrue(non_actionable, "fixture no longer exercises a non-actionable status")
+        served = {f["label"] for f in body["findings"]}
+        for row in non_actionable:
+            self.assertNotIn(row["label"], served, f'{row["status"]} row served as an action item')
 
     def test_scopes_to_the_most_recent_finished_season(self):
         newer_unfinished = self._production(name="2026 season", finished=False)

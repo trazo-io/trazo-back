@@ -12,8 +12,9 @@ period" and "No pest-control applications and no threshold records on file" need
 and counted both toward the open-items headline.
 """
 
-from company.views import ACTIONABLE_READINESS_STATUSES
 from django.test import TestCase
+
+from company.views import ACTIONABLE_READINESS_STATUSES
 
 
 class ActionableReadinessStatusTests(TestCase):

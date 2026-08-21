@@ -61,7 +61,20 @@ LABEL_DATABASE_VERIFIED = "Verified via USDA Organic Integrity Database"
 # a grower's dropdown pick is the grower's own record.
 LABEL_INPUT_OMRI_LISTED = "OMRI Listed"
 LABEL_INPUT_NATIONAL_LIST = "Allowed input · National List § 205.601"
-LABEL_INPUT_NATIONAL_LIST_PROHIBITED = "Prohibited substance · National List § 205.602"
+# 🔴 2026-08-20 — hardcoded "§ 205.602", which is wrong for most rows that reach it.
+# § 205.602 lists NONSYNTHETIC substances prohibited in crop production (calcium chloride,
+# rotenone, strychnine). A synthetic like glyphosate is barred by § 205.105(a) — it is simply
+# not on § 205.601 — and is not "on the National List" at all. Printing § 205.602 beside
+# glyphosate cites the wrong clause to a certifier and to a shopper, on the one label whose
+# job is to be exact. The clause varies per row, so the shared label states the fact that is
+# true of every row it covers; the packet already prints the actual `cfr_section` beside the
+# substance name, which is where the citation belongs.
+LABEL_INPUT_NATIONAL_LIST_PROHIBITED = "Prohibited substance · not allowed in organic production"
+# A § 205.602 entry the CFR permits for ONE stated use (calcium chloride as a foliar spray for
+# a calcium-uptake disorder; potassium chloride from a mined source). Neither "prohibited" nor
+# "allowed" is true of these, and this module must not decide which by reading the farmer's
+# free-text purpose against the annotation — that inference belongs to the certifier.
+LABEL_INPUT_NATIONAL_LIST_CONDITIONAL = "Restricted use · National List § 205.602"
 LABEL_INPUT_GROWER_REPORTED = "Organic-approved · grower-reported"
 LABEL_INPUT_UNCLASSIFIED = "Documented"
 
@@ -153,6 +166,19 @@ def may_claim_input_listing(chemical_event):
     nl = getattr(chemical_event, "national_list_substance", None)
     if nl is not None:
         if getattr(nl, "status", None) == "prohibited":
+            # 🔴 2026-08-20 — some § 205.602 entries are conditional, not absolute, and calling
+            # a compliant use "prohibited" on the shopper-facing page is the inverse error this
+            # module exists to prevent: it publishes a nonconformance the farm did not commit.
+            # (Live case: a Honeycrisp block's seven-spray calcium programme for bitter pit,
+            # which is precisely the exception § 205.602(c) writes out.) The honest claim names
+            # the listing and its condition and stops there — the operation's recorded purpose
+            # is free text, so whether it MEETS the condition is a certifier's call.
+            if getattr(nl, "is_conditionally_permitted", False):
+                return ClaimDecision(
+                    False,
+                    "National List conditional listing — allowance depends on the recorded use",
+                    LABEL_INPUT_NATIONAL_LIST_CONDITIONAL,
+                )
             return ClaimDecision(False, "National List prohibited match", LABEL_INPUT_NATIONAL_LIST_PROHIBITED)
         return ClaimDecision(False, "National List citation, not an OMRI listing", LABEL_INPUT_NATIONAL_LIST)
 

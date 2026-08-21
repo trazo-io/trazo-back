@@ -86,6 +86,22 @@ def _sheet_tab_name(title: str) -> str:
     return " ".join(cleaned.split())[:31]
 
 
+#: `Parcel.area` is stored in HECTARES. Every certifier-facing surface reports acres, so the
+#: conversion belongs at the boundary — printing the stored number is how a 28.4-acre block
+#: becomes "11.4931" on a form a certifier reconciles against the farm's stated total.
+HECTARES_TO_ACRES = 2.47105
+
+
+def _acres(area_hectares):
+    """Parcel area in ACRES, rounded the way a grower states it, or None."""
+    if area_hectares in (None, ""):
+        return None
+    try:
+        return round(float(area_hectares) * HECTARES_TO_ACRES, 2)
+    except (TypeError, ValueError):
+        return None
+
+
 def _blank(value) -> Optional[str]:
     """Empty string and whitespace become a blank cell, not the text 'None'."""
     if value is None:
@@ -133,11 +149,48 @@ def _field_rows(establishment):
     rows = []
     for parcel in parcels:
         history = sorted(parcel.crop_history.all(), key=lambda h: h.year, reverse=True)
-        if history:
-            rows.append((parcel, history[0]))
-        else:
-            rows.append((parcel, None))
+        rows.append((parcel, history[0] if history else None, _current_season_crop(parcel, history)))
     return rows
+
+
+def _current_season_crop(parcel, crop_history) -> Optional[str]:
+    """The crop this parcel is actually carrying, when that is newer than its crop history.
+
+    🔴 2026-08-21 — this form printed the newest `ParcelCropHistory` row and nothing else. A
+    farm whose field history was filled through 2025 but which had 2026 seasons running in
+    Trazo therefore filed a Field and Crop Information Form saying Upper Terrace grows a
+    "Full-season cover crop" while the SAME packet's contents page listed "Upper Terrace —
+    Onions — 2026-04-01", and Bottom Ground B was filed as onions in a year it grew carrots.
+    The field list is the first page an inspector reads, so a packet that contradicts itself
+    there costs the operation its credibility before anyone reaches the records.
+
+    `ParcelCropHistory` is the § 205.202(b) 36-month history and stays the source for prior
+    years. But Trazo already knows what is in the ground now — it is the production the
+    operator opened — so when the newest season is more recent than the newest history row,
+    the current crop is named from that season. Nothing is invented: both sides are the
+    operation's own records, and the prior-year history is untouched.
+    """
+    from history.models import History
+
+    newest_history_year = max((h.year for h in crop_history), default=None)
+    season = (
+        # `start_date__isnull=False` in the FILTER, not a check on the winner: ordering by
+        # "-start_date" can put a null-dated season first, and bailing on it would hide a
+        # real dated season sitting behind it.
+        History.objects.filter(parcel=parcel, start_date__isnull=False)
+        .select_related("product", "crop_type")
+        .order_by("-start_date")
+        .first()
+    )
+    if season is None:
+        return None
+    season_year = season.start_date.year
+    if newest_history_year is not None and newest_history_year >= season_year:
+        return None
+    crop = getattr(season.product, "name", None) or getattr(season.crop_type, "name", None)
+    if not crop:
+        return None
+    return f"{crop} ({season_year} season)"
 
 
 def _product_rows(establishment):
@@ -243,7 +296,7 @@ def _supplier_rows(establishment):
 
 def _field_status(row):
     """USDA 'Status' column: exactly one of Organic or Transitional."""
-    _, history = row
+    history = row[1]
     method = (getattr(history, "production_method", None) or "").lower() if history else ""
     if method == "organic":
         return "Organic"
@@ -260,7 +313,7 @@ def _last_prohibited(row):
     column lists everything applied in a year and cannot identify which was the last prohibited
     input without guessing, and a guess here is a false statement about land history.
     """
-    _, history = row
+    history = row[1]
     if history is None:
         return None
     name = _blank(getattr(history, "last_prohibited_substance", None))
@@ -289,11 +342,21 @@ WORKBOOKS: list = [
         columns=[
             Column("Location Name:", lambda r, est: _blank(est.name), 26),
             Column("Field or Parcel ID:", lambda r, est: _blank(r[0].name), 22),
-            Column("Acreage or square feet:", lambda r, est: r[0].area if r[0].area else None, 20),
+            # 🔴 2026-08-20 — this printed `Parcel.area` RAW, and `Parcel.area` is HECTARES
+            # (see its help_text). Under a column headed "Acreage or square feet" a 28.4-acre
+            # block was filed with the certifier as "11.4931". The Parcel Application in the
+            # SAME packet prints 28.4 acres, so the two documents contradicted each other, and
+            # the farm total (45.2 acres) did not reconcile against the sum of its own fields.
+            #
+            # This is the unit trap the audit export already documents: convert before
+            # printing, never compare or publish the stored hectares as acres.
+            Column("Acreage or square feet:", lambda r, est: _acres(r[0].area), 20),
             Column("Status:", lambda r, est: _field_status(r), 14),
             Column(
                 "Crop(s)/Cover Crops:",
-                lambda r, est: _blank(getattr(r[1], "crop_grown", None)),
+                # The season in the ground wins over a stale history row; see
+                # `_current_season_crop` for why a contradiction here is expensive.
+                lambda r, est: _blank(r[2] or getattr(r[1], "crop_grown", None)),
                 26,
             ),
             Column(

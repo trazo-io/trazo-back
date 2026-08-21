@@ -219,3 +219,53 @@ class BufferDispositionPacketTests(TestCase):
         text = self._pdf_text()
         self.assertIn("crop grown in buffer: Walnuts", text)
         self.assertNotIn("not sold as organic", text)
+
+
+class SplitOperationDeclarationTests(TestCase):
+    """The § 205.272 split declaration in the packet must be the operator's OWN answer.
+
+    🔴 2026-08-21 — split status has two independent editors: the farm-profile checkbox
+    `Establishment.has_split_operation` and the OSP's G6.0 `split_operation` answer, with
+    nothing binding them. The SOE table read the checkbox, so a farm that answered "yes, we
+    sell the buffer rows conventional" in the OSP wizard filed a packet asserting
+    "Split Operation (7 CFR 205.272): No" — followed by a REVIEW telling the operator that
+    the two statements in their packet disagree, about a question they had already answered.
+    """
+
+    def setUp(self):
+        from certifications.models import OrganicSystemPlan
+
+        self.user = User.objects.create_user(email="split@test.com", password="x")
+        company = Company.objects.create(name="Split Farm")
+        self.establishment = Establishment.objects.create(name="SF1", company=company)
+        self.parcel = Parcel.objects.create(name="Block 9", establishment=self.establishment, area=10.0)
+        self.history = History.objects.create(
+            name="Split Production",
+            start_date=timezone.now(),
+            product=Product.objects.create(name="Blueberries"),
+            parcel=self.parcel,
+            operator=self.user,
+        )
+        self.osp = OrganicSystemPlan.objects.create(establishment=self.establishment, version_number=1, status="draft")
+
+    def _service(self):
+        return AuditExportService(self.history, certification_type="organic")
+
+    def _set_answer(self, value):
+        self.osp.module_responses = {"modules": {"g6_0_production": {"answers": {"split_operation": {"value": value}}}}}
+        self.osp.save(update_fields=["module_responses"])
+
+    def test_the_osp_answer_is_read(self):
+        self._set_answer(True)
+        self.assertIs(self._service()._osp_declares_split_operation(self.establishment), True)
+        self._set_answer(False)
+        self.assertIs(self._service()._osp_declares_split_operation(self.establishment), False)
+
+    def test_an_unanswered_question_leaves_the_profile_checkbox_in_charge(self):
+        """Three states, not two — an unanswered question must not become a declaration."""
+        self.assertIsNone(self._service()._osp_declares_split_operation(self.establishment))
+
+    def test_a_bare_value_and_an_enveloped_value_both_read(self):
+        self.osp.module_responses = {"modules": {"g6_0_production": {"answers": {"split_operation": True}}}}
+        self.osp.save(update_fields=["module_responses"])
+        self.assertIs(self._service()._osp_declares_split_operation(self.establishment), True)

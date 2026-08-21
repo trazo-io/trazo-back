@@ -31,7 +31,7 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 from certifications.osp_modules import CONTENT_VERSION, MODULE_REGISTRY
 
 _REGISTRY_BY_KEY = {module.key: module for module in MODULE_REGISTRY}
-from certifications.osp_modules.conditions import visible_questions
+from certifications.osp_modules.conditions import answer_value, visible_questions
 from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
 from certifications.services.common_osp_workbooks import WORKBOOKS, build_workbook
 from certifications.services.osp_module_compiler import _format_answer_en
@@ -242,7 +242,12 @@ def _parcel_embed_flowables(embed: str, parcel, styles) -> list:
         line = "Field map on file (boundary recorded in Trazo)." if has_map else "No field map on file."
         out.append(Paragraph(_escape(line), styles["body"]))
         if area:
-            out.append(Paragraph(_escape(f"Mapped area: {area} acres."), styles["body"]))
+            # 🔴 2026-08-20 — printed `parcel.area` (HECTARES) with the word "acres" beside it.
+            # This is the § 205.202 page a certifier works from, so a WSDA reviewer read a
+            # 28.4-acre Honeycrisp block as 11.49 acres and would have issued a certificate
+            # (and a fee) for 24.0 acres against a 59.4-acre operation. The workbook on the
+            # facing page had the right numbers, which is what made it findable.
+            out.append(Paragraph(_escape(f"Mapped area: {parcel.area_display()}."), styles["body"]))
 
     elif embed == "crop_history":
         history = sorted(parcel.crop_history.all(), key=lambda h: h.year, reverse=True)
@@ -363,7 +368,18 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                 continue
             if question.kind in ("info", "upload"):
                 continue
-            value = (answers.get(question.key) or {}).get("value")
+            # 🔴 2026-08-20 — was `(answers.get(key) or {}).get("value")`, which assumes the
+            # ENVELOPE shape `{"value": ..., "at": ...}` the REST write path stores
+            # (certifications/views.py). The module wizard stores the BARE value, so a module
+            # a farmer actually answered raised
+            #     AttributeError: 'list' object has no attribute 'get'
+            # and took down the whole OSP packet ZIP with it — the artifact a grower downloads
+            # for the § 205.406 renewal, plus every per-module PDF and the parcel application.
+            #
+            # `answer_value` is the accessor that already exists for exactly this ("tolerating
+            # both envelope and bare shapes"); the compiler and the visibility evaluator both
+            # use it. This was the one reader that did not.
+            value = answer_value(answers, question.key)
             if value in (None, "", []):
                 continue
             if page.key != current_page_key:

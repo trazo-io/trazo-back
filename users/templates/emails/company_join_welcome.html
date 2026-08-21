@@ -8,12 +8,12 @@
     You've successfully joined {{ company.name }} on Trazo
 {% endblock %}
 
-{% block greeting %}Hi {{ user.first_name }},{% endblock %}
+{% block greeting %}Hi {{ user.first_name|default:"there" }},{% endblock %}
 
 {% block message %}
     <p>Welcome to <strong>{{ company.name }}</strong>! Your account has been successfully created and you've joined the team.</p>
     
-    <div style="background-color: #f0fdf4; border-left: 4px solid #4CAF50; padding: 16px; margin: 24px 0; border-radius: 4px;">
+    <div style="background-color: #f9fafb; border-left: 4px solid #d1d5db; padding: 16px; margin: 24px 0; border-radius: 4px;">
         <h3 style="color: #388E3C; margin-bottom: 8px; font-size: 16px;">🎉 Account Details</h3>
         <p style="margin-bottom: 4px; color: #374151;"><strong>Company:</strong> {{ company.name }}</p>
         <p style="margin-bottom: 4px; color: #374151;"><strong>Your Role:</strong> {{ role_display }}</p>
@@ -25,24 +25,24 @@
     {% if role == 'CA' %}
         <ul style="margin: 16px 0; padding-left: 20px; color: #4b5563;">
             <li>Manage all company operations and team members</li>
-            <li>Access complete transparency tracking and reporting</li>
-            <li>Generate QR codes for consumer trust</li>
+            <li>Access every record across the operation</li>
+            <li>Generate QR codes for buyer pages</li>
             <li>Configure company settings and integrations</li>
-            <li>View comprehensive analytics and insights</li>
+            <li>Review readiness checks across the operation</li>
         </ul>
     {% elif role == 'DS' %}
         <ul style="margin: 16px 0; padding-left: 20px; color: #4b5563;">
             <li>Supervise specific agricultural domains</li>
-            <li>Track transparency scores for assigned areas</li>
+            <li>Track record completeness for assigned areas</li>
             <li>Generate reports for your domains</li>
             <li>Manage domain workers and activities</li>
-            <li>Monitor sustainability metrics</li>
+            <li>Monitor activity logs and input use</li>
         </ul>
     {% elif role == 'DW' %}
         <ul style="margin: 16px 0; padding-left: 20px; color: #4b5563;">
             <li>Record agricultural activities and events</li>
             <li>Track inputs and outputs for assigned areas</li>
-            <li>Document farming practices for transparency scores</li>
+            <li>Document farming practices for the record</li>
             <li>Generate QR codes for products</li>
             <li>View domain-specific reports</li>
         </ul>
@@ -52,17 +52,15 @@
             <li>Track distribution and sales data</li>
             <li>Generate customer-facing reports</li>
             <li>Monitor product traceability</li>
-            <li>Support transparency initiatives</li>
+            <li>Share buyer pages for the products you carry</li>
         </ul>
     {% endif %}
     
-    <div style="background-color: #f0f9ff; border-left: 4px solid #0ea5e9; padding: 16px; margin: 24px 0; border-radius: 4px;">
-        <h3 style="color: #0369a1; margin-bottom: 8px; font-size: 16px;">🚀 Next Steps</h3>
+    <h3 style="color: #111827; margin: 24px 0 8px; font-size: 16px;">🚀 Next Steps</h3>
         <p style="margin-bottom: 8px; color: #374151;"><strong>1.</strong> Log in to your Trazo dashboard</p>
         <p style="margin-bottom: 8px; color: #374151;"><strong>2.</strong> Complete your profile setup</p>
-        <p style="margin-bottom: 8px; color: #374151;"><strong>3.</strong> Explore transparency tracking tools</p>
+        <p style="margin-bottom: 8px; color: #374151;"><strong>3.</strong> Explore the activity log and your OSP modules</p>
         <p style="margin-bottom: 4px; color: #374151;"><strong>4.</strong> Connect with your team</p>
-    </div>
 {% endblock %}
 
 {% block content %}
@@ -79,6 +77,6 @@
             This email was sent because you joined {{ company.name }} using a company invitation code. If you believe this was done in error, please contact our support team immediately.
         </p>
         
-        <p style="margin-top: 16px; color: #4CAF50; font-weight: 600;">The Trazo Team</p>
+        <p style="margin-top: 16px; color: #2E7D32; font-weight: 600;">The Trazo Team</p>
     </div>
 {% endblock %}

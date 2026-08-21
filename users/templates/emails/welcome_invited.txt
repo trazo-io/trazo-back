@@ -12,33 +12,33 @@ Your role as {{ role_display }}:
 • Full access to all company establishments and data
 • Manage team members and send invitations
 • Configure company settings and preferences
-• Access all transparency tracking and reporting tools
+• Access every record across the operation
 {% elif role == 'FM' %}
 • Manage assigned farm establishments
-• Document farming practices for transparency scores
+• Document farming practices for the record
 • Create and manage production records
-• Generate QR codes for consumer trust
+• Generate QR codes for buyer pages
 {% else %}
-• Contribute to your team's transparency documentation
+• Contribute to your team's records
 • Record agricultural events and activities
 • Support sustainable farming practices
 • Access training and educational resources
 {% endif %}
 
 What you can do with Trazo:
-• Document agricultural practices with transparency scores
+• Document agricultural practices as you work
 • Generate QR codes so consumers see how food was grown
 • Access EPA/USDA-sourced environmental data
 • Build buyer trust with dated, photo-backed records
-• Collaborate with your team on sustainability goals
+• Collaborate with your team on the season's records
 
-Your account is ready and you're automatically logged in. Start exploring your dashboard and see how {{ company.name }} is leading the way in agricultural transparency.
+Your account is ready and you're automatically logged in. Start exploring your dashboard and see what {{ company.name }} has documented so far.
 
 Access your dashboard: {{ BASE_APP_URL|default:'https://app.trazo.io' }}
 
 Need help getting started? Don't hesitate to reach out to {{ inviter.first_name }} or our support team.
 
-Welcome to {{ company.name }} and the future of agricultural transparency!
+Welcome to {{ company.name }}.
 
 The Trazo Team
 {% endautoescape %}

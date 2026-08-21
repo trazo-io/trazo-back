@@ -52,9 +52,17 @@ class RecordCompletenessSnapshotTests(TestCase):
         self.assertEqual(len(matches), 1, "exactly one record-completeness row must be present")
         return matches[0]
 
-    def test_no_chemical_events_is_pass(self):
+    def test_no_chemical_events_is_not_applicable(self):
+        """NA, not PASS — and the distinction is load-bearing.
+
+        A season with no chemical inputs has no chemical records to be complete or incomplete.
+        PASS would claim Trazo checked something and found it good; NA says the question does
+        not arise. The sibling "Input traceability (§ 205.103)" row directly above says NA for
+        the same fixture, and `ACTIONABLE_READINESS_STATUSES` (company/views.py) keeps both off
+        the readiness card for the same reason. This test asserted PASS and had been failing.
+        """
         row = self._row()
-        self.assertEqual(row["status"], "PASS")
+        self.assertEqual(row["status"], "NA")
         self.assertIn("No chemical inputs", row["detail"])
         self.assertIsNone(row["section_hint"])
 

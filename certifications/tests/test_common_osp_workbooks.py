@@ -325,6 +325,57 @@ class ContentTests(_Base):
             build_workbook(self.establishment, "not_a_workbook")
 
 
+class CurrentSeasonCropTests(_Base):
+    """The Field and Crop form must not contradict the packet it ships inside.
+
+    Found 2026-08-21 on a pilot renewal: field history was filled through 2025, the farm had
+    2026 seasons running, and the form filed "Full-season cover crop" for a parcel the same
+    packet listed as growing onions in 2026. The § 205.202(b) history stays the source for
+    prior years; the crop in the ground now comes from the season the operator opened.
+    """
+
+    def _crop_cell(self):
+        ws = self._sheet("field_and_crop_information")
+        rows = self._data_rows(ws)
+        self.assertTrue(rows, "no data rows")
+        return rows[0][4]
+
+    def test_a_season_newer_than_the_history_names_the_current_crop(self):
+        ParcelCropHistory.objects.create(
+            parcel=self.parcel, year=2025, crop_grown="Full-season cover crop", production_method="organic"
+        )
+        product = Product.objects.create(name="Onions")
+        History.objects.create(
+            parcel=self.parcel,
+            name="Onions 2026",
+            start_date=date(2026, 4, 1),
+            product=product,
+            production_method="organic",
+        )
+        cell = self._crop_cell()
+        self.assertIn("Onions", cell)
+        self.assertIn("2026", cell)
+        self.assertNotIn("cover crop", cell.lower())
+
+    def test_history_that_is_current_still_wins(self):
+        """A history row for the season year is the operator's own statement — do not override it."""
+        ParcelCropHistory.objects.create(
+            parcel=self.parcel, year=2026, crop_grown="Carrots (Bolero)", production_method="organic"
+        )
+        product = Product.objects.create(name="Onions")
+        History.objects.create(
+            parcel=self.parcel,
+            name="Onions 2026",
+            start_date=date(2026, 4, 1),
+            product=product,
+            production_method="organic",
+        )
+        self.assertEqual(self._crop_cell(), "Carrots (Bolero)")
+
+    def test_no_season_and_no_history_leaves_the_cell_blank(self):
+        self.assertIsNone(self._crop_cell())
+
+
 class SummaryTests(_Base):
     def test_summary_counts_rows_and_remaining_blanks(self):
         ParcelCropHistory.objects.create(parcel=self.parcel, year=2025, crop_grown="Walnuts")

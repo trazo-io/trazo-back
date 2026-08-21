@@ -283,3 +283,125 @@ class OrganicGeneratedEventTests(SimpleTestCase):
                 ORGANIC_OVERRIDES,
                 f"{crop_slug} has no organic template — organic growers get a glyphosate template",
             )
+
+
+class OrganicVegetableTemplateTests(SimpleTestCase):
+    """F4 (Calapooia Bend, 2026-08-21) — the four organic vegetable templates.
+
+    Carrots, onions, spinach and potatoes shipped with a CONVENTIONAL template and nothing
+    else, so an organic vegetable grower starting a season was offered exactly one plan — one
+    whose items include Herbicide Application, Pesticide Treatment, Fungicide Treatment and a
+    GLOBALG.A.P. audit. A template writes a season PLAN and never a record, so nothing false
+    was logged; the cost is that the checklist an organic grower works from starts wrong and
+    every practice their season actually turns on is absent.
+    """
+
+    VEGETABLES = ("carrots", "onions", "spinach", "potatoes")
+
+    def test_each_organic_vegetable_has_an_override_at_all(self):
+        # The seeder creates an organic template ONLY when ORGANIC_OVERRIDES has an entry, so
+        # this membership check is the whole feature. All four had a CROP_CUSTOMIZATIONS entry
+        # (hence a conventional template) and no organic one, which is exactly why the gap was
+        # invisible until a grower opened the picker.
+        for crop_slug in self.VEGETABLES:
+            self.assertIn(crop_slug, CROP_CUSTOMIZATIONS, f"{crop_slug} lost its practice data")
+            self.assertIn(crop_slug, ORGANIC_OVERRIDES, f"{crop_slug} has no organic template")
+
+    def test_no_organic_vegetable_template_carries_a_herbicide(self):
+        """The single most visible defect: "Herbicide Application" on an organic plan."""
+        for crop_slug in self.VEGETABLES:
+            self.assertIsNone(
+                ORGANIC_OVERRIDES[crop_slug].get("herbicide"),
+                f"{crop_slug} organic override names a herbicide",
+            )
+            for event in _generated_events(crop_slug):
+                fields = event.get("backend_event_fields") or {}
+                self.assertNotEqual(
+                    fields.get("chemical_subtype"),
+                    "synthetic_herbicide",
+                    f"{crop_slug} organic template emits a synthetic herbicide event",
+                )
+
+    def test_the_season_a_vegetable_grower_actually_runs_is_on_the_plan(self):
+        """The other half of F4: what the conventional template offered was wrong, and what an
+        organic season is MADE of was missing. § 205.204(a)(1) seed search, purchased compost
+        and pre-emergence flame weeding are the three the rehearsal named by name."""
+        for crop_slug in self.VEGETABLES:
+            subtypes = {(e.get("backend_event_fields") or {}).get("type") for e in _generated_events(crop_slug)}
+            self.assertIn("SS", subtypes, f"{crop_slug}: no organic-seed search on the plan")
+            self.assertIn("OM", subtypes, f"{crop_slug}: no compost application on the plan")
+            self.assertIn("CU", subtypes, f"{crop_slug}: no cultivation/weed control on the plan")
+            names = [e["name"] for e in _generated_events(crop_slug)]
+            self.assertIn("Pre-Emergence Flame Weeding", names, f"{crop_slug}: no flame weeding")
+
+    def test_the_seed_search_is_on_every_annual_organic_plan_not_just_the_new_ones(self):
+        """§ 205.204(a) binds every organic crop grown from seed or planting stock, so the
+        search is not a vegetable extra — the existing lettuce/tomato/strawberry templates
+        were missing a record the certifier asks for by name."""
+        for crop_slug in ("lettuce", "tomatoes", "strawberries"):
+            names = [e["name"] for e in _generated_events(crop_slug)]
+            self.assertIn(
+                "Organic Seed Sourcing & Availability Search",
+                names,
+                f"{crop_slug} organic template has no seed-search item",
+            )
+
+    def test_onions_are_cured_not_washed(self):
+        """A gated event must actually be gated. Storage onions are field- and shed-cured,
+        topped and sacked — never washed — so a wash-and-sanitize item on their plan would put
+        a food-safety record on the checklist that the crop's own handling contradicts. It is
+        the reverse test of the three above: proof the gate can say NO."""
+        self.assertNotIn("wash_water_sanitizer", ORGANIC_OVERRIDES["onions"])
+        onion_names = [e["name"] for e in _generated_events("onions")]
+        self.assertNotIn("Post-Harvest Wash & Sanitize", onion_names)
+        # …while a washed crop does get it.
+        self.assertIn("Post-Harvest Wash & Sanitize", [e["name"] for e in _generated_events("carrots")])
+
+    def test_potatoes_name_the_bt_that_works_on_a_beetle(self):
+        """kurstaki is a caterpillar material and does nothing to a Colorado potato beetle.
+        Naming the wrong Bt is the kind of detail a grower notices and a certifier does not,
+        which makes it worse than naming none."""
+        biological = ORGANIC_OVERRIDES["potatoes"]["biological_pesticide"].lower()
+        self.assertIn("tenebrionis", biological)
+        self.assertNotIn("kurstaki", biological)
+
+    def test_every_spray_names_its_ACTIVE_not_only_a_brand(self):
+        """7 CFR 205.601 lists SUBSTANCES; a brand never appears there and never will.
+
+        ⚠️ MEASURED, after getting it wrong. I first wrote this test asserting that spelling
+        the organism out makes the string classifiable, and it does not: `history/signals.py`
+        classifies a logged input by `extra_data.active_ingredient` FIRST and `commercial_name`
+        second, and a product string ("DiPel DF (Bacillus thuringiensis subsp. kurstaki) — OMRI
+        Listed") matches nothing at either step, because the National List's reverse pass needs
+        the operator's text to be a SUBSTRING of the listing. The path that works is the
+        farmer's own active-ingredient field, and a template cannot fill it — a template writes
+        a season PLAN, and a plan item carries no field values.
+
+        So what this test can honestly assert is narrower, and still worth having: the suggested
+        product NAMES the substance a certifier would look up, rather than only a trade name.
+        That is what the grower copies into the active-ingredient box, and it is the difference
+        between a citation and "Self-reported" on the packet."""
+        # Each of these is a name the classifier places when the grower enters it as the
+        # ACTIVE INGREDIENT — verified against `history/signals.py` end to end, not assumed.
+        # "insecticidal soap" rather than "potassium salts of fatty acids": the chemical name
+        # is the active in soap-based HERBICIDES too, so it is in
+        # `AMBIGUOUS_NEVER_AUTO_RESOLVE` and deliberately does not resolve.
+        RESOLVABLE_ACTIVES = (
+            "spinosad",
+            "bacillus",
+            "copper hydroxide",
+            "insecticidal soap",
+            "peracetic acid",
+            "elemental sulfur",
+            "horticultural oil",
+        )
+        for crop_slug in self.VEGETABLES:
+            overrides = ORGANIC_OVERRIDES[crop_slug]
+            for key in ("primary_fungicide", "copper_fungicide", "primary_pesticide", "biological_pesticide"):
+                value = (overrides.get(key) or "").lower()
+                if not value:
+                    continue
+                self.assertTrue(
+                    any(active in value for active in RESOLVABLE_ACTIVES),
+                    f"{crop_slug}.{key} = {overrides[key]!r} names no National-List active",
+                )

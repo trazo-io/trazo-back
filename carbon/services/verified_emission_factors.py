@@ -34,9 +34,31 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 
+# Provenance is what the UI is allowed to CLAIM about a number, and it is a typed field
+# precisely so no surface has to parse `source` prose to decide. Two values only:
+#
+#   "published"         — `source` names a document a certifier could pull up: a CFR part
+#                         and table, an eGRID edition, an IPCC volume/chapter, or an
+#                         author-year that resolves to one paper.
+#   "internal_estimate" — a Trazo-chosen default. Usually a national or regional average
+#                         reconciled from several places, no one of which publishes THIS
+#                         number. Defensible as a starting point, NOT as a citation.
+#
+# `compliance.md` checklist item 1 asks whether a statistic is sourced (publication, year,
+# author) and forbids fabricated attributions. A string like "USDA Agricultural Research
+# Service - Field Operations" names an agency, not a publication — it reads as a citation
+# and cannot be followed to one, which is the failure mode that rule exists to catch. So
+# those entries are labelled honestly rather than dressed up with an invented reference.
+#
+# The default is deliberately "internal_estimate": an unlabelled factor must not be able to
+# claim publication by omission. Adding a factor is a decision to classify it.
+PROVENANCE_PUBLISHED = "published"
+PROVENANCE_INTERNAL_ESTIMATE = "internal_estimate"
+
+
 @dataclass
 class EmissionFactor:
-    """Represents a verified emission factor with source documentation"""
+    """Represents an emission factor with its source documentation and provenance."""
 
     value: float
     unit: str
@@ -44,14 +66,28 @@ class EmissionFactor:
     confidence_level: float  # 0.0 to 1.0
     last_updated: str
     notes: Optional[str] = None
+    provenance: str = PROVENANCE_INTERNAL_ESTIMATE
+
+    @property
+    def is_published(self) -> bool:
+        """True only when `source` resolves to a document a certifier could look up."""
+        return self.provenance == PROVENANCE_PUBLISHED
 
 
 class VerifiedEmissionFactors:
     """
-    Verified emission factors from EPA and USDA sources for weather-related agricultural activities.
+    Emission factors for agricultural activities, each carrying its own provenance.
 
-    TRANSPARENCY PRINCIPLE: All factors are sourced from official government publications
-    and clearly documented with confidence levels and limitations.
+    TRANSPARENCY PRINCIPLE: every factor states where it came from and whether that
+    "where" is a document anyone can pull up.
+
+    This docstring used to read "All factors are sourced from official government
+    publications." That was not true of 29 of the 57 factors below, and the claim was
+    load-bearing: the activity wizard rendered an "EPA/USDA-sourced" badge over a
+    calculation whose driving input was a Trazo-chosen national average. Check
+    `factor.is_published` before any surface claims a citation — never the `source` prose,
+    and never the containing dict's name (EPA_CHEMICAL_FACTORS holds LCA-derived
+    estimates too).
     """
 
     # EPA VERIFIED DIESEL EMISSION FACTORS
@@ -60,6 +96,7 @@ class VerifiedEmissionFactors:
             value=10.18,  # kg CO2 per gallon
             unit="kg_CO2_per_gallon",
             source="EPA Greenhouse Gas Emission Factors Hub (40 CFR Part 98)",
+            provenance=PROVENANCE_PUBLISHED,
             confidence_level=0.95,
             last_updated="2024-03-15",
             notes="Stationary combustion emission factor for diesel fuel",
@@ -68,6 +105,7 @@ class VerifiedEmissionFactors:
             value=10.21,  # kg CO2 per gallon
             unit="kg_CO2_per_gallon",
             source="EPA Greenhouse Gas Emission Factors Hub (40 CFR Part 98)",
+            provenance=PROVENANCE_PUBLISHED,
             confidence_level=0.95,
             last_updated="2024-03-15",
             notes="Mobile combustion emission factor for diesel fuel",
@@ -76,6 +114,7 @@ class VerifiedEmissionFactors:
             value=10.21,  # kg CO2 per gallon - same as mobile diesel
             unit="kg_CO2_per_gallon",
             source="EPA Greenhouse Gas Emission Factors Hub (40 CFR Part 98)",
+            provenance=PROVENANCE_PUBLISHED,
             confidence_level=0.95,
             last_updated="2024-03-15",
             notes="Agricultural equipment mobile diesel emission factor",
@@ -90,6 +129,7 @@ class VerifiedEmissionFactors:
             value=10.21,  # kg CO2 per gallon
             unit="kg_CO2_per_gallon",
             source="EPA 40 CFR Part 98 Table C-1 (0.138 mmBtu/gal × 73.96 kg CO₂/mmBtu)",
+            provenance=PROVENANCE_PUBLISHED,
             confidence_level=0.95,
             last_updated="2026-02-15",
             notes="Mobile combustion for agricultural diesel fuel",
@@ -98,6 +138,7 @@ class VerifiedEmissionFactors:
             value=8.78,  # kg CO2 per gallon
             unit="kg_CO2_per_gallon",
             source="EPA 40 CFR Part 98 Table C-1 (0.125 mmBtu/gal × 70.22 kg CO₂/mmBtu)",
+            provenance=PROVENANCE_PUBLISHED,
             confidence_level=0.95,
             last_updated="2026-02-15",
             notes="Motor gasoline combustion",
@@ -106,6 +147,7 @@ class VerifiedEmissionFactors:
             value=5.72,  # kg CO2 per gallon
             unit="kg_CO2_per_gallon",
             source="EPA 40 CFR Part 98 Table C-1 (0.091 mmBtu/gal × 62.87 kg CO₂/mmBtu)",
+            provenance=PROVENANCE_PUBLISHED,
             confidence_level=0.95,
             last_updated="2026-02-15",
             notes="Propane/LPG combustion",
@@ -114,6 +156,7 @@ class VerifiedEmissionFactors:
             value=0.0544,  # kg CO2 per standard cubic foot
             unit="kg_CO2_per_scf",
             source="EPA 40 CFR Part 98 Table C-1 (0.001026 mmBtu/scf × 53.06 kg CO₂/mmBtu)",
+            provenance=PROVENANCE_PUBLISHED,
             confidence_level=0.95,
             last_updated="2026-02-15",
             notes="Natural gas combustion (weighted US average)",
@@ -122,6 +165,7 @@ class VerifiedEmissionFactors:
             value=8.76,  # kg CO2 per gallon
             unit="kg_CO2_per_gallon",
             source="EPA 40 CFR Part 98 Table C-1",
+            provenance=PROVENANCE_PUBLISHED,
             confidence_level=0.90,
             last_updated="2026-02-15",
             notes="Biodiesel (B100) combustion",
@@ -225,6 +269,7 @@ class VerifiedEmissionFactors:
             value=0.39,  # kg CO2 per kWh (2023 average, delivered electricity)
             unit="kg_CO2_per_kWh",
             source="EPA eGRID2023 Summary Tables (767.2 lbs/MWh) + 5.12% T&D losses",
+            provenance=PROVENANCE_PUBLISHED,
             confidence_level=0.95,
             last_updated="2025-12-03",
             notes="US average electricity emission factor for delivered electricity. eGRID 2023: 767.2 lbs CO2/MWh at generator, plus 5.12% T&D losses = ~0.39 kg CO2/kWh delivered",
@@ -238,6 +283,7 @@ class VerifiedEmissionFactors:
             value=0.39,
             unit="kg_CO2_per_kWh",
             source="EPA eGRID2023 (767.2 lbs/MWh + 5.12% T&D losses)",
+            provenance=PROVENANCE_PUBLISHED,
             confidence_level=0.95,
             last_updated="2025-12-03",
             notes="US average delivered electricity",
@@ -246,6 +292,7 @@ class VerifiedEmissionFactors:
             value=0.006263,
             unit="kg_CO2_per_kWh",
             source="MIEM/DNE Balance Energético Nacional (BEN) 2024 — Factor de emisión de CO2 del SIN (FE_SIN 6.263 tCO2/GWh)",
+            provenance=PROVENANCE_PUBLISHED,
             confidence_level=0.90,
             last_updated="2026-06-13",
             notes=(
@@ -261,6 +308,7 @@ class VerifiedEmissionFactors:
             value=0.35,
             unit="kg_CO2_per_kWh",
             source="CAMMESA Argentina 2023",
+            provenance=PROVENANCE_PUBLISHED,
             confidence_level=0.85,
             last_updated="2025-06-01",
             notes="Argentina mix of thermal + hydro + nuclear",
@@ -269,6 +317,7 @@ class VerifiedEmissionFactors:
             value=0.07,
             unit="kg_CO2_per_kWh",
             source="ONS Brazil 2023 (~80% hydro)",
+            provenance=PROVENANCE_PUBLISHED,
             confidence_level=0.90,
             last_updated="2025-06-01",
             notes="Brazil grid dominated by hydroelectric",
@@ -277,6 +326,7 @@ class VerifiedEmissionFactors:
             value=0.31,
             unit="kg_CO2_per_kWh",
             source="CEN Chile 2023",
+            provenance=PROVENANCE_PUBLISHED,
             confidence_level=0.85,
             last_updated="2025-06-01",
             notes="Chile transitioning to solar + wind",
@@ -285,6 +335,7 @@ class VerifiedEmissionFactors:
             value=0.13,
             unit="kg_CO2_per_kWh",
             source="XM Colombia 2023 (~70% hydro)",
+            provenance=PROVENANCE_PUBLISHED,
             confidence_level=0.85,
             last_updated="2025-06-01",
             notes="Colombia grid largely hydroelectric",
@@ -293,6 +344,7 @@ class VerifiedEmissionFactors:
             value=0.42,
             unit="kg_CO2_per_kWh",
             source="CENACE Mexico 2023",
+            provenance=PROVENANCE_PUBLISHED,
             confidence_level=0.85,
             last_updated="2025-06-01",
             notes="Mexico grid mix of gas, oil, hydro, wind",
@@ -301,6 +353,7 @@ class VerifiedEmissionFactors:
             value=0.19,
             unit="kg_CO2_per_kWh",
             source="COES Peru 2023 (~60% hydro)",
+            provenance=PROVENANCE_PUBLISHED,
             confidence_level=0.85,
             last_updated="2025-06-01",
             notes="Peru grid predominantly hydroelectric",
@@ -330,6 +383,7 @@ class VerifiedEmissionFactors:
             value=10.5,  # kg CO2 per kg N (manufacturing + direct N2O emissions)
             unit="kg_CO2_per_kg_N",
             source="EPA 40 CFR Part 98 + IPCC 2006/2019 Guidelines Direct N2O (EF1=1%)",
+            provenance=PROVENANCE_PUBLISHED,
             confidence_level=0.90,
             last_updated="2025-12-03",
             notes="Manufacturing (1-5 kg CO2e/kg N, avg 2.6 for urea) + N2O field emissions (IPCC 1% default × 44/28 × 265 GWP = ~4.2 kg CO2e/kg N) + indirect N2O (~3.7 kg). Total 10.5 is high-end of 4-12 kg range from scientific literature (Nature 2022). Conservative for transparency.",
@@ -338,6 +392,7 @@ class VerifiedEmissionFactors:
             value=1.19,  # kg CO2 per kg P2O5 (manufacturing emissions)
             unit="kg_CO2_per_kg_P2O5",
             source="EPA Greenhouse Gas Emission Factors Hub (40 CFR Part 98)",
+            provenance=PROVENANCE_PUBLISHED,
             confidence_level=0.90,
             last_updated="2024-03-15",
             notes="Phosphorus fertilizer manufacturing emissions",
@@ -346,6 +401,7 @@ class VerifiedEmissionFactors:
             value=0.65,  # kg CO2 per kg K2O (manufacturing emissions)
             unit="kg_CO2_per_kg_K2O",
             source="EPA Greenhouse Gas Emission Factors Hub (40 CFR Part 98)",
+            provenance=PROVENANCE_PUBLISHED,
             confidence_level=0.90,
             last_updated="2024-03-15",
             notes="Potassium fertilizer manufacturing emissions",
@@ -354,6 +410,7 @@ class VerifiedEmissionFactors:
             value=8.8,  # kg CO2 per kg active ingredient
             unit="kg_CO2_per_kg_active_ingredient",
             source="Audsley et al. 2009, range 5.1-19 kg; cross-validated Hillier et al. 2009",
+            provenance=PROVENANCE_PUBLISHED,
             confidence_level=0.85,
             last_updated="2026-03-21",
             notes=(
@@ -370,6 +427,7 @@ class VerifiedEmissionFactors:
             value=6.3,  # kg CO2 per kg active ingredient — updated from 5.5 to Lal 2004 original
             unit="kg_CO2_per_kg_active_ingredient",
             source="Lal 2004 (6.3±2.7 kg), Audsley et al. 2009 (18-27 kg); Hillier et al. 2009",
+            provenance=PROVENANCE_PUBLISHED,
             confidence_level=0.85,
             last_updated="2026-03-21",
             notes=(
@@ -386,6 +444,7 @@ class VerifiedEmissionFactors:
             value=1.2,  # kg CO2 per kg (acetic acid/vinegar herbicides)
             unit="kg_CO2_per_kg",
             source="ScienceDirect LCA Studies - Acetic Acid Production (0.64-1.2 kg CO2e/kg)",
+            provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.85,
             last_updated="2025-01-21",
             notes="Organic herbicides (acetic acid/vinegar-based) - much lower than synthetic herbicides due to simpler fermentation production process",
@@ -394,6 +453,7 @@ class VerifiedEmissionFactors:
             value=4.5,  # kg CO2 per kg active ingredient (verified against LCA literature)
             unit="kg_CO2_per_kg_active_ingredient",
             source="Lal 2004 (3.9±2.2 kg), agricultural LCA studies",
+            provenance=PROVENANCE_PUBLISHED,
             confidence_level=0.85,
             last_updated="2025-12-03",
             notes="Fungicide manufacturing. Lal 2004: 3.9 kg. Using 4.5 as conservative estimate. Copper-based: 5.5 kg, Sulfur-based: 1.8 kg, Biological: 2.0 kg factors apply for specific types.",
@@ -402,6 +462,7 @@ class VerifiedEmissionFactors:
             value=5.5,  # kg CO2 per kg active ingredient (copper-based fungicides)
             unit="kg_CO2_per_kg_active_ingredient",
             source="International Copper Association - Copper Production LCA (3-5 kg CO2e/kg Cu) + processing",
+            provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.85,
             last_updated="2025-01-21",
             notes="Copper-based fungicides (copper sulfate, copper hydroxide) - higher than generic due to copper mining/refining energy intensity",
@@ -410,6 +471,7 @@ class VerifiedEmissionFactors:
             value=1.8,  # kg CO2 per kg sulfur (elemental sulfur production)
             unit="kg_CO2_per_kg",
             source="EPA Industrial Manufacturing + Sulfur Recovery LCA Studies",
+            provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.85,
             last_updated="2025-01-21",
             notes="Sulfur-based fungicides - lower emissions as sulfur is often a byproduct of oil/gas refining",
@@ -418,6 +480,7 @@ class VerifiedEmissionFactors:
             value=2.0,  # kg CO2 per kg (fermentation-based production)
             unit="kg_CO2_per_kg",
             source="LCA Studies - Biological Agent Fermentation Production",
+            provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.80,
             last_updated="2025-01-21",
             notes="Biological fungicides (Bacillus, Trichoderma) - lower emissions due to fermentation-based production",
@@ -426,6 +489,7 @@ class VerifiedEmissionFactors:
             value=2.5,  # kg CO2 per kg (naturally-derived extraction)
             unit="kg_CO2_per_kg",
             source="LCA Studies - Natural Fungicide Extraction (Neem Oil, Potassium Bicarbonate)",
+            provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.75,
             last_updated="2026-04-09",
             notes="Organic fungicides (neem oil, potassium bicarbonate, essential oils) - moderate emissions from extraction/purification",
@@ -434,6 +498,7 @@ class VerifiedEmissionFactors:
             value=3.5,  # kg CO2 per kg (naturally-derived pesticides)
             unit="kg_CO2_per_kg",
             source="LCA Studies - Natural Pesticide Extraction (Neem, Pyrethrin)",
+            provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.80,
             last_updated="2025-01-21",
             notes="Organic pesticides (neem, pyrethrin) - moderate emissions from extraction processes",
@@ -442,6 +507,7 @@ class VerifiedEmissionFactors:
             value=2.5,  # kg CO2 per kg (microbial-based pesticides)
             unit="kg_CO2_per_kg",
             source="LCA Studies - Microbial Pesticide Production (Bt, Spinosad)",
+            provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.80,
             last_updated="2025-01-21",
             notes="Biological pesticides (Bt, Spinosad) - lower emissions from fermentation-based production",
@@ -490,6 +556,7 @@ class VerifiedEmissionFactors:
             value=6.14,  # kg CO2e per kg N applied (direct + indirect N2O, no manufacturing)
             unit="kg_CO2e_per_kg_N",
             source="IPCC 2019 Refinement Vol.4 Ch.11 Tables 11.1 & 11.3 (EF1 0.010, EF4 0.010, EF5 0.011, FracGASM 0.21, FracLEACH-(H) 0.24); GWP100 265 (IPCC AR5)",
+            provenance=PROVENANCE_PUBLISHED,
             confidence_level=0.85,
             last_updated="2026-07-31",
             notes="Post-application field N2O (direct + indirect) per kg of nitrogen applied, independent of N source. Applies to organic and synthetic N alike; already included inside the 10.5 nitrogen_fertilizer factor, so do NOT add both.",
@@ -498,6 +565,7 @@ class VerifiedEmissionFactors:
             value=0.5,  # kg CO2 per kg (composting/manure processing)
             unit="kg_CO2_per_kg",
             source="USDA/EPA Composting LCA Studies",
+            provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.75,
             last_updated="2025-01-21",
             notes="Organic fertilizers (compost, manure) - minimal manufacturing emissions, primarily processing/transport",
@@ -506,6 +574,7 @@ class VerifiedEmissionFactors:
             value=10.21,  # kg CO2 per gallon diesel for application equipment
             unit="kg_CO2_per_gallon",
             source="EPA Greenhouse Gas Emission Factors Hub (40 CFR Part 98)",
+            provenance=PROVENANCE_PUBLISHED,
             confidence_level=0.95,
             last_updated="2024-03-15",
             notes="Mobile diesel emission factor for chemical application equipment",
@@ -518,6 +587,7 @@ class VerifiedEmissionFactors:
             value=6.0,  # gallons diesel per hour (CALIBRATED - realistic orchard heater)
             unit="gallons_diesel_per_hour",
             source="UC Davis Agricultural Engineering + Equipment manufacturer data (Smudge Pot/Orchard Heater)",
+            provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.85,
             last_updated="2025-01-21",
             notes="Commercial orchard heaters (150,000-250,000 BTU) calibrated to UC Davis frost protection studies",
@@ -526,6 +596,7 @@ class VerifiedEmissionFactors:
             value=35.0,  # kWh per hour (CALIBRATED - realistic wind machine consumption)
             unit="kWh_per_hour",
             source="Agricultural equipment specifications (Orchard-Rite, Schmeiser) + UC Davis frost protection studies",
+            provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.80,
             last_updated="2025-01-21",
             notes="75-100 HP wind machines, calibrated to commercial frost protection operations",
@@ -534,6 +605,7 @@ class VerifiedEmissionFactors:
             value=3.5,  # kWh per 1000 gallons pumped (deep well scenario, 200-300 ft lift)
             unit="kWh_per_1000_gallons",
             source="USDA NRCS Irrigation Energy Guidelines + agricultural engineering studies",
+            provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.85,
             last_updated="2025-12-03",
             notes="Deep well pumping (200-300 ft). Literature: 1.5-2.5 kWh/1000 gal for moderate lift (50-150 ft), 3-5 kWh for deep wells (200+ ft). Using 3.5 for conservative deep well/drought scenario. Actual varies with pump efficiency (50-75%) and lift depth.",
@@ -542,6 +614,7 @@ class VerifiedEmissionFactors:
             value=12.0,  # kWh per hour per acre (CALIBRATED - realistic cooling system)
             unit="kWh_per_hour_per_acre",
             source="Agricultural cooling system studies + Equipment manufacturer specifications",
+            provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.75,
             last_updated="2025-01-21",
             notes="High-pressure misting systems calibrated to commercial farm cooling operations",
@@ -567,6 +640,7 @@ class VerifiedEmissionFactors:
             value=1.11,
             unit="kWh_per_1000_gallons",
             source="Irrigation pumping-energy equation (kWh/AF = 1.0241 × TDH / OPE) at 200 ft lift, 20 psi, 70% OPE",
+            provenance=PROVENANCE_PUBLISHED,
             confidence_level=0.75,
             last_updated="2026-07-30",
             notes=(
@@ -580,6 +654,7 @@ class VerifiedEmissionFactors:
             value=0.20,
             unit="kWh_per_1000_gallons",
             source="USDA NRCS + Municipal Water Distribution Studies",
+            provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.80,
             last_updated="2026-02-19",
             notes="Pre-pressurized municipal supply. On-farm energy is minimal booster pump only.",
@@ -588,6 +663,7 @@ class VerifiedEmissionFactors:
             value=0.15,
             unit="kWh_per_1000_gallons",
             source="USDA NRCS + Rainwater Harvesting LCA Studies",
+            provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.75,
             last_updated="2026-02-19",
             notes="Gravity-fed collection systems. Minimal energy for transfer pump from cistern to field.",
@@ -596,6 +672,7 @@ class VerifiedEmissionFactors:
             value=0.50,
             unit="kWh_per_1000_gallons",
             source="USDA NRCS Irrigation Energy Guidelines - Surface Water",
+            provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.80,
             last_updated="2026-02-19",
             notes="Low-lift surface pump (5-20 ft) from canal to field. Typical for irrigation district delivery.",
@@ -604,6 +681,7 @@ class VerifiedEmissionFactors:
             value=0.85,
             unit="kWh_per_1000_gallons",
             source="USDA NRCS Irrigation Energy Guidelines - Surface Water Pumping",
+            provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.80,
             last_updated="2026-02-19",
             notes="Moderate-lift surface pump (20-50 ft). Varies with bank height and distance to field.",
@@ -612,6 +690,7 @@ class VerifiedEmissionFactors:
             value=0.40,
             unit="kWh_per_1000_gallons",
             source="USDA NRCS Irrigation Energy Guidelines - On-Farm Storage",
+            provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.80,
             last_updated="2026-02-19",
             notes="Low-lift from on-farm storage (5-15 ft). Minimal pumping for gravity-assisted systems.",
@@ -620,6 +699,7 @@ class VerifiedEmissionFactors:
             value=0.30,
             unit="kWh_per_1000_gallons",
             source="USDA NRCS + Reclaimed Water Distribution Studies",
+            provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.75,
             last_updated="2026-02-19",
             notes="Pre-treated and pressurized reclaimed water. On-farm energy similar to municipal.",
@@ -640,6 +720,7 @@ class VerifiedEmissionFactors:
         value=0.88,
         unit="kWh_per_1000_gallons",
         source="Irrigation pumping-energy equation (kWh/AF = 1.0241 × TDH / OPE) at 150 ft lift, 20 psi, 70% OPE",
+        provenance=PROVENANCE_PUBLISHED,
         confidence_level=0.60,
         last_updated="2026-07-30",
         notes=(
@@ -668,6 +749,7 @@ class VerifiedEmissionFactors:
             value=10.21,  # kg CO2 per gallon diesel (agricultural equipment)
             unit="kg_CO2_per_gallon",
             source="EPA Greenhouse Gas Emission Factors Hub (40 CFR Part 98)",
+            provenance=PROVENANCE_PUBLISHED,
             confidence_level=0.95,
             last_updated="2024-03-15",
             notes="EPA mobile source emission factors for agricultural equipment",
@@ -676,6 +758,7 @@ class VerifiedEmissionFactors:
             value=0.39,  # kg CO2 per kWh for electric irrigation pumps (corrected 2025-12-03)
             unit="kg_CO2_per_kWh",
             source="EPA eGRID2023 Summary Tables (767.2 lbs/MWh) + 5.12% T&D losses",
+            provenance=PROVENANCE_PUBLISHED,
             confidence_level=0.95,
             last_updated="2025-12-03",
             notes="US average electricity emission factor for irrigation pumps. Updated from 0.821 to 0.39 per EPA eGRID 2023 data",
@@ -685,6 +768,7 @@ class VerifiedEmissionFactors:
             value=2.5,  # gallons diesel per hectare (typical agricultural operations)
             unit="gallons_per_hectare",
             source="USDA Agricultural Research Service - Farm Energy Use",
+            provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.80,
             last_updated="2024-01-01",
             notes="Average diesel consumption for crop production operations",
@@ -693,6 +777,7 @@ class VerifiedEmissionFactors:
             value=0.7,  # gallons diesel per hectare for harvesting (modern efficient equipment)
             unit="gallons_per_hectare",
             source="USDA Agricultural Research Service - Machinery Energy Use (2025 efficiency standards)",
+            provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.85,
             last_updated="2025-01-21",
             notes="Modern high-efficiency harvesting equipment with GPS guidance and variable rate technology",
@@ -701,6 +786,7 @@ class VerifiedEmissionFactors:
             value=1.8,  # gallons diesel per hectare for planting
             unit="gallons_per_hectare",
             source="USDA Agricultural Research Service - Field Operations",
+            provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.80,
             last_updated="2024-01-01",
             notes="Average diesel consumption for planting operations",
@@ -709,6 +795,7 @@ class VerifiedEmissionFactors:
             value=2.4,  # gallons diesel per hectare for transplanting (higher than planting due to careful handling)
             unit="gallons_per_hectare",
             source="USDA Agricultural Research Service - Transplanting Operations & UC Davis Nursery Studies",
+            provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.82,
             last_updated="2025-10-11",
             notes="Transplanting operations require careful plant handling, transport, and more precise field work than direct seeding",
@@ -717,6 +804,7 @@ class VerifiedEmissionFactors:
             value=0.75,  # gallons diesel per hectare for thinning (lightweight manual operation)
             unit="gallons_per_hectare",
             source="USDA Agricultural Research Service - Lightweight Field Operations & Fruit Crop Management",
+            provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.80,
             last_updated="2025-12-10",
             notes="Thinning is primarily manual labor with minimal fuel-intensive equipment. Lower than general production (2.5) due to hand-selection nature. Includes minimal mechanical assistance for removed fruit transport.",
@@ -725,6 +813,7 @@ class VerifiedEmissionFactors:
             value=3.2,  # gallons diesel per hectare for cultivation/weed control (high fuel intensity)
             unit="gallons_per_hectare",
             source="USDA Agricultural Research Service - Soil Preparation & Mechanical Weed Control",
+            provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.82,
             last_updated="2025-12-11",
             notes="Mechanical cultivation and weed removal operations requiring powered equipment. Higher than general production due to repeated passes and soil disturbance equipment (cultivators, row tillers).",
@@ -733,6 +822,7 @@ class VerifiedEmissionFactors:
             value=0.85,  # kWh per 1000 gallons pumped (shallow to moderate lift)
             unit="kWh_per_1000_gallons",
             source="USDA NRCS Irrigation Energy Guidelines + agricultural engineering studies",
+            provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.85,
             last_updated="2025-12-03",
             notes="Standard irrigation pumping (50-100 ft head). Literature: 0.5-2.5 kWh/1000 gal typical. For deep wells (200+ ft), use EQUIPMENT_CONSUMPTION['irrigation_pump'] at 3.5 kWh. Theoretical minimum ~1.02 kWh per acre-ft per ft of lift.",
@@ -745,6 +835,7 @@ class VerifiedEmissionFactors:
             value=4.5,  # gallons diesel per hour of equipment operation (ENHANCED)
             unit="gallons_diesel_per_hour",
             source="Agricultural insurance claims data + Construction equipment fuel consumption averages",
+            provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.80,
             last_updated="2025-01-21",
             notes="Heavy tractor/loader operation for agricultural debris cleanup, includes transport to disposal",
@@ -753,6 +844,7 @@ class VerifiedEmissionFactors:
             value=8.0,  # gallons diesel per acre for soil prep and replanting (ENHANCED)
             unit="gallons_diesel_per_acre",
             source="USDA Farm Operations fuel use surveys + Agricultural disaster response studies",
+            provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.85,
             last_updated="2025-01-21",
             notes="Complete replanting operation including tillage, soil amendment, planting, and initial irrigation setup",
@@ -761,6 +853,7 @@ class VerifiedEmissionFactors:
             value=3.2,  # gallons diesel per hour for protection system repair
             unit="gallons_diesel_per_hour",
             source="Agricultural equipment repair fuel consumption studies",
+            provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.75,
             last_updated="2025-01-21",
             notes="Netting replacement, structure repair, and irrigation system fixes after hail damage",
@@ -769,6 +862,7 @@ class VerifiedEmissionFactors:
             value=6.0,  # gallons diesel per hour for wind damage repair
             unit="gallons_diesel_per_hour",
             source="Agricultural storm damage response data + Equipment fuel studies",
+            provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.80,
             last_updated="2025-01-21",
             notes="Tree/structure stabilization, irrigation repair, fence/trellis reconstruction after wind damage",
@@ -1328,6 +1422,22 @@ class VerifiedEmissionFactors:
             # A7 (2026-07): post-harvest is facility energy, not field fuel — it had no entry
             # here and was silently charged the general per-hectare diesel estimate.
             "PH": cls._calculate_postharvest_emissions,
+            # PO (2026-08-20): pollination had NO entry here, so it fell through to the
+            # unknown-code fallback and was charged the general production estimate —
+            # 2.5 gal diesel/hectare, 6.198 kg CO2e for 0.6 acres of bees doing their job.
+            # The SAVED path (EventCarbonCalculator, `elif event.type == "PO"`) has always
+            # returned 0.0 with `zero_emission_biological_service`, so preview and saved
+            # disagreed on the same event — the divergence class the IR parity suite exists
+            # to catch. The wizard also renders "no fuel burned, so no direct emissions"
+            # for PO, which sat directly above a non-zero number.
+            "PO": cls._calculate_pollination_emissions,
+            # TP/BU/SS (2026-08-20): also absent from this map, also charged the general
+            # 2.5 gal/ha field estimate — 6.198 kg on 0.6 acres for documenting a seed
+            # search. None of the three is area-driven; see
+            # `_calculate_reported_fuel_only_emissions`.
+            "TP": cls._calculate_reported_fuel_only_emissions,
+            "BU": cls._calculate_reported_fuel_only_emissions,
+            "SS": cls._calculate_reported_fuel_only_emissions,
             # Full name aliases (safety net for any code path that passes descriptive names)
             "PLANTING": cls._calculate_planting_emissions,
             "HARVESTING": cls._calculate_harvesting_emissions,
@@ -1599,6 +1709,175 @@ class VerifiedEmissionFactors:
             )
 
     @classmethod
+    def _calculate_reported_fuel_only_emissions(
+        cls, area_covered: float, fuel_consumed: float = None, equipment_hours: float = None, **kwargs
+    ) -> Dict[str, Any]:
+        """Count fuel the operator actually reported. Never estimate from acreage.
+
+        For TP (a load moving off-farm), BU (§ 205.202(c) buffer harvest/disposal) and
+        SS (§ 205.204(a)(1) organic-seed availability search), a per-hectare field-diesel
+        rate is the wrong physical model:
+
+          * SS is a phone-and-catalogue search. It burns nothing.
+          * BU is a recordkeeping act about a boundary strip.
+          * TP scales with DISTANCE and load, not with the parcel's area. Charging it
+            2.5 gal/hectare of the parcel it left is meaningless.
+
+        None of the three had an entry in PRODUCTION_TYPE_MAPPING, so all three hit the
+        unknown-code fallback and were charged the general field-operation estimate —
+        6.198 kg CO2e on 0.6 acres for documenting a seed search. Same defect as PO.
+
+        Reported fuel still counts: haul diesel is a real direct emission, and an operator
+        who enters it should see it.
+        """
+        fuel_type = kwargs.get("fuel_type") or "diesel"
+        energy_source = kwargs.get("energy_source", "grid")
+        area_covered = float(area_covered or 0)
+
+        breakdown: Dict[str, Any] = {
+            "production_activity": kwargs.get("production_type_code", "reported_fuel_only"),
+            "area_covered_acres": area_covered,
+            "area_covered_hectares": area_covered * 0.404686,
+            "fuel_type": fuel_type,
+            "calculation_basis": "reported_fuel_only",
+            "confidence_level": 1.0,
+            "carbon_notes": (
+                "Counted from reported fuel only. This activity is not area-driven, so no "
+                "per-hectare estimate is applied when no fuel is entered."
+            ),
+        }
+
+        if not fuel_consumed:
+            breakdown["confidence_level"] = 1.0
+            return {
+                "co2e_kg": 0.0,
+                "calculation_method": "reported_fuel_only",
+                "breakdown": breakdown,
+                "data_sources": ["Trazo Methodology - non-area-driven activity, reported fuel only"],
+                "limitations": "No fuel reported. Excludes off-farm transport distance not captured on this record.",
+                "validation_warnings": [],
+            }
+
+        if fuel_type == "electric":
+            electricity_factor = cls.get_country_electricity_factor()
+            factor = cls.ELECTRICITY_SOURCE_FACTORS.get(energy_source, electricity_factor.value)
+            co2e_kg = float(fuel_consumed) * factor
+            breakdown["electricity_emission_factor_kg_per_kwh"] = factor
+            breakdown["actual_fuel_consumed_kWh"] = float(fuel_consumed)
+            emission_factor = electricity_factor
+        else:
+            co2e_kg, emission_factor, _unit_error = cls.fuel_co2e(fuel_consumed, fuel_type, kwargs.get("fuel_unit"))
+            breakdown["diesel_emission_factor_kg_per_gallon"] = emission_factor.value
+            breakdown["fuel_emission_factor_kg_per_unit"] = emission_factor.value
+            breakdown["actual_fuel_consumed_gallons"] = float(fuel_consumed)
+
+        # No per-area factor exists for these activities, so the "assumed rate" half of
+        # fuel_basis is deliberately the emission factor itself — there is nothing assumed.
+        cls._annotate_fuel_basis(breakdown, emission_factor, emission_factor, fuel_consumed)
+
+        return {
+            "co2e_kg": round(co2e_kg, 3),
+            "calculation_method": "reported_fuel_only",
+            "breakdown": breakdown,
+            "data_sources": [emission_factor.source],
+            "limitations": "Excludes off-farm transport distance not captured on this record.",
+            "validation_warnings": [],
+        }
+
+    @classmethod
+    def _calculate_pollination_emissions(
+        cls, area_covered: float, fuel_consumed: float = None, equipment_hours: float = None, **kwargs
+    ) -> Dict[str, Any]:
+        """Pollination (PO): a biological service, zero DIRECT operational emissions.
+
+        Placing hives is work bees do. There is no fuel combustion and no powered
+        equipment in the operation itself, so under the direct-operational scope
+        (`carbon-methodology.md`) it contributes nothing. Hive DELIVERY fuel is a
+        transport emission outside that boundary and is stated as a limitation rather
+        than silently folded in.
+
+        Mirrors `EventCarbonCalculator.calculate_production_event_impact`'s PO branch so
+        the preview and the saved record agree on the same event.
+        """
+        area_covered = float(area_covered or 0)
+        return {
+            "co2e_kg": 0.0,
+            "calculation_method": "zero_emission_biological_service",
+            "breakdown": {
+                "production_activity": "pollination",
+                "area_covered_acres": area_covered,
+                "area_covered_hectares": area_covered * 0.404686,
+                "carbon_impact": "zero",
+                "calculation_basis": "zero_emission_biological_service",
+                "confidence_level": 1.0,
+                "carbon_notes": (
+                    "Pollination is a biological service performed by bees or other "
+                    "pollinators. No direct fuel combustion or chemical inputs are involved."
+                ),
+            },
+            "data_sources": ["Trazo Methodology - Biological pollination services produce zero direct emissions"],
+            "limitations": "Excludes indirect transportation emissions for hive delivery/pickup",
+            "validation_warnings": [],
+        }
+
+    @classmethod
+    def _annotate_fuel_basis(
+        cls,
+        breakdown: Dict[str, Any],
+        emission_factor: EmissionFactor,
+        per_area_factor: EmissionFactor,
+        fuel_consumed: Optional[float],
+    ) -> Dict[str, Any]:
+        """State plainly whether the fuel driving this number was MEASURED or ASSUMED.
+
+        When the operator leaves fuel blank we multiply their acreage by a per-hectare
+        default and carry on. That is a reasonable starting point, but the resulting
+        figure is an estimate of an estimate, and until now nothing in the payload said
+        so — the wizard printed "1.7 liters" beside a genuinely-cited EPA combustion
+        factor, under one "EPA/USDA-sourced" badge, and the farmer had no way to tell
+        which half was theirs.
+
+        `measured` is the flag a surface should branch on. `assumed_rate` is present
+        only when we substituted, and carries its own provenance so the UI never has to
+        infer a citation from the fact that a number exists.
+
+        `emission_factor` must be the factor that ACTUALLY produced `co2e_kg`, which is not
+        always the one implied by the selected fuel type — see `assumed_fuel_is_diesel`.
+
+        ⚠️ KNOWN METHODOLOGY GAP (pre-existing, not introduced here): when fuel is blank the
+        calculators fall back to `area_hectares * <per_area_factor> * diesel_factor`
+        unconditionally, so an ELECTRIC or GASOLINE machine with nothing entered is costed as
+        diesel and returns a byte-identical figure to the diesel case.
+        `assumed_fuel_is_diesel` marks that combination so it is visible in the payload
+        instead of silently wrong. Fixing the arithmetic means choosing per-hectare defaults
+        per fuel type (a kWh/ha rate for electric above all), which do not exist in
+        PRODUCTION_FACTORS yet — a separate decision, not a rename.
+        """
+        measured = fuel_consumed is not None
+        breakdown["fuel_basis"] = {
+            "measured": measured,
+            "emission_factor": {
+                "value": emission_factor.value,
+                "unit": emission_factor.unit,
+                "source": emission_factor.source,
+                "provenance": emission_factor.provenance,
+            },
+            "assumed_fuel_is_diesel": (not measured and breakdown.get("fuel_type") not in (None, "", "diesel")),
+            "assumed_rate": (
+                None
+                if measured
+                else {
+                    "value": per_area_factor.value,
+                    "unit": per_area_factor.unit,
+                    "source": per_area_factor.source,
+                    "provenance": per_area_factor.provenance,
+                    "confidence_level": per_area_factor.confidence_level,
+                }
+            ),
+        }
+        return breakdown
+
+    @classmethod
     def _calculate_harvesting_emissions(
         cls, area_covered: float, fuel_consumed: float = None, equipment_hours: float = None, **kwargs
     ) -> Dict[str, Any]:
@@ -1675,6 +1954,25 @@ class VerifiedEmissionFactors:
             breakdown["fuel_emission_factor_kg_per_unit"] = actual_fuel_factor.value
             breakdown["diesel_emission_factor_kg_per_gallon"] = actual_fuel_factor.value
             breakdown["usda_harvesting_factor_gallons_per_hectare"] = harvesting_factor.value
+
+        # Annotated for BOTH fuel paths. This call used to live inside the
+        # `else` (non-electric) branch above, so an electric machine produced no
+        # `fuel_basis` at all and the wizard fell back to its published-factor
+        # badge over an estimate.
+        cls._annotate_fuel_basis(
+            breakdown,
+            (
+                (electricity_factor if fuel_type == "electric" else actual_fuel_factor)
+                if fuel_consumed is not None
+                # With no fuel entered the calculation falls back to the diesel per-hectare
+                # path REGARDLESS of the selected fuel type (see the `else` branch above:
+                # `fuel_gallons * diesel_factor.value`). Naming the electricity factor here
+                # would credit a factor that never touched the number.
+                else diesel_factor
+            ),
+            harvesting_factor,
+            fuel_consumed,
+        )
 
         if fuel_consumed is not None:
             fuel_unit = "kWh" if fuel_type == "electric" else "gallons"
@@ -1777,6 +2075,25 @@ class VerifiedEmissionFactors:
             breakdown["fuel_emission_factor_kg_per_unit"] = actual_fuel_factor.value
             breakdown["diesel_emission_factor_kg_per_gallon"] = actual_fuel_factor.value
             breakdown["usda_planting_factor_gallons_per_hectare"] = planting_factor.value
+
+        # Annotated for BOTH fuel paths. This call used to live inside the
+        # `else` (non-electric) branch above, so an electric machine produced no
+        # `fuel_basis` at all and the wizard fell back to its published-factor
+        # badge over an estimate.
+        cls._annotate_fuel_basis(
+            breakdown,
+            (
+                (electricity_factor if fuel_type == "electric" else actual_fuel_factor)
+                if fuel_consumed is not None
+                # With no fuel entered the calculation falls back to the diesel per-hectare
+                # path REGARDLESS of the selected fuel type (see the `else` branch above:
+                # `fuel_gallons * diesel_factor.value`). Naming the electricity factor here
+                # would credit a factor that never touched the number.
+                else diesel_factor
+            ),
+            planting_factor,
+            fuel_consumed,
+        )
 
         if fuel_consumed is not None:
             fuel_unit = "kWh" if fuel_type == "electric" else "gallons"
@@ -1881,6 +2198,25 @@ class VerifiedEmissionFactors:
             breakdown["fuel_emission_factor_kg_per_unit"] = actual_fuel_factor.value
             breakdown["diesel_emission_factor_kg_per_gallon"] = actual_fuel_factor.value
             breakdown["usda_transplanting_factor_gallons_per_hectare"] = transplanting_factor.value
+
+        # Annotated for BOTH fuel paths. This call used to live inside the
+        # `else` (non-electric) branch above, so an electric machine produced no
+        # `fuel_basis` at all and the wizard fell back to its published-factor
+        # badge over an estimate.
+        cls._annotate_fuel_basis(
+            breakdown,
+            (
+                (electricity_factor if fuel_type == "electric" else actual_fuel_factor)
+                if fuel_consumed is not None
+                # With no fuel entered the calculation falls back to the diesel per-hectare
+                # path REGARDLESS of the selected fuel type (see the `else` branch above:
+                # `fuel_gallons * diesel_factor.value`). Naming the electricity factor here
+                # would credit a factor that never touched the number.
+                else diesel_factor
+            ),
+            transplanting_factor,
+            fuel_consumed,
+        )
 
         if fuel_consumed is not None:
             fuel_unit = "kWh" if fuel_type == "electric" else "gallons"
@@ -2008,7 +2344,26 @@ class VerifiedEmissionFactors:
             fuel_unit = (kwargs.get("fuel_unit") or "L").lower()
             fuel_factor = cls.EPA_FUEL_FACTORS.get(fuel_type, cls.EPA_FUEL_FACTORS["diesel"])
 
-            if fuel_type == "natural_gas":
+            if fuel_type == "electric":
+                # EPA_FUEL_FACTORS holds diesel/gasoline/propane/biodiesel/natural_gas —
+                # there is no "electric" key, so `.get(fuel_type, diesel)` silently priced
+                # an electric huller's kWh as LITRES OF DIESEL: 10 kWh reported as 26.97 kg
+                # CO2e instead of 3.9. The wizard offers "Electric" in the fuel-type select
+                # for every production subtype including Post-Harvest, so this was reachable
+                # from the form, not just in theory.
+                #
+                # `processing_energy_kwh` remains the preferred input for facility energy;
+                # this branch handles the operator who enters the same figure in the general
+                # fuel field with Electric selected.
+                kwh = float(fuel_consumed)
+                factor = cls.ELECTRICITY_SOURCE_FACTORS.get(energy_source, electricity_factor.value)
+                electric_fuel_emissions = kwh * factor
+                co2e_kg += electric_fuel_emissions
+                components["fuel_type"] = fuel_type
+                components["equipment_electricity_kwh"] = kwh
+                components["equipment_electricity_kg_co2e"] = round(electric_fuel_emissions, 3)
+                components["electricity_emission_factor_kg_per_kwh"] = factor
+            elif fuel_type == "natural_gas":
                 # UNIT-BASIS FIX (2026-07-31): the natural-gas factor is per STANDARD
                 # CUBIC FOOT (see EPA_FUEL_FACTORS). It was previously multiplied by a
                 # gallon count, so a dryer run reported as 310 L produced 1.18 kg CO2e
@@ -2176,6 +2531,25 @@ class VerifiedEmissionFactors:
             breakdown["diesel_emission_factor_kg_per_gallon"] = actual_fuel_factor.value
             breakdown["usda_production_factor_gallons_per_hectare"] = production_factor.value
 
+        # Annotated for BOTH fuel paths. This call used to live inside the
+        # `else` (non-electric) branch above, so an electric machine produced no
+        # `fuel_basis` at all and the wizard fell back to its published-factor
+        # badge over an estimate.
+        cls._annotate_fuel_basis(
+            breakdown,
+            (
+                (electricity_factor if fuel_type == "electric" else actual_fuel_factor)
+                if fuel_consumed is not None
+                # With no fuel entered the calculation falls back to the diesel per-hectare
+                # path REGARDLESS of the selected fuel type (see the `else` branch above:
+                # `fuel_gallons * diesel_factor.value`). Naming the electricity factor here
+                # would credit a factor that never touched the number.
+                else diesel_factor
+            ),
+            production_factor,
+            fuel_consumed,
+        )
+
         if fuel_consumed is not None:
             fuel_unit = "kWh" if fuel_type == "electric" else "gallons"
             breakdown[f"actual_fuel_consumed_{fuel_unit}"] = fuel_consumed
@@ -2279,6 +2653,25 @@ class VerifiedEmissionFactors:
             breakdown["fuel_emission_factor_kg_per_unit"] = actual_fuel_factor.value
             breakdown["diesel_emission_factor_kg_per_gallon"] = actual_fuel_factor.value
             breakdown["usda_thinning_factor_gallons_per_hectare"] = thinning_factor.value
+
+        # Annotated for BOTH fuel paths. This call used to live inside the
+        # `else` (non-electric) branch above, so an electric machine produced no
+        # `fuel_basis` at all and the wizard fell back to its published-factor
+        # badge over an estimate.
+        cls._annotate_fuel_basis(
+            breakdown,
+            (
+                (electricity_factor if fuel_type == "electric" else actual_fuel_factor)
+                if fuel_consumed is not None
+                # With no fuel entered the calculation falls back to the diesel per-hectare
+                # path REGARDLESS of the selected fuel type (see the `else` branch above:
+                # `fuel_gallons * diesel_factor.value`). Naming the electricity factor here
+                # would credit a factor that never touched the number.
+                else diesel_factor
+            ),
+            thinning_factor,
+            fuel_consumed,
+        )
 
         if fuel_consumed is not None:
             fuel_unit = "kWh" if fuel_type == "electric" else "gallons"
@@ -2485,6 +2878,30 @@ class VerifiedEmissionFactors:
             breakdown["fuel_emission_factor_kg_per_unit"] = actual_fuel_factor.value
             breakdown["diesel_emission_factor_kg_per_gallon"] = actual_fuel_factor.value
             breakdown["cultivation_intensity_factor"] = cultivation_factor.value
+            # This branch is the reason `fuel_basis` exists rather than another
+            # `usda_<verb>_factor_gallons_per_hectare` key: cultivation names its factor
+            # differently from its five siblings, so the wizard's hand-written key chain
+            # fell through to 0 and printed "0.0 liters (estimated)" for every cultivation
+            # event. One key every activity writes, instead of six the client must know.
+
+        # Annotated for BOTH fuel paths. This call used to live inside the
+        # `else` (non-electric) branch above, so an electric machine produced no
+        # `fuel_basis` at all and the wizard fell back to its published-factor
+        # badge over an estimate.
+        cls._annotate_fuel_basis(
+            breakdown,
+            (
+                (electricity_factor if fuel_type == "electric" else actual_fuel_factor)
+                if fuel_consumed is not None
+                # With no fuel entered the calculation falls back to the diesel per-hectare
+                # path REGARDLESS of the selected fuel type (see the `else` branch above:
+                # `fuel_gallons * diesel_factor.value`). Naming the electricity factor here
+                # would credit a factor that never touched the number.
+                else diesel_factor
+            ),
+            cultivation_factor,
+            fuel_consumed,
+        )
 
         if fuel_consumed is not None:
             fuel_unit = "kWh" if fuel_type == "electric" else "gallons"

@@ -1494,6 +1494,177 @@ ORGANIC_OVERRIDES = {
         "certification_body": "CCOF (California Certified Organic Farmers)",
     },
     # ---------------------------------------------------------------------------
+    # Organic VEGETABLE variants — carrots, onions, spinach, potatoes. Added 2026-08-21
+    # (F4, Calapooia Bend rehearsal).
+    #
+    # These four shipped with a CONVENTIONAL template and nothing else, so an organic
+    # vegetable grower starting a spring season was offered exactly one plan — one whose
+    # items include "Herbicide Application", "Pesticide Treatment", "Fungicide Treatment"
+    # and a GLOBALG.A.P. audit. A template only writes a season PLAN, never a record, so
+    # nothing false was logged; the cost is that the checklist an organic grower works from
+    # starts wrong and every practice their season actually turns on is missing. Mid-size
+    # organic vegetable operations are squarely in the ICP.
+    #
+    # Every SPRAY named below resolves on the seeded National List — Spinosad, Microbial
+    # products (Bacillus thuringiensis, etc.), Copper hydroxide, Insecticidal soaps,
+    # Horticultural oils, Elemental sulfur, Peracetic acid. Materials commonly assumed to be
+    # organic but absent from the seed (kaolin, neem, pyrethrum, Reynoutria, Chromobacterium)
+    # are deliberately NOT used here: an input the classifier cannot place prints as
+    # "Self-reported" in the certifier packet, which defeats the point of suggesting it.
+    # Fertility inputs (fish, feather meal, compost) are non-synthetic and are not § 205.601
+    # entries at all, which is why they are named freely — the same as the existing
+    # lettuce/tomato/strawberry entries.
+    #
+    # Three optional keys are read by `get_annual_crop_organic_events` and gate the
+    # vegetable-specific events, so adding them here does not change any template that does
+    # not declare them:
+    #   uses_flame_weeding    -> pre-emergence flame weeding (CU)
+    #   compost_material      -> purchased-compost application (soil OM)
+    #   wash_water_sanitizer  -> post-harvest wash + sanitizer (PH). Absent for onions,
+    #                            which are field- and shed-CURED, never washed.
+    # ---------------------------------------------------------------------------
+    "carrots": {
+        # Feather meal pre-plant for slow-release N, fish emulsion as the side-dress —
+        # the standard PNW organic carrot fertility program.
+        "primary_fertilizer": "Down To Earth Feather Meal 12-0-0 — OMRI Listed",
+        "npk": "12-0-0",
+        "nitrogen_pct": 12.0,
+        "phosphorus_pct": 0.0,
+        "potassium_pct": 0.0,
+        "secondary_fertilizer": "Neptune's Harvest Fish & Seaweed 2-3-1",
+        "secondary_npk": "2-3-1",
+        "secondary_n": 2.0,
+        "secondary_p": 3.0,
+        "secondary_k": 1.0,
+        "slow_release_fertilizer": "Sustane 8-2-4 Organic Granular",
+        "primary_fungicide": "Serenade ASO (Bacillus subtilis) — OMRI Listed",
+        "fungicide_subtype": "biological_fungicide",
+        # Cavity spot (Pythium violae) is the disease that decides an organic carrot crop and
+        # has NO approved material — it is managed by rotation and drainage, so it is named in
+        # the scouting event rather than pretended away with a spray here.
+        "fungicide_target": "Alternaria leaf blight (Alternaria dauci), Cercospora leaf spot",
+        "copper_fungicide": "Kocide 3000 (copper hydroxide) — OMRI Listed",
+        "copper_target": "Bacterial leaf blight (Xanthomonas hortorum pv. carotae)",
+        "primary_pesticide": "Entrust SC (spinosad) — OMRI Listed",
+        "pesticide_subtype": "organic_pesticide",
+        "pesticide_target": "Aster leafhopper (Macrosteles quadrilineatus), armyworms",
+        "biological_pesticide": "DiPel DF (Bacillus thuringiensis subsp. kurstaki) — OMRI Listed",
+        "herbicide": None,
+        "uses_flame_weeding": True,
+        "compost_material": "Purchased OMRI-listed yard-debris compost",
+        "wash_water_sanitizer": "SaniDate 5.0 (peracetic acid) — OMRI Listed",
+        "organic_approved_default": "omri_listed",
+        "certification_type": "organic_usda",
+        "certification_standard": "USDA NOP (7 CFR Part 205)",
+        "certification_body": "Oregon Tilth Certified Organic (OTCO)",
+    },
+    "onions": {
+        "primary_fertilizer": "Down To Earth Feather Meal 12-0-0 — OMRI Listed",
+        "npk": "12-0-0",
+        "nitrogen_pct": 12.0,
+        "phosphorus_pct": 0.0,
+        "potassium_pct": 0.0,
+        "secondary_fertilizer": "Neptune's Harvest Fish & Seaweed 2-3-1",
+        "secondary_npk": "2-3-1",
+        "secondary_n": 2.0,
+        "secondary_p": 3.0,
+        "secondary_k": 1.0,
+        "slow_release_fertilizer": "Sustane 8-2-4 Organic Granular",
+        "primary_fungicide": "Serenade ASO (Bacillus subtilis) — OMRI Listed",
+        "fungicide_subtype": "biological_fungicide",
+        "fungicide_target": "Downy mildew (Peronospora destructor), Botrytis leaf blight",
+        "copper_fungicide": "Kocide 3000 (copper hydroxide) — OMRI Listed",
+        "copper_target": "Purple blotch (Alternaria porri), bacterial soft rots",
+        # Onion thrips is the pest that decides an organic bulb crop; spinosad is the
+        # primary tool and insecticidal soap the rotation partner for resistance management.
+        "primary_pesticide": "Entrust SC (spinosad) — OMRI Listed",
+        "pesticide_subtype": "organic_pesticide",
+        "pesticide_target": "Onion thrips (Thrips tabaci)",
+        "biological_pesticide": "M-Pede insecticidal soap (potassium salts of fatty acids) — OMRI Listed",
+        "herbicide": None,
+        "uses_flame_weeding": True,
+        "compost_material": "Purchased OMRI-listed yard-debris compost",
+        # No wash sanitizer key on purpose: storage onions are field-cured then shed-cured
+        # with forced air, topped and sacked. They are never washed, and a template that
+        # suggested a wash step would put a food-safety record on the plan that the crop's
+        # own handling contradicts.
+        "post_harvest_operation": "curing",
+        "organic_approved_default": "omri_listed",
+        "certification_type": "organic_usda",
+        "certification_standard": "USDA NOP (7 CFR Part 205)",
+        "certification_body": "Oregon Tilth Certified Organic (OTCO)",
+    },
+    "spinach": {
+        # Spinach is a short, fast, heavy-N crop: the liquid fish goes on first and the
+        # feather meal is the pre-plant base, the reverse of the root crops above.
+        "primary_fertilizer": "Neptune's Harvest Fish & Seaweed 2-3-1",
+        "npk": "2-3-1",
+        "nitrogen_pct": 2.0,
+        "phosphorus_pct": 3.0,
+        "potassium_pct": 1.0,
+        "secondary_fertilizer": "Down To Earth Feather Meal 12-0-0 — OMRI Listed",
+        "secondary_npk": "12-0-0",
+        "secondary_n": 12.0,
+        "secondary_p": 0.0,
+        "secondary_k": 0.0,
+        "slow_release_fertilizer": "Sustane 8-2-4 Organic Granular",
+        "primary_fungicide": "Serenade ASO (Bacillus subtilis) — OMRI Listed",
+        "fungicide_subtype": "biological_fungicide",
+        "fungicide_target": "Downy mildew (Peronospora effusa), white rust",
+        "copper_fungicide": "Kocide 3000 (copper hydroxide) — OMRI Listed",
+        "copper_target": "Bacterial leaf spot (Pseudomonas syringae pv. spinaciae)",
+        "primary_pesticide": "Entrust SC (spinosad) — OMRI Listed",
+        "pesticide_subtype": "organic_pesticide",
+        "pesticide_target": "Spinach leafminer (Pegomya hyoscyami), armyworms",
+        "biological_pesticide": "M-Pede insecticidal soap (potassium salts of fatty acids) — OMRI Listed",
+        "herbicide": None,
+        "uses_flame_weeding": True,
+        "compost_material": "Purchased OMRI-listed yard-debris compost",
+        "wash_water_sanitizer": "SaniDate 5.0 (peracetic acid) — OMRI Listed",
+        "organic_approved_default": "omri_listed",
+        "certification_type": "organic_usda",
+        "certification_standard": "USDA NOP (7 CFR Part 205)",
+        "certification_body": "Oregon Tilth Certified Organic (OTCO)",
+    },
+    "potatoes": {
+        "primary_fertilizer": "Down To Earth Feather Meal 12-0-0 — OMRI Listed",
+        "npk": "12-0-0",
+        "nitrogen_pct": 12.0,
+        "phosphorus_pct": 0.0,
+        "potassium_pct": 0.0,
+        "secondary_fertilizer": "Down To Earth Fish Bone Meal 3-16-0",
+        "secondary_npk": "3-16-0",
+        "secondary_n": 3.0,
+        "secondary_p": 16.0,
+        "secondary_k": 0.0,
+        "slow_release_fertilizer": "Sustane 8-2-4 Organic Granular",
+        # Copper is the load-bearing material in organic potatoes — late blight is the crop's
+        # decisive disease and there is no biological substitute for it, so copper leads and
+        # the Bacillus product is the partner, the reverse of the leaf crops above.
+        "primary_fungicide": "Kocide 3000 (copper hydroxide) — OMRI Listed",
+        "fungicide_subtype": "organic_fungicide",
+        "fungicide_target": "Late blight (Phytophthora infestans), early blight (Alternaria solani)",
+        "copper_fungicide": "Kocide 3000 (copper hydroxide) — OMRI Listed",
+        "copper_target": "Late blight (Phytophthora infestans)",
+        "primary_pesticide": "Entrust SC (spinosad) — OMRI Listed",
+        "pesticide_subtype": "organic_pesticide",
+        "pesticide_target": "Colorado potato beetle (Leptinotarsa decemlineata)",
+        # subsp. TENEBRIONIS, not kurstaki: kurstaki is a caterpillar material and does nothing
+        # to a beetle. Naming the wrong Bt on a potato plan is the kind of detail a grower
+        # notices and a certifier does not, which makes it worse, not better. The organism is
+        # spelled out rather than abbreviated to "Bt" for the reason in the block comment above:
+        # 7 CFR 205.601 names SUBSTANCES, never brands, and "Bt" alone is not a substance name
+        # any classifier can place.
+        "biological_pesticide": "Novodor FC (Bacillus thuringiensis subsp. tenebrionis) — OMRI Listed",
+        "herbicide": None,
+        "uses_flame_weeding": True,
+        "compost_material": "Purchased OMRI-listed yard-debris compost",
+        "organic_approved_default": "omri_listed",
+        "certification_type": "organic_usda",
+        "certification_standard": "USDA NOP (7 CFR Part 205)",
+        "certification_body": "Oregon Tilth Certified Organic (OTCO)",
+    },
+    # ---------------------------------------------------------------------------
     # California perennial specialty crops — organic variants, added 2026-08-07.
     #
     # EVERY material named below was checked against the seeded National List before being used:
@@ -4375,7 +4546,7 @@ def get_annual_crop_organic_events(crop_slug, crop_data, organic_overrides):
     oa = organic_overrides  # shorthand
     crop_label = crop_slug.replace("_", " ").title()
 
-    return [
+    base_events = [
         # === SOIL MANAGEMENT (backend_event_type=5) ===
         # 1. Annual Soil Analysis
         {
@@ -5231,6 +5402,214 @@ def get_annual_crop_organic_events(crop_slug, crop_data, organic_overrides):
             ),
         },
     ]
+
+    # -----------------------------------------------------------------------------------
+    # The practices an organic ANNUAL season actually turns on (F4, 2026-08-21).
+    #
+    # Everything above is the shared organic programme. What follows is what a real organic
+    # vegetable season is MADE of, and none of it was on any template: the § 205.204(a)(1)
+    # organic-seed search, the purchased compost, pre-emergence flame weeding, and the
+    # post-harvest wash. Appended rather than woven in so the order_sequence of the existing
+    # 20 events — and therefore every template already seeded — is untouched.
+    #
+    # Each is gated on a key the crop's ORGANIC_OVERRIDES entry declares, EXCEPT the seed
+    # search, which is universal: § 205.204(a) binds every organic crop grown from seed or
+    # planting stock, so a template that omits it omits a record the certifier will ask for.
+    # -----------------------------------------------------------------------------------
+    extra_events = []
+    next_order = 21
+
+    # § 205.204(a)(1) — organic seed sourcing, and the documented search when the variety is
+    # not commercially available in organic form. This is a RECORD an inspector asks for by
+    # name, and it was on no annual template at all.
+    extra_events.append(
+        {
+            "name": "Organic Seed Sourcing & Availability Search",
+            "event_type": "production",
+            "description": (
+                f"Source organic {crop_label.lower()} seed or planting stock; where the variety "
+                "is not commercially available in organic form, document the suppliers "
+                "contacted and keep the records on file (7 CFR 205.204(a)(1))."
+            ),
+            "timing": crop_data.get("timing_plant", "Before planting"),
+            "frequency": "annual",
+            "carbon_category": "low",
+            "cost_estimate": 0.0,
+            "carbon_impact": 0.0,
+            "labor_hours": 2.0,
+            "typical_duration": "1 day",
+            "efficiency_tips": (
+                "Contact at least three suppliers and keep the quotes or out-of-stock replies. "
+                "A search with no paper behind it is the same as no search."
+            ),
+            "sustainability_score": 9,
+            "qr_visibility": "low",
+            "consumer_message": "Organic seed sourced first, with the search documented when it is not available",
+            "backend_event_type": 1,
+            "is_default_enabled": True,
+            "is_required": True,
+            "order_sequence": next_order,
+            "backend_event_fields": build_production_event_fields(
+                subtype="SS",
+                name="Organic Seed Sourcing & Availability Search",
+                area=0.0,
+                fuel_consumed=0.0,
+                fuel_unit="gal",
+                fuel_type="none",
+                equipment_hours=0.0,
+                observation=(
+                    f"Organic seed search for {crop_label.lower()} — suppliers contacted and "
+                    "responses kept on file (7 CFR 205.204(a)(1))"
+                ),
+            ),
+        }
+    )
+    next_order += 1
+
+    if oa.get("compost_material"):
+        extra_events.append(
+            {
+                "name": "Purchased Compost Application",
+                "event_type": "soil_management",
+                "description": (
+                    f"Apply purchased OMRI-listed compost to organic {crop_label.lower()} ground. Keep the "
+                    "supplier's compost analysis and the delivery record: § 205.203(c) governs "
+                    "the material, and a purchased compost is only as documented as its paperwork."
+                ),
+                "timing": crop_data.get("timing_soil", "Before planting"),
+                "frequency": "annual",
+                "carbon_category": "low",
+                "cost_estimate": 480.0,
+                "carbon_impact": 12.0,
+                "labor_hours": 4.0,
+                "typical_duration": "1-2 days",
+                "efficiency_tips": (
+                    "Ask the supplier for the batch analysis, not just the invoice — the "
+                    "certifier asks for the analysis."
+                ),
+                "sustainability_score": 10,
+                "qr_visibility": "medium",
+                "consumer_message": "Soil fed with composted organic matter rather than synthetic fertiliser",
+                "backend_event_type": 5,
+                "is_default_enabled": True,
+                "is_required": False,
+                "order_sequence": next_order,
+                "backend_event_fields": build_soil_event_fields(
+                    subtype="OM",
+                    name="Purchased Compost Application",
+                    area=area,
+                    fuel_consumed=round(area * 2.0, 1),
+                    fuel_type="diesel",
+                    equipment_hours=round(area * 0.5, 1),
+                    observation=(
+                        f"{oa['compost_material']} applied to the {crop_label.lower()} ground — supplier "
+                        "compost analysis and delivery record on file (7 CFR 205.203(c))"
+                    ),
+                ),
+            }
+        )
+        next_order += 1
+
+    if oa.get("uses_flame_weeding"):
+        extra_events.append(
+            {
+                "name": "Pre-Emergence Flame Weeding",
+                "event_type": "production",
+                "description": (
+                    f"Propane flame weeding of the {crop_label.lower()} beds in the window between "
+                    "planting and crop emergence — the organic substitute for a pre-emergence "
+                    "herbicide, and the pass that decides how much hand weeding the season needs."
+                ),
+                "timing": crop_data.get("timing_plant", "After planting"),
+                "frequency": "1-2 per season",
+                "carbon_category": "medium",
+                "cost_estimate": 95.0,
+                # Propane, and it is real: this is the one organic weed operation with a fuel
+                # burn worth stating rather than hiding behind "mechanical cultivation".
+                "carbon_impact": 38.0,
+                "labor_hours": 3.0,
+                "typical_duration": "1 day",
+                "efficiency_tips": (
+                    "Time it to the crop's emergence, not the calendar — a day late and the "
+                    "flame takes the crop with the weeds."
+                ),
+                "sustainability_score": 8,
+                "qr_visibility": "medium",
+                "consumer_message": "Weeds burned off before the crop emerges — no herbicide is used",
+                "backend_event_type": 1,
+                "is_default_enabled": True,
+                "is_required": False,
+                "order_sequence": next_order,
+                "backend_event_fields": build_production_event_fields(
+                    subtype="CU",
+                    name="Pre-Emergence Flame Weeding",
+                    area=area,
+                    fuel_consumed=round(area * 12.0, 1),  # ~12 gal propane/ha, one pass
+                    fuel_unit="gal",
+                    fuel_type="propane",
+                    equipment_hours=round(area * 0.8, 1),
+                    observation=(
+                        f"Propane flame weeding of the {crop_label.lower()} beds before crop emergence — "
+                        "no herbicide used (7 CFR 205.206(a))"
+                    ),
+                ),
+            }
+        )
+        next_order += 1
+
+    if oa.get("wash_water_sanitizer"):
+        extra_events.append(
+            {
+                "name": "Post-Harvest Wash & Sanitize",
+                "event_type": "production",
+                "description": (
+                    f"Wash and pack {crop_label.lower()} using potable water and an approved sanitizer. "
+                    "Record the material, the label rate and the water source: § 205.272 asks "
+                    "how organic product is kept from contacting a prohibited substance, and "
+                    "the wash line is where that question is actually answered."
+                ),
+                "timing": "After harvest",
+                "frequency": "per lot",
+                "carbon_category": "medium",
+                "cost_estimate": 140.0,
+                "carbon_impact": 22.0,
+                "labor_hours": 8.0,
+                "typical_duration": "1 day per lot",
+                "efficiency_tips": (
+                    "Log the sanitizer concentration and the residual at discharge — the label "
+                    "rate is the compliance boundary, and 'per label' is not a reading."
+                ),
+                "sustainability_score": 8,
+                "qr_visibility": "medium",
+                "consumer_message": "Washed with potable water and an approved sanitizer before packing",
+                "backend_event_type": 1,
+                "is_default_enabled": True,
+                "is_required": False,
+                "order_sequence": next_order,
+                "backend_event_fields": build_production_event_fields(
+                    subtype="PH",
+                    name="Post-Harvest Wash & Sanitize",
+                    area=area,
+                    fuel_consumed=0.0,
+                    fuel_unit="gal",
+                    fuel_type="electric",
+                    equipment_hours=round(area * 1.5, 1),
+                    observation=(
+                        f"{crop_label} washed and packed — {oa['wash_water_sanitizer']} at label "
+                        "rate, well water (7 CFR 205.272)"
+                    ),
+                    extra_data={
+                        "processing_type": "wash_and_pack",
+                        "sanitizer_name": oa["wash_water_sanitizer"],
+                        "sanitizer_nop_reference": "7 CFR 205.605(b) — peracetic acid",
+                        "water_source": "well_groundwater",
+                    },
+                ),
+            }
+        )
+        next_order += 1
+
+    return base_events + extra_events
 
 
 def _build_shared_weather_event(crop_slug, crop_category, order):

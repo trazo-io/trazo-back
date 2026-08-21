@@ -17,7 +17,7 @@ from django.test import TestCase
 
 from rest_framework.test import APIClient
 
-from certifications.models import OrganicSystemPlan
+from certifications.models import NationalListSubstance, OMRIProduct, OrganicSystemPlan, WSDAMaterial
 from certifications.osp_modules import CONTENT_VERSION
 from company.models import Company, Establishment
 from users.models import User, WorksIn
@@ -243,6 +243,40 @@ class ModuleResponseAPITests(TestCase):
         entry = clone.module_responses["modules"]["g3_0_seeds"]
         self.assertEqual(entry["answers"]["seeds_used"]["value"], ["none"])
         self.assertIsNotNone(entry["completed_at"])
+
+    def test_new_version_carries_the_approved_inputs_registry(self):
+        """The materials list is an answer too, and the dialog promises to copy every answer.
+
+        🔴 Found 2026-08-21 on a pilot renewal: the clone copied `sections` and
+        `module_responses` and stopped, so v2 opened with an EMPTY approved-inputs registry
+        while v1 held eight verified entries. The § 205.201(a)(2) narrative is compiled from
+        that list, and the audit dossier duly reported "No approved-inputs list is on file for
+        this operation" — about a plan that had one. An operator who submits the new version
+        has filed a plan with no materials list at all.
+        """
+        substance = NationalListSubstance.objects.create(
+            substance_name="Elemental sulfur", cfr_section="205.601", status="allowed"
+        )
+        omri = OMRIProduct.objects.create(product_name="Entrust SC", omri_id="dow-2900")
+        wsda = WSDAMaterial.objects.create(brand_name="Serenade Opti", wsda_id="WSDA-REG-BIOAG-2025-003")
+        self.osp.approved_national_list_substances.add(substance)
+        self.osp.approved_omri_products.add(omri)
+        self.osp.approved_wsda_materials.add(wsda)
+
+        r = self.client.post(f"{self._base()}/new-version/")
+        self.assertEqual(r.status_code, 201)
+        clone = OrganicSystemPlan.objects.get(pk=r.data["id"])
+
+        self.assertEqual(list(clone.approved_national_list_substances.all()), [substance])
+        self.assertEqual(list(clone.approved_omri_products.all()), [omri])
+        self.assertEqual(
+            list(clone.approved_wsda_materials.all()),
+            [wsda],
+            "WSDA entries are co-equal with OMRI and must carry across too",
+        )
+        # The source keeps its own list — a clone is not a move.
+        self.osp.refresh_from_db()
+        self.assertEqual(self.osp.approved_omri_products.count(), 1)
 
     # --- roles ----------------------------------------------------------------------
 

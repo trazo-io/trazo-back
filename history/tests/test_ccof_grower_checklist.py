@@ -210,6 +210,42 @@ class Item6HandlerRoundTripTests(CCOFChecklistBase):
         text = _text(self._service()._build_post_harvest_section())
         self.assertIn("no handler is recorded for this production", text)
 
+    def test_the_farms_own_cooler_is_not_named_as_an_off_farm_handler(self):
+        """The warning must not assert that the operation shipped to its own building.
+
+        🔴 2026-08-21 — the named list was built from `storage_location` FIRST, so on an
+        operation that cools and packs its own fruit the packet read "this lot was sent for
+        off-farm handling to Farm cooler". A finding that is false on its face is discounted
+        by the reviewer, and the underlying § 205.272 gap — a real off-farm handler with no
+        certificate on file — goes unfixed with it.
+        """
+        from history.models import ProductionEvent
+
+        h = self._harvest(
+            harvest_destination="handler",
+            sent_to_handler_date=(timezone.now() - timedelta(days=18)).date(),
+            quantity_sent_to_handler=42000,
+            handler_quantity_unit="lbs",
+        )
+        ProductionEvent.objects.create(
+            history=self.production,
+            type="PH",
+            date=timezone.now() - timedelta(days=17),
+            description="Forced-air cooling",
+            storage_location="Farm cooler, 34F",
+        )
+        ProductionEvent.objects.create(
+            history=self.production,
+            type="TP",
+            date=timezone.now() - timedelta(days=16),
+            description="Reefer to the packer",
+            transport_destination_address="Willamette Valley Fruit, Salem OR",
+        )
+        text = _text(self._service()._build_post_harvest_section())
+        self.assertIn("Willamette Valley Fruit", text)
+        self.assertNotIn("off-farm handling to Farm cooler", text)
+        self.assertNotIn("sent for off-farm handling to Farm cooler, 34F", text)
+
     def test_handler_is_an_offered_destination(self):
         """Without this option a grower records the huller as a BUYER, which puts a non-sale
         into the § 205.307 itemized sales table and breaks the mass balance."""

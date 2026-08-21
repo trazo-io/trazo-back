@@ -1,5 +1,6 @@
 from datetime import datetime
 
+from django.core.validators import MinValueValidator
 from django.db import models
 
 from company.models import Establishment
@@ -20,7 +21,43 @@ class Parcel(models.Model):
     album = models.ForeignKey("common.Gallery", on_delete=models.CASCADE, blank=True, null=True)
     establishment = models.ForeignKey(Establishment, on_delete=models.CASCADE, related_name="parcels")
     product = models.ForeignKey(Product, on_delete=models.CASCADE, blank=True, null=True)
-    area = models.FloatField(help_text="Parcel area in hectares")
+    # MinValueValidator, not just a help_text: a 0 or negative parcel is not a data-entry
+    # curiosity, it is a hole in the packet. The certifier dossier reconciles the farm's stated
+    # total acreage against the sum of its parcels ("27.9 acres (parcels in this dossier total
+    # 27.9 acres)"), and a zero-area parcel makes that line silently wrong while looking
+    # arithmetically fine. `validators` only bite where full_clean() runs, so the serializer
+    # enforces the same floor on the API path — DRF calls full_clean() on neither create nor
+    # update. Smallest allowed value is arbitrary but must be > 0; 0.0001 ha is 1 m².
+    area = models.FloatField(
+        validators=[MinValueValidator(0.0001)],
+        help_text="Parcel area in hectares",
+    )
+    #: 1 hectare = 2.47105 acres. Lived in six places before 2026-08-20 — `unit_converter`,
+    #: `event_carbon_calculator`, a seeder, two spots in `audit_export_service`, and
+    #: `common_osp_workbooks` — which is exactly why a seventh surface (the Parcel Application
+    #: PDF, the § 205.202 document a certifier works from) printed the hectare value with the
+    #: word "acres" beside it and understated a 59.4-acre operation as 24.0.
+    HECTARES_TO_ACRES = 2.47105
+
+    @property
+    def area_acres(self) -> float:
+        """`area` in ACRES.
+
+        `area` is stored in hectares and every US-facing surface — certifier packets, parcel
+        applications, workbooks, the consumer page — needs acres. Reading `parcel.area` and
+        labelling it "acres" is the single most repeated unit error in this codebase, so the
+        conversion lives on the model that owns the field rather than at each call site.
+        """
+        return float(self.area or 0) * self.HECTARES_TO_ACRES
+
+    def area_display(self, decimals: int = 1) -> str:
+        """ "28.4 acres (11.49 ha)" — the acre figure a US reader wants, with its source.
+
+        Both units, always: a certifier who spots a number that looks like hectares can see
+        immediately which one it is, instead of having to divide by 2.47 to find out.
+        """
+        return f"{self.area_acres:.{decimals}f} acres ({float(self.area or 0):.2f} ha)"
+
     certified = models.BooleanField(default=False, help_text="Certified by a professional")
     current_history = models.OneToOneField(
         "history.History",
@@ -303,12 +340,27 @@ class Parcel(models.Model):
 
     def finish_current_history(self, history_data, images):
         if self.current_history is not None:
-            self.current_history.finish(history_data, images)
-            history = self.current_history
-            self.current_history = None
-            self.save()
-            return history
+            return self.finish_history_record(self.current_history, history_data, images)
         return None
+
+    def finish_history_record(self, history, history_data, images):
+        """Close the season the CALLER named, not whichever one the pointer happens to hold.
+
+        `current_history` is a single pointer holding the most recently started season. A
+        perennial block routinely has two open at once, and closing is irreversible — it makes
+        the record read-only and starts the § 205.103(b)(3) retention clock — so the season
+        being closed has to be the one the farmer was looking at.
+
+        The pointer is only cleared when it is the season being closed; otherwise the other
+        open season keeps it and the parcel page still shows a current production.
+        """
+        if history is None:
+            return None
+        history.finish(history_data, images)
+        if self.current_history_id == history.id:
+            self.current_history = None
+            self.save(update_fields=["current_history"])
+        return history
 
 
 class ParcelCropHistory(models.Model):

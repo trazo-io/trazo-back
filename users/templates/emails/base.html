@@ -35,15 +35,16 @@
         }
         
         /* Header styles */
+        /* Green has two jobs. green.500 is the DECORATIVE brand green and measures 2.78:1
+           against white — it fails AA and even the 3:1 non-text floor, so it may never carry
+           white text or render glyphs. Anything with type on it uses green.700 -> green.800
+           (5.13:1 and 7.87:1 against white); green.600 is for non-text boundaries only.
+           See .claude/rules/frontend.md → "Colour system — MEASURED, not chosen". */
         .email-header {
-            background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%);
+            background: linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%);
             padding: 32px 24px;
             text-align: center;
             color: white;
-        }
-        
-        .email-header.consumer {
-            background: linear-gradient(135deg, #2196F3 0%, #1E88E5 100%);
         }
         
         .logo {
@@ -110,7 +111,7 @@
         .btn {
             display: inline-block;
             padding: 14px 32px;
-            background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%);
+            background: linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%);
             color: white !important;
             text-decoration: none;
             border-radius: 8px;
@@ -121,17 +122,9 @@
             cursor: pointer;
         }
         
-        .btn.consumer {
-            background: linear-gradient(135deg, #2196F3 0%, #1E88E5 100%);
-        }
-        
         .btn:hover {
             transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
-        }
-        
-        .btn.consumer:hover {
-            box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+            box-shadow: 0 4px 12px rgba(46, 125, 50, 0.3);
         }
         
         /* Code styles */
@@ -147,13 +140,9 @@
         .code {
             font-size: 32px;
             font-weight: 700;
-            color: #4CAF50;
+            color: #2E7D32;
             letter-spacing: 4px;
             font-family: 'Courier New', monospace;
-        }
-        
-        .code.consumer {
-            color: #2196F3;
         }
         
         .code-instructions {
@@ -168,11 +157,7 @@
             border-radius: 8px;
             padding: 20px;
             margin: 24px 0;
-            border-left: 4px solid #4CAF50;
-        }
-        
-        .alt-link.consumer {
-            border-left-color: #2196F3;
+            border-left: 4px solid #388E3C;
         }
         
         .alt-link-title {
@@ -211,13 +196,9 @@
         }
         
         .footer-links a {
-            color: #4CAF50;
+            color: #2E7D32;
             text-decoration: none;
             margin: 0 8px;
-        }
-        
-        .footer-links a.consumer {
-            color: #2196F3;
         }
         
         .footer-links a:hover {
@@ -258,10 +239,10 @@
 <body>
     <div class="email-container">
         <!-- Header -->
-        <div class="email-header {% if user_type == 'consumer' %}consumer{% endif %}">
+        <div class="email-header">
                 <img src="{{ BASE_URL }}static/img/trazo2-white.png" alt="Trazo Logo" height="60" style="margin: 0 auto; padding-bottom: 10px;" />
             <h1 class="header-title">{% block header_title %}Welcome to Trazo{% endblock %}</h1>
-            <p class="header-subtitle">{% block header_subtitle %}Agricultural transparency you can trust{% endblock %}</p>
+            <p class="header-subtitle">{% block header_subtitle %}Organic recordkeeping, ready for renewal season{% endblock %}</p>
         </div>
         
         <!-- Content -->
@@ -272,7 +253,7 @@
             
             <div class="message">
                 {% block message %}
-                <p>Welcome to Trazo, the transparency platform for specialty crop farms.</p>
+                <p>Welcome to Trazo, the organic recordkeeping platform for specialty crop farms.</p>
                 {% endblock %}
             </div>
             
@@ -282,11 +263,11 @@
         <!-- Footer -->
         <div class="email-footer">
             <div class="footer-content">
-                <p><strong>Trazo&trade;</strong> - Agricultural Transparency Platform</p>
-                <p>Your buyers want proof. Give it to them.</p>
+                <p><strong>Trazo&trade;</strong> &mdash; Organic recordkeeping for specialty crop farms</p>
+                <p>One entry, two outputs. Your certifier gets the record. Your buyer gets the story.</p>
                 <div class="footer-links">
-                    <a href="https://trazo.io" {% if user_type == 'consumer' %}class="consumer"{% endif %}>Visit Website</a>
-                    <a href="mailto:support@trazo.io" {% if user_type == 'consumer' %}class="consumer"{% endif %}>Contact Support</a>
+                    <a href="https://trazo.io">Visit Website</a>
+                    <a href="mailto:support@trazo.io">Contact Support</a>
                 </div>
             </div>
         </div>

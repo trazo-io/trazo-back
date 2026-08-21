@@ -66,17 +66,38 @@ class OperationReadinessService:
         warnings = []
         checked = []
 
-        for check in (
-            self._check_ofpp,
-            self._check_osp,
-            self._check_attestation_support,
-            self._check_has_records,
+        # (key, callable) rather than bare callables: the key a failed check reports must not
+        # depend on reading `__name__` off the object, which is exactly what is unavailable
+        # when the callable has been replaced — including by the test that proves this path.
+        for check_key, check in (
+            ("ofpp", self._check_ofpp),
+            ("osp", self._check_osp),
+            ("attestation_support", self._check_attestation_support),
+            ("has_records", self._check_has_records),
         ):
             try:
                 result = check()
             except Exception:  # noqa: BLE001 — a broken check must not hide the others
-                logger.exception("Operation readiness check %s failed", check.__name__)
-                continue
+                # 🔴 2026-08-20 — `continue` here made a CRASHED check indistinguishable from a
+                # PASSED one. `_check_attestation_support` was raising AttributeError on every
+                # OSP whose answers came from the module wizard, and the operator's readiness
+                # panel simply did not mention attestation support — reading, to them, as
+                # nothing to fix. On a compliance surface "we could not evaluate this" and
+                # "this is fine" must never render the same; the log line nobody opens is not
+                # a disclosure. Surfaced as a warning: it is not a finding about the farm, so
+                # it must not block, but it does have to be visible.
+                logger.exception("Operation readiness check %s failed", check_key)
+                result = {
+                    "key": f"{check_key}_unavailable",
+                    "status": "warning",
+                    "title": "A readiness check could not be completed",
+                    "detail": (
+                        "Trazo could not finish one of its own readiness checks, so this list "
+                        "is incomplete. This is a problem with Trazo, not a finding about your "
+                        "operation."
+                    ),
+                    "fix": "Contact support so the check can be repaired before you submit.",
+                }
             if result is None:
                 continue
             checked.append(result)
@@ -327,8 +348,19 @@ class OperationReadinessService:
         modules = (plan.module_responses or {}).get("modules") or {}
 
         def _answer(module_key, question_key):
+            # 🔴 2026-08-20 — `module_responses` holds TWO answer shapes and always has: the
+            # REST endpoint writes an envelope `{"value": …, "at": …}` while the module wizard
+            # writes the bare value. `(entry.get(key) or {}).get("value")` raises
+            # AttributeError on a str, a bool or a list — and this whole readiness evaluation
+            # is wrapped in a broad except, so the crash showed up as a silently absent
+            # attestation-support warning rather than an error anyone could see.
+            #
+            # Third site of this class today (osp_module_pdf.py:366, certifications/views.py:1329
+            # were the first two). `answer_value()` is the one reader that tolerates both.
+            from certifications.osp_modules.conditions import answer_value
+
             entry = (modules.get(module_key) or {}).get("answers") or {}
-            return (entry.get(question_key) or {}).get("value")
+            return answer_value(entry, question_key)
 
         unsupported = []
 
@@ -377,9 +409,9 @@ class OperationReadinessService:
                     isinstance(row, dict) and str(row.get("supplier_name") or row.get("supplier") or "").strip()
                     for row in (ev.seed_search_attempts or [])
                 )
-                for ev in ProductionEvent.objects.filter(
-                    history__parcel__establishment=self.establishment
-                ).exclude(seed_search_attempts__isnull=True)
+                for ev in ProductionEvent.objects.filter(history__parcel__establishment=self.establishment).exclude(
+                    seed_search_attempts__isnull=True
+                )
             )
             if documented:
                 unsupported.append(

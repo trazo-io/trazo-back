@@ -259,11 +259,12 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     "parcel__establishment",
                     "operator",
                     "album",
-                    # HistorySerializer.get_post_harvest_facility_detail reads it on every
-                    # retrieve; without this the handler card costs one query per production.
-                    "post_harvest_facility",
                 )
                 .prefetch_related(
+                    # HistorySerializer.get_post_harvest_facilities_detail reads it on every
+                    # retrieve; without this the handler card costs one query per production.
+                    # `prefetch_related`, not `select_related`: many since 2026-08-21.
+                    "post_harvest_facilities",
                     Prefetch(
                         "history_weatherevent_events",
                         queryset=WeatherEvent.objects.select_related("album").prefetch_related("album__images"),
@@ -1334,6 +1335,109 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
     @action(
         detail=True,
+        methods=["get", "post"],
+        url_path="amend",
+        permission_classes=[IsAuthenticated],
+    )
+    def amend(self, request, pk=None):
+        """Correct one field on this season's HEADER, keeping the original — F7, 2026-08-21.
+
+        GET  → the correctable header fields with their current values, plus the corrections
+               already recorded against this season header.
+        POST → {field_name, new_value, reason} — reason mandatory.
+
+        WHY THIS EXISTS. The closed-record guard freezes `production_amount`, `lot_id`,
+        `quality_grade`, `harvest_method` and `production_unit` once a season is finished,
+        and it is right to: the lot header is the traceability spine § 205.103(b)(2) asks to
+        be auditable back to the last certified operation. Events on that same season have
+        had a correction path since the amendments table shipped. The header had NONE — so a
+        farmer who finished with the wrong yield (and the Finish form used to prefill that
+        number off the buffer-row event, so it happened) could neither edit it, which answers
+        423, nor amend it. The only repair was a developer with ORM access: a change to a
+        filed record with nothing on paper behind it, which is the shape NOP 4002 calls
+        concealment.
+
+        Corrections land in the SAME `EventAmendment` table as event corrections, so the
+        packet's "Documented Corrections" section prints them in one chronological list.
+        """
+        from history.amendments import (
+            AmendmentError,
+            apply_history_amendment,
+            history_amendable_fields,
+            history_field_label,
+        )
+        from history.models import EventAmendment
+
+        history, denied = self._owned_history_or_403(request, pk)
+        if denied is not None:
+            return denied
+
+        def _amendment_rows():
+            return [
+                {
+                    "id": a.id,
+                    "field_name": a.field_name,
+                    "field_label": a.field_label,
+                    "original_value": a.original_value,
+                    "corrected_value": a.corrected_value,
+                    "reason": a.reason,
+                    "amended_by": a.amended_by_name,
+                    "created_at": a.created_at,
+                }
+                # Header corrections only: the event corrections on this season have their
+                # own screens, and mixing them here would offer a farmer a "correct" button
+                # for a record this page is not showing.
+                for a in EventAmendment.objects.filter(
+                    history=history, event_type__isnull=True, event_id__isnull=True
+                ).order_by("-created_at")
+            ]
+
+        if request.method == "GET":
+            return Response(
+                {
+                    "is_finished": history.finish_date is not None,
+                    "fields": [
+                        {
+                            "name": field.name,
+                            "label": history_field_label(field.name),
+                            "current_value": getattr(history, field.name),
+                        }
+                        for field in history_amendable_fields()
+                    ],
+                    "amendments": _amendment_rows(),
+                }
+            )
+
+        try:
+            amendment = apply_history_amendment(
+                history=history,
+                field_name=request.data.get("field_name"),
+                new_value=request.data.get("new_value"),
+                reason=request.data.get("reason"),
+                user=request.user,
+            )
+        except AmendmentError as exc:
+            return Response(
+                exc.message_dict if hasattr(exc, "message_dict") else {"detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            {
+                "id": amendment.id,
+                "field_name": amendment.field_name,
+                "field_label": amendment.field_label,
+                "original_value": amendment.original_value,
+                "corrected_value": amendment.corrected_value,
+                "reason": amendment.reason,
+                "amended_by": amendment.amended_by_name,
+                "created_at": amendment.created_at,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(
+        detail=True,
         methods=["get"],
         url_path="season_plan",
         permission_classes=[IsAuthenticated],
@@ -1431,7 +1535,7 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         permission_classes=[IsAuthenticated],
     )
     def post_harvest_facility_link(self, request, pk=None):
-        """Which off-farm handler this lot was sent to — CCOF G6.1 / 7 CFR 205.272.
+        """Which off-farm handlers this lot was sent to — CCOF G6.1 / 7 CFR 205.272.
 
         OWNER-side on purpose, for the same reason harvest lot codes are: the handler's
         identity is supply-chain data, and `PublicHistorySerializer` deliberately omits it
@@ -1450,7 +1554,9 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         try:
             public_uuid = uuid_module.UUID(str(pk))
             history = get_object_or_404(
-                History.objects.select_related("parcel__establishment__company", "post_harvest_facility"),
+                History.objects.select_related("parcel__establishment__company").prefetch_related(
+                    "post_harvest_facilities"
+                ),
                 public_id=public_uuid,
             )
         except (ValueError, AttributeError):
@@ -1463,25 +1569,29 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         ):
             return Response({"error": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
 
-        facility = history.post_harvest_facility
-        if facility is None:
-            return Response({"post_harvest_facility": None, "detail": None}, status=status.HTTP_200_OK)
+        # LISTS since 2026-08-21. A lot with a fresh grade and a process grade goes to two
+        # certified handlers, and while this returned one object the operator could record —
+        # and the packet could print — only half of what § 205.272 asks for.
+        facilities = sorted(history.post_harvest_facilities.all(), key=lambda f: (f.name or "").lower())
 
         return Response(
             {
-                "post_harvest_facility": facility.id,
-                "detail": {
-                    "id": facility.id,
-                    "name": facility.name,
-                    "facility_type": facility.facility_type,
-                    "facility_type_display": facility.get_facility_type_display(),
-                    "certification_number": facility.certification_number,
-                    "certifier_name": facility.certifier_name,
-                    "effective_date": facility.effective_date,
-                    "expiry_date": facility.expiry_date,
-                    "verification_status": facility.verification_status,
-                    "cert_is_current": facility.cert_is_current,
-                },
+                "post_harvest_facilities": [f.id for f in facilities],
+                "details": [
+                    {
+                        "id": facility.id,
+                        "name": facility.name,
+                        "facility_type": facility.facility_type,
+                        "facility_type_display": facility.get_facility_type_display(),
+                        "certification_number": facility.certification_number,
+                        "certifier_name": facility.certifier_name,
+                        "effective_date": facility.effective_date,
+                        "expiry_date": facility.expiry_date,
+                        "verification_status": facility.verification_status,
+                        "cert_is_current": facility.cert_is_current,
+                    }
+                    for facility in facilities
+                ],
             },
             status=status.HTTP_200_OK,
         )
@@ -3441,11 +3551,66 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 # Use explicitly provided history ID if available (from Quick Add on specific production)
                 # Otherwise fall back to parcel.current_history
                 if explicit_history_id:
-                    try:
-                        history = History.objects.get(id=int(explicit_history_id), parcel=parcel)
-                    except History.DoesNotExist:
-                        history = parcel.current_history
+                    # Accept BOTH the numeric pk and the public UUID. The two callers that name
+                    # a season disagree about which they send: the production page passes the
+                    # route's numeric id, the season-plan "Log this" link passes `public_id`.
+                    # `int(...)` alone raised ValueError on the UUID — an unhandled 500 on the
+                    # save button, not a fallback.
+                    history = None
+                    raw = str(explicit_history_id).strip()
+                    if raw.isdigit():
+                        history = History.objects.filter(id=int(raw), parcel=parcel).first()
+                    else:
+                        try:
+                            history = History.objects.filter(public_id=raw, parcel=parcel).first()
+                        except (ValueError, ValidationError, DjangoValidationError):
+                            history = None
+                    if history is None:
+                        # Named a season this parcel does not have. Silently retargeting the
+                        # record at some other season is how a misfile happens, so say so.
+                        raise ValidationError(
+                            {
+                                "history": [
+                                    f"No production {explicit_history_id!r} on this parcel. "
+                                    "Log the activity from the production you mean."
+                                ]
+                            }
+                        )
                 else:
+                    # 🔴 2026-08-20 — `current_history` is ONE pointer, and it holds whichever
+                    # season was started last. A perennial block routinely carries two open
+                    # seasons at once (last year's crop still being picked while the next one
+                    # is under way), and in that state this fallback silently picked one.
+                    #
+                    # Found live: an application logged from the 2025 season's own page, dated
+                    # 14 May 2025, was written to the 2026 season — a season that had not yet
+                    # begun. The 2025 packet then showed no record and the 2026 packet showed
+                    # an application from before its own start date. That is a misfiled record
+                    # in the § 205.103(b)(2) trace-back, and nothing surfaced it.
+                    #
+                    # Where the caller knows the season it sends `history` (see the plan-item
+                    # path in NewEvent.jsx). Where it does not, and the answer is genuinely
+                    # ambiguous, REFUSE rather than guess — the same rule the numeric parser
+                    # follows: a wrong record is worse than a rejected one.
+                    open_seasons = list(
+                        History.objects.filter(parcel=parcel, finish_date__isnull=True).order_by("-start_date")
+                    )
+                    if len(open_seasons) > 1:
+                        raise ValidationError(
+                            {
+                                "history": [
+                                    "This parcel has more than one open production, so the season "
+                                    "for this activity is ambiguous: "
+                                    + "; ".join(
+                                        f"{h.name or 'Production'} (id {h.id}, started "
+                                        f"{h.start_date.date().isoformat() if h.start_date else 'unknown'})"
+                                        for h in open_seasons
+                                    )
+                                    + ". Log the activity from the production you mean, or send "
+                                    "its `history` id."
+                                ]
+                            }
+                        )
                     history = parcel.current_history
 
                 # Immutability guard: prevent adding events to completed productions

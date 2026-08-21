@@ -2,6 +2,7 @@ import json
 import logging
 from datetime import datetime
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -248,9 +249,7 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         current = parcel.current_history
         if current is None:
             current = (
-                History.objects.filter(parcel=parcel, finish_date__isnull=True)
-                .order_by("-start_date", "-id")
-                .first()
+                History.objects.filter(parcel=parcel, finish_date__isnull=True).order_by("-start_date", "-id").first()
             )
             if current is not None:
                 parcel.current_history = current
@@ -366,6 +365,57 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         assert_deletable("parcel", parcel=instance)
         super().perform_destroy(instance)
 
+    def _resolve_finish_target(self, parcel, history_data):
+        """The season this request is closing, or a 400 Response explaining why it is unclear.
+
+        Accepts the numeric pk or the public UUID, because the two callers that name a season
+        disagree about which they send. Falls back to `parcel.current_history` only when the
+        parcel has exactly one open season — where the fallback cannot be wrong.
+        """
+        from history.models import History
+
+        raw = history_data.get("history") or history_data.get("production_id")
+        raw = str(raw).strip() if raw is not None else ""
+
+        if raw:
+            qs = History.objects.filter(parcel=parcel)
+            target = qs.filter(id=int(raw)).first() if raw.isdigit() else None
+            if target is None and not raw.isdigit():
+                try:
+                    target = qs.filter(public_id=raw).first()
+                except (ValueError, DjangoValidationError):
+                    target = None
+            if target is None:
+                return Response(
+                    {"history": [f"No production {raw!r} on this parcel."]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if target.finish_date is not None:
+                return Response(
+                    {"history": ["That production is already finished."]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            return target
+
+        open_seasons = list(History.objects.filter(parcel=parcel, finish_date__isnull=True).order_by("-start_date"))
+        if len(open_seasons) > 1:
+            return Response(
+                {
+                    "history": [
+                        "This parcel has more than one open production, so it is unclear which "
+                        "one you are closing: "
+                        + "; ".join(
+                            f"{h.name or 'Production'} (id {h.id}, started "
+                            f"{h.start_date.date().isoformat() if h.start_date else 'unknown'})"
+                            for h in open_seasons
+                        )
+                        + ". Close it from that production's own page."
+                    ]
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return parcel.current_history
+
     @action(detail=True, methods=["post"])
     @transaction.atomic
     def finish_history(self, request, pk=None, parcel_pk=None, company_pk=None, establishment_pk=None):
@@ -392,11 +442,27 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # anything the database rejects (an over-length string, a bad numeric) surfaced
         # as a 500 DataError. Finalization is the moment a grower publishes their season
         # — it must fail with a usable field error, not a server error page.
-        invalid = self._validate_finalization_fields(history_data, current_history=parcel.current_history)
+        # 🔴 2026-08-20 — WHICH season is being closed must come from the caller.
+        #
+        # This acted on `parcel.current_history`, which holds whichever season started last. A
+        # perennial block routinely carries two open seasons, and the finish page is reached
+        # per-production, so closing the 2025 season validated against the 2026 one: the farmer
+        # was told "finish date cannot be before the production's start date (2026-03-18)" for a
+        # date they never entered and a season they were not closing. They could not complete
+        # the close at all.
+        #
+        # The worse branch is the one that did not fire here: had the dates been compatible,
+        # the click would have closed the WRONG season — and closing is irreversible by design
+        # (it makes the record read-only and starts the § 205.103(b)(3) retention clock).
+        target = self._resolve_finish_target(parcel, history_data)
+        if isinstance(target, Response):
+            return target
+
+        invalid = self._validate_finalization_fields(history_data, current_history=target)
         if invalid:
             return Response(invalid, status=status.HTTP_400_BAD_REQUEST)
 
-        history = parcel.finish_current_history(history_data, images)
+        history = parcel.finish_history_record(target, history_data, images)
         _t2 = time.monotonic()
 
         if history is not None:

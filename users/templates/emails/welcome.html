@@ -6,7 +6,7 @@
 
 {% block header_subtitle %}
     {% if user_type == 'producer' %}
-        Document how your food is grown. Build consumer trust.
+        Log it once. Use it at renewal.
     {% else %}
         Discover the story behind your food
     {% endif %}
@@ -16,37 +16,42 @@
 
 {% block message %}
     {% if user_type == 'producer' %}
-        <p>Welcome to Trazo, the transparency platform built for specialty crop farms.</p>
-        <p>Document every step of how your food is grown, earn transparency scores, and give your buyers the proof they need. More documentation means more trust and premium market positioning.</p>
+        <p>Welcome to Trazo, the organic recordkeeping platform built for specialty crop farms.</p>
+        <p>Log what you did in the field, once. Trazo turns that entry into the documentation your certifier reviews &mdash; and a plain-language page your buyer can check.</p>
         <p><strong>What you can do with Trazo:</strong></p>
         <ul style="margin: 16px 0; padding-left: 20px; color: #4b5563;">
-            <li>Document agricultural practices with transparency scores</li>
-            <li>Generate QR codes so consumers see how food was grown</li>
-            <li>Track 7 event types across 33 pre-configured US crops</li>
-            <li>Build buyer trust with dated, photo-backed records</li>
+            <li>Log activities as you work &mdash; by form, crop template, or voice</li>
+            <li>Answer your Organic System Plan in guided modules</li>
+            <li>Track 7 activity types across 33 pre-configured US crops</li>
+            <li>Generate a QR-coded buyer page from the season's records</li>
             <li>Manage your team with role-based access</li>
         </ul>
     {% else %}
-        <p>Welcome to Trazo, where transparency meets sustainability.</p>
-        <p>Scan QR codes on agricultural products to discover exactly how your food was grown. See transparency scores, verified farming practices, and the complete production journey.</p>
-        <p><strong>What you can discover:</strong></p>
+        <p>Welcome to Trazo.</p>
+        <p>Scan the QR code on a product to see how it was grown &mdash; the practices the farm documented, with dates and photos, straight from its own records.</p>
+        <p><strong>What you can see:</strong></p>
         <ul style="margin: 16px 0; padding-left: 20px; color: #4b5563;">
-            <li>Transparency scores showing how food was grown</li>
-            <li>Documented farming practices and events</li>
-            <li>Farm-to-table production journey</li>
-            <li>Photo evidence attached to the practices you logged</li>
+            <li>The season's documented practices, in plain language</li>
+            <li>Dates and photos from the farm's own records</li>
+            <li>Certifications checked against the USDA Organic Integrity Database</li>
+            <li>The farm's story and how to reach it</li>
         </ul>
     {% endif %}
 {% endblock %}
 
 {% block content %}
     <div class="btn-container">
-        {# 🔴 2026-08-19: this pointed at a producer.* subdomain that has never resolved, so
+        {% comment %}
+           🔴 2026-08-19: this pointed at a producer.* subdomain that has never resolved, so
            the welcome email's only button was dead for every producer who clicked it. The
            producer app is app.trazo.io, which the plain-text half of this email already said.
-           Guarded by users/tests/test_onboarding_email_claims.py. #}
+           Guarded by users/tests/test_onboarding_email_claims.py.
+           NOTE: Django's hash-comment syntax is SINGLE-LINE only. A multi-line one is not a
+           comment at all and renders verbatim into the delivered email, which is how this
+           very note shipped to inboxes. Multi-line notes use the comment tag, as here.
+        {% endcomment %}
         <a href="{% if user_type == 'producer' %}https://app.trazo.io{% else %}https://consumer.trazo.io{% endif %}" 
-           class="btn {% if user_type == 'consumer' %}consumer{% endif %}">
+           class="btn">
             {% if user_type == 'producer' %}
                 Go to My Dashboard
             {% else %}
@@ -56,9 +61,9 @@
     </div>
     
     <div class="message">
-        <p>Your account is ready to use. We're excited to have you join the movement toward more transparent and sustainable agriculture.</p>
+        <p>Your account is ready to use. We're glad to have you here.</p>
         <p>If you have any questions or need help getting started, don't hesitate to reach out to our support team.</p>
-        <p style="margin-top: 24px; font-weight: 600; color: #111827;">Welcome to the future of agricultural transparency!</p>
-        <p style="margin-top: 16px; color: #4CAF50; font-weight: 600;">The Trazo Team</p>
+        <p style="margin-top: 24px; font-weight: 600; color: #111827;">Welcome aboard.</p>
+        <p style="margin-top: 16px; color: #2E7D32; font-weight: 600;">The Trazo Team</p>
     </div>
 {% endblock %}

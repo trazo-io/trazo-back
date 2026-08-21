@@ -78,15 +78,25 @@ class PacketPostCloseEditTests(TestCase):
         finally:
             platypus.Paragraph = orig_para
             svc.Paragraph = orig_para
-        return [t for t in captured if "recorded after this season was closed" in t]
+        # Anchored on "closed in Trazo on" — the load-bearing phrase, not the whole sentence.
+        # The sentence was reworded on 2026-08-20 to name which of the two dates it means, and
+        # the old literal stopped matching: the positive test failed loudly, but the NEGATIVE
+        # test would have gone on passing because the text had become invisible rather than
+        # absent. `self._captured` lets that test prove it read something.
+        self._captured = captured
+        return [t for t in captured if "closed in Trazo on" in t]
 
     def test_a_cleanly_closed_backfilled_season_is_not_flagged(self):
         self.history.finish_date = timezone.now() - timedelta(days=300)
         self.history.lot_id = "LOT-X"
         self.history.save()
 
+        flags = self._flag_text()
+        self.assertGreater(
+            len(self._captured), 20, "the export produced almost no paragraphs — the spy is not reading the document"
+        )
         self.assertEqual(
-            self._flag_text(),
+            flags,
             [],
             "closing a backfilled season must not flag the close itself as a post-close edit",
         )
@@ -99,18 +109,15 @@ class PacketPostCloseEditTests(TestCase):
         # saves within the same second, which the close-window rule deliberately treats as one
         # operation, so the correction's log entry is moved to a realistic later moment. A
         # grower cannot type a correction inside the same second they closed the season.
-        from auditlog.models import LogEntry
         from django.contrib.contenttypes.models import ContentType
+
+        from auditlog.models import LogEntry
 
         self.history.production_amount = 123.0
         self.history.save()
 
         ct = ContentType.objects.get_for_model(History)
-        latest = (
-            LogEntry.objects.filter(content_type=ct, object_pk=str(self.history.pk))
-            .order_by("-timestamp")
-            .first()
-        )
+        latest = LogEntry.objects.filter(content_type=ct, object_pk=str(self.history.pk)).order_by("-timestamp").first()
         latest.timestamp = latest.timestamp + timedelta(minutes=5)
         latest.save(update_fields=["timestamp"])
 

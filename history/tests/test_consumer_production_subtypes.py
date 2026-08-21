@@ -128,3 +128,90 @@ class WithheldSubtypesAreAbsentFromThePayloadTests(TestCase):
             created_by=self.user,
         )
         self.assertIn("HA", self._public_types())
+
+
+class OwnerSeesWithheldSubtypesTests(TestCase):
+    """The consumer filter must not run against the producer's own timeline.
+
+    Found 2026-08-21. `may_publish_production_subtype` answers "may a CONSUMER surface show
+    this?" — its own docstring says so — and `PublicHistorySerializer.get_events` applied it
+    to EVERY caller, including the logged-in owner.
+
+    The four withheld subtypes are not incidental: buffer disposition (§ 205.202(c)),
+    the commercial-unavailability seed search (§ 205.204(a)(1)), equipment cleanout/purge and
+    transport (§ 205.272) are all records the operator is REQUIRED to keep and the certifier
+    explicitly asks for. So a farmer logged an equipment cleaning, watched it disappear from
+    their production timeline, and had no way to know whether it saved. Measured on the
+    rehearsal farm: a cleaning event already on a closed season was invisible to its own
+    grower while the certifier packet (which builds from AuditExportService, not this
+    serializer) rendered it the whole time.
+
+    `_is_owner` is the boundary the rest of this serializer already uses, and
+    `force_public_view` turns it off so the producer can preview the true shopper view.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        from django.contrib.auth import get_user_model
+        from django.utils import timezone
+
+        from company.models import Company, Establishment
+        from history.models import History, ProductionEvent
+        from product.models import Parcel, Product
+
+        User = get_user_model()
+        cls.user = User.objects.create_user(email="subtypeowner@test.com", password="x")
+        cls.company = Company.objects.create(name="Subtype Farm")
+        cls.user.companies.add(cls.company)
+        est = Establishment.objects.create(name="ST1", company=cls.company, state="WA")
+        parcel = Parcel.objects.create(name="STP1", establishment=est, area=5.0)
+        cls.history = History.objects.create(
+            name="Subtype Production",
+            start_date=timezone.now(),
+            product=Product.objects.create(name="Apple"),
+            parcel=parcel,
+            published=True,
+        )
+        for subtype in ("EM", "BU", "SS", "TP"):
+            ProductionEvent.objects.create(
+                history=cls.history,
+                type=subtype,
+                description=f"{subtype} record",
+                date=timezone.now(),
+            )
+        ProductionEvent.objects.create(history=cls.history, type="HA", description="Harvest", date=timezone.now())
+
+    def _production_subtypes(self, **context):
+        from history.serializers import PublicHistorySerializer
+
+        data = PublicHistorySerializer(self.history, context=context).data
+        return {
+            e.get("production_type") or e.get("type")
+            for e in (data.get("events") or [])
+            if isinstance(e, dict) and e.get("event_type") == 1
+        }
+
+    def _owner_request(self):
+        from django.test import RequestFactory
+
+        req = RequestFactory().get("/x/")
+        req.user = self.user
+        return req
+
+    def test_the_owner_sees_every_subtype_they_recorded(self):
+        subtypes = self._production_subtypes(request=self._owner_request())
+        for withheld in ("EM", "BU", "SS", "TP"):
+            self.assertIn(withheld, subtypes, f"the producer lost their own {withheld} record")
+
+    def test_an_anonymous_consumer_sees_none_of_the_withheld_subtypes(self):
+        """The half that must not regress — this is the claim-safety behaviour."""
+        subtypes = self._production_subtypes()
+        for withheld in ("EM", "BU", "SS", "TP"):
+            self.assertNotIn(withheld, subtypes)
+        self.assertIn("HA", subtypes, "ordinary field activity must still reach the QR page")
+
+    def test_force_public_view_withholds_them_from_the_owner_too(self):
+        """The producer previewing their own QR link must see exactly what a shopper sees."""
+        subtypes = self._production_subtypes(request=self._owner_request(), force_public_view=True)
+        for withheld in ("EM", "BU", "SS", "TP"):
+            self.assertNotIn(withheld, subtypes)

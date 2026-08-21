@@ -17,7 +17,7 @@
 
           <!-- Header -->
           <tr>
-            <td align="center" bgcolor="#4CAF50" style="background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%); padding: 32px 40px; border-radius: 8px 8px 0 0;">
+            <td align="center" bgcolor="#2E7D32" style="background: linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%); padding: 32px 40px; border-radius: 8px 8px 0 0;">
               <img src="{{ BASE_URL }}static/img/trazo2-white.png" alt="Trazo Logo" height="60" style="margin: 0 auto; padding-bottom: 10px;" />
               <p style="margin: 0; color: #ffffff; font-size: 22px; font-weight: bold; font-family: 'Inter', Arial, sans-serif;">Your trial expires in 3 days</p>
             </td>
@@ -28,19 +28,19 @@
             <td style="padding: 40px;">
 
               <!-- Greeting -->
-              <p style="margin: 0 0 16px 0; font-size: 16px; color: #333333; font-family: 'Inter', Arial, sans-serif;">Hi {{ company_name }},</p>
+              <p style="margin: 0 0 16px 0; font-size: 16px; color: #333333; font-family: 'Inter', Arial, sans-serif;">Hi {{ company_name|default:"there" }},</p>
 
               <!-- Opening message -->
               <p style="margin: 0 0 24px 0; font-size: 15px; line-height: 1.6; color: #555555; font-family: 'Inter', Arial, sans-serif;">
-                Your 14-day free trial of Trazo's Starter plan ends in <strong>3 days</strong>.
-                We hope you've had a chance to explore how Trazo helps you build agricultural
-                transparency and consumer trust.
+                Your Trazo trial ends in <strong>3 days</strong>.
+                We hope you've had a chance to see how Trazo turns one field entry into the
+                record your certifier reviews and the page your buyer can check.
               </p>
 
               <!-- Highlight box -->
               <table border="0" cellpadding="0" cellspacing="0" width="100%" role="presentation" style="margin-bottom: 24px;">
                 <tr>
-                  <td style="background-color: #f1f8f1; border-left: 4px solid #4CAF50; border-radius: 4px; padding: 16px 20px;">
+                  <td style="background-color: #FFF8E1; border-left: 4px solid #E65100; border-radius: 4px; padding: 16px 20px;">
                     <p style="margin: 0; font-size: 14px; color: #2E7D32; font-weight: bold; font-family: 'Inter', Arial, sans-serif;">
                       Your trial ends on {{ trial_end_date }}. Upgrade now to keep your data and continue without interruption.
                     </p>
@@ -54,24 +54,24 @@
               <!-- Feature list (table-based checkmarks) -->
               <table border="0" cellpadding="0" cellspacing="0" width="100%" role="presentation" style="margin-bottom: 24px;">
                 <tr>
-                  <td width="20" valign="top" style="padding: 6px 8px 6px 0; color: #4CAF50; font-weight: bold; font-size: 14px; font-family: 'Inter', Arial, sans-serif;">&#10003;</td>
-                  <td style="padding: 6px 0; font-size: 14px; color: #555555; font-family: 'Inter', Arial, sans-serif;">Full production transparency tracking</td>
+                  <td width="20" valign="top" style="padding: 6px 8px 6px 0; color: #2E7D32; font-weight: bold; font-size: 14px; font-family: 'Inter', Arial, sans-serif;">&#10003;</td>
+                  <td style="padding: 6px 0; font-size: 14px; color: #555555; font-family: 'Inter', Arial, sans-serif;">Every activity logged, with photos and dates</td>
                 </tr>
                 <tr>
-                  <td width="20" valign="top" style="padding: 6px 8px 6px 0; color: #4CAF50; font-weight: bold; font-size: 14px; font-family: 'Inter', Arial, sans-serif;">&#10003;</td>
-                  <td style="padding: 6px 0; font-size: 14px; color: #555555; font-family: 'Inter', Arial, sans-serif;">QR code generation for consumer trust</td>
+                  <td width="20" valign="top" style="padding: 6px 8px 6px 0; color: #2E7D32; font-weight: bold; font-size: 14px; font-family: 'Inter', Arial, sans-serif;">&#10003;</td>
+                  <td style="padding: 6px 0; font-size: 14px; color: #555555; font-family: 'Inter', Arial, sans-serif;">QR-coded buyer pages for your products</td>
                 </tr>
                 <tr>
-                  <td width="20" valign="top" style="padding: 6px 8px 6px 0; color: #4CAF50; font-weight: bold; font-size: 14px; font-family: 'Inter', Arial, sans-serif;">&#10003;</td>
-                  <td style="padding: 6px 0; font-size: 14px; color: #555555; font-family: 'Inter', Arial, sans-serif;">Blockchain-recorded production data</td>
+                  <td width="20" valign="top" style="padding: 6px 8px 6px 0; color: #2E7D32; font-weight: bold; font-size: 14px; font-family: 'Inter', Arial, sans-serif;">&#10003;</td>
+                  <td style="padding: 6px 0; font-size: 14px; color: #555555; font-family: 'Inter', Arial, sans-serif;">Certifier documents: OSP renewal packet, audit exports, CA PUR export</td>
                 </tr>
                 <tr>
-                  <td width="20" valign="top" style="padding: 6px 8px 6px 0; color: #4CAF50; font-weight: bold; font-size: 14px; font-family: 'Inter', Arial, sans-serif;">&#10003;</td>
-                  <td style="padding: 6px 0; font-size: 14px; color: #555555; font-family: 'Inter', Arial, sans-serif;">Comprehensive transparency reporting and analytics</td>
+                  <td width="20" valign="top" style="padding: 6px 8px 6px 0; color: #2E7D32; font-weight: bold; font-size: 14px; font-family: 'Inter', Arial, sans-serif;">&#10003;</td>
+                  <td style="padding: 6px 0; font-size: 14px; color: #555555; font-family: 'Inter', Arial, sans-serif;">Readiness checks cited to the CFR section</td>
                 </tr>
                 <tr>
-                  <td width="20" valign="top" style="padding: 6px 8px 6px 0; color: #4CAF50; font-weight: bold; font-size: 14px; font-family: 'Inter', Arial, sans-serif;">&#10003;</td>
-                  <td style="padding: 6px 0; font-size: 14px; color: #555555; font-family: 'Inter', Arial, sans-serif;">Unlimited transparency score calculations</td>
+                  <td width="20" valign="top" style="padding: 6px 8px 6px 0; color: #2E7D32; font-weight: bold; font-size: 14px; font-family: 'Inter', Arial, sans-serif;">&#10003;</td>
+                  <td style="padding: 6px 0; font-size: 14px; color: #555555; font-family: 'Inter', Arial, sans-serif;">Unlimited parcels, productions and photos</td>
                 </tr>
               </table>
 
@@ -81,7 +81,7 @@
                   <td align="center">
                     <table border="0" cellpadding="0" cellspacing="0" role="presentation">
                       <tr>
-                        <td align="center" bgcolor="#4CAF50" style="border-radius: 6px; background-color: #4CAF50;">
+                        <td align="center" bgcolor="#2E7D32" style="border-radius: 6px; background-color: #2E7D32;">
                           <a href="{{ pricing_url }}" target="_blank" style="display: inline-block; padding: 14px 36px; font-size: 16px; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600; font-family: 'Inter', Arial, sans-serif;">Upgrade My Plan</a>
                         </td>
                       </tr>
@@ -91,7 +91,7 @@
               </table>
 
               <!-- Closing note -->
-              <p style="margin: 0; font-size: 13px; line-height: 1.6; color: #888888; font-family: 'Inter', Arial, sans-serif;">
+              <p style="margin: 0; font-size: 13px; line-height: 1.6; color: #6B7280; font-family: 'Inter', Arial, sans-serif;">
                 If you have questions about our plans, reply to this email — we're happy to help
                 you find the right fit for your operation.
               </p>
@@ -104,14 +104,14 @@
             <td align="center" bgcolor="#f9f9f9" style="background-color: #f9f9f9; border-top: 1px solid #eeeeee; padding: 24px 40px; border-radius: 0 0 8px 8px;">
               <table border="0" cellpadding="0" cellspacing="0" width="100%" role="presentation">
                 <tr>
-                  <td style="padding: 0 0 10px 0; font-size: 12px; color: #999999; font-family: 'Inter', Arial, sans-serif;">
-                    Don't want to receive these emails? <a href="{{ app_url }}/admin/dashboard/settings" style="color: #999999; text-decoration: underline;">Manage email preferences</a>
+                  <td style="padding: 0 0 10px 0; font-size: 12px; color: #6B7280; font-family: 'Inter', Arial, sans-serif;">
+                    Don't want to receive these emails? <a href="{{ app_url }}/admin/dashboard/settings" style="color: #6B7280; text-decoration: underline;">Manage email preferences</a>
                   </td>
                 </tr>
               </table>
-              <p style="margin: 4px 0; font-size: 12px; color: #999999; font-family: 'Inter', Arial, sans-serif;">You are receiving this email because you have an active trial with Trazo.</p>
-              <p style="margin: 4px 0; font-size: 12px; color: #999999; font-family: 'Inter', Arial, sans-serif;">&copy; {{ current_year }} Trazo &mdash; Agricultural Transparency Platform</p>
-              <p style="margin: 4px 0; font-size: 12px; font-family: 'Inter', Arial, sans-serif;"><a href="{{ app_url }}" style="color: #4CAF50; text-decoration: none;">Log in to your dashboard</a></p>
+              <p style="margin: 4px 0; font-size: 12px; color: #6B7280; font-family: 'Inter', Arial, sans-serif;">You are receiving this email because you have an active trial with Trazo.</p>
+              <p style="margin: 4px 0; font-size: 12px; color: #6B7280; font-family: 'Inter', Arial, sans-serif;">&copy; {{ current_year }} Trazo &mdash; Organic recordkeeping for specialty crop farms</p>
+              <p style="margin: 4px 0; font-size: 12px; font-family: 'Inter', Arial, sans-serif;"><a href="{{ app_url }}" style="color: #2E7D32; text-decoration: none;">Log in to your dashboard</a></p>
             </td>
           </tr>
 

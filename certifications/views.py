@@ -233,7 +233,7 @@ class PostHarvestFacilityViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
     🔴 2026-08-16. The model, its serializer and the audit export's
     ``_facility_cert_block`` all shipped; this route did not, and neither did a write path
-    on ``History.post_harvest_facility``. So the one record CCOF's grower checklist calls
+    on ``History.post_harvest_facilities``. So the one record CCOF's grower checklist calls
     for when a crop is sent to another certified operation — the handler's current organic
     certificate — was reachable only from Django admin, and the packet's G6.1 block could
     never render for a real operation. The export was already compensating by scraping
@@ -904,6 +904,24 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 certifier_template_url=source.certifier_template_url,
                 created_by=self.request.user,
             )
+            # 🔴 2026-08-21 — the clone copied `sections` and `module_responses` and stopped
+            # there, so the approved-inputs registry did NOT come across: v2 opened with an
+            # empty materials list while v1 held eight verified entries. The dialog promises
+            # "copies every answer across", and the registry is an answer — the operator
+            # searched each product against OMRI / WSDA / the National List and accepted the
+            # match. Losing it is worse than an inconvenience: the § 205.201(a)(2) narrative is
+            # compiled from this list, the audit dossier reports "No approved-inputs list is on
+            # file for this operation" against a plan that had one, and an operator who submits
+            # the new version has filed a plan with no materials list at all — a § 205.201(a)(2)
+            # deficiency the tool created. Found on a pilot renewal: v1 4 OMRI / 2 National List
+            # / 2 WSDA, v2 zero of each.
+            #
+            # M2M, so this must happen after create(). The change log is deliberately NOT
+            # copied: it is the audit trail of edits made to THAT version (§ 205.400(f)(1)),
+            # and the new version starts its own.
+            clone.approved_national_list_substances.set(source.approved_national_list_substances.all())
+            clone.approved_omri_products.set(source.approved_omri_products.all())
+            clone.approved_wsda_materials.set(source.approved_wsda_materials.all())
         return Response(OrganicSystemPlanSerializer(clone).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["get", "post"], url_path="record-types")
@@ -1317,16 +1335,36 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                             }
                         }
                     )
+                from certifications.osp_modules.conditions import answer_value
+
                 for key, value in incoming.items():
                     if value is None:
                         if key in entry["answers"]:
                             entry["answers"].pop(key)
                             content_changed = True
                     else:
-                        previous = (entry["answers"].get(key) or {}).get("value")
+                        # Same two-shape hazard as the module PDF: an answer already stored
+                        # in the BARE shape by the module wizard makes `.get("value")` raise on
+                        # a str/list. Compare through the tolerant accessor.
+                        previous = answer_value(entry["answers"], key)
                         if previous != value:
                             entry["answers"][key] = {"value": value, "at": now}
                             content_changed = True
+
+                # F25 — a bound answer also owns an `Establishment` column. Written in the
+                # SAME transaction as the answer so the packet can never read one without
+                # the other. See certifications/osp_modules/bindings.py for why the OSP
+                # is the editor and the column is the follower.
+                from certifications.osp_modules.bindings import establishment_writes, is_unchanged
+
+                bound = establishment_writes(module, incoming)
+                if bound:
+                    est = osp.establishment
+                    changed = [f for f, v in bound.items() if not is_unchanged(getattr(est, f), v)]
+                    if changed:
+                        for f in changed:
+                            setattr(est, f, bound[f])
+                        est.save(update_fields=changed)
 
             if "not_applicable" in request.data:
                 flag = request.data.get("not_applicable")

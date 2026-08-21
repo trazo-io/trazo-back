@@ -426,6 +426,50 @@ class NationalListSubstance(models.Model):
         null=True,
         help_text="Usage restrictions from the regulation (e.g., 'minimize soil accumulation')",
     )
+    # 🔴 2026-08-20 — annotations on a National List entry come in two kinds that read
+    # identically as prose but mean opposite things, and NOTHING may distinguish them by
+    # sniffing the text:
+    #
+    #   condition_of_use — the CFR permits the substance FOR THE STATED USE.
+    #       § 205.602(c) calcium chloride: "prohibited ... except as a foliar spray to treat a
+    #       physiological disorder associated with calcium uptake."
+    #   rationale        — the note explains WHY the substance is listed and grants nothing.
+    #       § 205.105 glyphosate: "Synthetic herbicide; not on § 205.601 (NOP 5034-2)."
+    #
+    # Both rows are status="prohibited" and both have restriction_notes. A first pass at the
+    # certifier packet used `if restriction_notes:` as the test for "conditionally permitted",
+    # which would have printed GLYPHOSATE as "Restricted use" and filed it under [REVIEW]
+    # instead of [WARNING]. Type the distinction; never re-derive it from the prose.
+    ANNOTATION_NONE = "none"
+    ANNOTATION_CONDITION = "condition_of_use"
+    ANNOTATION_RATIONALE = "rationale"
+    ANNOTATION_KIND_CHOICES = [
+        (ANNOTATION_NONE, "No annotation"),
+        (ANNOTATION_CONDITION, "Condition of use — the CFR permits the stated use"),
+        (ANNOTATION_RATIONALE, "Rationale — explains the listing, grants no allowance"),
+    ]
+    annotation_kind = models.CharField(
+        max_length=20,
+        choices=ANNOTATION_KIND_CHOICES,
+        default=ANNOTATION_NONE,
+        db_index=True,
+        help_text=(
+            "What the restriction_notes text DOES. Only 'condition_of_use' may soften a "
+            "prohibited listing; 'rationale' never does."
+        ),
+    )
+
+    @property
+    def is_conditionally_permitted(self) -> bool:
+        """A prohibited listing the CFR permits for one stated use.
+
+        The single test every surface must use before softening a "prohibited" verdict.
+        Whether the operation's ACTUAL use meets the condition is not knowable here — the
+        recorded purpose is farmer-written free text — so callers must present the condition
+        and the recorded purpose side by side, never assert that the two match.
+        """
+        return self.status == "prohibited" and self.annotation_kind == self.ANNOTATION_CONDITION
+
     effective_date = models.DateField(
         blank=True,
         null=True,

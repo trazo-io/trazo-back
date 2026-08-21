@@ -31,16 +31,34 @@ class _FakeIrrigationEvent:
     `water_volume_total` is provided so water resolution short-circuits before
     the estimation helper, and `fuel_unit="gal"` keeps fuel in gallons (no
     L->gal conversion) so inputs match a gallons-based preview exactly.
+
+    ⚠️ This fixture must carry EVERY attribute the extractor touches, including the
+    ones a real `ProductionEvent` inherits from `CommonEvent` and never thinks about
+    (`history`, `id`). It originally omitted `history`; the extractor raised
+    AttributeError, its `except Exception` swallowed that into zero defaults, and the
+    suite reported 34.32 vs 85.37 — which reads exactly like the auxiliary-diesel
+    regression these tests exist to catch. It was not: the production path was correct
+    the whole time. The swallow is gone (it now re-raises), so an incomplete fixture
+    fails loudly as AttributeError instead of impersonating a carbon bug.
+
+    `history=None` is the faithful default: the FK is `null=True`, so on a real event
+    the attribute EXISTS and is None — it does not raise.
     """
 
     def __init__(self, **kwargs):
         # Event identity
         self.type = "IR"
+        self.id = 1
+        # Inherited from CommonEvent — nullable FK, so present-but-None on a real row.
+        self.history = None
         # Area / water
         self.area_covered = Decimal("5")
         self.area_unit = "acres"
         self.water_volume_total = Decimal("100000")
         self.water_volume_unit = "gallons"
+        self.volume = None
+        self.irrigation_depth = None
+        self.irrigation_depth_unit = "inches"
         # Fuel (auxiliary diesel reported alongside an electric grid pump)
         self.fuel_consumed = Decimal("5")
         self.fuel_unit = "gal"
@@ -132,3 +150,34 @@ class IrrigationPreviewSavedParityTestCase(TestCase):
         # Pure diesel pump: 5 gal * 10.21 = 51.05 kg
         self.assertAlmostEqual(saved_co2e, 5 * self.diesel_factor, places=2)
         self.assertAlmostEqual(saved_co2e, preview_co2e, places=2)
+
+    def test_extraction_failure_raises_instead_of_returning_zeros(self):
+        """A broken event must NOT yield a plausible carbon number.
+
+        `_extract_production_event_data` used to catch every exception and return
+        `area_covered=0.0, fuel_consumed=None, water_volume_gallons=None`. The caller
+        carried on and produced a figure from those zeros that was indistinguishable, in
+        the wizard and in the certifier packet, from a real calculation. Nothing in the
+        result said it came from a failure.
+
+        Now it propagates, and `calculate_production_event_impact` converts it into an
+        explicitly-marked error result — which a surface can refuse to display.
+        """
+
+        class _BrokenEvent(_FakeIrrigationEvent):
+            # Raise on READ only. A `@property` would also intercept the parent
+            # __init__'s `self.history = None` assignment and blow up in the
+            # constructor, before the code under test ever runs.
+            def __getattribute__(self, name):
+                if name == "history":
+                    raise RuntimeError("simulated DB/attribute failure during extraction")
+                return super().__getattribute__(name)
+
+        with self.assertRaises(RuntimeError):
+            self.calculator._extract_production_event_data(_BrokenEvent())
+
+        # And the public entry point marks it rather than fabricating a clean number.
+        result = self.calculator.calculate_production_event_impact(_BrokenEvent())
+        self.assertEqual(result["verification_status"], "error")
+        self.assertEqual(result["calculation_method"], "calculation_error")
+        self.assertIn("error", result)

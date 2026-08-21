@@ -1074,7 +1074,7 @@ class Command(BaseCommand):
             amendment_amount_numeric=_q(acres * 400),
             amendment_amount_unit="lbs",
             amendment_nitrogen_percentage=_q("13.00"),
-            amendment_organic_approved="yes",
+            amendment_organic_approved="omri_listed",
             fuel_consumed=_q(acres * Decimal("1.1")),
             fuel_unit="gal",
             fuel_type="diesel",

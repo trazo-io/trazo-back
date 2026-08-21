@@ -189,6 +189,14 @@ class UpdateEstablishmentSerializer(USContactFieldsMixin, USStateFieldMixin, Mod
             "has_split_operation",
             "split_operation_plan",
         )
+        # 🔴 2026-08-21 (F25) — READ-ONLY, deliberately. The § 205.201(a)(5) split-operation
+        # declaration has exactly one editor: OSP module G6.0, which writes through to these
+        # columns (certifications/osp_modules/bindings.py). They stayed writable here for the
+        # farm-profile checkbox, and that made the profile a second editor of a regulated
+        # fact — a farm that answered "yes" in the OSP filed a packet whose § 205.272 row
+        # said "Split Operation: No". Serialized OUT (the profile still displays the
+        # declaration), never IN.
+        read_only_fields = ("has_split_operation", "split_operation_plan")
 
     def to_representation(self, instance):
         return EstablishmentSerializer(instance).data
@@ -350,6 +358,11 @@ class UpdateEstablishmentSerializer(USContactFieldsMixin, USStateFieldMixin, Mod
 class RetrieveEstablishmentSerializer(ModelSerializer):
     parcels = serializers.SerializerMethodField()
     images = serializers.SerializerMethodField()
+    # F25 — "yes" / "no" / "unanswered". `has_split_operation` is a boolean column and so
+    # cannot tell a declared "no" apart from a field nobody has touched; the farm profile
+    # needs that difference, because rendering the default as a declaration is the same
+    # manufactured-statement bug the packet was fixed for.
+    split_operation_declaration = serializers.SerializerMethodField()
 
     class Meta:
         model = Establishment
@@ -402,6 +415,7 @@ class RetrieveEstablishmentSerializer(ModelSerializer):
             # NOP compliance — Split operation tracking (7 CFR 205.272)
             "has_split_operation",
             "split_operation_plan",
+            "split_operation_declaration",
             # SerializerMethodFields
             "parcels",
             "images",
@@ -430,6 +444,23 @@ class RetrieveEstablishmentSerializer(ModelSerializer):
 
     def get_parcels(self, establishment):
         return ParcelBasicSerializer(establishment.parcels.all(), many=True, context=self.context).data
+
+    def get_split_operation_declaration(self, establishment):
+        """Resolved through the ONE definition (certifications.services.split_operation).
+
+        Computed on the DETAIL view only. `EstablishmentViewSet.get_serializer_class` hands
+        this same serializer to `list`, and the resolver costs up to two OSP queries per
+        establishment — on the farm switcher of an Operation-tier company that is 2N queries
+        for a value no list surface renders. `None` here means "not computed on this view",
+        and the farm profile (the only reader) always arrives through `retrieve`.
+        """
+        view = self.context.get("view")
+        if getattr(view, "action", None) == "list":
+            return None
+
+        from certifications.services.split_operation import split_operation_declaration
+
+        return split_operation_declaration(establishment)
 
 
 class EstablishmentSeriesSerializer(serializers.Serializer):

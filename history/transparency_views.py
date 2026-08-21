@@ -864,7 +864,10 @@ def _build_organic_summary(history, certification_data, establishment, organic_c
 #: Weakest-first, so the first tier present is the honest headline. `contradicted` leads because
 #: it is not weak evidence FOR the claim — it is evidence AGAINST it, and an aggregate containing
 #: one must never present as though it were merely under-documented.
-_INPUT_EVIDENCE_ORDER = ("contradicted", "grower_reported", "national_list", "catalog_matched")
+#: `conditional` sits second: a § 205.602 entry the CFR permits only for one named use is not
+#: evidence FOR an organic claim the way an unconditional § 205.601 citation is, and an
+#: aggregate containing one must say so rather than presenting as plain grower_reported.
+_INPUT_EVIDENCE_ORDER = ("contradicted", "conditional", "grower_reported", "national_list", "catalog_matched")
 
 
 def _organic_input_evidence(chemical_events):
@@ -876,6 +879,7 @@ def _organic_input_evidence(chemical_events):
     """
     from history.services.claim_authority import (
         LABEL_INPUT_NATIONAL_LIST,
+        LABEL_INPUT_NATIONAL_LIST_CONDITIONAL,
         LABEL_INPUT_NATIONAL_LIST_PROHIBITED,
         LABEL_INPUT_OMRI_LISTED,
         may_claim_input_listing,
@@ -885,7 +889,7 @@ def _organic_input_evidence(chemical_events):
     # claim_resolver and the module-level import would be a cycle.
     from history.services.claim_resolver import ORGANIC_APPROVED_VALUES, event_organic_classification
 
-    counts = {"catalog_matched": 0, "national_list": 0, "grower_reported": 0, "contradicted": 0}
+    counts = {"catalog_matched": 0, "national_list": 0, "grower_reported": 0, "conditional": 0, "contradicted": 0}
     for event in chemical_events:
         if event_organic_classification(event) not in ORGANIC_APPROVED_VALUES:
             continue
@@ -894,6 +898,12 @@ def _organic_input_evidence(chemical_events):
             counts["catalog_matched"] += 1
         elif label == LABEL_INPUT_NATIONAL_LIST:
             counts["national_list"] += 1
+        elif label == LABEL_INPUT_NATIONAL_LIST_CONDITIONAL:
+            # § 205.602 with a condition of use. Not `contradicted` — the CFR writes the use
+            # out as permitted — and not `national_list` either, because that tier means an
+            # unconditional § 205.601 allowance. Its own bucket, so the basis a caller reads
+            # says "there is a condition attached" instead of quietly rounding to either side.
+            counts["conditional"] += 1
         elif label == LABEL_INPUT_NATIONAL_LIST_PROHIBITED:
             # The grower classified this input as organic-approved and § 205.602 lists the
             # substance as PROHIBITED. `resolve_lot_organic_eligibility` already refuses the

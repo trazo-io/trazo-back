@@ -136,7 +136,25 @@ def resolve_lot_organic_eligibility(history, cert) -> LotOrganicEligibility:
         if event_organic_classification(e) in PROHIBITED_INPUT_VALUES:
             return True
         nl = getattr(e, "national_list_substance", None)
-        return bool(nl and getattr(nl, "status", None) == "prohibited")
+        if nl is None or getattr(nl, "status", None) != "prohibited":
+            return False
+        # 🔴 2026-08-20 — not every § 205.602 entry is an absolute bar. Three of them are
+        # conditional: the CFR prohibits the substance EXCEPT for one named use. Calcium
+        # chloride (brine process) is prohibited "except as a foliar spray to treat a
+        # physiological disorder associated with calcium uptake" — which is exactly what a
+        # Honeycrisp block's bitter-pit calcium programme is, and every organic Honeycrisp
+        # grower in Washington runs one.
+        #
+        # Failing the lot on that match would revoke the whole lot-level organic claim of a
+        # legitimately certified operation and publish "this lot: not represented as organic"
+        # to shoppers over a compliant practice. A false negative here is not the safe
+        # direction — it is a public accusation the farm did not earn.
+        #
+        # Whether the recorded purpose actually meets the condition is a certifier judgement
+        # over farmer-written free text, so the consumer gate does not attempt it; the
+        # certifier packet raises these under its [REVIEW] note instead, where a human reads
+        # the annotation beside the recorded use.
+        return not getattr(nl, "is_conditionally_permitted", False)
 
     prohibited = [
         (e.commercial_name or e.get_type_display() or "Unnamed input") for e in chemical_events if _is_prohibited(e)
@@ -239,8 +257,8 @@ def resolve_input_status(chemical_event) -> dict:
     the frontend currently re-derives this client-side; serving it keeps the
     chip vocabulary in one place and lets the audit export reuse it.
 
-        status: omri_listed | national_list_allowed | organic_approved
-                | conventional_documented | unclassified
+        status: omri_listed | national_list_allowed | national_list_conditional
+                | organic_approved | conventional_documented | unclassified
 
     The organic side of the vocabulary is NOT decided here — it is asked of
     ``claim_authority.may_claim_input_listing``. Until 2026-08-09 this function
@@ -254,6 +272,7 @@ def resolve_input_status(chemical_event) -> dict:
     from history.services.claim_authority import (
         LABEL_INPUT_GROWER_REPORTED,
         LABEL_INPUT_NATIONAL_LIST,
+        LABEL_INPUT_NATIONAL_LIST_CONDITIONAL,
         LABEL_INPUT_NATIONAL_LIST_PROHIBITED,
         LABEL_INPUT_OMRI_LISTED,
         may_claim_input_listing,
@@ -281,6 +300,16 @@ def resolve_input_status(chemical_event) -> dict:
     if restricted and not has_omri_match:
         status = "conventional_documented"
         label = "Conventional input · documented"
+    elif listing.safe_label == LABEL_INPUT_NATIONAL_LIST_CONDITIONAL and organic not in PROHIBITED_INPUT_VALUES:
+        # A § 205.602 entry the CFR permits for one stated use. Chipping it
+        # "Conventional input · documented" told shoppers an organic block had used a
+        # conventional input when the regulation writes that exact use out as allowed;
+        # chipping it "allowed" would overclaim in the other direction. Say what is known:
+        # it is listed, the listing carries a condition. The grower's own "not organic" pick
+        # still outranks this — a farmer saying the input was not organic-approved is a
+        # first-party statement no regulatory citation should soften.
+        status = "national_list_conditional"
+        label = LABEL_INPUT_NATIONAL_LIST_CONDITIONAL
     elif organic in PROHIBITED_INPUT_VALUES or listing.safe_label == LABEL_INPUT_NATIONAL_LIST_PROHIBITED:
         # Checked BEFORE the organic tiers: an explicitly not-organic input whose substance
         # happens to carry a § 205.601 citation must not be chipped as an allowed input, and a

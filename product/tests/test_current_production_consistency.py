@@ -15,7 +15,9 @@ The endpoint now derives when the pointer is missing, and heals the pointer on t
 
 from datetime import timedelta
 
+from django.test import TestCase
 from django.utils import timezone
+
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from carbon.models import CropType
@@ -24,7 +26,6 @@ from history.models import History
 from product.models import Parcel, Product
 from product.views import ParcelViewSet
 from users.models import User, WorksIn
-from django.test import TestCase
 
 
 class CurrentProductionConsistencyTests(TestCase):
@@ -35,17 +36,28 @@ class CurrentProductionConsistencyTests(TestCase):
         self.est = Establishment.objects.create(name="Blk", company=self.company)
         self.parcel = Parcel.objects.create(name="P1", establishment=self.est, area=1.0)
         crop = CropType.objects.create(
-            name="Walnuts", slug="walnuts-curprod", category="tree_nut", description="n",
-            typical_farm_size="10", growing_season="s", harvest_season="h",
-            emissions_per_hectare=0.0, industry_average=0.0, best_practice=0.0,
-            carbon_credit_potential=0.0, typical_cost_per_hectare=0.0, has_soil_contact=True,
+            name="Walnuts",
+            slug="walnuts-curprod",
+            category="tree_nut",
+            description="n",
+            typical_farm_size="10",
+            growing_season="s",
+            harvest_season="h",
+            emissions_per_hectare=0.0,
+            industry_average=0.0,
+            best_practice=0.0,
+            carbon_credit_potential=0.0,
+            typical_cost_per_hectare=0.0,
+            has_soil_contact=True,
         )
         self.product = Product.objects.create(name="Walnuts")
         self.crop = crop
 
     def _open_season(self):
         return History.objects.create(
-            parcel=self.parcel, product=self.product, crop_type=self.crop,
+            parcel=self.parcel,
+            product=self.product,
+            crop_type=self.crop,
             start_date=timezone.now() - timedelta(days=30),
         )
 

@@ -33,14 +33,25 @@ class UncitedCheckLabellingTests(TestCase):
         est = Establishment.objects.create(name="U Block", company=company)
         parcel = Parcel.objects.create(name="P1", establishment=est, area=1.0)
         crop = CropType.objects.create(
-            name="Walnuts", slug="walnuts-uncited", category="tree_nut", description="n",
-            typical_farm_size="10", growing_season="s", harvest_season="h",
-            emissions_per_hectare=0.0, industry_average=0.0, best_practice=0.0,
-            carbon_credit_potential=0.0, typical_cost_per_hectare=0.0, has_soil_contact=True,
+            name="Walnuts",
+            slug="walnuts-uncited",
+            category="tree_nut",
+            description="n",
+            typical_farm_size="10",
+            growing_season="s",
+            harvest_season="h",
+            emissions_per_hectare=0.0,
+            industry_average=0.0,
+            best_practice=0.0,
+            carbon_credit_potential=0.0,
+            typical_cost_per_hectare=0.0,
+            has_soil_contact=True,
         )
         product = Product.objects.create(name="Walnuts")
         self.history = History.objects.create(
-            parcel=parcel, product=product, crop_type=crop,
+            parcel=parcel,
+            product=product,
+            crop_type=crop,
             start_date=timezone.now() - timedelta(days=200),
             finish_date=timezone.now() - timedelta(days=10),
         )
@@ -72,11 +83,7 @@ class UncitedCheckLabellingTests(TestCase):
 
     def test_every_other_non_pass_row_carries_a_citation(self):
         """If a new uncited check appears, it has to be labelled deliberately."""
-        uncited = [
-            r["label"]
-            for r in self._rows()
-            if "§" not in r["label"] and r["label"] != "Documentation depth"
-        ]
+        uncited = [r["label"] for r in self._rows() if "§" not in r["label"] and r["label"] != "Documentation depth"]
         self.assertEqual(
             uncited,
             [],

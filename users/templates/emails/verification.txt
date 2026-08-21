@@ -21,16 +21,16 @@ Click this link to verify your email address and activate your account:
 Once your account is verified, you'll have full access to all Trazo features:
 
 {% if user_type == 'producer' %}
-• Transparency score tracking and calculation
+• Activity logging with certifier-required detail checks
 • EPA/USDA-sourced environmental data
-• A certifier packet built from the records you already keep
+• A certifier packet built from those records, on the Compliance plan
 • QR code generation for products
 • Team management and role assignments
 {% else %}
-• QR code scanning for product transparency
-• See how your food was grown
+• Scan a product's QR code to open its record
+• See how your food was grown, in plain language
 • Farm-to-table production journey
-• Transparency scores and farming practices
+• Documented farming practices, with dates and photos
 {% endif %}
 
 This verification link will expire in 24 hours. If you didn't create an account with Trazo, you can safely ignore this email.
@@ -38,8 +38,8 @@ This verification link will expire in 24 hours. If you didn't create an account 
 The Trazo Team
 
 ---
-Trazo - Agricultural Transparency Platform
-Your buyers want proof. Give it to them.
+Trazo - Organic recordkeeping for specialty crop farms
+One entry, two outputs. Your certifier gets the record. Your buyer gets the story.
 
 Visit us: https://trazo.io
 Support: support@trazo.io

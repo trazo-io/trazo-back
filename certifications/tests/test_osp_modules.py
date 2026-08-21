@@ -190,6 +190,23 @@ class G30BranchingTests(TestCase):
         bad = invalid_choice_answers(self.module, {"seeds_used": {"value": ["glyphosate"]}})
         self.assertEqual(bad, {"seeds_used": ["glyphosate"]})
 
+    def test_list_sent_to_a_single_choice_question_is_a_validation_error_not_a_crash(self):
+        """A radio/select answered with a LIST must be reported, not raise.
+
+        `value not in allowed` is a set membership test; an unhashable value raised
+        TypeError inside the validator and the module save answered 500. Any client
+        holding an older content version — where a question was a checkbox_group before
+        it became a radio — sends exactly this shape. Found 2026-08-21 writing a real OSP.
+        """
+        radio = next(q for page in self.module.pages for q in page.questions if q.kind in ("radio", "select"))
+        bad = invalid_choice_answers(self.module, {radio.key: {"value": ["a", "b"]}})
+        self.assertIn(radio.key, bad)
+        self.assertEqual(bad[radio.key], ["a", "b"])
+
+        # A dict is just as unhashable, and just as much a client bug.
+        bad2 = invalid_choice_answers(self.module, {radio.key: {"value": {"x": 1}}})
+        self.assertIn(radio.key, bad2)
+
     def test_progress_counts(self):
         answers = {
             "seeds_used": {"value": ["none"]},

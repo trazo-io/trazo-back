@@ -146,7 +146,13 @@ def invalid_choice_answers(module: Module, answers: dict) -> dict:
             continue
         allowed = option_values(q)
         if q.kind in ("radio", "select"):
-            if value not in allowed:
+            # `value not in allowed` is a set membership test, so an unhashable value —
+            # a client sending a LIST to a single-choice question, which is exactly what a
+            # checkbox_group→radio content change produces on an old client — raised
+            # TypeError here and surfaced as a 500 on the module save. Malformed input is
+            # a validation failure, not a server error: report it like any other bad choice.
+            # Found 2026-08-21 writing the Calapooia Bend OSP.
+            if isinstance(value, (list, tuple, dict, set)) or value not in allowed:
                 bad[key] = value
         else:
             if not isinstance(value, (list, tuple)):

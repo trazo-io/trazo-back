@@ -154,7 +154,7 @@ class HistoryAdmin(admin.ModelAdmin):
         SoilManagementEventInline,
         LabelImageInline,
     ]
-    raw_id_fields = ("post_harvest_facility",)
+    filter_horizontal = ("post_harvest_facilities",)
 
     # Trust metrics and analytics in readonly fields
     readonly_fields = (
@@ -175,10 +175,11 @@ class HistoryAdmin(admin.ModelAdmin):
         (
             "Audit Records (CCOF)",
             {
-                "fields": ("post_harvest_facility",),
+                "fields": ("post_harvest_facilities",),
                 "description": (
-                    "Off-farm post-harvest handler (huller / dryer / cold storage) this lot was "
-                    "sent to (CCOF G6.1). Create the facility first under "
+                    "Off-farm post-harvest handlers (huller / dryer / cold storage / packer) this lot "
+                    "was sent to (CCOF G6.1) — a lot with a fresh grade and a process grade has TWO. "
+                    "Create each facility first under "
                     "Certifications &gt; Post-harvest facilities, then link it here. Surfaces in "
                     "the audit export's Post-Harvest section. Container labels (G7.0) are added "
                     "in the inline below."

@@ -149,30 +149,45 @@ class ProductionHandlerLinkTests(TestCase):
 
     def test_production_can_be_linked_to_its_own_farms_handler(self):
         self.client.force_authenticate(user=self.user)
-        resp = self.client.patch(self._url(), {"post_harvest_facility": self.facility.id}, format="json")
+        resp = self.client.patch(self._url(), {"post_harvest_facilities": [self.facility.id]}, format="json")
         self.assertIn(resp.status_code, (200, 202), resp.content)
         self.production.refresh_from_db()
-        self.assertEqual(self.production.post_harvest_facility_id, self.facility.id)
+        self.assertEqual(list(self.production.post_harvest_facilities.values_list("id", flat=True)), [self.facility.id])
 
     def test_production_cannot_be_linked_to_another_farms_handler(self):
         """Otherwise a stranger's organic certificate prints inside this operation's packet."""
         self.client.force_authenticate(user=self.user)
-        resp = self.client.patch(self._url(), {"post_harvest_facility": self.foreign_facility.id}, format="json")
+        resp = self.client.patch(self._url(), {"post_harvest_facilities": [self.foreign_facility.id]}, format="json")
         self.assertEqual(resp.status_code, 400, resp.content)
         self.production.refresh_from_db()
-        self.assertIsNone(self.production.post_harvest_facility_id)
+        self.assertEqual(self.production.post_harvest_facilities.count(), 0)
+
+    def test_a_foreign_handler_is_refused_even_when_a_valid_one_leads_the_list(self):
+        """The validator runs over EVERY id — a per-object check would stop at the first.
+
+        Added 2026-08-21 with the single-FK → many-relation change: a list gives the caller a
+        place to hide a stranger's facility behind a legitimate one, and that facility's
+        organic certificate would then print inside this operation's packet.
+        """
+        self.client.force_authenticate(user=self.user)
+        resp = self.client.patch(
+            self._url(),
+            {"post_harvest_facilities": [self.facility.id, self.foreign_facility.id]},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400, resp.content)
+        self.assertEqual(self.production.post_harvest_facilities.count(), 0)
 
     def test_detail_payload_carries_the_certificate_summary(self):
-        self.production.post_harvest_facility = self.facility
-        self.production.save(update_fields=["post_harvest_facility"])
+        self.production.post_harvest_facilities.add(self.facility)
         self.client.force_authenticate(user=self.user)
         resp = self.client.get(self._url())
         self.assertEqual(resp.status_code, 200)
-        detail = resp.data.get("post_harvest_facility_detail")
-        self.assertIsNotNone(detail, "handler summary missing from the production payload")
-        self.assertEqual(detail["name"], "Central Valley Hulling")
-        self.assertEqual(detail["certification_number"], "CCOF-12345")
-        self.assertIs(detail["cert_is_current"], True)
+        details = resp.data.get("post_harvest_facilities_detail")
+        self.assertTrue(details, "handler summary missing from the production payload")
+        self.assertEqual(details[0]["name"], "Central Valley Hulling")
+        self.assertEqual(details[0]["certification_number"], "CCOF-12345")
+        self.assertIs(details[0]["cert_is_current"], True)
 
 
 class FacilityReachesTheAuditExportTests(TestCase):
@@ -196,31 +211,83 @@ class FacilityReachesTheAuditExportTests(TestCase):
         self.assertNotIn("Handler / Facility", _text(elements))
 
     def test_linked_facility_prints_the_certificate_block(self):
-        self.production.post_harvest_facility = PostHarvestFacility.objects.create(
-            establishment=self.establishment,
-            name="Central Valley Hulling",
-            facility_type="huller",
-            certification_number="CCOF-12345",
-            certifier_name="CCOF Certification Services",
-            effective_date=timezone.now().date() - timedelta(days=30),
+        self.production.post_harvest_facilities.add(
+            PostHarvestFacility.objects.create(
+                establishment=self.establishment,
+                name="Central Valley Hulling",
+                facility_type="huller",
+                certification_number="CCOF-12345",
+                certifier_name="CCOF Certification Services",
+                effective_date=timezone.now().date() - timedelta(days=30),
+            )
         )
-        self.production.save(update_fields=["post_harvest_facility"])
 
         text = _text(AuditExportService(self.production, "organic")._build_post_harvest_section())
         self.assertIn("Central Valley Hulling", text)
         self.assertIn("CCOF-12345", text)
         self.assertIn("DOCUMENTED", text)
 
-    def test_stale_certificate_is_flagged_not_passed(self):
-        self.production.post_harvest_facility = PostHarvestFacility.objects.create(
+    def test_both_handlers_of_a_split_grade_lot_print_their_own_certificate(self):
+        """🔴 2026-08-21 — one lot, TWO certified handlers.
+
+        Calapooia Bend ships each blueberry season's fresh grade to Organically Grown Company
+        and its process grade to Willamette Valley Fruit — two certified operations, separate
+        loads, separate bills of lading. Five of that farm's nine shipped lots were that shape,
+        and the link was a single ForeignKey, so the operator could record at most half of what
+        § 205.272 asks for. Worse than the omission: the packet's "no handler certificate on
+        file" REVIEW cleared as soon as ONE was linked, so the second handler's certificate
+        silently stopped being asked for.
+
+        Each handler needs its OWN block — its own certificate number, certifier and 15-month
+        freshness verdict. One merged block would attach one certificate to both.
+        """
+        fresh = PostHarvestFacility.objects.create(
             establishment=self.establishment,
-            name="Stale Huller",
-            facility_type="huller",
-            # Older than the ~15-month CCOF G6.1 freshness window.
-            effective_date=timezone.now().date() - timedelta(days=600),
+            name="Organically Grown Company",
+            facility_type="cold_storage",
+            certification_number="OTCO-0042",
+            certifier_name="Oregon Tilth Certified Organic",
+            effective_date=timezone.now().date() - timedelta(days=30),
         )
-        self.production.save(update_fields=["post_harvest_facility"])
+        process = PostHarvestFacility.objects.create(
+            establishment=self.establishment,
+            name="Willamette Valley Fruit Co.",
+            facility_type="custom",
+            certification_number="OTCO-0318",
+            certifier_name="Oregon Tilth Certified Organic",
+            effective_date=timezone.now().date() - timedelta(days=600),  # stale copy on file
+        )
+        self.production.post_harvest_facilities.set([fresh, process])
 
         text = _text(AuditExportService(self.production, "organic")._build_post_harvest_section())
-        self.assertIn("[GAP]", text)
+        self.assertIn("Organically Grown Company", text)
+        self.assertIn("OTCO-0042", text)
+        self.assertIn("Willamette Valley Fruit Co.", text)
+        self.assertIn("OTCO-0318", text)
+        # Per-handler verdicts, not one verdict covering both: the fresh handler's copy is
+        # current, the process handler's is 20 months old.
+        self.assertIn("DOCUMENTED", text)
+        self.assertIn("more than 15 months old", text)
+
+    def test_stale_certificate_is_flagged_not_passed(self):
+        self.production.post_harvest_facilities.add(
+            PostHarvestFacility.objects.create(
+                establishment=self.establishment,
+                name="Stale Huller",
+                facility_type="huller",
+                # Older than the ~15-month CCOF G6.1 freshness window.
+                effective_date=timezone.now().date() - timedelta(days=600),
+            )
+        )
+
+        text = _text(AuditExportService(self.production, "organic")._build_post_harvest_section())
+        # A NOP certificate does not expire (§ 205.404(d)) — the COPY ON FILE goes stale,
+        # because the certifier reissues after each § 205.406 annual update. The flag used to
+        # say "expired", contradicting this same document's Active Certification Summary
+        # footnote, and was the only [GAP] in a packet that otherwise flags REVIEW / WARNING /
+        # NON-CONFORMANCE.
+        self.assertIn("[REVIEW]", text)
+        self.assertIn("more than 15 months old", text)
+        self.assertNotIn("expired", text)
+        self.assertNotIn("[GAP]", text)
         self.assertNotIn("DOCUMENTED", text)

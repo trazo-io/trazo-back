@@ -31,14 +31,25 @@ class LandRequirementsVerificationSourceTests(TestCase):
         self.est = Establishment.objects.create(name="L Block", company=company)
         parcel = Parcel.objects.create(name="P1", establishment=self.est, area=1.0)
         crop = CropType.objects.create(
-            name="Walnuts", slug="walnuts-land", category="tree_nut", description="n",
-            typical_farm_size="10", growing_season="s", harvest_season="h",
-            emissions_per_hectare=0.0, industry_average=0.0, best_practice=0.0,
-            carbon_credit_potential=0.0, typical_cost_per_hectare=0.0, has_soil_contact=True,
+            name="Walnuts",
+            slug="walnuts-land",
+            category="tree_nut",
+            description="n",
+            typical_farm_size="10",
+            growing_season="s",
+            harvest_season="h",
+            emissions_per_hectare=0.0,
+            industry_average=0.0,
+            best_practice=0.0,
+            carbon_credit_potential=0.0,
+            typical_cost_per_hectare=0.0,
+            has_soil_contact=True,
         )
         product = Product.objects.create(name="Walnuts")
         self.history = History.objects.create(
-            parcel=parcel, product=product, crop_type=crop,
+            parcel=parcel,
+            product=product,
+            crop_type=crop,
             start_date=timezone.now() - timedelta(days=200),
             finish_date=timezone.now() - timedelta(days=10),
         )
@@ -83,7 +94,9 @@ class LandRequirementsVerificationSourceTests(TestCase):
         parcel = self.history.parcel
         for yr in (2023, 2024, 2025):
             ParcelCropHistory.objects.create(
-                parcel=parcel, year=yr, crop_grown="Walnuts",
+                parcel=parcel,
+                year=yr,
+                crop_grown="Walnuts",
                 production_method="organic",
                 substances_applied="None prohibited.",
                 date_last_prohibited=None,
@@ -91,7 +104,8 @@ class LandRequirementsVerificationSourceTests(TestCase):
 
         row = self._land_row()
         self.assertEqual(
-            row["status"], "INFO",
+            row["status"],
+            "INFO",
             "complete field history with nothing prohibited is the § 205.202 evidence USDA's "
             "own form asks for — there is nothing for the grower to fix, so it must not sit "
             "on the readiness card as an action",
@@ -129,12 +143,19 @@ class LandRequirementsVerificationSourceTests(TestCase):
         parcel = self.history.parcel
         for yr in (2023, 2024, 2025):
             ParcelCropHistory.objects.create(
-                parcel=parcel, year=yr, crop_grown="Walnuts", production_method="organic",
-                substances_applied="None prohibited.", date_last_prohibited=None,
+                parcel=parcel,
+                year=yr,
+                crop_grown="Walnuts",
+                production_method="organic",
+                substances_applied="None prohibited.",
+                date_last_prohibited=None,
             )
         ChemicalEvent.objects.create(
-            history=self.history, date=timezone.now() - timedelta(days=100),
-            description="unclassified input", commercial_name="Some Input", type="FU",
+            history=self.history,
+            date=timezone.now() - timedelta(days=100),
+            description="unclassified input",
+            commercial_name="Some Input",
+            type="FU",
             created_by=self.user,
         )
         row = self._land_row()

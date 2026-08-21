@@ -208,3 +208,18 @@ class OspAnnualUpdateTests(_Base):
         self.assertIn("Narrative only", text)
         self.assertNotIn("Sections Not Attested", text)
         self.assertNotIn("Sections With Changes", text)
+
+    def test_a_revoked_certification_carries_no_continuation_duty(self):
+        """§ 205.406 attaches to a CERTIFIED operation. A revoked one is not one.
+
+        The prose still distinguishes this from "never certified" — they are different facts
+        and a reader needs to know which they are looking at.
+        """
+        cert = self._certify(date(2020, 1, 1))
+        cert.verification_status = "revoked"
+        cert.save(update_fields=["verification_status"])
+        OrganicSystemPlan.objects.create(establishment=self.establishment, version_number=1, status="active")
+        text = _section_text(self._svc()._build_osp_reference_section())
+        self.assertNotIn("[REVIEW] 7 CFR 205.406", text)
+        self.assertIn("currently active", text)
+        self.assertNotIn("§ 205.401 application", text)

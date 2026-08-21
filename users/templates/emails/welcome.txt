@@ -4,43 +4,43 @@ WELCOME TO TRAZO!
 Hi {{ user.first_name|default:"there" }},
 
 {% if user_type == 'producer' %}
-Welcome to Trazo, the transparency platform built for specialty crop farms.
+Welcome to Trazo, the organic recordkeeping platform built for specialty crop farms.
 
-Document every step of how your food is grown, earn transparency scores, and give your buyers the proof they need. More documentation means more trust and premium market positioning.
+Log what you did in the field, once. Trazo turns that entry into the documentation your certifier reviews - and a plain-language page your buyer can check.
 
 What you can do with Trazo:
-• Document agricultural practices with transparency scores
-• Generate QR codes so consumers see how food was grown
-• Track 7 event types across 33 pre-configured US crops
-• Build buyer trust with dated, photo-backed records
+• Log activities as you work - by form, crop template, or voice
+• Answer your Organic System Plan in guided modules
+• Track 7 activity types across 33 pre-configured US crops
+• Generate a QR-coded buyer page from the season's records
 • Manage your team with role-based access
 
 Get started: https://app.trazo.io
 {% else %}
-Welcome to Trazo, where transparency meets sustainability.
+Welcome to Trazo.
 
-Scan QR codes on agricultural products to discover exactly how your food was grown. See transparency scores, verified farming practices, and the complete production journey.
+Scan the QR code on a product to see how it was grown - the practices the farm documented, with dates and photos, straight from its own records.
 
-What you can discover:
-• Transparency scores showing how food was grown
-• Documented farming practices and events
-• Farm-to-table production journey
-• Photo evidence attached to the practices you logged
+What you can see:
+• The season's documented practices, in plain language
+• Dates and photos from the farm's own records
+• Certifications checked against the USDA Organic Integrity Database
+• The farm's story and how to reach it
 
 Get started: https://consumer.trazo.io
 {% endif %}
 
-Your account is ready to use. We're excited to have you join the movement toward more transparent and sustainable agriculture.
+Your account is ready to use. We're glad to have you here.
 
 If you have any questions or need help getting started, don't hesitate to reach out to our support team.
 
-Welcome to the future of agricultural transparency!
+Welcome aboard.
 
 The Trazo Team
 
 ---
-Trazo - Agricultural Transparency Platform
-Your buyers want proof. Give it to them.
+Trazo - Organic recordkeeping for specialty crop farms
+One entry, two outputs. Your certifier gets the record. Your buyer gets the story.
 
 Visit us: https://trazo.io
 Support: support@trazo.io

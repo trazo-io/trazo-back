@@ -70,14 +70,14 @@ def apply_loewen_audit_fields(prod):
     keep_invoices = {s["invoice_number"] for s in LOEWEN_SALES}
     prod.sales_records.exclude(invoice_number__in=keep_invoices).delete()
 
-    fac = getattr(prod, "post_harvest_facility", None)
-    if fac is not None:
-        prod.post_harvest_facility = None
-        prod.save(update_fields=["post_harvest_facility"])
-        try:
-            fac.delete()
-        except Exception:  # noqa: BLE001 — non-fatal
-            pass
+    stale_facilities = list(prod.post_harvest_facilities.all())
+    if stale_facilities:
+        prod.post_harvest_facilities.clear()
+        for fac in stale_facilities:
+            try:
+                fac.delete()
+            except Exception:  # noqa: BLE001 — non-fatal
+                pass
 
     try:
         from certifications.models import OrganicSystemPlan, OSPChangeNotification

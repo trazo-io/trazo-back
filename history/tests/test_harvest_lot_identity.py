@@ -276,6 +276,9 @@ class PlantingNopGapTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.history = _make_history(crop_name="Avocado")
+        # § 205.204(a)(4) is the PERENNIAL planting-stock rule, so these fixtures say so.
+        cls.history.type = "OR"
+        cls.history.save(update_fields=["type"])
 
     def _planting(self, **kwargs):
         payload = {
@@ -324,6 +327,38 @@ class PlantingNopGapTests(TestCase):
         )
         self.assertIn("205.204(a)(4)", text)
         self.assertIn("UNDER the 12-month minimum", text)
+
+    def test_annual_transplants_are_not_judged_against_the_perennial_year(self):
+        """§ 205.204(a)(4) governs perennial planting stock, not annual seedlings.
+
+        🔴 2026-08-21 — the check fired on ANY planting event carrying an organic-management
+        date, so an organic vegetable grower who recorded the nursery date for purchased onion
+        transplants read "this perennial planting stock … its crop may not be sold as organic
+        until the year has elapsed" in the packet. Annual seedlings fall under
+        § 205.204(a)(2)-(3), which has no 12-month clock, and the crop is perfectly saleable.
+        """
+        from datetime import timedelta
+
+        from history.services.audit_export_service import AuditExportService
+
+        annual = _make_history(crop_name="Onions")
+        annual.type = "GA"
+        annual.save(update_fields=["type"])
+        event = ProductionEvent.objects.create(
+            history=annual,
+            type="TR",
+            date=timezone.now(),
+            description="Transplanting",
+            seeds_source="commercial",
+        )
+        event.stock_organic_management_start = event.date.date() - timedelta(days=76)
+        event.save()
+
+        text = " ".join(getattr(el, "text", "") or "" for el in AuditExportService(annual)._build_seed_stock_section())
+        self.assertNotIn("UNDER the 12-month minimum", text)
+        self.assertNotIn("may not be sold as organic", text)
+        # The date itself is still worth showing — it is just not a verdict.
+        self.assertIn("Organic management since", text)
 
     def test_perennial_year_met_is_not_flagged(self):
         from datetime import timedelta

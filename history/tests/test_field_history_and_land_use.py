@@ -250,6 +250,41 @@ class FieldHistoryPacketTests(TestCase):
         self.assertIn("CONTRADICTION", text)
         self.assertIn("declare that no materials were applied", text)
 
+    def test_a_land_use_table_alongside_the_declaration_is_not_a_contradiction(self):
+        """USDA form #2 asks for BOTH the "no materials applied" tick and the 3-year table.
+
+        Filling in both is the form completed correctly. Flagging it meant every honest
+        affidavit on an organic operation drew a § 205.202(b) REVIEW — six in one packet on
+        the 2026-08-21 pilot renewal. A contradiction needs a row that NAMES something applied.
+        """
+        LandownerAffidavit.objects.create(
+            parcel=self.parcel,
+            previous_manager_name="J. Consistent",
+            no_materials_applied=True,
+            yearly_history=[
+                {"year": 2023, "land_use": "pasture"},
+                {"year": 2024, "land_use": "fallow, cover crop"},
+            ],
+        )
+        text = self._text()
+        self.assertNotIn("CONTRADICTION", text)
+
+    def test_prose_in_the_history_field_does_not_become_a_year_count(self):
+        """`yearly_history` is an unvalidated JSONField; a stored STRING made len() count characters.
+
+        The packet printed "CONTRADICTION — declared none, 56 year(s) listed" on a three-year
+        land-history affidavit — a number a certifier cannot reconcile with anything.
+        """
+        LandownerAffidavit.objects.create(
+            parcel=self.parcel,
+            previous_manager_name="J. Prose",
+            no_materials_applied=True,
+            yearly_history="Organic management from purchase; certified 2006 onward.",
+        )
+        text = self._text()
+        self.assertNotIn("56 year(s) listed", text)
+        self.assertNotIn("CONTRADICTION", text)
+
     def test_affidavit_shows_the_management_window_it_attests_for(self):
         """Without it, a signer who managed one of three years reads as covering all three."""
         LandownerAffidavit.objects.create(

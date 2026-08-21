@@ -178,6 +178,18 @@ SECTION_601_ALLOWED = [
     ),
 ]
 
+# 🔴 The KIND of every annotation is declared per section, never guessed from the prose.
+# A § 205.601/§ 205.602 note states a condition under which the CFR PERMITS the substance; a
+# § 205.105 note explains why the substance is banned and permits nothing. Both are prose in
+# `restriction_notes`, so only this declaration separates "calcium chloride for bitter pit is
+# allowed" from "glyphosate is a synthetic herbicide". See NationalListSubstance.annotation_kind.
+ANNOTATION_BY_SECTION = {
+    "205.601": NationalListSubstance.ANNOTATION_CONDITION,
+    "205.602": NationalListSubstance.ANNOTATION_CONDITION,
+    "205.105": NationalListSubstance.ANNOTATION_RATIONALE,
+}
+
+
 # 7 CFR 205.602 — Nonsynthetic substances PROHIBITED for use in organic crop production.
 SECTION_602_PROHIBITED = [
     (None, "prohibited", "Ash from manure burning", None),
@@ -272,6 +284,9 @@ class Command(BaseCommand):
                     category=category,
                     status="allowed",
                     restriction_notes=notes,
+                    annotation_kind=(
+                        ANNOTATION_BY_SECTION["205.601"] if notes else NationalListSubstance.ANNOTATION_NONE
+                    ),
                 ),
             )
             created += 1 if was_created else 0
@@ -287,6 +302,9 @@ class Command(BaseCommand):
                     category=category,
                     status="prohibited",
                     restriction_notes=notes,
+                    annotation_kind=(
+                        ANNOTATION_BY_SECTION["205.602"] if notes else NationalListSubstance.ANNOTATION_NONE
+                    ),
                 ),
             )
             created += 1 if was_created else 0
@@ -303,6 +321,9 @@ class Command(BaseCommand):
                     category=category,
                     status="prohibited",
                     restriction_notes=notes,
+                    annotation_kind=(
+                        ANNOTATION_BY_SECTION["205.105"] if notes else NationalListSubstance.ANNOTATION_NONE
+                    ),
                 ),
             )
             created += 1 if was_created else 0

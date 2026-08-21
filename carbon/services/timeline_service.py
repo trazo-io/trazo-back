@@ -305,6 +305,14 @@ class TimelineService:
 
             event_data = {
                 "id": f"chemical_{event.id}",
+                # The record's own id and family code, stated rather than left to be
+                # parsed back out of the "chemical_123" key. This payload is owner-only
+                # (CarbonViewSet.complete_summary is authenticated and owner-scoped), and
+                # the producer's Production Profile needs them to open a correction
+                # against the event it is rendering. Same two keys the consumer
+                # serializer exposes to owners, so one frontend builder serves both.
+                "record_id": event.id,
+                "event_type": 2,
                 "type": event_type,
                 "date": TimelineService._get_event_date(event).isoformat(),
                 "description": escape(getattr(event, "description", "") or ""),
@@ -400,6 +408,14 @@ class TimelineService:
 
             event_data = {
                 "id": f"production_{event.id}",
+                # The record's own id and family code, stated rather than left to be
+                # parsed back out of the "production_123" key. This payload is owner-only
+                # (CarbonViewSet.complete_summary is authenticated and owner-scoped), and
+                # the producer's Production Profile needs them to open a correction
+                # against the event it is rendering. Same two keys the consumer
+                # serializer exposes to owners, so one frontend builder serves both.
+                "record_id": event.id,
+                "event_type": 1,
                 "type": event_type,
                 "date": TimelineService._get_event_date(event).isoformat(),
                 "description": escape(getattr(event, "notes", "") or getattr(event, "description", "") or ""),
@@ -446,6 +462,14 @@ class TimelineService:
         try:
             event_data = {
                 "id": f"equipment_{event.id}",
+                # The record's own id and family code, stated rather than left to be
+                # parsed back out of the "equipment_123" key. This payload is owner-only
+                # (CarbonViewSet.complete_summary is authenticated and owner-scoped), and
+                # the producer's Production Profile needs them to open a correction
+                # against the event it is rendering. Same two keys the consumer
+                # serializer exposes to owners, so one frontend builder serves both.
+                "record_id": event.id,
+                "event_type": 4,
                 "type": "production.equipment",
                 "date": TimelineService._get_event_date(event).isoformat(),
                 "description": escape(getattr(event, "notes", "") or getattr(event, "description", "") or ""),
@@ -607,6 +631,14 @@ class TimelineService:
 
             event_data = {
                 "id": f"soil_{event.id}",
+                # The record's own id and family code, stated rather than left to be
+                # parsed back out of the "soil_123" key. This payload is owner-only
+                # (CarbonViewSet.complete_summary is authenticated and owner-scoped), and
+                # the producer's Production Profile needs them to open a correction
+                # against the event it is rendering. Same two keys the consumer
+                # serializer exposes to owners, so one frontend builder serves both.
+                "record_id": event.id,
+                "event_type": 5,
                 "type": event_type,
                 "date": TimelineService._get_event_date(event).isoformat(),
                 "description": escape(getattr(event, "description", "") or ""),
@@ -667,6 +699,14 @@ class TimelineService:
 
             event_data = {
                 "id": f"weather_{event.id}",
+                # The record's own id and family code, stated rather than left to be
+                # parsed back out of the "weather_123" key. This payload is owner-only
+                # (CarbonViewSet.complete_summary is authenticated and owner-scoped), and
+                # the producer's Production Profile needs them to open a correction
+                # against the event it is rendering. Same two keys the consumer
+                # serializer exposes to owners, so one frontend builder serves both.
+                "record_id": event.id,
+                "event_type": 0,
                 "type": event_type,
                 "date": TimelineService._get_event_date(event).isoformat(),
                 "description": escape(getattr(event, "description", "") or ""),
@@ -698,6 +738,14 @@ class TimelineService:
         try:
             event_data = {
                 "id": f"general_{event.id}",
+                # The record's own id and family code, stated rather than left to be
+                # parsed back out of the "general_123" key. This payload is owner-only
+                # (CarbonViewSet.complete_summary is authenticated and owner-scoped), and
+                # the producer's Production Profile needs them to open a correction
+                # against the event it is rendering. Same two keys the consumer
+                # serializer exposes to owners, so one frontend builder serves both.
+                "record_id": event.id,
+                "event_type": 3,
                 "type": "general.activity",
                 "date": TimelineService._get_event_date(event).isoformat(),
                 "description": escape(getattr(event, "description", "") or ""),
@@ -733,6 +781,14 @@ class TimelineService:
 
             event_data = {
                 "id": f"pest_{event.id}",
+                # The record's own id and family code, stated rather than left to be
+                # parsed back out of the "pest_123" key. This payload is owner-only
+                # (CarbonViewSet.complete_summary is authenticated and owner-scoped), and
+                # the producer's Production Profile needs them to open a correction
+                # against the event it is rendering. Same two keys the consumer
+                # serializer exposes to owners, so one frontend builder serves both.
+                "record_id": event.id,
+                "event_type": 6,
                 "type": "pest.management",
                 "date": TimelineService._get_event_date(event).isoformat(),
                 "description": escape(getattr(event, "description", "") or ""),
@@ -766,6 +822,14 @@ class TimelineService:
         try:
             event_data = {
                 "id": f"business_{event.id}",
+                # The record's own id and family code, stated rather than left to be
+                # parsed back out of the "business_123" key. This payload is owner-only
+                # (CarbonViewSet.complete_summary is authenticated and owner-scoped), and
+                # the producer's Production Profile needs them to open a correction
+                # against the event it is rendering. Same two keys the consumer
+                # serializer exposes to owners, so one frontend builder serves both.
+                "record_id": event.id,
+                "event_type": 7,
                 "type": "business.activity",
                 "date": TimelineService._get_event_date(event).isoformat(),
                 "description": escape(getattr(event, "description", "") or ""),

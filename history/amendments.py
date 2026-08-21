@@ -202,7 +202,135 @@ def apply_amendment(*, event, event_type, field_name, new_value, reason, user):
         event_id=event.id,
         history=event.history,
         field_name=field_name,
-        field_label=getattr(field, "verbose_name", "") or field_name,
+        field_label=history_field_label(field_name),
+        original_value=_render(original),
+        corrected_value=_render(coerced),
+        reason=reason,
+        amended_by=user if getattr(user, "is_authenticated", False) else None,
+        amended_by_name=_actor_name(user),
+    )
+
+
+# --------------------------------------------------------------------------------------
+# The season header (F7, 2026-08-21)
+# --------------------------------------------------------------------------------------
+
+# The lot header a finished season is identified BY — the same tuple
+# `HistoryWriteSerializer._CLOSED_RECORD_FIELDS` freezes, minus `finish_date`.
+#
+# `finish_date` is deliberately NOT correctable here. Re-dating a finished season is not a
+# correction to what was recorded: `retention_until` is computed once inside `History.finish()`
+# and moving the date afterwards leaves the 5-year floor keyed to the old one, and clearing it
+# reopens every event lock at once. That is a reopen, and it needs its own decision, not a
+# text box labelled "correct this".
+HISTORY_AMENDABLE_FIELDS = (
+    "production_amount",
+    "production_unit",
+    "lot_id",
+    "quality_grade",
+    "harvest_method",
+)
+
+# Written out rather than derived from `verbose_name`. None of these columns declares one, so
+# Django derives the label from the attribute name and the picker read "production amount",
+# "lot id", "harvest method" — lowercase, underscored-looking, and not what the page beside it
+# calls them. `.title()` is not the fix either: it is the same function that turned an
+# operator's "WA Extra Fancy" into "Wa Extra Fancy" on 2026-08-20. Five fixed strings, named.
+HISTORY_FIELD_LABELS = {
+    "production_amount": "Production amount",
+    "production_unit": "Unit",
+    "lot_id": "Lot ID",
+    "quality_grade": "Quality grade",
+    "harvest_method": "Harvest method",
+}
+
+
+def history_amendable_fields():
+    """The season-header fields a correction may target, as model field objects."""
+    from history.models import History
+
+    by_name = {f.name: f for f in History._meta.get_fields() if getattr(f, "concrete", False)}
+    return [by_name[name] for name in HISTORY_AMENDABLE_FIELDS if name in by_name]
+
+
+def history_field_label(field_name: str) -> str:
+    """The farmer-facing name for a lot-header field, captured onto the amendment row."""
+    return HISTORY_FIELD_LABELS.get(field_name, field_name)
+
+
+@transaction.atomic
+def apply_history_amendment(*, history, field_name, new_value, reason, user):
+    """Correct one field on a season HEADER, recording the original.
+
+    🔴 2026-08-21 (F7). The closed-record guard freezes the lot header once a season is
+    finished — right, it is the traceability spine § 205.103(b)(2) asks to be auditable —
+    and events on that season have had `/amend` since the corrections table shipped. The
+    header had nothing: a farmer who finished with the wrong yield could neither edit it
+    (423) nor amend it, and the only repair was a developer with ORM access. An
+    uncorrectable wrong number is still a wrong number, and a repair with no row behind it
+    is the shape NOP 4002 calls concealment.
+
+    Same contract as `apply_amendment`: the header carries the corrected value so every
+    export reads the truth without special-casing, and the amendment carries the original,
+    the actor and the mandatory reason.
+    """
+    from history.models import EventAmendment, History
+
+    reason = (reason or "").strip()
+    if not reason:
+        raise AmendmentError({"reason": "Say why this record is being corrected. The reason is part of the record."})
+
+    if not isinstance(history, History):
+        raise AmendmentError({"history": "That is not a production."})
+
+    allowed = {f.name: f for f in history_amendable_fields()}
+    field = allowed.get(field_name)
+    if field is None:
+        raise AmendmentError(
+            {
+                "field_name": (
+                    f"'{field_name}' is not part of the lot header. Only the harvest figures that "
+                    "identify a finished lot are corrected here; everything else on a production "
+                    "is edited normally."
+                )
+            }
+        )
+
+    original = getattr(history, field_name)
+
+    try:
+        coerced = field.to_python(new_value)
+    except DjangoValidationError as exc:
+        raise AmendmentError({field_name: " ".join(exc.messages)})
+
+    # Same two-step comparison as the event path: Decimal("200.00") == Decimal("200") as
+    # numbers but renders differently, and a correction line reading "200.00 -> 200" is
+    # noise in a document an inspector reads closely.
+    if coerced == original or _render(coerced) == _render(original):
+        raise AmendmentError({field_name: "That is the value already on the record — nothing to correct."})
+
+    setattr(history, field_name, coerced)
+    try:
+        # `clean_fields` on the corrected column only — see `apply_amendment` for why
+        # `full_clean` is the wrong tool here.
+        history.clean_fields(
+            exclude=[
+                f.name for f in History._meta.get_fields() if getattr(f, "concrete", False) and f.name != field_name
+            ]
+        )
+    except DjangoValidationError as exc:
+        setattr(history, field_name, original)
+        raise AmendmentError(exc.message_dict if hasattr(exc, "message_dict") else {field_name: str(exc)})
+
+    history.save(update_fields=[field_name])
+
+    return EventAmendment.objects.create(
+        # Both NULL — this correction targets the header, not an event on it.
+        event_type=None,
+        event_id=None,
+        history=history,
+        field_name=field_name,
+        field_label=history_field_label(field_name),
         original_value=_render(original),
         corrected_value=_render(coerced),
         reason=reason,

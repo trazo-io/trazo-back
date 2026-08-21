@@ -33,15 +33,26 @@ class ProducerAttestationTests(TestCase):
         self.est = Establishment.objects.create(name="A Block", company=company)
         parcel = Parcel.objects.create(name="P1", establishment=self.est, area=1.0)
         crop = CropType.objects.create(
-            name="Walnuts", slug="walnuts-attest", category="tree_nut", description="n",
-            typical_farm_size="10", growing_season="s", harvest_season="h",
-            emissions_per_hectare=0.0, industry_average=0.0, best_practice=0.0,
-            carbon_credit_potential=0.0, typical_cost_per_hectare=0.0, has_soil_contact=True,
+            name="Walnuts",
+            slug="walnuts-attest",
+            category="tree_nut",
+            description="n",
+            typical_farm_size="10",
+            growing_season="s",
+            harvest_season="h",
+            emissions_per_hectare=0.0,
+            industry_average=0.0,
+            best_practice=0.0,
+            carbon_credit_potential=0.0,
+            typical_cost_per_hectare=0.0,
+            has_soil_contact=True,
         )
         product = Product.objects.create(name="Walnuts")
         # A season with NO operator — the shape that produced the bug.
         self.history = History.objects.create(
-            parcel=parcel, product=product, crop_type=crop,
+            parcel=parcel,
+            product=product,
+            crop_type=crop,
             start_date=timezone.now() - timedelta(days=200),
             finish_date=timezone.now() - timedelta(days=10),
         )
@@ -50,6 +61,7 @@ class ProducerAttestationTests(TestCase):
         svc = AuditExportService(self.history, certification_type="organic")
         captured = []
         import reportlab.platypus as platypus
+
         from history.services import audit_export_service as mod
 
         orig = platypus.Paragraph

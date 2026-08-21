@@ -316,30 +316,6 @@ def send_invitation_email(
         return False
 
 
-def send_invitation_to_user(email, link, username, email_address, user_type):
-    """
-    Send verification code link to the given email (Legacy function - kept for backward compatibility)
-    """
-    params = {
-        "link": link,
-        "username": username,
-        "email": email_address,
-        "user_type": user_type,
-    }
-
-    msg_plain = render_to_string("email_verification_code/message.txt", params)
-    msg_html = render_to_string("email_verification_code/message.html", params)
-    subject = "Welcome to Trazo, just verify your account."
-
-    return send_mail(
-        subject,
-        msg_plain,
-        settings.DEFAULT_FROM_EMAIL,
-        [email],
-        html_message=msg_html,
-    )
-
-
 def generate_invitation_code():
     """
     Generate a secure invitation code for companies

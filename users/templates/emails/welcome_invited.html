@@ -21,14 +21,14 @@
             <li>Full access to all company establishments and data</li>
             <li>Manage team members and send invitations</li>
             <li>Configure company settings and preferences</li>
-            <li>Access all transparency tracking and reporting tools</li>
+            <li>Access every record across the operation</li>
         {% elif role == 'FM' %}
             <li>Manage assigned farm establishments</li>
-            <li>Document farming practices for transparency scores</li>
+            <li>Document farming practices for the record</li>
             <li>Create and manage production records</li>
-            <li>Generate QR codes for consumer trust</li>
+            <li>Generate QR codes for buyer pages</li>
         {% else %}
-            <li>Contribute to your team's transparency documentation</li>
+            <li>Contribute to your team's records</li>
             <li>Record agricultural events and activities</li>
             <li>Support sustainable farming practices</li>
             <li>Access training and educational resources</li>
@@ -37,28 +37,28 @@
 
     <p><strong>What you can do with Trazo:</strong></p>
     <ul style="margin: 16px 0; padding-left: 20px; color: #4b5563;">
-        <li>Document agricultural practices with transparency scores</li>
+        <li>Document agricultural practices as you work</li>
         <li>Generate QR codes so consumers see how food was grown</li>
         <li>Access EPA/USDA-sourced environmental data</li>
         <li>Build buyer trust with dated, photo-backed records</li>
-        <li>Collaborate with your team on sustainability goals</li>
+        <li>Collaborate with your team on the season's records</li>
     </ul>
 {% endblock %}
 
 {% block content %}
     <div class="btn-container">
         <a href="{{ BASE_APP_URL|default:'https://app.trazo.io' }}" 
-           class="btn {% if user_type == 'consumer' %}consumer{% endif %}">
+           class="btn">
             Access Your Dashboard
         </a>
     </div>
     
     <div class="message">
-        <p>Your account is ready and you're automatically logged in. Start exploring your dashboard and see how {{ company.name }} is leading the way in agricultural sustainability.</p>
+        <p>Your account is ready and you're automatically logged in. Start exploring your dashboard and see what {{ company.name }} has documented so far.</p>
         
         <p><strong>Need help getting started?</strong> Don't hesitate to reach out to {{ inviter.first_name }} or our support team.</p>
         
-        <p style="margin-top: 24px; font-weight: 600; color: #111827;">Welcome to {{ company.name }} and the future of agricultural transparency!</p>
-        <p style="margin-top: 16px; color: #4CAF50; font-weight: 600;">The Trazo Team</p>
+        <p style="margin-top: 24px; font-weight: 600; color: #111827;">Welcome to {{ company.name }}.</p>
+        <p style="margin-top: 16px; color: #2E7D32; font-weight: 600;">The Trazo Team</p>
     </div>
 {% endblock %}
