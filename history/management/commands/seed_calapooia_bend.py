@@ -53,12 +53,14 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
 
 from django.apps import apps
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
+from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
 
 from company.models import Company, Establishment
@@ -261,9 +263,51 @@ class Command(BaseCommand):
         }
 
     def _company(self, data, owner):
+        """Create the company, grant the owner access, and give it a plan.
+
+        Both halves were missing and both are load-bearing in production:
+
+        ACCESS. `User.companies` is a many-to-many `through="WorksIn"` with
+        `related_name="company_users"` — there is no `company.users`, and Django refuses `.add()`
+        on a through-relation anyway. An earlier version of this method guarded with
+        `hasattr(company, "users")`, which is simply False, so it silently granted nothing: the
+        farm existed and the person who seeded it could not see it. `WorksIn` with
+        COMPANY_ADMIN is what `provision_pilot` and `create_demo_user` both do, and
+        `RetrieveCompanySerializer` gives role "CA" every establishment in the company.
+
+        PLAN. A company with no Subscription row resolves to no plan at all, and that cascades:
+        `can_create_parcel` / `can_create_establishment` / `can_create_production` all answer
+        False, photo and document uploads are refused with NO_SUBSCRIPTION, voice input switches
+        off. The farm would be visible and inert — you could show it and not touch it, which is
+        the opposite of a demo. `pilot` is the correct plan: comped, internal, and hidden from
+        the public lineup.
+        """
+        from subscriptions.models import Plan, Subscription
+        from users.models import WorksIn
+
         company, _ = Company.objects.get_or_create(name=data["company"]["name"])
-        if hasattr(company, "users") and owner not in company.users.all():
-            company.users.add(owner)
+
+        WorksIn.objects.get_or_create(
+            user=owner,
+            company=company,
+            defaults={"role": WorksIn.COMPANY_ADMIN},
+        )
+
+        if not Subscription.objects.filter(company=company).exists():
+            plan = Plan.objects.filter(slug="pilot").first()
+            if plan is None:
+                raise CommandError(
+                    "No plan with slug 'pilot' exists. Run `manage.py create_plans` first — it is "
+                    "the only thing that creates plan rows; `migrate` does not."
+                )
+            Subscription.objects.create(
+                company=company,
+                plan=plan,
+                status="active",
+                current_period_start=timezone.now(),
+                current_period_end=timezone.now() + timedelta(days=365),
+            )
+
         return company
 
     def _establishment(self, data, company):
