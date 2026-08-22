@@ -82,12 +82,17 @@ class StarterHasNoTrialClockTests(TestCase):
         self.assertNotEqual(
             subscription.status,
             "canceled",
-            "expire_trials cancelled a Starter subscription — Starter is free forever, and "
-            "cancelling nulls Company.subscription_plan and 403s every creation in the app",
+            "expire_trials cancelled a Starter subscription — Starter is free forever, so there "
+            "is no clock for it to run out",
         )
-        self.assertIsNotNone(
-            subscription.company.subscription_plan,
-            "the company lost its plan, which is the lockout this test exists to prevent",
+        # Asserts the SLUG, not merely that a plan resolves. Since 2026-08-22 a canceled
+        # subscription falls back to Starter, so `assertIsNotNone` alone would now pass even if
+        # `expire_trials` had cancelled the row — the check this test exists for would be gone
+        # while the test stayed green.
+        self.assertEqual(
+            subscription.company.subscription_plan.slug,
+            "starter",
+            "the company is no longer resolving to Starter",
         )
 
     def test_starter_never_receives_trial_expiry_emails(self):

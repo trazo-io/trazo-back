@@ -113,6 +113,10 @@ class Command(BaseCommand):
                 "description": "A beautiful farm in the heart of California's agricultural region",
             },
         )
+        # Seeded farm: the records below are invented, so every certifier packet, OSP module,
+        # workbook and PUR export built from it is stamped a specimen (common/specimen.py).
+        establishment.is_demo = True
+        establishment.save(update_fields=["is_demo"])
 
         # Create or get product
         product, _ = Product.objects.get_or_create(

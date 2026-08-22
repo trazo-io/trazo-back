@@ -1,10 +1,15 @@
+import logging
 from decimal import Decimal
 
 from django.utils import timezone
 
 from rest_framework import serializers
 
+from company.models import PAID_PLAN_STATUSES, STARTER_PLAN_SLUG
+
 from .models import AddOn, Invoice, PaymentMethod, Plan, Subscription, SubscriptionAddOn
+
+logger = logging.getLogger(__name__)
 
 
 class PlanSerializer(serializers.ModelSerializer):
@@ -47,6 +52,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
     scan_count = serializers.SerializerMethodField()
     usage_warnings = serializers.SerializerMethodField()
     effective_limits = serializers.SerializerMethodField()
+    downgrade_preview = serializers.SerializerMethodField()
 
     class Meta:
         model = Subscription
@@ -58,6 +64,12 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             "current_period_start",
             "current_period_end",
             "cancel_at_period_end",
+            # Read-only on the wire. The client needs to know a cancellation is pending and
+            # when it was asked for; it must never be able to rewrite the churn reason with a
+            # PATCH, which would corrupt the only answer we will ever get from that customer.
+            # The write path is the `cancel` action, which validates against the model choices.
+            "cancellation_reason",
+            "cancellation_requested_at",
             "used_productions",
             "used_storage_gb",
             "storage_breakdown",
@@ -66,7 +78,9 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             "addons",
             "usage_warnings",
             "effective_limits",
+            "downgrade_preview",
         ]
+        read_only_fields = ["cancellation_reason", "cancellation_requested_at"]
 
     def _get_cached_usage(self, obj):
         """Compute all usage metrics once per serialization and cache on the instance."""
@@ -190,23 +204,60 @@ class SubscriptionSerializer(serializers.ModelSerializer):
     def get_scan_count(self, obj):
         return self._get_cached_usage(obj)["scans"]
 
+    def _starter_plan(self):
+        """The free tier, looked up ONCE per serializer instance.
+
+        Two paths need it — the entitlement fallback below and `get_downgrade_preview` — and
+        both run per row. On a list endpoint that was one `Plan` query per subscription for a
+        row that is identical every time.
+        """
+        if not hasattr(self, "_starter_plan_cache"):
+            self._starter_plan_cache = Plan.objects.filter(slug=STARTER_PLAN_SLUG, is_active=True).first()
+        return self._starter_plan_cache
+
     def _get_effective_limits(self, obj):
         """
-        Compute effective limits = base plan limits + purchased add-ons.
-        This ensures the dashboard displays the true limits the user has paid for.
+        Compute effective limits = ENTITLED plan limits + purchased add-ons.
+
+        ENTITLED, not subscribed (2026-08-22). This read `obj.plan.features` with no regard for
+        `obj.status`, so a lapsed Compliance subscription kept reporting `compliance_exports:
+        True` long after the backend had stopped honouring it. `ComplianceExportsGuard` reads
+        exactly this field to decide whether to render the export buttons, so the farmer was
+        shown a working Download Packet button that answered 403 — the render gate and the
+        enforcement gate disagreeing about the same fact, which is the whole point of shipping
+        the flag to the client in the first place.
+
+        The rule is stated here rather than delegated to `Company.subscription_plan` — which is
+        the authority everywhere else — for one reason: `obj.addons` and `obj.plan` are already
+        prefetched by the dashboard query, and reaching the same answer via
+        `obj.company.subscription` would drop that prefetch and cost a round trip per row on a
+        page that renders one per company. Both paths key off the SAME constant,
+        `company.models.PAID_PLAN_STATUSES`, so they cannot disagree about which statuses are
+        paid; what is duplicated is the lookup, not the policy.
         """
         cache_attr = f"_effective_limits_cache_{obj.pk}"
         if hasattr(self, cache_attr):
             return getattr(self, cache_attr)
 
-        features = obj.plan.features if obj.plan else {}
+        if obj.status in PAID_PLAN_STATUSES:
+            entitled_plan = obj.plan
+        else:
+            entitled_plan = self._starter_plan()
+        features = entitled_plan.features if entitled_plan else {}
 
         def base(key, default=0):
             return features.get(key, default)
 
         def addon_qty(slug):
+            # Zero once the subscription stops being paid for — an Extra Farm that Stripe no
+            # longer charges for must not keep showing as headroom. Same rule as the enforcement
+            # side in `Company._addon_quantity`, but asked of `obj.status` directly rather than
+            # through the company: `obj.addons` is prefetched by the dashboard query and going
+            # back via `obj.company.subscription` would be a fresh round trip per row.
+            if obj.status not in PAID_PLAN_STATUSES:
+                return 0
             try:
-                # Use .all() + Python filter to leverage prefetch_related cache
+                # .all() + Python filter to leverage prefetch_related
                 # (.filter() would bypass the prefetch and hit the DB)
                 return sum(a.quantity for a in obj.addons.all() if a.addon and a.addon.slug == slug)
             except Exception:
@@ -253,6 +304,80 @@ class SubscriptionSerializer(serializers.ModelSerializer):
         if not obj.plan:
             return {}
         return self._get_effective_limits(obj)
+
+    def get_downgrade_preview(self, obj):
+        """What this company would be OVER if the paid plan ended today.
+
+        A downgrade never deletes anything: existing farms, parcels, productions and photos all
+        survive `land_on_free_tier`. What changes is the CEILING, and a farm that is already
+        above the new one finds additions refused the moment the subscription ends — a farm on
+        Operation with five farms and 42 GB of photos lands on Starter's one farm and 10 GB and
+        cannot upload another photo, with nothing on screen having warned them.
+
+        That gap was not merely unkind, it made the cancel screen inaccurate: its "what you keep"
+        panel lists "10 GB of photo storage", which reads as a promise to somebody currently
+        using four times that. Misstating the consequences of cancelling is exactly what FTC
+        §5 / ROSCA scrutiny of negative-option flows is about, and it is also just wrong.
+
+        Computed from `_get_cached_usage`, which the serializer already builds for the meters —
+        so this costs no extra query for the two limits that can actually bite today. The two
+        that cannot (parcels, productions: Starter is unlimited on both since migration 0014) are
+        checked generically off the plan's own features and skipped while the limit is -1, so a
+        future tier that DOES bound them is covered without anyone remembering to come back here.
+
+        `None` when there is nothing to say: no plan, already on a free plan, or nothing over.
+        """
+        plan = obj.plan
+        if plan is None or plan.price == 0 or plan.slug == STARTER_PLAN_SLUG:
+            return None
+
+        target = self._starter_plan()
+        if target is None:
+            return None
+
+        limits = target.features or {}
+        usage = self._get_cached_usage(obj)
+        exceeds = []
+
+        def check(metric, limit_key, used):
+            limit = limits.get(limit_key, -1)
+            # -1 is unlimited; a missing key is treated the same rather than as zero, because
+            # reading an absent key as "0 allowed" here would warn every customer that
+            # everything they own is over the limit.
+            if limit is None or limit < 0:
+                return
+            if used > limit:
+                exceeds.append({"metric": metric, "used": used, "limit": limit})
+
+        check("establishments", "max_establishments", usage["establishments"])
+
+        # MEDIA, not the total: photos are the hard-limited category, so photo usage is what
+        # actually gets refused. Scoring the total would warn about a document shelf that is
+        # counted but never blocked. Mirrors `storage_utils.check_storage_quota`.
+        check("media_storage_gb", "storage_limit_gb", float(usage["storage_breakdown"]["media_gb"]))
+
+        check("productions", "max_productions_per_year", usage["productions"])
+
+        # Per-establishment, so this needs its own query — only run when the target plan
+        # actually bounds it. Starter does not, so today this costs nothing.
+        parcel_limit = limits.get("max_parcels_per_establishment", -1)
+        if parcel_limit is not None and parcel_limit >= 0:
+            try:
+                from django.db.models import Count, Max
+
+                busiest = obj.company.establishment_set.annotate(n=Count("parcels")).aggregate(m=Max("n"))["m"] or 0
+                check("parcels_per_farm", "max_parcels_per_establishment", busiest)
+            except Exception:
+                logger.exception("Could not compute parcel downgrade preview for company %s", obj.company_id)
+
+        if not exceeds:
+            return None
+
+        return {
+            "target_plan_slug": target.slug,
+            "target_plan_name": target.name,
+            "exceeds": exceeds,
+        }
 
     def get_usage_warnings(self, obj):
         """

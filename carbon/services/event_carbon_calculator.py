@@ -1613,13 +1613,32 @@ class EventCarbonCalculator:
                 limitations = calculation_result.get("limitations", "")
 
             else:
-                # Fallback for unknown production types
-                # Extract fuel_type and energy_source from event object for electric equipment support
+                # Any subtype without a branch above.
+                #
+                # ⛔ This used to pass the LITERAL string "general production", which threw the
+                # farmer's actual subtype away before PRODUCTION_TYPE_MAPPING ever saw it. That
+                # map is the single place that knows which operations are area-driven, so
+                # overwriting the code here made every entry added to it unreachable from the
+                # SAVED path — the map only ever got "GENERAL PRODUCTION", an unknown code, and
+                # fell through to the 2.5 gal diesel/hectare field estimate every time.
+                #
+                # It cost exactly the three subtypes the 2026-08-20 fix was written for. TP, BU
+                # and SS were mapped to `_calculate_reported_fuel_only_emissions` in that pass,
+                # and all three kept computing the area estimate on save while the live preview
+                # (which passes the real code) showed 0. A seed search — three phone calls and a
+                # catalogue — was charged 169 kg CO2e on a 16.4-acre block, because the fallback
+                # reads the PARCEL's acreage when the event has no `area_covered` of its own.
+                # PO escaped only because it also has an explicit `elif` above.
+                #
+                # Passing `event.type` restores the map as the authority. An unrecognised code
+                # still lands on general production — via the map's own documented fallback,
+                # which logs a warning naming the code, instead of silently laundering it into
+                # a string that is itself unrecognised.
                 fuel_type = getattr(event, "fuel_type", "diesel")  # Default to diesel if not specified
                 energy_source = getattr(event, "energy_source", "grid")  # Default to grid if not specified
 
                 calculation_result = VerifiedEmissionFactors.calculate_production_event_emissions(
-                    production_type="general production",
+                    production_type=event.type or "general production",
                     area_covered=area_covered,
                     fuel_consumed=fuel_consumed,
                     equipment_hours=equipment_hours,
@@ -1679,7 +1698,30 @@ class EventCarbonCalculator:
                 "confidence_level": breakdown.get("confidence_level", 0.80),
             }
 
-            return self._add_enhanced_usda_metadata(result, event, production_data.get("crop_name", "unknown"))
+            enriched = self._add_enhanced_usda_metadata(result, event, production_data.get("crop_name", "unknown"))
+
+            # ⚖️ Do not claim EPA/USDA sourcing for a figure no factor produced.
+            #
+            # `_add_enhanced_usda_metadata` sets `usda_factors_based: True` for every US event
+            # unconditionally, and the detail modal renders that as an "EPA/USDA-sourced"
+            # badge beside the number. That is right whenever a factor WAS applied — including
+            # a TP haul whose reported diesel is multiplied by the EPA factor.
+            #
+            # It is NOT right for the reported-fuel-only path when nothing was reported: that
+            # 0 comes from the absence of an input, not from any agency's factor, and
+            # `_calculate_reported_fuel_only_emissions` says so itself by returning
+            # "Trazo Methodology - non-area-driven activity, reported fuel only" as its only
+            # data source. Badging that 0 as EPA/USDA-sourced lends agency provenance to an
+            # absence — the failure `carbon-panel-provenance` exists to prevent, where the
+            # citable half of a calculation vouches for the uncited half.
+            #
+            # Narrow on purpose: only when the route was reported_fuel_only AND nothing was
+            # counted. Every other path keeps the badge it earns.
+            if calculation_method == "reported_fuel_only" and not base_emissions:
+                enriched["usda_factors_based"] = False
+                enriched["verification_status"] = "no_factor_applied"
+
+            return enriched
 
         except Exception as e:
             logger.error(f"Production event calculation error: {e}")
@@ -3104,7 +3146,22 @@ class EventCarbonCalculator:
             from ..models import USDAComplianceRecord
 
             compliance_record = USDAComplianceRecord.objects.filter(carbon_entry=carbon_entry).first()
-            if compliance_record and compliance_record.is_epa_factors_based:
+
+            # ⚖️ This upgrade is ONE-WAY: it can set the flag True, never False. That is fine
+            # while `is_epa_factors_based` is a decent proxy — but read its docstring: it
+            # returns True whenever validation RAN with a known crop. It reports that the
+            # validation pipeline worked, not that any factor was applied to THIS number.
+            #
+            # So a calculation that deliberately applied no factor had its own answer
+            # overwritten here, and the modal showed an "EPA/USDA-sourced" badge beside a 0
+            # produced by the absence of an input. `verification_status` survived the
+            # overwrite while `usda_factors_based` did not, which is what made the mismatch
+            # visible: one field said `no_factor_applied`, the other said True.
+            #
+            # Gated on the explicit sentinel rather than on the flag itself, so paths that
+            # simply never set `usda_factors_based` keep the upgrade they rely on.
+            no_factor_applied = calculation_result.get("verification_status") == "no_factor_applied"
+            if compliance_record and compliance_record.is_epa_factors_based and not no_factor_applied:
                 carbon_entry.usda_factors_based = True
                 carbon_entry.save(update_fields=["usda_factors_based"])
                 logger.info(

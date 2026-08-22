@@ -34,6 +34,12 @@ celery_app.conf.beat_schedule = {
         "task": "subscriptions.tasks.send_trial_emails",
         "schedule": crontab(hour=8, minute=0),  # Daily at 8 AM
     },
+    # Statutory: California's ARL requires an annual-renewal reminder 15-45 days out.
+    # Daily, so a single missed run cannot push a customer past the window.
+    "send-renewal-reminders": {
+        "task": "subscriptions.tasks.send_renewal_reminders",
+        "schedule": crontab(hour=8, minute=30),  # Daily at 8:30 AM
+    },
     # --- Carbon nightly tasks ---
     "generate-nightly-reports": {
         "task": "carbon.tasks.generate_nightly_reports",

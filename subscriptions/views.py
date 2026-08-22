@@ -20,7 +20,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework.viewsets import ViewSet
 
-from company.models import Company
+from company.models import STARTER_PLAN_SLUG, Company
 from company.serializers import RetrieveCompanySerializer
 
 from .models import AddOn, Invoice, PaymentMethod, Plan, ProcessedWebhookEvent, Subscription, SubscriptionAddOn
@@ -102,6 +102,25 @@ class AddOnViewSet(viewsets.ReadOnlyModelViewSet):
         return queryset
 
 
+def _may_manage_billing_for(user, company):
+    """True when `user` may spend or stop money on `company`'s behalf.
+
+    The same rule `IsCompanyAdminForSubscription.has_object_permission` applies to the
+    subscription endpoints, stated once here so the checkout endpoints — which resolve their
+    company from the REQUEST BODY and therefore cannot use an object-level permission — cannot
+    drift away from it.
+    """
+    from users.models import WorksIn
+
+    if not getattr(user, "is_authenticated", False):
+        return False
+    if user.is_staff or user.is_superuser:
+        return True
+    if company is None:
+        return False
+    return WorksIn.objects.filter(user=user, company=company, role=WorksIn.COMPANY_ADMIN).exists()
+
+
 class SubscriptionViewSet(viewsets.ModelViewSet):
     """API endpoint for managing subscriptions"""
 
@@ -109,14 +128,20 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_permissions(self):
-        # Billing operations require Company Admin role
+        # Billing operations require Company Admin role **of the company being billed**.
+        # `IsCompanyAdminForSubscription.has_object_permission` enforces the second half, and
+        # every action below is `detail=True`, so DRF calls it from `get_object()`.
+        #
+        # ⚠️ `create_session` and `create_customer_portal_session` used to be listed here. They
+        # are NOT actions on this viewset — they live on `CheckoutViewSet`, whose
+        # `permission_classes` is `[IsAuthenticated]`. Naming them here configured nothing while
+        # reading as though checkout was admin-gated. It was not; both now carry the check
+        # themselves via `_may_manage_billing_for`.
         write_actions = [
             "cancel",
             "reactivate",
             "change_plan",
             "add_addon",
-            "create_session",
-            "create_customer_portal_session",
         ]
         if self.action in write_actions or self.action in ["create", "update", "partial_update", "destroy"]:
             return [permissions.IsAuthenticated(), IsCompanyAdminForSubscription()]
@@ -291,24 +316,118 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
             status=status.HTTP_201_CREATED,
         )
 
+    @staticmethod
+    def _uncancellable_reason(subscription):
+        """Why this subscription cannot be cancelled through self-serve, or None if it can.
+
+        A PAYLOAD gate, not a second copy of the UI's render gate. `UnifiedSubscription` already
+        hides the button for Starter and pilot, and a render gate proves nothing about what the
+        endpoint accepts: a stale tab, a replayed request or a direct POST all reach this action
+        with a company-admin cookie. That is the whole edit-lock-gating class — the control has
+        to read the rule, and so does the endpoint.
+
+        Nothing here is a refusal to let a customer leave. It is a refusal to run a CHARGE-ENDING
+        flow against something that is not being charged, which would only ever produce a
+        confusing state ("your subscription will cancel on -") on a plan that never bills.
+        """
+        plan = subscription.plan
+        if plan is None:
+            return "This subscription has no plan attached and cannot be cancelled here."
+
+        features = plan.features or {}
+
+        if plan.slug == "pilot" or features.get("is_pilot") is True:
+            # Ending a pilot is a conversation, per the pilot agreement — not a button.
+            return (
+                "Pilot accounts are comped by agreement and are not billed, so there is nothing "
+                "to cancel. Email support and we will close it out with you."
+            )
+
+        if plan.slug == STARTER_PLAN_SLUG or plan.price == 0:
+            # Starter is free forever. There is no charge to stop, and running the flow anyway
+            # used to stamp `cancel_at_period_end=True` on a row whose `current_period_end` is
+            # None — which rendered as "Your subscription will cancel on -" beside a Reactivate
+            # button, on the one plan whose entire selling point is that nothing is ever due.
+            return (
+                "Your plan is free — there is nothing to cancel and nothing will ever be "
+                "charged. Your records stay in Trazo. To close the account entirely, contact "
+                "support."
+            )
+
+        return None
+
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):
-        """Cancel subscription at the end of billing period"""
+        """Schedule cancellation at the end of the paid period, and record why.
+
+        Cancellation is a DOWNGRADE to Starter, not an account deletion — the company keeps
+        every record, keeps logging, and keeps the free tier forever. What actually stops is the
+        certifier OUTPUTS (`compliance_exports`). The move itself happens when Stripe reports the
+        subscription gone; see `land_on_free_tier`.
+
+        Reason capture is OPTIONAL and always will be. California's ARL (AB 2863, in force since
+        2025-07-01) prohibits obstructing or delaying cancellation, and a required question in
+        the middle of a cancel flow is obstruction whatever it is labelled. A blank reason is a
+        valid answer that must not cost the customer a second click.
+        """
         subscription = self.get_object()
+
+        blocked = self._uncancellable_reason(subscription)
+        if blocked:
+            return Response(
+                {"error": blocked, "code": "not_cancellable"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validated against the model's own choices so a typo cannot silently create a bucket
+        # that no report will ever count. An UNKNOWN reason is dropped rather than rejected —
+        # the cancellation is what the customer asked for and must not fail over telemetry.
+        # `request.data` is whatever the client sent. A JSON array or a bare string parses to a
+        # non-mapping, and `.get` on it raises AttributeError OUTSIDE the try below — a 500 on a
+        # billing endpoint from a malformed body.
+        payload = request.data if hasattr(request.data, "get") else {}
+
+        valid_reasons = {value for value, _ in Subscription.CANCELLATION_REASON_CHOICES}
+        raw_reason = str(payload.get("reason") or "").strip()
+        reason = raw_reason if raw_reason in valid_reasons else ""
+        if raw_reason and not reason:
+            logger.warning("Unrecognised cancellation reason %r from company %s", raw_reason, subscription.company_id)
+        feedback = str(payload.get("feedback") or "").strip()[:2000]
+
+        # Never overwrite an answer already given with silence.
+        #
+        # The UI swaps Cancel for Reactivate once `cancel_at_period_end` is set, so a second
+        # cancel is a direct POST or a stale tab — and if it carried no reason it would blank the
+        # one the customer actually gave. That is the only churn answer we will ever get from
+        # them, and it is already snapshotted onto the SubscriptionEvent, so losing it here would
+        # also make the row disagree with the log.
+        if subscription.cancel_at_period_end:
+            reason = reason or subscription.cancellation_reason
+            feedback = feedback or subscription.cancellation_feedback
 
         try:
             if subscription.stripe_subscription_id:
-                stripe_subscription = stripe.Subscription.modify(
-                    subscription.stripe_subscription_id, cancel_at_period_end=True
-                )
+                stripe.Subscription.modify(subscription.stripe_subscription_id, cancel_at_period_end=True)
 
+            already_cancelling = subscription.cancel_at_period_end
             subscription.cancel_at_period_end = True
+            subscription.cancellation_reason = reason
+            subscription.cancellation_feedback = feedback
+            # The moment they FIRST asked, kept. Re-stamping on a repeat request would move the
+            # date the ARL acknowledgement is measured from.
+            if not already_cancelling or subscription.cancellation_requested_at is None:
+                subscription.cancellation_requested_at = timezone.now()
             subscription.save()
+
+            _acknowledge_cancellation_request(subscription, request.user)
 
             return Response(
                 {
                     "status": "subscription will be canceled at the end of the billing period",
                     "end_date": subscription.current_period_end,
+                    # What the customer keeps, said by the server so the UI cannot drift from
+                    # what `land_on_free_tier` actually does.
+                    "downgrades_to": STARTER_PLAN_SLUG,
                 }
             )
         except Exception as e:
@@ -325,11 +444,16 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
 
         try:
             if subscription.stripe_subscription_id:
-                stripe_subscription = stripe.Subscription.modify(
-                    subscription.stripe_subscription_id, cancel_at_period_end=False
-                )
+                stripe.Subscription.modify(subscription.stripe_subscription_id, cancel_at_period_end=False)
 
             subscription.cancel_at_period_end = False
+            # Clear the churn answer along with the churn. Leaving it behind would attach the
+            # reason a customer once gave to a subscription they decided to keep, and would then
+            # be copied onto the NEXT cancellation event by `signals._cancellation_metadata`
+            # even if that one was cancelled for something else entirely.
+            subscription.cancellation_reason = ""
+            subscription.cancellation_feedback = ""
+            subscription.cancellation_requested_at = None
             subscription.save()
 
             return Response({"status": "subscription reactivated"})
@@ -782,10 +906,20 @@ class CheckoutViewSet(ViewSet):
         try:
             company = Company.objects.get(id=company_id)
 
-            # Verify user has permission to manage this company
-            if not request.user.is_staff and company not in request.user.companies.all():
+            # ADMIN of this company, not merely a member of it (2026-08-22).
+            #
+            # This was `company in request.user.companies.all()` — bare membership, so any
+            # Viewer or Farm Manager could start a charge on the company card or open the
+            # Stripe Customer Portal (invoices, card swap, and depending on its Stripe
+            # configuration a CANCEL that bypasses Trazo's own flow, its Starter/pilot gate and
+            # its reason capture). `CheckoutViewSet.permission_classes` is `[IsAuthenticated]`
+            # and the `SubscriptionViewSet.get_permissions` entry that appeared to cover these
+            # two actions named actions that do not exist on that viewset, so nothing else was
+            # standing behind this line.
+            if not _may_manage_billing_for(request.user, company):
                 return Response(
-                    {"error": "You do not have permission to manage this company"}, status=status.HTTP_403_FORBIDDEN
+                    {"error": "Only Company Admins can manage billing for this company."},
+                    status=status.HTTP_403_FORBIDDEN,
                 )
 
             # Create or get Stripe customer
@@ -924,10 +1058,20 @@ class CheckoutViewSet(ViewSet):
         try:
             company = Company.objects.get(id=company_id)
 
-            # Verify user has permission to manage this company
-            if not request.user.is_staff and company not in request.user.companies.all():
+            # ADMIN of this company, not merely a member of it (2026-08-22).
+            #
+            # This was `company in request.user.companies.all()` — bare membership, so any
+            # Viewer or Farm Manager could start a charge on the company card or open the
+            # Stripe Customer Portal (invoices, card swap, and depending on its Stripe
+            # configuration a CANCEL that bypasses Trazo's own flow, its Starter/pilot gate and
+            # its reason capture). `CheckoutViewSet.permission_classes` is `[IsAuthenticated]`
+            # and the `SubscriptionViewSet.get_permissions` entry that appeared to cover these
+            # two actions named actions that do not exist on that viewset, so nothing else was
+            # standing behind this line.
+            if not _may_manage_billing_for(request.user, company):
                 return Response(
-                    {"error": "You do not have permission to manage this company"}, status=status.HTTP_403_FORBIDDEN
+                    {"error": "Only Company Admins can manage billing for this company."},
+                    status=status.HTTP_403_FORBIDDEN,
                 )
 
             # Check if company has a Stripe customer
@@ -1409,14 +1553,53 @@ def handle_invoice_payment_failed(invoice):
             },
         )
 
-        # Update subscription status
+        # Update subscription status.
+        #
+        # `past_due` is NOT a lockout (see `company.models.PAID_PLAN_STATUSES`): the plan stays
+        # live for the whole of Stripe's retry window, because a declined card is a billing
+        # problem and answering it by cutting a farm off from its own harvest records in the
+        # middle of a season is not a remedy. What it does trigger is a notice, so the customer
+        # can fix the card before Stripe gives up and the subscription really does end.
         if subscription.status == "active":
             subscription.status = "past_due"
             subscription.save()
+            _notify_payment_failed(subscription, invoice)
 
     except Exception as e:
         logger.exception("Error in handle_invoice_payment_failed: %s", e)
         raise
+
+
+def _notify_payment_failed(subscription, invoice):
+    """Tell the customer their card was declined and that nothing has been switched off.
+
+    Never raises: a mail failure must not make the webhook 500, because Stripe would then retry
+    the whole handler and the subscription state has already been written.
+    """
+    try:
+        from subscriptions.utils import resolve_billing_recipient, send_payment_failed_email
+
+        email, first_name = resolve_billing_recipient(subscription.company)
+        if not email:
+            logger.warning(
+                "No billing contact for company %s — payment-failed notice not sent.",
+                subscription.company_id,
+            )
+            return
+
+        amount_due = invoice.get("amount_due")
+        send_payment_failed_email(
+            email=email,
+            username=first_name,
+            company_name=subscription.company.name,
+            plan_name=subscription.plan.name if subscription.plan else "",
+            amount_due=(amount_due / 100) if amount_due else None,
+        )
+    except Exception:
+        logger.exception(
+            "Failed to send payment-failed notice for company %s",
+            getattr(subscription, "company_id", None),
+        )
 
 
 def handle_invoice_created(invoice_data):
@@ -1604,25 +1787,148 @@ def handle_customer_subscription_deleted(subscription_data):
         if not subscription:
             return
 
-        # Update subscription status
-        subscription.status = "canceled"
-        subscription.save()
-
-        # Send cancellation email
-        try:
-            company = subscription.company
-            admin_user = company.company_admins.first()
-            if admin_user:
-                # Import email utility function
-                from subscriptions.utils import send_subscription_canceled_email
-
-                send_subscription_canceled_email(admin_user.email, admin_user.first_name, company.name)
-        except Exception as e:
-            logger.error("Error sending cancellation email: %s", str(e))
+        land_on_free_tier(subscription)
 
     except Exception as e:
         logger.exception("Error in handle_customer_subscription_deleted: %s", e)
         raise
+
+
+def land_on_free_tier(subscription):
+    """End a paid subscription by MOVING IT TO STARTER — never by locking the company out.
+
+    THE ONE PLACE a paid subscription is wound down. Called when Stripe reports the
+    subscription gone (`customer.subscription.deleted`), which happens both when the customer
+    cancelled at period end and when collection was finally abandoned.
+
+    It used to be `subscription.status = "canceled"; subscription.save()`. That looks harmless
+    and is not: `Company.subscription_plan` resolved for no status but active/trialing, so the
+    row went to None and took everything with it — no parcels, no productions, no photo or
+    document upload, no voice, and 403 on all seven compliance-export doors. A farm that paid
+    $249 and simply did not renew ended up locked out of records it is required by
+    §205.103(b)(3) to keep for five years, and strictly worse off than someone signing up that
+    morning for free. `Company.subscription_plan` now ALSO falls back to Starter on its own, so
+    the lockout cannot come back by a path that forgets to call this; the two are deliberate
+    belt and braces. This one makes the DATA right — the billing page reads Starter, the event
+    log books the churn, MRR drops to zero — and the resolver makes the SYSTEM safe when a
+    webhook is missed, delayed or replayed.
+
+    Stripe ids: `stripe_subscription_id` is CLEARED because that subscription no longer exists
+    in Stripe and any later `Subscription.modify` against it would 404. `stripe_customer_id` is
+    KEPT — the customer does still exist, still owns the payment methods and the invoice
+    history, and is what a win-back checkout or a billing-portal visit needs.
+    """
+    previous_plan = subscription.plan
+    starter_plan = Plan.objects.filter(slug=STARTER_PLAN_SLUG, is_active=True).first()
+
+    if not starter_plan:
+        # `create_plans` is the only thing that creates plan rows, so this means a broken
+        # install rather than a customer state. Loud, because the alternative is silently
+        # leaving the farm on a plan Stripe is no longer billing.
+        logger.error(
+            "Starter plan missing — cannot land company %s on the free tier after cancellation.",
+            subscription.company_id,
+        )
+        return
+
+    subscription.plan = starter_plan
+    subscription.status = "active"
+    subscription.pending_plan = None
+    subscription.cancel_at_period_end = False
+    subscription.stripe_subscription_id = None
+    # Starter does not renew and does not lapse, so it carries no period end — the same shape
+    # `company.views.CompanyViewSet.create` gives a brand-new company. Leaving the old paid
+    # period end in place would print a "Next billing date" for a plan that never bills.
+    subscription.current_period_start = timezone.now()
+    subscription.current_period_end = None
+    subscription.trial_end = None
+    subscription.save()
+
+    logger.info(
+        "Company %s moved from %s to Starter after cancellation.",
+        subscription.company_id,
+        previous_plan.slug if previous_plan else "unknown",
+    )
+
+    _notify_subscription_canceled(subscription, previous_plan)
+
+
+def _acknowledge_cancellation_request(subscription, user):
+    """Send the ARL acknowledgement for a cancellation REQUEST.
+
+    Separate from `_notify_subscription_canceled`, which fires weeks later when Stripe reports
+    the subscription actually gone. Both are needed and they say different things: this one
+    confirms the request, names the date the paid features stop, and shows how to undo it while
+    the subscription is still live; the other confirms the move to Starter has happened.
+
+    Addressed to the person who clicked, not to `company_admins.first()`. They are a company
+    admin by permission class, they are the one owed the acknowledgement, and on a farm with
+    several admins the arbitrary "first" is frequently not them.
+
+    Never raises. A failed send must not roll back a cancellation the customer already
+    confirmed and that Stripe has already accepted — that would leave the two systems
+    disagreeing about whether the customer is still a customer.
+    """
+    try:
+        recipient = getattr(user, "email", None)
+        if not recipient:
+            logger.warning(
+                "No email for user %s — cancellation acknowledgement not sent for company %s.",
+                getattr(user, "id", None),
+                subscription.company_id,
+            )
+            return
+
+        from subscriptions.utils import send_cancellation_scheduled_email
+
+        send_cancellation_scheduled_email(
+            email=recipient,
+            username=getattr(user, "first_name", "") or "",
+            company_name=subscription.company.name,
+            plan_name=subscription.plan.name if subscription.plan else "",
+            end_date=subscription.current_period_end,
+        )
+    except Exception:
+        logger.exception(
+            "Failed to send cancellation acknowledgement for company %s",
+            getattr(subscription, "company_id", None),
+        )
+
+
+def _notify_subscription_canceled(subscription, previous_plan):
+    """Send the post-cancellation acknowledgement.
+
+    Swallows failures — a webhook must not 500 and be retried forever because SendGrid was
+    down — but logs them at ERROR with a stack trace. The previous version swallowed a
+    `TemplateDoesNotExist` here for months: `subscriptions/utils.py` rendered a
+    `subscription_emails/` namespace that has never existed in this repo, so the acknowledgement
+    California's ARL requires after a cancellation was never sent to anyone, and nothing said so
+    above DEBUG.
+    """
+    try:
+        company = subscription.company
+
+        from subscriptions.utils import resolve_billing_recipient, send_subscription_canceled_email
+
+        email, first_name = resolve_billing_recipient(company)
+        if not email:
+            logger.warning(
+                "No billing contact for company %s — cancellation confirmation not sent.",
+                company.id,
+            )
+            return
+
+        send_subscription_canceled_email(
+            email=email,
+            username=first_name,
+            company_name=company.name,
+            previous_plan_name=previous_plan.name if previous_plan else "",
+        )
+    except Exception:
+        logger.exception(
+            "Failed to send cancellation acknowledgement for company %s",
+            getattr(subscription, "company_id", None),
+        )
 
 
 def handle_payment_method_attached(payment_method_data):

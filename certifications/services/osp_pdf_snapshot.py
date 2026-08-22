@@ -23,6 +23,8 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer
 
+from common.specimen import is_specimen, specimen_page_callback
+
 TRAZO_GREEN_DARK = colors.HexColor("#2E7D32")
 DARK_GRAY = colors.HexColor("#333333")
 
@@ -302,5 +304,6 @@ def generate_osp_snapshot_pdf(osp) -> bytes:
         )
     )
 
-    doc.build(story)
+    _furniture = specimen_page_callback(letter, specimen=is_specimen(getattr(osp, "establishment", None)))
+    doc.build(story, onFirstPage=_furniture, onLaterPages=_furniture)
     return buffer.getvalue()

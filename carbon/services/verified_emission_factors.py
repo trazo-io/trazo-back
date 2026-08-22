@@ -1377,31 +1377,21 @@ class VerifiedEmissionFactors:
         return any(kw in method_lower for kw in cls._MANUAL_METHOD_KEYWORDS)
 
     @classmethod
-    def calculate_production_event_emissions(
-        cls,
-        production_type: str,
-        area_covered: float,
-        fuel_consumed: float = None,
-        equipment_hours: float = None,
-        **kwargs,
-    ) -> Dict[str, Any]:
-        """Calculate production event emissions using verified EPA/USDA factors
+    def production_type_codes(cls):
+        """Every production code this class can route. Read by the subtype-coverage guard."""
+        return set(cls._production_type_mapping())
 
-        Production types map to database model codes:
-        - PL: Planting
-        - HA: Harvesting
-        - IR: Irrigation
-        - PR: Pruning
-        - TR: Transplanting
-        - EM: Equipment Maintenance
-        - CU: Cultivation
-        - TH: Thinning
+    @classmethod
+    def _production_type_mapping(cls):
+        """Production subtype code -> the calculator that knows its physical model.
+
+        Hoisted out of `calculate_production_event_emissions` (2026-08-22) so a guard can read
+        the real mapping instead of a hand-copied list. `test_non_area_driven_subtypes_carbon`
+        asserts every code in `ProductionEvent.PRODUCTION_EVENTS` appears here — an unmapped
+        code silently collects the 2.5 gal/hectare general-production estimate, which is a
+        decision nobody made.
         """
-
-        # Map production type codes to calculation methods
-        # Using database-defined codes from ProductionEvent model
-        # Also includes full name aliases as safety net (e.g., "PLANTING" → same as "PL")
-        PRODUCTION_TYPE_MAPPING = {
+        return {
             # Standard codes (primary)
             "PL": cls._calculate_planting_emissions,
             "HA": cls._calculate_harvesting_emissions,
@@ -1450,6 +1440,30 @@ class VerifiedEmissionFactors:
                 ac, fc, eh, "canopy_management", **kw
             ),
         }
+
+    @classmethod
+    def calculate_production_event_emissions(
+        cls,
+        production_type: str,
+        area_covered: float,
+        fuel_consumed: float = None,
+        equipment_hours: float = None,
+        **kwargs,
+    ) -> Dict[str, Any]:
+        """Calculate production event emissions using verified EPA/USDA factors
+
+        Production types map to database model codes:
+        - PL: Planting
+        - HA: Harvesting
+        - IR: Irrigation
+        - PR: Pruning
+        - TR: Transplanting
+        - EM: Equipment Maintenance
+        - CU: Cultivation
+        - TH: Thinning
+        """
+
+        PRODUCTION_TYPE_MAPPING = cls._production_type_mapping()
 
         # Normalize production type to uppercase (database stores uppercase codes)
         production_type_code = production_type.strip().upper()

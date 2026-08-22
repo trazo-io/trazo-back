@@ -285,6 +285,10 @@ class Command(BaseCommand):
                 "year_established": 1949,
             },
         )
+        # Seeded farm: the records below are invented, so every certifier packet, OSP module,
+        # workbook and PUR export built from it is stamped a specimen (common/specimen.py).
+        establishment.is_demo = True
+        establishment.save(update_fields=["is_demo"])
         self.stdout.write(f"✅ Created establishment: {establishment.name}")
         return establishment
 
@@ -324,6 +328,10 @@ class Command(BaseCommand):
                 "year_established": 1995,
             },
         )
+        # Seeded farm: the records below are invented, so every certifier packet, OSP module,
+        # workbook and PUR export built from it is stamped a specimen (common/specimen.py).
+        establishment.is_demo = True
+        establishment.save(update_fields=["is_demo"])
         self.stdout.write(f"✅ Created establishment: {establishment.name}")
         return establishment
 

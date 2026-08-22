@@ -181,6 +181,10 @@ def create_loewen_base(user):
         has_split_operation=False,
         split_operation_plan="",
     )
+    # Seeded farm: the records below are invented, so every certifier packet, OSP module,
+    # workbook and PUR export built from it is stamped a specimen (common/specimen.py).
+    establishment.is_demo = True
+    establishment.save(update_fields=["is_demo"])
 
     # ------------------------------------------------------------------ #
     # Certifications (3)                                                  #

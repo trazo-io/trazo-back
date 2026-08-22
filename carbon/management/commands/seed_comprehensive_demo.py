@@ -247,6 +247,10 @@ class Command(BaseCommand):
                 "certifications": "USDA Organic, CCOF, Rainforest Alliance, SQF Level 2",
             },
         )
+        # Seeded farm: the records below are invented, so every certifier packet, OSP module,
+        # workbook and PUR export built from it is stamped a specimen (common/specimen.py).
+        establishment.is_demo = True
+        establishment.save(update_fields=["is_demo"])
         self.stdout.write(self.style.SUCCESS(f"✅ Created establishment 1: {establishment.name}"))
         return establishment
 
@@ -277,6 +281,10 @@ class Command(BaseCommand):
                 "certifications": "USDA Organic, CCOF, Good Agricultural Practices (GAP)",
             },
         )
+        # Seeded farm: the records below are invented, so every certifier packet, OSP module,
+        # workbook and PUR export built from it is stamped a specimen (common/specimen.py).
+        establishment.is_demo = True
+        establishment.save(update_fields=["is_demo"])
         self.stdout.write(self.style.SUCCESS(f"✅ Created establishment 2: {establishment.name}"))
         return establishment
 

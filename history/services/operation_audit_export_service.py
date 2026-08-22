@@ -32,7 +32,10 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Table, TableStyle
 
-from .audit_export_service import AuditExportService, _add_page_number, _fmt_date, _fmt_generated_date, _val
+from common.specimen import is_specimen, specimen_page_callback
+from history.services.audit_export_service import production_period
+
+from .audit_export_service import AuditExportService, _add_page_number, _fmt_generated_date, _val
 
 logger = logging.getLogger(__name__)
 
@@ -208,7 +211,10 @@ class OperationAuditExportService:
                     styles["body"],
                 )
             )
-            doc.build(story, onFirstPage=_add_page_number, onLaterPages=_add_page_number)
+            _furniture = specimen_page_callback(
+                letter, base_callback=_add_page_number, specimen=is_specimen(self.establishment)
+            )
+            doc.build(story, onFirstPage=_furniture, onLaterPages=_furniture)
             buffer.seek(0)
             return buffer
 
@@ -245,7 +251,7 @@ class OperationAuditExportService:
                     crop = prod.crop_type.name if prod.crop_type else (prod.product.name if prod.product else "")
                 except AttributeError:
                     crop = ""
-                span = f"{_fmt_date(prod.start_date)} – {_fmt_date(prod.finish_date or prod.expected_harvest)}"
+                span = production_period(prod, joiner=" – ")
                 title = f"Production — {_esc(crop)} ({span})"
                 story.append(header_svc._section_header(title))
                 prod_svc = AuditExportService(prod, self.certification_type)
@@ -253,7 +259,10 @@ class OperationAuditExportService:
                 for k in prod_keys:
                     story += prod_builders[k]()
 
-        doc.build(story, onFirstPage=_add_page_number, onLaterPages=_add_page_number)
+        _furniture = specimen_page_callback(
+            letter, base_callback=_add_page_number, specimen=is_specimen(self.establishment)
+        )
+        doc.build(story, onFirstPage=_furniture, onLaterPages=_furniture)
         buffer.seek(0)
         return buffer
 
@@ -339,7 +348,7 @@ class OperationAuditExportService:
                         crop = prod.crop_type.name if prod.crop_type else (prod.product.name if prod.product else "")
                     except AttributeError:
                         crop = ""
-                    span = f"{_fmt_date(prod.start_date)} – {_fmt_date(prod.finish_date or prod.expected_harvest)}"
+                    span = production_period(prod, joiner=" – ", compact=True)
                     index_rows.append(
                         [_val(getattr(parcel, "name", None)), _val(crop), span, _val(getattr(prod, "lot_id", None))]
                     )

@@ -91,6 +91,10 @@ class Command(BaseCommand):
                 "longitude": -119.7871,
             },
         )
+        # Seeded farm: the records below are invented, so every certifier packet, OSP module,
+        # workbook and PUR export built from it is stamped a specimen (common/specimen.py).
+        establishment.is_demo = True
+        establishment.save(update_fields=["is_demo"])
 
         # Create realistic products
         valencia_orange, _ = Product.objects.get_or_create(

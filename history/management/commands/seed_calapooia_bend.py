@@ -1,0 +1,560 @@
+"""Rebuild Calapooia Bend Farm — the depth demo — from an exact fixture.
+
+Why this exists
+---------------
+Calapooia Bend is the deepest dataset Trazo has: 6 parcels over 86.9 acres, 12 seasons across
+two crop years, 512 events, closed seasons AND open ones. It is the farm the certifier-packet
+work was validated against (dossier flags 29 -> 19), and the only one whose records were
+produced by working the product the way a grower does rather than by inventing rows.
+
+It existed in exactly one place: a developer's local database. 465 of its 512 events came from
+an ad-hoc shell script that was never committed, and the remaining 47 were typed into the UI
+during the rehearsal. Nothing could rebuild it, so a schema change would have quietly destroyed
+the only copy — and it could not be put in front of anyone, because production had never seen it.
+
+Why a JSON fixture and not inline Python
+----------------------------------------
+`ProductionEvent` has 97 columns, `ChemicalEvent` 82, `SoilManagementEvent` 80. 512 rows across
+those is roughly fifteen thousand values. Written as Python literals that is a ten-thousand-line
+module nobody can review, and every hand-copied value is a chance to invent data that the
+rehearsal never produced. The fixture is machine-extracted from the rows themselves.
+
+The extraction records ONLY fields whose value differs from the model's own default. That is
+what keeps a 97-column model from becoming a 97-key dict of mostly-None, and it is why stale
+columns stay unwritten: a field nobody filled is absent here rather than pinned to a default the
+farmer never chose. `extra_data` is carried verbatim — it is heavily used on this farm (all 80
+chemical applications, all 15 weather notes, 104 of 227 production events).
+
+Why not dumpdata / loaddata
+---------------------------
+`loaddata` pins primary keys, which collide in a database that already has rows; it cannot remap
+the foreign keys that must point at whatever CropType / Product / NationalListSubstance the
+target database happens to have; and it carries no honesty constraints. This command does all
+three, and fails loudly when a referenced natural key is missing rather than seeding a farm with
+holes in it.
+
+Honesty constraints
+-------------------
+The rehearsal data names REAL organisations: Oregon Tilth Certified Organic, a USDA-accredited
+certifying agent, plus two real Oregon handlers. `seed_showcase_walnut_farm` refuses to do this
+for a reason it states plainly — "no real accredited agent is named as certifying a farm that
+does not exist" — and the risk is sharper here, because Oregon Tilth is on the certifier
+outreach ladder and would be shown this packet.
+
+So the names are replaced with invented ones by default, everywhere they appear including inside
+descriptions and observations (Oregon Tilth alone occurs 31 times, one handler 57). `--real-names`
+restores the ground truth for local work; it should not be used for anything anyone else sees.
+
+The establishment is created with `is_demo=True`, so every packet, CSV, OSP module, workbook and
+PUR export it produces is stamped a specimen (`common/specimen.py`).
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from decimal import Decimal
+from pathlib import Path
+
+from django.apps import apps
+from django.core.management.base import BaseCommand, CommandError
+from django.db import transaction
+from django.utils.dateparse import parse_date, parse_datetime
+
+from company.models import Company, Establishment
+from history.models import History
+from product.models import Parcel, Product
+from users.models import User
+
+FIXTURE = Path(__file__).with_name("_calapooia_bend_data.json")
+
+EVENT_MODELS = [
+    "ChemicalEvent",
+    "ProductionEvent",
+    "SoilManagementEvent",
+    "PestManagementEvent",
+    "GeneralEvent",
+    "BusinessEvent",
+    "WeatherEvent",
+]
+
+#: Real organisation -> invented stand-in. Applied to EVERY string in the fixture, longest key
+#: first so "Oregon Tilth Certified Organic (OTCO)" is consumed before the bare "Oregon Tilth".
+#: Bare acronyms are matched on word boundaries only, or "OGC" would corrupt any word containing
+#: it. Regional plausibility is kept on purpose: a Willamette Valley grower shipping to a
+#: "Marion Bend Fruit Co." still reads like Oregon, which is the point of a demo.
+FICTIONAL_NAMES: dict[str, str] = {
+    "Oregon Tilth Certified Organic (OTCO)": "Cascadia Organic Certifiers (COC)",
+    "Oregon Tilth Certified Organic": "Cascadia Organic Certifiers",
+    "Oregon Tilth": "Cascadia Organic Certifiers",
+    "Real Organic Project": "Living Soil Standard",
+    "Organically Grown Company (OGC) — Portland DC": "Cascade Organic Distributors — Portland DC",
+    "Organically Grown Company (OGC)": "Cascade Organic Distributors",
+    "Organically Grown Company": "Cascade Organic Distributors",
+    "Willamette Valley Fruit Co.": "Marion Bend Fruit Co.",
+    "Willamette Valley Fruit": "Marion Bend Fruit",
+}
+#: Acronyms replaced only as whole words.
+FICTIONAL_ACRONYMS: dict[str, str] = {"OTCO": "COC", "OGC": "COD"}
+
+
+def _decode(value):
+    """Undo the fixture's type markers. Left as data in JSON so the file stays diffable."""
+    if isinstance(value, dict):
+        if "__dec__" in value:
+            return Decimal(value["__dec__"])
+        if "__dt__" in value:
+            return parse_datetime(value["__dt__"])
+        if "__d__" in value:
+            return parse_date(value["__d__"])
+        return {k: _decode(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_decode(v) for v in value]
+    return value
+
+
+def _substitute(value, enabled: bool):
+    """Replace real organisation names throughout the fixture, recursively.
+
+    Runs over the WHOLE structure rather than the certifier and facility name fields, because the
+    names also appear inside free text the operator wrote — descriptions, observations, the OSP
+    narrative. Marking only the structured fields would leave a packet whose header says one thing
+    and whose body still names the real agent.
+    """
+    if not enabled:
+        return value
+    if isinstance(value, str):
+        out = value
+        for real, fake in FICTIONAL_NAMES.items():
+            out = out.replace(real, fake)
+        for real, fake in FICTIONAL_ACRONYMS.items():
+            out = re.sub(rf"\b{re.escape(real)}\b", fake, out)
+        return out
+    if isinstance(value, dict):
+        return {k: _substitute(v, enabled) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_substitute(v, enabled) for v in value]
+    return value
+
+
+class Command(BaseCommand):
+    help = "Rebuild the Calapooia Bend demo farm from its exact fixture."
+
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--owner-email",
+            required=True,
+            help="Existing user who will own the company and be credited as operator.",
+        )
+        parser.add_argument(
+            "--rebuild",
+            action="store_true",
+            help="Delete an existing Calapooia Bend establishment first. Without this the "
+            "command refuses rather than creating a second copy.",
+        )
+        parser.add_argument(
+            "--real-names",
+            action="store_true",
+            help="Keep the real certifier and handler names from the rehearsal. Local use only "
+            "— it names a real accredited agent as certifying a farm that does not exist.",
+        )
+
+    # ------------------------------------------------------------------
+    @transaction.atomic
+    def handle(self, *args, **options):
+        if not FIXTURE.exists():
+            raise CommandError(f"Fixture missing: {FIXTURE}")
+
+        raw = json.loads(FIXTURE.read_text())
+        data = _substitute(raw, enabled=not options["real_names"])
+
+        owner = User.objects.filter(email=options["owner_email"]).first()
+        if owner is None:
+            raise CommandError(f"No user with email {options['owner_email']!r}.")
+
+        est_name = data["establishment"]["name"]
+        existing = Establishment.objects.filter(name=est_name)
+
+        # --rebuild DELETES a farm and everything under it, and this command runs against
+        # production. Matching on name alone would let it destroy a real operation that happened
+        # to share the name — an unrecoverable outcome from a demo tool. Everything this seeder
+        # creates is `is_demo=True`, so refusing to touch anything else costs nothing and makes
+        # "it deleted a customer's records" impossible rather than unlikely.
+        real = existing.filter(is_demo=False)
+        if real.exists():
+            raise CommandError(
+                f"Refusing to touch {est_name!r}: establishment(s) "
+                f"{', '.join(str(e.pk) for e in real)} exist with is_demo=False. This command "
+                "only ever creates and replaces demo farms. Rename the real operation, or seed "
+                "under a different name."
+            )
+
+        existing = existing.filter(is_demo=True)
+        if existing.exists():
+            if not options["rebuild"]:
+                raise CommandError(
+                    f"{est_name!r} already exists (id "
+                    f"{', '.join(str(e.pk) for e in existing)}). Pass --rebuild to replace it."
+                )
+            for est in existing:
+                self.stdout.write(f"  removing existing demo establishment {est.pk}")
+                self._teardown(est)
+                est.delete()
+
+        company = self._company(data, owner)
+        est = self._establishment(data, company)
+        facilities = self._facilities(data, est)
+        certs = self._certifications(data, est)
+        osps = self._osp_graph(data, est, owner, certs)
+        parcels = self._parcels(data, est)
+        seasons = self._seasons(data, est, parcels, facilities, owner)
+        n_events, event_map = self._events(data, seasons, owner)
+        self._related_records(data, seasons, parcels, event_map, owner)
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Calapooia Bend rebuilt: establishment {est.pk}, {len(parcels)} parcels, "
+                f"{len(seasons)} seasons, {n_events} events, {len(osps)} OSP versions, "
+                f"is_demo={est.is_demo}"
+            )
+        )
+        if options["real_names"]:
+            self.stdout.write(
+                self.style.WARNING("  --real-names: this farm names a REAL accredited certifier. Do not expose it.")
+            )
+
+    # ------------------------------------------------------------------
+    #: Fixture key prefixes: "_" identity, "#" a foreign key inside this farm's own graph,
+    #: "@" a foreign key resolved by natural key against the target database, "~" a
+    #: many-to-many set listed by natural key. Only unprefixed keys are model columns.
+    #:
+    #: Fixture keys that describe STRUCTURE rather than a column. `events` nests the child
+    #: rows; `post_harvest_facilities` is the § 205.272 many-to-many, which Django refuses to
+    #: accept in `create()` and which is wired separately once the season exists.
+    STRUCTURAL_KEYS = frozenset({"events", "post_harvest_facilities"})
+
+    @staticmethod
+    def _teardown(est):
+        """Remove what PROTECT would otherwise block, in dependency order.
+
+        `OSPAnnualUpdate.prior_osp` is on_delete=PROTECT, so an establishment that has ever
+        filed a § 205.406 annual update cannot be deleted until the update rows go first — the
+        same order `create_organic_pilot_farm` already works in. Worth knowing outside this
+        command: a farm with an OSP is not deletable by a plain `.delete()`, which is a
+        deliberate records-retention posture rather than an oversight.
+        """
+        OSP = apps.get_model("certifications", "OrganicSystemPlan")
+        AU = apps.get_model("certifications", "OSPAnnualUpdate")
+        osp_ids = list(OSP.objects.filter(establishment=est).values_list("id", flat=True))
+        if osp_ids:
+            AU.objects.filter(prior_osp_id__in=osp_ids).delete()
+            AU.objects.filter(new_osp_id__in=osp_ids).delete()
+            OSP.objects.filter(id__in=osp_ids).delete()
+
+    @classmethod
+    def _scalar_fields(cls, payload):
+        """Fixture keys that map straight onto model fields (skip markers and structure)."""
+        return {
+            k: _decode(v)
+            for k, v in payload.items()
+            if not k.startswith(("_", "#", "@", "~")) and k not in cls.STRUCTURAL_KEYS
+        }
+
+    def _company(self, data, owner):
+        company, _ = Company.objects.get_or_create(name=data["company"]["name"])
+        if hasattr(company, "users") and owner not in company.users.all():
+            company.users.add(owner)
+        return company
+
+    def _establishment(self, data, company):
+        fields = self._scalar_fields(data["establishment"])
+        # Never inherited from the fixture: this is the flag that makes every export from this
+        # farm say what it is. Set explicitly so it cannot be lost by an extraction change.
+        fields["is_demo"] = True
+        est = Establishment.objects.create(company=company, **fields)
+        return est
+
+    def _facilities(self, data, est):
+        PHF = apps.get_model("certifications", "PostHarvestFacility")
+        out = {}
+        for row in data.get("post_harvest_facilities", []):
+            obj = PHF.objects.create(establishment=est, **self._scalar_fields(row))
+            out[row["_id"]] = obj
+        return out
+
+    def _certifications(self, data, est):
+        Cert = apps.get_model("certifications", "Certification")
+        return {
+            row["_id"]: Cert.objects.create(establishment=est, **self._scalar_fields(row))
+            for row in data.get("certifications", [])
+        }
+
+    def _osp_graph(self, data, est, owner, certs):
+        """Seed the § 205.201 plan and everything hanging off it.
+
+        Without this the packet reports "No Organic System Plan on file" and "No approved-inputs
+        list on file", and the Documentation Snapshot turns DOCUMENTED rows into GAP/REVIEW. The
+        farm would then render the product at its weakest — which is the exact failure
+        `seed_showcase_walnut_farm` was written to end, one farm over.
+
+        Versions are created in `version_number` order so `previous_version` always points at a
+        row that already exists; the answers themselves live in the `sections` and
+        `module_responses` JSON columns and travel verbatim.
+        """
+        OSP = apps.get_model("certifications", "OrganicSystemPlan")
+        AICL = apps.get_model("certifications", "ApprovedInputChangeLog")
+        OCN = apps.get_model("certifications", "OSPChangeNotification")
+        AU = apps.get_model("certifications", "OSPAnnualUpdate")
+        NLS = apps.get_model("certifications", "NationalListSubstance")
+        OMRI = apps.get_model("certifications", "OMRIProduct")
+        WSDA = apps.get_model("certifications", "WSDAMaterial")
+
+        # The approved-input registry lives on the OSP as three many-to-many sets, and a fresh
+        # database has NO OMRI or WSDA rows at all (they arrive from a listing import, not a
+        # migration). Create the ones this farm references before wiring the sets, or the
+        # packet reports "No approved-inputs list on file" and demotes § 205.201(a)(2) to
+        # REVIEW — an absence of evidence presented where the real farm shows DOCUMENTED.
+        approved = {}
+        for model_name, natural in (
+            ("NationalListSubstance", "substance_name"),
+            ("OMRIProduct", "product_name"),
+            ("WSDAMaterial", "brand_name"),
+        ):
+            Model = apps.get_model("certifications", model_name)
+            approved[model_name] = {}
+            for key, row in data.get("approved_input_rows", {}).get(model_name, {}).items():
+                obj = Model.objects.filter(**{natural: key}).first()
+                if obj is None:
+                    obj = Model.objects.create(**self._scalar_fields(row))
+                approved[model_name][key] = obj
+
+        M2M_SOURCE = {
+            "approved_national_list_substances": "NationalListSubstance",
+            "approved_omri_products": "OMRIProduct",
+            "approved_wsda_materials": "WSDAMaterial",
+        }
+
+        osps = {}
+        for row in sorted(data.get("osps", []), key=lambda r: r.get("version_number") or 0):
+            kwargs = dict(establishment=est, created_by=owner, **self._scalar_fields(row))
+            prev = row.get("#previous_version")
+            if prev and prev in osps:
+                kwargs["previous_version"] = osps[prev]
+            cert = row.get("#certification")
+            if cert and cert in certs:
+                kwargs["certification"] = certs[cert]
+            osp = OSP.objects.create(**kwargs)
+            for m2m, model_name in M2M_SOURCE.items():
+                keys = row.get("~" + m2m)
+                if keys:
+                    members = [approved[model_name][k] for k in keys if k in approved[model_name]]
+                    getattr(osp, m2m).set(members)
+            osps[row["_id"]] = osp
+
+        def _target(row, key, model, field):
+            ref = row.get("@" + key)
+            if not ref:
+                return None
+            return model.objects.filter(**{field: ref[field]}).first()
+
+        for row in data.get("approved_input_changes", []):
+            osp = osps.get(row.get("#osp"))
+            if osp is None:
+                continue
+            kwargs = dict(osp=osp, changed_by=owner, **self._scalar_fields(row))
+            for key, model, field in (
+                ("target_national_list", NLS, "substance_name"),
+                ("target_omri", OMRI, "product_name"),
+                ("target_wsda", WSDA, "brand_name"),
+            ):
+                obj = _target(row, key, model, field)
+                if obj is not None:
+                    kwargs[key] = obj
+            AICL.objects.create(**kwargs)
+
+        for row in data.get("osp_change_notifications", []):
+            osp = osps.get(row.get("#osp"))
+            if osp is not None:
+                OCN.objects.create(osp=osp, created_by=owner, **self._scalar_fields(row))
+
+        for row in data.get("annual_updates", []):
+            kwargs = self._scalar_fields(row)
+            prior, new = osps.get(row.get("#prior_osp")), osps.get(row.get("#new_osp"))
+            if prior is not None:
+                kwargs["prior_osp"] = prior
+            if new is not None:
+                kwargs["new_osp"] = new
+            AU.objects.create(**kwargs)
+
+        return osps
+
+    def _parcels(self, data, est):
+        out = {}
+        for row in data["parcels"]:
+            obj = Parcel.objects.create(establishment=est, **self._scalar_fields(row))
+            out[row["_id"]] = obj
+        return out
+
+    # ------------------------------------------------------------------
+    def _resolve_crop_type(self, ref):
+        CropType = apps.get_model("carbon", "CropType")
+        obj = CropType.objects.filter(slug=ref["slug"]).first() or CropType.objects.filter(name=ref["name"]).first()
+        if obj is None:
+            raise CommandError(
+                f"CropType {ref['name']!r} (slug {ref['slug']!r}) is not in this database. "
+                "Run `populate_usda_crop_types --crops-only` first."
+            )
+        return obj
+
+    def _resolve_substance(self, ref):
+        NLS = apps.get_model("certifications", "NationalListSubstance")
+        obj = NLS.objects.filter(substance_name=ref["substance_name"]).first()
+        if obj is None:
+            raise CommandError(
+                f"NationalListSubstance {ref['substance_name']!r} missing. Run the National "
+                "List seeder before this command."
+            )
+        return obj
+
+    def _seasons(self, data, est, parcels, facilities, owner):
+        out = {}
+        for row in data["seasons"]:
+            fields = self._scalar_fields(row)
+            parcel = parcels[row["#parcel"]]
+            product, _ = Product.objects.get_or_create(name=row["@product"]["name"])
+            kwargs = dict(
+                parcel=parcel,
+                product=product,
+                operator=owner,
+                **fields,
+            )
+            if "@crop_type" in row:
+                kwargs["crop_type"] = self._resolve_crop_type(row["@crop_type"])
+            history = History.objects.create(**kwargs)
+            linked = [facilities[f] for f in row.get("post_harvest_facilities", []) if f in facilities]
+            if linked:
+                history.post_harvest_facilities.set(linked)
+            out[row["_id"]] = history
+        # `Parcel.current_history` points at whichever season the parcel is working now.
+        for row in data["parcels"]:
+            ref = row.get("#current_history")
+            if ref and ref in out:
+                p = parcels[row["_id"]]
+                p.current_history = out[ref]
+                p.save(update_fields=["current_history"])
+        return out
+
+    def _related_records(self, data, seasons, parcels, event_map, owner):
+        """Everything else that hangs off a season or a parcel and is NOT derived.
+
+        Found by walking every model with a foreign key into this farm rather than by listing
+        them, which is how `SalesRecord` turned up at all: its FK is named `production`, not
+        `history`, so a hand-written list missed it and the packet demoted § 205.307 sales
+        documentation from DOCUMENTED to REVIEW.
+
+        `CarbonEntry` and `USDAComplianceRecord` are deliberately NOT carried. Both are rebuilt
+        by post_save signals as the events are written, landing on exactly the same 333 rows as
+        the source database; seeding them too would double every figure.
+        """
+        PCH = apps.get_model("product", "ParcelCropHistory")
+        SR = apps.get_model("history", "SalesRecord")
+        PPI = apps.get_model("history", "ProductionPlanItem")
+        HS = apps.get_model("history", "HistoryScan")
+        EA = apps.get_model("history", "EventAmendment")
+        ET = apps.get_model("carbon", "EventTemplate")
+
+        for row in data.get("parcel_crop_history", []):
+            parcel = parcels.get(row.get("#parcel"))
+            if parcel is not None:
+                PCH.objects.create(parcel=parcel, **self._scalar_fields(row))
+
+        for row in data.get("sales_records", []):
+            season = seasons.get(row.get("#production"))
+            if season is None:
+                continue
+            sale = SR.objects.create(production=season, **self._scalar_fields(row))
+            linked = [
+                event_map[("ProductionEvent", pk)]
+                for pk in row.get("~harvest_events", [])
+                if ("ProductionEvent", pk) in event_map
+            ]
+            if linked:
+                sale.harvest_events.set(linked)
+
+        for row in data.get("production_plan_items", []):
+            season = seasons.get(row.get("#history"))
+            if season is None:
+                continue
+            kwargs = dict(history=season, **self._scalar_fields(row))
+            ref = row.get("@source_template")
+            if ref and ref.get("name"):
+                template = ET.objects.filter(name=ref["name"]).first()
+                if template is not None:
+                    kwargs["source_template"] = template
+            PPI.objects.create(**kwargs)
+
+        for row in data.get("history_scans", []):
+            season = seasons.get(row.get("#history"))
+            if season is not None:
+                HS.objects.create(history=season, **self._scalar_fields(row))
+
+        # `EventAmendment` stores a bare (event_type code, event_id) pair rather than a real
+        # relation, so the id is a primary key from the SOURCE database and renumbers here.
+        # Left untranslated it would point at whatever row happens to hold that pk — attaching
+        # a § 205.103 correction to an unrelated record, which is worse than losing it.
+        from history.constants import EVENT_TYPE_TO_MODEL
+
+        for row in data.get("event_amendments", []):
+            season = seasons.get(row.get("#history"))
+            if season is None:
+                continue
+            fields = self._scalar_fields(row)
+            old_id = fields.get("event_id")
+            model = EVENT_TYPE_TO_MODEL.get(fields.get("event_type"))
+            if old_id is not None:
+                if model is None:
+                    continue
+                target = event_map.get((model.__name__, old_id))
+                if target is None:
+                    # A correction whose subject did not come across is not seeded at all: an
+                    # amendment pointing at nothing reads as a missing record to a reviewer.
+                    continue
+                fields["event_id"] = target.pk
+            EA.objects.create(history=season, amended_by=owner, **fields)
+
+    def _events(self, data, seasons, owner):
+        total = 0
+        # Two passes: `equipment_cleaning_event` is an event pointing at ANOTHER event, so the
+        # target may not exist when the referrer is written. Create everything, then wire.
+        created: dict[tuple[str, int], object] = {}
+        deferred: list[tuple[str, int, int]] = []
+
+        for row_season in data["seasons"]:
+            history = seasons[row_season["_id"]]
+            for model_name in EVENT_MODELS:
+                Model = apps.get_model("history", model_name)
+                for row in row_season["events"].get(model_name, []):
+                    fields = self._scalar_fields(row)
+                    kwargs = dict(history=history, created_by=owner, **fields)
+                    if "@national_list_substance" in row:
+                        kwargs["national_list_substance"] = self._resolve_substance(row["@national_list_substance"])
+                    obj = Model.objects.create(**kwargs)
+                    created[(model_name, row["_id"])] = obj
+                    if "#equipment_cleaning_event" in row:
+                        deferred.append((model_name, row["_id"], row["#equipment_cleaning_event"]))
+                    total += 1
+
+        for model_name, own_id, target_id in deferred:
+            obj = created[(model_name, own_id)]
+            # The cleaning event it points at is a ProductionEvent in every observed case, but
+            # look through all models rather than assuming — a wrong link here is a § 205.272
+            # contamination-prevention claim attached to the wrong record.
+            target = next(
+                (v for (m, i), v in created.items() if i == target_id and m == "ProductionEvent"),
+                None,
+            )
+            if target is not None:
+                obj.equipment_cleaning_event = target
+                obj.save(update_fields=["equipment_cleaning_event"])
+
+        return total, created

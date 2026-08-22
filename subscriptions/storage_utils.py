@@ -75,8 +75,11 @@ def check_storage_quota(user, upload_size_bytes, category=CATEGORY_MEDIA, compan
         # grants no storage, so reading the limit first collapsed two different situations
         # into one message — a company whose subscription lapsed was told to "upgrade your
         # plan" for storage, which is not what went wrong and not what fixes it.
-        # `subscription_plan` is None unless the subscription is active or trialing, so this
-        # also catches a canceled row rather than trusting `hasattr`.
+        #
+        # As of 2026-08-22 a LAPSED subscription no longer lands here at all: it falls back to
+        # Starter and its 10 GB, because refusing a farmer's harvest photos over an expired card
+        # was never the right answer. This branch is now reached only by a company with no
+        # subscription ROW — data corruption, not a tier — and it still fails closed.
         if company.subscription_plan is None:
             return False, {
                 "error": "No active subscription found.",

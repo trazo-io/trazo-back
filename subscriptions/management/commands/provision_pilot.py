@@ -13,7 +13,9 @@ provisioning, so every pilot would hit this.
 
 The subscription has its own traps, all load-bearing (see `subscriptions/0008`):
   * plan slug must be `pilot` — `expire_trials` filters `plan__slug="starter"` and would cancel a
-    Starter-based pilot on day 14, which nulls `Company.subscription_plan` and 403s every creation.
+    Starter-based pilot on day 14. (That was the behaviour until 2026-08-22; a lapsed subscription now falls back to Starter rather than resolving to nothing, so the blast radius
+    of the same mistake today is the loss of the certifier outputs rather than a lockout — but
+    a comped pilot silently dropping to the free tier mid-season is still wrong.)
   * status must be `active`/`trialing` — `subscription_plan` resolves for nothing else.
   * price is 0, so `mrr_for()` books zero. Putting a pilot on Enterprise/active instead would
     report $299/mo of revenue that does not exist.

@@ -605,6 +605,10 @@ class Command(BaseCommand):
                 "location_highlights": "Solar-powered operations, Beneficial insect habitat, Carbon demonstration plots, Blockchain verified supply chain",
             },
         )
+        # Seeded farm: the records below are invented, so every certifier packet, OSP module,
+        # workbook and PUR export built from it is stamped a specimen (common/specimen.py).
+        establishment.is_demo = True
+        establishment.save(update_fields=["is_demo"])
 
         self.stdout.write(f"   ✅ Premium Citrus Ranch: {establishment.total_acreage} acres, Premium operation")
         return establishment
@@ -656,6 +660,10 @@ class Command(BaseCommand):
                 "location_highlights": "IoT sensor networks, AI crop monitoring, Renewable energy systems, Research partnerships",
             },
         )
+        # Seeded farm: the records below are invented, so every certifier packet, OSP module,
+        # workbook and PUR export built from it is stamped a specimen (common/specimen.py).
+        establishment.is_demo = True
+        establishment.save(update_fields=["is_demo"])
 
         self.stdout.write(f"   ✅ Organic Innovation Center: {establishment.total_acreage} acres, Technology leader")
         return establishment
@@ -707,6 +715,10 @@ class Command(BaseCommand):
                 "location_highlights": "Carbon farming demonstration, Wildlife habitat restoration, Soil health research, Climate solutions",
             },
         )
+        # Seeded farm: the records below are invented, so every certifier packet, OSP module,
+        # workbook and PUR export built from it is stamped a specimen (common/specimen.py).
+        establishment.is_demo = True
+        establishment.save(update_fields=["is_demo"])
 
         self.stdout.write(
             f"   ✅ Regenerative Grain Ranch: {establishment.total_acreage} acres, Carbon farming pioneer"

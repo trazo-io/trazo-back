@@ -53,8 +53,45 @@ class User(AbstractUser):
         return self.first_name + " " + self.last_name
 
     def get_active_company(self):
-        # Check for active or trialing subscriptions
-        return self.companies.filter(subscription__status__in=["active", "trialing"]).first()
+        """The company this user is currently working in.
+
+        THE SECOND LOCKOUT PATH (fixed 2026-08-22). This filtered on
+        `subscription__status__in=["active", "trialing"]`, the same two-status list that used to
+        gate `Company.subscription_plan` — so the moment a card was declined the company stopped
+        existing as far as this method was concerned, and it returned None. That is worse than
+        losing the plan: `get_active_company()` is the fallback that resolves the company for
+        photo and document uploads, voice recording, support tickets and three creation
+        permissions, so a single failed charge left a still-contracted customer with no company
+        at all. Fixing `subscription_plan` alone would have left this one live.
+
+        Companies are ordered so the answer is DETERMINISTIC and so it prefers the one that is
+        being paid for: a user working in a paying company and a free one must not get whichever
+        row Postgres returns from the heap. That defect has already been measured once on the
+        billing dashboard, where a farm's plan came from one company and its usage counts from
+        another.
+
+        Falls back to any company the user works in rather than None. A company whose
+        subscription has lapsed now resolves to Starter and is fully usable, and one with no
+        subscription row at all still fails closed at the plan gate — which is the right place
+        for that decision, and produces an error a farmer can act on instead of the app behaving
+        as though they belong to nobody.
+        """
+        from django.db.models import Case, IntegerField, Value, When
+
+        from company.models import PAID_PLAN_STATUSES
+
+        return (
+            self.companies.annotate(
+                _billing_rank=Case(
+                    When(subscription__status__in=PAID_PLAN_STATUSES, then=Value(0)),
+                    When(subscription__isnull=False, then=Value(1)),
+                    default=Value(2),
+                    output_field=IntegerField(),
+                )
+            )
+            .order_by("_billing_rank", "id")
+            .first()
+        )
 
     def get_trial_company(self):
         return self.companies.filter(subscription__status="trialing").first()

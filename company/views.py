@@ -90,8 +90,10 @@ class CompanyViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # Put every new company on Starter — FREE FOREVER, not a trial.
         #
         # 2026-08-13: this created `status="trialing"` with a 14-day `trial_end`, and
-        # `expire_trials` then flipped it to "canceled" on day 14, which nulls
-        # `Company.subscription_plan` and 403s every creation in the app. That contradicts the
+        # `expire_trials` then flipped it to "canceled" on day 14, which at the time nulled
+        # `Company.subscription_plan` and 403'd every creation in the app. (A canceled
+        # subscription now falls back to Starter — see `Company.subscription_plan` — so that
+        # cascade is gone, but the tier still must not be created as a trial.) That contradicts the
         # October plan in four places ("Starter free forever, pilot free, no card") and, worse,
         # contradicts the COG Pro migration page whose entire anti-lock-in answer is "Starter is
         # free permanently, not a trial" — aimed at refugees from a product that dies 2026-12-31.

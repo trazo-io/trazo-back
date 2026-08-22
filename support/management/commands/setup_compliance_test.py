@@ -125,6 +125,10 @@ class Command(BaseCommand):
                     latitude=40.7128 + random.uniform(-0.5, 0.5),
                     longitude=-74.0060 + random.uniform(-0.5, 0.5),
                 )
+                # Seeded farm: the records below are invented, so every certifier packet, OSP module,
+                # workbook and PUR export built from it is stamped a specimen (common/specimen.py).
+                establishment.is_demo = True
+                establishment.save(update_fields=["is_demo"])
 
                 # Link user to company
                 WorksIn.objects.create(user=user, company=company, role=WorksIn.COMPANY_ADMIN)

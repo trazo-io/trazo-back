@@ -75,6 +75,45 @@ class Subscription(models.Model):
     # Trial information
     trial_end = models.DateTimeField(blank=True, null=True)
 
+    # Why the customer left. Captured at the moment they confirm, which is the only moment
+    # they will ever tell us — a post-cancellation survey email to a farm that just left is
+    # not answered. Nullable and never required: a cancellation must NEVER be blocked on
+    # answering a question. California's ARL forbids obstructing cancellation, and a required
+    # field in the middle of a cancel flow is obstruction whatever it is labelled.
+    #
+    # Two ag-specific reasons are on this list that no generic SaaS list carries, and they are
+    # the two most likely answers here: `seasonal` (the season ended — this customer is not
+    # gone, they are dormant until the next one) and `certification_done` (the renewal packet
+    # shipped, so the thing they bought is finished). Both call for a re-engagement date, not
+    # a win-back discount, and neither is visible if the only options are price/features/bugs.
+    CANCELLATION_REASON_CHOICES = [
+        ("too_expensive", "Too expensive"),
+        ("missing_feature", "Missing something I need"),
+        ("not_using", "Not using it enough"),
+        ("switched", "Moved to another tool"),
+        ("seasonal", "Season ended — may come back"),
+        ("certification_done", "Certification finished for now"),
+        ("too_hard", "Too hard to use"),
+        ("other", "Other"),
+    ]
+    cancellation_reason = models.CharField(
+        max_length=30,
+        choices=CANCELLATION_REASON_CHOICES,
+        blank=True,
+        default="",
+        help_text="Reason the customer gave when cancelling. Blank when they declined to say.",
+    )
+    cancellation_feedback = models.TextField(
+        blank=True,
+        default="",
+        help_text="Free-text detail the customer gave when cancelling.",
+    )
+    cancellation_requested_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text="When the customer asked to cancel — not when the subscription actually ended.",
+    )
+
     # Tracks which trial lifecycle emails have been sent to avoid duplicates.
     # Keys: "day_11", "day_14", "day_17". Values: ISO-8601 timestamp of send.
     email_notifications_sent = models.JSONField(

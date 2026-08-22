@@ -29,6 +29,8 @@ import csv
 import io
 import re
 
+from common.specimen import SPECIMEN_LINE, is_specimen
+
 # DPR-PML-017C box order. (key, human header, required?). REI/rate/dilution and
 # pre-plant/block are optional per the official form instructions.
 PUR_COLUMNS = [
@@ -524,6 +526,12 @@ class PURExportService:
         # Report header block.
         header = self._operator_header()
         writer.writerow(["California Pesticide Use Report (DPR-PML-017C)"])
+        # A PUR is filed with a county agricultural commissioner. A fabricated one that
+        # reads as a real monthly filing is the most consequential unmarked document this
+        # codebase produces, so the marking goes in the preamble the format already has —
+        # no column contract is disturbed, and it sits above the operator's own name.
+        if is_specimen(self.establishment):
+            writer.writerow([SPECIMEN_LINE])
         writer.writerow([f"Operator (Grower): {header['operator_name']}"])
         writer.writerow([f"Establishment: {self.establishment.name}"])
         writer.writerow([f"Report period: {self.year}-{self.month:02d}"])

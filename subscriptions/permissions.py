@@ -2,9 +2,31 @@ from rest_framework import permissions
 
 
 class IsCompanyAdminForSubscription(permissions.BasePermission):
-    """Only Company Admins can manage billing and subscriptions."""
+    """Company Admin **of the company being billed** — not of some other company.
+
+    ⚠️ `has_permission` alone is NOT the check. It asks "is this user a Company Admin
+    ANYWHERE", which is a cheap pre-filter and nothing more. Until 2026-08-22 that was the only
+    check, and `SubscriptionViewSet.get_queryset()` returns every subscription of every company
+    the user belongs to in ANY role. The two combined let a user who is Company Admin of farm A
+    and a mere Viewer of farm B cancel farm B's subscription, change its plan, or buy add-ons
+    against its card — by id, with no membership escalation anywhere.
+
+    Same family as the creation-quota bypass fixed on 2026-08-19: a billing question must be
+    asked of the SUBSCRIPTION being acted on, never of whatever the user happens to be an admin
+    of somewhere else. Every billing mutation on `SubscriptionViewSet` (`cancel`, `reactivate`,
+    `change_plan`, `add_addon`) is `detail=True`, so `has_object_permission` covers all four —
+    DRF calls it from `get_object()`.
+    """
 
     message = "Only Company Admins can manage subscriptions."
+
+    @staticmethod
+    def _is_admin_of(user, company):
+        from users.models import WorksIn
+
+        if company is None:
+            return False
+        return WorksIn.objects.filter(user=user, company=company, role=WorksIn.COMPANY_ADMIN).exists()
 
     def has_permission(self, request, view):
         from users.models import WorksIn
@@ -13,7 +35,15 @@ class IsCompanyAdminForSubscription(permissions.BasePermission):
             return False
         if request.user.is_staff or request.user.is_superuser:
             return True
+        # Cheap gate so a user with no admin role anywhere is refused before a row is fetched.
+        # The authoritative, per-company check is `has_object_permission` below.
         return WorksIn.objects.filter(user=request.user, role=WorksIn.COMPANY_ADMIN).exists()
+
+    def has_object_permission(self, request, view, obj):
+        if request.user.is_staff or request.user.is_superuser:
+            return True
+        # `obj` is a Subscription; `company` is its OneToOne owner.
+        return self._is_admin_of(request.user, getattr(obj, "company", None))
 
 
 def _user_works_in(user, company):

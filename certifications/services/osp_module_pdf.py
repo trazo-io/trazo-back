@@ -29,6 +29,7 @@ from reportlab.lib.units import inch
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
 from certifications.osp_modules import CONTENT_VERSION, MODULE_REGISTRY
+from common.specimen import is_specimen, specimen_page_callback
 
 _REGISTRY_BY_KEY = {module.key: module for module in MODULE_REGISTRY}
 from certifications.osp_modules.conditions import answer_value, visible_questions
@@ -399,7 +400,13 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
             styles["meta"],
         )
     )
-    doc.build(story)
+    # Same authority as the audit packet (common/specimen.py). An OSP is the § 205.201
+    # plan a certifier approves; a fabricated one must not read as an approved plan.
+    doc.build(
+        story,
+        onFirstPage=specimen_page_callback(letter, specimen=is_specimen(getattr(osp, "establishment", None))),
+        onLaterPages=specimen_page_callback(letter, specimen=is_specimen(getattr(osp, "establishment", None))),
+    )
     return buffer.getvalue()
 
 
@@ -426,7 +433,13 @@ def _packet_cover_pdf(osp) -> bytes:
             styles["meta"],
         ),
     ]
-    doc.build(story)
+    # Same authority as the audit packet (common/specimen.py). An OSP is the § 205.201
+    # plan a certifier approves; a fabricated one must not read as an approved plan.
+    doc.build(
+        story,
+        onFirstPage=specimen_page_callback(letter, specimen=is_specimen(getattr(osp, "establishment", None))),
+        onLaterPages=specimen_page_callback(letter, specimen=is_specimen(getattr(osp, "establishment", None))),
+    )
     return buffer.getvalue()
 
 

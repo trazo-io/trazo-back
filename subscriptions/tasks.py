@@ -304,3 +304,96 @@ def send_trial_emails(self):
         "day_14": sent_day14,
         "day_17": sent_day17,
     }
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_kwargs={"max_retries": 3},
+    name="subscriptions.tasks.send_renewal_reminders",
+)
+def send_renewal_reminders(self):
+    """Remind annual subscribers before their plan auto-renews.
+
+    California's Automatic Renewal Law (as amended by AB 2863, in force 2025-07-01) requires a
+    clear and conspicuous reminder, in a form the consumer can retain, 15 to 45 days before an
+    auto-renewal whose term is a year or longer. Compliance ($249/yr) and Operation ($1,200/yr)
+    are both in scope. Trazo's ICP is California and Washington farms, so this is not a
+    hypothetical jurisdiction.
+
+    WHY A SCHEDULED TASK AND NOT `invoice.upcoming`
+    -----------------------------------------------
+    Stripe does emit `invoice.upcoming`, but the lead time is a Stripe dashboard setting whose
+    default is 3 days — outside the statutory window. Wiring a legal deadline to a checkbox in
+    someone else's admin UI means the obligation silently lapses the day that checkbox changes,
+    and nothing in this repo would show it. The window is computed here, from data this repo
+    owns, and is covered by a test.
+
+    Sends at T-30 days: comfortably inside 15-45, and tolerant of roughly two weeks of missed
+    beat runs before the deadline is at risk. `email_notifications_sent` is keyed by the exact
+    renewal date, so a subscription cannot be reminded twice about the same renewal however
+    often the task runs.
+    """
+    from datetime import timedelta
+
+    from company.models import PAID_PLAN_STATUSES
+    from subscriptions.models import Subscription
+    from subscriptions.utils import resolve_billing_recipient, send_renewal_reminder_email
+
+    now = timezone.now()
+    window_opens = now + timedelta(days=14)
+    window_closes = now + timedelta(days=30)
+
+    due = (
+        Subscription.objects.select_related("plan", "company")
+        .filter(
+            status__in=PAID_PLAN_STATUSES,
+            plan__price__gt=0,
+            plan__interval="yearly",
+            cancel_at_period_end=False,
+            current_period_end__gt=window_opens,
+            current_period_end__lte=window_closes,
+        )
+        .exclude(plan__slug="pilot")
+    )
+
+    sent = 0
+    for subscription in due:
+        # Keyed by the renewal DATE, not by a counter: a customer who renews every year needs
+        # one reminder per renewal, and the key has to differ between them.
+        key = f"renewal_reminder_{subscription.current_period_end:%Y-%m-%d}"
+        sent_map = subscription.email_notifications_sent or {}
+        if key in sent_map:
+            continue
+
+        recipient, first_name = resolve_billing_recipient(subscription.company)
+        if not recipient:
+            continue
+
+        try:
+            send_renewal_reminder_email(
+                email=recipient,
+                username=first_name,
+                company_name=subscription.company.name,
+                plan_name=subscription.plan.name,
+                amount=subscription.plan.price,
+                renewal_date=subscription.current_period_end,
+            )
+        except Exception:
+            # One bad address must not stop the run: the next subscription in the queryset may
+            # be the one whose statutory deadline is closest.
+            logger.exception(
+                "Failed to send renewal reminder to %s for subscription id=%s",
+                recipient,
+                subscription.pk,
+            )
+            continue
+
+        sent_map[key] = timezone.now().isoformat()
+        subscription.email_notifications_sent = sent_map
+        subscription.save(update_fields=["email_notifications_sent", "updated_at"])
+        sent += 1
+
+    logger.info("Renewal reminders: %d sent, %d in window.", sent, due.count())
+    return sent

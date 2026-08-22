@@ -26,7 +26,11 @@ G7_0_LABELING = Module(
     key="g7_0_labeling",
     code="G7.0",
     title=text("Labeling", "Etiquetado"),
-    nop_cites=("§ 205.300", "§ 205.301", "§ 205.303", "§ 205.307"),
+    # § 205.311 added 2026-08-22: this module already ASKS whether the USDA seal appears on
+    # the label, and the seal has its own section governing its form and who may apply it.
+    # Asking the question while citing four neighbouring sections and not that one left the
+    # only rule the answer is judged against uncited.
+    nop_cites=("§ 205.300", "§ 205.301", "§ 205.303", "§ 205.307", "§ 205.311"),
     education=(
         text(
             'The word "organic" may identify only product that is certified organic (§ 205.300); a '

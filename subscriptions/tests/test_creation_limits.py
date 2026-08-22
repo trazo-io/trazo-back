@@ -103,12 +103,45 @@ class ParcelLimitTests(TestCase):
         company = Company.objects.create(name="No subscription")
         self.assertFalse(company.can_create_parcel(_farm(company)))
 
-    def test_a_canceled_subscription_blocks_everything(self):
-        # `subscription_plan` resolves only for active/trialing. This is what made the 14-day
-        # Starter trial expiry so destructive: the account kept working right up until it didn't.
+    def test_a_canceled_subscription_falls_back_to_starter_and_keeps_logging(self):
+        """REVERSED 2026-08-22. This used to assert the opposite, and the opposite was wrong.
+
+        The old contract was "a canceled subscription blocks everything", justified by the
+        14-day Starter trial expiry being destructive. The correct conclusion from that incident
+        was that the EXPIRY was wrong (Starter is free forever; `expire_trials` can no longer
+        touch it), not that a lapsed farm should be locked out of records §205.103(b)(3) makes
+        it keep for five years.
+
+        ⚠️ Starter is seeded HERE, in the test. The fallback resolves through
+        `Plan.objects.filter(slug="starter", is_active=True)`, so on a database without that row
+        `subscription_plan` returns None and the OLD assertion passes vacuously — which is
+        exactly what this test did the first time the new resolver ran against it. See
+        `test_cancellation_lands_on_starter.py` for the full contract.
+        """
+        from subscriptions.models import Plan
+
+        Plan.objects.update_or_create(
+            slug="starter",
+            defaults={
+                "name": "Trazo Starter",
+                "description": "Free forever",
+                "price": 0,
+                "interval": "monthly",
+                "is_active": True,
+                "features": {
+                    "max_establishments": 1,
+                    "max_parcels_per_establishment": -1,
+                    "max_productions_per_year": -1,
+                    "storage_limit_gb": 10,
+                    "compliance_exports": False,
+                },
+            },
+        )
         company = _company_on(_plan("t-canceled", max_parcels_per_establishment=5), status="canceled")
-        self.assertIsNone(company.subscription_plan)
-        self.assertFalse(company.can_create_parcel(_farm(company)))
+
+        self.assertEqual(company.subscription_plan.slug, "starter")
+        self.assertTrue(company.can_create_parcel(_farm(company)))
+        self.assertFalse(company.has_feature("compliance_exports"), "the certifier outputs are what lapses")
 
 
 class ProductionQuotaTests(TestCase):

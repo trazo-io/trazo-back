@@ -37,6 +37,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
+from common.specimen import SPECIMEN_LINE, is_specimen
+
 logger = logging.getLogger(__name__)
 
 # Shown in the instruction row of every generated sheet, so a certifier opening the file knows
@@ -509,6 +511,15 @@ def build_workbook(establishment, key: str, generated_on=None) -> io.BytesIO:
 
     ws.append([spec.title])
     ws["A1"].font = Font(bold=True, size=14)
+
+    # The Common OSP attachments ship INSIDE the renewal packet ZIP alongside the module
+    # PDFs, so a packet whose PDFs are watermarked and whose workbooks are not is exactly
+    # the sibling-surface split this marking exists to prevent — and the workbook is the
+    # file a certifier is most likely to open, edit and keep, because it is the one they
+    # are meant to complete. Row 2, above the instructions, in the same red as the PDF wash.
+    if is_specimen(establishment):
+        ws.append([SPECIMEN_LINE])
+        ws.cell(row=ws.max_row, column=1).font = Font(bold=True, color="C62828")
     ws.append([spec.instructions])
     ws.append([PROVENANCE.format(date=generated_on.isoformat())])
     ws.append([])

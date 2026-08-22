@@ -5,6 +5,26 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+# The slug of the free-forever tier. Every company that is not currently entitled to a paid
+# plan falls back to this one — see `Company.subscription_plan`.
+STARTER_PLAN_SLUG = "starter"
+
+# Subscription statuses in which the company is entitled to the plan it SUBSCRIBED to.
+#
+# `past_due` is IN this list DELIBERATELY (2026-08-22). Stripe's Smart Retries run for three to
+# four weeks after a card fails, and for that whole window the customer is still contracted and
+# still counted in MRR (`subscriptions.models.MRR_STATUSES` says so). Dropping their plan on the
+# FIRST failed charge turned the largest source of involuntary churn in SaaS into a hard outage:
+# the farm could not log a harvest, upload a photo or add a parcel, and the message it got was
+# "Your subscription plan does not allow creating more parcels" — false, unactionable, and
+# impossible for the farmer to connect to an expired card. An expired card is a billing problem.
+# It is answered with a banner and an email, never by locking a farm out of its own records in
+# the middle of a season.
+#
+# `unpaid` is NOT here: it means Stripe stopped trying to collect. Neither are `canceled` and
+# `incomplete`. None of those lock a company out either — they fall back to Starter below.
+PAID_PLAN_STATUSES = ("active", "trialing", "past_due")
+
 
 class Company(models.Model):
     name = models.CharField(max_length=150, help_text="Company name")
@@ -81,13 +101,85 @@ class Company(models.Model):
     # Subscription-related methods
     @property
     def subscription_plan(self):
-        """Get the current subscription plan for this company"""
+        """The plan whose features this company may use RIGHT NOW.
+
+        Not the same question as "what is this company subscribed to" — `self.subscription.plan`
+        answers that. This answers "what is it entitled to", which differs the moment a payment
+        fails or a subscription ends.
+
+        A COMPANY WITH A SUBSCRIPTION ROW ALWAYS RESOLVES TO A PLAN (2026-08-22).
+
+        This used to return None for every status except active/trialing, and None cascades:
+        `has_feature` answers False, `get_feature_limit` falls back to 0, `can_create_parcel` /
+        `can_create_establishment` / `can_create_production` all answer False, photo and document
+        uploads are refused with NO_SUBSCRIPTION, voice input switches off and all seven
+        compliance-export doors 403. In other words a farmer who paid $249 and then chose not to
+        renew was left strictly WORSE off than a stranger signing up that morning, who lands on
+        Starter — free forever, unlimited parcels and productions, 10 GB. That contradicted the
+        one promise the October plan repeats in four places, and it aimed the damage squarely at
+        the COG Pro refugees whose entire reason for trusting Trazo is "Starter is free
+        permanently, not a trial".
+
+        So the end of a paid subscription is a DOWNGRADE, never a deletion:
+
+          * paid statuses (`PAID_PLAN_STATUSES`)  -> the subscribed plan
+          * anything else, with a subscription    -> Starter
+          * no subscription row at all            -> None
+
+        The last case is a data anomaly, not a customer, and it still fails closed.
+
+        `subscriptions.views.handle_customer_subscription_deleted` ALSO re-points the row at
+        Starter, so this fallback is not the primary mechanism — it is the safety net. The two
+        answer different failure modes: the webhook makes the DATA right (the billing page reads
+        "Starter", the event log books the churn, MRR drops), while this makes the SYSTEM safe
+        when a webhook is missed, delayed, replayed out of order, or carries a status nobody
+        anticipated. A status this code has never heard of now degrades to the free tier instead
+        of locking a farm out.
+        """
         try:
-            if hasattr(self, "subscription") and self.subscription.status in ["active", "trialing"]:
-                return self.subscription.plan
-            return None
+            subscription = self.subscription
         except Exception:
+            # No subscription row (or no reverse accessor at all). Fails closed, deliberately:
+            # every real company gets one at creation (`company.views.CompanyViewSet.create`),
+            # so its absence is corruption rather than a tier.
             return None
+
+        if subscription is None:
+            return None
+
+        if subscription.status in PAID_PLAN_STATUSES:
+            return subscription.plan
+
+        return self._free_fallback_plan()
+
+    @staticmethod
+    def _free_fallback_plan():
+        """The free-forever plan a lapsed subscription falls back to.
+
+        None when Starter is not seeded — `create_plans` is the ONLY thing that creates plan
+        rows, so a database that has only been migrated has no Starter to fall back to. That is
+        a broken install, and it fails closed rather than inventing an allowance.
+        """
+        from subscriptions.models import Plan
+
+        return Plan.objects.filter(slug=STARTER_PLAN_SLUG, is_active=True).first()
+
+    def _addon_quantity(self, slug):
+        """Total quantity of a purchased add-on — ZERO unless the subscription is being paid for.
+
+        Add-on rows outlive the subscription that bought them: cancelling in Stripe removes the
+        recurring charge but leaves `SubscriptionAddOn` in place. Counting them after the plan
+        has fallen back to Starter would hand a farm that once bought three Extra Farms a
+        permanent free allowance of four (1 + 3) — the exact cap Extra Farm at $149/yr and the
+        Operation tier exist to sell. The entitlement has to end when the payment does.
+        """
+        if not hasattr(self, "subscription"):
+            return 0
+        subscription = self.subscription
+        if subscription.status not in PAID_PLAN_STATUSES:
+            return 0
+        # Iterating rather than .filter() so a prefetched `addons` is not thrown away.
+        return sum(a.quantity for a in subscription.addons.all() if a.addon and a.addon.slug == slug)
 
     def get_feature_limit(self, feature_name, default=0):
         """Get limit for a specific feature from subscription plan"""
@@ -112,12 +204,9 @@ class Company(models.Model):
             return True
         current_count = self.establishment_set.count()
 
-        # Add purchased add-ons
-        if hasattr(self, "subscription"):
-            extra_establishments = sum(
-                addon.quantity for addon in self.subscription.addons.filter(addon__slug="extra-establishment")
-            )
-            max_allowed += extra_establishments
+        # Add purchased add-ons. `_addon_quantity` returns 0 once the subscription stops being
+        # paid for, so a lapsed farm keeps every farm it already has but buys no new headroom.
+        max_allowed += self._addon_quantity("extra-establishment")
 
         return current_count < max_allowed
 
@@ -138,12 +227,8 @@ class Company(models.Model):
             current_count = establishment.parcels.count()
             max_allowed = max_per_establishment
 
-            # Add purchased add-ons
-            if hasattr(self, "subscription"):
-                extra_parcels = sum(
-                    addon.quantity for addon in self.subscription.addons.filter(addon__slug="extra-parcel")
-                )
-                max_allowed += extra_parcels
+            # Add purchased add-ons (zero once the subscription lapses — see `_addon_quantity`).
+            max_allowed += self._addon_quantity("extra-parcel")
 
             return current_count < max_allowed
 
@@ -184,12 +269,8 @@ class Company(models.Model):
             created_at__gte=start_of_year,
         ).count()
 
-        # Add purchased add-ons
-        if hasattr(self, "subscription"):
-            extra_productions = sum(
-                addon.quantity * 10 for addon in self.subscription.addons.filter(addon__slug="extra-production")
-            )
-            max_productions += extra_productions
+        # Add purchased add-ons (zero once the subscription lapses — see `_addon_quantity`).
+        max_productions += self._addon_quantity("extra-production") * 10
 
         return productions_this_year < max_productions
 
@@ -246,6 +327,26 @@ class Company(models.Model):
 
 
 class Establishment(models.Model):
+    #: True when this farm's records are FABRICATED — a seeded showcase, a rehearsal farm, a
+    #: demo handed to a prospect. Default False, and the default is the load-bearing part: a
+    #: certifier packet is a 7 CFR 205.103 compliance record, and stamping a REAL operation's
+    #: packet "SPECIMEN" would invite a certifier to reject it. So the flag is opt-IN, and a
+    #: farm that never heard of it exports exactly as before.
+    #:
+    #: Why it exists (2026-08-21): the audit packet carried NO marking of any kind, so a PDF
+    #: generated from an invented farm — Calapooia Bend, the pilot-rehearsal operation — was
+    #: byte-for-byte the same KIND of document as a real grower's organic records: same cover,
+    #: same CFR citations, same handler certificates, same § 205.103 audit trail. Those get
+    #: forwarded, excerpted and filed. An unmarked synthetic one is a document that can be
+    #: mistaken for a real operation's legal records, and we intend to hand these to
+    #: inspectors and certifier reviewers.
+    is_demo = models.BooleanField(
+        default=False,
+        help_text=(
+            "Records for this farm are fabricated (seeded/demo/rehearsal). Marks every page of "
+            "exported certifier packets as a specimen. Never set this on a real operation."
+        ),
+    )
     public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, db_index=True)
     name = models.CharField(max_length=150, help_text="Establishment name")
     address = models.CharField(max_length=200, blank=True, default="", help_text="Street address")

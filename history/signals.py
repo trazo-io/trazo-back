@@ -305,14 +305,30 @@ def calculate_production_event_carbon(sender, instance, created, **kwargs):
         calculation_result = calculator.calculate_production_event_impact(instance)
 
         # Create carbon entry as the authoritative source - single source of truth.
-        # For facility-based subtypes (EM, PO, PH), create an entry even when co2e=0:
-        # electric packing lines / pollination-by-bee-hive / equipment cleaning with
-        # no fuel use legitimately produce 0 emissions, and the timeline should
-        # display "0 kg CO₂e" (a transparency signal) rather than "No CO₂ data"
-        # (which reads as missing data).
+        #
+        # A zero is only worth storing when it is an ANSWER. For most subtypes a 0 means the
+        # calculation had nothing to work with, and writing a row would dress a gap up as a
+        # measurement. For the subtypes below, 0 is the correct and expected result:
+        #
+        #   EM / PO / PH — electric packing lines, pollination by bee hive, equipment cleaning
+        #                  with no fuel use. Facility or biological work.
+        #   TP / BU / SS — not area-driven at all (see `_calculate_reported_fuel_only_emissions`).
+        #                  A seed search is phone calls; a buffer disposal is a recordkeeping
+        #                  act; a haul with no diesel entered has nothing to count.
+        #
+        # Without an entry the serializer answers `carbon_data: null`, which the detail modal
+        # treats as its "carbon data not available" ERROR branch — so the Carbon Impact card
+        # and the zero-emission copy (`eventDetails.noDirectEmissions`, plus the record-value
+        # alert) both disappear. "No CO₂ data" reads as missing data; "0 kg CO₂e — no direct
+        # emissions" is the transparency signal the grower earned by logging the activity.
+        #
+        # 🔴 TP/BU/SS added 2026-08-22. Until the routing fix that day they were charged a
+        # per-hectare diesel estimate, so they always had a (wrong, non-zero) entry and never
+        # reached this branch. Correcting the calculation moved them from "wrong number" to
+        # "no card at all" — the list had to widen with the fix, not after it.
         co2e_value = calculation_result.get("co2e", 0)
-        facility_subtypes = ("EM", "PO", "PH")
-        if co2e_value > 0 or (co2e_value >= 0 and instance.type in facility_subtypes):
+        legitimately_zero_subtypes = ("EM", "PO", "PH", "TP", "BU", "SS")
+        if co2e_value > 0 or (co2e_value >= 0 and instance.type in legitimately_zero_subtypes):
             carbon_entry = calculator.create_carbon_entry_from_event(instance, calculation_result)
 
         action = "created" if created else "updated"
@@ -474,6 +490,22 @@ def cleanup_carbon_entries_on_event_delete(sender, instance, **kwargs):
     """
     try:
         from carbon.models import CarbonEntry
+
+        # A CASCADE delete reaches here with the parent History already gone, so
+        # `instance.history` raises DoesNotExist. That is the ordinary path when a season, a
+        # parcel or a whole establishment is removed — not an error — and there is nothing to
+        # clean up in it either, because `CarbonEntry.production` is itself on_delete=CASCADE
+        # and the database has already removed the rows (verified: 0 orphans after deleting a
+        # 512-event farm).
+        #
+        # It mattered because the broad `except` below printed "❌ Error cleaning up carbon
+        # entries" once per event — 512 lines for one farm — and a REAL cleanup failure was
+        # indistinguishable from that noise. Same shape as the `except Exception` that once
+        # disguised a fixture bug as a product bug.
+        from history.models import History
+
+        if instance.history_id is None or not History.objects.filter(pk=instance.history_id).exists():
+            return
 
         # Find and delete associated carbon entries
         # FIX: Match by event ID pattern to delete only the correct CarbonEntry

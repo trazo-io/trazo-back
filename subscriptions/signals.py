@@ -71,6 +71,17 @@ def _classify(prev, instance):
     if not plan_changed and not status_changed:
         return None
 
+    # Landing on a plan that bills NOTHING is churn, not a downgrade (2026-08-22).
+    #
+    # Since cancellation became a downgrade-to-Starter rather than a lockout, the terminal state
+    # of a churned customer is `plan=starter, status=active` — which, read naively, is an ordinary
+    # plan change with a negative MRR delta, i.e. "downgraded". That would have quietly hidden
+    # every real cancellation inside the downgrade bucket and left `canceled` looking like zero.
+    # Revenue going to zero is the definition of churn regardless of which row the customer ends
+    # up sitting on, and this is derived from the MRR movement rather than from a flag a future
+    # write path could forget to set.
+    dropped_to_free = plan_changed and prev_mrr > 0 and new_mrr == 0
+
     # Status transitions are the stronger signal — a cancellation that also drops the
     # plan is a cancellation, not a downgrade. Terminal/non-billable statuses are checked
     # FIRST so that e.g. an abandoned checkout (incomplete) alongside a plan change is
@@ -84,6 +95,11 @@ def _classify(prev, instance):
             return "unpaid"
         if new_status == "incomplete":
             return "status_changed"
+        # Checked ahead of `reactivated` and `trial_converted`: a lapsed subscription being
+        # re-pointed at Starter arrives here as canceled/past_due/trialing -> active, and both
+        # of those labels would book it as a WIN.
+        if dropped_to_free:
+            return "canceled"
         if new_status in ("active", "trialing") and prev_status in ("canceled", "unpaid"):
             return "reactivated"
         if prev_status == "trialing" and new_status == "active":
@@ -92,6 +108,8 @@ def _classify(prev, instance):
             return "status_changed"
 
     if plan_changed:
+        if dropped_to_free:
+            return "canceled"
         if new_mrr > prev_mrr:
             return "upgraded"
         if new_mrr < prev_mrr:
@@ -99,6 +117,24 @@ def _classify(prev, instance):
         return "plan_changed"
 
     return "status_changed"
+
+
+def _cancellation_metadata(instance, event_type):
+    """Copy the churn reason onto the immutable event row.
+
+    `Subscription` holds current state and is overwritten — a farm that cancels, comes back and
+    cancels again for a different reason leaves only the second answer there. SubscriptionEvent
+    is the append-only record, so the reason has to be snapshotted onto it at the transition or
+    it is not really recorded. Only attached to cancellations: on any other event these fields
+    are stale by definition.
+    """
+    if event_type != "canceled":
+        return {}
+    reason = getattr(instance, "cancellation_reason", "") or ""
+    feedback = getattr(instance, "cancellation_feedback", "") or ""
+    if not reason and not feedback:
+        return {}
+    return {"cancellation_reason": reason, "cancellation_feedback": feedback}
 
 
 @receiver(post_save, sender=Subscription, dispatch_uid="subscriptions.log_subscription_event")
@@ -148,6 +184,7 @@ def log_subscription_event(sender, instance, created, **kwargs):
             mrr_before=prev["mrr"],
             mrr_after=new_mrr,
             source="system",
+            metadata=_cancellation_metadata(instance, event_type),
         )
     except Exception:  # noqa: BLE001 — see docstring: instrumentation must not break writes
         logger.exception("Failed to log SubscriptionEvent for company_id=%s", instance.company_id)

@@ -12,8 +12,10 @@ logger = logging.getLogger(__name__)
 # 2026-08-13: this used to filter `plan__slug="starter"` and flip expired Starter subscriptions to
 # "canceled". Starter is free FOREVER (October plan: "Actually free. Starter free forever, pilot
 # free, no card"), and the COG Pro migration page's whole anti-lock-in answer is "Starter is free
-# permanently, not a trial". Cancelling it nulls `Company.subscription_plan` and 403s every
-# creation in the app — i.e. it silently locked out the exact COG Pro refugees October targets.
+# permanently, not a trial". At the time, cancelling it nulled `Company.subscription_plan` and
+# 403'd every creation in the app — i.e. it silently locked out the exact COG Pro refugees
+# October targets. Since 2026-08-22 a lapsed subscription falls back to Starter instead, so
+# that particular blast radius is gone; expiring the free-forever tier would still be wrong.
 #
 # Nothing self-serve carries a trial now: Starter is free forever, Compliance is paid, and Pilot
 # is hand-provisioned with `trial_no_card_days: 0`. The command is kept (the beat schedule and

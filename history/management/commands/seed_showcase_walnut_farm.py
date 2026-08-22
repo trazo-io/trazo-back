@@ -519,6 +519,14 @@ class Command(BaseCommand):
             self._verify(est)
             return
 
+        # This command REBUILDS an existing establishment row out of invented seasons, blocks
+        # and spray records — it is the landing page's showcase farm, not an operation. The
+        # row pre-exists, so unlike the other seeders there is no create() to carry the flag;
+        # set it here or the showcase exports as though it were somebody's real records.
+        if not est.is_demo:
+            est.is_demo = True
+            est.save(update_fields=["is_demo"])
+
         self.photo_dir = options.get("photo_dir")
         if self.photo_dir and not os.path.isdir(self.photo_dir):
             raise CommandError(f"--photo-dir {self.photo_dir} is not a directory.")
