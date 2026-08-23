@@ -238,6 +238,37 @@ PARCEL_APPLICATION = Module(
                     nop_cite="§ 205.202(c)",
                 ),
                 Question(
+                    # § 205.400(f) — the notices the certifier was SENT about this field, printed
+                    # on the field's own page. "Buffer widened to 45 ft" was filed on the OSP
+                    # screen while the buffer row above still said 30 ft, and the two statements
+                    # never met on one page until 2026-08-23.
+                    key="parcel_change_notifications",
+                    kind="info",
+                    label=text(
+                        "Change notifications filed about this parcel",
+                        "Notificaciones de cambio presentadas sobre esta parcela",
+                    ),
+                    embed="parcel_change_notifications",
+                    required=False,
+                    nop_cite="§ 205.400(f)",
+                ),
+                Question(
+                    # § 205.400(f)(1) — a drift or other contamination incident on THIS parcel
+                    # belongs on its own application. It was recorded (a GeneralEvent marked
+                    # is_contamination_incident) and notified, and then never appeared on the
+                    # page a certifier reads about that parcel's adjacent land; the 2028
+                    # renewal for a block that took drift on 11 May 2027 said nothing about it.
+                    key="contamination_incidents",
+                    kind="info",
+                    label=text(
+                        "Contamination incidents recorded on this parcel",
+                        "Incidentes de contaminación registrados en esta parcela",
+                    ),
+                    embed="contamination_incidents",
+                    required=False,
+                    nop_cite="§ 205.400(f)(1)",
+                ),
+                Question(
                     key="no_adjoining_prohibited",
                     kind="boolean",
                     label=text(
@@ -335,6 +366,17 @@ PARCEL_APPLICATION = Module(
                     label=text("Prior land manager affidavit", "Declaración jurada del manejador anterior"),
                     embed="landowner_affidavit",
                     required=False,
+                ),
+                Question(
+                    # USDA form #25 — the neighbour-signed attestation for a boundary. Counted
+                    # on the same page as the prior-manager affidavit because a certifier
+                    # looks for both together on new ground.
+                    key="adjoining_affidavit_card",
+                    kind="info",
+                    label=text("Adjoining-land affidavits", "Declaraciones juradas de tierras colindantes"),
+                    embed="adjoining_land_affidavit",
+                    required=False,
+                    nop_cite="§ 205.202(c)",
                 ),
             ),
         ),

@@ -23,6 +23,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer
 
+from common.pdf_text import glyph_safe
 from common.specimen import is_specimen, specimen_page_callback
 
 TRAZO_GREEN_DARK = colors.HexColor("#2E7D32")
@@ -42,7 +43,7 @@ def _escape(text: str) -> str:
     """Escape + preserve paragraph breaks for ReportLab Paragraph."""
     if not text:
         return ""
-    return xml.sax.saxutils.escape(text).replace("\n", "<br/>")
+    return xml.sax.saxutils.escape(glyph_safe(text)).replace("\n", "<br/>")
 
 
 def _record_inventory(establishment):

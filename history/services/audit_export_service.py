@@ -29,6 +29,7 @@ from reportlab.platypus import Image as RLImage
 from reportlab.platypus import KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from common.field_registry import NO_TREATMENT_ANSWERS, NON_ORGANIC_SEED_STATUSES, ORGANIC_APPROVED
+from common.pdf_text import glyph_safe
 from common.specimen import (
     SPECIMEN_BODY,
     SPECIMEN_LINE,
@@ -895,7 +896,7 @@ def _esc(value, fallback="\u2014"):
     `_cell` already escapes, so table cells were never exposed; only the hand-built
     Paragraph lines were. Use this for those.
     """
-    text = _val(value, fallback)
+    text = glyph_safe(_val(value, fallback))
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
@@ -1442,7 +1443,9 @@ def _fmt_change_entries(entries):
             str(entry[k]).replace("_", " ").strip().title() for k in ("section", "field") if entry.get(k)
         )
         if new_value and old_value:
-            body = f"{old_value} \u2192 {new_value}"
+            # ReportLab's base-14 Helvetica carries no U+2192: an arrow here printed as the "fi"
+            # ligature in every packet ("old ﬁ new"). Plain words render in every font.
+            body = f"{old_value} to {new_value}"
         elif new_value or old_value:
             body = str(new_value or old_value)
         else:
@@ -1473,6 +1476,72 @@ def production_period(production, joiner=" to ", compact=False):
     if production.expected_harvest and not compact:
         return f"{start}, in progress (expected {_fmt_date(production.expected_harvest)})"
     return f"{start}, in progress"
+
+
+_EVENT_RELATIONS = (
+    "history_chemicalevent_events",
+    "history_productionevent_events",
+    "history_soilmanagementevent_events",
+    "history_pestmanagementevent_events",
+    "history_generalevent_events",
+    "history_businessevent_events",
+    "history_weatherevent_events",
+)
+
+
+def records_span(production):
+    """(earliest, latest) record date on a production, or (None, None) — iterated in Python over
+    the prefetched relations, for the same reason `_last_covered_year` does."""
+    dates = []
+    for related in _EVENT_RELATIONS:
+        try:
+            dates.extend(e.date for e in getattr(production, related).all() if e.date)
+        except Exception:  # noqa: BLE001 — a missing relation must never kill the PDF
+            continue
+    if not dates:
+        return None, None
+    return min(dates), max(dates)
+
+
+def records_outside_period(production):
+    """The record span when it reaches OUTSIDE the declared production period, else None.
+
+    `production_period()` prints the crop cycle the operator declared — sowing to last pick,
+    or the projected harvest. It is the right headline and it stays. But 13.5% of a pilot's
+    records sat outside it: dormant pruning and the seed search weeks before `start_date`,
+    winter cover, the irrigation summary and a storage crop's third load weeks after
+    `finish_date`. A certifier reading "Period: 1 March – 12 July" and then a record dated
+    9 February inside the packet queries it — reasonably, because the document stated a range
+    it does not keep to.
+
+    Returns a dict {"earliest", "latest", "before", "after"} (the last two are booleans saying
+    which side was overrun) when anything sits outside, so the caller can print one honest line
+    beside the period: "Records: 2026-02-09 to 2026-08-31 — pre-season work from 9 Feb; post-harvest
+    through 31 Aug". Returns None when every record sits inside the declared period.
+    """
+    earliest, latest = records_span(production)
+    if earliest is None:
+        return None
+    start = production.start_date
+    end = production.finish_date or production.expected_harvest
+    before = bool(start and earliest.date() < start.date())
+    after = bool(end and latest.date() > end.date())
+    if not (before or after):
+        return None
+    return {"earliest": earliest, "latest": latest, "before": before, "after": after}
+
+
+def records_span_line(production):
+    """The one-line disclosure for the cover / section header, or "" when none is owed."""
+    over = records_outside_period(production)
+    if not over:
+        return ""
+    notes = []
+    if over["before"]:
+        notes.append(f"pre-season work from {_fmt_date(over['earliest'])}")
+    if over["after"]:
+        notes.append(f"post-harvest records through {_fmt_date(over['latest'])}")
+    return f"Records: {_fmt_date(over['earliest'])} to {_fmt_date(over['latest'])} \u2014 " + "; ".join(notes)
 
 
 def _add_page_number(canvas, doc):
@@ -1984,7 +2053,7 @@ class AuditExportService:
         """
         t = _truncate(text, max_len if max_len is not None else _RUNAWAY_CELL_CHARS) if text else "\u2014"
         # Escape XML special characters for Paragraph
-        t = t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        t = glyph_safe(t).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         return Paragraph(t, self._styles["cell"])
 
     def _hdr(self, text):
@@ -2546,6 +2615,12 @@ class AuditExportService:
                 self._styles["subtitle"],
             )
         )
+        # The declared cycle is the headline; when the records reach outside it, say so on the
+        # same page rather than let the reader discover a 9 February record under a 1 March
+        # period. See `records_outside_period`.
+        span_line = records_span_line(p)
+        if span_line:
+            elements.append(Paragraph(_esc(span_line), self._styles["footer_note"]))
 
         elements.append(self._spacer(0.6))
 
@@ -10747,7 +10822,7 @@ class AuditExportService:
         # specialty crops. A larger delta warrants inspector review but is
         # not itself a regulatory violation.
         elements.append(self._spacer(0.12))
-        elements.append(self._body("<b>Harvest Reconciliation (boxes \u2192 pounds)</b>"))
+        elements.append(self._body("<b>Harvest Reconciliation (boxes to pounds)</b>"))
         elements.append(self._spacer(0.04))
 
         box_weight, tolerance = self._box_weight_for_production()
@@ -10770,7 +10845,7 @@ class AuditExportService:
             elements.append(
                 Paragraph(
                     "<b>[REVIEW] Output reconciliation incomplete.</b> Harvest yield and quantity "
-                    "sold are both required to close the boxes \u2192 pounds trace from field to "
+                    "sold are both required to close the boxes-to-pounds trace from field to "
                     "sale. Without them the § 205.2 audit trail stops at the farm gate.",
                     self._warning_style(),
                 )
@@ -10789,7 +10864,7 @@ class AuditExportService:
                     f"Box weight is not configured for this production (product "
                     f"crop-type \u201c{getattr(self.production.product, 'crop_type', '') or getattr(self.production.product, 'name', '') or '-'}\u201d). "
                     "Set the <b>box_weight_lb</b> field on the production record to enable "
-                    "the boxes \u2192 pounds reconciliation, or consult the USDA-AMS "
+                    "the boxes-to-pounds reconciliation, or consult the USDA-AMS "
                     "Marketing Order for the crop-specific standard."
                 )
             )
@@ -12038,8 +12113,22 @@ class AuditExportService:
         except Exception:  # noqa: BLE001 — non-fatal; export should still render
             pass
 
-        # --- Primary: structured ParcelCropHistory entries ---
-        crop_history = list(ParcelCropHistory.objects.filter(parcel=parcel).order_by("-year")[:10])
+        # --- Primary: typed ParcelCropHistory years MERGED with years derived from the seasons
+        # logged on this parcel. Reading the typed table alone left the two most recent, best
+        # documented years off every renewal's § 205.202(b) section — see
+        # product/services/land_history.py. Capped at the audited production's own year so a
+        # 2026 packet does not list 2027 plantings; a spanning season caps at its finish year.
+        from product.services.land_history import land_history_rows
+
+        _span_end = self.production.finish_date or self.production.expected_harvest or self.production.start_date
+        _through = (
+            max(
+                (self.production.start_date.year if self.production.start_date else 0),
+                (_span_end.year if _span_end else 0),
+            )
+            or None
+        )
+        crop_history = land_history_rows(parcel, limit=10, through_year=_through)
 
         if crop_history:
             headers = [
@@ -12061,7 +12150,9 @@ class AuditExportService:
             for entry in crop_history:
                 data.append(
                     [
-                        self._cell(str(entry.year)),
+                        # A derived year is marked in the cell, not only in Notes, so the
+                        # provenance survives a reader who scans the first column.
+                        self._cell(f"{entry.year}{' *' if entry.is_derived else ''}"),
                         # Fold the block into the crop cell rather than adding a column: this
                         # table is already against the portrait width budget, and the Input
                         # Application Log uses the same technique for its Area cell.
@@ -12075,7 +12166,7 @@ class AuditExportService:
                             (f"{entry.crop_grown} ({entry.block_id})" if entry.block_id else entry.crop_grown)
                             + (f" + cover: {entry.cover_crop}" if entry.cover_crop else "")
                         ),
-                        self._cell(entry.get_production_method_display() if entry.production_method else None),
+                        self._cell(entry.production_method_display or None),
                         self._cell(entry.substances_applied),
                         self._cell(_last_prohibited_input(entry)),
                         self._cell(entry.notes),
@@ -12093,6 +12184,16 @@ class AuditExportService:
             t = Table(data, colWidths=col_widths, repeatRows=1)
             t.setStyle(self._base_table_style())
             elements.append(t)
+            if any(e.is_derived for e in crop_history):
+                elements.append(
+                    Paragraph(
+                        "* Compiled from the productions and inputs logged on this parcel in Trazo. "
+                        "Unmarked years were entered by the operator as land-use history. A compiled "
+                        "year never states a last prohibited input — that remains the operator's "
+                        "attestation.",
+                        self._styles["footer_note"],
+                    )
+                )
 
             # USDA's Field History form asks for "Material / Product Brand Name",
             # "Manufacturer" and "Application Date(s)" as three columns. The table above is
@@ -12104,7 +12205,12 @@ class AuditExportService:
             # would put a fabricated attribution into an eligibility determination.
             history_material_lines = []
             for entry in crop_history:
-                rows = entry.substance_applications if isinstance(entry.substance_applications, list) else []
+                _pch = entry.recorded
+                rows = (
+                    _pch.substance_applications
+                    if _pch is not None and isinstance(getattr(_pch, "substance_applications", None), list)
+                    else []
+                )
                 for row in rows:
                     if not isinstance(row, dict):
                         continue

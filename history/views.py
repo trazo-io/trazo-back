@@ -3547,7 +3547,14 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         created_event = None
 
         for parcel in parcels:
-            if parcel.current_history is not None:
+            # A named season is reachable whether or not the parcel still POINTS at one.
+            # Finishing a production nulls `parcel.current_history`
+            # (Parcel.finish_current_history), and the explicit-`history` branch below sat
+            # inside this `current_history is not None` test — so a record sent FOR a finished
+            # season, by id, from that season's own page, fell through to "No active production
+            # found for the selected parcel" (2026-08-23). The post-harvest continuation the
+            # closed-record guard below now allows was therefore unreachable in practice.
+            if parcel.current_history is not None or explicit_history_id:
                 # Use explicitly provided history ID if available (from Quick Add on specific production)
                 # Otherwise fall back to parcel.current_history
                 if explicit_history_id:
@@ -3613,23 +3620,56 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                         )
                     history = parcel.current_history
 
-                # Immutability guard: prevent adding events to completed productions
-                if history.finish_date is not None or history.published:
-                    raise PermissionDenied(
-                        # Was "...; reopen it to add events." There is no reopen CONTROL —
-                        # no UI, no command, no dedicated endpoint — so the message sent
-                        # farmers hunting for a button that does not exist.
-                        # ⚠️ It is nonetheless reachable: `finish_date` and `published` are
-                        # both writable on HistoryWriteSerializer (serializers.py fields list,
-                        # absent from read_only_fields), and HistoryViewSet.update guards only
-                        # `published=True while finish_date is None` — nothing rejects setting
-                        # finish_date back to null. So PATCH /histories/<id>/ {"finish_date":
-                        # null} clears this lock wholesale, with no record of the reopen.
-                        # That is a gap to close deliberately, not a feature to advertise here.
-                        "Cannot add events to a completed production. "
-                        "A finished production is a closed record. Log this activity "
-                        "against the parcel's current or next production instead."
+                # Closed-record guard — the line is the FINISH DATE, not the finish itself.
+                #
+                # Until 2026-08-23 this refused EVERY new record on a finished production and told
+                # the farmer to log it "against the parcel's current or next production instead".
+                # Read against what a farm actually does after harvest, that was wrong twice:
+                #
+                #   * a storage crop ships for months. "Load 3 of 3 to the distributor", 40 days
+                #     after the onions were lifted and the season closed, is part of THAT lot's
+                #     harvest → storage → transport → sale trail — the trail § 205.103(b)(2) and the
+                #     CCOF audit ask to be followed lot by lot. Filing it on next spring's carrots
+                #     breaks the trail at the one point an inspector follows it;
+                #   * winter cover drilled in October after the carrots, the season's irrigation
+                #     summary, post-harvest alley mowing and trap counts that run past the last
+                #     pick are all that FIELD's year. On a vegetable block there is no "next
+                #     production" to receive them until the following spring.
+                #
+                # 49 records in one pilot farm's own history were dated after their season closed
+                # — every one a record the API had come to refuse.
+                #
+                # The integrity the lock protects is against BACKDATING: inserting a spray into a
+                # harvest window a certifier has already seen as closed. A record dated AFTER the
+                # finish date does not rewrite that window — it extends the lot's trail forward,
+                # carrying its own later date, and the packet prints it in date order after the
+                # close. So: on a finished production, a new record dated after `finish_date` is a
+                # post-harvest continuation and is accepted; one dated on or before it is refused,
+                # and the message names the path that exists for that case — a correction, which
+                # keeps the original beside it. The lot header (lot_id, production_amount,
+                # finish_date) stays frozen (HistoryWriteSerializer), and existing records on a
+                # finished season stay behind 423 + /amend. `published` implies finished, so it
+                # adds nothing to the test.
+                if history.finish_date is not None:
+                    # Day granularity, both sides in the SAME zone (`timezone.localdate`): the
+                    # finish day is the last day of the season, so a record dated that day is
+                    # inside it. Comparing raw UTC `.date()`s would put a 5 pm local finish on
+                    # the next UTC day and refuse a record the farmer dated the morning after.
+                    event_when = serializer.validated_data.get("date")
+                    event_day = (
+                        timezone.localdate(event_when)
+                        if hasattr(event_when, "tzinfo") and event_when.tzinfo is not None
+                        else (event_when.date() if hasattr(event_when, "date") else event_when)
                     )
+                    finish_day = timezone.localdate(history.finish_date)
+                    if event_day is None or event_day <= finish_day:
+                        raise PermissionDenied(
+                            f"This production was finished on {finish_day.isoformat()}, so its "
+                            "season is a closed record. A record dated inside it goes in as a "
+                            "correction to an existing activity (the original is kept beside it). "
+                            "Work done after the finish date — shipments from storage, cover crop, "
+                            "post-harvest field work — can be logged here with its own later date."
+                        )
 
                 index = (
                     history.history_weatherevent_events.count()

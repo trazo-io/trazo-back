@@ -32,8 +32,9 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Table, TableStyle
 
+from common.pdf_text import glyph_safe
 from common.specimen import is_specimen, specimen_page_callback
-from history.services.audit_export_service import production_period
+from history.services.audit_export_service import production_period, records_span_line
 
 from .audit_export_service import AuditExportService, _add_page_number, _fmt_generated_date, _val
 
@@ -42,7 +43,7 @@ logger = logging.getLogger(__name__)
 
 def _esc(text):
     """Escape XML specials for ReportLab Paragraph (section headers embed user data)."""
-    return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return glyph_safe(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 class OperationAuditExportService:
@@ -254,6 +255,11 @@ class OperationAuditExportService:
                 span = production_period(prod, joiner=" – ")
                 title = f"Production — {_esc(crop)} ({span})"
                 story.append(header_svc._section_header(title))
+                # Same disclosure the per-production cover carries: the declared cycle is the
+                # headline, and when the records reach outside it the span is printed beside it.
+                span_line = records_span_line(prod)
+                if span_line:
+                    story.append(Paragraph(_esc(span_line), header_svc._styles["footer_note"]))
                 prod_svc = AuditExportService(prod, self.certification_type)
                 prod_builders = prod_svc._section_builders()
                 for k in prod_keys:

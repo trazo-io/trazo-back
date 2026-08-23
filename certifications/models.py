@@ -1680,6 +1680,20 @@ class OSPChangeNotification(models.Model):
         blank=True,
         help_text="Date the certifier acknowledged the change (blank until acknowledged).",
     )
+    # The FIELD a notice is about, when it is about one. A certifier's letter names the field
+    # ("buffer on Home Field West widened to 45 ft"); until 2026-08-23 the notice had no link to
+    # the parcel, so it lived only on the OSP screen while that parcel's application went on
+    # printing the old buffer width — the two statements never met on one page. Optional,
+    # because a change of buyer or a new material is not about a field. SET_NULL: a notice is a
+    # record of what the certifier was told and outlives a parcel row.
+    parcel = models.ForeignKey(
+        "product.Parcel",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="change_notifications",
+        help_text="The parcel this notice concerns, if it concerns one (prints on that parcel's application).",
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,

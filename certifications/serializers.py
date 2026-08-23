@@ -342,6 +342,17 @@ class OrganicSystemPlanSerializer(serializers.ModelSerializer):
             "previous_version",
             "submission_pdf",  # Set only by submit() action.
             "module_responses",  # Written only via the module PUT action (WS-2.2).
+            # 🔴 2026-08-23 — `status` and `submitted_at` were ordinary writable fields, so
+            # PATCH {"status": "submitted"} on a draft reached "submitted" through
+            # perform_update (which only refuses edits to NON-drafts) and skipped everything
+            # the submit action exists to do: the § 205.201(a) narrative floor, the module
+            # recompile, and above all the frozen submission_pdf — "the exact artifact the
+            # certifier receives", whose absence the submit docstring itself calls "a silent
+            # gap the inspector can't detect". activate() then activated it. Found replaying
+            # a pilot's renewal through the API: two "submitted" plans, no snapshot on either.
+            # The UI only ever PATCHes `sections`. Status moves through submit / activate.
+            "status",
+            "submitted_at",
             "approved_at",
             "approved_national_list_substances",
             "approved_omri_products",
@@ -564,12 +575,15 @@ class OSPChangeNotificationSerializer(serializers.ModelSerializer):
     documentation_timing_display = serializers.CharField(source="get_documentation_timing_display", read_only=True)
     cfr_reference = serializers.CharField(read_only=True)
     is_immediate = serializers.BooleanField(read_only=True)
+    parcel_name = serializers.CharField(source="parcel.name", read_only=True, default=None)
 
     class Meta:
         model = OSPChangeNotification
         fields = [
             "id",
             "osp",
+            "parcel",
+            "parcel_name",
             "change_category",
             "change_category_display",
             "description",
@@ -585,6 +599,20 @@ class OSPChangeNotificationSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = ["id", "osp", "created_at"]
+
+    def validate_parcel(self, parcel):
+        """A notice may only be attached to a parcel of the plan's own operation.
+
+        The create path saves with `osp=` from the URL, so the establishment comes through the
+        serializer context (`osp`) or the instance; without either there is nothing to check
+        against and the FK is accepted as given.
+        """
+        if parcel is None:
+            return parcel
+        osp = self.context.get("osp") or getattr(self.instance, "osp", None)
+        if osp is not None and parcel.establishment_id != osp.establishment_id:
+            raise serializers.ValidationError("That parcel belongs to a different operation.")
+        return parcel
 
     def validate(self, attrs):
         """Run the model's date guard on the API path — DRF does not call Model.clean()."""

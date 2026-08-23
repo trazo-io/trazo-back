@@ -10,6 +10,9 @@
     "Native hedgerow maintenance on the Upper Terrace north edge continues under the NRCS EQIP 422 contract established in 2024"
    ],
    "changes_summary": "Two changes to the plan since the 2025 renewal, both already notified to Oregon Tilth in writing before they took effect. First, Grandevo WDG (Pro Farm Group, OMRI listed, EPA Reg. 84059-27) was added to the spotted wing drosophila programme on the three blueberry blocks as a rotation partner to Entrust SC; the materials-list update went to OTCO on 12 February 2026 and was acknowledged on 26 February under ticket OT-26-01174, and the first application was 26 June. Second, Bottom Ground A carried two crops in 2026 instead of one — spring spinach closed on 8 June and a second carrot planting went in on 20 June — which changes the rotation for that parcel but adds no acreage. Everything else stands as filed: no new or removed parcels, no change to the certified acreage (86.9 acres across six parcels), no change of certifier, buyers or handlers, no split or parallel production, no livestock, and no change to the buffer arrangements on Home Field East, Home Field West or the Upper Terrace.",
+   "created_at": {
+    "__dt__": "2026-08-21T11:37:30.808156+00:00"
+   },
    "deletions": [
     "None. No input, parcel, practice or buyer has been removed since the 2025 plan."
    ],
@@ -22,6 +25,9 @@
    },
    "submitted_at": {
     "__dt__": "2026-08-21T11:37:30.723000+00:00"
+   },
+   "updated_at": {
+    "__dt__": "2026-08-21T11:37:30.808187+00:00"
    }
   }
  ],
@@ -248,6 +254,9 @@
     "On-farm washing, curing, cooling and packing"
    ],
    "certifier_name": "Oregon Tilth Certified Organic (OTCO)",
+   "created_at": {
+    "__dt__": "2026-08-21T04:48:50.002311+00:00"
+   },
    "effective_date": {
     "__d__": "2006-05-15"
    },
@@ -270,6 +279,9 @@
     ],
     "simulated": true
    },
+   "updated_at": {
+    "__dt__": "2026-08-21T06:26:41.549056+00:00"
+   },
    "usda_operation_name": "Brandt Family Farms LLC",
    "verification_source": "usda_organic_integrity_db",
    "verification_source_url": "https://organic.ams.usda.gov/integrity/CP/OPP?cid=71&nopid=8150001463",
@@ -288,6 +300,9 @@
     "Spinach"
    ],
    "certifier_name": "Real Organic Project",
+   "created_at": {
+    "__dt__": "2026-08-21T04:48:50.022499+00:00"
+   },
    "effective_date": {
     "__d__": "2020-07-01"
    },
@@ -295,6 +310,9 @@
     "__d__": "2027-06-30"
    },
    "notes": "Add-on label to USDA Organic; requires soil-grown crops. Inspected August 2025. Certificate copy on file.",
+   "updated_at": {
+    "__dt__": "2026-08-21T04:48:50.022508+00:00"
+   },
    "verification_source": "",
    "verification_status": "self_reported"
   }
@@ -306,6 +324,9 @@
   "#company": 130,
   "address": "31480 Calapooia Rd",
   "city": "Tangent",
+  "contact_email": "laurel@calapooiabend.example",
+  "contact_person": "Laurel Brandt",
+  "contact_phone": "(541) 555-0142",
   "crops_grown": "[\"Blueberries\",\"Carrots\",\"Onions\",\"Spinach\"]",
   "custom_message": "Thanks for scanning. We have grown certified organic fruit and vegetables on this ground since 2006, all of it in real soil. Every pick and every input is recorded here as we do it.",
   "description": "Family-run organic farm on the Calapooia River in Linn County, Oregon, certified organic by Oregon Tilth since 2006 and Real Organic Project certified since 2020. Forty acres of soil-grown blueberries (Duke, Draper, Liberty) on sawdust-mulched raised beds, and fifty acres of rotation ground in carrots, onions and spinach with winter cover crops. Everything goes to wholesale: fresh fruit and vegetables through Organically Grown Company in Portland, process-grade berries to Willamette Valley Fruit in Salem.",
@@ -599,6 +620,9 @@
    "#osp": 59,
    "_id": 22,
    "change_category": "practice_input_procedure_change",
+   "created_at": {
+    "__dt__": "2026-08-21T11:38:06.571344+00:00"
+   },
    "date_notified": {
     "__d__": "2026-02-12"
    },
@@ -613,6 +637,9 @@
    "#establishment": 166,
    "_id": 59,
    "approval_document": "",
+   "created_at": {
+    "__dt__": "2026-08-21T11:19:47.487361+00:00"
+   },
    "effective_date": {
     "__d__": "2025-01-15"
    },
@@ -1530,6 +1557,9 @@
    "submitted_at": {
     "__dt__": "2024-12-10T16:05:00+00:00"
    },
+   "updated_at": {
+    "__dt__": "2026-08-21T11:42:55.359881+00:00"
+   },
    "version_number": 1,
    "~approved_national_list_substances": [
     "Peracetic acid",
@@ -1551,6 +1581,9 @@
    "#previous_version": 59,
    "_id": 60,
    "approval_document": "",
+   "created_at": {
+    "__dt__": "2026-08-21T11:57:30.367555+00:00"
+   },
    "effective_date": {
     "__d__": "2026-02-12"
    },
@@ -2476,6 +2509,9 @@
    "submitted_at": {
     "__dt__": "2026-02-12T15:20:00+00:00"
    },
+   "updated_at": {
+    "__dt__": "2026-08-21T12:01:56.642505+00:00"
+   },
    "version_number": 2,
    "~approved_national_list_substances": [
     "Peracetic acid",
@@ -2497,6 +2533,9 @@
    "#previous_version": 60,
    "_id": 61,
    "approval_document": "",
+   "created_at": {
+    "__dt__": "2026-08-21T12:14:08.832794+00:00"
+   },
    "effective_date": {
     "__d__": "2026-08-21"
    },
@@ -3422,6 +3461,9 @@
    "submitted_at": {
     "__dt__": "2026-08-21T11:37:00+00:00"
    },
+   "updated_at": {
+    "__dt__": "2026-08-21T12:14:25.911147+00:00"
+   },
    "version_number": 3,
    "~approved_national_list_substances": [
     "Peracetic acid",
@@ -3445,198 +3487,306 @@
    "#parcel": 297,
    "_id": 141,
    "cover_crop": "Permanent grass alleyway",
+   "created_at": {
+    "__dt__": "2026-08-21T04:48:49.868169+00:00"
+   },
    "crop_grown": "Blueberries ('Duke')",
    "last_prohibited_substance": "",
    "notes": "Certified organic continuously since 2006 (Oregon Tilth). No prohibited materials.",
    "production_method": "organic",
    "substances_applied": "Rexius compost 3 t/ac (Oct); feather meal 13-0-0 400 lb/ac (Apr); Neptune's Harvest 2-3-1 fertigation x3; Tiger 90 sulfur 300 lb/ac (Mar); lime sulfur dormant (Feb); Serenade Opti x2 at bloom; Entrust SC x2 (Jul); Surround WP x1",
+   "updated_at": {
+    "__dt__": "2026-08-21T04:48:49.868186+00:00"
+   },
    "year": 2023
   },
   {
    "#parcel": 297,
    "_id": 142,
    "cover_crop": "Permanent grass alleyway",
+   "created_at": {
+    "__dt__": "2026-08-21T04:48:49.87454+00:00"
+   },
    "crop_grown": "Blueberries ('Duke')",
    "last_prohibited_substance": "",
    "notes": "Certified organic continuously (Oregon Tilth). Heavy SWD pressure after a warm June; three Entrust applications inside the label limit. No prohibited materials.",
    "production_method": "organic",
    "substances_applied": "Rexius compost 3 t/ac (Oct); feather meal 400 lb/ac; Neptune's Harvest x3; Tiger 90 sulfur 300 lb/ac; lime sulfur dormant; Serenade Opti x2; Entrust SC x3 (heavy SWD year); Surround WP x1",
+   "updated_at": {
+    "__dt__": "2026-08-21T04:48:49.874552+00:00"
+   },
    "year": 2024
   },
   {
    "#parcel": 297,
    "_id": 143,
    "cover_crop": "Permanent grass alleyway",
+   "created_at": {
+    "__dt__": "2026-08-21T04:48:49.875922+00:00"
+   },
    "crop_grown": "Blueberries ('Duke')",
    "last_prohibited_substance": "",
    "notes": "Certified organic continuously (Oregon Tilth). Hail on the River Block 2025-06-14 cost an estimated 6 percent of Liberty. No prohibited materials.",
    "production_method": "organic",
    "substances_applied": "Rexius compost 3 t/ac (Oct); feather meal 400 lb/ac; Neptune's Harvest x3; Tiger 90 sulfur 300 lb/ac; lime sulfur dormant; Serenade Opti x2; Entrust SC x2; Surround WP x1",
+   "updated_at": {
+    "__dt__": "2026-08-21T04:48:49.875932+00:00"
+   },
    "year": 2025
   },
   {
    "#parcel": 298,
    "_id": 144,
    "cover_crop": "Cereal rye / hairy vetch / crimson clover (winter)",
+   "created_at": {
+    "__dt__": "2026-08-21T04:48:49.877631+00:00"
+   },
    "crop_grown": "Onions (Patterson, transplants)",
    "last_prohibited_substance": "",
    "notes": "Certified organic continuously since 2006 (Oregon Tilth); ground managed organically since 2004. No prohibited materials.",
    "production_method": "organic",
    "substances_applied": "Rexius compost 4 t/ac pre-plant; feather meal 13-0-0 600 lb/ac; Neptune's Harvest 2-3-1 side-dress x2; no pesticide applied",
+   "updated_at": {
+    "__dt__": "2026-08-21T04:48:49.877636+00:00"
+   },
    "year": 2023
   },
   {
    "#parcel": 298,
    "_id": 145,
    "cover_crop": "Cereal rye / hairy vetch / crimson clover (winter)",
+   "created_at": {
+    "__dt__": "2026-08-21T04:48:49.87901+00:00"
+   },
    "crop_grown": "Carrots (Bolero)",
    "last_prohibited_substance": "",
    "notes": "Certified organic continuously since 2006 (Oregon Tilth); ground managed organically since 2004. No prohibited materials.",
    "production_method": "organic",
    "substances_applied": "Rexius compost 4 t/ac pre-plant; feather meal 13-0-0 500 lb/ac; Neptune's Harvest x2; flame weeding pre-emergence; no pesticide applied",
+   "updated_at": {
+    "__dt__": "2026-08-21T04:48:49.879019+00:00"
+   },
    "year": 2024
   },
   {
    "#parcel": 298,
    "_id": 146,
    "cover_crop": "Cereal rye / hairy vetch / crimson clover (winter)",
+   "created_at": {
+    "__dt__": "2026-08-21T04:48:49.882399+00:00"
+   },
    "crop_grown": "Carrots (Bolero)",
    "last_prohibited_substance": "",
    "notes": "Certified organic continuously since 2006 (Oregon Tilth); ground managed organically since 2004. No prohibited materials.",
    "production_method": "organic",
    "substances_applied": "Rexius compost 4 t/ac pre-plant; feather meal 13-0-0 500 lb/ac; Neptune's Harvest x2; flame weeding pre-emergence; no pesticide applied",
+   "updated_at": {
+    "__dt__": "2026-08-21T04:48:49.882407+00:00"
+   },
    "year": 2025
   },
   {
    "#parcel": 299,
    "_id": 147,
    "cover_crop": "Permanent grass alleyway",
+   "created_at": {
+    "__dt__": "2026-08-21T04:48:49.885464+00:00"
+   },
    "crop_grown": "Blueberries ('Draper')",
    "last_prohibited_substance": "",
    "notes": "Certified organic continuously since 2006 (Oregon Tilth). No prohibited materials.",
    "production_method": "organic",
    "substances_applied": "Rexius compost 3 t/ac (Oct); feather meal 13-0-0 400 lb/ac (Apr); Neptune's Harvest 2-3-1 fertigation x3; Tiger 90 sulfur 300 lb/ac (Mar); lime sulfur dormant (Feb); Serenade Opti x2 at bloom; Entrust SC x2 (Jul); Surround WP x1",
+   "updated_at": {
+    "__dt__": "2026-08-21T04:48:49.885472+00:00"
+   },
    "year": 2023
   },
   {
    "#parcel": 299,
    "_id": 148,
    "cover_crop": "Permanent grass alleyway",
+   "created_at": {
+    "__dt__": "2026-08-21T04:48:49.888214+00:00"
+   },
    "crop_grown": "Blueberries ('Draper')",
    "last_prohibited_substance": "",
    "notes": "Certified organic continuously (Oregon Tilth). Heavy SWD pressure after a warm June; three Entrust applications inside the label limit. No prohibited materials.",
    "production_method": "organic",
    "substances_applied": "Rexius compost 3 t/ac (Oct); feather meal 400 lb/ac; Neptune's Harvest x3; Tiger 90 sulfur 300 lb/ac; lime sulfur dormant; Serenade Opti x2; Entrust SC x3 (heavy SWD year); Surround WP x1",
+   "updated_at": {
+    "__dt__": "2026-08-21T04:48:49.888225+00:00"
+   },
    "year": 2024
   },
   {
    "#parcel": 299,
    "_id": 149,
    "cover_crop": "Permanent grass alleyway",
+   "created_at": {
+    "__dt__": "2026-08-21T04:48:49.89087+00:00"
+   },
    "crop_grown": "Blueberries ('Draper')",
    "last_prohibited_substance": "",
    "notes": "Certified organic continuously (Oregon Tilth). Hail on the River Block 2025-06-14 cost an estimated 6 percent of Liberty. No prohibited materials.",
    "production_method": "organic",
    "substances_applied": "Rexius compost 3 t/ac (Oct); feather meal 400 lb/ac; Neptune's Harvest x3; Tiger 90 sulfur 300 lb/ac; lime sulfur dormant; Serenade Opti x2; Entrust SC x2; Surround WP x1",
+   "updated_at": {
+    "__dt__": "2026-08-21T04:48:49.890879+00:00"
+   },
    "year": 2025
   },
   {
    "#parcel": 300,
    "_id": 150,
    "cover_crop": "Permanent grass alleyway",
+   "created_at": {
+    "__dt__": "2026-08-21T04:48:49.89219+00:00"
+   },
    "crop_grown": "Blueberries ('Liberty')",
    "last_prohibited_substance": "",
    "notes": "Certified organic continuously since 2006 (Oregon Tilth). No prohibited materials.",
    "production_method": "organic",
    "substances_applied": "Rexius compost 3 t/ac (Oct); feather meal 13-0-0 400 lb/ac (Apr); Neptune's Harvest 2-3-1 fertigation x3; Tiger 90 sulfur 300 lb/ac (Mar); lime sulfur dormant (Feb); Serenade Opti x2 at bloom; Entrust SC x2 (Jul); Surround WP x1",
+   "updated_at": {
+    "__dt__": "2026-08-21T04:48:49.892196+00:00"
+   },
    "year": 2023
   },
   {
    "#parcel": 300,
    "_id": 151,
    "cover_crop": "Permanent grass alleyway",
+   "created_at": {
+    "__dt__": "2026-08-21T04:48:49.894188+00:00"
+   },
    "crop_grown": "Blueberries ('Liberty')",
    "last_prohibited_substance": "",
    "notes": "Certified organic continuously (Oregon Tilth). Heavy SWD pressure after a warm June; three Entrust applications inside the label limit. No prohibited materials.",
    "production_method": "organic",
    "substances_applied": "Rexius compost 3 t/ac (Oct); feather meal 400 lb/ac; Neptune's Harvest x3; Tiger 90 sulfur 300 lb/ac; lime sulfur dormant; Serenade Opti x2; Entrust SC x3 (heavy SWD year); Surround WP x1",
+   "updated_at": {
+    "__dt__": "2026-08-21T04:48:49.894194+00:00"
+   },
    "year": 2024
   },
   {
    "#parcel": 300,
    "_id": 152,
    "cover_crop": "Permanent grass alleyway",
+   "created_at": {
+    "__dt__": "2026-08-21T04:48:49.89564+00:00"
+   },
    "crop_grown": "Blueberries ('Liberty')",
    "last_prohibited_substance": "",
    "notes": "Certified organic continuously (Oregon Tilth). Hail on the River Block 2025-06-14 cost an estimated 6 percent of Liberty. No prohibited materials.",
    "production_method": "organic",
    "substances_applied": "Rexius compost 3 t/ac (Oct); feather meal 400 lb/ac; Neptune's Harvest x3; Tiger 90 sulfur 300 lb/ac; lime sulfur dormant; Serenade Opti x2; Entrust SC x2; Surround WP x1",
+   "updated_at": {
+    "__dt__": "2026-08-21T04:48:49.895648+00:00"
+   },
    "year": 2025
   },
   {
    "#parcel": 301,
    "_id": 153,
    "cover_crop": "Cereal rye / hairy vetch / crimson clover (winter)",
+   "created_at": {
+    "__dt__": "2026-08-21T04:48:49.896969+00:00"
+   },
    "crop_grown": "Carrots (Bolero)",
    "last_prohibited_substance": "",
    "notes": "Certified organic continuously since 2006 (Oregon Tilth); ground managed organically since 2004. No prohibited materials.",
    "production_method": "organic",
    "substances_applied": "Rexius compost 4 t/ac pre-plant; feather meal 13-0-0 500 lb/ac; Neptune's Harvest x2; flame weeding pre-emergence; no pesticide applied",
+   "updated_at": {
+    "__dt__": "2026-08-21T04:48:49.896976+00:00"
+   },
    "year": 2023
   },
   {
    "#parcel": 301,
    "_id": 154,
    "cover_crop": "Cereal rye / hairy vetch / crimson clover (winter)",
+   "created_at": {
+    "__dt__": "2026-08-21T04:48:49.89809+00:00"
+   },
    "crop_grown": "Onions (Patterson, transplants)",
    "last_prohibited_substance": "",
    "notes": "Certified organic continuously since 2006 (Oregon Tilth); ground managed organically since 2004. No prohibited materials.",
    "production_method": "organic",
    "substances_applied": "Rexius compost 4 t/ac pre-plant; feather meal 13-0-0 600 lb/ac; Neptune's Harvest 2-3-1 side-dress x2; no pesticide applied",
+   "updated_at": {
+    "__dt__": "2026-08-21T04:48:49.898098+00:00"
+   },
    "year": 2024
   },
   {
    "#parcel": 301,
    "_id": 155,
    "cover_crop": "Cereal rye / hairy vetch / crimson clover (winter)",
+   "created_at": {
+    "__dt__": "2026-08-21T04:48:49.899139+00:00"
+   },
    "crop_grown": "Onions (Patterson, transplants)",
    "last_prohibited_substance": "",
    "notes": "Certified organic continuously since 2006 (Oregon Tilth); ground managed organically since 2004. No prohibited materials.",
    "production_method": "organic",
    "substances_applied": "Rexius compost 4 t/ac pre-plant; feather meal 13-0-0 600 lb/ac; Neptune's Harvest 2-3-1 side-dress x2; no pesticide applied",
+   "updated_at": {
+    "__dt__": "2026-08-21T04:48:49.899145+00:00"
+   },
    "year": 2025
   },
   {
    "#parcel": 302,
    "_id": 156,
    "cover_crop": "Cereal rye / hairy vetch / crimson clover (winter)",
+   "created_at": {
+    "__dt__": "2026-08-21T04:48:49.900143+00:00"
+   },
    "crop_grown": "Spinach (Space F1)",
    "last_prohibited_substance": "",
    "notes": "Certified organic continuously since 2010 (Oregon Tilth); managed organically since 2007. Last prohibited input: Hartwell grass-seed herbicide program, spring 2006, before lease. No prohibited materials since.",
    "production_method": "organic",
    "substances_applied": "Rexius compost 4 t/ac; feather meal 400 lb/ac; Neptune's Harvest x1; no pesticide applied",
+   "updated_at": {
+    "__dt__": "2026-08-21T04:48:49.900149+00:00"
+   },
    "year": 2023
   },
   {
    "#parcel": 302,
    "_id": 157,
    "cover_crop": "Cereal rye / hairy vetch / crimson clover, flail-mowed and incorporated",
+   "created_at": {
+    "__dt__": "2026-08-21T04:48:49.901173+00:00"
+   },
    "crop_grown": "Full-season cover crop (fallow year)",
    "last_prohibited_substance": "",
    "notes": "Certified organic continuously since 2010 (Oregon Tilth); managed organically since 2007. Last prohibited input: Hartwell grass-seed herbicide program, spring 2006, before lease. No prohibited materials since.",
    "production_method": "organic",
    "substances_applied": "Cover seed only; Rexius compost 4 t/ac at fall seeding; no other inputs",
+   "updated_at": {
+    "__dt__": "2026-08-21T04:48:49.901178+00:00"
+   },
    "year": 2024
   },
   {
    "#parcel": 302,
    "_id": 158,
    "cover_crop": "Cereal rye / hairy vetch / crimson clover, flail-mowed Jul 15 and incorporated",
+   "created_at": {
+    "__dt__": "2026-08-21T04:48:49.90257+00:00"
+   },
    "crop_grown": "Full-season cover crop",
    "last_prohibited_substance": "",
    "notes": "Certified organic continuously since 2010 (Oregon Tilth); managed organically since 2007. Last prohibited input: Hartwell grass-seed herbicide program, spring 2006, before lease. No prohibited materials since.",
    "production_method": "organic",
    "substances_applied": "Cover seed only; no other inputs",
+   "updated_at": {
+    "__dt__": "2026-08-21T04:48:49.902579+00:00"
+   },
    "year": 2025
   }
  ],
@@ -6268,6 +6418,9 @@
    "buyer_name": "Organically Grown Company (OGC), Portland OR",
    "carrier_name": "Brandt Family Farms reefer (own)",
    "clean_transport_method": "dedicated_organic",
+   "created_at": {
+    "__dt__": "2026-08-21T05:13:21.926077+00:00"
+   },
    "destination": "OGC Portland DC, 7150 NE Portland Hwy",
    "invoice_number": "CBF-INV-25-HFE-F",
    "organic_label_category": "100_percent_organic",
@@ -6304,6 +6457,9 @@
    "buyer_name": "Willamette Valley Fruit Co., Salem OR",
    "carrier_name": "Brandt Family Farms reefer (own)",
    "clean_transport_method": "dedicated_organic",
+   "created_at": {
+    "__dt__": "2026-08-21T05:13:21.949237+00:00"
+   },
    "destination": "Willamette Valley Fruit Co., 2994 82nd Ave NE, Salem",
    "invoice_number": "CBF-INV-25-HFE-P",
    "organic_label_category": "100_percent_organic",
@@ -6338,6 +6494,9 @@
    "buyer_name": "Organically Grown Company (OGC), Portland OR",
    "carrier_name": "Brandt Family Farms reefer (own)",
    "clean_transport_method": "dedicated_organic",
+   "created_at": {
+    "__dt__": "2026-08-21T05:13:23.407851+00:00"
+   },
    "destination": "OGC Portland DC, 7150 NE Portland Hwy",
    "invoice_number": "CBF-INV-25-HFW-F",
    "organic_label_category": "100_percent_organic",
@@ -6375,6 +6534,9 @@
    "buyer_name": "Willamette Valley Fruit Co., Salem OR",
    "carrier_name": "Brandt Family Farms reefer (own)",
    "clean_transport_method": "dedicated_organic",
+   "created_at": {
+    "__dt__": "2026-08-21T05:13:23.413079+00:00"
+   },
    "destination": "Willamette Valley Fruit Co., 2994 82nd Ave NE, Salem",
    "invoice_number": "CBF-INV-25-HFW-P",
    "organic_label_category": "100_percent_organic",
@@ -6409,6 +6571,9 @@
    "buyer_name": "Organically Grown Company (OGC), Portland OR",
    "carrier_name": "Brandt Family Farms reefer (own)",
    "clean_transport_method": "dedicated_organic",
+   "created_at": {
+    "__dt__": "2026-08-21T05:13:24.702735+00:00"
+   },
    "destination": "OGC Portland DC, 7150 NE Portland Hwy",
    "invoice_number": "CBF-INV-25--RB-F",
    "organic_label_category": "100_percent_organic",
@@ -6445,6 +6610,9 @@
    "buyer_name": "Willamette Valley Fruit Co., Salem OR",
    "carrier_name": "Brandt Family Farms reefer (own)",
    "clean_transport_method": "dedicated_organic",
+   "created_at": {
+    "__dt__": "2026-08-21T05:13:24.710529+00:00"
+   },
    "destination": "Willamette Valley Fruit Co., 2994 82nd Ave NE, Salem",
    "invoice_number": "CBF-INV-25--RB-P",
    "organic_label_category": "100_percent_organic",
@@ -6479,6 +6647,9 @@
    "buyer_name": "Organically Grown Company (OGC), Portland OR",
    "carrier_name": "Brandt Family Farms reefer (own)",
    "clean_transport_method": "dedicated_organic",
+   "created_at": {
+    "__dt__": "2026-08-21T05:15:57.539297+00:00"
+   },
    "destination": "OGC Portland DC",
    "invoice_number": "CBF-INV-25-BGA",
    "organic_label_category": "100_percent_organic",
@@ -6514,6 +6685,9 @@
    "buyer_name": "Organically Grown Company (OGC), Portland OR",
    "carrier_name": "Brandt Family Farms van (own)",
    "clean_transport_method": "dedicated_organic",
+   "created_at": {
+    "__dt__": "2026-08-21T05:15:58.005831+00:00"
+   },
    "destination": "OGC Portland DC",
    "invoice_number": "CBF-INV-25-BGB",
    "organic_label_category": "100_percent_organic",
@@ -6548,6 +6722,9 @@
    "buyer_name": "Organically Grown Company (OGC), Portland OR",
    "carrier_name": "Brandt Family Farms reefer (own)",
    "clean_transport_method": "dedicated_organic",
+   "created_at": {
+    "__dt__": "2026-08-21T05:42:15.915693+00:00"
+   },
    "destination": "OGC Portland DC, 7150 NE Portland Hwy",
    "invoice_number": "CBF-INV-26-HFE-F",
    "organic_label_category": "100_percent_organic",
@@ -6583,6 +6760,9 @@
    "buyer_name": "Willamette Valley Fruit Co., Salem OR",
    "carrier_name": "Brandt Family Farms reefer (own)",
    "clean_transport_method": "dedicated_organic",
+   "created_at": {
+    "__dt__": "2026-08-21T05:42:15.925382+00:00"
+   },
    "destination": "Willamette Valley Fruit Co., 2994 82nd Ave NE, Salem",
    "invoice_number": "CBF-INV-26-HFE-P",
    "organic_label_category": "100_percent_organic",
@@ -6617,6 +6797,9 @@
    "buyer_name": "Organically Grown Company (OGC), Portland OR",
    "carrier_name": "Brandt Family Farms reefer (own)",
    "clean_transport_method": "dedicated_organic",
+   "created_at": {
+    "__dt__": "2026-08-21T05:42:17.438067+00:00"
+   },
    "destination": "OGC Portland DC, 7150 NE Portland Hwy",
    "invoice_number": "CBF-INV-26-HFW-F",
    "organic_label_category": "100_percent_organic",
@@ -6654,6 +6837,9 @@
    "buyer_name": "Willamette Valley Fruit Co., Salem OR",
    "carrier_name": "Brandt Family Farms reefer (own)",
    "clean_transport_method": "dedicated_organic",
+   "created_at": {
+    "__dt__": "2026-08-21T05:42:17.443398+00:00"
+   },
    "destination": "Willamette Valley Fruit Co., 2994 82nd Ave NE, Salem",
    "invoice_number": "CBF-INV-26-HFW-P",
    "organic_label_category": "100_percent_organic",
@@ -6688,6 +6874,9 @@
    "buyer_name": "Organically Grown Company (OGC), Portland OR",
    "carrier_name": "Brandt Family Farms reefer (own)",
    "clean_transport_method": "dedicated_organic",
+   "created_at": {
+    "__dt__": "2026-08-21T05:42:18.744346+00:00"
+   },
    "destination": "OGC Portland DC, 7150 NE Portland Hwy",
    "invoice_number": "CBF-INV-26--RB-F",
    "organic_label_category": "100_percent_organic",
@@ -6724,6 +6913,9 @@
    "buyer_name": "Willamette Valley Fruit Co., Salem OR",
    "carrier_name": "Brandt Family Farms reefer (own)",
    "clean_transport_method": "dedicated_organic",
+   "created_at": {
+    "__dt__": "2026-08-21T05:42:18.749336+00:00"
+   },
    "destination": "Willamette Valley Fruit Co., 2994 82nd Ave NE, Salem",
    "invoice_number": "CBF-INV-26--RB-P",
    "organic_label_category": "100_percent_organic",
@@ -6758,6 +6950,9 @@
    "buyer_name": "Organically Grown Company (OGC), Portland OR",
    "carrier_name": "Brandt Family Farms reefer (own)",
    "clean_transport_method": "dedicated_organic",
+   "created_at": {
+    "__dt__": "2026-08-21T05:42:40.487609+00:00"
+   },
    "destination": "OGC Portland DC",
    "invoice_number": "CBF-INV-26-BGA-SP",
    "organic_label_category": "100_percent_organic",

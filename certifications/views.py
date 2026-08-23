@@ -522,7 +522,34 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        return Response(OrganicSystemPlanSerializer(osp).data)
+        # The plan review rides back with the submission. It does not block — the operator may
+        # have read a section and decided it still holds — but it is in front of them at the
+        # moment the decision was made, and it prints on the packet cover for the same reason.
+        from certifications.services.plan_review import plan_review
+
+        data = OrganicSystemPlanSerializer(osp).data
+        data["review"] = plan_review(osp).as_dict()
+        return Response(data)
+
+    @action(detail=True, methods=["get"], url_path="review")
+    def review(self, request, **kwargs):
+        """What the operation's records did after this plan's answers were last written.
+
+        `new-version` copies every answer across, and nothing then said which answers the
+        records had overtaken. A pilot's renewal went out reading "six parcels" and "86.9 acres"
+        with seven and 96.7 on file, every section stamped eighteen months before submission.
+        This lists — from dated records only, never by reading the prose — the ground begun,
+        seasons started and closed, § 205.400(f) notices, materials changes, certificate
+        changes, affidavits and incidents since the newest answer, the parcels the plan never
+        names, and the modules not revisited in a year. See services/plan_review.py.
+        """
+        from django.utils import timezone as dj_tz
+
+        from certifications.services.plan_review import plan_review
+
+        # `reference=now`: the screen shows the RUNNING list — on an active plan, everything the
+        # next annual update will have to mention. The packet cover keeps the filing date.
+        return Response(plan_review(self.get_object(), reference=dj_tz.now()).as_dict())
 
     @action(detail=True, methods=["post"])
     def activate(self, request, **kwargs):
@@ -757,7 +784,7 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             qs = osp.change_notifications.all()
             return Response(OSPChangeNotificationSerializer(qs, many=True).data)
 
-        serializer = OSPChangeNotificationSerializer(data=request.data)
+        serializer = OSPChangeNotificationSerializer(data=request.data, context={"osp": osp, "request": request})
         serializer.is_valid(raise_exception=True)
         serializer.save(
             osp=osp,

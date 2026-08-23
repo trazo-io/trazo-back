@@ -151,6 +151,68 @@ class NeverGuessTests(_Base):
         )
         self.assertEqual(self._data_rows(self._sheet("field_and_crop_information"))[0][5], "Glyphosate")
 
+    def test_last_prohibited_input_comes_from_the_latest_dated_year_not_the_newest_row(self):
+        """The LAST prohibited input is the most recent one ever recorded — usually an older row.
+
+        Ground that transitioned has, by definition, clean years AFTER its last prohibited
+        application. Reading only the newest crop-history row therefore blanked the cell on
+        exactly the fields this column exists for. A 9.8-acre lease — glyphosate 10 Jun 2023,
+        then three clean years — filed with this cell empty while the Parcel Application in the
+        same packet printed the date (found 2026-08-23).
+        """
+        ParcelCropHistory.objects.create(
+            parcel=self.parcel,
+            year=2023,
+            crop_grown="Perennial ryegrass seed",
+            production_method="conventional",
+            last_prohibited_substance="Glyphosate (Roundup PowerMAX)",
+            date_last_prohibited=date(2023, 6, 10),
+        )
+        for year in (2024, 2025, 2026):
+            ParcelCropHistory.objects.create(
+                parcel=self.parcel, year=year, crop_grown="Fallow", production_method="organic"
+            )
+        row = self._data_rows(self._sheet("field_and_crop_information"))[0]
+        self.assertEqual(row[5], "Glyphosate (Roundup PowerMAX), 6/10/2023")
+
+    def test_last_prohibited_input_prefers_the_later_of_two_dated_years(self):
+        """Two dated entries: the more recent application is the 'last' one."""
+        ParcelCropHistory.objects.create(
+            parcel=self.parcel,
+            year=2019,
+            crop_grown="Corn",
+            last_prohibited_substance="Atrazine",
+            date_last_prohibited=date(2019, 5, 1),
+        )
+        ParcelCropHistory.objects.create(
+            parcel=self.parcel,
+            year=2021,
+            crop_grown="Corn",
+            last_prohibited_substance="Glyphosate",
+            date_last_prohibited=date(2021, 4, 20),
+        )
+        ParcelCropHistory.objects.create(parcel=self.parcel, year=2025, crop_grown="Walnuts")
+        self.assertEqual(self._data_rows(self._sheet("field_and_crop_information"))[0][5], "Glyphosate, 4/20/2021")
+
+    def test_spanning_season_is_labelled_with_both_years(self):
+        """Drilled October 2026, cut April 2027: the form says 2026–27, not 2026."""
+        from datetime import datetime
+        from datetime import timezone as dt_tz
+
+        from history.models import History
+        from product.models import Product
+
+        spinach = Product.objects.create(name="Spinach")
+        History.objects.create(
+            name="Overwintered Spinach",
+            parcel=self.parcel,
+            product=spinach,
+            start_date=datetime(2026, 10, 12, 9, tzinfo=dt_tz.utc),
+            finish_date=datetime(2027, 4, 20, 17, tzinfo=dt_tz.utc),
+        )
+        row = self._data_rows(self._sheet("field_and_crop_information"))[0]
+        self.assertEqual(row[4], "Spinach (2026\u201327 season)")
+
     def test_status_is_blank_rather_than_assumed_organic(self):
         """A parcel with no recorded production method is not assumed to be certified."""
         ParcelCropHistory.objects.create(parcel=self.parcel, year=2025, crop_grown="Walnuts")

@@ -61,7 +61,15 @@ class AnnualUpdateChangeEntryFormattingTests(SimpleTestCase):
 
     def test_old_and_new_render_as_a_transition(self):
         entry = {"old": "Serenade ASO", "new": "Serenade Opti", "field": "input", "section": "inputs_list"}
-        self.assertIn("Serenade ASO → Serenade Opti", _fmt_change_entries([entry]))
+        self.assertIn("Serenade ASO to Serenade Opti", _fmt_change_entries([entry]))
+
+    def test_transition_never_uses_an_arrow_the_pdf_font_cannot_draw(self):
+        """ReportLab's base-14 Helvetica has no U+2192. The arrow this used to emit was drawn
+        as the glyph at that slot in the font's own encoding — the "fi" ligature — so every
+        packet printed "Serenade ASO ﬁ Serenade Opti" (found 2026-08-23 reading a renewal
+        cover, where "v4 → v5" came out as "v4 ﬁ v5"). Words render in every font."""
+        entry = {"old": "A", "new": "B", "field": "input", "section": "inputs_list"}
+        self.assertNotIn("\u2192", _fmt_change_entries([entry])[0])
 
     def test_mixed_shapes_in_one_field(self):
         """Both shapes coexist in the same JSON list — that is how the bug hid."""

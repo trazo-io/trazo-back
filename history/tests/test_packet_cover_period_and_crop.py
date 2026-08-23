@@ -128,3 +128,93 @@ class CoverCropLabelTests(TestCase):
         """'Citrus' and 'Spinach' are not plurals; trimming them would invent a crop."""
         self.assertIn("Citrus Production", self._packet_text_for("Citrus", "citrus-cover"))
         self.assertIn("Spinach Production", self._packet_text_for("Spinach", "spinach-cover"))
+
+
+class RecordsSpanDisclosureTests(TestCase):
+    """The declared period is the headline; when records reach outside it, the cover says so.
+
+    13.5% of a pilot's records sat outside the period the packet printed for them — dormant
+    pruning and the seed search weeks before `start_date`, winter cover and a storage crop's
+    third load weeks after `finish_date`. "Period: 1 March – 12 July" above a 9 February record
+    is a document that states a range it does not keep to, and a certifier queries it. The
+    period line is kept (it is the crop cycle the operator declared); one line beside it now
+    prints the record span and which side was overrun. Nothing prints when the records sit
+    inside the period — the disclosure is owed only when it is true.
+    """
+
+    def setUp(self):
+        from history.models import ProductionEvent
+
+        self.ProductionEvent = ProductionEvent
+        user = User.objects.create_user(email="span@test.com", password="x")
+        company = Company.objects.create(name="Span Co")
+        est = Establishment.objects.create(name="Span Farm", company=company)
+        self.parcel = Parcel.objects.create(name="Home Field East", establishment=est, area=5.0)
+        crop = CropType.objects.create(
+            name="Blueberries",
+            slug="blueberries-span",
+            category="fruit",
+            description="d",
+            typical_farm_size="10",
+            growing_season="s",
+            harvest_season="h",
+            emissions_per_hectare=0.0,
+            industry_average=0.0,
+            best_practice=0.0,
+            carbon_credit_potential=0.0,
+            typical_cost_per_hectare=0.0,
+            has_soil_contact=True,
+        )
+        self.start = datetime(2026, 3, 1, 8, tzinfo=dt_timezone.utc)
+        self.finish = datetime(2026, 7, 12, 17, tzinfo=dt_timezone.utc)
+        self.history = History.objects.create(
+            parcel=self.parcel,
+            product=Product.objects.create(name="Blueberries"),
+            crop_type=crop,
+            operator=user,
+            start_date=self.start,
+            finish_date=self.finish,
+        )
+
+    def _event(self, when, **extra):
+        fields = {"type": "MO", "name": "Mowing"}
+        fields.update(extra)
+        return self.ProductionEvent.objects.create(history=self.history, date=when, **fields)
+
+    def _cover_text(self):
+        import io
+
+        from pdfminer.high_level import extract_text
+
+        buffer = AuditExportService(self.history, certification_type="usda_organic").generate_pdf()
+        text = extract_text(io.BytesIO(buffer.getvalue() if hasattr(buffer, "getvalue") else buffer))
+        return " ".join(text.split())
+
+    def test_records_inside_the_period_print_no_span_line(self):
+        self._event(self.start + timedelta(days=30))
+        self._event(self.finish - timedelta(days=2))
+        self.assertNotIn("Records:", self._cover_text())
+
+    def test_pre_season_and_post_harvest_records_are_disclosed_beside_the_period(self):
+        from history.services.audit_export_service import records_outside_period, records_span_line
+
+        self._event(datetime(2026, 2, 9, 9, tzinfo=dt_timezone.utc), type="PR", name="Dormant pruning")
+        self._event(datetime(2026, 8, 31, 9, tzinfo=dt_timezone.utc), type="IR", name="Irrigation summary")
+        over = records_outside_period(self.history)
+        self.assertTrue(over["before"] and over["after"])
+        line = records_span_line(self.history)
+        self.assertIn("Records: 2026-02-09 to 2026-08-31", line)
+        self.assertIn("pre-season work from 2026-02-09", line)
+        self.assertIn("post-harvest records through 2026-08-31", line)
+        text = self._cover_text()
+        self.assertIn("Production — 2026-03-01 to 2026-07-12", text)  # the declared cycle stays
+        self.assertIn("Records: 2026-02-09 to 2026-08-31", text)
+
+    def test_only_the_overrun_side_is_named(self):
+        from history.services.audit_export_service import records_span_line
+
+        self._event(self.start + timedelta(days=10))
+        self._event(self.finish + timedelta(days=50), type="IR", name="Irrigation summary")
+        line = records_span_line(self.history)
+        self.assertIn("post-harvest records through", line)
+        self.assertNotIn("pre-season", line)

@@ -273,6 +273,11 @@ _PUBLISHABLE_CERTIFICATION_TYPES = frozenset(
         # BusinessEvent vocabulary
         "organic_usda",
         "regenerative",
+        # ROP on the BusinessEvent side (added to CERTIFICATION_TYPE_CHOICES 2026-08-21 without
+        # being classified here, so the guard flagged it and every ROP record was silently
+        # withheld). Same issuing body as "real_organic_project" below — the Real Organic
+        # Project is a third-party add-on standard with a public directory, i.e. checkable.
+        "real_organic",
         "cng",
         "non_gmo",
         "rainforest_alliance",
@@ -392,6 +397,8 @@ def public_certifier_name(certifier_name, establishment, certification_type=None
 # with a genuine USDA Organic Integrity Database match, i.e. exactly the case it must allow.
 _CERT_TYPE_ALIASES = {
     "organic_usda": "usda_organic",
+    "real_organic": "real_organic_project",
+    "real_organic_project": "real_organic_project",
     "usda_organic": "usda_organic",
     "global_gap": "global_gap",
     "ccof": "ccof",

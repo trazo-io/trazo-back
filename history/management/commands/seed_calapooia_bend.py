@@ -272,6 +272,25 @@ class Command(BaseCommand):
             if not k.startswith(("_", "#", "@", "~")) and k not in cls.STRUCTURAL_KEYS
         }
 
+    #: Columns Django stamps itself. `auto_now_add` / `auto_now` IGNORE a value passed to
+    #: create(), so every reseed re-dated the farm's audit trail — approved-input changes,
+    #: certifications, affidavits, notifications — to the day the command ran. The plan
+    #: review then listed "10 materials added 2026-08-23" on a plan whose answers were written
+    #: 2026-08-21, which is a fixture artifact, not a finding. A queryset update after create
+    #: bypasses the auto stamp and restores what the rehearsal actually recorded.
+    AUTO_TIMESTAMPS = ("created_at", "updated_at", "changed_at")
+
+    @classmethod
+    def _stamp(cls, obj, row):
+        """Restore the fixture's own timestamps on `obj` after create(); returns obj."""
+        if obj is None or not isinstance(row, dict):
+            return obj
+        names = {f.name for f in obj._meta.fields}
+        vals = {k: _decode(row[k]) for k in cls.AUTO_TIMESTAMPS if k in names and row.get(k) not in (None, "")}
+        if vals:
+            type(obj).objects.filter(pk=obj.pk).update(**vals)
+        return obj
+
     def _company(self, data, owner):
         """Create the company, grant the owner access, and give it a plan.
 
@@ -343,14 +362,14 @@ class Command(BaseCommand):
         PHF = apps.get_model("certifications", "PostHarvestFacility")
         out = {}
         for row in data.get("post_harvest_facilities", []):
-            obj = PHF.objects.create(establishment=est, **self._scalar_fields(row))
+            obj = self._stamp(PHF.objects.create(establishment=est, **self._scalar_fields(row)), row)
             out[row["_id"]] = obj
         return out
 
     def _certifications(self, data, est):
         Cert = apps.get_model("certifications", "Certification")
         return {
-            row["_id"]: Cert.objects.create(establishment=est, **self._scalar_fields(row))
+            row["_id"]: self._stamp(Cert.objects.create(establishment=est, **self._scalar_fields(row)), row)
             for row in data.get("certifications", [])
         }
 
@@ -390,7 +409,7 @@ class Command(BaseCommand):
             for key, row in data.get("approved_input_rows", {}).get(model_name, {}).items():
                 obj = Model.objects.filter(**{natural: key}).first()
                 if obj is None:
-                    obj = Model.objects.create(**self._scalar_fields(row))
+                    obj = self._stamp(Model.objects.create(**self._scalar_fields(row)), row)
                 approved[model_name][key] = obj
 
         M2M_SOURCE = {
@@ -408,7 +427,7 @@ class Command(BaseCommand):
             cert = row.get("#certification")
             if cert and cert in certs:
                 kwargs["certification"] = certs[cert]
-            osp = OSP.objects.create(**kwargs)
+            osp = self._stamp(OSP.objects.create(**kwargs), row)
             for m2m, model_name in M2M_SOURCE.items():
                 keys = row.get("~" + m2m)
                 if keys:
@@ -435,12 +454,12 @@ class Command(BaseCommand):
                 obj = _target(row, key, model, field)
                 if obj is not None:
                     kwargs[key] = obj
-            AICL.objects.create(**kwargs)
+            self._stamp(AICL.objects.create(**kwargs), row)
 
         for row in data.get("osp_change_notifications", []):
             osp = osps.get(row.get("#osp"))
             if osp is not None:
-                OCN.objects.create(osp=osp, created_by=owner, **self._scalar_fields(row))
+                self._stamp(OCN.objects.create(osp=osp, created_by=owner, **self._scalar_fields(row)), row)
 
         for row in data.get("annual_updates", []):
             kwargs = self._scalar_fields(row)
@@ -449,14 +468,14 @@ class Command(BaseCommand):
                 kwargs["prior_osp"] = prior
             if new is not None:
                 kwargs["new_osp"] = new
-            AU.objects.create(**kwargs)
+            self._stamp(AU.objects.create(**kwargs), row)
 
         return osps
 
     def _parcels(self, data, est):
         out = {}
         for row in data["parcels"]:
-            obj = Parcel.objects.create(establishment=est, **self._scalar_fields(row))
+            obj = self._stamp(Parcel.objects.create(establishment=est, **self._scalar_fields(row)), row)
             out[row["_id"]] = obj
         return out
 
@@ -495,7 +514,7 @@ class Command(BaseCommand):
             )
             if "@crop_type" in row:
                 kwargs["crop_type"] = self._resolve_crop_type(row["@crop_type"])
-            history = History.objects.create(**kwargs)
+            history = self._stamp(History.objects.create(**kwargs), row)
             linked = [facilities[f] for f in row.get("post_harvest_facilities", []) if f in facilities]
             if linked:
                 history.post_harvest_facilities.set(linked)
@@ -531,13 +550,13 @@ class Command(BaseCommand):
         for row in data.get("parcel_crop_history", []):
             parcel = parcels.get(row.get("#parcel"))
             if parcel is not None:
-                PCH.objects.create(parcel=parcel, **self._scalar_fields(row))
+                self._stamp(PCH.objects.create(parcel=parcel, **self._scalar_fields(row)), row)
 
         for row in data.get("sales_records", []):
             season = seasons.get(row.get("#production"))
             if season is None:
                 continue
-            sale = SR.objects.create(production=season, **self._scalar_fields(row))
+            sale = self._stamp(SR.objects.create(production=season, **self._scalar_fields(row)), row)
             linked = [
                 event_map[("ProductionEvent", pk)]
                 for pk in row.get("~harvest_events", [])
@@ -556,12 +575,12 @@ class Command(BaseCommand):
                 template = ET.objects.filter(name=ref["name"]).first()
                 if template is not None:
                     kwargs["source_template"] = template
-            PPI.objects.create(**kwargs)
+            self._stamp(PPI.objects.create(**kwargs), row)
 
         for row in data.get("history_scans", []):
             season = seasons.get(row.get("#history"))
             if season is not None:
-                HS.objects.create(history=season, **self._scalar_fields(row))
+                self._stamp(HS.objects.create(history=season, **self._scalar_fields(row)), row)
 
         # `EventAmendment` stores a bare (event_type code, event_id) pair rather than a real
         # relation, so the id is a primary key from the SOURCE database and renumbers here.
@@ -585,7 +604,7 @@ class Command(BaseCommand):
                     # amendment pointing at nothing reads as a missing record to a reviewer.
                     continue
                 fields["event_id"] = target.pk
-            EA.objects.create(history=season, amended_by=owner, **fields)
+            self._stamp(EA.objects.create(history=season, amended_by=owner, **fields), row)
 
     def _events(self, data, seasons, owner):
         total = 0
@@ -603,7 +622,7 @@ class Command(BaseCommand):
                     kwargs = dict(history=history, created_by=owner, **fields)
                     if "@national_list_substance" in row:
                         kwargs["national_list_substance"] = self._resolve_substance(row["@national_list_substance"])
-                    obj = Model.objects.create(**kwargs)
+                    obj = self._stamp(Model.objects.create(**kwargs), row)
                     created[(model_name, row["_id"])] = obj
                     if "#equipment_cleaning_event" in row:
                         deferred.append((model_name, row["_id"], row["#equipment_cleaning_event"]))

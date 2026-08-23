@@ -192,6 +192,12 @@ def _current_season_crop(parcel, crop_history) -> Optional[str]:
     crop = getattr(season.product, "name", None) or getattr(season.crop_type, "name", None)
     if not crop:
         return None
+    # A season that opens in one year and closes in the next is "2026–27", not "2026": an
+    # overwintered spinach drilled in October and cut in April was filed as "Spinach (2026
+    # season)" on a form for the year it was actually harvested, and read as stale.
+    end = season.finish_date or season.expected_harvest
+    if end is not None and end.year > season_year:
+        return f"{crop} ({season_year}\u2013{str(end.year)[-2:]} season)"
     return f"{crop} ({season_year} season)"
 
 
@@ -314,16 +320,26 @@ def _last_prohibited(row):
     or "name, date" — and blank when neither is. Never derived from `substances_applied`: that
     column lists everything applied in a year and cannot identify which was the last prohibited
     input without guessing, and a guess here is a false statement about land history.
+
+    🔴 2026-08-23 — this read `row[1]`, the NEWEST crop-history year, and nothing else. The
+    "last prohibited input" is the most recent one EVER recorded on the field, which on any
+    ground that has since had a clean year sits in an OLDER row. So the cell was blank on
+    exactly the parcels where it matters most: a 9.8-acre lease with glyphosate on 10 Jun 2023
+    in its 2023 row and three clean years after it filed a Field and Crop Information Form with
+    this column empty — while the Parcel Application in the same packet printed the date.
+    Scans every year; the latest dated entry wins.
     """
-    history = row[1]
-    if history is None:
-        return None
-    name = _blank(getattr(history, "last_prohibited_substance", None))
-    date = getattr(history, "date_last_prohibited", None)
-    date_text = date.strftime("%-m/%-d/%Y") if date else None
-    if name and date_text:
-        return f"{name}, {date_text}"
-    return name or date_text
+    parcel = row[0]
+    rows = [h for h in parcel.crop_history.all() if getattr(h, "date_last_prohibited", None)]
+    if not rows:
+        # No dated entry anywhere — fall back to a name-only entry on the newest row, which is
+        # all the previous code could ever have shown.
+        history = row[1]
+        return _blank(getattr(history, "last_prohibited_substance", None)) if history else None
+    latest = max(rows, key=lambda h: h.date_last_prohibited)
+    name = _blank(getattr(latest, "last_prohibited_substance", None))
+    date_text = latest.date_last_prohibited.strftime("%-m/%-d/%Y")
+    return f"{name}, {date_text}" if name else date_text
 
 
 WORKBOOKS: list = [
