@@ -164,6 +164,8 @@ class Command(BaseCommand):
     # ------------------------------------------------------------------
     @transaction.atomic
     def handle(self, *args, **options):
+        from subscriptions.models import Subscription
+
         if not FIXTURE.exists():
             raise CommandError(f"Fixture missing: {FIXTURE}")
 
@@ -203,7 +205,7 @@ class Command(BaseCommand):
                 self._teardown(est)
                 est.delete()
 
-        company = self._company(data, owner)
+        company, membership = self._company(data, owner)
         est = self._establishment(data, company)
         facilities = self._facilities(data, est)
         certs = self._certifications(data, est)
@@ -216,9 +218,17 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 f"Calapooia Bend rebuilt: establishment {est.pk}, {len(parcels)} parcels, "
-                f"{len(seasons)} seasons, {n_events} events, {len(osps)} OSP versions, "
+                f"{len(seasons)} productions, {n_events} events, {len(osps)} OSP versions, "
                 f"is_demo={est.is_demo}"
             )
+        )
+        # This command is run over a production console, where the next question is always
+        # "will I actually see it?". Answer it here rather than making someone log in to find out.
+        subscription = Subscription.objects.filter(company=company).first()
+        self.stdout.write(f"  company      : {company.name} (#{company.pk})")
+        self.stdout.write(f"  access       : {owner.email} as {membership.get_role_display()}")
+        self.stdout.write(
+            f"  plan         : {subscription.plan.slug if subscription else 'NONE — farm will be read-only'}"
         )
         if options["real_names"]:
             self.stdout.write(
@@ -287,11 +297,22 @@ class Command(BaseCommand):
 
         company, _ = Company.objects.get_or_create(name=data["company"]["name"])
 
-        WorksIn.objects.get_or_create(
+        membership, created = WorksIn.objects.get_or_create(
             user=owner,
             company=company,
             defaults={"role": WorksIn.COMPANY_ADMIN},
         )
+        # An existing membership is left alone rather than upgraded — a seeder must not silently
+        # escalate someone's role. But a VIEWER cannot open most of what this farm exists to
+        # demonstrate, and finding that out by clicking around is a bad afternoon, so say it.
+        if not created and membership.role != WorksIn.COMPANY_ADMIN:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"  {owner.email} already works in {company.name} as "
+                    f"{membership.get_role_display()}, not Company Admin. Left unchanged — only "
+                    "a Company Admin sees every establishment in a company."
+                )
+            )
 
         if not Subscription.objects.filter(company=company).exists():
             plan = Plan.objects.filter(slug="pilot").first()
@@ -308,7 +329,7 @@ class Command(BaseCommand):
                 current_period_end=timezone.now() + timedelta(days=365),
             )
 
-        return company
+        return company, membership
 
     def _establishment(self, data, company):
         fields = self._scalar_fields(data["establishment"])

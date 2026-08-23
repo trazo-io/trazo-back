@@ -421,6 +421,30 @@ def _quote_all(items) -> str:
 
 
 class OSPAnnualUpdateSerializer(serializers.ModelSerializer):
+    def validate_submitted_at(self, value):
+        """The filing date is fixed once it exists.
+
+        `submitted_at` is the answer to "when did this operation continue its certification for
+        that year", and § 205.406(b) hangs an annual inspection off that cycle. It was an
+        ordinary writable field, so a later PATCH could move it — including backwards, onto a
+        date the filing was not made. Editing the CONTENT of a submitted filing is legitimate
+        (a certifier asks for a correction and the change is captured by auditlog, which
+        registers this model); moving the date it was filed is not an edit, it is a different
+        claim.
+
+        Clearing it is allowed: a filing withdrawn back to draft before the certifier
+        acknowledged it is the withdraw path its sibling change-notification panel already
+        permits, and the acknowledged case never reaches here — the viewset answers 423.
+        """
+        existing = getattr(self.instance, "submitted_at", None)
+        if existing is not None and value is not None and value != existing:
+            raise serializers.ValidationError(
+                "This update was filed on "
+                f"{existing.date().isoformat()}. The filing date cannot be changed — correct the "
+                "content if it is wrong, or withdraw the filing and re-file it."
+            )
+        return value
+
     def validate_changes_summary(self, value):
         # 7 CFR 205.406 annual update goes to the certifier. "Test" reached a real
         # dossier and rendered verbatim into the regulatory filing (2026-08-03 review).
@@ -480,13 +504,25 @@ class OSPAnnualUpdateSerializer(serializers.ModelSerializer):
     def validate_deletions(self, value):
         return self._clean_entry_list(value)
 
+    # The plan VERSIONS this filing moved between, not just their row ids. A § 205.406 update
+    # is the hinge between two versions of the plan — "the 2026 update took us from v1 to v3" is
+    # the traceability an inspector follows, and `prior_osp: 59` cannot be read that way by
+    # anyone. The viewset already select_relateds both, so this costs no query.
+    prior_osp_version = serializers.IntegerField(source="prior_osp.version_number", read_only=True)
+    # No `allow_null`: it is a validation kwarg and inert on a read-only field. DRF already
+    # returns None when the source traversal hits a null relation, which is the normal case
+    # here — a "no material changes" attestation creates no new version.
+    new_osp_version = serializers.IntegerField(source="new_osp.version_number", read_only=True)
+
     class Meta:
         model = OSPAnnualUpdate
         fields = [
             "id",
             "public_id",
             "prior_osp",
+            "prior_osp_version",
             "new_osp",
+            "new_osp_version",
             "reporting_year",
             "changes_summary",
             "additions",
@@ -500,6 +536,8 @@ class OSPAnnualUpdateSerializer(serializers.ModelSerializer):
         read_only_fields = [
             "id",
             "public_id",
+            "prior_osp_version",
+            "new_osp_version",
             "certifier_acknowledged_at",
             "created_at",
             "updated_at",

@@ -2285,6 +2285,15 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
             if attempts is None and self.instance is not None:
                 attempts = getattr(self.instance, "seed_search_attempts", None)
             attempts = attempts or []
+            # A non-list value crashed the validator with `TypeError: 'int' object is not
+            # iterable`, i.e. an unhandled 500 on the save button rather than a field error.
+            # `seed_search_attempts` is a JSONField, so the API accepts any JSON shape a client
+            # sends and a bare count ("we called 3 suppliers") is exactly what an operator would
+            # think to put there. Coercing to [] hands the case to the message below, which is
+            # the right answer: a count is not the § 205.204(a)(1) evidence, the supplier names
+            # are. Found 2026-08-22 in a pilot fixture that stored `3`.
+            if not isinstance(attempts, list):
+                attempts = []
             # Accept the pre-2026-08-15 `supplier` key too. to_internal_value normalises it
             # on the real write path, but validate() is also called directly (and by tests),
             # and a rule that silently stops seeing legacy rows would reject records that are

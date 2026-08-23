@@ -81,6 +81,28 @@ class SeedSearchValidationTests(TestCase):
         )
         self.assertEqual(out["type"], "PL")
 
+    def test_a_count_instead_of_a_supplier_list_is_a_field_error_not_a_500(self):
+        """`seed_search_attempts` is a JSONField, so any JSON shape reaches this rule.
+
+        A bare count is exactly what an operator would think to put in a field called
+        "search attempts" — and `for a in attempts` then raised
+        `TypeError: 'int' object is not iterable`, which DRF does not catch: an unhandled
+        500 on the save button instead of a field error telling them what to write.
+        Found 2026-08-22 in a pilot fixture that stored `3`.
+
+        The right answer is not to accept the count. It is to reach the message below, which
+        says what § 205.204(a)(1) actually wants: the suppliers, not how many there were.
+        """
+        for bad in (3, "3", {"count": 3}, None):
+            with self.subTest(value=bad):
+                with self.assertRaises(drf_serializers.ValidationError) as ctx:
+                    self._validate(
+                        type="PL",
+                        seed_certification_status="non_organic_untreated",
+                        seed_search_attempts=bad,
+                    )
+                self.assertIn("seed_search_attempts", ctx.exception.detail)
+
     def test_non_pl_event_not_subject_to_seed_rule(self):
         out = self._validate(
             type="HA",

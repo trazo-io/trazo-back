@@ -65,6 +65,13 @@ UNIT_AMENDMENT = [
     ("lbs", "Pounds"),
     ("tons", "Tons"),
     ("gal", "Gallons"),
+    # Bulk compost, mulch and sawdust are sold, delivered and invoiced by the cubic yard —
+    # the amendment volume a certifier reconciles against the supplier's ticket is a yardage,
+    # not a weight. Without this the operator either converts by guessing a density (which
+    # invents a number the invoice does not support) or types "yd3" into a column whose
+    # `choices` reject it. A pilot farm's three sawdust top-dressings (392, 438 and 490 yd3)
+    # sat in the database as exactly that invalid value until 2026-08-22.
+    ("yd3", "Cubic yards"),
 ]
 
 # Fuel units (diesel, gasoline, electricity)

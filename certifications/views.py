@@ -1472,6 +1472,58 @@ class OSPAnnualUpdateViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
 
+    # ------------------------------------------------------------------
+    # A § 205.406 filing hardens in three stages, mirroring the rule its sibling
+    # `OSPChangeNotification` already follows. This viewset was a plain ModelViewSet with no
+    # stage at all: a filing the certifier had already received could be rewritten freely, and
+    # `submitted_at` with it, so the record of WHEN an operation continued its certification
+    # could be moved after the fact. That is the most consequential of the three OSP records —
+    # it is the document actually submitted at renewal — and it had the weakest protection of
+    # them. Event records refuse a post-close edit with 423; change notifications freeze on
+    # acknowledgment; this froze never.
+    #
+    #   draft        (submitted_at is None)  -> freely editable, it is nobody else's record yet
+    #   submitted    (submitted_at set)      -> editable, but the FILING DATE is now fixed and
+    #                                           every change is captured by auditlog, which
+    #                                           already registers this model
+    #   acknowledged (certifier ack'd)       -> frozen. It records what a third party confirmed
+    #                                           receiving; correcting THAT is a new filing.
+    #
+    # The middle stage stays open on purpose. Certifiers routinely ask for a resubmission, and
+    # nothing in the product writes `certifier_acknowledged_at`, so a hard freeze at submission
+    # would be a lock with no key.
+    LOCKED_DETAIL = (
+        "This annual update was acknowledged by your certifier on {date}. It records what they "
+        "confirmed receiving, so it stays as filed — if something in it is wrong, file an "
+        "update for the year rather than changing this one."
+    )
+
+    def _acknowledged_response(self, instance):
+        return Response(
+            {
+                "error": "Annual update is locked",
+                "detail": self.LOCKED_DETAIL.format(date=instance.certifier_acknowledged_at.date().isoformat()),
+                "correctable": False,
+                "reporting_year": instance.reporting_year,
+            },
+            status=status.HTTP_423_LOCKED,
+        )
+
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.certifier_acknowledged_at is not None:
+            return self._acknowledged_response(instance)
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        # Same asymmetry the change-notification panel documents: before acknowledgment a
+        # mistyped filing is just a mistake and must be withdrawable; after it, deleting would
+        # erase the operation's own evidence that it continued certification that year.
+        instance = self.get_object()
+        if instance.certifier_acknowledged_at is not None:
+            return self._acknowledged_response(instance)
+        return super().destroy(request, *args, **kwargs)
+
 
 class LandownerAffidavitViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     """

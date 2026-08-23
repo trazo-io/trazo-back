@@ -32,6 +32,10 @@ from pathlib import Path
 from django.apps import apps
 from django.test import SimpleTestCase
 
+# The loader's own type-marker decoder. Imported rather than reimplemented: a guard that
+# decodes differently from the seeder is testing a document nobody loads.
+from history.management.commands.seed_calapooia_bend import _decode
+
 FIXTURE = Path(apps.get_app_config("history").path) / "management" / "commands" / "_calapooia_bend_data.json"
 
 #: Fixture section -> the model its rows are loaded into.
@@ -123,6 +127,136 @@ class CalapooiaFixtureIntegrityTests(SimpleTestCase):
                         if key not in writable:
                             problems.append(f"{model_name}.{key}")
         self.assertEqual(sorted(set(problems)), [], "event fixture has drifted from the models")
+
+    def test_every_event_row_would_survive_its_own_write_serializer(self):
+        """The strongest form of the question above: could a farmer have entered this?
+
+        The choices check catches a bad VALUE. This catches a missing one — a field the write
+        serializer requires that the fixture never filled. Five of the farm's six cultural-control
+        events had no `cultural_practice`, the § 205.206(a) evidence, because the rule was added
+        to `UpdatePestManagementEventSerializer` after the shell script wrote the rows; the packet
+        printed "Practice: --" under a § 205.206(a) heading on all five.
+
+        Runs each row through the SAME serializer POST /api/events/ selects, so any rule added
+        there — cross-field, conditional, or a new required field — is enforced against the demo
+        farm from the moment it lands. Relations are dropped: `history` and `album` are resolved
+        by the loader, and this must stay a no-database test.
+        """
+        from history import serializers as hs
+
+        WRITE_SERIALIZER = {
+            "ChemicalEvent": hs.UpdateChemicalEventSerializer,
+            "ProductionEvent": hs.UpdateProductionEventSerializer,
+            "SoilManagementEvent": hs.UpdateSoilManagementEventSerializer,
+            "PestManagementEvent": hs.UpdatePestManagementEventSerializer,
+            "GeneralEvent": hs.UpdateGeneralEventSerializer,
+            "BusinessEvent": hs.UpdateBusinessEventSerializer,
+            "WeatherEvent": hs.UpdateWeatherEventSerializer,
+        }
+        problems = []
+        checked = 0
+        for season in self.data["seasons"]:
+            for model_name, rows in season["events"].items():
+                serializer_cls = WRITE_SERIALIZER[model_name]
+                writable = {name for name, field in serializer_cls().fields.items() if not field.read_only} - {
+                    "history",
+                    "album",
+                }
+                for row in rows:
+                    payload = {
+                        k: _decode(v)
+                        for k, v in row.items()
+                        if k in writable and not k.startswith(("_", "#", "@", "~"))
+                    }
+                    serializer = serializer_cls(data=payload)
+                    checked += 1
+                    if not serializer.is_valid():
+                        problems.append(f"{model_name} {row.get('date')}: {dict(serializer.errors)}")
+        self.assertEqual(checked, 512, "not every event row was checked")
+        self.assertEqual(
+            problems[:10],
+            [],
+            f"{len(problems)} fixture events would be REJECTED by the endpoint that is "
+            "supposed to have created them",
+        )
+
+    def test_every_choice_field_holds_a_value_the_api_would_accept(self):
+        """A demo farm must be reproducible through the product that shows it.
+
+        The fixture was machine-extracted from a database whose rows were written by an ad-hoc
+        shell script — straight through the ORM, which does not run `choices` validation. So it
+        accumulated 452 values no serializer would take: LABELS where the code belongs
+        ("Farmer / Farm Staff" for `farmer`), free text in an enum ("flail mower"), near-miss
+        codes ("mi" for `miles`, "well" for `well_groundwater`, "lbs" for `lb`), and one value
+        belonging to a sibling field ("inspected" in `transport_cleaning_method`).
+
+        That matters twice over. A record the API refuses is a record no farmer could have
+        entered, so the farm we put in front of certifiers demonstrates a product that cannot
+        produce it. And the packet renders unknown codes literally — Calapooia's printed
+        "surface_water" (unrecognised value - not in the current form)" three times in one
+        submission.
+
+        Found 2026-08-22 by replaying the farm's own 2025 records back through POST /api/events/
+        while simulating the following season: 16 of the first 60 re-logged records were
+        rejected by the product that had stored them.
+        """
+        from django.apps import apps as _apps
+
+        def _bad(model, rows):
+            fields = {
+                f.name: {c[0] for c in f.choices}
+                for f in model._meta.get_fields()
+                if getattr(f, "concrete", False) and getattr(f, "choices", None)
+            }
+            for row in rows:
+                for name, valid in fields.items():
+                    value = row.get(name)
+                    if value in (None, "") or not isinstance(value, str):
+                        continue
+                    if value not in valid:
+                        yield f"{model.__name__}.{name} = {value!r}"
+
+        problems = []
+        for section, (app_label, model_name) in SECTION_MODEL.items():
+            rows = self.data.get(section) or []
+            rows = rows if isinstance(rows, list) else [rows]
+            problems += list(_bad(_apps.get_model(app_label, model_name), rows))
+        for season in self.data["seasons"]:
+            for model_name, rows in season["events"].items():
+                problems += list(_bad(_apps.get_model("history", model_name), rows))
+
+        self.assertEqual(
+            sorted(set(problems)),
+            [],
+            "the fixture holds values the model's own `choices` reject — the API would refuse "
+            "these records, so no farmer could have entered them",
+        )
+
+    def test_recorded_transport_inspections_actually_print(self):
+        """A finding the farm recorded must reach the packet, not be dropped for its shape.
+
+        `SalesRecord.transport_inspected_free_of` is a JSONField whose contract is a LIST of
+        codes, and `transport_inspection_display()` returns "" for anything that is not a list —
+        deliberately, so a malformed value cannot be paraphrased into an attestation nobody
+        made. The fixture held the codes as one comma-joined STRING, so all 15 of Calapooia's
+        sales printed no "inspected and found free of" line at all, even though the operation
+        had recorded three findings on every load. JSONField accepts any JSON, so nothing
+        upstream objected; the frontend has always sent a real array.
+
+        Asserting on the rendered line rather than the type is deliberate: it is the packet
+        output, not the column, that a certifier reads.
+        """
+        from history.models import SalesRecord
+
+        blank = []
+        for row in self.data["sales_records"]:
+            value = row.get("transport_inspected_free_of")
+            if not value:
+                continue
+            rendered = SalesRecord(transport_inspected_free_of=value).transport_inspection_display()
+            if not rendered:
+                blank.append(f"{row.get('invoice_number')}: {value!r}")
+        self.assertEqual(blank, [], "sales records carry inspection findings that render as nothing")
 
     def test_relation_markers_point_at_relations_that_exist(self):
         """`#name` and `@name` must still BE relations, and `~name` still a many-to-many.
