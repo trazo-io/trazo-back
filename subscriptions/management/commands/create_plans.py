@@ -131,8 +131,32 @@ class Command(BaseCommand):
         self.create_plans()
         # Create add-ons
         self.create_addons()
+        # Strip retired feature keys from EVERY row, including legacy variant slugs this
+        # command no longer writes (standard, compliance-yearly, ...). Deleting a key from
+        # the dicts above only reaches the slugs update_or_create touches; without this
+        # sweep the retired ladder keeps serving the key forever.
+        self.strip_retired_feature_keys()
 
         self.stdout.write(self.style.SUCCESS("Setup completed successfully!"))
+
+    #: Feature keys that no longer exist anywhere in the product. `monthly_scan_limit`
+    #: (deleted 2026-08-25): never enforced — the tracking middleware only logged, the
+    #: quota method had no callers — and the buyer page is deliberately unlimited on
+    #: every plan, because it is the demonstration that sells the paid tier.
+    RETIRED_FEATURE_KEYS = ("monthly_scan_limit",)
+
+    def strip_retired_feature_keys(self):
+        from subscriptions.models import Plan
+
+        for plan in Plan.objects.all():
+            features = plan.features or {}
+            removed = [k for k in self.RETIRED_FEATURE_KEYS if k in features]
+            if removed:
+                for k in removed:
+                    features.pop(k)
+                plan.features = features
+                plan.save(update_fields=["features"])
+                self.stdout.write(f"  Stripped retired feature keys {removed} from plan '{plan.slug}'")
 
     def create_plans(self):
         # Starter — FREE FOREVER, no card, no clock.
@@ -174,7 +198,6 @@ class Command(BaseCommand):
             "max_parcels_per_establishment": -1,
             "max_productions_per_year": -1,
             "establishment_full_description": False,
-            "monthly_scan_limit": 1000,
             # 10 GB, not 2. A season of photo evidence does not fit in 2 GB, and `storage_utils`
             # REFUSES the upload once projected usage passes the limit — so a 2 GB Starter would
             # simply have re-imposed the removed wall as a storage failure mid-season.
@@ -227,7 +250,6 @@ class Command(BaseCommand):
             "max_parcels_per_establishment": -1,
             "max_productions_per_year": -1,
             "establishment_full_description": True,
-            "monthly_scan_limit": -1,
             "storage_limit_gb": 25,
             "support_response_time": 24,
             # No trial keys: Starter is the free path. Two 14-day offers on one page read as
@@ -308,7 +330,6 @@ class Command(BaseCommand):
             "max_parcels_per_establishment": 2,
             "max_productions_per_year": 3,
             "establishment_full_description": True,
-            "monthly_scan_limit": 5000,
             "storage_limit_gb": 10,
             "support_response_time": 48,
             "trial_no_card_days": 7,
@@ -325,7 +346,6 @@ class Command(BaseCommand):
             "max_parcels_per_establishment": 2,
             "max_productions_per_year": 4,
             "establishment_full_description": True,
-            "monthly_scan_limit": 10000,
             "storage_limit_gb": 25,
             "support_response_time": 24,
             "trial_no_card_days": 7,
@@ -342,7 +362,6 @@ class Command(BaseCommand):
             "max_parcels_per_establishment": 4,
             "max_productions_per_year": 6,
             "establishment_full_description": True,
-            "monthly_scan_limit": 20000,
             "storage_limit_gb": 50,
             "support_response_time": 12,
             "trial_no_card_days": 7,
@@ -359,7 +378,6 @@ class Command(BaseCommand):
             "max_parcels_per_establishment": -1,
             "max_productions_per_year": -1,
             "establishment_full_description": True,
-            "monthly_scan_limit": -1,
             "storage_limit_gb": -1,
             "support_response_time": 4,
             "trial_no_card_days": 7,
@@ -375,7 +393,8 @@ class Command(BaseCommand):
         ANNUAL_MULTIPLIER = 10  # monthly_price * 10 = annual price
 
         plans = [
-            # Starter - 14-day free trial
+            # Starter - free forever, no trial, no card (the "14-day free trial" this comment
+            # once claimed is the phantom migration 0015 exists to kill; do not resurrect it)
             {
                 "name": "Starter",
                 "slug": "starter",
@@ -402,7 +421,8 @@ class Command(BaseCommand):
                 "slug": "compliance-yearly",
                 "description": (
                     "Everything one certified farm needs for renewal season: the OSP renewal "
-                    "packet, the audit export, the CA PUR export and the certifier review link."
+                    "packet, the audit export, the CA PUR export, and the certifier and buyer "
+                    "review links."
                 ),
                 "price": 249.00,
                 "interval": "yearly",

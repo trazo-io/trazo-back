@@ -192,7 +192,8 @@ class DriftDetectorSignalTests(TransactionTestCase):
             date=timezone.now(),
             description="Compost application",
             type=SoilManagementEvent.ORGANIC_MATTER,
-            amendment_type="Unapproved Bat Guano",
+            amendment_type="compost",
+            amendment_product_name="Unapproved Bat Guano",
         )
         ev.refresh_from_db()
         self.assertIsNotNone(ev.drift_warning)
@@ -204,7 +205,8 @@ class DriftDetectorSignalTests(TransactionTestCase):
             date=timezone.now(),
             description="Approved compost",
             type=SoilManagementEvent.ORGANIC_MATTER,
-            amendment_type="Neptunes Harvest Fish Fertilizer",
+            amendment_type="compost",
+            amendment_product_name="Neptunes Harvest Fish Fertilizer",
         )
         ev.refresh_from_db()
         self.assertIsNone(ev.drift_warning)
@@ -521,3 +523,125 @@ class DriftFindingsPDFSectionTests(TransactionTestCase):
         self.assertGreaterEqual(len(els), 4)
         texts = " ".join(getattr(e, "text", "") for e in els if hasattr(e, "text"))
         self.assertNotIn("No drift findings", texts)
+
+
+class SoilAmendmentCategoryEnumTests(TransactionTestCase):
+    """A category enum is not an input name (2026-08-25).
+
+    The soil classifier used to run the catalog matcher on `amendment_type`
+    itself, so every on-farm "compost"/"mulch" event carried an "unresolved
+    input" drift finding — 8 of the 23 findings on dev farm 167 were this.
+    On-farm material needs no catalog listing; a PURCHASED product does, and
+    its name lives in `amendment_product_name`.
+    """
+
+    def setUp(self):
+        self.company = Company.objects.create(name="Enum Farm")
+        self.establishment = Establishment.objects.create(name="Main", company=self.company)
+        self.parcel = Parcel.objects.create(name="P1", establishment=self.establishment, area=5.0)
+        self.history = History.objects.create(
+            name="Enum Production",
+            start_date=timezone.now(),
+            parcel=self.parcel,
+        )
+        OrganicSystemPlan.objects.create(
+            establishment=self.establishment,
+            version_number=1,
+            status="active",
+            effective_date=timezone.now().date(),
+        )
+
+    def test_bare_category_enum_never_flags(self):
+        for category in ("compost", "mulch", "manure", "other"):
+            ev = SoilManagementEvent.objects.create(
+                history=self.history,
+                date=timezone.now(),
+                description=f"{category} spread",
+                type=SoilManagementEvent.ORGANIC_MATTER,
+                amendment_type=category,
+            )
+            ev.refresh_from_db()
+            self.assertIsNone(
+                ev.drift_warning,
+                f"bare '{category}' must not be treated as a product name",
+            )
+
+    def test_named_product_still_flags(self):
+        ev = SoilManagementEvent.objects.create(
+            history=self.history,
+            date=timezone.now(),
+            description="purchased compost",
+            type=SoilManagementEvent.COMPOSTING,
+            amendment_type="compost",
+            amendment_product_name="Mystery Compost Co Premium Blend",
+        )
+        ev.refresh_from_db()
+        self.assertIsNotNone(ev.drift_warning)
+        self.assertEqual(ev.drift_warning["input_label"], "Mystery Compost Co Premium Blend")
+
+
+class UpdateSerializerLabFlattenTests(TransactionTestCase):
+    """The retrieve payload must carry the lab results the consumer card shows.
+
+    2026-08-25: soil lab values live in the `test_results` JSON. The full
+    serializer flattens them (LAB_RESULT_FIELDS) for the public card, but
+    `EventViewSet.retrieve` answers with UpdateSoilManagementEventSerializer,
+    which did not — so the producer's "full record" modal showed LESS than the
+    consumer card (Laboratorio visible to shoppers, absent from the modal).
+    """
+
+    def setUp(self):
+        self.company = Company.objects.create(name="Lab Farm")
+        self.establishment = Establishment.objects.create(name="Main", company=self.company)
+        self.parcel = Parcel.objects.create(name="P1", establishment=self.establishment, area=5.0)
+        self.history = History.objects.create(
+            name="Lab Production",
+            start_date=timezone.now(),
+            parcel=self.parcel,
+        )
+
+    def test_update_serializer_flattens_test_results(self):
+        from history.serializers import UpdateSoilManagementEventSerializer
+
+        ev = SoilManagementEvent.objects.create(
+            history=self.history,
+            date=timezone.now(),
+            description="Annual soil test",
+            type=SoilManagementEvent.SOIL_TEST,
+            test_results={
+                "lab_name": "A&L Western Laboratories, Portland OR",
+                "sample_id": "AL-25-04411",
+                "nitrogen": 15,
+                "cec": 12,
+            },
+        )
+        data = UpdateSoilManagementEventSerializer(ev).data
+        self.assertEqual(data["lab_name"], "A&L Western Laboratories, Portland OR")
+        self.assertEqual(data["lab_sample_id"], "AL-25-04411")
+        self.assertEqual(data["lab_nitrogen"], 15)
+        self.assertEqual(data["lab_cec"], 12)
+
+
+class UpdateSerializerFallbackChannelTests(TransactionTestCase):
+    """Every retrieve payload must carry the channels the display registry
+    resolves values from: top-level model fields, `extra_data`, and (for soil)
+    the flattened `test_results`. Registry fields that are not model columns
+    live in extra_data — drop it from a serializer and every such field goes
+    invisible on the detail modal while still showing on the consumer card.
+    """
+
+    def test_every_update_serializer_carries_extra_data_and_observation(self):
+        from history import serializers as hs
+
+        for cls in (
+            hs.UpdateWeatherEventSerializer,
+            hs.UpdateProductionEventSerializer,
+            hs.UpdateChemicalEventSerializer,
+            hs.UpdateGeneralEventSerializer,
+            hs.UpdateSoilManagementEventSerializer,
+            hs.UpdatePestManagementEventSerializer,
+            hs.UpdateBusinessEventSerializer,
+        ):
+            fields = set(cls().fields.keys())
+            self.assertIn("extra_data", fields, cls.__name__)
+            self.assertIn("observation", fields, cls.__name__)

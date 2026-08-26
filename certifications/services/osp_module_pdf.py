@@ -942,4 +942,29 @@ def generate_osp_packet(osp) -> bytes:
         for spec in WORKBOOKS:
             workbook = build_workbook(establishment, spec.key)
             zf.writestr(f"workbooks/{spec.key}.xlsx", workbook.getvalue())
+
+        # Purchase receipts (2026-08-25): every uploaded receipt FILE referenced by a
+        # chemical or soil event rides in the packet verbatim. The audit tables mark
+        # the matching rows "[receipt on file]" — the number on the record and the
+        # paper behind it finally travel together. (Outside the workbook loop: the
+        # first cut sat inside it and wrote every receipt once per workbook.)
+        from history.models import ChemicalEvent as _ChemEv
+        from history.models import SoilManagementEvent as _SoilEv
+
+        _receipt_docs = {}
+        for _model in (_ChemEv, _SoilEv):
+            for _ev in _model.objects.filter(
+                history__parcel__establishment=osp.establishment,
+                receipt_document__isnull=False,
+            ).select_related("receipt_document"):
+                _receipt_docs[_ev.receipt_document_id] = _ev.receipt_document
+        for _doc in _receipt_docs.values():
+            try:
+                with _doc.file.open("rb") as _fh:
+                    _data = _fh.read()
+            except Exception:
+                continue  # a missing file must not sink the whole packet
+            _ext = ("." + _doc.file.name.rsplit(".", 1)[-1]) if "." in _doc.file.name else ""
+            _safe_title = (_doc.title or "receipt").replace("/", "-")[:60]
+            zf.writestr(f"receipts/{_doc.pk}-{_safe_title}{_ext}", _data)
     return out.getvalue()

@@ -52,7 +52,7 @@ ADMIN_ROUTE_SUFFIXES = ("_add", "_change", "_delete", "_changelist", "_history")
 # silenced.
 EXEMPT_ROUTES = {
     # The farm's own data, never withheld from the farm. A QR code is printed on cases and
-    # already in the world; the consumer page it points at is capped by `monthly_scan_limit`,
+    # already in the world; the consumer page it points at is deliberately unlimited,
     # not paywalled, and it is the surface that makes a grower want the paid tier at all.
     "histories-download-qr-code": "consumer QR code — the farm's own, and the demonstration that sells the tier",
     "parcel-histories-download-qr-code": "same route under the nested router",
@@ -73,6 +73,13 @@ EXEMPT_ROUTES = {
     # opposite of what a paywall on artifacts is for.
     "supportattachment-list": "files the user uploaded to their own support ticket",
     "supportattachment-detail": "same, single record",
+    # Raw § 205.103 records as CSV. Deliberately free on every tier, and the docstring on
+    # RecordsExportViewSet says so: record ownership is the product's answer to every grower
+    # who watched their last tool shut down with their data inside (COG Pro). The
+    # certifier-SHAPED artifacts — packet, dossier, audit PDF — are what Compliance buys, and
+    # those stay gated. The farm's own rows never are. Contract pinned separately by
+    # history/tests/test_records_export.py.
+    "establishment-records-export-list": "the farm's own raw records — free by design, never a paid artifact",
 }
 
 # What the gate is called. Asserted by NAME so a rename cannot quietly empty this test.

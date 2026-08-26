@@ -251,6 +251,20 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 _visibility = Q(published=True) | Q(parcel__establishment__company__in=_user.companies.all())
             else:
                 _visibility = Q(published=True)
+            # Buyer review token (2026-08-25): an ACTIVE buyer-audience link widens
+            # visibility to that ONE establishment's productions, published or not —
+            # in-season wholesale diligence, consented by the farmer when minting the
+            # link. The payload stays the ordinary claim-safe public serialization;
+            # the token changes WHICH productions resolve, never WHAT a production
+            # shows. Resolved once here, reused by the action body for logging.
+            _rt = self.request.query_params.get("review_token")
+            if _rt:
+                from certifications.models import CertifierAccessLink
+
+                _buyer_link = CertifierAccessLink.resolve_buyer_token(_rt)
+                self._buyer_review_link = _buyer_link
+                if _buyer_link is not None:
+                    _visibility = _visibility | Q(parcel__establishment=_buyer_link.establishment)
             return (
                 History.objects.filter(_visibility)
                 .select_related(
@@ -904,8 +918,28 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         if request.user.is_authenticated and history.parcel and history.parcel.establishment:
             is_owner = request.user.companies.filter(id=history.parcel.establishment.company_id).exists()
 
+        # A buyer following a review link is neither a shopper scan nor the owner:
+        # their open is logged to the LINK's access log (the farmer sees "did my
+        # buyer actually look?"), and deliberately NOT recorded as a HistoryScan —
+        # diligence opens must not inflate consumer-engagement numbers or fire
+        # "your product was scanned" notifications.
+        buyer_link = getattr(self, "_buyer_review_link", None)
+        via_buyer_link = bool(
+            buyer_link is not None and history.parcel and history.parcel.establishment_id == buyer_link.establishment_id
+        )
+        if via_buyer_link and not is_owner:
+            from certifications.models import CertifierAccessLog
+            from certifications.views import _client_ip
+
+            CertifierAccessLog.objects.create(
+                link=buyer_link,
+                action="production",
+                ip_address=_client_ip(request),
+                user_agent=(request.META.get("HTTP_USER_AGENT") or "")[:300],
+            )
+
         history_scan = None
-        if not is_owner:
+        if not is_owner and not via_buyer_link:
             # Consent gate + geolocation are shared with PublicHistoryScanViewSet.
             # This path used to parse X-Forwarded-For itself and store the RAW ip,
             # the city and the country with no consent check whatsoever — the exact
@@ -4719,3 +4753,27 @@ class SalesRecordViewSet(viewsets.GenericViewSet):
             return Response({"error": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
         record.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class RecordsExportViewSet(CompanyNestedViewSet, viewsets.ViewSet):
+    """GET .../establishments/{id}/records-export/ → ZIP of raw CSVs.
+
+    Deliberately NOT gated on any plan: § 205.103 records are the farm's
+    records, and record ownership is the product's answer to every grower who
+    watched their last tool shut down with their data inside (COG Pro). The
+    certifier-shaped artifacts (packet, dossier, audit PDF) stay behind
+    `require_compliance_exports`; the raw data never does. Guard:
+    history/tests/test_records_export.py pins the no-gating contract.
+    """
+
+    def list(self, request, company_pk=None, establishment_pk=None):
+        from django.http import HttpResponse
+        from django.utils import timezone as dj_tz
+
+        from history.services.records_export import export_establishment_records_zip
+
+        payload = export_establishment_records_zip(self.establishment)
+        response = HttpResponse(payload, content_type="application/zip")
+        stamp = dj_tz.localdate().isoformat()
+        response["Content-Disposition"] = f'attachment; filename="trazo-records-{establishment_pk}-{stamp}.zip"'
+        return response

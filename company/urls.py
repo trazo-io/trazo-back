@@ -13,7 +13,7 @@ from certifications.views import (
     StateOrganicRegistrationViewSet,
 )
 from documents.views import GeneratedDocumentViewSet
-from history.views import EventViewSet, HistoryScanViewSet, HistoryViewSet
+from history.views import EventViewSet, HistoryScanViewSet, HistoryViewSet, RecordsExportViewSet
 from product.views import ParcelViewSet, ProductsViewSet
 from reviews.views import ReviewsViewSet
 
@@ -63,6 +63,7 @@ establishment_router.register(
     basename="establishment-certifier-links",
 )
 establishment_router.register(r"documents", GeneratedDocumentViewSet, basename="establishment-documents")
+establishment_router.register(r"records-export", RecordsExportViewSet, basename="establishment-records-export")
 establishment_router.register(r"scans", HistoryScanViewSet, basename="establishment-scans")
 establishment_router.register(r"events", EventViewSet, basename="establishment-events")
 establishment_router.register(r"parcels", ParcelViewSet, basename="establishment-parcels")

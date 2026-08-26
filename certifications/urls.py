@@ -5,7 +5,13 @@
 
 from django.urls import path
 
-from .views import certifier_review_dossier, certifier_review_metadata, certifier_review_readiness, verify_input
+from .views import (
+    buyer_review_metadata,
+    certifier_review_dossier,
+    certifier_review_metadata,
+    certifier_review_readiness,
+    verify_input,
+)
 
 urlpatterns = [
     # NOP input verifier (Sprint 3) — classify a chemical/amendment against the
@@ -14,6 +20,11 @@ urlpatterns = [
     # Certifier review links — ANONYMOUS by design. The certifier needs no Trazo
     # account; the token in the URL is the credential. Both views resolve only
     # ACTIVE links (not expired, not revoked) and log every open.
+    path(
+        "buyer-review/<str:token>/",
+        buyer_review_metadata,
+        name="buyer_review_metadata",
+    ),
     path(
         "certifier-review/<str:token>/",
         certifier_review_metadata,

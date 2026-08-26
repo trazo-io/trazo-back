@@ -8000,7 +8000,7 @@
        "__dec__": "6.00"
       },
       "extra_data": {
-       "low_temp_f": 31
+       "low_temperature": 31
       },
       "fuel_consumed": {
        "__dec__": "11.00"
@@ -8030,7 +8030,7 @@
        "__dec__": "6.00"
       },
       "extra_data": {
-       "low_temp_f": 29
+       "low_temperature": 29
       },
       "fuel_consumed": {
        "__dec__": "11.00"
@@ -8059,8 +8059,8 @@
       "extra_data": {
        "beekeeper": "Foothills Honey Co., Colton OR",
        "contract": "FHC-2025-31",
-       "hives": 25,
-       "hives_per_acre": 2
+       "hives_per_acre": 2,
+       "hive_count": 25
       },
       "observation": "25 hives from Foothills Honey Co., Colton, set along the headlands at 5 percent bloom — two per acre. Rental contract and apiary registration on file.",
       "performed_by": "Laurel Brandt",
@@ -8080,7 +8080,7 @@
        "__dec__": "6.00"
       },
       "extra_data": {
-       "low_temp_f": 31
+       "low_temperature": 31
       },
       "fuel_consumed": {
        "__dec__": "11.00"
@@ -8130,7 +8130,7 @@
       "description": "Honeybee hives removed",
       "extra_data": {
        "beekeeper": "Foothills Honey Co., Colton OR",
-       "hives": 25
+       "hive_count": 25
       },
       "observation": "Hives pulled at petal fall, evening, before the first fungicide window closed. No sprays while hives were in the block.",
       "performed_by": "Laurel Brandt",
@@ -8818,12 +8818,12 @@
        "boron_ppm": 0.6,
        "cec": 11,
        "lab_name": "A&L Western Laboratories, Portland OR",
-       "nitrogen_ppm": 14,
        "organic_matter_pct": 5.8,
        "ph": 5.4,
-       "phosphorus_ppm": 48,
-       "potassium_ppm": 118,
-       "report_no": "AL-25-04410"
+       "sample_id": "AL-25-04410",
+       "nitrogen": 14,
+       "phosphorus": 48,
+       "potassium": 118
       }
      },
      {
@@ -8847,8 +8847,8 @@
        "mg_pct": 0.19,
        "n_pct": 1.9,
        "p_pct": 0.12,
-       "report_no": "AL-25-07710",
-       "sample": "leaf tissue, 50 leaves"
+       "sample": "leaf tissue, 50 leaves",
+       "sample_id": "AL-25-07710"
       },
       "type": "LA"
      }
@@ -8863,7 +8863,7 @@
       "description": "Radiation frost",
       "extra_data": {
        "duration_hours": 5,
-       "low_temp_f": 29
+       "low_temperature": 29
       },
       "observation": "Clear, calm, 29F at the orchard floor at 4 a.m. Overhead water ran on all blocks; no bloom loss found on the walk-through.",
       "type": "FR"
@@ -8877,7 +8877,7 @@
       "description": "Heat event",
       "extra_data": {
        "days_at_or_above": 3,
-       "peak_temperature_f": 102
+       "highest_temperature": 102
       },
       "observation": "Three days 98-102F. Picked from first light and stopped by 11; drip sets lengthened; Surround film earned its keep. Some soft fruit on the west rows.",
       "type": "HT"
@@ -10582,7 +10582,7 @@
        "__dec__": "6.00"
       },
       "extra_data": {
-       "low_temp_f": 31
+       "low_temperature": 31
       },
       "fuel_consumed": {
        "__dec__": "11.00"
@@ -10634,7 +10634,7 @@
        "__dec__": "6.00"
       },
       "extra_data": {
-       "low_temp_f": 29
+       "low_temperature": 29
       },
       "fuel_consumed": {
        "__dec__": "11.00"
@@ -10664,7 +10664,7 @@
        "__dec__": "6.00"
       },
       "extra_data": {
-       "low_temp_f": 31
+       "low_temperature": 31
       },
       "fuel_consumed": {
        "__dec__": "11.00"
@@ -10693,8 +10693,8 @@
       "extra_data": {
        "beekeeper": "Foothills Honey Co., Colton OR",
        "contract": "FHC-2025-32",
-       "hives": 28,
-       "hives_per_acre": 2
+       "hives_per_acre": 2,
+       "hive_count": 28
       },
       "observation": "28 hives from Foothills Honey Co., Colton, set along the headlands at 5 percent bloom — two per acre. Rental contract and apiary registration on file.",
       "performed_by": "Laurel Brandt",
@@ -10734,7 +10734,7 @@
       "description": "Honeybee hives removed",
       "extra_data": {
        "beekeeper": "Foothills Honey Co., Colton OR",
-       "hives": 28
+       "hive_count": 28
       },
       "observation": "Hives pulled at petal fall, evening, before the first fungicide window closed. No sprays while hives were in the block.",
       "performed_by": "Laurel Brandt",
@@ -11472,12 +11472,12 @@
        "boron_ppm": 0.6,
        "cec": 12,
        "lab_name": "A&L Western Laboratories, Portland OR",
-       "nitrogen_ppm": 15,
        "organic_matter_pct": 6.1,
        "ph": 5.3,
-       "phosphorus_ppm": 48,
-       "potassium_ppm": 112,
-       "report_no": "AL-25-04411"
+       "sample_id": "AL-25-04411",
+       "nitrogen": 15,
+       "phosphorus": 48,
+       "potassium": 112
       }
      },
      {
@@ -11501,8 +11501,8 @@
        "mg_pct": 0.19,
        "n_pct": 1.95,
        "p_pct": 0.12,
-       "report_no": "AL-25-07711",
-       "sample": "leaf tissue, 50 leaves"
+       "sample": "leaf tissue, 50 leaves",
+       "sample_id": "AL-25-07711"
       },
       "type": "LA"
      }
@@ -11517,7 +11517,7 @@
       "description": "Radiation frost",
       "extra_data": {
        "duration_hours": 5,
-       "low_temp_f": 29
+       "low_temperature": 29
       },
       "observation": "Clear, calm, 29F at the orchard floor at 4 a.m. Overhead water ran on all blocks; no bloom loss found on the walk-through.",
       "type": "FR"
@@ -11531,7 +11531,7 @@
       "description": "Heat event",
       "extra_data": {
        "days_at_or_above": 3,
-       "peak_temperature_f": 102
+       "highest_temperature": 102
       },
       "observation": "Three days 98-102F. Picked from first light and stopped by 11; drip sets lengthened; Surround film earned its keep. Some soft fruit on the west rows.",
       "type": "HT"
@@ -12560,7 +12560,7 @@
        "__dec__": "6.00"
       },
       "extra_data": {
-       "low_temp_f": 29
+       "low_temperature": 29
       },
       "fuel_consumed": {
        "__dec__": "11.00"
@@ -12612,7 +12612,7 @@
        "__dec__": "6.00"
       },
       "extra_data": {
-       "low_temp_f": 31
+       "low_temperature": 31
       },
       "fuel_consumed": {
        "__dec__": "11.00"
@@ -12641,8 +12641,8 @@
       "extra_data": {
        "beekeeper": "Foothills Honey Co., Colton OR",
        "contract": "FHC-2025-33",
-       "hives": 22,
-       "hives_per_acre": 2
+       "hives_per_acre": 2,
+       "hive_count": 22
       },
       "observation": "22 hives from Foothills Honey Co., Colton, set along the headlands at 5 percent bloom — two per acre. Rental contract and apiary registration on file.",
       "performed_by": "Laurel Brandt",
@@ -12682,7 +12682,7 @@
       "description": "Honeybee hives removed",
       "extra_data": {
        "beekeeper": "Foothills Honey Co., Colton OR",
-       "hives": 22
+       "hive_count": 22
       },
       "observation": "Hives pulled at petal fall, evening, before the first fungicide window closed. No sprays while hives were in the block.",
       "performed_by": "Laurel Brandt",
@@ -13343,12 +13343,12 @@
        "boron_ppm": 0.6,
        "cec": 13,
        "lab_name": "A&L Western Laboratories, Portland OR",
-       "nitrogen_ppm": 16,
        "organic_matter_pct": 6.4,
        "ph": 5.2,
-       "phosphorus_ppm": 48,
-       "potassium_ppm": 106,
-       "report_no": "AL-25-04412"
+       "sample_id": "AL-25-04412",
+       "nitrogen": 16,
+       "phosphorus": 48,
+       "potassium": 106
       }
      },
      {
@@ -13372,8 +13372,8 @@
        "mg_pct": 0.19,
        "n_pct": 2.0,
        "p_pct": 0.12,
-       "report_no": "AL-25-07712",
-       "sample": "leaf tissue, 50 leaves"
+       "sample": "leaf tissue, 50 leaves",
+       "sample_id": "AL-25-07712"
       },
       "type": "LA"
      }
@@ -13388,7 +13388,7 @@
       "description": "Radiation frost",
       "extra_data": {
        "duration_hours": 5,
-       "low_temp_f": 30
+       "low_temperature": 30
       },
       "observation": "Clear, calm, 30F at the orchard floor at 4 a.m. Overhead water ran on all blocks; no bloom loss found on the walk-through.",
       "type": "FR"
@@ -13417,7 +13417,7 @@
       "description": "Heat event",
       "extra_data": {
        "days_at_or_above": 3,
-       "peak_temperature_f": 102
+       "highest_temperature": 102
       },
       "observation": "Three days 98-102F. Picked from first light and stopped by 11; drip sets lengthened; Surround film earned its keep. Some soft fruit on the west rows.",
       "type": "HT"
@@ -14222,12 +14222,12 @@
       "test_results": {
        "cec": 19,
        "lab_name": "A&L Western Laboratories, Portland OR",
-       "nitrogen_ppm": 11,
        "organic_matter_pct": 4.1,
        "ph": 6.3,
-       "phosphorus_ppm": 62,
-       "potassium_ppm": 205,
-       "report_no": "AL-25-04602"
+       "sample_id": "AL-25-04602",
+       "nitrogen": 11,
+       "phosphorus": 62,
+       "potassium": 205
       }
      },
      {
@@ -14881,12 +14881,12 @@
       "test_results": {
        "cec": 18,
        "lab_name": "A&L Western Laboratories, Portland OR",
-       "nitrogen_ppm": 12,
        "organic_matter_pct": 4.0,
        "ph": 6.4,
-       "phosphorus_ppm": 58,
-       "potassium_ppm": 212,
-       "report_no": "AL-25-04588"
+       "sample_id": "AL-25-04588",
+       "nitrogen": 12,
+       "phosphorus": 58,
+       "potassium": 212
       }
      },
      {
@@ -16375,7 +16375,7 @@
        "__dec__": "6.00"
       },
       "extra_data": {
-       "low_temp_f": 30
+       "low_temperature": 30
       },
       "fuel_consumed": {
        "__dec__": "11.00"
@@ -16425,7 +16425,7 @@
       "description": "Honeybee hives removed",
       "extra_data": {
        "beekeeper": "Foothills Honey Co., Colton OR",
-       "hives": 25
+       "hive_count": 25
       },
       "observation": "Hives pulled at petal fall. No sprays while in.",
       "performed_by": "Laurel Brandt",
@@ -18411,7 +18411,7 @@
        "__dec__": "6.00"
       },
       "extra_data": {
-       "low_temp_f": 30
+       "low_temperature": 30
       },
       "fuel_consumed": {
        "__dec__": "11.00"
@@ -18463,7 +18463,7 @@
        "__dec__": "6.00"
       },
       "extra_data": {
-       "low_temp_f": 30
+       "low_temperature": 30
       },
       "fuel_consumed": {
        "__dec__": "11.00"
@@ -18492,8 +18492,8 @@
       "extra_data": {
        "beekeeper": "Foothills Honey Co., Colton OR",
        "contract": "FHC-2026-29",
-       "hives": 28,
-       "hives_per_acre": 2
+       "hives_per_acre": 2,
+       "hive_count": 28
       },
       "observation": "28 hives from Foothills Honey Co. at 5 percent bloom, two per acre. Contract on file.",
       "performed_by": "Laurel Brandt",
@@ -18533,7 +18533,7 @@
       "description": "Honeybee hives removed",
       "extra_data": {
        "beekeeper": "Foothills Honey Co., Colton OR",
-       "hives": 28
+       "hive_count": 28
       },
       "observation": "Hives pulled at petal fall. No sprays while in.",
       "performed_by": "Laurel Brandt",
@@ -19420,12 +19420,12 @@
        "boron_ppm": 0.7,
        "cec": 12,
        "lab_name": "A&L Western Laboratories, Portland OR",
-       "nitrogen_ppm": 16,
        "organic_matter_pct": 6.3,
        "ph": 5.2,
-       "phosphorus_ppm": 46,
-       "potassium_ppm": 120,
-       "report_no": "AL-26-04381"
+       "sample_id": "AL-26-04381",
+       "nitrogen": 16,
+       "phosphorus": 46,
+       "potassium": 120
       }
      },
      {
@@ -19449,8 +19449,8 @@
        "mg_pct": 0.19,
        "n_pct": 1.97,
        "p_pct": 0.12,
-       "report_no": "AL-26-07661",
-       "sample": "leaf tissue, 50 leaves"
+       "sample": "leaf tissue, 50 leaves",
+       "sample_id": "AL-26-07661"
       },
       "type": "LA"
      }
@@ -19465,7 +19465,7 @@
       "description": "Radiation frost",
       "extra_data": {
        "duration_hours": 4,
-       "low_temp_f": 30
+       "low_temperature": 30
       },
       "observation": "Clear and calm, 30F at the orchard floor at 4 a.m.; overhead ran on all blocks.",
       "type": "FR"
@@ -19495,7 +19495,7 @@
       "description": "Heat event",
       "extra_data": {
        "days_at_or_above": 2,
-       "peak_temperature_f": 101
+       "highest_temperature": 101
       },
       "observation": "Two days at 99-101F. Picked from first light, stopped by 11; sets lengthened.",
       "type": "HT"
@@ -20548,7 +20548,7 @@
        "__dec__": "6.00"
       },
       "extra_data": {
-       "low_temp_f": 30
+       "low_temperature": 30
       },
       "fuel_consumed": {
        "__dec__": "11.00"
@@ -20577,8 +20577,8 @@
       "extra_data": {
        "beekeeper": "Foothills Honey Co., Colton OR",
        "contract": "FHC-2026-30",
-       "hives": 22,
-       "hives_per_acre": 2
+       "hives_per_acre": 2,
+       "hive_count": 22
       },
       "observation": "22 hives from Foothills Honey Co. at 5 percent bloom, two per acre. Contract on file.",
       "performed_by": "Laurel Brandt",
@@ -20618,7 +20618,7 @@
       "description": "Honeybee hives removed",
       "extra_data": {
        "beekeeper": "Foothills Honey Co., Colton OR",
-       "hives": 22
+       "hive_count": 22
       },
       "observation": "Hives pulled at petal fall. No sprays while in.",
       "performed_by": "Laurel Brandt",
@@ -21250,12 +21250,12 @@
        "boron_ppm": 0.7,
        "cec": 13,
        "lab_name": "A&L Western Laboratories, Portland OR",
-       "nitrogen_ppm": 17,
        "organic_matter_pct": 6.6,
        "ph": 5.1,
-       "phosphorus_ppm": 46,
-       "potassium_ppm": 114,
-       "report_no": "AL-26-04382"
+       "sample_id": "AL-26-04382",
+       "nitrogen": 17,
+       "phosphorus": 46,
+       "potassium": 114
       }
      },
      {
@@ -21279,8 +21279,8 @@
        "mg_pct": 0.19,
        "n_pct": 2.02,
        "p_pct": 0.12,
-       "report_no": "AL-26-07662",
-       "sample": "leaf tissue, 50 leaves"
+       "sample": "leaf tissue, 50 leaves",
+       "sample_id": "AL-26-07662"
       },
       "type": "LA"
      }
@@ -21295,7 +21295,7 @@
       "description": "Radiation frost",
       "extra_data": {
        "duration_hours": 4,
-       "low_temp_f": 30
+       "low_temperature": 30
       },
       "observation": "Clear and calm, 30F at the orchard floor at 4 a.m.; overhead ran on all blocks.",
       "type": "FR"
@@ -21309,7 +21309,7 @@
       "description": "Heat event",
       "extra_data": {
        "days_at_or_above": 2,
-       "peak_temperature_f": 101
+       "highest_temperature": 101
       },
       "observation": "Two days at 99-101F. Picked from first light, stopped by 11; sets lengthened.",
       "type": "HT"
@@ -22097,12 +22097,12 @@
       "test_results": {
        "cec": 18,
        "lab_name": "A&L Western Laboratories, Portland OR",
-       "nitrogen_ppm": 12,
        "organic_matter_pct": 4.1,
        "ph": 6.4,
-       "phosphorus_ppm": 60,
-       "potassium_ppm": 210,
-       "report_no": "AL-26-04511"
+       "sample_id": "AL-26-04511",
+       "nitrogen": 12,
+       "phosphorus": 60,
+       "potassium": 210
       }
      }
     ]
@@ -22711,12 +22711,12 @@
       "test_results": {
        "cec": 17,
        "lab_name": "A&L Western Laboratories, Portland OR",
-       "nitrogen_ppm": 16,
        "organic_matter_pct": 4.4,
        "ph": 6.1,
-       "phosphorus_ppm": 52,
-       "potassium_ppm": 198,
-       "report_no": "AL-26-04490"
+       "sample_id": "AL-26-04490",
+       "nitrogen": 16,
+       "phosphorus": 52,
+       "potassium": 198
       }
      },
      {

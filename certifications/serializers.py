@@ -862,6 +862,7 @@ class CertifierAccessLinkSerializer(serializers.ModelSerializer):
             "id",
             "token",
             "label",
+            "audience",
             "certification_type",
             "period_start",
             "period_end",

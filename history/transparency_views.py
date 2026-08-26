@@ -119,8 +119,38 @@ def production_transparency_detail(request, production_public_id=None):
             except History.DoesNotExist:
                 pass
 
+        # Buyer review token (2026-08-25): mirrors public_history — an active
+        # buyer-audience link opens this establishment's unpublished productions.
+        # Same payload either way; the token only changes which productions resolve.
+        buyer_link = None
+        if not is_owner:
+            from certifications.models import CertifierAccessLink
+
+            buyer_link = CertifierAccessLink.resolve_buyer_token(request.query_params.get("review_token"))
+
         if is_owner:
             history = get_object_or_404(base_qs, **lookup_kwargs)
+        elif buyer_link is not None:
+            history = get_object_or_404(
+                base_qs.filter(Q(published=True) | Q(parcel__establishment=buyer_link.establishment)),
+                **lookup_kwargs,
+            )
+            # Log the open to the LINK, not as a consumer scan: this endpoint is the
+            # one the consumer page actually fetches, so without this row the farmer's
+            # "did my buyer look?" log only covered public_history (which the page
+            # does not call). Logged only when the token is what granted access —
+            # a published production of some other farm resolving alongside a valid
+            # token is ordinary public traffic, not a buyer open.
+            if history.parcel and history.parcel.establishment_id == buyer_link.establishment_id:
+                from certifications.models import CertifierAccessLog
+                from certifications.views import _client_ip
+
+                CertifierAccessLog.objects.create(
+                    link=buyer_link,
+                    action="production",
+                    ip_address=_client_ip(request),
+                    user_agent=(request.META.get("HTTP_USER_AGENT") or "")[:300],
+                )
         else:
             history = get_object_or_404(base_qs, published=True, **lookup_kwargs)
 

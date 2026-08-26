@@ -248,7 +248,6 @@ MIDDLEWARE = [
     "subscriptions.middleware.SubscriptionMiddleware",
     # REMOVED: backend.security.middleware.RateLimitHeadersMiddleware
     # REMOVED: backend.security.middleware.SecurityEventMiddleware
-    "subscriptions.middleware.UsageTrackingMiddleware",
     # Resolve JWT cookie to request.user BEFORE AuditlogMiddleware so audit
     # entries carry a named actor (7 CFR 205.103 / 21 CFR Part 11 attribution).
     "users.middleware.JWTCookieActorMiddleware",

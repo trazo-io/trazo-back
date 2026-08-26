@@ -188,7 +188,6 @@ class Command(BaseCommand):
                     "max_establishments": 10,
                     "max_parcels": 100,
                     "max_productions_per_year": 500,
-                    "monthly_scan_limit": 50000,
                     "storage_limit_gb": 500,
                     "carbon_tracking": True,
                     "blockchain_verification": True,

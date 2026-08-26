@@ -41,6 +41,35 @@ except Exception as e:
     async_openai_client = None
 
 
+# Prompt variants are stored under one representative tag per language family. Callers send
+# whatever BCP-47 tag the client uses, and those do not match: the app's Spanish locale is
+# ``es-419`` (Latin America) while the prompt below is filed under ``es-ES``. A plain
+# ``prompts.get(language, prompts["en-US"])`` therefore answered a Spanish transcript with the
+# ENGLISH prompt — silently, because the fallback is also the success path for English.
+#
+# Keying by family instead means ``es-419``, ``es-ES`` and ``es-MX`` all resolve, and adding a
+# locale to the front end cannot quietly revert a farmer to English again.
+_PROMPT_KEY_BY_FAMILY = {"en": "en-US", "es": "es-ES", "pt": "pt-BR"}
+
+# Fallback pattern-matching keyword sets are keyed differently again ("keywords" is English).
+_KEYWORD_KEY_BY_FAMILY = {"en": "keywords", "es": "es", "pt": "pt"}
+
+
+def _language_family(language: str) -> str:
+    """First subtag of a BCP-47 tag, lowercased. ``es-419`` -> ``es``."""
+    return (language or "").split("-")[0].lower()
+
+
+def prompt_key_for(language: str) -> str:
+    """Prompt-variant key for any BCP-47 tag, defaulting to English."""
+    return _PROMPT_KEY_BY_FAMILY.get(_language_family(language), "en-US")
+
+
+def keyword_key_for(language: str) -> str:
+    """Fallback keyword-set key for any BCP-47 tag, defaulting to English."""
+    return _KEYWORD_KEY_BY_FAMILY.get(_language_family(language), "keywords")
+
+
 class AIVoiceProcessor:
     """
     AI-powered voice processing for agricultural events using OpenAI GPT models.
@@ -222,7 +251,7 @@ INSTRUÇÕES CRÍTICAS:
 - Se não tem certeza de um valor, definir como null em vez de adivinhar.""",
         }
 
-        return prompts.get(language, prompts["en-US"])
+        return prompts.get(prompt_key_for(language), prompts["en-US"])
 
     def _create_extraction_prompt(self, transcript: str, crop_type: str, language: str) -> str:
         """Create the extraction prompt for the AI model."""
@@ -266,7 +295,7 @@ Data: Hoje
 Responda apenas com JSON.""",
         }
 
-        return prompts.get(language, prompts["en-US"])
+        return prompts.get(prompt_key_for(language), prompts["en-US"])
 
     def _structure_ai_response(
         self, ai_response: Dict[str, Any], original_transcript: str, processing_time: float
@@ -379,7 +408,7 @@ Responda apenas com JSON.""",
         confidence = 30  # Lower confidence for fallback
 
         # Detect event type
-        lang_suffix = "es" if language == "es-ES" else "pt" if language == "pt-BR" else "keywords"
+        lang_suffix = keyword_key_for(language)
 
         max_matches = 0
         for event_type, pattern_data in patterns.items():

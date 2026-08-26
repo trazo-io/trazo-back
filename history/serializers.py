@@ -689,6 +689,7 @@ def _leading_number(raw_value):
 
 
 class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializer):
+    receipt_document_title = serializers.CharField(source="receipt_document.title", read_only=True)
     # 🚨 FIELD ALIASING: Accept frontend field names and map to backend model fields
     # This allows the frontend to send consistent field names while the backend
     # continues to use the existing database schema
@@ -762,6 +763,8 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
             "supplier_name",
             "purchase_date",
             "purchase_invoice",
+            "receipt_document",
+            "receipt_document_title",
             "quantity_purchased",
             "quantity_purchased_unit",
             "chemical_lot_number",
@@ -800,6 +803,38 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
             "area": {"required": False, "allow_blank": True, "allow_null": True},
             "way_of_application": {"required": False, "allow_blank": True, "allow_null": True},
         }
+
+    def validate_receipt_document(self, doc):
+        """Receipt must belong to the same establishment as the event's season.
+
+        Cross-tenant scope is the whole game here: a bare FK field would accept
+        any document id the caller can name."""
+        if doc is None:
+            return doc
+        # First gate: the CALLER must belong to the document's company. The normal
+        # create path posts `parcels`, not `history` — the season is resolved in
+        # perform_create AFTER validation — so a history-only check would let a
+        # member of company A link company B's receipt by id (fresh-eyes, 2026-08-25).
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if user is not None and user.is_authenticated and not user.is_superuser:
+            from users.models import WorksIn
+
+            if not WorksIn.objects.filter(user=user, company_id=doc.establishment.company_id).exists():
+                raise serializers.ValidationError("Receipt document belongs to a different operation.")
+        # Second gate: when the season IS resolvable, the document must belong to
+        # the same establishment (a user in two companies must not cross-link).
+        history = None
+        raw_history = self.initial_data.get("history") if hasattr(self, "initial_data") else None
+        if raw_history:
+            from history.models import History
+
+            history = History.objects.filter(pk=raw_history).select_related("parcel__establishment").first()
+        if history is None and getattr(self, "instance", None) is not None:
+            history = getattr(self.instance, "history", None)
+        if history is not None and doc.establishment_id != history.parcel.establishment_id:
+            raise serializers.ValidationError("Receipt document belongs to a different operation.")
+        return doc
 
     def to_internal_value(self, data):
         """
@@ -2009,6 +2044,15 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
         "protection_method",  # FP: wind_machine / orchard_heater / under_tree_sprinkler
         "low_temperature",  # FP: low temp that triggered protection
         "floor_management_type",  # MO: mow / mulch / cover_crop_mgmt / flame_weed
+        # 2026-08-25 round-trip matrix: the LAST form fields with no home. Pollination's
+        # whole section (PO) and the pruning-summary pass count posted top-level, hit no
+        # column and no lift, and DRF silently discarded them — a farmer's hive record
+        # saved as an empty event. Guard: history/tests/test_form_field_round_trip.py.
+        "pollinator_type",
+        "hive_count",
+        "placement_date",
+        "removal_date",
+        "pruning_passes",
         # A9 fix (2026-07): `method` was in the READ serializer's EXTRA_DATA_FIELDS but
         # missing here, so a flat `method=` POST was silently discarded and only a nested
         # extra_data.method survived. That single omission disabled the manual-operation
@@ -5499,8 +5543,8 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "id": f"pest_{i}",
                         "record_id": event.id,
                         "date": event.date.isoformat() if event.date else None,
-                        "description": event.description or "Pest Management",
-                        "observation": getattr(event, "observation", ""),
+                        "description": _public_event_text(event.description or "Pest Management", event),
+                        "observation": _public_event_text(getattr(event, "observation", ""), event),
                         "performed_by": self._public_performer(event, show_full_names),
                         "type": "pest_management",
                         "event_type": PEST_MANAGEMENT_EVENT_TYPE,
@@ -5619,8 +5663,8 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "id": f"general_{i}",
                         "record_id": event.id,
                         "date": event.date.isoformat() if event.date else None,
-                        "description": event.name or event.description or "General Event",
-                        "observation": event.observation or "",
+                        "description": _public_event_text(event.name or event.description or "General Event", event),
+                        "observation": _public_event_text(event.observation or "", event),
                         "performed_by": self._public_performer(event, show_full_names),
                         "type": "general",
                         "event_type": GENERAL_EVENT_TYPE,
@@ -5733,8 +5777,10 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "id": f"business_{i}",
                         "record_id": event.id,
                         "date": event.date.isoformat() if event.date else None,
-                        "description": event.name or event.description or f"Business Event - {business_display}",
-                        "observation": event.observation or "",
+                        "description": _public_event_text(
+                            event.name or event.description or f"Business Event - {business_display}", event
+                        ),
+                        "observation": _public_event_text(event.observation or "", event),
                         "performed_by": self._public_performer(event, show_full_names),
                         "type": "business",
                         "event_type": BUSINESS_EVENT_TYPE,
@@ -6214,6 +6260,7 @@ class EquipmentEventSerializer(EventSerializer):
 
 # Soil Management Event Serializers
 class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSerializer):
+    receipt_document_title = serializers.CharField(source="receipt_document.title", read_only=True)
     # Grazing fields are optional - only relevant for grazing management subtype
     animal_count = serializers.IntegerField(required=False, allow_null=True, default=None)
     grazing_duration_days = serializers.IntegerField(required=False, allow_null=True, default=None)
@@ -6243,6 +6290,8 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "amendment_supplier_name",
             "amendment_purchase_date",
             "amendment_purchase_invoice",
+            "receipt_document",
+            "receipt_document_title",
             "amendment_quantity_purchased",
             "amendment_quantity_purchased_unit",
             "amendment_lot_number",
@@ -6473,6 +6522,38 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
 
         return internal_value
 
+    def validate_receipt_document(self, doc):
+        """Receipt must belong to the same establishment as the event's season.
+
+        Cross-tenant scope is the whole game here: a bare FK field would accept
+        any document id the caller can name."""
+        if doc is None:
+            return doc
+        # First gate: the CALLER must belong to the document's company. The normal
+        # create path posts `parcels`, not `history` — the season is resolved in
+        # perform_create AFTER validation — so a history-only check would let a
+        # member of company A link company B's receipt by id (fresh-eyes, 2026-08-25).
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if user is not None and user.is_authenticated and not user.is_superuser:
+            from users.models import WorksIn
+
+            if not WorksIn.objects.filter(user=user, company_id=doc.establishment.company_id).exists():
+                raise serializers.ValidationError("Receipt document belongs to a different operation.")
+        # Second gate: when the season IS resolvable, the document must belong to
+        # the same establishment (a user in two companies must not cross-link).
+        history = None
+        raw_history = self.initial_data.get("history") if hasattr(self, "initial_data") else None
+        if raw_history:
+            from history.models import History
+
+            history = History.objects.filter(pk=raw_history).select_related("parcel__establishment").first()
+        if history is None and getattr(self, "instance", None) is not None:
+            history = getattr(self.instance, "history", None)
+        if history is not None and doc.establishment_id != history.parcel.establishment_id:
+            raise serializers.ValidationError("Receipt document belongs to a different operation.")
+        return doc
+
     def to_representation(self, instance):
         """Override to serialize album with images instead of just ID"""
         data = super().to_representation(instance)
@@ -6484,6 +6565,18 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
 
         # Include custom fields in response for frontend display
         data = self.add_custom_fields_to_representation(data, instance)
+
+        # Same read-only lab-results flatten as SoilManagementEventSerializer (its
+        # LAB_RESULT_FIELDS is the single authority; resolved at call time, the class
+        # is defined later in this module). This serializer answers
+        # `EventViewSet.retrieve`, which feeds the producer detail modal and the edit
+        # wizard — without the flatten the "full record" view showed LESS than the
+        # consumer card (2026-08-25: Laboratorio visible to shoppers, absent here).
+        # Write path unchanged: the form sends the `test_results` JSON.
+        results = instance.test_results if isinstance(instance.test_results, dict) else {}
+        for out_key, json_key in SoilManagementEventSerializer.LAB_RESULT_FIELDS.items():
+            if data.get(out_key) is None:
+                data[out_key] = results.get(json_key)
 
         return data
 

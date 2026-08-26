@@ -109,7 +109,8 @@ class Phase1DriftTests(TransactionTestCase):
         ev = SoilManagementEvent.objects.create(
             history=self.history,
             type="OM",
-            amendment_type="Mystery Brand Fish 4-4-1",
+            amendment_type="compost",
+            amendment_product_name="Mystery Brand Fish 4-4-1",
             date=timezone.now(),
         )
         ev.refresh_from_db()
@@ -123,7 +124,8 @@ class Phase1DriftTests(TransactionTestCase):
         ev = SoilManagementEvent.objects.create(
             history=self.history,
             type="OM",
-            amendment_type="Neptune's Harvest Fish & Seaweed 2-3-1",
+            amendment_type="compost",
+            amendment_product_name="Neptune's Harvest Fish & Seaweed 2-3-1",
             date=timezone.now(),
         )
         ev.refresh_from_db()
@@ -180,7 +182,8 @@ class Phase1DriftTests(TransactionTestCase):
         ev = SoilManagementEvent.objects.create(
             history=self.history,
             type="OM",
-            amendment_type="Mystery Brand Fish 4-4-1",
+            amendment_type="compost",
+            amendment_product_name="Mystery Brand Fish 4-4-1",
             date=timezone.now(),
         )
         ev.refresh_from_db()

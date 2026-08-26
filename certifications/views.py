@@ -1670,15 +1670,20 @@ def _client_ip(request):
     return request.META.get("REMOTE_ADDR")
 
 
-def _resolve_link_or_404(token):
-    """Resolve an ACTIVE link, or raise 404.
+def _resolve_link_or_404(token, audience="certifier"):
+    """Resolve an ACTIVE link of the expected AUDIENCE, or raise 404.
 
     Expired and revoked links deliberately return 404 rather than 410/403: a
     distinct status would confirm to an unauthenticated caller that the token was
     once real, which is information they should not get. The farmer sees the true
     state (expired vs revoked) on their own authenticated dashboard.
+
+    Audience is part of the lookup, not a post-check: a buyer token must never
+    open the certifier dossier surface (it exposes supplier invoices, prices and
+    applicator names), and a certifier token must never widen the buyer surface.
+    Cross-audience use reads as "no such link".
     """
-    link = CertifierAccessLink.objects.filter(token=token).select_related("establishment").first()
+    link = CertifierAccessLink.objects.filter(token=token, audience=audience).select_related("establishment").first()
     if link is None or not link.is_active:
         raise Http404("No active certifier review link for this address.")
     return link
@@ -1816,6 +1821,62 @@ def certifier_review_dossier(request, token):
     return FileResponse(pdf, as_attachment=True, filename=filename, content_type="application/pdf")
 
 
+@api_view(["GET"])
+@permission_classes([AllowAny])
+@throttle_classes([AnonRateThrottle])
+def buyer_review_metadata(request, token):
+    """Landing payload for a BUYER review link: operation context + season list.
+
+    The buyer surface serves NO records here — season detail is opened on the
+    consumer product page (`public_history` + transparency detail) with this same
+    token as `review_token`, so every field a buyer sees flows through the exact
+    claim-safe serializers the public page uses. This endpoint only answers
+    "whose operation, which seasons, how current" — including OPEN seasons, which
+    is the point: wholesale diligence happens before harvest.
+    """
+    link = _resolve_link_or_404(token, audience="buyer")
+
+    CertifierAccessLog.objects.create(
+        link=link,
+        action="metadata",
+        ip_address=_client_ip(request),
+        user_agent=(request.META.get("HTTP_USER_AGENT") or "")[:300],
+    )
+
+    from history.models import History
+
+    seasons = []
+    qs = (
+        History.objects.filter(parcel__establishment=link.establishment)
+        .select_related("product", "parcel")
+        .order_by("-start_date")
+    )
+    for h in qs:
+        seasons.append(
+            {
+                "public_id": str(h.public_id),
+                "name": h.name,
+                "product": h.product.name if h.product else None,
+                "parcel": h.parcel.name if h.parcel else None,
+                "start_date": h.start_date,
+                "finish_date": h.finish_date,
+                "in_progress": h.finish_date is None,
+                "published": bool(h.published),
+            }
+        )
+
+    return Response(
+        {
+            "operation_name": link.establishment.name,
+            "operation_city": link.establishment.city,
+            "operation_state": link.establishment.state,
+            "label": link.label,
+            "expires_at": link.expires_at,
+            "seasons": seasons,
+        }
+    )
+
+
 class CertifierAccessLinkViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     """Farmer-side management of certifier review links.
 
@@ -1860,14 +1921,21 @@ class CertifierAccessLinkViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         require_compliance_exports(self.establishment.company, user=self.request.user)
 
         certification_type = serializer.validated_data.get("certification_type", "organic")
-        readiness = OperationReadinessService(self.establishment, certification_type).evaluate()
-        if not readiness["ready"]:
-            raise ValidationError(
-                {
-                    "readiness": "This operation is not ready to share with a certifier.",
-                    "blockers": readiness["blockers"],
-                }
-            )
+        # The readiness blocker is a CERTIFIER-submission gate ("do not send this to
+        # your certifier yet"). A buyer link is the opposite case: in-season diligence,
+        # minted precisely while seasons are still open — blocking it on certification
+        # readiness would defeat its purpose. The buyer surface is claim-safe by
+        # construction (same serializers as the public page), so nothing a buyer can
+        # open depends on readiness.
+        if serializer.validated_data.get("audience", "certifier") == "certifier":
+            readiness = OperationReadinessService(self.establishment, certification_type).evaluate()
+            if not readiness["ready"]:
+                raise ValidationError(
+                    {
+                        "readiness": "This operation is not ready to share with a certifier.",
+                        "blockers": readiness["blockers"],
+                    }
+                )
 
         serializer.save(
             establishment=self.establishment,

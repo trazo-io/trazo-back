@@ -51,7 +51,6 @@ def compliance_plan():
                 "max_establishments": 1,
                 "max_parcels_per_establishment": -1,
                 "max_productions_per_year": -1,
-                "monthly_scan_limit": -1,
                 "storage_limit_gb": 25,
                 "compliance_exports": True,
             },

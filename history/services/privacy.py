@@ -116,7 +116,16 @@ def _strip_unless_negated(text, pattern):
 #: description would mangle honest copy to protect something that was never withheld.
 #: `applicator_name` is a PERSON and is certifier-only, but "[supplier withheld]" is the wrong
 #: label for a human name — that needs its own treatment, not this one.
-VENDOR_NAME_FIELDS = ("seed_supplier_name", "supplier_name")
+#: 2026-08-25: widened to the other two vendor columns the anonymous payload withholds.
+#: `beneficial_supplier` (pest BR events) and `amendment_supplier_name` (soil) were stripped
+#: as fields while the same names could ride out in the event's own prose — and the pest,
+#: general and business descriptions were not routed through the redactor at all.
+VENDOR_NAME_FIELDS = (
+    "seed_supplier_name",
+    "supplier_name",
+    "beneficial_supplier",
+    "amendment_supplier_name",
+)
 
 #: Words that are far too common in farm prose to use as a vendor match on their own. Without
 #: this, a supplier stored as "Organic Seeds Inc" reduces to the stem "Organic" and redacts the
@@ -211,7 +220,11 @@ def redact_own_vendor_names(text, event):
             candidates.add(stem)
         # Longest first, so the fullest form wins and shorter forms only mop up what is left.
         for candidate in sorted(candidates, key=len, reverse=True):
-            text = re.sub(re.escape(candidate), _REDACTED, text, flags=re.IGNORECASE)
+            # Word boundaries (lookarounds, so a candidate that starts or ends on
+            # punctuation still matches): without them a supplier named "Test"
+            # turned "tested" into "[supplier withheld]ed" — the redaction must
+            # remove the NAME, never the middle of an unrelated word.
+            text = re.sub(rf"(?<!\w){re.escape(candidate)}(?!\w)", _REDACTED, text, flags=re.IGNORECASE)
     # Collapse a redaction that swallowed part of a name and left its tail behind
     # ("[supplier withheld] Nursery" -> "[supplier withheld]").
     text = re.sub(

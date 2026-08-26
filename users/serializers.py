@@ -8,6 +8,7 @@ from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.settings import api_settings
 
+from .constants import EMAIL_EXISTS_UNVERIFIED, EMAIL_EXISTS_VERIFIED
 from .models import User, WorksIn
 
 logger = logging.getLogger(__name__)
@@ -202,13 +203,54 @@ class RegisterSerializer(BasicUserSerializer):
         return value
 
     def validate_email(self, value):
-        """
-        Validate email uniqueness - critical security validation
-        Following 2025 security best practices
-        """
-        if User.objects.filter(email=value.lower()).exists():
-            raise serializers.ValidationError("A user with this email address already exists. Please sign in instead.")
+        """Normalize only. The uniqueness check lives in `validate()` — see below."""
         return value.lower()
+
+    def validate(self, attrs):
+        """
+        Reject a duplicate address, and say which recovery is actually open.
+
+        ⛔ This check used to live in `validate_email`, which can only ever raise
+        `{"email": [sentence]}`. That shape cost the client the one fact it needs: an address
+        that exists but was NEVER VERIFIED cannot sign in. `verify_email` is the only thing
+        that flips `is_active` (views.py), Django's `ModelBackend.user_can_authenticate`
+        rejects `is_active=False`, so "Please sign in instead" walked that person straight
+        into "No active account found with the given credentials" — which reads as a wrong
+        password. The recovery they needed was `resend_verification_email`, and nothing on
+        the screen offered it.
+
+        So the check moved here, where a serializer may raise a DICT, and it carries a stable
+        `code` the UI keys its ACTION off rather than parsing English. Note DRF's
+        `as_serializer_error` wraps a bare string value in a list, so the client reads
+        `data["code"][0]`.
+
+        The message is deliberately still human-readable: a code with no sentence beside it
+        turns every unhandled case into a blank box.
+        """
+        attrs = super().validate(attrs)
+
+        email = attrs.get("email")
+        if email:
+            existing = User.objects.filter(email=email).only("is_verified").first()
+            if existing is not None:
+                if existing.is_verified:
+                    raise serializers.ValidationError(
+                        {
+                            "email": ["An account with this email already exists. Sign in instead."],
+                            "code": EMAIL_EXISTS_VERIFIED,
+                        }
+                    )
+                raise serializers.ValidationError(
+                    {
+                        "email": [
+                            "An account with this email already exists but has not been verified yet. "
+                            "Resend the verification email to finish signing up."
+                        ],
+                        "code": EMAIL_EXISTS_UNVERIFIED,
+                    }
+                )
+
+        return attrs
 
     def create(self, validated_data):
         from django.db import transaction

@@ -281,7 +281,6 @@ class SubscriptionSerializer(serializers.ModelSerializer):
                 base("max_productions_per_year", 0),
                 addon_qty("extra-production") * 10,
             ),
-            "monthly_scan_limit": base("monthly_scan_limit", 0),
             "storage_limit_gb": add_if_not_unlimited(
                 base("storage_limit_gb", 0),
                 addon_qty("extra-storage"),
@@ -425,12 +424,6 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             usage["productions"],
             limits.get("max_productions_per_year", 0),
             "Productions this year",
-        )
-        check_limit(
-            "scans",
-            usage["scans"],
-            limits.get("monthly_scan_limit", 0),
-            "QR scans this month",
         )
         # Scored on the ENFORCED half, not the total.
         #

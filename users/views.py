@@ -487,9 +487,29 @@ class UserViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            # Set new password
+            # Set new password.
+            #
+            # ⛔ `is_active` / `is_verified` are set HERE too, and that is not incidental.
+            # `verify_email` used to be the only thing that flipped them, so an account that
+            # signed up and never clicked the link was stuck: `authenticate()` rejects
+            # `is_active=False`, signup answered "an account already exists, sign in instead",
+            # sign-in answered "No active account found with the given credentials", and this
+            # endpoint answered "You can now sign in with your new password" — which was
+            # FALSE. Three screens, each pointing at the next, none of them a way out.
+            #
+            # Activating here is not a weakening. The reset token was delivered to the address
+            # on the account and is single-use and 15-minute-lived; holding it proves control
+            # of that mailbox, which is the entire thing the signup code proves. Anyone who
+            # can complete this flow could equally have completed `verify_email`.
+            #
+            # Pending verification codes are deliberately NOT deleted: `verify_email` answers
+            # an already-verified user with "User is already verified", which is true and
+            # legible, whereas deleting the row would answer the same click with
+            # "Verification code is invalid", which is neither.
             user.set_password(new_password)
-            user.save(update_fields=["password"])
+            user.is_verified = True
+            user.is_active = True
+            user.save(update_fields=["password", "is_verified", "is_active"])
 
             # Mark token as used
             reset_token.mark_as_used()

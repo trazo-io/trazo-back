@@ -204,8 +204,24 @@ class SeedAndMigrationAgreeTests(TestCase):
         with open(command_source) as fh:
             text = fh.read()
 
+        # The migration's copy is frozen history; keys the product has since RETIRED are
+        # exempt from the drift check but must be named in the command's own retired list —
+        # so a key cannot quietly vanish from the seeder without being declared retired,
+        # and the strip step removes it from every existing row on the next re-run.
+        from subscriptions.management.commands.create_plans import Command
+
         for key, value in migration.PILOT_FEATURES.items():
             with self.subTest(key=key):
+                if key in Command.RETIRED_FEATURE_KEYS:
+                    # `"key":` (with the colon) is the dict-entry shape — the retired-list
+                    # tuple and prose mentions don't carry it, so this catches a re-seeded
+                    # key anywhere in the file without matching the declaration itself.
+                    self.assertNotIn(
+                        f'"{key}":',
+                        text,
+                        f"{key} is declared retired but still seeded by create_plans.py",
+                    )
+                    continue
                 self.assertIn(
                     f'"{key}": {value}',
                     text,

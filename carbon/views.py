@@ -7856,68 +7856,15 @@ def get_usda_benchmark_comparison(request):
         )
 
 
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def process_voice_event(request):
-    """NEW ENDPOINT: Enhanced voice event processing with confidence-based auto-approval"""
-    company = request.user.get_active_company()
-    if not company or not company.has_feature("voice_recording"):
-        return Response(
-            {"error": "Voice recording is not available on your current plan. " "Please upgrade to Compliance."},
-            status=status.HTTP_403_FORBIDDEN,
-        )
-    try:
-        voice_data = request.data
-
-        # Validate required fields
-        required_fields = ["transcript", "crop_type"]
-        for field in required_fields:
-            if field not in voice_data:
-                return Response({"error": f"{field} is required"}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Enhanced natural language processing would go here
-        # For now, simulate confidence-based processing
-        transcript = voice_data["transcript"]
-        crop_type = voice_data["crop_type"]
-        language = voice_data.get("language", "en-US")
-
-        # Simulate parsing with confidence score
-        confidence = 0.85  # This would come from actual NLP processing
-
-        parsed_event = {
-            "event_type": "fertilization",  # This would be detected from transcript
-            "amount": "50 kg",  # This would be extracted from transcript
-            "area": "2 hectares",  # This would be extracted from transcript
-            "confidence": confidence,
-            "transcript": transcript,
-            "language": language,
-            "crop_type": crop_type,
-        }
-
-        # Auto-create if high confidence
-        if confidence > 0.85:
-            # Here you would create the actual event
-            return Response(
-                {
-                    "status": "auto_created",
-                    "event_data": parsed_event,
-                    "confidence": confidence,
-                    "message": "Event created automatically due to high confidence",
-                }
-            )
-
-        return Response(
-            {
-                "status": "confirmation_required",
-                "parsed_data": parsed_event,
-                "confidence": confidence,
-                "message": "Manual confirmation required due to lower confidence",
-            }
-        )
-
-    except Exception as e:
-        logger.error(f"Error processing voice event: {e}")
-        return Response({"error": f"Voice processing failed: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+# Voice logging is on EVERY plan — `create_plans` sets ``voice_recording: True`` for
+# starter, compliance, operation and pilot alike (migration 0014 moved it onto Starter
+# deliberately: Starter is bounded by what it can PRODUCE, not by how much it can log).
+#
+# So this gate is not a paywall. It can only fire when a company has no subscription_plan
+# at all, and the old copy — "Please upgrade to Compliance" — told that farmer to buy a
+# tier for something the free tier already includes, contradicting the pricing page, the
+# one-pager and the seeder in one sentence.
+VOICE_UNAVAILABLE_ERROR = "Voice logging is unavailable for this account. Please contact support."
 
 
 @api_view(["POST"])
@@ -7930,7 +7877,7 @@ def process_voice_event_ai(request):
     company = request.user.get_active_company()
     if not company or not company.has_feature("voice_recording"):
         return Response(
-            {"error": "Voice recording is not available on your current plan. " "Please upgrade to Compliance."},
+            {"error": VOICE_UNAVAILABLE_ERROR},
             status=status.HTTP_403_FORBIDDEN,
         )
     try:
@@ -9267,6 +9214,8 @@ def smart_product_stats(request):
 
 
 # ────────────────────────────────────────────────────────────────────────────────
+
+
 # Voice Configuration & Deepgram Token Endpoints
 # ────────────────────────────────────────────────────────────────────────────────
 
@@ -9278,7 +9227,7 @@ def voice_config(request):
     company = request.user.get_active_company()
     if not company or not company.has_feature("voice_recording"):
         return Response(
-            {"error": "Voice recording is not available on your current plan. " "Please upgrade to Compliance."},
+            {"error": VOICE_UNAVAILABLE_ERROR},
             status=status.HTTP_403_FORBIDDEN,
         )
     provider = "deepgram" if getattr(settings, "DEEPGRAM_API_KEY", "") else "web_speech_api"
@@ -9296,7 +9245,7 @@ def deepgram_token(request):
     company = request.user.get_active_company()
     if not company or not company.has_feature("voice_recording"):
         return Response(
-            {"error": "Voice recording is not available on your current plan. " "Please upgrade to Compliance."},
+            {"error": VOICE_UNAVAILABLE_ERROR},
             status=status.HTTP_403_FORBIDDEN,
         )
     import requests as http_requests

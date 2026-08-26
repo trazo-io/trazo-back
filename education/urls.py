@@ -2,12 +2,9 @@ from django.urls import include, path
 
 from rest_framework.routers import DefaultRouter
 
-from .views import EducationCategoryViewSet, EducationCourseViewSet, EducationLessonViewSet, FarmerQuestionAnswerViewSet
+from .views import FarmerQuestionAnswerViewSet
 
 router = DefaultRouter()
-router.register(r"categories", EducationCategoryViewSet, basename="education-categories")
-router.register(r"courses", EducationCourseViewSet, basename="education-courses")
-router.register(r"lessons", EducationLessonViewSet, basename="education-lessons")
 router.register(r"faqs", FarmerQuestionAnswerViewSet, basename="education-faqs")
 
 urlpatterns = [

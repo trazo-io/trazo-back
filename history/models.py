@@ -1506,6 +1506,20 @@ class ChemicalEvent(CommonEvent):
         null=True,
         help_text="Date input was purchased",
     )
+    receipt_document = models.ForeignKey(
+        "documents.GeneratedDocument",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="chemical_receipts",
+        help_text=(
+            "The uploaded purchase receipt/invoice FILE behind purchase_invoice. "
+            "2026-08-25: the record said 'INV-123' but the packet could not show the "
+            "receipt — the farmer was the courier between Trazo's two halves. "
+            "Same-establishment enforced in the serializer; embedded in the audit "
+            "PDF and copied into the packet ZIP."
+        ),
+    )
     purchase_invoice = models.CharField(
         max_length=100,
         blank=True,
@@ -3427,6 +3441,14 @@ class SoilManagementEvent(CommonEvent):
         blank=True,
         null=True,
         help_text="Date on the purchase receipt / invoice for this amendment.",
+    )
+    receipt_document = models.ForeignKey(
+        "documents.GeneratedDocument",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="soil_receipts",
+        help_text="Uploaded receipt file behind amendment_purchase_invoice (see ChemicalEvent.receipt_document).",
     )
     amendment_purchase_invoice = models.CharField(
         max_length=100,

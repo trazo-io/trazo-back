@@ -274,39 +274,6 @@ class Company(models.Model):
 
         return productions_this_year < max_productions
 
-    def get_remaining_scan_quota(self):
-        """Get remaining scan quota for the current billing period"""
-        if not self.subscription_plan:
-            return 0
-
-        base_quota = self.get_feature_limit("monthly_scan_limit", 5000)
-        if base_quota == -1:
-            return -1  # Unlimited
-
-        # Count actual scans from HistoryScan aligned to billing cycle
-        if hasattr(self, "subscription"):
-            from django.utils import timezone
-
-            from history.models import HistoryScan
-
-            period_start = self.subscription.current_period_start
-            if not period_start:
-                period_start = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-
-            # Quota consumes COUNTED scans only: a shopper reloading the page must not burn
-            # the farm's allowance twice, and a crawler must not burn it at all.
-            current_usage = (
-                HistoryScan.objects.counted()
-                .filter(
-                    history__parcel__establishment__company=self,
-                    date__gte=period_start,
-                )
-                .count()
-            )
-            return max(0, base_quota - current_usage)
-
-        return base_quota
-
     def get_storage_limit_gb(self):
         """Get storage limit in GB"""
         if not self.subscription_plan:

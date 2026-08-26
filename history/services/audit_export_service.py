@@ -5123,7 +5123,14 @@ class AuditExportService:
                     self._cell(product_txt or None),
                     self._cell(ev.supplier_name),
                     self._cell(_fmt_date(ev.purchase_date) if ev.purchase_date else None),
-                    self._cell(ev.purchase_invoice),
+                    # "[receipt on file]" marks that the invoice FILE itself is in the
+                    # packet ZIP's receipts/ folder (2026-08-25) — the inspector no longer
+                    # has to ask the farmer to courier the paper behind the number.
+                    self._cell(
+                        f"{ev.purchase_invoice} [receipt on file]"
+                        if ev.purchase_invoice and ev.receipt_document_id
+                        else ("[receipt on file]" if ev.receipt_document_id else ev.purchase_invoice)
+                    ),
                     self._cell(ev.chemical_lot_number),
                     self._cell(qty_purchased or None),
                     # authorizer_name is NOT folded in here — this column is 0.70" and the
@@ -6766,7 +6773,11 @@ class AuditExportService:
                     self._cell(_fmt_date(ev.amendment_purchase_date) if ev.amendment_purchase_date else None),
                     # Invoice and lot numbers are audit-trail identifiers — never truncated to
                     # a stub an inspector cannot match against the paper record.
-                    self._cell(ev.amendment_purchase_invoice),
+                    self._cell(
+                        f"{ev.amendment_purchase_invoice} [receipt on file]"
+                        if ev.amendment_purchase_invoice and ev.receipt_document_id
+                        else ("[receipt on file]" if ev.receipt_document_id else ev.amendment_purchase_invoice)
+                    ),
                     self._cell(ev.amendment_lot_number),
                     self._cell(qty and qty.strip()),
                 ]

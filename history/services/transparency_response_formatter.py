@@ -150,17 +150,36 @@ class TransparencyResponseFormatter:
             metadata = company.sustainability_metadata
             # Extract sustainability goals - these are collected during company creation
             sustainability_goals = metadata.get("sustainability_goals", [])
-            # Map goal IDs to consumer-friendly labels
+            # Map goal IDs to consumer-friendly labels.
+            #
+            # ⛔ This is a DISPLAY REGISTRY for values the onboarding wizard writes
+            # (`trazo-app/src/views/Dashboard/Dashboard/Company/AddCompany.jsx`,
+            # SUSTAINABILITY_GOALS). Nothing compared the two, and they had drifted: the
+            # wizard offers `waste_reduction` and `renewable_energy`, which had NO entry here,
+            # while this map carried `carbon_reduction` and `local_sourcing`, which the wizard
+            # can no longer produce. With the old `.get(g, g)` fallback a shopper who scanned a
+            # QR code from a farm that ticked either of those two was shown the literal string
+            # "waste_reduction". Guard: `history/tests/test_sustainability_goal_labels.py`.
+            #
+            # The two legacy ids are KEPT, not deleted: rows written by an earlier version of
+            # the wizard still carry them, and a label is the only thing standing between such
+            # a row and raw snake_case on a public page.
             goal_labels = {
                 "full_transparency": "Full Farming Transparency",
-                "carbon_reduction": "Environmental Impact Tracking",
                 "water_conservation": "Water Conservation",
                 "soil_health": "Soil Health Focus",
                 "biodiversity": "Biodiversity Protection",
+                "waste_reduction": "Waste Reduction",
+                "renewable_energy": "Renewable Energy Use",
+                # Legacy ids — no longer offered, still present in stored data.
+                "carbon_reduction": "Environmental Impact Tracking",
                 "local_sourcing": "Local Community Support",
             }
             company_sustainability = {
-                "goals": [goal_labels.get(g, g) for g in sustainability_goals] if sustainability_goals else [],
+                # ⛔ Unknown ids are DROPPED, never passed through. A value this service does
+                # not recognise is a value nobody wrote consumer copy for, and the public page
+                # is the wrong place to find that out.
+                "goals": [goal_labels[g] for g in sustainability_goals if g in goal_labels],
                 "crop_focus": metadata.get("crop_template", {}).get("title") if metadata.get("crop_template") else None,
                 "commitment": company.sustainability_commitment,
             }

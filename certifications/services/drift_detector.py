@@ -75,6 +75,8 @@ def _build_drift_warning(
     *,
     osp,
     reason: str,
+    reason_code: Optional[str] = None,
+    reason_params: Optional[Dict[str, Any]] = None,
     input_label: str,
     resolved_via: str,
     resolved_id: Optional[int] = None,
@@ -113,6 +115,11 @@ def _build_drift_warning(
         "osp_version": osp.version_number,
         "input_label": input_label,
         "reason": reason,
+        # Stable machine code + params so the UI can localize the finding; the
+        # English prose above remains the packet text and the UI fallback for
+        # legacy findings written before 2026-08-25.
+        "reason_code": reason_code,
+        "reason_params": reason_params or {},
         "resolved_via": resolved_via,
         "resolved_id": resolved_id,
         "resolved_name": resolved_name,
@@ -216,6 +223,8 @@ def _classify_seed_event(event, osp) -> Optional[Dict[str, Any]]:
                 "Confirm seed treatment with certifier before harvest to avoid "
                 "disqualification."
             ),
+            reason_code="seed_treated",
+            reason_params={"input": label},
             input_label=label,
             resolved_via="seed_treated_prohibited",
             resolved_name=label,
@@ -234,6 +243,8 @@ def _classify_seed_event(event, osp) -> Optional[Dict[str, Any]]:
                     "NOP 5029 (§ 205.204(a)(1)) requires documented commercial-"
                     "availability search of 3+ organic seed suppliers."
                 ),
+                reason_code="seed_search_incomplete",
+                reason_params={"input": label, "count": len(search_attempts)},
                 input_label=label,
                 resolved_via="seed_search_incomplete",
                 resolved_name=label,
@@ -251,6 +262,8 @@ def _classify_seed_event(event, osp) -> Optional[Dict[str, Any]]:
             "each planting to record whether seed is organic, transitional, "
             "or non-organic."
         ),
+        reason_code="seed_cert_missing",
+        reason_params={"input": label},
         input_label=label,
         resolved_via="seed_certification_missing",
         resolved_name=label,
@@ -383,25 +396,90 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
         return _event_ca_dpr_permit_status(event)
 
     def _approved_issue_reason(cdfa, dpr):
-        """Build reason string when OSP-approved input has CDFA/DPR gaps.
-        Returns None when neither gap is present."""
+        """Build the OSP-approved-but-flagged reason.
+        Returns (prose, issue_codes, issue_params); prose is None when clean."""
         parts = []
+        codes = []
+        params: Dict[str, Any] = {}
         if cdfa and cdfa.get("status") == "missing":
             parts.append(
                 "CDFA OIM registration is missing — California state law "
                 "requires OIM registration for fertilizing materials"
             )
+            codes.append("cdfa_missing")
         if dpr and dpr.get("status") == "missing":
             parts.append(
                 "CA DPR restricted-materials permit missing — county Ag "
                 "Commissioner permit required before application"
             )
+            codes.append("dpr_missing")
         elif dpr and dpr.get("status") == "expired":
             parts.append(
                 f"CA DPR permit #{dpr.get('permit_number')} expired on "
                 f"{dpr.get('expires')} — renew before next application"
             )
-        return "; ".join(parts) if parts else None
+            codes.append("dpr_expired")
+            params["permitNumber"] = dpr.get("permit_number")
+            params["expires"] = dpr.get("expires")
+        return ("; ".join(parts) if parts else None), codes, params
+
+    def _name_approval_clears(name):
+        """Cross-catalog rescue for FK-classified events (2026-08-25).
+
+        An event stamped with an NL substance (or an OMRI FK) used to be judged
+        against THAT registry alone — so "Entrust SC", classified as Spinosad on
+        save, was flagged "National List substance not in active OSP approved
+        inputs" while "Entrust SC Naturalyte Insect Control" sat on the plan's
+        approved OMRI list. One product, two registries, and the detector
+        stopped at the wrong one. Same rule as Layer 2 below: ANY catalog
+        approval clears the finding.
+
+        Returns (approved_obj, via, approved_name, omri_ts, wsda_ts) or None.
+        """
+        if not name:
+            return None
+        from certifications.services.omri_verifier import _resolve_omri_by_name, _resolve_wsda_by_name
+
+        o_ts = _now_iso()
+        r_omri = _resolve_omri_by_name(name)
+        w_ts = _now_iso()
+        r_wsda = _resolve_wsda_by_name(name)
+        if r_omri is not None and r_omri.id in approved_omri_ids:
+            return (r_omri, "omri", r_omri.product_name, o_ts, w_ts)
+        if r_wsda is not None and r_wsda.id in approved_wsda_ids:
+            return (r_wsda, "wsda", r_wsda.brand_name, o_ts, w_ts)
+        return None
+
+    def _rescued_approved_result(rescue, label):
+        """Finding-or-None for an FK-flagged event rescued by a name-level OSP
+        approval: None clears it outright; CA sub-findings still surface."""
+        approved_obj, via, approved_name, o_ts, w_ts = rescue
+        cdfa_ts = _now_iso()
+        cdfa = _ca_sub(approved_obj)
+        dpr = _dpr_sub(label, approved_obj)
+        issue_prose, issue_codes, issue_params = _approved_issue_reason(cdfa, dpr)
+        if issue_prose:
+            return _build_drift_warning(
+                osp=osp,
+                reason=(f"Input '{label}' is OSP-approved ({via.upper()}: {approved_name}) " f"but {issue_prose}."),
+                reason_code="approved_with_issues",
+                reason_params={
+                    "input": label,
+                    "resolvedName": approved_name,
+                    "issues": issue_codes,
+                    **issue_params,
+                },
+                input_label=label,
+                resolved_via=via,
+                resolved_id=approved_obj.id,
+                resolved_name=approved_name,
+                cdfa_oim_status=cdfa,
+                ca_dpr_permit_status=dpr,
+                omri_verified_at=o_ts,
+                wsda_verified_at=w_ts,
+                cdfa_oim_verified_at=cdfa_ts if cdfa else None,
+            )
+        return None
 
     # Layer 1 — structured FK match (highest confidence). Per-finding
     # timestamps capture WHEN the FK cross-reference was performed so the
@@ -415,11 +493,18 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
             cdfa_ts = _now_iso()
             cdfa = _ca_sub(resolved)
             dpr = _dpr_sub(label, resolved)
-            issue_reason = _approved_issue_reason(cdfa, dpr)
+            issue_reason, issue_codes, issue_params = _approved_issue_reason(cdfa, dpr)
             if issue_reason:
                 return _build_drift_warning(
                     osp=osp,
                     reason=f"Input approved on OSP but {issue_reason}.",
+                    reason_code="approved_with_issues",
+                    reason_params={
+                        "input": label,
+                        "resolvedName": getattr(resolved, "product_name", None),
+                        "issues": issue_codes,
+                        **issue_params,
+                    },
                     input_label=label,
                     resolved_via="omri",
                     resolved_id=event.omri_product_id,
@@ -431,11 +516,18 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
                 )
             return None
         label = event.commercial_name or f"OMRI #{event.omri_product_id}"
+        # The linked OMRI product is not on the plan — but the same product may be
+        # approved on the plan through its WSDA listing. Any catalog approval clears.
+        rescue = _name_approval_clears((event.commercial_name or "").strip())
+        if rescue:
+            return _rescued_approved_result(rescue, label)
         cdfa_ts = _now_iso()
         cdfa = _ca_sub(resolved)
         return _build_drift_warning(
             osp=osp,
             reason="OMRI product not in active OSP approved inputs",
+            reason_code="omri_not_in_osp",
+            reason_params={"input": label},
             input_label=label,
             resolved_via="omri",
             resolved_id=event.omri_product_id,
@@ -456,11 +548,18 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
         if event.national_list_substance_id in approved_nl_ids:
             # OSP-approved National List substance — still surface DPR if applicable.
             dpr = _dpr_sub(label, nl_obj)
-            issue_reason = _approved_issue_reason(None, dpr)
+            issue_reason, issue_codes, issue_params = _approved_issue_reason(None, dpr)
             if issue_reason:
                 return _build_drift_warning(
                     osp=osp,
                     reason=f"Input approved on OSP but {issue_reason}.",
+                    reason_code="approved_with_issues",
+                    reason_params={
+                        "input": label,
+                        "resolvedName": event.commercial_name,
+                        "issues": issue_codes,
+                        **issue_params,
+                    },
                     input_label=label,
                     resolved_via="national_list",
                     resolved_id=event.national_list_substance_id,
@@ -469,9 +568,22 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
                     national_list_verified_at=nl_ts,
                 )
             return None
+        # The stamped NL substance is not on the plan — but the PRODUCT may be
+        # approved there via its OMRI or WSDA listing ("Entrust SC" → the plan's
+        # "Entrust SC Naturalyte Insect Control"). Flagging without this check
+        # told a farmer to notify their certifier about a material already on
+        # their plan (live false positive, 2026-08-25, dev farm 167).
+        rescue = _name_approval_clears((event.commercial_name or "").strip())
+        if rescue:
+            return _rescued_approved_result(rescue, label)
         return _build_drift_warning(
             osp=osp,
             reason="National List substance not in active OSP approved inputs",
+            reason_code="nl_not_in_osp",
+            reason_params={
+                "input": label,
+                "substance": getattr(nl_obj, "substance_name", None),
+            },
             input_label=label,
             resolved_via="national_list",
             resolved_id=event.national_list_substance_id,
@@ -523,13 +635,20 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
         cdfa_ts = _now_iso()
         cdfa = _ca_sub(approved_obj)
         dpr = _dpr_sub(name, approved_obj)
-        issue_reason = _approved_issue_reason(cdfa, dpr)
+        issue_reason, issue_codes, issue_params = _approved_issue_reason(cdfa, dpr)
         if issue_reason:
             return _build_drift_warning(
                 osp=osp,
                 reason=(
                     f"Input '{name}' is OSP-approved ({resolved_via.upper()}: {approved_name}) " f"but {issue_reason}."
                 ),
+                reason_code="approved_with_issues",
+                reason_params={
+                    "input": name,
+                    "resolvedName": approved_name,
+                    "issues": issue_codes,
+                    **issue_params,
+                },
                 input_label=name,
                 resolved_via=resolved_via,
                 resolved_id=approved_obj.id,  # type: ignore[union-attr]
@@ -552,6 +671,8 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
                 f"Input '{name}' resolves to OMRI catalog '{resolved_omri.product_name}' "
                 "but that product is not in the active OSP approved inputs."
             ),
+            reason_code="name_omri_not_in_osp",
+            reason_params={"input": name, "resolvedName": resolved_omri.product_name},
             input_label=name,
             resolved_via="omri",
             resolved_id=resolved_omri.id,
@@ -574,6 +695,8 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
                 f"'{resolved_wsda.brand_name}' but that product is not in the "
                 "active OSP approved inputs."
             ),
+            reason_code="name_wsda_not_in_osp",
+            reason_params={"input": name, "resolvedName": resolved_wsda.brand_name},
             input_label=name,
             resolved_via="wsda",
             resolved_id=resolved_wsda.id,
@@ -591,11 +714,18 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
         if resolved_nl.id in approved_nl_ids:
             # OSP-approved NL substance — still surface DPR if applicable.
             dpr = _dpr_sub(name, resolved_nl)
-            issue_reason = _approved_issue_reason(None, dpr)
+            issue_reason, issue_codes, issue_params = _approved_issue_reason(None, dpr)
             if issue_reason:
                 return _build_drift_warning(
                     osp=osp,
                     reason=f"Input '{name}' is OSP-approved but {issue_reason}.",
+                    reason_code="approved_with_issues",
+                    reason_params={
+                        "input": name,
+                        "resolvedName": resolved_nl.substance_name,
+                        "issues": issue_codes,
+                        **issue_params,
+                    },
                     input_label=name,
                     resolved_via="national_list",
                     resolved_id=resolved_nl.id,
@@ -613,6 +743,8 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
                 f"'{resolved_nl.substance_name}' but that substance is not in the "
                 "active OSP approved inputs."
             ),
+            reason_code="name_nl_not_in_osp",
+            reason_params={"input": name, "substance": resolved_nl.substance_name},
             input_label=name,
             resolved_via="national_list",
             resolved_id=resolved_nl.id,
@@ -626,6 +758,8 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
     return _build_drift_warning(
         osp=osp,
         reason=f"Input '{name}' not matched to any approved OSP input",
+        reason_code="unresolved",
+        reason_params={"input": name},
         input_label=name,
         resolved_via="unresolved",
         resolved_name=name,
@@ -686,7 +820,12 @@ def _classify_soil_event(event, osp) -> Optional[Dict[str, Any]]:
     if event.type not in AMENDMENT_TYPES:
         return None
 
-    amendment = (event.amendment_type or "").strip()
+    # The PRODUCT name is what can drift against a catalog. `amendment_type` is a
+    # category enum ("compost", "mulch", "manure", "other") — running the matcher on
+    # those words flagged on-farm compost as an "unresolved input" farm-wide
+    # (2026-08-25, recompute on dev farm 167). A category needs no OMRI listing; a
+    # purchased product does, and its name lives in `amendment_product_name`.
+    amendment = (event.amendment_product_name or "").strip()
     if not amendment:
         return None
 
@@ -732,6 +871,12 @@ def _classify_soil_event(event, osp) -> Optional[Dict[str, Any]]:
                     "registration is missing — California state law requires "
                     "OIM registration for fertilizing materials."
                 ),
+                reason_code="approved_with_issues",
+                reason_params={
+                    "input": amendment,
+                    "resolvedName": approved_name,
+                    "issues": ["cdfa_missing"],
+                },
                 input_label=amendment,
                 resolved_via=resolved_via,
                 resolved_id=approved_obj.id,  # type: ignore[union-attr]
@@ -753,6 +898,8 @@ def _classify_soil_event(event, osp) -> Optional[Dict[str, Any]]:
                 f"'{resolved_omri.product_name}' but that product is not in the "
                 "active OSP approved inputs."
             ),
+            reason_code="name_omri_not_in_osp",
+            reason_params={"input": amendment, "resolvedName": resolved_omri.product_name},
             input_label=amendment,
             resolved_via="omri",
             resolved_id=resolved_omri.id,
@@ -773,6 +920,8 @@ def _classify_soil_event(event, osp) -> Optional[Dict[str, Any]]:
                 f"entry '{resolved_wsda.brand_name}' but that product is not in "
                 "the active OSP approved inputs."
             ),
+            reason_code="name_wsda_not_in_osp",
+            reason_params={"input": amendment, "resolvedName": resolved_wsda.brand_name},
             input_label=amendment,
             resolved_via="wsda",
             resolved_id=resolved_wsda.id,
@@ -795,6 +944,8 @@ def _classify_soil_event(event, osp) -> Optional[Dict[str, Any]]:
                 f"substance '{resolved_nl.substance_name}' but that substance is "
                 "not in the active OSP approved inputs."
             ),
+            reason_code="name_nl_not_in_osp",
+            reason_params={"input": amendment, "substance": resolved_nl.substance_name},
             input_label=amendment,
             resolved_via="national_list",
             resolved_id=resolved_nl.id,
@@ -807,6 +958,8 @@ def _classify_soil_event(event, osp) -> Optional[Dict[str, Any]]:
     return _build_drift_warning(
         osp=osp,
         reason=f"Soil amendment '{amendment}' not in active OSP approved inputs",
+        reason_code="unresolved",
+        reason_params={"input": amendment},
         input_label=amendment,
         resolved_via="unresolved",
         resolved_name=amendment,

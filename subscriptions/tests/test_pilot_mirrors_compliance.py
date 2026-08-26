@@ -27,7 +27,6 @@ ENFORCED_LIMITS = (
     "max_establishments",
     "max_parcels_per_establishment",
     "max_productions_per_year",
-    "monthly_scan_limit",
     "storage_limit_gb",
     # Added 2026-08-14 and now the load-bearing one. Starter grants the same capacity limits as
     # Compliance, so `compliance_exports` is the ONLY entitlement separating free from paid: a

@@ -1926,6 +1926,18 @@ class CertifierAccessLink(models.Model):
 
     DEFAULT_VALIDITY_DAYS = 90
 
+    #: Who this link is FOR decides what it can open — two disjoint content classes.
+    #: "certifier" resolves the audit dossier surface, which deliberately exposes MORE
+    #: than the consumer page (supplier names, invoices, prices, applicator names,
+    #: open findings). "buyer" resolves ONLY the claim-safe consumer payload — the
+    #: same uniform-policy view the public product page serves — but in-season and
+    #: before publish, because the farmer consented by minting the link. A buyer
+    #: token on a certifier endpoint (or vice versa) is a 404, never a downgrade.
+    AUDIENCE_CHOICES = [
+        ("certifier", "Certifier"),
+        ("buyer", "Buyer"),
+    ]
+
     establishment = models.ForeignKey(
         "company.Establishment",
         on_delete=models.CASCADE,
@@ -1947,6 +1959,12 @@ class CertifierAccessLink(models.Model):
         max_length=20,
         default="organic",
         help_text="Dossier profile passed to OperationAuditExportService.",
+    )
+    audience = models.CharField(
+        max_length=12,
+        choices=AUDIENCE_CHOICES,
+        default="certifier",
+        help_text="Which review surface this token opens: certifier dossier or buyer (claim-safe) view.",
     )
     period_start = models.DateField(
         null=True,
@@ -1986,6 +2004,22 @@ class CertifierAccessLink(models.Model):
     def generate_token() -> str:
         return secrets.token_urlsafe(32)
 
+    @classmethod
+    def resolve_buyer_token(cls, token):
+        """Return the ACTIVE buyer-audience link for `token`, or None.
+
+        Used by the anonymous consumer endpoints (`public_history`, transparency
+        detail) to let a buyer link open an UNPUBLISHED / in-season production.
+        Audience is filtered here, not by the caller: a certifier token must never
+        widen the consumer surface, and a buyer token must never open the dossier.
+        """
+        if not token:
+            return None
+        link = cls.objects.filter(token=token, audience="buyer").select_related("establishment").first()
+        if link is None or not link.is_active:
+            return None
+        return link
+
     @staticmethod
     def default_expiry():
         return timezone.now() + timedelta(days=CertifierAccessLink.DEFAULT_VALIDITY_DAYS)
@@ -2021,6 +2055,7 @@ class CertifierAccessLog(models.Model):
         ("metadata", "Opened link"),
         ("readiness", "Viewed readiness findings"),
         ("dossier", "Downloaded dossier"),
+        ("production", "Viewed a production page"),
     ]
 
     link = models.ForeignKey(

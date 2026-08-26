@@ -231,7 +231,6 @@ class Command(BaseCommand):
             "max_establishments",
             "max_parcels_per_establishment",
             "max_productions_per_year",
-            "monthly_scan_limit",
             "storage_limit_gb",
             # Added 2026-08-14. This is now the ONLY entitlement that separates the paid tier from
             # the free one — the capacity limits above are identical on Starter — so a pilot

@@ -63,6 +63,12 @@ REVIEWED_ANONYMOUS_ENDPOINTS = {
     "certifier_review_metadata::AllowAny": "opaque review token",
     "certifier_review_readiness::AllowAny": "opaque review token",
     "certifier_review_dossier::AllowAny": "opaque review token",
+    "buyer_review_metadata::AllowAny": (
+        "opaque review token, buyer audience only. Payload: operation name/city/state (same "
+        "exposure as certifier_review_metadata) plus a season LIST (public uuid, crop, parcel "
+        "name, dates, published flag) — no events, no PII, no claims; season detail flows "
+        "through public_history's claim-safe serializer"
+    ),
     # --- Pricing + docs. No farm data. ---
     "PlanViewSet::AllowAny": "public pricing table",
     "SpectacularAPIView::AllowAny": "OpenAPI schema",

@@ -33,9 +33,10 @@ and DRF instantiates whatever is in `permission_classes` itself. It has no call 
 WHAT IS DELIBERATELY *NOT* GATED
 --------------------------------
 Logging, parcels, productions, photos, voice, templates, and the consumer/buyer QR page. The buyer
-page carries its own `monthly_scan_limit` and is the surface that makes a grower want the paid
-tier — putting it behind the paywall would remove the demonstration and strand QR codes already
-printed on cases. The farm's own data is never withheld from the farm.
+page is deliberately unlimited on every plan (the `monthly_scan_limit` key was deleted
+2026-08-25: it was never enforced, and the buyer page is the surface that makes a grower want the
+paid tier — capping it would remove the demonstration and strand QR codes already printed on
+cases). The farm's own data is never withheld from the farm.
 """
 
 from rest_framework.exceptions import PermissionDenied

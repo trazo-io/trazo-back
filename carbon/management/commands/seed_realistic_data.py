@@ -57,7 +57,6 @@ class Command(BaseCommand):
                     "max_establishments": 5,
                     "max_parcels": 50,
                     "max_productions_per_year": 100,
-                    "monthly_scan_limit": 10000,
                     "storage_limit_gb": 100,
                     "carbon_tracking": True,
                     "analytics": True,
