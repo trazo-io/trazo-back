@@ -4094,10 +4094,8 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # seed-sourced production subtypes (PL/TR/SS) on 2026-08-15. A grower editing a planting
         # to SUPPLY the missing seed status was told, on the 200 for that very edit, that it was
         # still missing — and clearing a field reported the record complete.
-        if isinstance(instance, ChemicalEvent):
-            instance.refresh_from_db()
         try:
-            pass
+            instance.refresh_from_db()
         except instance.__class__.DoesNotExist:
             # Nothing left to judge — the row is gone. The update itself already succeeded.
             return response
