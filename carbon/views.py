@@ -7866,6 +7866,23 @@ def get_usda_benchmark_comparison(request):
 # one-pager and the seeder in one sentence.
 VOICE_UNAVAILABLE_ERROR = "Voice logging is unavailable for this account. Please contact support."
 
+# A ceiling, not a paywall — see carbon/services/voice_budget.py. The wording says what the
+# farmer can still do, because voice is an accelerator and the form is always open.
+VOICE_BUDGET_EXCEEDED_ERROR = (
+    "Voice logging has reached today's limit for this operation. "
+    "You can keep logging with the form or a template, and voice resets tomorrow."
+)
+
+
+def _seconds_until_utc_midnight():
+    from datetime import datetime, time, timedelta
+
+    from django.utils import timezone as dj_timezone
+
+    now = dj_timezone.now()
+    tomorrow = datetime.combine(now.date() + timedelta(days=1), time.min, tzinfo=now.tzinfo)
+    return max(1, int((tomorrow - now).total_seconds()))
+
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
@@ -7880,6 +7897,37 @@ def process_voice_event_ai(request):
             {"error": VOICE_UNAVAILABLE_ERROR},
             status=status.HTTP_403_FORBIDDEN,
         )
+    # ⛔ Only charge here on the WEB SPEECH path.
+    #
+    # A Deepgram session already paid at `deepgram-token`, and it always reaches this
+    # endpoint afterwards to parse the transcript — so charging both made one voice entry
+    # cost TWO units, halving the documented ceiling and making `used` (and the admin view
+    # built to watch spend) report double the real session count.
+    #
+    # When DEEPGRAM_API_KEY is unset, `voice_config` tells the client "web_speech_api", no
+    # token is ever minted, and this is the only paid call in the flow — so it pays. That
+    # gives exactly one unit per logical session in either deployment.
+    #
+    # Residual: a client could POST transcripts here directly without minting a token. It is
+    # authenticated, covered by the global throttle, and a gpt-3.5 parse of ~500 tokens is
+    # a rounding error next to metered audio — so the ceiling belongs on the stream, not here.
+    if not getattr(settings, "DEEPGRAM_API_KEY", ""):
+        from carbon.services.voice_budget import consume_voice_session
+
+        allowed, used, limit = consume_voice_session(company)
+        if not allowed:
+            return Response(
+                {
+                    "error": VOICE_BUDGET_EXCEEDED_ERROR,
+                    "code": "voice_daily_limit",
+                    "used": used,
+                    "limit": limit,
+                },
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+                # RFC 9110: tell the client WHEN, not just no. Midnight UTC is when the day rolls.
+                headers={"Retry-After": str(_seconds_until_utc_midnight())},
+            )
+
     try:
         transcript = request.data.get("transcript", "")
         crop_type = request.data.get("crop_type", "")
@@ -9255,6 +9303,25 @@ def deepgram_token(request):
         return Response(
             {"error": "Deepgram is not configured on this server."},
             status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+    # Charged HERE, after the 503 — this is the line that actually mints a metered key.
+    # Charging above it meant a server with no Deepgram key burned a farm's daily budget on
+    # requests that returned an error and cost nothing.
+    from carbon.services.voice_budget import consume_voice_session
+
+    allowed, used, limit = consume_voice_session(company)
+    if not allowed:
+        return Response(
+            {
+                "error": VOICE_BUDGET_EXCEEDED_ERROR,
+                "code": "voice_daily_limit",
+                "used": used,
+                "limit": limit,
+            },
+            status=status.HTTP_429_TOO_MANY_REQUESTS,
+            # RFC 9110: tell the client WHEN, not just no. Midnight UTC is when the day rolls.
+            headers={"Retry-After": str(_seconds_until_utc_midnight())},
         )
 
     headers = {

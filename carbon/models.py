@@ -1704,3 +1704,48 @@ class CarbonIntelligence(models.Model):
 
     def __str__(self):
         return f"Carbon Intelligence for {self.production} - {self.confidence_score:.1f}%"
+
+
+class VoiceUsageDay(models.Model):
+    """One row per company per day: how many billable voice sessions it started.
+
+    WHY THIS IS IN THE DATABASE AND NOT THE CACHE
+    ---------------------------------------------
+    DRF's throttles keep their counters in the Django cache, and this project falls back to
+    ``DummyCache`` whenever ``REDIS_URL`` is unset (prod.py). DummyCache stores nothing, so
+    every declared rate becomes a no-op — MEASURED 2026-08-26: a ``3/minute`` throttle
+    allowed 50 of 50 requests. A budget that protects real spend cannot be built on a store
+    that may silently be a black hole, and it has to survive a restart and be reportable
+    besides. `backend.security.checks` raises the cache problem separately; this is the
+    control that holds either way.
+
+    WHY A BUDGET AND NOT ONLY A RATE
+    --------------------------------
+    Every ``deepgram-token`` call mints a real Deepgram project key and opens a metered
+    stream, and voice is free on EVERY plan (``voice_recording: True`` across create_plans).
+    So the exposure is not request bursts, it is unbounded per-account cost — the same shape
+    Otter, Granola and Fathom answer with monthly minutes rather than requests per second.
+    A daily ceiling is the cheap version of that: invisible to a farmer logging a real day's
+    work, and a hard stop on a loop.
+    """
+
+    company = models.ForeignKey(
+        "company.Company",
+        on_delete=models.CASCADE,
+        related_name="voice_usage_days",
+    )
+    # Stored as the company's calendar day in UTC. Exact enough for a spend ceiling, and it
+    # avoids making the limit depend on a per-farm timezone we do not reliably have.
+    day = models.DateField(db_index=True)
+    session_count = models.PositiveIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "carbon_voice_usage_day"
+        unique_together = ("company", "day")
+        indexes = [models.Index(fields=["company", "day"])]
+        verbose_name = "Voice usage (day)"
+        verbose_name_plural = "Voice usage (days)"
+
+    def __str__(self):
+        return f"{self.company_id} {self.day}: {self.session_count}"

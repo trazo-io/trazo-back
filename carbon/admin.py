@@ -12,6 +12,7 @@ from .models import (
     CropType,
     EventTemplate,
     ProductionTemplate,
+    VoiceUsageDay,
 )
 
 # Register your models here.
@@ -237,3 +238,35 @@ class EventTemplateAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related("production_template__crop_type")
+
+
+@admin.register(VoiceUsageDay)
+class VoiceUsageDayAdmin(admin.ModelAdmin):
+    """Voice spend, per operation, per day — for US, not for the farmer.
+
+    This is deliberately an OPS surface and not a row on the subscription page. The 200/day
+    ceiling is an anti-abuse valve, not something a plan sells: `voice_recording` is a
+    boolean feature (True on starter, compliance, operation and pilot alike), and every
+    metric the subscription page meters maps to a `max_*` the plan actually buys. Publishing
+    the ceiling there would turn an implementation detail into a plan term we would then owe
+    the customer — and one we cannot sell more of. The farmer meets this number in exactly
+    one place: the moment it stops them, in the voice panel itself.
+    """
+
+    list_display = ("company", "day", "session_count", "updated_at")
+    list_filter = ("day",)
+    search_fields = ("company__name",)
+    date_hierarchy = "day"
+    ordering = ("-day", "-session_count")
+    readonly_fields = ("company", "day", "session_count", "updated_at")
+
+    def has_add_permission(self, request):
+        # Counters are written by carbon/services/voice_budget.py, never by hand: a typed row
+        # would hand somebody a day of free budget or silently mute a farm.
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("company")

@@ -258,6 +258,17 @@ If a buyer genuinely needs certifier-grade depth, that is a different act: answe
                 "is_featured": False,
             },
             {
+                "question": "Why does the QR on my lot tags look different from my production QR?",
+                "answer": """They open the **same page** — both encode your production's public link. They look different on purpose:
+
+- The **production QR** (downloaded from the production page or the Buyer Page) is the branded artwork: Trazo leaf in the center, green styling, sized for larger print like a box side, a poster or a farm-stand card.
+- The **lot-tag QR** is a plain black-and-white code, printed at about one inch on each § 205.307 case tag. A plain code keeps more error-correction margin, so it stays scannable small, at distance, and on scuffed cardboard — which is the whole job of a case label.
+
+Use the branded QR wherever a person looks at it up close; use the lot-tag sheet on nonretail containers. Whichever gets scanned, the buyer lands on the same page.""",
+                "category": "consumer_page",
+                "is_featured": False,
+            },
+            {
                 "question": "Can I attach a purchase receipt to a record?",
                 "answer": """Yes. Chemical and soil-amendment purchase records have a **receipt field**: upload the receipt or invoice in **Documents** first, then pick it from the record's receipt selector.
 

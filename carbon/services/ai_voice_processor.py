@@ -176,7 +176,7 @@ Your job is to parse voice inputs from farmers and extract structured informatio
 to help them document their farming practices transparently.
 
 You must respond with valid JSON containing these fields:
-- event_type: One of [fertilization, irrigation, pesticide, herbicide, fungicide, harvest, planting, pruning, transplanting, cultivation, thinning, soil_management, general]. Use "cultivation" for tractor/equipment usage, field operations, or machinery work.
+- event_type: One of [fertilization, irrigation, pesticide, herbicide, fungicide, harvest, planting, pruning, transplanting, cultivation, thinning, soil_management, transport, pollination, frost_protection, mowing, post_harvest, general]. Use "cultivation" for tractor/equipment usage, field operations, or machinery work. Use "transport" for a load leaving the farm (hauling to a huller, packer or buyer), "pollination" for bee hives placed or removed, "frost_protection" for wind machines/heaters/frost sprinklers on a cold night, "mowing" for orchard-floor mowing/mulching, and "post_harvest" for hulling, shelling, washing, sorting or packing.
 - confidence: Integer 0-100 representing your confidence in the classification
 - detected_amounts: Array of structured amounts (e.g., [{"value": 200, "unit": "lbs", "category": "weight"}, {"value": 2, "unit": "hours", "category": "time"}])
 - detected_products: Array of products mentioned (e.g., ["NPK 10-10-10", "glyphosate", "diesel"])
@@ -204,7 +204,7 @@ Tu trabajo es analizar entradas de voz de agricultores y extraer información es
 para ayudarlos a documentar sus prácticas agrícolas de forma transparente.
 
 Debes responder con JSON válido conteniendo estos campos:
-- event_type: Uno de [fertilization, irrigation, pesticide, herbicide, fungicide, harvest, planting, pruning, transplanting, cultivation, thinning, soil_management, general]. Usar "cultivation" para uso de tractor/equipo, operaciones de campo, o trabajo con maquinaria.
+- event_type: Uno de [fertilization, irrigation, pesticide, herbicide, fungicide, harvest, planting, pruning, transplanting, cultivation, thinning, soil_management, transport, pollination, frost_protection, mowing, post_harvest, general]. Usar "cultivation" para uso de tractor/equipo, operaciones de campo, o trabajo con maquinaria. Usar "transport" para una carga que sale del campo (llevar a descascaradora, empacadora o comprador), "pollination" para colmenas colocadas o retiradas, "frost_protection" para máquinas de viento/calentadores/riego antihelada, "mowing" para corte del piso del huerto, y "post_harvest" para descascarado, lavado, clasificación o empaque.
 - confidence: Entero 0-100 representando tu confianza en la clasificación
 - detected_amounts: Array de cantidades estructuradas (e.g., [{"value": 200, "unit": "lbs", "category": "weight"}])
 - detected_products: Array de productos mencionados
@@ -229,7 +229,7 @@ Seu trabalho é analisar entradas de voz de agricultores e extrair informações
 para ajudá-los a documentar suas práticas agrícolas de forma transparente.
 
 Você deve responder com JSON válido contendo estes campos:
-- event_type: Um de [fertilization, irrigation, pesticide, herbicide, fungicide, harvest, planting, pruning, transplanting, cultivation, thinning, soil_management, general]. Usar "cultivation" para uso de trator/equipamento, operações de campo, ou trabalho com maquinaria.
+- event_type: Um de [fertilization, irrigation, pesticide, herbicide, fungicide, harvest, planting, pruning, transplanting, cultivation, thinning, soil_management, transport, pollination, frost_protection, mowing, post_harvest, general]. Usar "cultivation" para uso de trator/equipamento, operações de campo, ou trabalho com maquinaria. Usar "transport" para uma carga que sai da fazenda (levar ao descascador, empacotador ou comprador), "pollination" para colmeias colocadas ou retiradas, "frost_protection" para máquinas de vento/aquecedores/irrigação antigeada, "mowing" para corte do piso do pomar, e "post_harvest" para descascamento, lavagem, classificação ou embalagem.
 - confidence: Inteiro 0-100 representando sua confiança na classificação
 - detected_amounts: Array de quantidades estruturadas (e.g., [{"value": 200, "unit": "lbs", "category": "weight"}])
 - detected_products: Array de produtos mencionados
@@ -400,6 +400,84 @@ Responda apenas com JSON.""",
                 "keywords": ["harvest", "harvested", "picked", "collected", "yield"],
                 "es": ["cosechar", "cosechado", "recoger", "recolectar", "rendimiento"],
                 "pt": ["colher", "colhido", "colher", "coletar", "rendimento"],
+            },
+            # 2026-08-26: five production subtypes the enum above never named, so the parser
+            # could only answer "general" for them. Buffer use (BU), seed search (SS) and
+            # canopy management (CM) are deliberately still absent — see the note in
+            # voiceDataMapper.ts. Mislabelling an ordinary harvest as a § 205.202(c) buffer
+            # harvest would put a compliance claim on the record nobody made out loud.
+            "transport": {
+                "keywords": [
+                    "hauled",
+                    "haul",
+                    "delivered",
+                    "shipped",
+                    "truck",
+                    "load",
+                    "huller",
+                    "packer",
+                    "packing house",
+                ],
+                "es": ["llevé", "llevar", "entregué", "entregar", "camión", "carga", "descascaradora", "empacadora"],
+                "pt": ["levei", "levar", "entreguei", "entregar", "caminhão", "carga", "descascador", "empacotadora"],
+            },
+            "pollination": {
+                "keywords": ["bees", "beehive", "hive", "hives", "pollination", "pollinator", "placed hives"],
+                "es": ["abejas", "colmena", "colmenas", "polinización", "polinizador"],
+                "pt": ["abelhas", "colmeia", "colmeias", "polinização", "polinizador"],
+            },
+            "frost_protection": {
+                "keywords": ["frost", "freeze", "wind machine", "heater", "heaters", "frost protection", "cold night"],
+                "es": ["helada", "escarcha", "máquina de viento", "calentador", "antihelada"],
+                "pt": ["geada", "congelamento", "máquina de vento", "aquecedor", "antigeada"],
+            },
+            "mowing": {
+                "keywords": [
+                    "mowed",
+                    "mowing",
+                    "mulched",
+                    "mulching",
+                    "orchard floor",
+                    "row middles",
+                    "cover crop mow",
+                ],
+                "es": ["corté", "cortar el piso", "desbrozar", "mulching", "piso del huerto", "entrelíneas"],
+                "pt": ["cortei", "roçar", "roçada", "mulching", "piso do pomar", "entrelinhas"],
+            },
+            "post_harvest": {
+                "keywords": [
+                    "hulling",
+                    "hulled",
+                    "shelling",
+                    "shelled",
+                    "washing",
+                    "washed",
+                    "sorting",
+                    "sorted",
+                    "packing",
+                    "packed",
+                    "grading",
+                ],
+                "es": [
+                    "descascarado",
+                    "descascarar",
+                    "lavado",
+                    "lavar",
+                    "clasificación",
+                    "clasificar",
+                    "empaque",
+                    "empacar",
+                ],
+                "pt": [
+                    "descascamento",
+                    "descascar",
+                    "lavagem",
+                    "lavar",
+                    "classificação",
+                    "classificar",
+                    "embalagem",
+                    "embalar",
+                ],
             },
         }
 

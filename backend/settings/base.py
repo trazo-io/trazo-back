@@ -299,6 +299,12 @@ COOLFARM_API_URL = os.environ.get("COOLFARM_API_URL", "https://api.coolfarmtool.
 # Deepgram API Configuration for Voice Transcription (Nova-3)
 DEEPGRAM_API_KEY = config("DEEPGRAM_API_KEY", default="")
 
+# Billable voice sessions per COMPANY per UTC day. Not a paywall — voice is on every plan —
+# but each session mints a Deepgram key and opens a metered stream, so an account with no
+# ceiling is an account with unbounded spend. 0 disables it. See
+# carbon/services/voice_budget.py for why this is counted in Postgres rather than the cache.
+VOICE_DAILY_SESSION_LIMIT = config("VOICE_DAILY_SESSION_LIMIT", default=200, cast=int)
+
 # OpenAI API Configuration for Voice Processing and AI Suggestions
 OPENAI_AVAILABLE = config("OPENAI_AVAILABLE", default=False, cast=bool)
 OPENAI_API_KEY = config("OPENAI_API_KEY", default="")
