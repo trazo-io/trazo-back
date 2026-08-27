@@ -3305,19 +3305,25 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         incomplete record must still save — but the response tells the UI what an inspector will
         ask for (record_completeness.py, § 205.103(b)(2) / § 205.206(a) / § 205.204).
 
-        Covers ChemicalEvent and the seed-sourced production subtypes (PL/TR) as of 2026-08-15.
-        The registry itself decides — an event type with no registry returns no gaps, so the key
-        is simply omitted rather than asserting a record is complete.
+        Covers ChemicalEvent and the seed-sourced production subtypes (SEED_SOURCED_SUBTYPES:
+        PL/TR since 2026-08-15, SS since 2026-08-19). The registries themselves decide, via
+        `has_registry` — an event type nobody has written a citable registry for gets NO
+        `completeness_gaps` key at all, rather than an empty list asserting the record is
+        complete. Every covered type gets the key even when the list is empty.
         """
         if not isinstance(response.data, dict):
             return
-        from .services.record_completeness import completeness_gap_keys
+        from .services.record_completeness import completeness_gap_keys, has_registry
 
-        gaps = completeness_gap_keys(event)
-        if gaps or isinstance(event, ChemicalEvent):
-            # Chemical keeps emitting an empty list (the UI treats [] as "record complete");
-            # other types stay silent unless there is something to say.
-            response.data["completeness_gaps"] = gaps
+        if not has_registry(event):
+            # No citable registry for this event type — omit the key entirely rather than send
+            # an empty list, which the UI reads as "checked, and complete".
+            return
+        # Every CHECKED type emits, including when the list is empty: `[]` is the only way to
+        # say "the gap you were told about is now closed". The predicate used to be
+        # `isinstance(event, ChemicalEvent)`, written when this module was chemical-only, so a
+        # complete planting was indistinguishable from an unchecked weather log.
+        response.data["completeness_gaps"] = completeness_gap_keys(event)
 
     def get_serializer_class(self):
         event_type = (
@@ -4081,10 +4087,20 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         except Exception:
             pass  # Non-fatal: score will update on next calculation
 
+        # `instance` predates super().update()'s save — DRF re-fetched and saved its own copy —
+        # so re-read before judging completeness of the row as it now stands. Unconditional: the
+        # guard used to read `isinstance(instance, ChemicalEvent)`, written when the registry was
+        # chemical-only, and was never widened when record_completeness.py took on the
+        # seed-sourced production subtypes (PL/TR/SS) on 2026-08-15. A grower editing a planting
+        # to SUPPLY the missing seed status was told, on the 200 for that very edit, that it was
+        # still missing — and clearing a field reported the record complete.
         if isinstance(instance, ChemicalEvent):
-            # `instance` predates super().update()'s save — DRF re-fetched and saved its own
-            # copy — so re-read before judging completeness of the row as it now stands.
             instance.refresh_from_db()
+        try:
+            pass
+        except instance.__class__.DoesNotExist:
+            # Nothing left to judge — the row is gone. The update itself already succeeded.
+            return response
         self._attach_completeness_gaps(response, instance)
 
         return response

@@ -27,8 +27,9 @@ Scope. v1 was `ChemicalEvent` only, four fields — the highest-stakes record ty
 smallest citable set that catches the actual failure mode (a record `python manage.py shell` can
 happily construct with every field blank).
 
-Extended 2026-08-15 to the seed-sourced production subtypes (PL planting, TR transplanting)
-under § 205.204. The trigger was an audit finding rather than resemblance: the certifier packet
+Extended 2026-08-15 to the seed-sourced production subtypes under § 205.204 —
+`SEED_SOURCED_SUBTYPES`: PL planting and TR transplanting, joined by SS seed search on
+2026-08-19. The trigger was an audit finding rather than resemblance: the certifier packet
 already PRINTS a seed table with columns for organic status, the § 205.2 nonavailability ground,
 the supplier searches and the treatment-allowability basis — and none of them were checked
 anywhere, so a planting record could reach a certifier with every one of those cells blank while
@@ -258,13 +259,28 @@ def _registry_for(event) -> list[RequiredField]:
     return []
 
 
+def has_registry(event) -> bool:
+    """Is this event type CHECKED at all — as distinct from checked and found complete?
+
+    `missing_required_fields()` returns `[]` for both, and the two mean opposite things to a
+    caller: "every citable field is filled in" versus "nobody has written a citable registry for
+    this event type yet". Only the first is a completeness claim.
+
+    Callers used `isinstance(event, ChemicalEvent)` to tell them apart, which was accurate when
+    the module was chemical-only and silently wrong from the day the § 205.204 planting registry
+    landed — a complete planting looked identical to an unchecked weather log. Ask here instead,
+    so the answer moves with the registries.
+    """
+    return bool(_registry_for(event))
+
+
 def missing_required_fields(event) -> list[dict]:
     """Required fields absent on this event. Empty list = record is complete.
 
     Each item: {"key", "label", "cfr_cite"} — same shape PUR export's `_missing_required` implies,
     minus the CA-only "which PUR box" framing.
 
-    Covers ChemicalEvent and the seed-sourced production subtypes (PL/TR). Any other event type
+    Covers ChemicalEvent and the SEED_SOURCED_SUBTYPES production subtypes. Any other event type
     returns [] — silence, not a claim of completeness.
     """
     return [

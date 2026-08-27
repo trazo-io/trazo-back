@@ -3,8 +3,14 @@
 Contract under test (EventViewSet.create/update → _attach_completeness_gaps):
 - a ChemicalEvent response carries `completeness_gaps` — machine keys from
   `record_completeness.CHEMICAL_EVENT_REQUIRED_FIELDS` still missing on the saved row;
+- a seed-sourced ProductionEvent (SEED_SOURCED_SUBTYPES) carries the § 205.204 keys from
+  `record_completeness.PLANTING_EVENT_REQUIRED_FIELDS`;
 - an incomplete record STILL SAVES (201/200) — the nudge is advisory, never blocking;
-- non-chemical events carry no `completeness_gaps` key at all.
+- an UPDATE judges the row as it now stands, for every covered type. The refresh_from_db
+  behind that was `isinstance(instance, ChemicalEvent)`-guarded from v1 and never widened
+  when the planting registry landed, so a grower who edited a planting to SUPPLY the missing
+  seed status was told on that very 200 that it was still missing;
+- event types with no registry carry no `completeness_gaps` key at all.
 
 Fixture pattern copied from `test_record_completeness_snapshot.py` (`state="CA"` per the
 2026-07-30 fixture-trap postmortem) plus `parcel.current_history`, which perform_create requires.
@@ -92,5 +98,51 @@ class EventCompletenessNudgeTests(TestCase):
 
     def test_non_chemical_event_carries_no_completeness_key(self):
         resp = self._post_event(event_type=3, name="Walkthrough")
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertNotIn("completeness_gaps", resp.data)
+
+    # --- Seed-sourced production subtypes (§ 205.204) ------------------------------------
+
+    def test_incomplete_planting_event_saves_and_lists_its_204_gaps(self):
+        resp = self._post_event(event_type=1, type="PL")
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertEqual(resp.data.get("completeness_gaps"), ["seed_certification_status"])
+
+    def test_update_of_a_planting_recomputes_gaps_from_the_saved_row(self):
+        """The grower fills in the one thing they were asked for; the 200 must agree.
+
+        Regression: `update()` judged the pre-save `instance` for everything except
+        ChemicalEvent, so this returned ["seed_certification_status"] — naming the field the
+        farmer had just supplied, in the response to the request that supplied it.
+        """
+        created = self._post_event(event_type=1, type="PL")
+        self.assertEqual(created.status_code, 201, created.data)
+        self.assertEqual(created.data.get("completeness_gaps"), ["seed_certification_status"])
+
+        resp = self.client.patch(
+            f"{self.events_url}{created.data['id']}/?event_type=1",
+            {"event_type": 1, "seed_certification_status": "certified_organic"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data.get("completeness_gaps"), [])
+
+    def test_update_of_a_planting_reports_gaps_the_edit_opened(self):
+        """The mirror image: clearing a field must not keep reporting the record complete."""
+        created = self._post_event(event_type=1, type="PL", seed_certification_status="certified_organic")
+        self.assertEqual(created.status_code, 201, created.data)
+        self.assertEqual(created.data.get("completeness_gaps"), [])
+
+        resp = self.client.patch(
+            f"{self.events_url}{created.data['id']}/?event_type=1",
+            {"event_type": 1, "seed_certification_status": ""},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data.get("completeness_gaps"), ["seed_certification_status"])
+
+    def test_non_seed_production_subtype_carries_no_completeness_key(self):
+        """Pruning is a ProductionEvent with no § 205.204 obligation — silence, not a claim."""
+        resp = self._post_event(event_type=1, type="PR")
         self.assertEqual(resp.status_code, 201, resp.data)
         self.assertNotIn("completeness_gaps", resp.data)
