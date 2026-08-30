@@ -22,7 +22,7 @@ class Command(BaseCommand):
         ("stripe_secret_key", "STRIPE_SECRET_KEY", "Stripe secret key for payments"),
         ("stripe_webhook_secret", "STRIPE_WEBHOOK_SECRET", "Stripe webhook secret"),
         ("openai_api_key", "OPENAI_API_KEY", "OpenAI API key for voice processing"),
-        ("sendgrid_api_key", "SENDGRID_API_KEY", "SendGrid API key for email"),
+        ("resend_api_key", "RESEND_API_KEY", "Resend API key for email"),
         ("aws_access_key_id", "AWS_ACCESS_KEY_ID", "AWS access key ID"),
         ("aws_secret_access_key", "AWS_SECRET_ACCESS_KEY", "AWS secret access key"),
         ("google_client_secret", "GOOGLE_CLIENT_SECRET", "Google OAuth client secret"),

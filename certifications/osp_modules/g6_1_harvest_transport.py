@@ -202,28 +202,71 @@ G6_1_HARVEST_TRANSPORT = Module(
                     visible_when=(Condition("container_types", "includes", "other"),),
                     compiles_to=CompileRule(template="Additional container type used: {answer}."),
                 ),
+                # 🔴 This was ONE boolean — "are these containers new, dedicated to organic use,
+                # OR cleaned before each use?" — answered once across every container type
+                # ticked above, and compiled as an affirmative covering all three predicates. On
+                # the pilot a single "Yes" spoke for reusable lugs, single-use cartons and totes
+                # while the description substantiated only the lugs: the plan asserted more than
+                # the operator had said. WSDA J5 asks exactly this as a four-way checkbox, and
+                # CCOF G6.1 B1 as a per-item table.
+                #
+                # The old key is deliberately NOT reused. A stored `True` does not say WHICH
+                # safeguard applies — that missing information IS the defect — so migration 0036
+                # clears it rather than guessing, and the question reads as unanswered until the
+                # operator says which. (`_module_status` recomputes against the current
+                # questionnaire, so those plans correctly show as in progress again.)
                 Question(
-                    key="containers_clean_or_dedicated",
-                    kind="boolean",
+                    key="container_safeguards",
+                    kind="checkbox_group",
                     label=text(
-                        "Are these containers new, dedicated to organic use, or cleaned " "before each use?",
-                        "¿Estos contenedores son nuevos, están dedicados al uso orgánico o se "
-                        "limpian antes de cada uso?",
+                        "How do you keep harvest containers from contaminating organic crops?",
+                        "\u00bfC\u00f3mo evita que los contenedores de cosecha contaminen los cultivos "
+                        "org\u00e1nicos?",
                     ),
-                    nop_cite="§ 205.272(a)",
-                    compiles_to=CompileRule(
-                        template="Containers are new, dedicated to organic use, or cleaned before each use: {answer}."
+                    coaching=text(
+                        "Tick every safeguard you rely on. If different container types are "
+                        "handled differently — new cartons but reused lugs — say so in the "
+                        "description below, because your certifier reads this as a statement "
+                        "about every container named above.",
+                        "Marque cada salvaguarda en la que se apoya. Si distintos tipos de "
+                        "contenedor se manejan de forma diferente \u2014 cartones nuevos pero cajas "
+                        "reutilizadas \u2014 ind\u00edquelo en la descripci\u00f3n de abajo, porque su "
+                        "certificador lo lee como una afirmaci\u00f3n sobre todos los contenedores "
+                        "nombrados arriba.",
+                    ),
+                    nop_cite="\u00a7 205.272(a)",
+                    compiles_to=CompileRule(template="Harvest-container safeguards used: {answer}."),
+                    options=(
+                        Option(
+                            "cleaned_prior",
+                            text("Cleaned prior to use", "Se limpian antes de usarse"),
+                        ),
+                        Option(
+                            "lined_prior",
+                            text("Lined prior to use", "Se forran antes de usarse"),
+                        ),
+                        Option(
+                            "only_new",
+                            text("Only new containers are used", "Solo se usan contenedores nuevos"),
+                        ),
+                        Option(
+                            "organic_only",
+                            text(
+                                "Dedicated to organic product only",
+                                "Dedicados \u00fanicamente a producto org\u00e1nico",
+                            ),
+                        ),
                     ),
                 ),
                 Question(
                     key="containers_cleaning_method",
                     kind="textarea",
                     label=text(
-                        "Describe the cleaning method and when it happens relative to " "organic use",
-                        "Describa el método de limpieza y cuándo ocurre en relación con el " "uso orgánico",
+                        "Describe the cleaning or lining method, and which container types it " "applies to",
+                        "Describa el m\u00e9todo de limpieza o forrado, y a qu\u00e9 tipos de contenedor " "se aplica",
                     ),
-                    visible_when=(Condition("containers_clean_or_dedicated", "truthy"),),
-                    compiles_to=CompileRule(template="Container cleaning method: {answer}"),
+                    visible_when=(Condition("container_safeguards", "includes_any", ["cleaned_prior", "lined_prior"]),),
+                    compiles_to=CompileRule(template="Container cleaning or lining method: {answer}"),
                 ),
                 Question(
                     key="containers_reused_from_prohibited",
@@ -436,6 +479,111 @@ G6_1_HARVEST_TRANSPORT = Module(
                     visible_when=(Condition("who_transports", "one_of", ["commercial_carrier", "buyer_pickup"]),),
                     compiles_to=CompileRule(
                         template="Records provided by the carrier or handler transporting product off the operation: {answer}"
+                    ),
+                ),
+            ),
+        ),
+        ModulePage(
+            key="d_off_farm_handling",
+            title=text("D. Off-farm handling", "D. Manejo fuera de la finca"),
+            education=(
+                text(
+                    "If anyone off your operation hulls, dries, packs, conditions or "
+                    "otherwise handles your crop, the certifier needs to know who they are "
+                    "and whether they are certified — because from that point the audit "
+                    "trail runs through their records, not yours. Answering \u201cno\u201d here is a "
+                    "complete answer; leaving it blank is not, because a reviewer cannot "
+                    "tell the difference between \u201cnobody handles our crop\u201d and "
+                    "\u201cnot filled in yet\u201d.",
+                    "Si alguien fuera de su operaci\u00f3n descascara, seca, empaca, acondiciona o "
+                    "de otro modo manipula su cultivo, el certificador necesita saber qui\u00e9n es "
+                    "y si est\u00e1 certificado, porque desde ese punto el rastro de auditor\u00eda pasa "
+                    "por sus registros y no por los suyos. Responder \u201cno\u201d aqu\u00ed es una "
+                    "respuesta completa; dejarlo en blanco no lo es, porque quien revisa no "
+                    "puede distinguir entre \u201cnadie manipula nuestro cultivo\u201d y \u201ca\u00fan no se "
+                    "ha completado\u201d.",
+                ),
+            ),
+            questions=(
+                Question(
+                    key="handled_by_another_operation",
+                    kind="radio",
+                    label=text(
+                        "Is your organic crop handled off the farm by another operation?",
+                        "\u00bfSu cultivo org\u00e1nico es manipulado fuera de la finca por otra " "operaci\u00f3n?",
+                    ),
+                    nop_cite="\u00a7 205.272(a)",
+                    compiles_to=CompileRule(template="Off-farm handling of this operation's organic crop: {answer}."),
+                    options=(
+                        Option(
+                            "no",
+                            text(
+                                "No \u2014 nobody off this operation handles our crop",
+                                "No \u2014 nadie fuera de esta operaci\u00f3n manipula nuestro cultivo",
+                            ),
+                        ),
+                        Option(
+                            "yes_certified",
+                            text(
+                                "Yes \u2014 by a certified organic operation",
+                                "S\u00ed \u2014 por una operaci\u00f3n org\u00e1nica certificada",
+                            ),
+                        ),
+                        Option(
+                            "yes_uncertified",
+                            text(
+                                "Yes \u2014 by an operation that is not certified",
+                                "S\u00ed \u2014 por una operaci\u00f3n que no est\u00e1 certificada",
+                            ),
+                        ),
+                    ),
+                ),
+                Question(
+                    key="off_farm_handler_table",
+                    kind="info",
+                    required=False,
+                    embed="post_harvest_facilities",
+                    label=text(
+                        "Handlers on file for this operation",
+                        "Manejadores registrados para esta operaci\u00f3n",
+                    ),
+                    coaching=text(
+                        "These are the facilities recorded on your farm profile. Each one "
+                        "prints here with its address and its organic certificate, so the "
+                        "reviewer sees the same handler in the plan and in the records.",
+                        "Estas son las instalaciones registradas en el perfil de su finca. "
+                        "Cada una aparece aqu\u00ed con su direcci\u00f3n y su certificado org\u00e1nico, "
+                        "para que quien revisa vea el mismo manejador en el plan y en los "
+                        "registros.",
+                    ),
+                    nop_cite="\u00a7 205.272(a)",
+                    visible_when=(
+                        Condition("handled_by_another_operation", "one_of", ["yes_certified", "yes_uncertified"]),
+                    ),
+                ),
+                Question(
+                    key="uncertified_handler_records",
+                    kind="textarea",
+                    label=text(
+                        "What records does that operation provide to preserve your product's " "organic identity?",
+                        "\u00bfQu\u00e9 registros proporciona esa operaci\u00f3n para preservar la "
+                        "identidad org\u00e1nica de su producto?",
+                    ),
+                    coaching=text(
+                        "An uncertified operation handling your crop needs records proving "
+                        "identity preservation \u2014 lot tags, logs showing physical or timing "
+                        "separation from nonorganic product, and cleaning records for the "
+                        "equipment and space used.",
+                        "Una operaci\u00f3n no certificada que manipula su cultivo necesita "
+                        "registros que demuestren la preservaci\u00f3n de la identidad \u2014 "
+                        "etiquetas de lote, bit\u00e1coras que muestren separaci\u00f3n f\u00edsica o "
+                        "temporal del producto no org\u00e1nico, y registros de limpieza del "
+                        "equipo y el espacio utilizados.",
+                    ),
+                    nop_cite="\u00a7 205.103",
+                    visible_when=(Condition("handled_by_another_operation", "one_of", ["yes_uncertified"]),),
+                    compiles_to=CompileRule(
+                        template="Records provided by the uncertified operation handling this crop: {answer}"
                     ),
                 ),
             ),

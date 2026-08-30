@@ -29,7 +29,7 @@ def apply_secure_settings(settings_dict):
         "STRIPE_SECRET_KEY": ("stripe_secret_key", "STRIPE_SECRET_KEY"),
         "STRIPE_WEBHOOK_SECRET": ("stripe_webhook_secret", "STRIPE_WEBHOOK_SECRET"),
         "OPENAI_API_KEY": ("openai_api_key", "OPENAI_API_KEY"),
-        "SENDGRID_API_KEY": ("sendgrid_api_key", "SENDGRID_API_KEY"),
+        "RESEND_API_KEY": ("resend_api_key", "RESEND_API_KEY"),
         "AWS_ACCESS_KEY_ID": ("aws_access_key_id", "AWS_ACCESS_KEY_ID"),
         "AWS_SECRET_ACCESS_KEY": ("aws_secret_access_key", "AWS_SECRET_ACCESS_KEY"),
         "GOOGLE_CLIENT_SECRET": ("google_client_secret", "GOOGLE_CLIENT_SECRET"),
@@ -37,11 +37,6 @@ def apply_secure_settings(settings_dict):
         "APPLE_PRIVATE_KEY": ("apple_private_key", "APPLE_PRIVATE_KEY"),
         "ICR_API_KEY": ("icr_api_key", "ICR_API_KEY"),
     }
-
-    # Special handling for EMAIL_HOST_PASSWORD (uses SENDGRID_API_KEY)
-    sendgrid_key = get_secure_key("sendgrid_api_key", "SENDGRID_API_KEY")
-    if sendgrid_key:
-        settings_dict["EMAIL_HOST_PASSWORD"] = sendgrid_key
 
     # Apply secure settings
     for setting_name, (secure_key_name, fallback_env_var) in SECURE_SETTINGS_MAP.items():
@@ -122,7 +117,7 @@ def validate_secure_configuration():
     required_keys = [
         "blockchain_private_key",
         "stripe_secret_key",
-        "sendgrid_api_key",
+        "resend_api_key",
     ]
 
     missing_keys = []

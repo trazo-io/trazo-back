@@ -217,6 +217,37 @@ Trazo imports COG Pro CSV exports **white-glove**: send us the export and your r
                 "is_featured": False,
             },
             {
+                # 2026-08-29. Trazo has THREE certifier-facing exports and their names did not
+                # distinguish them — the per-season one even called itself "the full renewal
+                # packet", the phrase used for the OSP ZIP a grower actually files. Fixed in the
+                # UI the same day; this is the farmer-facing explanation of the difference.
+                "question": "Which document do I send my certifier?",
+                "answer": """Three different documents, and they are not interchangeable.
+
+**The OSP renewal packet** — this is the one you FILE. Generate it from **Organic System Plan**. It is the ZIP with your cover page, the § 205.406 annual update, your change notices, each module as a PDF, every parcel application, and the workbooks. This is your renewal.
+
+**The Operation Audit Dossier** — your RECORDS, every parcel and production in one PDF, from your farm profile. This is what you hand an inspector, or share ahead of a desk review. It is not a filing.
+
+**Export for your certifier** — one season on its own, from that production's page. Use it when someone asks about a specific lot, or when a form asks you to attach a worked example. CCOF's G8.0 §B asks for exactly that: a sample audit trail showing how your documents link together.
+
+**And here is the part that surprises people: you do not send your records in.** Across every CCOF and WSDA form, dozens of questions ask whether you MAINTAIN records and can make them available — and not one asks you to submit them. That is 7 CFR 205.103(c): records must be available for inspection during business hours. The plan gets filed; the records get shown.""",
+                "category": "records",
+                "is_featured": True,
+            },
+            {
+                # 2026-08-29. Carbon is computed and shown in-app, and until today it rode into
+                # certifier exports through three multi-standard variants that were removed. A
+                # farmer who sees carbon on screen will look for it in the packet.
+                "question": "Why isn't my carbon data in the certifier packet?",
+                "answer": """On purpose. Your organic inspector does not grade you on emissions, and putting a carbon figure inside an audit document invites a sustainability claim nobody asked you to make — the kind regulators now read closely. So the certifier packet stays what a certifier asked for: practices, inputs, land and records.
+
+**Your carbon data is still yours.** It is on each production's page in the app, and every entry is in the free **Export all records** ZIP from Documents, as `carbon_entries.csv`. No plan gate on that — your records should never be trapped in any tool, including this one.
+
+One thing worth knowing about how Trazo talks about it: emission factors are **EPA/USDA-sourced**, which means the published factor came from those agencies. It does not mean USDA verified your farm's numbers. Nobody has. If you ever see Trazo word it more strongly than that, it is a bug — tell us.""",
+                "category": "records",
+                "is_featured": False,
+            },
+            {
                 "question": "How does my certifier see my records?",
                 "answer": """Two ways, and you control both:
 
@@ -266,6 +297,52 @@ If a buyer genuinely needs certifier-grade depth, that is a different act: answe
 
 Use the branded QR wherever a person looks at it up close; use the lot-tag sheet on nonretail containers. Whichever gets scanned, the buyer lands on the same page.""",
                 "category": "consumer_page",
+                "is_featured": False,
+            },
+            {
+                # 2026-08-28. Until this shipped, an input Trazo could not resolve dead-ended:
+                # the panel told the operator to "record it under Notification of Changes" and
+                # their events kept flagging as drift. CCOF's own §A prompt names compost,
+                # manure, gypsum and limestone — the exact materials no catalog could supply —
+                # under five attestations that everything in use was on the list.
+                "question": "My input isn't in OMRI, WSDA or the National List. Now what?",
+                "answer": """You add it anyway, in your own words. Search for it in **Organic System Plan → Materials**; if nothing resolves, the result offers **Add it as it appears on the label**, and the material goes on your plan with its name, manufacturer, category and your reason for use.
+
+This is how compost, manure, gypsum, limestone and a home-formulated spray reach the list — CCOF's materials form names those exact items, and no catalog carries them.
+
+**What your packet says about it.** Each row prints the basis it actually has. A catalog match prints "OMRI listed" or "WSDA Brand Name Materials List". A material your certifier approved in writing prints that, and asks you which letter. A material you entered yourself prints **"no third-party listing on file"** — which is a normal thing for a certifier to read and decide on, not a finding against you.
+
+**No match is not a verdict.** Trazo's OMRI copy is a licensed reference subset, and a National List entry is a substance while your label carries a brand — so "no match" means unmatched, never unapproved.""",
+                "category": "osp_renewal",
+                "is_featured": True,
+            },
+            {
+                # 2026-08-28. Both certifiers treat the map as a mandatory attachment and the
+                # packet carried none — the parcel page printed "Field map on file" and no map.
+                "question": "Does my certifier need a map of each parcel?",
+                "answer": """Yes, and both CCOF and WSDA treat it as an **attachment, not a question**: CCOF reviews the map before inspecting a new parcel, and WSDA asks for one with every site application.
+
+Trazo draws a boundary schematic from the field geometry you recorded, with your adjoining land uses labelled by compass direction, and it prints in **section E of each Parcel Application** and travels in your renewal packet.
+
+**That drawing is a floor, not the whole answer.** Your certifier also asks for things a boundary cannot show — nearest roads and landmarks, block or lot identifiers, other areas of the operation, buffer widths, and satellite imagery where available. So section E also has **Attach a map**: upload your own 8.5x11 map and it ships inside the packet under `parcels/maps/`, with the parcel page naming the exact file.
+
+If you farm in Washington, print your operation name and the site name on the map itself — WSDA asks for both on the graphic.""",
+                "category": "osp_renewal",
+                "is_featured": False,
+            },
+            {
+                # 2026-08-28. `PostHarvestFacility` held every fact these forms ask for and no
+                # OSP module read it, so the plan answered "who handles your crop" from free
+                # text while the structured record sat in a different export.
+                "question": "Someone else hulls, packs or stores my crop. What does my plan need?",
+                "answer": """Their name, their address, and their current organic certificate — because from the moment your crop leaves your operation, the audit trail runs through **their** records.
+
+Record the facility once on a production's **post-harvest** section, including whether they handle the crop, only store it, or both. That one record then answers your certifier's questions on every form that asks: CCOF's G6.1 §C for handling and G6.2 §A for storage, WSDA's sections J, K and L.
+
+It prints in your plan and packet with the certificate stated **exactly as your record supports it** — current, expired or older than 15 months, no date recorded, or none on file. Trazo will not call a certificate current when you have not recorded its date.
+
+If the operation handling your crop is **not** certified, say so and describe the records they give you that keep your product's organic identity intact — lot tags, separation logs, cleaning records for the equipment used.""",
+                "category": "osp_renewal",
                 "is_featured": False,
             },
             {

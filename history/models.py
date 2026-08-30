@@ -4481,7 +4481,12 @@ class BusinessEvent(CommonEvent):
     ]
 
     # Sprint 2 Epic 2.2: Expanded certification types with GlobalG.A.P., Non-GMO, CNG
-    CERTIFICATION_TYPE_CHOICES = [
+    #
+    # What a farmer may still CHOOSE. Every entry names an issuing body or programme a
+    # shopper can go and check, which is the same line `claim_authority` draws — after the
+    # 2026-08-27 retirement below, every offered type is publishable and none needs a
+    # "this will not reach a buyer" caveat on the form.
+    OFFERED_CERTIFICATION_TYPE_CHOICES = [
         # Organic & Food Safety Certifications
         ("organic_usda", "USDA Organic"),
         ("regenerative", "Regenerative Organic Certified (ROC)"),
@@ -4491,16 +4496,37 @@ class BusinessEvent(CommonEvent):
         ("cng", "Certified Naturally Grown (CNG)"),
         ("non_gmo", "Non-GMO Project Verified"),
         # Environmental & Sustainability Certifications
-        ("carbon_neutral", "Carbon Neutral Certification"),
         ("rainforest_alliance", "Rainforest Alliance"),
         ("water_stewardship", "Water Stewardship Certification"),
-        ("sustainable_agriculture", "Sustainable Agriculture Standard"),
         # Global Food Safety & Trade Certifications
         ("global_gap", "GlobalG.A.P. Certified"),
         ("fair_trade", "Fair Trade Certified"),
         ("food_safety", "SQF / Food Safety Certified"),
         ("kosher", "Kosher Certified"),
     ]
+
+    # Retired 2026-08-27. NOT deleted: § 205.103(b)(2) records have to survive an
+    # inspector's trace-back, so a farmer who logged one of these still gets their own
+    # words back and the packet still prints a label instead of a raw slug. They are
+    # simply no longer OFFERED, and `BusinessEventSerializer` refuses them on write.
+    #
+    # Why these two and not the rest: both name a claim with no issuing body behind it.
+    # `claim_authority._WITHHELD_CERTIFICATION_TYPES` already kept them off every consumer
+    # surface — "Carbon Neutral" is a general environmental benefit claim (16 CFR 260.6)
+    # that also contradicts Trazo's own direct-operational-emissions methodology, and
+    # "Sustainable Agriculture Standard" is the self-created sustainability label ECGT
+    # 2024/825 bans outright from 2026-09-27. Withholding the value while still offering
+    # the menu item left the farmer making a claim the product silently declined to show.
+    DEPRECATED_CERTIFICATION_TYPE_CHOICES = [
+        ("carbon_neutral", "Carbon Neutral Certification"),
+        ("sustainable_agriculture", "Sustainable Agriculture Standard"),
+    ]
+
+    # The DISPLAY vocabulary — offered plus retired. This is what the field stores and what
+    # `get_certification_type_display()` reads.
+    CERTIFICATION_TYPE_CHOICES = OFFERED_CERTIFICATION_TYPE_CHOICES + DEPRECATED_CERTIFICATION_TYPE_CHOICES
+
+    DEPRECATED_CERTIFICATION_TYPES = frozenset(k for k, _ in DEPRECATED_CERTIFICATION_TYPE_CHOICES)
 
     CARBON_CREDIT_UNITS = [
         ("tCO2e", "tCO2e (tonnes CO2 equivalent)"),

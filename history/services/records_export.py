@@ -19,6 +19,8 @@ import zipfile
 from datetime import date, datetime
 from decimal import Decimal
 
+from common.specimen import SPECIMEN_LINE, is_specimen
+
 
 def _cell(value):
     if value is None:
@@ -32,11 +34,25 @@ def _cell(value):
     return value
 
 
-def _model_csv(queryset) -> str:
+def _model_csv(queryset, specimen: bool = False) -> str:
+    """One record family as CSV, marked when the operation is fabricated.
+
+    🔴 2026-08-29 — this export shipped on 2026-08-25, four days AFTER the specimen-marking
+    work that put one authority (`common.specimen`) behind every artifact leaving the product,
+    and it was never wired to it. So a demo operation's complete records ZIP was
+    indistinguishable from a real farm's — the exact defect that work exists to prevent, arriving
+    through a door built after the fix. Caught by its own guard,
+    `test_every_export_surface_consults_the_authority`.
+
+    Marked the way the PUR and audit CSVs already do it: `SPECIMEN_LINE` as the first row, so it
+    survives being opened in a spreadsheet rather than living in metadata nobody reads.
+    """
     model = queryset.model
     fields = [f.name if not f.is_relation else f.attname for f in model._meta.concrete_fields]
     out = io.StringIO()
     writer = csv.writer(out)
+    if specimen:
+        writer.writerow([SPECIMEN_LINE])
     writer.writerow(fields)
     for row in queryset.values_list(*[f.attname if hasattr(f, "attname") else f for f in model._meta.concrete_fields]):
         writer.writerow([_cell(v) for v in row])
@@ -46,6 +62,7 @@ def _model_csv(queryset) -> str:
 def export_establishment_records_zip(establishment) -> bytes:
     """Return ZIP bytes: one CSV per record family plus parcels, productions,
     sales and photo references. Owner-facing raw data; no plan gating."""
+    from carbon.models import CarbonEntry
     from history.models import (
         BusinessEvent,
         ChemicalEvent,
@@ -71,17 +88,36 @@ def export_establishment_records_zip(establishment) -> bytes:
         "productions.csv": History.objects.filter(parcel__establishment=establishment),
         "sales_records.csv": SalesRecord.objects.filter(production__parcel__establishment=establishment),
         "parcels.csv": Parcel.objects.filter(establishment=establishment),
+        # Carbon entries are DERIVED records about this farm, and they belong to the farm.
+        #
+        # Added 2026-08-29, when removing the multi-standard export picker made carbon
+        # unreachable from every export at once: it had only ever ridden along in the `all`,
+        # `roc` and `scs` variants, which are gone because they carried it into a CERTIFIER
+        # document — inspectors do not grade on emissions and putting them in an audit PDF is a
+        # greenwashing-by-association risk. Keeping it out of the certifier packet is right;
+        # letting it become unexportable was not, and contradicts this product's own stated
+        # position that records "should never be trapped in any tool, including this one".
+        #
+        # This is the FREE, ungated door, which is where a farmer's own data belongs.
+        "carbon_entries.csv": CarbonEntry.objects.filter(establishment=establishment),
     }
 
     out = io.BytesIO()
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
+        # `Establishment.is_demo` decides, in one place, for every family in the ZIP. Its default
+        # of False is load-bearing: marking a REAL farm's export invites a certifier to reject it.
+        specimen = is_specimen(establishment)
         for name, qs in families.items():
-            zf.writestr(name, _model_csv(qs.order_by("pk")))
+            zf.writestr(name, _model_csv(qs.order_by("pk"), specimen=specimen))
 
         # Photo references: family, event id, image URL — enough to fetch the
         # farmer's own photos out of their own album storage.
         photo_rows = io.StringIO()
         writer = csv.writer(photo_rows)
+        # photos.csv is hand-built rather than going through `_model_csv`, so it needs the mark
+        # applied explicitly — a per-file marking scheme is only as good as its least-visited path.
+        if specimen:
+            writer.writerow([SPECIMEN_LINE])
         writer.writerow(["event_family", "event_id", "event_date", "image_url", "s3_key"])
         family_models = {
             "production": ProductionEvent,
@@ -112,12 +148,16 @@ def export_establishment_records_zip(establishment) -> bytes:
                     )
         zf.writestr("photos.csv", photo_rows.getvalue())
 
+        # The README is the first file anyone opens, so it carries the mark FIRST — before the
+        # establishment name, which is the line that would otherwise make fabricated records read
+        # as a real farm's.
         zf.writestr(
             "README.txt",
-            "Trazo records export\n"
-            f"Establishment: {establishment.name} (id {establishment.pk})\n"
-            "One CSV per record family. Columns are the raw database fields;\n"
-            "JSON columns (extra_data, test_results, ...) hold structured detail.\n"
-            "These are your records (7 CFR 205.103) — keep them for at least five years.\n",
+            (f"{SPECIMEN_LINE}\n\n" if specimen else "")
+            + "Trazo records export\n"
+            + f"Establishment: {establishment.name} (id {establishment.pk})\n"
+            + "One CSV per record family. Columns are the raw database fields;\n"
+            + "JSON columns (extra_data, test_results, ...) hold structured detail.\n"
+            + "These are your records (7 CFR 205.103) — keep them for at least five years.\n",
         )
     return out.getvalue()

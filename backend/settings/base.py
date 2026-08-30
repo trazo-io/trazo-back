@@ -324,11 +324,13 @@ VCS_API_KEY = config("VCS_API_KEY", default="")
 GOLD_STANDARD_API_URL = config("GOLD_STANDARD_API_URL", default="https://api.goldstandard.org/v1")
 GOLD_STANDARD_API_KEY = config("GOLD_STANDARD_API_KEY", default="")
 
-EMAIL_HOST = config("EMAIL_HOST", default="smtp.sendgrid.net")
-EMAIL_HOST_USER = "apikey"
-EMAIL_HOST_PASSWORD = config("SENDGRID_API_KEY", default=None)
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
+# SMTP settings are used only by dev.py (MailDev). prod/staging send over
+# HTTPS via backend.email_backend.ResendAPIBackend and ignore these.
+EMAIL_HOST = config("EMAIL_HOST", default="localhost")
+EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
+EMAIL_PORT = config("EMAIL_PORT", default=3025, cast=int)
+EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=False, cast=bool)
 
 # Email sender defaults - can be overridden in environment-specific settings
 DEFAULT_FROM_EMAIL = config("FROM_EMAIL_ADDRESS", default="osmunogue@gmail.com")

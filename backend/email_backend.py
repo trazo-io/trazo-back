@@ -1,11 +1,14 @@
 """
-SendGrid Web API v3 email backend for Django.
+Resend Web API email backend for Django.
 
 Uses HTTPS (port 443) instead of SMTP, which is reliable on all
 cloud platforms (DigitalOcean, Heroku, Railway, etc.) where SMTP
 ports 25/465/587 are commonly blocked.
 
-Requires: requests (already installed), SENDGRID_API_KEY in settings.
+Requires: requests (already installed), RESEND_API_KEY in settings.
+
+Note: the REST API is snake_case (`reply_to`); only Resend's Node/Python
+SDKs use camelCase. The landing site's lib/email.ts posts the same shape.
 """
 
 import logging
@@ -17,21 +20,21 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-SENDGRID_API_URL = "https://api.sendgrid.com/v3/mail/send"
+RESEND_API_URL = "https://api.resend.com/emails"
 
 
-class SendGridAPIBackend(BaseEmailBackend):
-    """Django email backend that sends via SendGrid's Web API v3."""
+class ResendAPIBackend(BaseEmailBackend):
+    """Django email backend that sends via Resend's Web API."""
 
     def __init__(self, fail_silently=False, **kwargs):
         super().__init__(fail_silently=fail_silently, **kwargs)
-        self.api_key = getattr(settings, "SENDGRID_API_KEY", None)
+        self.api_key = getattr(settings, "RESEND_API_KEY", None)
 
     def send_messages(self, email_messages):
         if not self.api_key:
-            logger.error("SENDGRID_API_KEY is not configured")
+            logger.error("RESEND_API_KEY is not configured")
             if not self.fail_silently:
-                raise ValueError("SENDGRID_API_KEY is not configured")
+                raise ValueError("RESEND_API_KEY is not configured")
             return 0
 
         sent_count = 0
@@ -40,48 +43,38 @@ class SendGridAPIBackend(BaseEmailBackend):
                 if self._send(message):
                     sent_count += 1
             except Exception as e:
-                logger.error(f"SendGrid API error sending to {message.to}: {e}")
+                logger.error(f"Resend API error sending to {message.to}: {e}")
                 if not self.fail_silently:
                     raise
         return sent_count
 
     def _send(self, message):
+        # Resend accepts "Name <email>" verbatim in `from`, so from_email needs
+        # no parsing the way SendGrid's {"email": ..., "name": ...} dict did.
         payload = {
-            "personalizations": [
-                {
-                    "to": [{"email": addr} for addr in message.to],
-                }
-            ],
-            "from": self._parse_email(message.from_email),
+            "from": message.from_email,
+            "to": list(message.to),
             "subject": message.subject,
-            "content": [],
         }
 
-        # Add CC
         if message.cc:
-            payload["personalizations"][0]["cc"] = [{"email": addr} for addr in message.cc]
+            payload["cc"] = list(message.cc)
 
-        # Add BCC
         if message.bcc:
-            payload["personalizations"][0]["bcc"] = [{"email": addr} for addr in message.bcc]
+            payload["bcc"] = list(message.bcc)
 
-        # Add Reply-To
         if message.reply_to:
-            payload["reply_to"] = {"email": message.reply_to[0]}
+            payload["reply_to"] = list(message.reply_to)
 
-        # Add plain text content
         if message.body:
-            payload["content"].append({"type": "text/plain", "value": message.body})
+            payload["text"] = message.body
 
-        # Add HTML content if available
-        html_body = getattr(message, "alternatives", None)
-        if html_body:
-            for content, mimetype in html_body:
-                if mimetype == "text/html":
-                    payload["content"].append({"type": "text/html", "value": content})
+        for content, mimetype in getattr(message, "alternatives", None) or []:
+            if mimetype == "text/html":
+                payload["html"] = content
 
         response = requests.post(
-            SENDGRID_API_URL,
+            RESEND_API_URL,
             json=payload,
             headers={
                 "Authorization": f"Bearer {self.api_key}",
@@ -91,21 +84,12 @@ class SendGridAPIBackend(BaseEmailBackend):
         )
 
         if response.status_code in (200, 201, 202):
-            logger.info(f"Email sent via SendGrid API to {message.to}")
+            logger.info(f"Email sent via Resend API to {message.to}")
             return True
-        else:
-            logger.error(
-                f"SendGrid API failed: {response.status_code} {response.text} "
-                f"| to={message.to} from={message.from_email}"
-            )
-            if not self.fail_silently:
-                raise Exception(f"SendGrid API error: {response.status_code} {response.text}")
-            return False
 
-    def _parse_email(self, email_str):
-        """Parse 'Name <email>' format into SendGrid dict."""
-        if "<" in email_str and ">" in email_str:
-            name = email_str.split("<")[0].strip()
-            email = email_str.split("<")[1].rstrip(">")
-            return {"email": email, "name": name}
-        return {"email": email_str}
+        logger.error(
+            f"Resend API failed: {response.status_code} {response.text} " f"| to={message.to} from={message.from_email}"
+        )
+        if not self.fail_silently:
+            raise Exception(f"Resend API error: {response.status_code} {response.text}")
+        return False

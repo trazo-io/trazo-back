@@ -274,19 +274,12 @@ G3_0_SEEDS = Module(
                         "permitidos y no transgénicos?",
                     ),
                     nop_cite="§ 205.105",
-                    compiles_to=CompileRule(template="Seed treatment materials verified via: {answer}."),
+                    compiles_to=CompileRule(template="Basis on which seed treatment materials are allowed: {answer}."),
                     options=(
                         Option("omri_wsda", text("OMRI or WSDA listing", "Listado OMRI o WSDA")),
                         Option(
                             "certifier_approval",
                             text("Written certifier approval", "Aprobación escrita del certificador"),
-                        ),
-                        Option(
-                            "trazo_verification",
-                            text(
-                                "Checked against the National List / OMRI / WSDA in Trazo at " "logging time",
-                                "Verificado contra la Lista Nacional / OMRI / WSDA en Trazo " "al registrar",
-                            ),
                         ),
                     ),
                 ),

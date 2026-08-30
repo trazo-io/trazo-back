@@ -28,6 +28,19 @@ from product.models import Parcel
 from users.models import User, WorksIn
 
 
+def _pdf_text(data: bytes) -> str:
+    """Rendered text of a generated PDF.
+
+    Asserting on `%PDF` proves the bytes are a PDF and nothing else — which is how a renderer that
+    dropped a whole registry from the materials list stayed green. ReportLab ASCII85-encodes its
+    streams, so hand-decoding is not enough either.
+    """
+    import pdfplumber
+
+    with pdfplumber.open(io.BytesIO(data)) as doc:
+        return "\n".join(page.extract_text() or "" for page in doc.pages)
+
+
 def _osp(establishment, module_responses=None, version=1):
     return OrganicSystemPlan.objects.create(
         establishment=establishment,
@@ -137,7 +150,7 @@ class ModulePdfTests(TestCase):
         showing only parcel name, APN and address. The one document whose job is to prove
         land eligibility carried none of the evidence for it.
         """
-        from product.models import ParcelCropHistory
+        from product.models import Parcel, ParcelCropHistory
 
         parcel = Parcel.objects.create(
             name="Evidence Block",
@@ -215,9 +228,14 @@ class ModulePdfTests(TestCase):
             },
         )
         data = generate_module_pdf(osp, "materials_application")
-        self.assertTrue(data.startswith(b"%PDF"))
-        # With nothing approved the PDF must say so rather than silently omitting the panel.
-        self.assertIn(b"%PDF", data[:8])
+        # `%PDF` is not an assertion about content. This test asserted only that, and the packet
+        # went on printing a list that silently omitted every WSDA-listed product under a heading
+        # that named WSDA. Read the rendered text.
+        self.assertIn(
+            "No input materials have been added to this plan's materials list",
+            _pdf_text(data),
+            "with nothing on the plan the PDF must say so, not omit the panel",
+        )
 
     def test_unknown_module_raises(self):
         osp = _osp(self.establishment)

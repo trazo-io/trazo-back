@@ -154,6 +154,7 @@ def compile_module_contributions(osp) -> dict:
             contributions.setdefault(section_key, []).append(paragraph)
 
     _append_materials_registry(osp, contributions)
+    _append_post_harvest_facilities(osp, contributions)
     return contributions
 
 
@@ -171,10 +172,16 @@ def _append_materials_registry(osp, contributions: dict) -> None:
     the document listed the inputs in one table and reported them as undescribed two pages
     earlier. Found filling a real OSP.
 
-    The registry IS the description — product name, manufacturer, and the OMRI / WSDA /
-    National List reference that verifies it — so the compiler states it in the narrative
-    rather than asking the operator to retype a list they already entered. Nothing here is
-    invented: every line comes from an entry the operator added and Trazo resolved.
+    The list IS the description — product name, manufacturer, and the basis on which the
+    material appears — so the compiler states it in the narrative rather than asking the
+    operator to retype a list they already entered. Nothing here is invented: every line comes
+    from an entry the operator put on the plan, and each says what backs it. Since 2026-08-28
+    that includes operator-authored rows with NO catalog listing, which is why neither this
+    paragraph nor any row may describe the list as "resolved" or "verified" as a whole.
+
+    Reads through `plan_materials()` — the single reading of the plan's materials — rather than
+    querying the registries here. Two readings is precisely the defect that produced four
+    disagreeing materials lists in one packet.
     """
     # An unsaved OSP has no pk, and Django raises on any M2M access against one. This runs on
     # the packet/snapshot path, where the standing rule is that a cross-check never takes the
@@ -182,39 +189,93 @@ def _append_materials_registry(osp, contributions: dict) -> None:
     if not getattr(osp, "pk", None):
         return
 
+    from certifications.services.plan_materials import plan_materials
+
     lines = []
-    for product in osp.approved_omri_products.all():
-        name = (product.product_name or "").strip()
-        if not name:
-            continue
-        maker = (product.manufacturer or "").strip()
-        omri_id = (product.omri_id or "").strip()
-        detail = ", ".join(x for x in (maker, f"OMRI #{omri_id}" if omri_id else "") if x)
-        lines.append(f"{name} — OMRI listed{f' ({detail})' if detail else ''}.")
-    for material in osp.approved_wsda_materials.all():
-        name = (material.brand_name or "").strip()
-        if not name:
-            continue
-        maker = (material.manufacturer or "").strip()
-        wsda_id = (material.wsda_id or "").strip()
-        detail = ", ".join(x for x in (maker, wsda_id) if x)
-        lines.append(f"{name} — WSDA listed{f' ({detail})' if detail else ''}.")
-    for substance in osp.approved_national_list_substances.all():
-        name = (substance.substance_name or "").strip()
-        if not name:
-            continue
-        cfr = (substance.cfr_section or "").strip()
-        lines.append(f"{name} — National List{f' § {cfr}' if cfr else ''}.")
+    for row in plan_materials(osp):
+        # `display()` already carries the manufacturer, the catalog identifier or the operator's
+        # listing basis, and the [REVIEW] qualifier on a § 205.602 prohibited row.
+        lines.append(f"{row.display()} — {row.source}.")
 
     if not lines:
         return
+    # ⛔ The lead-in may not claim more than the rows support. It used to read "Each was
+    # resolved against OMRI, the WSDA Materials List or the National List" — true while the only
+    # way onto the list was a catalog match, and FALSE the moment operator-entered rows shipped
+    # (caught on review before release, 2026-08-28). Each row now states its own basis, so the
+    # sentence introduces them instead of vouching for them.
     paragraph = (
-        "[Approved input materials]\n"
+        "[Input materials on this plan]\n"
         "The following substances are used or planned as production inputs on this "
-        "operation. Each was resolved against OMRI, the WSDA Materials List or the "
-        "National List when it was added to this plan:\n" + "\n".join(lines)
+        "operation. Each line states the basis on which it appears — a catalog listing "
+        "resolved by Trazo, a certifier approval, or the operator's own entry with no "
+        "third-party listing:\n" + "\n".join(lines)
     )
     contributions.setdefault("inputs_list", []).append(paragraph)
+
+
+def _append_post_harvest_facilities(osp, contributions: dict) -> None:
+    """Name every off-farm handler and storage facility in the (a)(5) narrative.
+
+    § 205.201(a)(5) wants the practices and physical barriers preventing commingling and
+    contact with prohibited substances, and once a crop leaves the operation the answer is
+    partly "these are the people who have it, and this is their certification". CCOF asks for
+    that as a table (G6.1 §C, G6.2 §A); WSDA gates whole sections on it (J13, K1, L1).
+
+    The record already existed — `PostHarvestFacility` carries name, address, certifier,
+    certificate number and dates — and nothing read it into the plan. Same shape as the
+    materials registry above and the same reason: the operator entered these facts once, so
+    the plan states them rather than asking for them again as prose.
+
+    Only the gate's own answer decides whether off-farm handling happens; this paragraph
+    reports the records on file either way, because a facility on file and a "no" on the gate
+    is exactly the contradiction a reviewer needs to see.
+    """
+    if not getattr(osp, "pk", None) or not getattr(osp, "establishment_id", None):
+        return
+
+    lines = []
+    for facility in osp.establishment.post_harvest_facilities.all():
+        name = (facility.name or "").strip()
+        if not name:
+            continue
+        where = ", ".join(x for x in (facility.city, facility.state) if x)
+        cert = (facility.certification_number or "").strip()
+        certifier = (facility.certifier_name or "").strip()
+        current = facility.cert_is_current
+        if not cert and not certifier:
+            status = "no organic certificate on file"
+        elif current is True:
+            status = "organic certificate current"
+        elif current is False:
+            status = "organic certificate expired or older than 15 months"
+        else:
+            status = "organic certificate date not stated"
+        detail = ", ".join(
+            x
+            for x in (
+                facility.get_facility_type_display(),
+                facility.get_role_display() if facility.role else "",
+                where,
+                " ".join(y for y in (certifier, f"#{cert}" if cert else "") if y),
+            )
+            if x
+        )
+        lines.append(f"{name} — {detail} ({status}).")
+
+    if not lines:
+        return
+    # States the RECORDS, not a conclusion about them. An operation that answered "no, nobody
+    # off this operation handles our crop" may still carry facility rows from an earlier season,
+    # and a paragraph reading "this operation's crop is handled off the farm by…" would contradict
+    # its own gate answer over the producer's name. The gate's answer is compiled separately, from
+    # the operator's own words; this paragraph is the file.
+    paragraph = (
+        "[Off-farm handlers and storage facilities]\n"
+        "The following off-farm handlers and storage facilities are on file for this "
+        "operation, with each organic certificate stated as the record supports it:\n" + "\n".join(lines)
+    )
+    contributions.setdefault("commingling_barriers", []).append(paragraph)
 
 
 def _split_section(section: dict) -> dict:

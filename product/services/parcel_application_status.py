@@ -61,7 +61,17 @@ def parcel_application_status(parcel) -> dict:
     if not has_buffers:
         missing.append("buffers")
 
-    has_map = bool(parcel.polygon) or answers.get("map_uploaded") is True
+    # ⚠️ ONE OF TWO definitions of "does this parcel have a map". The other is the `parcel_map`
+    # embed in `certifications/services/osp_module_pdf.py`, which decides what the packet PRINTS.
+    # They were allowed to diverge only while nothing could upload a map; the upload question
+    # shipped 2026-08-28, so both now read the same two sources and must keep doing so.
+    #
+    # A drawn boundary OR an uploaded map counts. Neither alone is what CCOF ultimately asks for
+    # — its §E lists eleven elements a schematic cannot carry — but either one means the parcel
+    # is no longer map-less, and the packet says which of the two the reviewer is holding.
+    from certifications.services.osp_module_pdf import parcel_map_documents
+
+    has_map = bool(parcel.polygon) or bool(parcel_map_documents(parcel))
     if not has_map:
         missing.append("map")
 

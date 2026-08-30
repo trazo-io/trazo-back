@@ -74,10 +74,10 @@ DEMO_IMAGES = {
     # Removed 2026-08-04: grass/grain field, used to illustrate scouting for avocado
     # lace bug in an orchard.
     "scouting": [],
-    "pruning": [
-        # Arborist pruning tree branches
-        "https://images.unsplash.com/photo-1626828476637-5bd713ef9f22?w=800&q=80",
-    ],
+    # Emptied 2026-08-28. Captioned "arborist pruning tree branches" and never opened: it is a
+    # ROPED CLIMBER chainsawing a PINE in full leaf. Dormant orchard pruning has no leaves, no
+    # conifer and no rope access. Removed, not replaced.
+    "pruning": [],
     "avocado_harvest": [
         # Avocados hanging on tree branch ready for harvest
         "https://images.unsplash.com/photo-1726177551991-270f9e79b65e?w=800&q=80",
@@ -86,22 +86,22 @@ DEMO_IMAGES = {
         # Hand picking orange from citrus tree
         "https://images.unsplash.com/photo-1528582654826-585a71fcf7f4?w=800&q=80",
     ],
-    "planting": [
-        # Hands holding soil with small seedling
-        "https://images.unsplash.com/photo-1679110663825-c6ec1ad51884?w=800&q=80",
-    ],
+    # Emptied 2026-08-28. A studio shot of a basil-like seedling in cupped hands on a grey
+    # backdrop — the canonical greenwashing stock image, and not a tree going into orchard
+    # ground. It illustrated "replanted 24 trees where blackline losses opened gaps".
+    "planting": [],
     "composting": [
         # Compost pile with organic waste in wooden bin
         "https://images.unsplash.com/photo-1587733761376-3f26fc81d17f?w=800&q=80",
     ],
-    "organic_matter": [
-        # Brown dried leaves/compost material in person's hand
-        "https://images.unsplash.com/photo-1580974563942-76580268810f?w=800&q=80",
-    ],
-    "beneficial_insects": [
-        # Ladybug on blade of grass (classic beneficial insect)
-        "https://images.unsplash.com/photo-1528824620477-1cfafcb6d502?w=800&q=80",
-    ],
+    # Emptied 2026-08-28. The comment said "brown dried leaves/compost material"; the image is
+    # EARTHWORMS in compost held in two hands. It illustrated "Feather Meal 13-0-0 broadcast at
+    # 400 lb/acre" — a dry granulate spread by machine down a tree row.
+    "organic_matter": [],
+    # Emptied 2026-08-28. A ladybird on a grass blade in a meadow, illustrating a Trichogramma
+    # platneri release — a ~0.5 mm parasitic WASP hung on cards in an orchard canopy. Same
+    # grass-field-for-orchard error as photo-1622813071880, which was pruned 2026-08-04.
+    "beneficial_insects": [],
     # Removed 2026-08-04: open field, not an orchard.
     "trap_monitoring": [],
     "ipm": [

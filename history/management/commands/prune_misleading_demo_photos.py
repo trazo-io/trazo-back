@@ -44,6 +44,21 @@ MISLEADING_IMAGE_IDS = [
     # attached to orchard fungicide records — and, being the first production photo, it was
     # rendering as the hero of the consumer QR page.
     ("photo-1758608951483", "liquid-manure slurry tanker, used for orchard fungicide"),
+    # 2026-08-28: found on the Blue Oak showcase farm while vetting frames for the demo video.
+    # These four survived the 2026-08-04 and 2026-08-15 prunes because they sit under keys that
+    # sounded harmless (`pruning`, `planting`, `organic_matter`, `beneficial_insects`) rather
+    # than under the machinery keys that were audited. Every one was OPENED before this entry
+    # was written; the DEMO_IMAGES comment describing two of them was itself wrong.
+    ("photo-1626828476637", "roped arborist chainsawing a leafy PINE, used for dormant orchard pruning"),
+    ("photo-1679110663825", "studio shot of a basil-like seedling in cupped hands, used for a 24-tree walnut replant"),
+    (
+        "photo-1580974563942",
+        "EARTHWORMS in compost in cupped hands, used for Feather Meal 13-0-0 broadcast at 400 lb/ac",
+    ),
+    (
+        "photo-1528824620477",
+        "seven-spot LADYBIRD on a grass blade, used for a Trichogramma platneri (parasitic wasp) release",
+    ),
 ]
 
 

@@ -28,18 +28,17 @@ MATERIALS_APPLICATION = Module(
     nop_cites=("§ 205.105", "§ 205.601", "§ 205.206(e)"),
     education=(
         text(
-            "Trazo verifies every input material against OMRI, WSDA, and the National List, "
-            "so that only compliant fertilizers, pest and disease materials, weed-control "
-            "materials, and production aids are used on certified or transitional land "
-            "(§ 205.105, § 205.601). This module does not collect a new list — it points to "
-            "the materials list you already maintain and asks you to confirm it is complete "
-            "by category.",
-            "Trazo verifica cada material de insumo contra OMRI, WSDA y la Lista Nacional, "
-            "de modo que en tierra certificada o en transición solo se usen fertilizantes, "
-            "materiales para plagas y enfermedades, materiales para el control de malezas y "
-            "auxiliares de producción que cumplan (§ 205.105, § 205.601). Este módulo no "
-            "recopila una lista nueva — remite a la lista de materiales que ya mantiene y le "
-            "pide confirmar que está completa por categoría.",
+            "Trazo resolves each input material's name against OMRI, the WSDA Materials List "
+            "and the National List, and shows what it found — your certifying agent is the one "
+            "who approves what may be used on certified or transitional land (§ 205.105, "
+            "§ 205.601). This module does not collect a new list: it points to the materials "
+            "list you already maintain and asks you to confirm it is complete by category.",
+            "Trazo resuelve el nombre de cada material de insumo contra OMRI, la Lista de "
+            "Materiales de WSDA y la Lista Nacional, y muestra lo que encontró — tu agente "
+            "certificador es quien aprueba lo que puede usarse en tierra certificada o en "
+            "transición (§ 205.105, § 205.601). Este módulo no recopila una lista nueva: "
+            "remite a la lista de materiales que ya mantienes y te pide confirmar que está "
+            "completa por categoría.",
         ),
     ),
     allows_not_applicable=False,
@@ -51,13 +50,14 @@ MATERIALS_APPLICATION = Module(
             education=(
                 text(
                     "The materials list below is the single record of every input used on "
-                    "this operation. Trazo checks each entry against OMRI, WSDA, and the "
-                    "National List and shows the result to your certifier — add or update "
-                    "materials there, not in this questionnaire.",
+                    "this operation. Trazo resolves each entry against OMRI, the WSDA "
+                    "Materials List and the National List and shows what it found to your "
+                    "certifier — add or update materials there, not in this questionnaire.",
                     "La lista de materiales a continuación es el registro único de cada "
-                    "insumo usado en esta operación. Trazo verifica cada entrada contra "
-                    "OMRI, WSDA y la Lista Nacional y muestra el resultado a su certificador "
-                    "— agregue o actualice materiales ahí, no en este cuestionario.",
+                    "insumo usado en esta operación. Trazo resuelve cada entrada contra "
+                    "OMRI, la Lista de Materiales de WSDA y la Lista Nacional y le muestra a "
+                    "tu certificador lo que encontró — agrega o actualiza materiales ahí, no "
+                    "en este cuestionario.",
                 ),
             ),
             questions=(
@@ -66,20 +66,21 @@ MATERIALS_APPLICATION = Module(
                     kind="info",
                     required=False,
                     label=text(
-                        "Approved input materials",
-                        "Materiales de insumos aprobados",
+                        "Input materials on this plan",
+                        "Materiales de insumo de este plan",
                     ),
                     coaching=text(
-                        "Every fertilizer, pest, disease, or weed-control material, and "
-                        "production aid you use or plan to use is verified here against "
-                        "OMRI, WSDA, and the National List. Add materials in this panel — "
-                        "your certifier sees each material's name, verification status, and "
-                        "source.",
-                        "Aquí se verifica contra OMRI, WSDA y la Lista Nacional cada "
-                        "fertilizante, material para el control de plagas, enfermedades o "
-                        "malezas, y cada auxiliar de producción que usa o planea usar. "
-                        "Agregue los materiales en este panel — su certificador ve el "
-                        "nombre, el estado de verificación y la fuente de cada material.",
+                        "List every fertilizer, pest, disease, or weed-control material and "
+                        "production aid you use or plan to use. Trazo resolves each name "
+                        "against OMRI, the WSDA Materials List and the National List and shows "
+                        "the result; your certifier reviews the list and decides what is "
+                        "approved for your operation.",
+                        "Lista cada fertilizante, material para el control de plagas, "
+                        "enfermedades o malezas, y cada auxiliar de producción que usas o "
+                        "planeas usar. Trazo resuelve cada nombre contra OMRI, la Lista de "
+                        "Materiales de WSDA y la Lista Nacional y muestra el resultado; tu "
+                        "certificador revisa la lista y decide qué queda aprobado para tu "
+                        "operación.",
                     ),
                     embed="approved_inputs",
                     nop_cite="§ 205.601",
@@ -101,7 +102,7 @@ MATERIALS_APPLICATION = Module(
                     compiles_to=CompileRule(
                         template=(
                             "The operator attests that all input materials in use are "
-                            "enumerated in the verified materials list ({answer})."
+                            "enumerated in the materials list on this plan ({answer})."
                         )
                     ),
                 ),
@@ -143,7 +144,7 @@ MATERIALS_APPLICATION = Module(
                     compiles_to=CompileRule(
                         template=(
                             "The operator attests that all fertilizer and soil amendment "
-                            "materials in use are entered in the verified materials list "
+                            "materials in use are entered in the materials list on this plan "
                             "({answer})."
                         )
                     ),
@@ -170,7 +171,7 @@ MATERIALS_APPLICATION = Module(
                     compiles_to=CompileRule(
                         template=(
                             "The operator attests that all pest, disease, and weed-control "
-                            "materials in use are entered in the verified materials list "
+                            "materials in use are entered in the materials list on this plan "
                             "({answer})."
                         )
                     ),
@@ -198,7 +199,7 @@ MATERIALS_APPLICATION = Module(
                         template=(
                             "The operator attests that all production aids, including "
                             "adjuvants and wetting agents, in use are entered in the "
-                            "verified materials list ({answer})."
+                            "materials list on this plan ({answer})."
                         )
                     ),
                 ),
@@ -226,7 +227,7 @@ MATERIALS_APPLICATION = Module(
                         template=(
                             "The operator attests that all post-harvest contact "
                             "materials, including wash water additives and sanitizers, "
-                            "in use are entered in the verified materials list "
+                            "in use are entered in the materials list on this plan "
                             "({answer})."
                         )
                     ),

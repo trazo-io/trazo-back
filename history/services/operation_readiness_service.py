@@ -21,6 +21,12 @@ and an ignored checklist is worse than none on the day of an inspection.
 import logging
 import os
 
+# Imported, not restated. "Mirrors AuditExportService's ORGANIC_CERT_TYPES" was a comment
+# standing where an import belonged: there were FIVE hand-maintained copies of "which types
+# count as organic" across three modules, with FOUR different answers between them and no
+# test holding any of them together. certifications.constants is the authority.
+from certifications.constants import ORGANIC_CONFERRING_CERT_TYPES
+
 logger = logging.getLogger(__name__)
 
 # An OFPP whose file is actually a purchase invoice is a hard non-conformance, not
@@ -32,10 +38,6 @@ OFPP_SUSPICIOUS_FILENAME_PATTERNS = ("factura", "invoice", "receipt", "comproban
 # A GlobalG.A.P. or FSMA 204 packet must never be blocked over either: an Organic
 # System Plan is 7 CFR 205.201, not a food-safety artifact.
 ORGANIC_PROFILES = ("organic", "all")
-
-# Certification types that mean the operation is in (or entering) the NOP system.
-# Mirrors AuditExportService's ORGANIC_CERT_TYPES.
-ORGANIC_CONFERRING_CERT_TYPES = ("usda_organic", "ccof", "cng", "real_organic_project", "roc")
 
 
 class OperationReadinessService:
@@ -74,6 +76,14 @@ class OperationReadinessService:
             ("osp", self._check_osp),
             ("attestation_support", self._check_attestation_support),
             ("has_records", self._check_has_records),
+            # 🔴 2026-08-28 — the three below read exactly what the PACKET reads. Without them
+            # the pilot's card said "ready · 0 warnings" on the same day its own packet printed
+            # "[REVIEW] 8 product name(s) in the logged applications do not match an entry
+            # above". Two numbers for one farm on one day is the defect this card was built to
+            # remove, reappearing between the card and the document instead of between two cards.
+            ("unmatched_materials", self._check_unmatched_materials),
+            ("parcel_maps", self._check_parcel_maps),
+            ("handler_certificates", self._check_handler_certificates),
         ):
             try:
                 result = check()
@@ -440,6 +450,142 @@ class OperationReadinessService:
                 "Add the missing entries, or change the answer — an attestation the packet "
                 "itself contradicts reads as a noncompliance."
             ),
+        }
+
+    def _plan_being_filed(self):
+        """The plan this card is talking about — the one that will be FILED, not the one in force.
+
+        This card's heading is "Before your certifier packet", and the packet is generated from
+        the plan the operator is preparing. Reading the ACTIVE plan instead looks right and is
+        subtly wrong: a farm mid-renewal has an active v3 and a draft v4, and an operator fixing
+        v4 would watch the warning refuse to clear because it was counting v3. Caught on the
+        pilot, where the two differ by exactly the material added this morning (v4: 8 unmatched,
+        v3: 9).
+
+        Superseded and withdrawn versions are history, never the filing.
+        """
+        from certifications.models import OrganicSystemPlan
+
+        return (
+            OrganicSystemPlan.objects.filter(
+                establishment=self.establishment,
+                status__in=("draft", "active", "submitted"),
+            )
+            .order_by("-version_number")
+            .first()
+        )
+
+    def _check_unmatched_materials(self):
+        """Products the records show were applied, with no matching entry on the plan.
+
+        The packet already states this on the materials page. Saying it here is the point: the
+        operator finds out BEFORE they generate the document, when adding the material is a
+        thirty-second job, instead of reading it in a PDF they were about to send.
+
+        A WARNING, never a blocker, and the wording matters. UNMATCHED IS NOT UNAPPROVED — a
+        brand name and the National List substance that covers it read differently, so some of
+        these are already accounted for. Calling them violations would invent a compliance
+        finding out of a naming difference.
+        """
+        from certifications.services.plan_materials import unmatched_logged_materials
+
+        osp = self._plan_being_filed()
+        if osp is None:
+            return {"key": "unmatched_materials", "status": "ok", "title": "", "detail": "", "fix": ""}
+        unmatched = unmatched_logged_materials(osp)
+        if not unmatched:
+            return {
+                "key": "unmatched_materials",
+                "status": "ok",
+                "title": "Logged inputs match your materials list",
+                "detail": "",
+                "fix": "",
+            }
+        shown = ", ".join(unmatched[:5]) + (f", and {len(unmatched) - 5} more" if len(unmatched) > 5 else "")
+        return {
+            "key": "unmatched_materials",
+            "status": "warning",
+            "title": f"{len(unmatched)} logged product(s) are not on your materials list",
+            "detail": (
+                f"Your records show these were applied: {shown}. Your certifier's materials form "
+                "asks for everything in use. A brand name and the substance entry that covers it "
+                "can read differently, so some may already be accounted for — check each one."
+            ),
+            "fix": "Open Organic System Plan \u2192 Materials and add anything genuinely missing.",
+        }
+
+    def _check_parcel_maps(self):
+        """A map is an ATTACHMENT both CCOF and WSDA require, not a question.
+
+        CCOF reviews it before inspecting a new parcel; WSDA asks for one with every site
+        application. Trazo draws a boundary schematic, but that cannot carry roads, landmarks,
+        block identifiers or the other operation areas CCOF lists — so a parcel with neither a
+        recorded boundary nor an uploaded map ships a section E that says so.
+        """
+        from certifications.services.osp_module_pdf import parcel_map_documents
+
+        parcels = list(self.establishment.parcels.all())
+        if not parcels:
+            return {"key": "parcel_maps", "status": "ok", "title": "", "detail": "", "fix": ""}
+        without = [p for p in parcels if not p.polygon and not parcel_map_documents(p)]
+        if not without:
+            return {
+                "key": "parcel_maps",
+                "status": "ok",
+                "title": "Every parcel has a map or a recorded boundary",
+                "detail": "",
+                "fix": "",
+            }
+        names = ", ".join((p.name or f"Parcel {p.pk}") for p in without[:4])
+        more = f", and {len(without) - 4} more" if len(without) > 4 else ""
+        return {
+            "key": "parcel_maps",
+            "status": "warning",
+            "title": f"{len(without)} parcel(s) have no map",
+            "detail": (
+                f"{names}{more}. CCOF reviews the parcel map before inspecting a new parcel and "
+                "WSDA asks for one with every site application, so a parcel with no boundary and "
+                "no attached map leaves that section blank."
+            ),
+            "fix": "Draw the boundary on the parcel page, or attach your own map in section E.",
+        }
+
+    def _check_handler_certificates(self):
+        """An off-farm handler's certificate must be current — and dated.
+
+        `cert_is_current` is TRI-STATE: None means no effective date is recorded, which is an
+        ASK, not a pass and not a failure. The packet prints it that way; this must too, or the
+        card would report absence as compliance.
+        """
+        from certifications.models import PostHarvestFacility
+
+        facilities = list(PostHarvestFacility.objects.filter(establishment=self.establishment))
+        if not facilities:
+            return {"key": "handler_certificates", "status": "ok", "title": "", "detail": "", "fix": ""}
+        stale = [f for f in facilities if f.cert_is_current is False]
+        undated = [f for f in facilities if f.cert_is_current is None]
+        if not stale and not undated:
+            return {
+                "key": "handler_certificates",
+                "status": "ok",
+                "title": "Handler certificates are current",
+                "detail": "",
+                "fix": "",
+            }
+        parts = []
+        if stale:
+            parts.append("expired or older than 15 months: " + ", ".join(f.name for f in stale[:3]))
+        if undated:
+            parts.append("no certificate date recorded: " + ", ".join(f.name for f in undated[:3]))
+        return {
+            "key": "handler_certificates",
+            "status": "warning",
+            "title": f"{len(stale) + len(undated)} handler certificate(s) need attention",
+            "detail": (
+                "Once your crop leaves the farm the audit trail runs through the handler's "
+                "records, so your certifier asks for their current organic certificate \u2014 " + "; ".join(parts) + "."
+            ),
+            "fix": "Update the facility on a production's post-harvest section.",
         }
 
     def _check_has_records(self):

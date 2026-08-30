@@ -154,6 +154,20 @@ OSP_EVIDENCE_MAP: dict = {
         EVIDENCED,
         source="certifications.PostHarvestFacility.cert_document",
     ),
+    "uncertified_handler_records": EvidenceEntry(
+        NOT_EVIDENCED,
+        note=(
+            "The operator describes what an UNCERTIFIED handler gives them — lot tags, "
+            "separation logs, cleaning records for the equipment used. By definition that "
+            "operation has no organic certificate to hold, so `PostHarvestFacility.cert_document` "
+            "is the wrong evidence and the honest answer is that Trazo carries nothing. Its "
+            "certified counterpart IS evidenced: the facility's name, certifier, certificate "
+            "number and freshness now print in the plan (G6.1 \u00a7D, shipped 2026-08-28). Closing "
+            "this one means an upload slot on the facility record for the handler's own "
+            "identity-preservation paperwork, which is the same attachment loop CCOF G6.1 C2 "
+            "still needs for the certificate itself."
+        ),
+    ),
     # --- G6.4 handling ----------------------------------------------------------
     "custom_handling_separation": EvidenceEntry(
         EVIDENCED,

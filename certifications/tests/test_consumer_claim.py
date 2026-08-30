@@ -167,9 +167,12 @@ class ConsumerClaimValidatorTests(TestCase):
             certification_type="usda_organic",
             verification_status="self_reported",
         )
+        # A non-USDA certification. Was "ccof" until 2026-08-27, which never belonged in the
+        # type column at all — CCOF is a certifying AGENT that ISSUES USDA Organic, so the
+        # row it built was not the "non-USDA" case this test claims to cover.
         other_cert = Certification.objects.create(
             establishment=self.establishment,
-            certification_type="ccof",
+            certification_type="rainforest_alliance",
             verification_status="self_reported",
         )
         filtered = filter_certifications_for_consumer([verified_usda, self_reported_usda, other_cert])

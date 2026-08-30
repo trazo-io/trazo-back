@@ -161,12 +161,9 @@ SESSION_COOKIE_HTTPONLY = True
 X_FRAME_OPTIONS = "DENY"
 SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 
-# Email configuration for staging - use SendGrid SMTP
-EMAIL_HOST = "smtp.sendgrid.net"
-EMAIL_HOST_USER = "apikey"
-EMAIL_HOST_PASSWORD = config("SENDGRID_API_KEY", default=None)
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
+# Email configuration for staging - use Resend's Web API (HTTPS).
+# SMTP ports 465/587 are blocked on most PaaS platforms.
+RESEND_API_KEY = config("RESEND_API_KEY", default=None)
 SERVER_EMAIL = config("FROM_EMAIL_ADDRESS", default="osmunogue@gmail.com")
 DEFAULT_FROM_EMAIL = config("FROM_EMAIL_ADDRESS", default="osmunogue@gmail.com")
 
@@ -228,11 +225,11 @@ LOGGING = {
     },
 }
 
-# Email settings for staging - use SendGrid for actual email delivery
+# Email settings for staging - use Resend for actual email delivery
 if config("USE_CONSOLE_EMAIL", default=False, cast=bool):
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 else:
-    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+    EMAIL_BACKEND = "backend.email_backend.ResendAPIBackend"
 
 # Cache configuration for staging
 REDIS_URL = config("REDIS_URL", default=None)

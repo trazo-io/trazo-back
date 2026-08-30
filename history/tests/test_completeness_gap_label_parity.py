@@ -25,10 +25,7 @@ from pathlib import Path
 
 from django.test import SimpleTestCase
 
-from history.services.record_completeness import (
-    CHEMICAL_EVENT_REQUIRED_FIELDS,
-    PLANTING_EVENT_REQUIRED_FIELDS,
-)
+from history.services.record_completeness import CHEMICAL_EVENT_REQUIRED_FIELDS, PLANTING_EVENT_REQUIRED_FIELDS
 
 _REPO = Path(__file__).resolve().parents[3]
 NEW_EVENT = _REPO / "trazo-app" / "src" / "views" / "Dashboard" / "Dashboard" / "components" / "forms" / "NewEvent.jsx"

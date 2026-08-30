@@ -182,6 +182,6 @@ class BothPublicSurfacesHonourTheVerdictTests(TestCase):
     def test_named_programmes_survive_the_filter(self):
         from certifications.services.consumer_claim_validator import filter_certifications_for_consumer
 
-        certs = [self._cert(t) for t in ("ccof", "global_gap", "fair_trade", "roc")]
+        certs = [self._cert(t) for t in ("primus_gfs", "global_gap", "fair_trade", "roc")]
         out = filter_certifications_for_consumer(certs)
         self.assertEqual(len(out), 4, "the gate stripped certifications a farm may legitimately show")

@@ -211,6 +211,22 @@ class PostHarvestFacility(models.Model):
         ("custom", "Custom Post-Harvest Handler"),
     ]
 
+    # What the facility DOES for this operation, which is a different axis from what it IS.
+    # CCOF asks about handling on G6.1 §C and about storage on G6.2 §A — two forms, two
+    # questions — and WSDA splits them again across sections K and L. A cold store can be
+    # either: it holds the crop (storage) or it also packs and ships it (handling). Without
+    # this axis the same row answers both questions or neither, which is how the storage
+    # table and the handler table read as two defects for a while when they are one.
+    # Blank is the default and it is load-bearing: a row created before this field existed has
+    # never been asked, and defaulting it to "handling" would print "Handles the crop (packs,
+    # hulls, dries, conditions)" in the plan for a cold store nobody described that way. Unset
+    # prints as unset, exactly like `cert_is_current`'s None.
+    ROLE_CHOICES = [
+        ("handling", "Handles the crop (packs, hulls, dries, conditions)"),
+        ("storage", "Stores the crop only"),
+        ("both", "Stores and handles the crop"),
+    ]
+
     public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, db_index=True)
     establishment = models.ForeignKey(
         "company.Establishment",
@@ -220,6 +236,13 @@ class PostHarvestFacility(models.Model):
     )
     name = models.CharField(max_length=200, help_text="Handler / facility name")
     facility_type = models.CharField(max_length=20, choices=FACILITY_TYPE_CHOICES, default="huller")
+    role = models.CharField(
+        max_length=20,
+        choices=ROLE_CHOICES,
+        blank=True,
+        default="",
+        help_text="Whether this facility handles the crop, only stores it, or both",
+    )
     address = models.CharField(max_length=200, blank=True, null=True)
     city = models.CharField(max_length=100, blank=True, null=True)
     state = models.CharField(max_length=50, blank=True, null=True)
@@ -1466,6 +1489,131 @@ class AdjoiningLandAffidavit(models.Model):
         a signed statement from that neighbour.
         """
         return bool(self.neighbor_signed_date or self.signed_document)
+
+
+class PlanMaterialEntry(models.Model):
+    """A material the operator put on the plan in their own words.
+
+    🔴 The defect this closes (certifier register, `materials-list-cannot-hold-a-material`,
+    4 blocker rows across CCOF and WSDA): the only path onto an OSP's materials list was a
+    catalog match against Trazo's OMRI subset, the WSDA Brand Name list, or the seeded National
+    List. CCOF NOPB41 §A names compost, manure, gypsum and limestone in its own prompt; the
+    pilot's Rexius Organic Compost and Douglas-fir sawdust dead-ended at "No match — record it
+    under Notification of Changes"; WSDA AGR 2196 is one undifferentiated table with no category
+    split at all. Meanwhile the module printed five attestations that every material in use was
+    "entered in the materials list on this plan", so the packet asserted a completeness the
+    product made impossible — the only remaining defect that makes the packet lie.
+
+    § 205.201(a)(2) asks for "a description of the … substances to be used as production inputs".
+    The producer is the author (§ 205.201(a)); a catalog is a convenience, never the gate.
+
+    ⛔ THE CLAIM RULE THIS MODEL EXISTS UNDER. A row here is the OPERATOR'S statement, and its
+    `listing_basis` is what may be said about it and nothing more. `none_unlisted` must never
+    render as listed, approved or verified — it renders as what it is: a material on the plan
+    with no third-party listing behind it, which is a perfectly legitimate thing for a certifier
+    to review and decide. Only a genuine catalog resolution may name OMRI, WSDA or the National
+    List, and `certifier_letter` must name the letter.
+    """
+
+    CATEGORY_CHOICES = [
+        ("fertilizer_amendment", "Fertilizers and soil amendments (CCOF §A)"),
+        ("pest_disease_weed", "Pest, weed and disease control materials (CCOF §B)"),
+        ("production_aid", "Other crop production materials — seed treatments, growing media, adjuvants (CCOF §C)"),
+        ("post_harvest", "Post-harvest materials — wash-water additives, sanitizers (CCOF §D)"),
+        ("other", "Other"),
+    ]
+
+    BASIS_OMRI = "omri"
+    BASIS_WSDA = "wsda"
+    BASIS_NATIONAL_LIST = "national_list"
+    BASIS_CERTIFIER_LETTER = "certifier_letter"
+    BASIS_NONE = "none_unlisted"
+    LISTING_BASIS_CHOICES = [
+        (BASIS_OMRI, "OMRI listed"),
+        (BASIS_WSDA, "WSDA Brand Name Materials List"),
+        (BASIS_NATIONAL_LIST, "National List substance (7 CFR 205.601-606)"),
+        (BASIS_CERTIFIER_LETTER, "Approved by our certifier in writing"),
+        (BASIS_NONE, "No third-party listing — for certifier review"),
+    ]
+
+    STATUS_PLANNED = "planned"
+    STATUS_IN_USE = "in_use"
+    STATUS_CHOICES = [
+        (STATUS_PLANNED, "Planned for use"),
+        (STATUS_IN_USE, "In use"),
+    ]
+
+    osp = models.ForeignKey(
+        OrganicSystemPlan,
+        on_delete=models.CASCADE,
+        related_name="plan_material_entries",
+        help_text="OSP whose materials list this row belongs to",
+    )
+    product_name = models.CharField(
+        max_length=300,
+        help_text="Full product name including formulation, as it appears on the label",
+    )
+    manufacturer = models.CharField(max_length=200, blank=True, default="")
+    category = models.CharField(max_length=32, choices=CATEGORY_CHOICES, default="fertilizer_amendment")
+    reason_for_use = models.TextField(
+        blank=True,
+        default="",
+        help_text="Why this material is used — CCOF and WSDA both ask for it per row",
+    )
+    listing_basis = models.CharField(
+        max_length=32,
+        choices=LISTING_BASIS_CHOICES,
+        default=BASIS_NONE,
+        help_text="What may be said about this material, and nothing more",
+    )
+    certifier_letter_reference = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        help_text="Which certifier letter approved it — required when listing_basis is certifier_letter",
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PLANNED)
+    notes = models.TextField(blank=True, default="")
+
+    # Optional shortcut, never the gate: when the operator's material DID resolve against a
+    # catalog, the resolution is kept so the listing basis is checkable rather than asserted.
+    national_list_substance = models.ForeignKey(
+        NationalListSubstance, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    omri_product = models.ForeignKey(OMRIProduct, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    wsda_material = models.ForeignKey(WSDAMaterial, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Plan material entry"
+        verbose_name_plural = "Plan material entries"
+        ordering = ["category", "product_name"]
+        indexes = [models.Index(fields=["osp", "category"])]
+
+    def __str__(self):
+        return f"{self.product_name} ({self.get_category_display()})"
+
+    @property
+    def listing_statement(self) -> str:
+        """What may be printed about this row's standing. Never more than the basis supports."""
+        if self.listing_basis == self.BASIS_CERTIFIER_LETTER:
+            ref = self.certifier_letter_reference.strip()
+            return f"approved by our certifier in writing{f' ({ref})' if ref else ''}"
+        if self.listing_basis == self.BASIS_OMRI:
+            return "OMRI listed"
+        if self.listing_basis == self.BASIS_WSDA:
+            return "WSDA Brand Name Materials List"
+        if self.listing_basis == self.BASIS_NATIONAL_LIST:
+            return "National List substance"
+        # Not "operator-entered; no third-party listing" — every surface that prints this already
+        # groups or labels the row as operator-entered, so saying it twice read as padding on the
+        # pilot's own packet. The half that carries information is the listing.
+        return "no third-party listing on file"
 
 
 class ApprovedInputChangeLog(models.Model):

@@ -5,12 +5,14 @@ Computes the earliest date a parcel becomes eligible to harvest crops marketable
 USDA Organic. Per 7 CFR 205.202(b), land must have had no prohibited substances applied
 for the 36 months immediately preceding harvest of the first organic crop.
 
-Two evidence sources, in priority order:
+Three evidence sources:
   1. ParcelCropHistory.date_last_prohibited (farmer-declared, retroactive history)
   2. ChemicalEvent records on Histories tied to this parcel where the chemical is NOT
      organic-approved (live recordkeeping data).
+  3. LandownerAffidavit.last_prohibited_date — the signed statement covering the years before
+     this operation kept records here, and the document CCOF's Parcel Application §G asks for.
 
-The latest of (1) and (2) sets the transition clock. transition_complete = latest + 36 months.
+The latest of (1), (2) and (3) sets the transition clock. transition_complete = latest + 36 months.
 
 Returns a structured payload usable by the API endpoint, frontend transition card, and
 audit export field-history section.
@@ -159,6 +161,29 @@ def compute_transition_status(parcel) -> TransitionStatus:
                 )
             )
 
+    # Source 3: the signed landowner affidavit — the ONLY source for the years before this
+    # operation kept records in Trazo, and the document CCOF's Parcel Application §G asks for by
+    # name. Omitting it let the packet print "Eligible" beside an affidavit whose signer had dated
+    # a prohibited application: the two facts sat in one PDF, contradicting each other, because
+    # only one of them reached the clock.
+    #
+    # A NULL date is not a finding — on this model it is the signed attestation that none were
+    # ever applied (see the field's help_text), which is the opposite of missing data.
+    from certifications.models import LandownerAffidavit
+
+    for aff in LandownerAffidavit.objects.filter(parcel=parcel, last_prohibited_date__isnull=False):
+        findings.append(
+            ProhibitedFinding(
+                source="LandownerAffidavit",
+                date_observed=aff.last_prohibited_date,
+                description=(
+                    f"Signed affidavit for {parcel.name}: prohibited substance applied "
+                    f"{aff.last_prohibited_date.isoformat()}"
+                ),
+                record_id=aff.pk,
+            )
+        )
+
     findings.sort(key=lambda f: f.date_observed, reverse=True)
     unclassified.sort(key=lambda f: f.date_observed, reverse=True)
 
@@ -226,3 +251,42 @@ def compute_transition_status(parcel) -> TransitionStatus:
         )
         + unclassified_note,
     )
+
+
+def transition_verdict(status: TransitionStatus, *, has_field_history: Optional[bool] = None) -> str:
+    """The § 205.202(b) line a certifier reads, in ONE place.
+
+    `is_eligible` is reached "by absence of contrary evidence" — the service only sees rows that
+    carry a `date_last_prohibited`, so a parcel with three documented clean years and a parcel with
+    no records at all both come back with `findings == []`. Printing the favourable verdict for the
+    second is a self-assigned eligibility call in a document the certifier reads, and eligibility is
+    the certifying agent's determination, not ours.
+
+    This function exists because that correction was made once, in the per-production audit export,
+    and the OSP packet's parcel page went on printing "Eligible for organic harvest: Yes" from the
+    same status object — the "fixed on the audited surface, alive on its sibling" failure this
+    codebase keeps meeting. Two callers, one sentence. Add a third caller here, not a fourth copy.
+
+    Pass `has_field_history` when it is already known; otherwise it is queried.
+    """
+    if has_field_history is None:
+        from product.models import ParcelCropHistory
+
+        has_field_history = ParcelCropHistory.objects.filter(parcel_id=status.parcel_id).exists()
+
+    if status.is_eligible and not has_field_history:
+        return "Not established — no field history on file (§ 205.202(b))"
+    if status.is_eligible:
+        return "Eligible"
+    if status.last_prohibited_date is None:
+        # Not "In transition": `is_eligible` is False here for the opposite reason to the one that
+        # phrasing implies. Nothing prohibited is on record, so there is no clock at all; what
+        # blocks the determination is an application whose organic status was never classified.
+        blocked_by = ""
+        if status.unclassified:
+            blocked_by = (
+                f" — {len(status.unclassified)} application(s) on this parcel have no organic "
+                "status recorded, so no start date can be fixed"
+            )
+        return f"Not established from records in Trazo{blocked_by} (§ 205.202(b))"
+    return f"In transition — {status.days_remaining} days remaining (eligible {status.transition_complete_date})"

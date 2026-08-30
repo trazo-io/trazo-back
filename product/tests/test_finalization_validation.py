@@ -42,10 +42,33 @@ class FinalizationValidationTests(TestCase):
         self.assertIn("at most 20 characters", errors["harvest_method"][0])
 
     def test_invalid_choice_is_reported_with_the_valid_options(self):
-        payload = {**self.valid, "quality_grade": "US No. 1"}
-        errors = self.validate(payload)
-        self.assertIn("quality_grade", errors)
-        self.assertIn("premium", errors["quality_grade"][0])
+        """Rewritten 2026-08-28. It used to assert this against `quality_grade`, and had been
+        failing since 2026-08-21 — with a TypeError, not an assertion, because the validator
+        returns None when nothing is wrong.
+
+        That was the test being stale, not the code regressing: the F5 fix deliberately removed
+        `choices` from `History.quality_grade` (see the comment on the field). Declaring the
+        crop-aware catalogue as `choices` made DRF generate a ChoiceField, so the catalogue's own
+        escape hatch — "Other — as stated on the packing record" — came back 400, and the packet
+        would have printed "Grade A (legacy)" at a certifier.
+
+        The generic behaviour under test is still real; it just needs a field that still HAS
+        choices. `harvest_method` does.
+        """
+        errors = self.validate({**self.valid, "harvest_method": "airlifted"})
+        self.assertIn("harvest_method", errors)
+        self.assertIn("mechanical", errors["harvest_method"][0])
+
+    def test_a_real_packing_grade_is_accepted_as_free_text(self):
+        """The other half of F5, pinned so the choices cannot quietly come back.
+
+        "US No. 1" is a genuine USDA apple grade and exactly the kind of value the old
+        Premium/Grade A/Grade B list refused. A grower whose packing record says it must be able
+        to finalize the season with it — private buyer grades and state marks are real, which is
+        why the column is free text with a crop-aware suggestion list rather than an enum.
+        """
+        self.assertIsNone(self.validate({**self.valid, "quality_grade": "US No. 1"}))
+        self.assertIsNone(self.validate({**self.valid, "quality_grade": "WA Extra Fancy"}))
 
     def test_non_numeric_production_amount(self):
         errors = self.validate({**self.valid, "production_amount": "lots"})

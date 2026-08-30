@@ -154,11 +154,11 @@ SESSION_COOKIE_HTTPONLY = True
 X_FRAME_OPTIONS = "DENY"
 SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 
-SENDGRID_API_KEY = config("SENDGRID_API_KEY", default=None)
+RESEND_API_KEY = config("RESEND_API_KEY", default=None)
 
-# Use SendGrid Web API (HTTPS) instead of SMTP
+# Use Resend's Web API (HTTPS) instead of SMTP
 # SMTP ports 465/587 are blocked on most PaaS platforms
-EMAIL_BACKEND = "backend.email_backend.SendGridAPIBackend"
+EMAIL_BACKEND = "backend.email_backend.ResendAPIBackend"
 SERVER_EMAIL = os.environ.get("FROM_EMAIL_ADDRESS", "noreply@trazo.io")
 DEFAULT_FROM_EMAIL = config("FROM_EMAIL_ADDRESS", default="noreply@trazo.io")
 

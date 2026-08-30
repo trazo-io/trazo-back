@@ -7084,7 +7084,32 @@ class PestManagementEventSerializer(EventSerializer):
 
 
 # Business Event Serializers
-class UpdateBusinessEventSerializer(CustomFieldsMixin, serializers.ModelSerializer):
+class RetiredCertificationTypeGuardMixin:
+    """Refuse a retired certification type on WRITE, leaving existing records readable.
+
+    `BusinessEvent.CERTIFICATION_TYPE_CHOICES` still carries the retired entries so a
+    § 205.103(b)(2) record already on file renders its own label instead of a raw slug —
+    which means the ModelSerializer's generated ChoiceField would happily accept them again.
+    Dropping the two `<option>` tags from the form is not a gate: the form is one client, and
+    the API is what decides.
+
+    ⛔ MIXED INTO BOTH SERIALIZERS ON PURPOSE. `EventViewSet.get_serializer_class` returns
+    `UpdateBusinessEventSerializer` for a mutation and `BusinessEventSerializer` for a read,
+    so a guard on the read serializer alone is a guard on the path that never validates
+    anything. Same class of miss as "the gate flag is set but the controls do not read it".
+    """
+
+    def validate_certification_type(self, value):
+        if value and value in BusinessEvent.DEPRECATED_CERTIFICATION_TYPES:
+            raise serializers.ValidationError(
+                f"'{value}' is no longer an available certification type. It named a claim with "
+                "no issuing body behind it, so it was never shown to a buyer. Record the "
+                "programme that issued your certificate instead."
+            )
+        return value
+
+
+class UpdateBusinessEventSerializer(RetiredCertificationTypeGuardMixin, CustomFieldsMixin, serializers.ModelSerializer):
     class Meta:
         model = BusinessEvent
         fields = [
@@ -7246,7 +7271,7 @@ class UpdateBusinessEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
         return data
 
 
-class BusinessEventSerializer(EventSerializer):
+class BusinessEventSerializer(RetiredCertificationTypeGuardMixin, EventSerializer):
     type = serializers.SerializerMethodField()
     event_type = serializers.SerializerMethodField()
     business_event_type = serializers.SerializerMethodField()

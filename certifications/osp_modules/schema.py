@@ -203,6 +203,11 @@ class Question:
     #   "s11_record_types" — the Common OSP § 11 registry panel (G8.0)
     #   "approved_inputs"  — the ApprovedInputs flow (Materials Application, later)
     embed: Optional[str] = None
+    #: This question is the operator vouching for the contents of an embed rendered above it
+    #: (the embed's name). It cannot be answered affirmatively while that embed is empty —
+    #: see certifications/services/attestation_gates.py for why that is a server rule and not
+    #: a UI courtesy.
+    attests_embed: Optional[str] = None
     placeholder: Optional[TextMap] = None
     max_length: Optional[int] = None
 

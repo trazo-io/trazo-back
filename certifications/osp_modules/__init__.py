@@ -36,6 +36,20 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 # know which questionnaire text an answer was given against, and a version that moves with
 # no record of what moved does not deliver that.
 #
+# 2026.08.27: claim-safety. Trazo does not verify or approve materials — it RESOLVES names
+# against OMRI / the WSDA Materials List / the National List, and the certifying agent
+# approves. Question COUNT drops by 0; one OPTION is removed.
+#   * G3.0 `treatment_verification` loses the `trazo_verification` option ("Checked against the
+#     National List / OMRI / WSDA in Trazo at logging time"). CCOF's G3.0 D1 accepts exactly two
+#     bases — an OMRI/WSDA listing, or written certifier approval — and the drift detector does
+#     not check a seed TREATMENT at all (drift_detector.py: "We can't verify the specific
+#     treatment"). Its compiled sentence changed from "Seed treatment materials verified via: X"
+#     to "Basis on which seed treatment materials are allowed: X".
+#   * Materials Application: module education, the panel label ("Approved input materials" →
+#     "Input materials on this plan") and its coaching no longer say Trazo verifies; the five
+#     category-attestation templates say "the materials list on this plan", not "the verified
+#     materials list". BEHAVIOURAL for stored answers only in that the compiled narrative wording
+#     changes on next recompile; no answer is reinterpreted.
 # 2026.08.18: citation and coaching corrections found by a fresh-eyes CFR audit. No question
 # was added or removed; question COUNT is unchanged at 196.
 #   * G6.4 `own_products_only` + the module education (both locales) cited § 205.101(b) — the
@@ -75,7 +89,7 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 # (establishment record, commercial-availability justification, the § 205.204(a)(4)
 # one-year rule, records) — the question every orchard and vineyard answers. 12 depth
 # modules + Materials Application + 4 N/A-able stubs remain.
-CONTENT_VERSION = "2026.08.23"
+CONTENT_VERSION = "2026.08.28"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

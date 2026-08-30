@@ -20,6 +20,7 @@ Header color #2E7D32 (green.700) — the AA-safe PDF header standard.
 from __future__ import annotations
 
 import io
+import logging
 import xml.sax.saxutils
 import zipfile
 from datetime import date
@@ -28,6 +29,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
+from certifications.constants import NOP_CERTIFICATION_TYPES
 from certifications.osp_modules import CONTENT_VERSION, MODULE_REGISTRY
 from common.pdf_text import glyph_safe
 from common.specimen import is_specimen, specimen_page_callback
@@ -38,6 +40,8 @@ from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
 from certifications.services.common_osp_workbooks import WORKBOOKS, build_workbook
 from certifications.services.osp_module_compiler import _format_answer_en
 from certifications.services.osp_pdf_snapshot import _styles, generate_osp_snapshot_pdf
+
+logger = logging.getLogger(__name__)
 
 
 def _notice_when(n) -> str:
@@ -136,6 +140,84 @@ def _record_registry_flowables(osp, styles) -> list:
     return out
 
 
+def _post_harvest_facility_flowables(osp, styles) -> list:
+    """Render the operation's off-farm handlers and storage facilities.
+
+    🔴 The largest blocker in the certifier register (6 rows across both certifiers, 2026-08-28).
+    `PostHarvestFacility` has always held name, address, facility type, certifier, certificate
+    number, effective and expiry dates, and computes a `cert_is_current` tri-state — and no OSP
+    module read any of it. So the plan layer answered "who handles or stores your crop" from free
+    text while the structured record sat in a different artifact, and the pilot packet named the
+    same handler two different ways under one certificate number with nothing comparing them.
+
+    CCOF G6.1 §C and G6.2 §A ask this as a table with the handler's certificate attached; WSDA
+    J13 / K1 / L1 gate an entire required section on it, and a "Yes" there declares an attached
+    AGR 2519. An unanswered gate is a bounce, not a request for information.
+
+    The certificate line states what the record supports and no more: `cert_is_current` returns
+    None when there is no effective date, and that prints as "not stated", never as current.
+    """
+    facilities = list(osp.establishment.post_harvest_facilities.all()) if osp.establishment_id else []
+    if not facilities:
+        return [
+            Paragraph(
+                "No off-farm handler or storage facility is recorded for this operation.",
+                styles["body"],
+            ),
+            Spacer(1, 6),
+        ]
+
+    out = [Paragraph("<b>Off-farm handlers and storage facilities</b>", styles["body"])]
+    for facility in facilities:
+        where = ", ".join(x for x in (facility.address, facility.city, facility.state) if x)
+        role = facility.get_role_display() if facility.role else ""
+        head = f"{facility.name} — {facility.get_facility_type_display()}" + (f" ({role})" if role else "")
+        out.append(Paragraph(f"• {_escape(head)}", styles["body"]))
+        if where:
+            out.append(Paragraph(_escape(where), styles["meta"]))
+
+        current = facility.cert_is_current
+        if facility.certification_number or facility.certifier_name:
+            cert = " ".join(
+                x
+                for x in (
+                    facility.certifier_name or "",
+                    f"#{facility.certification_number}" if facility.certification_number else "",
+                )
+                if x
+            )
+            if current is True:
+                state = "certificate current"
+            elif current is False:
+                state = "[REVIEW] certificate expired or older than 15 months"
+            else:
+                state = "[REVIEW] certificate date not stated"
+            dates = ""
+            if facility.effective_date:
+                dates = f", effective {facility.effective_date.isoformat()}"
+                if facility.expiry_date:
+                    dates += f", expires {facility.expiry_date.isoformat()}"
+            out.append(Paragraph(_escape(f"Organic certificate: {cert}{dates} — {state}"), styles["meta"]))
+        else:
+            out.append(
+                Paragraph(
+                    "[REVIEW] No organic certificate is on file for this facility. If it is a "
+                    "certified operation, record its certificate; if it is not certified, the "
+                    "records preserving your product's organic identity must be described.",
+                    styles["meta"],
+                )
+            )
+        if not facility.cert_document:
+            out.append(
+                Paragraph(
+                    "A copy of the certificate is not embedded in this document.",
+                    styles["meta"],
+                )
+            )
+    out.append(Spacer(1, 6))
+    return out
+
+
 def _approved_inputs_flowables(osp, styles) -> list:
     """Render the OSP's approved input materials for the Materials Application PDF.
 
@@ -149,28 +231,99 @@ def _approved_inputs_flowables(osp, styles) -> list:
     here but never applied appears in one and not the other, and vice versa — worth
     knowing when the two are read side by side.
     """
-    substances = list(osp.approved_national_list_substances.all())
-    products = list(osp.approved_omri_products.all())
-    if not substances and not products:
+    from certifications.services.plan_materials import plan_materials, unmatched_logged_materials
+
+    rows = plan_materials(osp)
+    if not rows:
         return [
             Paragraph(
-                "No input materials have been added to the approved list for this plan.",
+                "No input materials have been added to this plan's materials list.",
                 styles["body"],
             ),
             Spacer(1, 6),
         ]
 
-    out = [Paragraph("<b>Approved input materials on this plan</b>", styles["body"])]
-    if substances:
-        out.append(Paragraph("National List substances", styles["meta"]))
-        for item in substances:
-            out.append(Paragraph(f"• {_escape(str(item))}", styles["body"]))
-    if products:
-        out.append(Paragraph("Listed products (OMRI / WSDA)", styles["meta"]))
-        for item in products:
-            out.append(Paragraph(f"• {_escape(str(item))}", styles["body"]))
+    out = [Paragraph("<b>Input materials on this plan</b>", styles["body"])]
+    # Grouped from the ROWS, never from a literal list of source names. This function exists
+    # because an earlier renderer read two of the three registries and silently dropped the
+    # third — and a hardcoded tuple here would have dropped operator-entered rows the same way
+    # the day they shipped (caught on review, 2026-08-28). Known sources keep their order;
+    # anything new appears rather than vanishing.
+    known = ("National List", "OMRI", "WSDA", "Operator-entered")
+    seen = list(dict.fromkeys(r.source for r in rows))
+    for source in [s for s in known if s in seen] + [s for s in seen if s not in known]:
+        group = [r for r in rows if r.source == source]
+        if not group:
+            continue
+        out.append(Paragraph(_escape(source), styles["meta"]))
+        for row in group:
+            out.append(Paragraph(f"• {_escape(row.display())}", styles["body"]))
+
+    # State the disagreement instead of leaving the reader to find it. The packet used to print
+    # this list beside an event-derived workbook that held different products, under five
+    # attestations that everything in use was "entered in this list".
+    unmatched = unmatched_logged_materials(osp)
+    if unmatched:
+        # Cap, and announce the cap. An operation with a hundred inputs would otherwise swallow
+        # the page, and a silently truncated list reads as a complete one.
+        shown = unmatched[:12]
+        listed = ", ".join(shown)
+        if len(unmatched) > len(shown):
+            listed += f", and {len(unmatched) - len(shown)} more"
+        out.append(Spacer(1, 4))
+        out.append(
+            Paragraph(
+                f"[REVIEW] {len(unmatched)} product name(s) in the logged applications do not match "
+                "an entry above: " + _escape(listed) + ". A brand name and the substance entry that "
+                "covers it read differently, so some of these may already be accounted for — "
+                "confirm each one and add anything genuinely missing.",
+                styles["meta"],
+            )
+        )
     out.append(Spacer(1, 6))
     return out
+
+
+#: DMS `linked_section` used for an operator-supplied parcel map. The document model already
+#: carries a `parcel` FK, so the map needs no new storage — only a section key that says what the
+#: file IS, so the packet can ship it and the Parcel Application can name it.
+PARCEL_MAP_SECTION = "parcel_application_map"
+
+
+def parcel_map_documents(parcel):
+    """Operator-supplied map documents for one parcel, newest first."""
+    try:
+        return list(parcel.documents.filter(linked_section=PARCEL_MAP_SECTION).order_by("-created_at"))
+    except Exception:  # noqa: BLE001 — a document lookup must never take the packet down
+        logger.exception("Could not load parcel map documents for parcel %s", getattr(parcel, "pk", None))
+        return []
+
+
+def _parcel_map_upload(parcel) -> str:
+    """Filename of the operator's map as it appears in the packet ZIP, or "" if there is none."""
+    docs = parcel_map_documents(parcel)
+    if not docs:
+        return ""
+    doc = docs[0]
+    ext = ("." + doc.file.name.rsplit(".", 1)[-1]) if "." in (doc.file.name or "") else ""
+    safe_title = (doc.title or "map").replace("/", "-")[:60]
+    return f"{doc.pk}-{safe_title}{ext}"
+
+
+def _style(styles, name: str, fallback: str = "body"):
+    """A named style, falling back rather than raising.
+
+    `styles` arrives from more than one place — the module PDF's own sheet, and callers that
+    build a minimal ReportLab stylesheet to render one embed in isolation (see
+    `product/tests/test_parcel_area_units.py`, which pins the acres-vs-hectares regression on
+    this very block). A renderer that hard-indexes a style key it happens to want turns a
+    missing style into a crash on the § 205.202 page, which is the last page that should be
+    fragile. ReportLab's own stylesheet raises KeyError on a miss, so ask it politely.
+    """
+    try:
+        return styles[name]
+    except (KeyError, IndexError):
+        return styles[fallback]
 
 
 def _parcel_embed_flowables(embed: str, parcel, styles) -> list:
@@ -185,7 +338,7 @@ def _parcel_embed_flowables(embed: str, parcel, styles) -> list:
     out: list = []
 
     if embed == "transition_card":
-        from product.services.transition_status_service import compute_transition_status
+        from product.services.transition_status_service import compute_transition_status, transition_verdict
 
         try:
             status = compute_transition_status(parcel)
@@ -205,12 +358,11 @@ def _parcel_embed_flowables(embed: str, parcel, styles) -> list:
                     styles["body"],
                 )
             )
-        out.append(
-            Paragraph(
-                _escape(f"Eligible for organic harvest: {'Yes' if status.is_eligible else 'Not yet'}"),
-                styles["body"],
-            )
-        )
+        # NOT "Eligible for organic harvest: Yes/Not yet". Eligibility under § 205.202(b) is the
+        # certifying agent's determination, and `is_eligible` is true by absence of contrary
+        # evidence — which is indistinguishable from having no field history at all. One shared
+        # resolver states what the records support; see transition_verdict().
+        out.append(Paragraph(_escape(f"Organic transition status: {transition_verdict(status)}"), styles["body"]))
         if status.note:
             out.append(Paragraph(_escape(status.note), styles["meta"]))
 
@@ -232,7 +384,11 @@ def _parcel_embed_flowables(embed: str, parcel, styles) -> list:
             if row.get("adjacent_is_organic") is True:
                 bits.append("adjoining land is certified organic — no buffer required")
             if row.get("crop_grown_in_buffer"):
-                bits.append(f"crop in buffer (never sold as organic): {row['crop_grown_in_buffer']}")
+                # State the crop, NOT its organic status. "never sold as organic" had the packet
+                # asserting the exact fact § 205.202(c) asks the operator to PROVE, on the strength
+                # of a free-text parcel field. What became of the crop is evidenced by the
+                # buffer-use disposition records, not by this line.
+                bits.append(f"crop grown in buffer: {row['crop_grown_in_buffer']}")
             if row.get("prohibited_use_last_date"):
                 bits.append(f"adjoining land last received a prohibited material {row['prohibited_use_last_date']}")
             if row.get("drift_risk"):
@@ -247,17 +403,68 @@ def _parcel_embed_flowables(embed: str, parcel, styles) -> list:
             out.append(Spacer(1, 4))
 
     elif embed == "parcel_map":
-        has_map = bool(parcel.polygon)
-        area = getattr(parcel, "area", None)
-        line = "Field map on file (boundary recorded in Trazo)." if has_map else "No field map on file."
-        out.append(Paragraph(_escape(line), styles["body"]))
-        if area:
-            # 🔴 2026-08-20 — printed `parcel.area` (HECTARES) with the word "acres" beside it.
-            # This is the § 205.202 page a certifier works from, so a WSDA reviewer read a
-            # 28.4-acre Honeycrisp block as 11.49 acres and would have issued a certificate
-            # (and a fee) for 24.0 acres against a 59.4-acre operation. The workbook on the
-            # facing page had the right numbers, which is what made it findable.
-            out.append(Paragraph(_escape(f"Mapped area: {parcel.area_display()}."), styles["body"]))
+        # 🔴 Until 2026-08-28 this printed one sentence — "Field map on file (boundary recorded
+        # in Trazo)" — and no map, on the page whose entire job is to prove land eligibility.
+        # CCOF NOPB49 §E requires the map ATTACHED and reviewed before a new parcel is
+        # inspected; WSDA AGR 2264 requires one with every site application. A sentence saying
+        # the map exists somewhere the reviewer is not looking is worse than printing nothing.
+        #
+        # The schematic comes from `certifications.services.parcel_map`, shared with the
+        # per-production audit export so the two documents cannot draw the same parcel
+        # differently.
+        from certifications.services.parcel_map import CCOF_MAP_ELEMENTS, parcel_map_caption, parcel_map_drawing
+
+        drawing = parcel_map_drawing(parcel)
+        if drawing is not None:
+            out.append(drawing)
+            out.append(Paragraph(_escape(parcel_map_caption(parcel)), styles["body"]))
+            out.append(
+                Paragraph(
+                    "Schematic parcel boundary drawn from the recorded field geometry — not a "
+                    "surveyed plat, not to scale, and not satellite imagery. Compass labels "
+                    "carry the adjoining land use recorded for each boundary.",
+                    _style(styles, "meta"),
+                )
+            )
+        else:
+            # The identity line prints in BOTH branches. The first cut only printed it beside a
+            # drawing, which silently dropped the parcel's ACREAGE from §E for any parcel whose
+            # boundary is not yet recorded — the one number CCOF asks to see annotated on the map
+            # and the subject of the acres-vs-hectares regression this page already carries a
+            # test for. Caught by that test (`product/tests/test_parcel_area_units.py`).
+            out.append(Paragraph(_escape(parcel_map_caption(parcel)), styles["body"]))
+            out.append(
+                Paragraph(
+                    "[REVIEW] No field-boundary geometry is on file for this parcel, so no map "
+                    "could be drawn. Record the parcel boundary in Trazo, or attach your own "
+                    "map below.",
+                    _style(styles, "meta"),
+                )
+            )
+
+        # An uploaded map is the operator's own document and outranks the schematic — CCOF
+        # prefers satellite imagery, and several of its eleven required elements (roads and
+        # landmarks, permanent identifiers, other operation areas) cannot appear on a boundary
+        # schematic at all. Say which of the two the reviewer is holding.
+        uploaded = _parcel_map_upload(parcel)
+        if uploaded:
+            out.append(
+                Paragraph(
+                    _escape(f"Operator-supplied map attached to this packet: parcels/maps/{uploaded}."),
+                    styles["body"],
+                )
+            )
+        else:
+            out.append(
+                Paragraph(
+                    "[REVIEW] No operator-supplied map is attached. A schematic boundary cannot "
+                    "carry every element a certifier asks for — "
+                    + _escape(", ".join(CCOF_MAP_ELEMENTS[:6]))
+                    + " and the rest. Attach an 8.5x11 map (satellite imagery preferred) on the "
+                    "parcel page.",
+                    _style(styles, "meta"),
+                )
+            )
 
     elif embed == "crop_history":
         # Typed years AND years derived from the seasons logged on this parcel — see
@@ -494,6 +701,8 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                     rendered = _record_registry_flowables(osp, styles)
                 elif question.embed == "approved_inputs":
                     rendered = _approved_inputs_flowables(osp, styles)
+                elif question.embed == "post_harvest_facilities":
+                    rendered = _post_harvest_facility_flowables(osp, styles)
                 else:
                     rendered = []
                 if rendered:
@@ -525,6 +734,22 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
             answered_any = True
             story.append(Paragraph(f"<b>{_escape(_en(question.label))}</b>", styles["body"]))
             story.append(Paragraph(_escape(_format_answer_en(question, value)), styles["body"]))
+            # An attestation stored before the gate existed can still be affirmative over an empty
+            # list. The API refuses to write one now, but a plan attested earlier keeps it, and
+            # printing a bare "Yes" under a section that says "no record types have been confirmed"
+            # is the contradiction this whole fix is about. Qualify it rather than hide it: the
+            # answer is the operator's and stays visible.
+            if getattr(question, "attests_embed", None) and value is True:
+                from certifications.services.attestation_gates import blocked_attestations
+
+                if blocked_attestations(module, {question.key: True}, osp):
+                    story.append(
+                        Paragraph(
+                            "[REVIEW] Nothing in the list above is confirmed, so this attestation "
+                            "is not supported by the plan as it stands.",
+                            styles["meta"],
+                        )
+                    )
             story.append(Spacer(1, 6))
         if not answered_any:
             story.append(Paragraph("No answers recorded for this module yet.", styles["body"]))
@@ -567,7 +792,7 @@ def _renewal_context(osp) -> dict:
     # certificate on the renewal cover. `is_active` is a property (it reads today's date), so
     # the filter runs in Python over the few rows an operation has.
     nop_certs = sorted(
-        Certification.objects.filter(establishment=est, certification_type__in=("usda_organic", "ccof")),
+        Certification.objects.filter(establishment=est, certification_type__in=NOP_CERTIFICATION_TYPES),
         key=lambda c: (c.effective_date or date.min),
         reverse=True,
     )
@@ -737,6 +962,7 @@ def _packet_cover_pdf(osp) -> bytes:
         Paragraph("01. Six-section narrative snapshot (7 CFR 205.201(a))", styles["body"]),
         Paragraph("02. Annual update — the § 205.406(a) filing", styles["body"]),
         Paragraph("03. § 205.400(f) change notifications filed against this plan lineage", styles["body"]),
+        Paragraph("04. What this packet covers, what it does not, and who authored it", styles["body"]),
         Paragraph("modules/ — one PDF per guided module, N/A attestations included", styles["body"]),
         Paragraph("parcels/ — one Parcel Application per parcel (§ 205.202)", styles["body"]),
         Paragraph("workbooks/ — Common OSP workbooks (field/crop, product list, materials, suppliers)", styles["body"]),
@@ -916,8 +1142,133 @@ def _change_notifications_pdf(osp) -> bytes:
     return buffer.getvalue()
 
 
+def _coverage_pdf(osp) -> bytes:
+    """04 — what this packet covers, what it does not, and who authored it.
+
+    CCOF's Guide routes by activity, so a reviewer already knows which forms a crop operation owes.
+    Stating what is absent, and why, is the difference between a scope decision and an omission.
+    """
+    from certifications.services.packet_coverage import coverage_rows, exclusion_rows, outstanding_modules
+
+    buffer = io.BytesIO()
+    styles = _styles()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, title="Packet coverage")
+    story = [
+        Paragraph("What this packet covers", styles["title"]),
+        Paragraph(_escape(f"{osp.establishment.name} · OSP v{osp.version_number}"), styles["subtitle"]),
+        Paragraph(
+            "Trazo drafted the documents in this packet from the operation's own records. The "
+            "producer is the author of this organic system plan (7 CFR 205.201(a)) and reviews, "
+            "corrects and signs it; every compliance determination is the certifying agent's.",
+            styles["body"],
+        ),
+        Spacer(1, 8),
+    ]
+
+    rows = coverage_rows()
+    if rows:
+        story.append(Paragraph("CCOF forms generated in this packet", styles["header"]))
+        for row in rows:
+            if not row.generated:
+                continue
+            story.append(Paragraph(_escape(f"{row.form} ({row.document_id}) — {row.location}"), styles["body"]))
+        elsewhere = [r for r in rows if not r.generated]
+        if elsewhere:
+            story.append(Spacer(1, 6))
+            # NOT "reviewed in the plan": these are registered in the conformance comparison but
+            # have no Trazo module, so nothing about them is answered here.
+            story.append(Paragraph("Compared against, but not generated — file CCOF's own form", styles["header"]))
+            for row in elsewhere:
+                story.append(Paragraph(_escape(f"{row.form} ({row.document_id})"), styles["body"]))
+    else:
+        story.append(
+            Paragraph(
+                "The form-by-form coverage list could not be read for this packet. The documents "
+                "present are listed on the cover page.",
+                styles["body"],
+            )
+        )
+
+    exclusions = exclusion_rows()
+    if exclusions:
+        story.append(Spacer(1, 8))
+        story.append(Paragraph("Forms Trazo does not generate", styles["header"]))
+        story.append(
+            Paragraph(
+                "File these directly with CCOF where they apply to this operation. They are listed "
+                "so their absence from this packet is a stated scope, not an oversight.",
+                styles["meta"],
+            )
+        )
+        for row in exclusions:
+            label = f"{row.form}" + (f" ({row.document_id})" if row.document_id else "")
+            story.append(Paragraph(f"<b>{_escape(label)}</b>", styles["body"]))
+            story.append(Paragraph(_escape(row.reason), styles["meta"]))
+
+    pending = outstanding_modules(osp)
+    if pending:
+        story.append(Spacer(1, 8))
+        story.append(Paragraph("Sections of this plan still to finish", styles["header"]))
+        story.append(
+            Paragraph(
+                "Listed by the operation, for the operation — a reviewer finding these first is "
+                "worse than the operation naming them.",
+                styles["meta"],
+            )
+        )
+        for name in pending:
+            story.append(Paragraph(f"• {_escape(name)}", styles["body"]))
+
+    # Same specimen authority as every other packet document (common/specimen.py): a demo
+    # operation's coverage page must be as unmistakably marked as its records.
+    spec = is_specimen(getattr(osp, "establishment", None))
+    doc.build(
+        story,
+        onFirstPage=specimen_page_callback(letter, specimen=spec),
+        onLaterPages=specimen_page_callback(letter, specimen=spec),
+    )
+    return buffer.getvalue()
+
+
+def _refresh_narratives_if_editable(osp) -> None:
+    """Recompile § 205.201(a) before assembling the packet, on plans that may still change.
+
+    🔴 Found 2026-08-28 by generating the pilot's real packet and reading it: the same ZIP listed
+    "Rexius Organic Compost" in `modules/materials_application.pdf` and omitted it from the
+    (a)(2) narrative two files away. One packet, two answers — the exact defect
+    `plan_materials()` was written to end, arriving through a door nobody had closed.
+
+    The cause is structural, not local. `osp.sections` is STORED prose, and the only writers that
+    recompiled it were the ones that change module ANSWERS (the module PUT, the sections PATCH,
+    submit). But the compiler also reads three catalogue M2Ms, the operator-authored materials
+    table and the establishment's post-harvest facilities — none of which live in module answers,
+    and two of which are edited on entirely different screens (the approved-inputs panel; a
+    production's post-harvest section). Adding a handler on the production page left the (a)(5)
+    paragraph stale with nothing to warn you.
+
+    Fixing each writer would fix today's writers. Recompiling here fixes the packet for every
+    writer, including the next thing the compiler learns to read — the same reason claim decisions
+    live at one chokepoint rather than at each call site.
+
+    ⛔ EDITABLE PLANS ONLY. A submitted or superseded plan's sections are the text that was FILED;
+    its frozen `submission_pdf` is "the exact content the certifier receives". Recompiling those
+    would rewrite history. `compile_modules_to_sections` is idempotent and reports whether
+    anything actually changed, so a no-op costs one comparison and no write.
+    """
+    if getattr(osp, "status", None) not in ("draft", "active"):
+        return
+    try:
+        from certifications.services.osp_module_compiler import compile_modules_to_sections
+
+        if compile_modules_to_sections(osp):
+            osp.save(update_fields=["sections", "updated_at"])
+    except Exception:  # noqa: BLE001 — a stale narrative is bad; no packet at all is worse
+        logger.exception("Could not refresh narratives before assembling the packet for OSP %s", osp.pk)
+
+
 def generate_osp_packet(osp) -> bytes:
     """Assemble the renewal packet ZIP. Single source of packet content."""
+    _refresh_narratives_if_editable(osp)
     establishment = osp.establishment
     out = io.BytesIO()
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -927,6 +1278,9 @@ def generate_osp_packet(osp) -> bytes:
         # 2026-08-23: the § 205.406(a) filing and the § 205.400(f) notices that support it.
         zf.writestr("02-annual-update.pdf", _annual_update_pdf(osp))
         zf.writestr("03-change-notifications.pdf", _change_notifications_pdf(osp))
+        # 04 — scope. CCOF's Guide routes by activity, so what is missing is as readable as what
+        # is present; this states it rather than leaving a reviewer to infer an omission.
+        zf.writestr("04-coverage-and-scope.pdf", _coverage_pdf(osp))
         for module in MODULE_REGISTRY:
             code = (module.code or module.key).replace(".", "_")
             zf.writestr(
@@ -942,6 +1296,23 @@ def generate_osp_packet(osp) -> bytes:
         for spec in WORKBOOKS:
             workbook = build_workbook(establishment, spec.key)
             zf.writestr(f"workbooks/{spec.key}.xlsx", workbook.getvalue())
+
+        # Operator-supplied parcel maps (2026-08-28). CCOF NOPB49 §E requires the map reviewed
+        # BEFORE a new parcel is inspected and WSDA AGR 2264 requires one with every site
+        # application — a mandatory attachment that never rode in the packet. The Parcel
+        # Application PDF names the file it expects to find here, so the two agree or neither
+        # does. Same loop shape as receipts below, and outside the workbook loop for the same
+        # reason: inside it, every file would be written once per workbook.
+        for _parcel in establishment.parcels.all():
+            for _map_doc in parcel_map_documents(_parcel):
+                try:
+                    with _map_doc.file.open("rb") as _fh:
+                        _map_data = _fh.read()
+                except Exception:  # noqa: BLE001 — a missing file must not sink the packet
+                    logger.exception("Parcel map %s could not be read into the packet", _map_doc.pk)
+                    continue
+                zf.writestr(f"parcels/maps/{_parcel_map_upload(_parcel)}", _map_data)
+                break  # the newest map is the one the Parcel Application names
 
         # Purchase receipts (2026-08-25): every uploaded receipt FILE referenced by a
         # chemical or soil event rides in the packet verbatim. The audit tables mark

@@ -15,15 +15,119 @@ from .models import (
     OrganicSystemPlan,
     OSPAnnualUpdate,
     OSPChangeNotification,
+    PlanMaterialEntry,
     PostHarvestFacility,
     StateOrganicRegistration,
 )
+
+
+class PlanMaterialEntrySerializer(serializers.ModelSerializer):
+    """Operator-authored materials-list rows (CCOF NOPB41 §A-§D, WSDA AGR 2196).
+
+    The write path enforces the one rule the model exists under: a listing basis may not claim
+    more than the row supports. `certifier_letter` without a reference is refused, and a catalog
+    basis without the matching FK is refused — otherwise "OMRI listed" becomes a free-text claim
+    the operator can type, which is the whole defect this replaces, inverted.
+    """
+
+    category_display = serializers.CharField(source="get_category_display", read_only=True)
+    listing_basis_display = serializers.CharField(source="get_listing_basis_display", read_only=True)
+    listing_statement = serializers.CharField(read_only=True)
+
+    class Meta:
+        model = PlanMaterialEntry
+        fields = [
+            "id",
+            "product_name",
+            "manufacturer",
+            "category",
+            "category_display",
+            "reason_for_use",
+            "listing_basis",
+            "listing_basis_display",
+            "listing_statement",
+            "certifier_letter_reference",
+            "status",
+            "notes",
+            "national_list_substance",
+            "omri_product",
+            "wsda_material",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+    def validate_product_name(self, value):
+        cleaned = (value or "").strip()
+        if not cleaned:
+            raise serializers.ValidationError(
+                "A material needs a name — this is the column CCOF and WSDA both ask for first."
+            )
+        return cleaned
+
+    def validate(self, attrs):
+        # One material, one row. Nothing else stopped a double-click — or a slow network and a
+        # second press — from putting the same product on a regulatory list twice, and a
+        # duplicated line is a reviewer's question the operator has to answer for no reason.
+        # Checked case-insensitively on the name within this OSP; a genuinely different
+        # formulation is a different name.
+        osp = self.context.get("osp")
+        name = (attrs.get("product_name") or getattr(self.instance, "product_name", "") or "").strip()
+        if osp is not None and name:
+            clash = osp.plan_material_entries.filter(product_name__iexact=name)
+            if self.instance is not None:
+                clash = clash.exclude(pk=self.instance.pk)
+            if clash.exists():
+                raise serializers.ValidationError({"product_name": f"{name} is already on this plan's materials list."})
+
+        basis = attrs.get("listing_basis", getattr(self.instance, "listing_basis", PlanMaterialEntry.BASIS_NONE))
+        reference = attrs.get("certifier_letter_reference", getattr(self.instance, "certifier_letter_reference", ""))
+        if basis == PlanMaterialEntry.BASIS_CERTIFIER_LETTER and not (reference or "").strip():
+            raise serializers.ValidationError(
+                {
+                    "certifier_letter_reference": (
+                        "Name the certifier letter that approved this material. "
+                        "\u201cApproved by our certifier\u201d with nothing behind it is the kind of "
+                        "unsupported claim a reviewer sends the packet back for."
+                    )
+                }
+            )
+        catalog_field = {
+            PlanMaterialEntry.BASIS_OMRI: "omri_product",
+            PlanMaterialEntry.BASIS_WSDA: "wsda_material",
+            PlanMaterialEntry.BASIS_NATIONAL_LIST: "national_list_substance",
+        }.get(basis)
+        if catalog_field:
+            resolved = attrs.get(catalog_field, getattr(self.instance, catalog_field, None))
+            if not resolved:
+                raise serializers.ValidationError(
+                    {
+                        catalog_field: (
+                            "A catalog listing basis has to point at the catalog row it came from. "
+                            "Search for the material to attach it, or record it as operator-entered "
+                            "with no third-party listing."
+                        )
+                    }
+                )
+        # § 205.602 substances are prohibited; the same refusal as add_approved_input.
+        nl = attrs.get("national_list_substance", getattr(self.instance, "national_list_substance", None))
+        if nl is not None and (getattr(nl, "status", "") or "").lower() == "prohibited":
+            raise serializers.ValidationError(
+                {
+                    "national_list_substance": (
+                        f"{nl.substance_name} is prohibited in organic production "
+                        f"(\u00a7 {nl.cfr_section or '205.602'}) and cannot be put on an organic system plan."
+                    )
+                }
+            )
+        return attrs
 
 
 class PostHarvestFacilitySerializer(serializers.ModelSerializer):
     """Producer-dashboard CRUD for off-farm post-harvest handlers (CCOF G6.1)."""
 
     facility_type_display = serializers.CharField(source="get_facility_type_display", read_only=True)
+    role_display = serializers.CharField(source="get_role_display", read_only=True)
     verification_status_display = serializers.CharField(source="get_verification_status_display", read_only=True)
     is_verified = serializers.BooleanField(read_only=True)
     cert_is_current = serializers.BooleanField(read_only=True)
@@ -37,6 +141,8 @@ class PostHarvestFacilitySerializer(serializers.ModelSerializer):
             "name",
             "facility_type",
             "facility_type_display",
+            "role",
+            "role_display",
             "address",
             "city",
             "state",

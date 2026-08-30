@@ -28,6 +28,8 @@ from reportlab.lib.units import inch
 from reportlab.platypus import Image as RLImage
 from reportlab.platypus import KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+from certifications.constants import NOP_CERTIFICATION_TYPES as _NOP_CERTIFICATION_TYPES
+from certifications.constants import ORGANIC_CONFERRING_CERT_TYPES as _ORGANIC_CONFERRING_CERT_TYPES
 from common.field_registry import NO_TREATMENT_ANSWERS, NON_ORGANIC_SEED_STATUSES, ORGANIC_APPROVED
 from common.pdf_text import glyph_safe
 from common.specimen import (
@@ -1607,6 +1609,26 @@ class OFPPMissingError(Exception):
         self.reason = reason
         self.doc_name = doc_name
         super().__init__(f"OFPP blocker: {reason}" + (f" (file: {doc_name})" if doc_name else ""))
+
+
+#: What may be said about the factor behind one carbon line — never about the RESULT.
+#:
+#: `CarbonEntry.verification_status` is an untyped CharField that accumulated values reading as
+#: third-party verification (`usda_verified`, `epa_usda_verified_aggregate`, `factors_verified`).
+#: Printing them raw put "usda_verified" in a document a certifier reads. Per
+#: `.claude/rules/compliance.md`: factors are "EPA/USDA-sourced"; "USDA Verified" is forbidden.
+#: An unrecognised value degrades to "not stated" rather than inheriting a neighbour's claim.
+_EMISSION_FACTOR_BASIS = {
+    "factors_verified": "EPA/USDA-sourced factor applied",
+    "usda_verified": "EPA/USDA-sourced factor applied",
+    "epa_usda_verified_aggregate": "EPA/USDA-sourced factors, aggregated",
+    "no_factor_applied": "No factor applied",
+    "estimated": "Estimated \u2014 no published factor applied",
+}
+
+
+def _emission_factor_basis(status) -> str:
+    return _EMISSION_FACTOR_BASIS.get((status or "").strip().lower(), "Factor basis not stated")
 
 
 class AuditExportService:
@@ -3595,21 +3617,15 @@ class AuditExportService:
 
             prod_start = self.production.start_date.date() if self.production.start_date else date.today()
             # Certification.certification_type stores enum keys (e.g. "usda_organic",
-            # "ccof", "roc") — NOT display labels. An icontains="organic" match
-            # would miss CCOF / CNG / ROC because their keys don't contain the
-            # string "organic". Explicit allow-list of organic-conferring cert
-            # types keeps the check accurate as new types are added.
-            ORGANIC_CERT_TYPES = (
-                "usda_organic",
-                "ccof",
-                "cng",
-                "real_organic_project",
-                "roc",
-            )
+            # "roc") — NOT display labels, so an icontains="organic" match would miss
+            # CNG / ROC / ROP whose keys do not contain the string "organic". The
+            # allow-list is right; restating its members here was not. It is one import
+            # now, shared with OperationReadinessService, and guarded by
+            # certifications/tests/test_cert_type_set_authority.py.
             organic_certs = list(
                 _Cert.objects.filter(
                     establishment=est_for_land,
-                    certification_type__in=ORGANIC_CERT_TYPES,
+                    certification_type__in=_ORGANIC_CONFERRING_CERT_TYPES,
                 ).order_by("effective_date")
             )
             covering = [
@@ -4294,6 +4310,7 @@ class AuditExportService:
         sold_to = resolve_sales_disclosure(p).buyer
         if sold_to:
             handler_tokens = set()
+            recorded_handlers: set = set()
             # Scan post-harvest narratives for "<Name> pickup" or
             # "delivery to <Name>" — simple tokeniser that looks for a
             # capitalised two-word name adjacent to a handler verb.
@@ -4304,8 +4321,12 @@ class AuditExportService:
             # otherwise a phrase like "Transport to Mission Produce uses
             # Missions" swallows the lowercase "uses" and captures four
             # words instead of the intended two.
+            # "takes" and "goes to" were missing, which is how a real pilot's
+            # "Organically Grown Company takes the fresh blueberries" passed this check
+            # unseen (found 2026-08-28 auditing the checker itself).
             handler_verbs = re.compile(
-                r"(?i:pickup by|pickup on [^\n]{0,30}?by|delivery to|shipped to|transport(?:ed)? to)\s+"
+                r"(?i:pickup by|pickup on [^\n]{0,30}?by|delivery to|shipped to|goes to|"
+                r"sold to|takes|transport(?:ed)? to)\s+"
                 r"([A-Z][A-Za-z&]+(?:\s+[A-Z][A-Za-z&]+){0,3})",
             )
             pickup_verbs = re.compile(
@@ -4317,9 +4338,24 @@ class AuditExportService:
                     handler_tokens.add(m.group(1).strip())
                 for m in pickup_verbs.finditer(text):
                     handler_tokens.add(m.group(1).strip())
-            # Also pull from OSP (a)(5) commingling narrative if available
+            # Also pull handler names out of the OSP narrative, and load the facilities the
+            # operation actually has on file.
             try:
                 establishment = p.parcel.establishment
+
+                # A name that matches a facility ON FILE is not a discrepancy — it is the record
+                # doing its job. Comparing prose against prose could never tell the difference,
+                # which is why this check had never once fired on a real mismatch.
+                #
+                # Loaded INDEPENDENTLY of the OSP: a facility record belongs to the
+                # establishment, not to a plan version, and an operation mid-renewal has only a
+                # DRAFT plan. Nesting this under `if osp:` (as the first cut did) meant exactly
+                # the farms most likely to be assembling a packet had no facilities to compare
+                # against, so every handler they named read as a mismatch.
+                for facility in establishment.post_harvest_facilities.all():
+                    if facility.name:
+                        recorded_handlers.add(facility.name)
+
                 from certifications.models import OrganicSystemPlan
 
                 osp = (
@@ -4328,27 +4364,42 @@ class AuditExportService:
                     .first()
                 )
                 if osp:
-                    a5 = (osp.sections or {}).get("commingling_barriers", {}).get("narrative", "") or ""
-                    for m in handler_verbs.finditer(a5):
-                        handler_tokens.add(m.group(1).strip())
-                    for m in pickup_verbs.finditer(a5):
-                        handler_tokens.add(m.group(1).strip())
-            except Exception:  # noqa: BLE001 — linter must never crash the PDF
-                pass
+                    # § 205.201(a)(5) is where commingling lives, but the sales-channel answer
+                    # that names the handler compiles into (a)(3) `monitoring_plan` — so a
+                    # check reading only (a)(5) was blind to the one sentence most likely to
+                    # name a handler. Read all three narrative homes (2026-08-28).
+                    sections = osp.sections or {}
+                    for key in ("commingling_barriers", "monitoring_plan", "practices_procedures"):
+                        narrative = (sections.get(key) or {}).get("narrative", "") or ""
+                        for m in handler_verbs.finditer(narrative):
+                            handler_tokens.add(m.group(1).strip())
+                        for m in pickup_verbs.finditer(narrative):
+                            handler_tokens.add(m.group(1).strip())
+            except Exception:  # noqa: BLE001 — a linter finding must never take the PDF down
+                # Deliberate fail-open, but never silent: without the log this degrades into
+                # "the check found nothing", which reads identically to "the check passed".
+                logger.exception("Handler-chain check could not load OSP or facility records")
 
             def _normalise(s: str) -> str:
                 return re.sub(r"[^a-z0-9]", "", s.lower())
 
             sold_to_norm = _normalise(sold_to)
-            handler_mismatches = [
-                tok
-                for tok in handler_tokens
-                # Treat a handler as consistent if it is referenced in
-                # (or references) the sold_to string — handles "Mission
-                # Produce → Whole Foods" chains where Mission is the
-                # intermediate handler and Whole Foods is the retailer.
-                if _normalise(tok) not in sold_to_norm and sold_to_norm not in _normalise(tok)
-            ]
+            recorded_norm = {_normalise(name) for name in recorded_handlers if name}
+
+            def _accounted_for(token: str) -> bool:
+                tok = _normalise(token)
+                if not tok:
+                    return True
+                # Consistent if it is the buyer, or references it — handles "Mission Produce →
+                # Whole Foods" chains where Mission is the intermediate handler.
+                if tok in sold_to_norm or sold_to_norm in tok:
+                    return True
+                # Or if it is a facility the operation has on file. Before the handler record
+                # reached the plan layer there was nothing to compare against, so every named
+                # handler looked like a discrepancy or none did.
+                return any(tok in rec or rec in tok for rec in recorded_norm)
+
+            handler_mismatches = [tok for tok in handler_tokens if not _accounted_for(tok)]
             # Flag only when ≥2 distinct handler names appear that do not
             # match the sales-record retailer. A single-handler mismatch
             # (e.g. "Mission Produce" as the intermediate handler with
@@ -8615,7 +8666,19 @@ class AuditExportService:
         elements.append(self._spacer(0.15))
 
         if entries:
-            headers = ["Source", "Type", "Amount (kg CO2e)", "Verification Status"]
+            # 🔴 2026-08-29 — this column was headed "Verification Status" and printed
+            # `CarbonEntry.verification_status` RAW. That field is a free CharField whose live
+            # values include `usda_verified` (88 rows on the pilot alone) and
+            # `epa_usda_verified_aggregate`, so a certifier-facing PDF stated "usda_verified"
+            # against emission lines — the precise claim `.claude/rules/compliance.md` forbids by
+            # name ("EPA/USDA-sourced" is SAFE; "USDA Verified" is UNSAFE), and an FTC 16 CFR
+            # 260.6 exposure. Nothing about a Trazo calculation is verified by USDA.
+            #
+            # The honest vocabulary already exists: `carbon/services/verified_emission_factors.py`
+            # types provenance as published-vs-internal-estimate precisely so no surface has to
+            # invent its own wording. This says which FACTOR BASIS was applied, and never that
+            # anyone verified the result.
+            headers = ["Source", "Type", "Amount (kg CO2e)", "Emission factor basis"]
             header_row = [self._hdr(h) for h in headers]
             data = [header_row]
             for entry in entries:
@@ -8625,7 +8688,7 @@ class AuditExportService:
                         self._cell(source_name),
                         self._cell(entry.type),
                         self._cell(_fmt_float(entry.co2e_amount or entry.amount)),
-                        self._cell(entry.verification_status),
+                        self._cell(_emission_factor_basis(entry.verification_status)),
                     ]
                 )
             col_widths = [2.2 * inch, 1.0 * inch, 1.5 * inch, 1.6 * inch]
@@ -9736,14 +9799,16 @@ class AuditExportService:
         # "Anniversary: YYYY-MM-DD" and explicitly state no expiry applies;
         # private-label certs continue to render as "Expires: YYYY-MM-DD"
         # because that IS their legal semantic.
-        _USDA_ORGANIC_TYPES = ("usda_organic", "ccof", "ccof_organic", "ams_organic")
-
         def _is_usda_organic(cert):
             ctype = (getattr(cert, "certification_type", "") or "").lower()
-            # Exact key match against the USDA NOP set. CCOF acts as a USDA-
-            # accredited certifying agent, so a CCOF-issued NOP certificate
-            # falls under the same § 205.404(d) "no expiry" rule.
-            return ctype in _USDA_ORGANIC_TYPES
+            # Exact key match against the NOP set. This used to read
+            # ("usda_organic", "ccof", "ccof_organic", "ams_organic") — the last two are
+            # slugs that appear in NO vocabulary in this codebase, and the CCOF entry was
+            # working around a certifier sitting in the TYPE column. A CCOF-issued
+            # certificate IS a NOP certificate and now stores `usda_organic`, with "CCOF"
+            # in certifier_name, so the § 205.404(d) no-expiry rule reaches it by the
+            # front door.
+            return ctype in _NOP_CERTIFICATION_TYPES
 
         def _date_cell_display(cert):
             if _is_usda_organic(cert):
@@ -11025,30 +11090,18 @@ class AuditExportService:
                 )
                 elements.append(self._spacer(0.1))
 
-        polygon = getattr(parcel, "polygon", None) if parcel else None
-        ring = None
-        if isinstance(polygon, dict):
-            coords = polygon.get("coordinates") or []
-            if coords and isinstance(coords[0], list):
-                ring = coords[0]
+        # The drawing itself lives in `certifications.services.parcel_map`, shared with the OSP
+        # Parcel Application (2026-08-28). It was a private method here, so the one document that
+        # most needs a map — the §205.202 parcel page a certifier reviews before inspecting a new
+        # parcel — could not call it and printed a sentence instead. Two renderings of one
+        # parcel is how two documents come to disagree about the same field.
+        from certifications.services.parcel_map import parcel_map_caption, parcel_map_drawing
 
-        # Adjoining-land labels keyed by compass direction (from buffer_zones).
-        buffers = getattr(parcel, "buffer_zones", None) if parcel else None
-        adj_by_dir = {}
-        if isinstance(buffers, list):
-            for b in buffers:
-                if isinstance(b, dict) and b.get("direction"):
-                    adj_by_dir[str(b["direction"]).strip().lower()] = b.get("adjoining_land_use") or ""
-
-        valid_ring = (
-            isinstance(ring, list)
-            and len(ring) >= 3
-            and all(isinstance(pt, (list, tuple)) and len(pt) >= 2 for pt in ring)
-        )
-        if not valid_ring:
+        drawing = parcel_map_drawing(parcel) if parcel else None
+        if drawing is None:
             elements.append(
                 self._body(
-                    "No field-boundary geometry is on file for this parcel. A parcel map "
+                    "No usable field-boundary geometry is on file for this parcel. A parcel map "
                     "showing field boundaries, buffer zones, and adjoining land use is a "
                     "standard certifier expectation (the Common OSP Parcel Application). Add the "
                     "parcel polygon in the producer dashboard so this map renders."
@@ -11062,86 +11115,8 @@ class AuditExportService:
             )
             return elements
 
-        try:
-            lngs = [float(pt[0]) for pt in ring]
-            lats = [float(pt[1]) for pt in ring]
-        except (TypeError, ValueError):
-            elements.append(self._body("Parcel geometry is present but not numeric; field map skipped."))
-            return elements
-
-        min_lng, max_lng = min(lngs), max(lngs)
-        min_lat, max_lat = min(lats), max(lats)
-        geo_w = max_lng - min_lng
-        geo_h = max_lat - min_lat
-        if geo_w <= 0 or geo_h <= 0:
-            elements.append(self._body("Parcel geometry is degenerate (zero width or height); field map skipped."))
-            return elements
-
-        # Drawing canvas. Reserve margins for the compass-direction labels.
-        draw_w = 4.9 * inch
-        draw_h = 3.1 * inch
-        margin_x = 70.0
-        margin_y = 26.0
-        box_x1, box_x2 = margin_x, draw_w - margin_x
-        box_y1, box_y2 = margin_y, draw_h - margin_y
-        box_w = box_x2 - box_x1
-        box_h = box_y2 - box_y1
-
-        # Preserve aspect ratio so the schematic is not distorted; center in box.
-        scale = min(box_w / geo_w, box_h / geo_h)
-        used_w = geo_w * scale
-        used_h = geo_h * scale
-        off_x = box_x1 + (box_w - used_w) / 2.0
-        off_y = box_y1 + (box_h - used_h) / 2.0
-
-        # Higher latitude = north = higher y, so no vertical flip is needed.
-        pts = []
-        for lng, lat in zip(lngs, lats):
-            pts.extend([off_x + (lng - min_lng) * scale, off_y + (lat - min_lat) * scale])
-
-        d = Drawing(draw_w, draw_h)
-        d.hAlign = "CENTER"
-        d.add(
-            Polygon(
-                points=pts,
-                fillColor=colors.HexColor("#E8F5E9"),
-                strokeColor=TRAZO_GREEN,
-                strokeWidth=1.4,
-            )
-        )
-
-        cx = (box_x1 + box_x2) / 2.0
-        cy = (box_y1 + box_y2) / 2.0
-
-        def dir_label(direction, x, y, anchor):
-            land = adj_by_dir.get(direction.lower(), "")
-            text = f"{direction.upper()} · {_truncate(land, 32)}" if land else direction.upper()
-            d.add(String(x, y, text, fontSize=6.5, fillColor=colors.HexColor("#555555"), textAnchor=anchor))
-
-        dir_label("North", cx, draw_h - 12, "middle")
-        dir_label("South", cx, 6, "middle")
-        dir_label("East", draw_w - 4, cy, "end")
-        dir_label("West", 4, cy, "start")
-
-        # North arrow (top-right corner of the canvas).
-        ax = draw_w - 16
-        ay = draw_h - 44
-        d.add(Line(ax, ay, ax, ay + 16, strokeColor=colors.HexColor("#333333"), strokeWidth=1))
-        d.add(String(ax, ay + 18, "N", fontSize=7, fillColor=colors.HexColor("#333333"), textAnchor="middle"))
-
-        elements.append(d)
-
-        # Bounding-box center — robust to the repeated GeoJSON closing vertex and to
-        # uneven vertex spacing (a plain vertex-average would be biased by both).
-        cen_lng = (min_lng + max_lng) / 2.0
-        cen_lat = (min_lat + max_lat) / 2.0
-        area_txt = f"{_fmt_float(parcel.area, 2)} ha" if getattr(parcel, "area", None) else "—"
-        elements.append(
-            self._label_value(
-                "Parcel",
-                f"{_val(getattr(parcel, 'name', None))} · {area_txt} · " f"center {cen_lat:.6f}, {cen_lng:.6f}",
-            )
-        )
+        elements.append(drawing)
+        elements.append(self._label_value("Parcel", parcel_map_caption(parcel)))
         elements.append(
             Paragraph(
                 "Schematic parcel boundary drawn from the recorded field geometry — "
@@ -12058,7 +12033,7 @@ class AuditExportService:
 
         # NOP 7 CFR 205.202 — computed transition status (Sprint 2.2)
         try:
-            from product.services.transition_status_service import compute_transition_status
+            from product.services.transition_status_service import compute_transition_status, transition_verdict
 
             ts = compute_transition_status(parcel)
             # "Eligible" is a determination the CERTIFYING AGENT makes, and
@@ -12069,49 +12044,16 @@ class AuditExportService:
             # date_last_prohibited. Printing the favourable verdict for the second case puts a
             # self-assigned eligibility call into a document the certifier reads — the same
             # absence-is-not-a-pass rule applied to the snapshot marks.
+            # One definition of this sentence, shared with the OSP packet's parcel page — it was
+            # corrected here first and the packet went on printing "Eligible: Yes" from the same
+            # status object for months. See product/services/transition_status_service.py.
             has_field_history = ParcelCropHistory.objects.filter(parcel=parcel).exists()
-            if ts.is_eligible and not has_field_history:
-                elements.append(
-                    self._label_value(
-                        "Organic Transition Status",
-                        "Not established \u2014 no field history on file (\u00a7 205.202(b))",
-                    )
+            elements.append(
+                self._label_value(
+                    "Organic Transition Status",
+                    transition_verdict(ts, has_field_history=has_field_history),
                 )
-            elif ts.is_eligible:
-                elements.append(self._label_value("Organic Transition Status", "Eligible"))
-            elif ts.last_prohibited_date is None:
-                # 🔴 2026-08-19: this case fell into the "In transition" branch below and
-                # printed "In transition — 0 days remaining (eligible None)" — a raw Python
-                # None in a certifier document, on a farm certified organic since 1978.
-                #
-                # `is_eligible` is False here for the opposite reason to the one that phrasing
-                # implies. There is no prohibited application on record (findings == 0) and so
-                # no transition clock at all; what blocks the determination is an application
-                # whose organic status was never classified. "In transition" asserts a
-                # regulatory state Trazo has no basis for, and it asserts the unfavourable one.
-                #
-                # Trazo reports what the records show and leaves § 205.202(b) to the certifying
-                # agent — the same rule the no-field-history branch above already follows.
-                blocked_by = ""
-                if ts.unclassified:
-                    blocked_by = (
-                        f" — {len(ts.unclassified)} application(s) on this parcel have no "
-                        "organic status recorded, so no start date can be fixed"
-                    )
-                elements.append(
-                    self._label_value(
-                        "Organic Transition Status",
-                        f"Not established from records in Trazo{blocked_by} (§ 205.202(b))",
-                    )
-                )
-            else:
-                elements.append(
-                    self._label_value(
-                        "Organic Transition Status",
-                        f"In transition — {ts.days_remaining} days remaining "
-                        f"(eligible {ts.transition_complete_date})",
-                    )
-                )
+            )
             if ts.last_prohibited_date:
                 elements.append(self._label_value("Last Prohibited Substance Date", str(ts.last_prohibited_date)))
             if ts.note:
@@ -12500,7 +12442,9 @@ class AuditExportService:
 
     # Certification types that put an operation under 7 CFR Part 205. Only these carry the
     # § 205.406 annual-continuation duty — a Non-GMO or GlobalG.A.P. certificate does not.
-    NOP_CERTIFICATION_TYPES = ("usda_organic", "ccof")
+    # The members live in certifications.constants; this alias keeps the class attribute
+    # that existing call sites read.
+    NOP_CERTIFICATION_TYPES = _NOP_CERTIFICATION_TYPES
 
     def _safe_narrative(self, text: str, max_chars: int | None = None) -> str:
         """
@@ -12917,7 +12861,9 @@ class AuditExportService:
                 )
             elements.append(self._spacer(0.08))
 
-        # --- Approved inputs — the scope the certifier approved ---------------
+        # --- Input materials on the plan. NOT "the scope the certifier approved":
+        # nothing here records a certifier decision. Trazo resolves names against
+        # OMRI / WSDA / the National List; approval is the agent's act. ------------
         # Inspectors reviewing the Unapproved-Input Findings section (if
         # present) need to know what WAS approved so they can cross-reference
         # "this event references X, X is not in the approved list" against
@@ -12929,7 +12875,7 @@ class AuditExportService:
         elements.append(self._spacer(0.12))
         elements.append(
             Paragraph(
-                "<b>Approved inputs — certifier-approved scope (§ 205.201(a)(2))</b>",
+                "<b>Input materials on this plan (§ 205.201(a)(2))</b>",
                 self._styles["body"],
             )
         )
@@ -14090,16 +14036,33 @@ class AuditExportService:
         except AttributeError:
             establishment = None
 
-        # --- FSMA 204 Food Traceability Rule (21 CFR 1.1300, effective 2028-07-20) ---
+        # --- FSMA 204 Food Traceability Rule (21 CFR 1.1300) ---
         # FTL membership resolved by the single-source-of-truth helper so this
         # declaration and the Traceability-section footer can never contradict.
+        #
+        # 🔴 2026-08-29 — this said the KDEs were required "by 2028-07-20" and the comment called
+        # the rule "effective 2028-07-20". A COMPLIANCE DATE and an ENFORCEMENT MORATORIUM are not
+        # the same thing, and conflating them told a certifier an obligation was not yet in force
+        # when it was. The rule's own compliance date (January 20, 2026) has passed; what defers
+        # 2028-07-20 is an appropriations rider barring FDA from SPENDING to enforce, which
+        # expires with the fiscal year and must be renewed — not a finalised extension (the
+        # 30-month extension published 2025-08-07 was a PROPOSED rule; no final rule followed).
+        #
+        # Trazo does not track FDA's enforcement calendar and must not appear to. The statement
+        # now reports what Trazo actually knows — whether the crop is on the list — and sends the
+        # operator to the authority for dates. Anything else is a regulatory claim on a document
+        # a certifier reads.
         coverage = self._fsma_ftl_coverage()
         if coverage == "covered":
             fsma_204_status = (
-                "COVERED. Crop is on the FDA Food Traceability List. FSMA 204 "
-                "KDEs/CTEs required at harvest, cooling, packing, and shipping "
-                "by 2028-07-20. Trazo lot tracking captures the identifiers; "
-                "formal CTE/KDE export is on the roadmap."
+                "COVERED. Crop is on the FDA Food Traceability List (21 CFR 1.1300), so the rule's "
+                "recordkeeping obligations apply to it. Note that the growing of a listed food has "
+                "no Key Data Elements of its own — KDEs attach from initial packing onward, and the "
+                "initial packer assigns the traceability lot code. Trazo's lot records carry the "
+                "harvest-side identifiers a packer needs; Trazo does not produce a FSMA 204 "
+                "traceability plan or a sortable KDE file. Confirm the current compliance and "
+                "enforcement dates with FDA or your buyer — they have been subject to change and "
+                "Trazo does not track them."
             )
         elif coverage == "not_covered":
             fsma_204_status = (

@@ -76,6 +76,7 @@ G8_0_RECORD_KEEPING = Module(
                 ),
                 Question(
                     key="records_retention_attestation",
+                    attests_embed="s11_record_types",
                     kind="boolean",
                     label=text(
                         "Do you maintain the records confirmed above, keep them for at "

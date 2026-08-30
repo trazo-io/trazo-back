@@ -151,6 +151,60 @@ G6_2_STORAGE = Module(
                     visible_when=(Condition("storage_locations", "includes", "uncertified_facility"),),
                     compiles_to=CompileRule(template="Records provided by the uncertified storage facility: {answer}"),
                 ),
+                # WSDA K1 asks whether a THIRD PARTY is contracted to store the crop, which
+                # none of the location options above can answer: "commercial cold storage
+                # off-farm" reads the same whether the operation rents the unit itself or
+                # another business stores for it, and only the second puts the crop inside
+                # someone else's records.
+                Question(
+                    key="third_party_storage_contracted",
+                    kind="boolean",
+                    label=text(
+                        "Do you contract another operation to store your organic product?",
+                        "\u00bfContrata a otra operaci\u00f3n para almacenar su producto org\u00e1nico?",
+                    ),
+                    nop_cite="\u00a7 205.272(a)",
+                    visible_when=(
+                        Condition(
+                            "storage_locations",
+                            "includes_any",
+                            ["commercial_cold_off_farm", "certified_handler", "uncertified_facility"],
+                        ),
+                    ),
+                    compiles_to=CompileRule(
+                        template="Organic product is stored by another operation under contract: {answer}."
+                    ),
+                ),
+                # Selecting `certified_handler` used to open nothing at all, so the plan named
+                # a facility class and never the facility — while CCOF G6.2 \u00a7A's attachment is
+                # mandatory the moment that box is ticked. Same records, same embed as G6.1 \u00a7D.
+                Question(
+                    key="off_farm_storage_table",
+                    kind="info",
+                    required=False,
+                    embed="post_harvest_facilities",
+                    label=text(
+                        "Storage facilities on file for this operation",
+                        "Instalaciones de almacenamiento registradas para esta operaci\u00f3n",
+                    ),
+                    coaching=text(
+                        "These are the facilities recorded on your farm profile, with their "
+                        "address and organic certificate. A facility that both stores and "
+                        "handles your crop appears here and on G6.1 \u00a7D \u2014 it is one record.",
+                        "Estas son las instalaciones registradas en el perfil de su finca, con "
+                        "su direcci\u00f3n y su certificado org\u00e1nico. Una instalaci\u00f3n que almacena "
+                        "y adem\u00e1s manipula su cultivo aparece aqu\u00ed y en G6.1 \u00a7D \u2014 es un solo "
+                        "registro.",
+                    ),
+                    nop_cite="\u00a7 205.272(a)",
+                    visible_when=(
+                        Condition(
+                            "storage_locations",
+                            "includes_any",
+                            ["commercial_cold_off_farm", "certified_handler", "uncertified_facility"],
+                        ),
+                    ),
+                ),
             ),
         ),
         ModulePage(

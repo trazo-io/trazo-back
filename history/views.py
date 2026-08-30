@@ -2054,7 +2054,12 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # Plan gate, from the PRODUCTION's owning company (not the caller's active one).
         require_compliance_exports(production.parcel.establishment.company, user=request.user)
 
-        cert_type = request.query_params.get("certification", "all").lower()
+        # Defaults to ORGANIC, not "all". `all` carries the carbon appendix that the organic
+        # export deliberately omits — emissions data in a certifier document is a
+        # greenwashing-by-association risk and inspectors do not grade on it — so a caller who
+        # omits the parameter must not receive it by accident. The UI stopped offering a choice
+        # on 2026-08-29; this is the door direct API callers come through.
+        cert_type = request.query_params.get("certification", "organic").lower()
         export_format = request.query_params.get("export_format", "pdf").lower()
         # strict_ofpp=true is an opt-in gate intended for certifier-handoff
         # exports ("Mark as Submitted"). Default is False so farmers can
@@ -2344,7 +2349,12 @@ def audit_export_by_uuid(request, public_id):
     # how a paywall ends up being enforced on only one of them.
     require_compliance_exports(production.parcel.establishment.company, user=request.user)
 
-    cert_type = request.query_params.get("certification", "all").lower()
+    # Defaults to ORGANIC, not "all". `all` carries the carbon appendix that the organic
+    # export deliberately omits — emissions data in a certifier document is a
+    # greenwashing-by-association risk and inspectors do not grade on it — so a caller who
+    # omits the parameter must not receive it by accident. The UI stopped offering a choice
+    # on 2026-08-29; this is the door direct API callers come through.
+    cert_type = request.query_params.get("certification", "organic").lower()
     export_format = request.query_params.get("export_format", "pdf").lower()
     # strict_ofpp tri-state: unset → service-side default (True for
     # organic / all-certs, False otherwise). Explicit "false" → diagnostic

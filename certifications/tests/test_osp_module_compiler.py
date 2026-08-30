@@ -146,7 +146,11 @@ class CompilerUnitTests(TestCase):
                         "seeds_used": ["organic_untreated", "organic_treated"],
                         "seedlings_used": ["purchased_organic"],
                         "planting_stock_used": ["organic"],
-                        "treatment_verification": ["omri_wsda", "trazo_verification"],
+                        # Both bases CCOF's G3.0 D1 accepts. `trazo_verification` was a third
+                        # option here until 2026-08-27; it claimed a check Trazo does not perform
+                        # and was removed. Fixture values must be options the module actually
+                        # offers — a test that supplies its own vocabulary passes forever.
+                        "treatment_verification": ["omri_wsda", "certifier_approval"],
                         "treatments_on_inputs_list": True,
                         "grafts_stock": "no",
                     }

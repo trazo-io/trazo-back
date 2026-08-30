@@ -307,6 +307,33 @@ PARCEL_APPLICATION = Module(
                     embed="parcel_map",
                     required=False,
                 ),
+                # CCOF NOPB49 §E prefers satellite imagery and names eleven required elements —
+                # roads and landmarks, permanent block identifiers, other operation areas, the
+                # livestock and treated-lumber notes — most of which a boundary schematic
+                # cannot carry. WSDA AGR 2264 additionally wants the operation and site name
+                # printed ON the map. So the drawing is a floor, not the answer: the operator's
+                # own map rides in the packet under `parcels/maps/`.
+                Question(
+                    key="map_upload",
+                    kind="upload",
+                    label=text(
+                        "Attach your parcel map (8.5x11, satellite imagery preferred)",
+                        "Adjunte el mapa de su parcela (8.5x11, se prefiere imagen satelital)",
+                    ),
+                    coaching=text(
+                        "Mark the parcel boundaries, a north arrow, total acreage, block or lot "
+                        "identifiers, the nearest roads or landmarks, adjacent land uses, and "
+                        "your buffer zones with their widths. If you farm in Washington, print "
+                        "your operation name and this site's name on the map itself.",
+                        "Marque los l\u00edmites de la parcela, una flecha norte, la superficie "
+                        "total, los identificadores de bloque o lote, los caminos o puntos de "
+                        "referencia m\u00e1s cercanos, los usos de la tierra colindante y sus zonas "
+                        "de amortiguamiento con sus anchos. Si produce en Washington, imprima el "
+                        "nombre de su operaci\u00f3n y el de este sitio en el mapa.",
+                    ),
+                    nop_cite="\u00a7 205.202",
+                    required=False,
+                ),
             ),
         ),
         ModulePage(

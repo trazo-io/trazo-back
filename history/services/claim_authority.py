@@ -290,12 +290,18 @@ _PUBLISHABLE_CERTIFICATION_TYPES = frozenset(
         "kosher",
         # certifications app vocabulary
         "usda_organic",
-        "ccof",
         "real_organic_project",
         "roc",
         "korean_organic",
         "non_gmo_project",
         "sqf",
+        # 2026-08-27. Both name an issuing body with a public directory, which is the line
+        # this list draws: a shopper can go and check them. (`ccof` left this set the same
+        # day — not because CCOF is unpublishable, but because it stopped being a
+        # certification TYPE at all. It is a certifying AGENT and now travels in
+        # `certifier_name`, where `public_certifier_name()` governs it.)
+        "primus_gfs",
+        "salmon_safe",
         "other",
     }
 )
@@ -401,7 +407,10 @@ _CERT_TYPE_ALIASES = {
     "real_organic_project": "real_organic_project",
     "usda_organic": "usda_organic",
     "global_gap": "global_gap",
-    "ccof": "ccof",
+    # 2026-08-27: "ccof" was an identity mapping onto a Certification type that no longer
+    # exists. A legacy BusinessEvent still carrying it means USDA Organic, which is where
+    # migration 0031 moved every Certification row it named.
+    "ccof": "usda_organic",
 }
 
 

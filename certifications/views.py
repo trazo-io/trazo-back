@@ -40,6 +40,7 @@ from .serializers import (
     OrganicSystemPlanSerializer,
     OSPAnnualUpdateSerializer,
     OSPChangeNotificationSerializer,
+    PlanMaterialEntrySerializer,
     PostHarvestFacilitySerializer,
     StateOrganicRegistrationSerializer,
 )
@@ -729,6 +730,25 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         if target_id in (None, ""):
             raise ValidationError({"id": "id is required."})
         target = self._resolve_input(kind, target_id)
+
+        # § 205.602 substances are PROHIBITED in organic crop production, and 33 of them sit in the
+        # same National List catalogue the search reads — "Ash from manure burning" comes back for
+        # a search on "manure". The API served each row's status all along and nothing read it, so
+        # a prohibited substance could be attached to the plan and would then print in the
+        # certifier packet as an input on this operation's approved list. Refused here rather than
+        # only in the panel, because a disabled button is a UI courtesy, not an access rule.
+        if kind == "national_list" and (getattr(target, "status", "") or "").lower() == "prohibited":
+            raise ValidationError(
+                {
+                    "id": (
+                        f"{target.substance_name} is prohibited in organic production "
+                        f"(\u00a7 {target.cfr_section or '205.602'}) and cannot be added to an organic "
+                        "system plan. If it was applied to this land, record it as a land-history "
+                        "or change-notification entry instead."
+                    )
+                }
+            )
+
         ref = (request.data.get("change_notification_reference") or "").strip()
         notes = (request.data.get("notes") or "").strip()
 
@@ -764,9 +784,88 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # adding an input may clear warnings that were raised for it.
         self._recompute_drift_for_establishment(osp.establishment_id)
 
+        self._recompile_after_materials_change(osp)
         # Re-fetch so serializer reflects the freshly prefetched relations.
         osp.refresh_from_db()
         return Response(OrganicSystemPlanSerializer(osp).data)
+
+    @staticmethod
+    def _recompile_after_materials_change(osp) -> None:
+        """Keep the on-screen § 205.201(a) narrative in step with the materials list.
+
+        The packet recompiles at assembly (`_refresh_narratives_if_editable`), and that is what
+        guarantees the FILED document. This is the other half: between packets the farmer reads
+        their narrative in the app, and a material added here belongs in it immediately rather
+        than at whatever module save happens to come next.
+        """
+        from certifications.services.osp_module_compiler import compile_modules_to_sections
+
+        try:
+            if compile_modules_to_sections(osp):
+                osp.save(update_fields=["sections", "updated_at"])
+        except Exception:  # noqa: BLE001 — never fail the write over the prose it feeds
+            logger.exception("Could not recompile narratives after a materials change on OSP %s", osp.pk)
+
+    @action(detail=True, methods=["get", "post"], url_path="plan-materials")
+    def plan_materials_entries(self, request, **kwargs):
+        """List (GET) or add (POST) an operator-authored materials-list row.
+
+        The defect this closes: the only path onto an OSP's materials list was a catalog match,
+        so CCOF NOPB41 §A's own examples — compost, manure, gypsum, limestone — and any
+        home-formulated product had nowhere to go, while the module printed five attestations
+        that every material in use was on the list. § 205.201(a) makes the producer the author;
+        a catalog is a shortcut, never the gate.
+
+        Editable on the same statuses as the approved-inputs list, for the same reason: the
+        materials list is part of the plan under review.
+        """
+        osp = self.get_object()
+        if request.method == "GET":
+            return Response(PlanMaterialEntrySerializer(osp.plan_material_entries.all(), many=True).data)
+
+        self._ensure_approved_inputs_editable(osp)
+        serializer = PlanMaterialEntrySerializer(data=request.data, context={"osp": osp})
+        serializer.is_valid(raise_exception=True)
+        entry = serializer.save(
+            osp=osp,
+            created_by=request.user if request.user.is_authenticated else None,
+        )
+        # Adding a material may clear a drift warning raised for it, exactly as attaching a
+        # catalog input does.
+        self._recompute_drift_for_establishment(osp.establishment_id)
+        self._recompile_after_materials_change(osp)
+        return Response(PlanMaterialEntrySerializer(entry).data, status=status.HTTP_201_CREATED)
+
+    @action(
+        detail=True,
+        methods=["patch", "delete"],
+        url_path=r"plan-materials/(?P<entry_id>\d+)",
+    )
+    def plan_material_entry_detail(self, request, entry_id=None, **kwargs):
+        """Correct or remove one operator-authored row.
+
+        Removal is never gated on the material's standing — a row that should not be on the plan
+        must always be removable. (The § 205.602 refusal added on 2026-08-28 applies to putting a
+        prohibited substance ON a plan, never to taking one off.)
+        """
+        osp = self.get_object()
+        self._ensure_approved_inputs_editable(osp)
+        entry = osp.plan_material_entries.filter(pk=entry_id).first()
+        if entry is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == "DELETE":
+            entry.delete()
+            self._recompute_drift_for_establishment(osp.establishment_id)
+            self._recompile_after_materials_change(osp)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        serializer = PlanMaterialEntrySerializer(entry, data=request.data, partial=True, context={"osp": osp})
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        self._recompute_drift_for_establishment(osp.establishment_id)
+        self._recompile_after_materials_change(osp)
+        return Response(serializer.data)
 
     @action(detail=True, methods=["get", "post"], url_path="change-notifications")
     def change_notifications(self, request, **kwargs):
@@ -882,6 +981,7 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             ApprovedInputChangeLog.objects.create(**log_kwargs)
 
         self._recompute_drift_for_establishment(osp.establishment_id)
+        self._recompile_after_materials_change(osp)
         osp.refresh_from_db()
         return Response(OrganicSystemPlanSerializer(osp).data)
 
@@ -1181,7 +1281,7 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _module_status(entry: dict, module=None) -> str:
+    def _module_status(entry: dict, module=None, osp=None) -> str:
         """Status as it stands against the CURRENT questionnaire, not as it was stamped.
 
         Adding a required question to a shipped module makes every previously-completed
@@ -1200,20 +1300,29 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             if module is not None:
                 from certifications.osp_modules.conditions import missing_required
 
-                if missing_required(module, entry.get("answers") or {}):
+                answers = entry.get("answers") or {}
+                if missing_required(module, answers):
                     return "in_progress"
+                # A module completed before the attestation gate existed can still hold an
+                # affirmative attestation over an empty list. Report it honestly rather than
+                # showing a green tick a certifier will send back.
+                if osp is not None:
+                    from certifications.services.attestation_gates import blocked_attestations
+
+                    if blocked_attestations(module, answers, osp):
+                        return "in_progress"
             return "completed"
         if entry.get("answers"):
             return "in_progress"
         return "not_started"
 
-    def _module_progress_row(self, module, entry: dict) -> dict:
+    def _module_progress_row(self, module, entry: dict, osp=None) -> dict:
         from certifications.osp_modules.conditions import progress
 
         return {
             "key": module.key,
             "code": module.code,
-            "status": self._module_status(entry, module),
+            "status": self._module_status(entry, module, osp),
             "not_applicable": bool(entry.get("not_applicable")),
             "na_attestation": entry.get("na_attestation"),
             "completed_at": entry.get("completed_at"),
@@ -1237,7 +1346,7 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         osp = self.get_object()
         responses = (osp.module_responses or {}).get("modules", {})
-        rows = [self._module_progress_row(m, responses.get(m.key) or {}) for m in MODULE_REGISTRY]
+        rows = [self._module_progress_row(m, responses.get(m.key) or {}, osp) for m in MODULE_REGISTRY]
         return Response({"modules": rows})
 
     @action(detail=True, methods=["get", "put"], url_path=r"modules/(?P<module_key>[a-z0-9_]+)")
@@ -1283,7 +1392,7 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 {
                     "definition": serialize_module(module),
                     "content_version": CONTENT_VERSION,
-                    "response": self._module_progress_row(module, entry),
+                    "response": self._module_progress_row(module, entry, osp),
                     "answers": entry.get("answers") or {},
                     # Evidence → suggestion only. Resolved fresh on every GET, never
                     # stored; the sole path into `answers` is the operator accepting
@@ -1362,6 +1471,15 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                             }
                         }
                     )
+                # Refuse the untrue value at the WRITE, not only at completion. The attestation
+                # is a statement to the certifier; storing it and blocking completion later would
+                # leave "Yes" sitting in the plan, and the compiler reads stored answers.
+                from certifications.services.attestation_gates import blocked_attestations
+
+                blocked = blocked_attestations(module, incoming, osp)
+                if blocked:
+                    raise ValidationError({"answers": blocked})
+
                 from certifications.osp_modules.conditions import answer_value
 
                 for key, value in incoming.items():
@@ -1446,11 +1564,24 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                             },
                         }
                     )
+                # An attestation over an empty embed is the module reporting "complete" while
+                # its own PDF prints a signature line with nothing above it. See
+                # certifications/services/attestation_gates.py.
+                from certifications.services.attestation_gates import blocked_attestations
+
+                blocked = blocked_attestations(module, stored, osp)
+                if blocked:
+                    raise ValidationError(
+                        {
+                            "complete": "An attestation refers to a list that is still empty.",
+                            "attestations": blocked,
+                        }
+                    )
                 entry["completed_at"] = now
                 entry["completed_by"] = user_id
 
             entry["definition_version"] = CONTENT_VERSION
-            entry["status"] = self._module_status(entry, module)
+            entry["status"] = self._module_status(entry, module, osp)
             osp.module_responses = responses
 
             # Recompile the § 205.201(a) narratives from the new answers in the same
@@ -1463,7 +1594,7 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         return Response(
             {
-                "response": self._module_progress_row(module, entry),
+                "response": self._module_progress_row(module, entry, osp),
                 "answers": entry.get("answers") or {},
             }
         )
