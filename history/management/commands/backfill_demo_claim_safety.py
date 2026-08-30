@@ -21,6 +21,9 @@ WHAT IT CORRECTS
     GGN is publicly searchable, which is worse than a merely fake number).
   * "(DEMO)" marker on company + establishment names, so the disclosure rides into the
     consumer hero, the JSON-LD, and any screenshot or forward.
+  * `Establishment.is_demo` set — the flag `common/specimen.py` reads to stamp every export
+    and, since 2026-08-30, the consumer product page. The name suffix alone is read only by a
+    human who is already looking; the flag is what every automated surface asks.
   * Fabricated blockchain proof removed. `blockchain_verified` is the explicitly UNSAFE
     wording in .claude/rules/compliance.md (SAFE: "blockchain-recorded"), and the seeded
     Polygon transaction hash resolves to nothing on-chain.
@@ -292,6 +295,30 @@ class Command(BaseCommand):
             if getattr(est, attr, None) is not None and float(getattr(est, attr)) != target:
                 setattr(est, attr, target)
                 fields.append(attr)
+        # 🔴 2026-08-30 — THE FLAG, not just the name.
+        #
+        # This command has been appending "(DEMO)" to fixture names since 2026-08-01 and never
+        # set `is_demo`. The seeders do set it (`_solana_verde_base.py`), but they are
+        # create-only — which is the whole reason this file exists — so every fixture row that
+        # predates that line carried the marker in its NAME and False in the FLAG.
+        #
+        # Measured locally on 2026-08-30: 4 of 65 establishments had `is_demo=True`, and
+        # neither Solana Verde nor Coastal Valleys was among them, both of them already
+        # renamed "(DEMO)" by this very command.
+        #
+        # That flag is now load-bearing. `common/specimen.py` reads it to decide whether an
+        # exported packet, CSV, OSP module, workbook or PUR filing is stamped, and since
+        # 2026-08-30 whether the consumer product page carries its provenance mark. A name
+        # suffix is read by a human who is already looking; the flag is what every automated
+        # surface asks. Marking the name and not the flag meant the fixtures announced
+        # themselves in the one place nothing checks.
+        #
+        # Set only for rows this command has positively identified as a FIXTURE by name — the
+        # asymmetry `common/specimen.py` documents holds here too, and flipping this on a real
+        # operation would stamp SPECIMEN across a legitimate grower's records.
+        if not est.is_demo:
+            est.is_demo = True
+            fields.append("is_demo")
         if fields:
             self._save(est, fields, f"Establishment #{est.id}")
         return len(fields)

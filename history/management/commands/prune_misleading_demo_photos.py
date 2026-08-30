@@ -62,6 +62,59 @@ MISLEADING_IMAGE_IDS = [
 ]
 
 
+#: Hosts that serve library photography. A picture from one of these was taken somewhere else,
+#: of something else, by someone else.
+STOCK_IMAGE_HOSTS = (
+    "images.unsplash.com",
+    "unsplash.com",
+    "images.pexels.com",
+    "pexels.com",
+    "pixabay.com",
+    "istockphoto.com",
+    "shutterstock.com",
+)
+
+
+def _demo_event_gallery_ids():
+    """Gallery ids belonging to EVENTS on establishments flagged `is_demo`.
+
+    Event albums only, deliberately. A stock orchard photo on a demo farm's PROFILE header is
+    decoration and reads as such; the same photo pinned to a dated record — "Preventive
+    anthracnose spray, 14 March, 1 lb/acre" — is a photograph asserting that a specific
+    operation happened. That is the thing 7 CFR 205.201(a)(3) makes an inspector read as
+    fabricated evidence, and it is what every entry in MISLEADING_IMAGE_IDS turned out to be.
+    """
+    from history.models import (
+        BusinessEvent,
+        ChemicalEvent,
+        EquipmentEvent,
+        GeneralEvent,
+        PestManagementEvent,
+        ProductionEvent,
+        SoilManagementEvent,
+        WeatherEvent,
+    )
+
+    ids = set()
+    for model in (
+        WeatherEvent,
+        ChemicalEvent,
+        ProductionEvent,
+        GeneralEvent,
+        EquipmentEvent,
+        SoilManagementEvent,
+        PestManagementEvent,
+        BusinessEvent,
+    ):
+        ids.update(
+            model.objects.filter(
+                history__parcel__establishment__is_demo=True,
+                album__isnull=False,
+            ).values_list("album_id", flat=True)
+        )
+    return ids
+
+
 class Command(BaseCommand):
     help = "Delete demo photographs that depict an operation other than the one they document."
 
@@ -70,6 +123,14 @@ class Command(BaseCommand):
             "--dry-run",
             action="store_true",
             help="Report what would be removed without deleting anything.",
+        )
+        parser.add_argument(
+            "--stock",
+            action="store_true",
+            help=(
+                "Also remove EVERY stock-library photograph attached to an event on a demo "
+                "establishment, not only the individually reviewed ones."
+            ),
         )
 
     def handle(self, *args, **options):
@@ -85,6 +146,34 @@ class Command(BaseCommand):
             if count:
                 total += count
                 self.stdout.write(f"  {count:>5}  {image_id}  — {reason}")
+
+        # --stock: the same defect, addressed as a RULE instead of a list.
+        #
+        # Every id above was found by a person opening a photograph and comparing it to the
+        # record beneath it. That works exactly once per photograph, and this list has now been
+        # extended three times — 2026-08-04, 08-15, 08-28 — each time by images that had
+        # survived the previous sweep. Four of them survived twice because they sat under keys
+        # that sounded innocent (`pruning`, `planting`, `organic_matter`, `beneficial_insects`)
+        # rather than under the machinery keys someone had thought to audit.
+        #
+        # A denylist of reviewed images encodes only the reviews that happened. The rule does
+        # not need the review: a fabricated record has no real photographs, so any library
+        # photograph attached to one is standing in for evidence that does not exist. Whether
+        # it happens to depict the right crop is luck, not correctness.
+        if options["stock"]:
+            gallery_ids = _demo_event_gallery_ids()
+            host_query = Q()
+            for host in STOCK_IMAGE_HOSTS:
+                host_query |= Q(image_url__icontains=host)
+            stock_qs = GalleryImage.objects.filter(host_query, gallery_id__in=gallery_ids).exclude(query)
+            stock_count = stock_qs.count()
+            if stock_count:
+                total += stock_count
+                self.stdout.write(
+                    f"  {stock_count:>5}  (--stock) library photographs on demo EVENT albums, "
+                    "beyond the reviewed list above"
+                )
+            query |= Q(pk__in=list(stock_qs.values_list("pk", flat=True)))
 
         if not total:
             self.stdout.write(self.style.SUCCESS("No misleading demo photographs found."))

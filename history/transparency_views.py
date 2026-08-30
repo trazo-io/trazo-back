@@ -21,6 +21,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from carbon.services.calculator_service import CarbonCalculatorService
+from common.specimen import SPECIMEN_BODY, SPECIMEN_TITLE, is_specimen
 
 from .models import (
     BusinessEvent,
@@ -419,15 +420,30 @@ def production_transparency_detail(request, production_public_id=None):
                 # Consumer blockchain badge removed 2026-08-03 — see the note above. Key kept
                 # with a falsy payload so an un-upgraded client degrades to "no badge".
                 "blockchain_verification": {"verified": False, "transaction_hash": ""},
-                # Scoring methodology — included here so consumers know how the score
-                # was calculated without needing a separate API call.
+                # Basis disclosure for what this payload actually contains.
+                #
+                # 🔴 2026-08-30 — this block used to describe a SCORE. `description` read
+                # "Transparency score based on documented agricultural events" and
+                # `scoring_method` read "Weighted category completeness across 7 event
+                # categories", on a payload the 2026-08-11 gate strips every graded number
+                # out of. So the one thing the consumer surface still said about the score was
+                # how it is computed: the machinery survived the metric it belonged to.
+                #
+                # That is the rule stated at the claim-safety gate below, failing on its own
+                # terms — "PUBLISH facts about the FARM. Never publish Trazo's authored
+                # BASELINE, nor the scoring machinery that applies it." A weighting scheme
+                # across seven categories is the machinery exactly.
+                #
+                # What stays is what substantiates the content the shopper is actually shown:
+                # who the records came from, whether anyone independent checked them, and the
+                # scope of the carbon figures. `data_source` is the required 16 CFR 260.6(d)
+                # basis disclosure and is the most important line in the block.
                 "methodology": {
-                    "description": "Transparency score based on documented agricultural events",
+                    "description": "Farming activities documented by the producer for this lot",
                     "data_source": "Farmer-reported data, not independently audited",
-                    "scoring_method": "Weighted category completeness across 7 event categories",
                     "carbon_scope": "Direct operational emissions only (EPA/USDA-sourced factors)",
-                    "version": "2.0",
-                    "last_updated": "2026-03-21",
+                    "version": "2.1",
+                    "last_updated": "2026-08-30",
                 },
                 # Metadata
                 "api_version": "2.0",
@@ -637,6 +653,39 @@ def production_transparency_detail(request, production_public_id=None):
                 "images": public_history_data.get("images", []),  # Photo gallery for ProductDetail
             }
         )  # Close the response_data.update() call
+
+        # Specimen marking (2026-08-30). From 2026-08-21 `common/specimen.py` has been the one
+        # place that decides whether an artifact describes a REAL operation, and every EXPORT
+        # surface consults it — packet, CSV, OSP modules, workbooks, PUR. The consumer product
+        # page is the sibling that never got wired. `Establishment.is_demo` was already True on
+        # every seeded farm and `is_specimen()` already read it; this payload asked neither.
+        #
+        # So `consumer.trazo.io/production/<uuid>` served Solana Verde Organic Ranch — a 285-acre
+        # Fallbrook operation invented by `_solana_verde_base.py`, naming CCOF and the Xerces
+        # Society as its certifiers — in a shape byte-identical to a real grower's lot. That is
+        # exactly the defect class the specimen module was written for, one surface over, and the
+        # dominant defect class in this codebase generally: fixed on the audited surface, alive on
+        # its sibling.
+        #
+        # Two deliberate choices:
+        #
+        # * Marked for EVERY caller, owner included, and therefore placed ABOVE the `is_owner`
+        #   gate below. Whether a farm's records are invented is a fact about the farm, not a
+        #   function of who is looking — unlike the transparency score, which genuinely is
+        #   audience-dependent.
+        # * On the PAYLOAD, not only in the UI. This JSON is public and scrapable whatever the
+        #   page chooses to render, and the export path learned the same lesson when marking the
+        #   packet PDF but not its CSV was considered.
+        #
+        # The default stays load-bearing in the same direction as the export path: `is_specimen()`
+        # resolves anything it cannot read to False, because marking a REAL lot tells a buyer that
+        # a legitimate operation's records are a demonstration.
+        if is_specimen(establishment):
+            response_data["specimen"] = {
+                "is_specimen": True,
+                "title": SPECIMEN_TITLE,
+                "body": SPECIMEN_BODY,
+            }
 
         # Claim-safety gate (2026-06): the self-assigned transparency SCORE is a
         # farmer-dashboard engagement KPI, NOT a consumer-facing claim. A self-created
@@ -1179,72 +1228,6 @@ def _calculate_data_freshness(history):
         return "recent"
     else:
         return "archived"
-
-
-@api_view(["GET"])
-@permission_classes([AllowAny])
-def transparency_explanation(request):
-    """
-    Consumer education endpoint explaining Trazo's transparency scoring
-    Helps consumers understand why transparency percentage matters
-    """
-
-    explanation_data = {
-        "title": "Understanding Farm Transparency Scores",
-        "overview": "Trazo transparency scores show how completely a farm has documented their growing practices. Higher scores mean more complete information.",
-        "scoring_levels": {
-            "excellent": {
-                "range": "90-100%",
-                "description": "Complete documentation of farming activities",
-                "consumer_message": "You can see the full story of how this food was grown",
-            },
-            "good": {
-                "range": "70-89%",
-                "description": "Comprehensive documentation with minor gaps",
-                "consumer_message": "Most farming activities are documented and visible",
-            },
-            "basic": {
-                "range": "50-69%",
-                "description": "Basic documentation covering main activities",
-                "consumer_message": "Key farming activities are documented",
-            },
-            "limited": {
-                "range": "0-49%",
-                "description": "Limited documentation available",
-                "consumer_message": "Only basic information is available",
-            },
-        },
-        "why_transparency_matters": [
-            "See exactly how your food was grown",
-            "Verify sustainability claims with real data",
-            "Support farmers who practice full transparency",
-            "Make informed choices based on complete information",
-        ],
-        "what_we_track": [
-            "Planting and harvesting activities",
-            "Fertilizer and chemical applications",
-            "Soil management practices",
-            "Equipment use and maintenance",
-            "Weather and environmental factors",
-            "Certifications and inspections",
-        ],
-        "carbon_vs_transparency": {
-            "carbon_score": "Shows environmental impact of production",
-            "transparency_score": "Shows how much information is available to verify the carbon score",
-            "together": "Both scores help you make informed, sustainable choices",
-        },
-        # Machine-readable methodology block for API consumers and transparency disclosure.
-        "methodology": {
-            "description": "Transparency score based on documented agricultural events",
-            "data_source": "Farmer-reported data, not independently audited",
-            "scoring_method": "Weighted category completeness across 7 event categories",
-            "carbon_scope": "Direct operational emissions only (EPA/USDA-sourced factors)",
-            "version": "2.0",
-            "last_updated": "2026-03-21",
-        },
-    }
-
-    return Response(explanation_data, status=status.HTTP_200_OK)
 
 
 @api_view(["GET"])

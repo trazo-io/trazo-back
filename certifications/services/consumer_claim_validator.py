@@ -35,6 +35,33 @@ ORGANIC_CERT_TYPE = "usda_organic"
 DISCLAIMER_CERTIFIED = (
     "Certified by a USDA-accredited certifying agent. " "Verification via USDA Organic Integrity Database."
 )
+# 🔴 2026-08-30. The disclaimer above names a specific act — a match against the USDA Organic
+# Integrity Database — and every production holding an active `usda_organic` certificate got it,
+# whether or not that match had ever been performed.
+#
+# `Certification.consumer_display_status` already refuses exactly this: a row whose
+# `verification_status` is "verified" but whose `verification_source` is not the OID falls back
+# to the honest `self_reported` label, "rather than silently upgrading a farmer attestation into
+# a third-party verification" (16 CFR 260.6). That gate landed on the certifications LIST and
+# never on this validator, so one public payload asserted both at once — Solana Verde on
+# consumer.trazo.io served `certifications[].status: self_reported` with
+# `verification_source_url: null`, beside an `organic_claim` claiming OID verification.
+#
+# The fix is the disclaimer, not the label. "USDA Certified Organic" describes the OPERATION and
+# stays true for any farm holding a certificate; "Verification via …" describes something TRAZO
+# did, and may only be said when Trazo did it. Collapsing the unsubstantiated case into
+# DISCLAIMER_SELF_REPORTED would have been the opposite error: that text ends "Not USDA Certified
+# Organic", which is false about a farm that holds a certificate.
+#
+# The negation leads. This string renders inside a badge popover that clamps, and a qualification
+# that survives truncation only in its second sentence is not a qualification: cut mid-string,
+# "…Certified by a USDA-accredited certifying agent. Verification via the USDA Organic Integrity
+# Datab…" is indistinguishable from the affirmative claim. Same reasoning as the materials-list
+# rule that a "none unlisted" answer must never read as "listed".
+DISCLAIMER_CERTIFIED_ON_FILE = (
+    "Not verified by Trazo against the USDA Organic Integrity Database. Certified by a "
+    "USDA-accredited certifying agent, per the certificate on file for this operation."
+)
 DISCLAIMER_TRANSITIONING = (
     "This farm is in transition to organic certification under 7 CFR 205.202(b). "
     "Product may not be labeled or sold as organic until certification is complete."
@@ -43,6 +70,28 @@ DISCLAIMER_SELF_REPORTED = (
     "Farmer-reported organic practices. Not independently verified. " "Not USDA Certified Organic."
 )
 DISCLAIMER_CONVENTIONAL = "This production is not certified organic. Practices documented by the farmer."
+
+#: react-intl message id for each disclaimer above.
+#:
+#: The docstring on `display_label_key` below explains why a server-composed English string
+#: cannot be translated and therefore cannot be the source of truth on a bilingual consumer
+#: page. `disclaimer` had exactly the same defect and no key: OrganicClaimBadge renders
+#: `{claim.disclaimer}` raw, so an es-419 shopper read the whole page in Spanish and then hit
+#: "Farmer-reported organic practices. Not independently verified." in English — on the one
+#: line of the page whose entire job is to qualify a regulated claim under 16 CFR 260.6(d).
+#: A qualification the reader cannot read does not qualify anything.
+#:
+#: Keyed BY THE STRING rather than by `status`, because the two are not one-to-one: a single
+#: status (`certified_organic`) now carries two different disclaimers depending on whether the
+#: OID match actually happened, and keying on status would have silently given both the same
+#: message id — reintroducing the claim this whole change removed.
+DISCLAIMER_MESSAGE_IDS = {
+    DISCLAIMER_CERTIFIED: "consumer.claim.disclaimer.certified",
+    DISCLAIMER_CERTIFIED_ON_FILE: "consumer.claim.disclaimer.certifiedOnFile",
+    DISCLAIMER_TRANSITIONING: "consumer.claim.disclaimer.transitioning",
+    DISCLAIMER_SELF_REPORTED: "consumer.claim.disclaimer.selfReported",
+    DISCLAIMER_CONVENTIONAL: "consumer.claim.disclaimer.conventional",
+}
 
 
 @dataclass
@@ -62,6 +111,7 @@ class ConsumerClaimResult:
       transition_complete_date     ISO date or None
       days_remaining               int or None
       display_label_key            react-intl message id for `display_label`
+      disclaimer_key               react-intl message id for `disclaimer`
       display_label_params         interpolation values for that message
 
     On `display_label` vs `display_label_key`
@@ -88,6 +138,7 @@ class ConsumerClaimResult:
     days_remaining: Optional[int] = None
     display_label_key: Optional[str] = None
     display_label_params: Optional[dict] = None
+    disclaimer_key: Optional[str] = None
 
     def to_dict(self, *, include_diagnostics: bool = False) -> dict:
         """Serialise for a response body.
@@ -103,6 +154,11 @@ class ConsumerClaimResult:
         pass ``include_diagnostics=True`` explicitly.
         """
         data = asdict(self)
+        # Derived here, not passed in at each of the five construction sites. A key that has to
+        # be remembered alongside its string is a key that will eventually disagree with it —
+        # and a disclaimer whose translation says something other than its English is worse
+        # than one that is merely untranslated.
+        data["disclaimer_key"] = self.disclaimer_key or DISCLAIMER_MESSAGE_IDS.get(self.disclaimer)
         if not include_diagnostics:
             data.pop("reason", None)
         return data
@@ -147,17 +203,23 @@ class ConsumerClaimValidator:
         # Priority 1 — active verified USDA Organic cert.
         cert = self._get_active_usda_organic_cert(establishment)
         if cert is not None:
+            # One authority for "did the OID match actually happen", shared with the
+            # certifications list rendered a few inches away on the same page. Reading the
+            # model's own property rather than re-deriving it from `verification_source` is the
+            # point: two copies of this rule is how the page came to contradict itself.
+            oid_matched = cert.consumer_display_status == "verified_via_database"
             return ConsumerClaimResult(
                 can_display_organic=True,
                 can_display_transitioning=False,
                 display_label="USDA Certified Organic",
                 display_label_key="consumer.claim.certifiedOrganic",
-                disclaimer=DISCLAIMER_CERTIFIED,
+                disclaimer=(DISCLAIMER_CERTIFIED if oid_matched else DISCLAIMER_CERTIFIED_ON_FILE),
                 status="certified_organic",
                 status_color="green",
                 reason=(
                     f"Active Certification #{cert.id} "
                     f"(verification_status={cert.verification_status}, "
+                    f"consumer_display_status={cert.consumer_display_status}, "
                     f"expiry={cert.expiry_date})."
                 ),
             )

@@ -310,3 +310,115 @@ class SpecimenSurfaceCoverageTests(TestCase):
             re.sub(r"#.*", "", source),
             "afterPage/onPage drawing would put the watermark over the content",
         )
+
+
+class SpecimenConsumerSurfaceTests(_PacketFixture):
+    """The consumer product page is an export in every way that matters here.
+
+    `common/specimen.py` was written for documents that get "forwarded, excerpted, printed a
+    section at a time and filed". The public lot page at `consumer.<host>/production/<uuid>`
+    is all of that and worse: it is a URL, so it is screenshotted, linked, indexed and quoted
+    by people who never saw the rest of the page — and until 2026-08-30 it consulted no
+    authority at all. `Establishment.is_demo` was already True on every seeded farm and
+    `is_specimen()` already read it; neither public surface asked.
+
+    What that shipped: Solana Verde Organic Ranch, a 285-acre Fallbrook avocado operation
+    invented by `_solana_verde_base.py`, served publicly in a shape byte-identical to a real
+    grower's lot — naming CCOF and the Xerces Society as its certifiers.
+
+    Both public surfaces are asserted, not one. They render the same lot to the same
+    anonymous shopper, and marking a page while its sibling endpoint stays clean is precisely
+    the packet-marked-CSV-unmarked bug this module already exists to refuse.
+    """
+
+    def _make_published_farm(self, name, is_demo):
+        """Both public surfaces resolve an anonymous caller only to a PUBLISHED lot.
+
+        The unpublished case is a different guard's job (season-level publish is a privacy
+        control the grower owns). Here it would just turn every assertion into a 404 and let
+        the marking tests pass without ever reaching the marking.
+        """
+        est, history = self._make_farm(name, is_demo)
+        history.published = True
+        history.save(update_fields=["published"])
+        return est, history
+
+    def _transparency(self, history):
+        return self.client.get(f"/api/transparency/{history.public_id}/")
+
+    def _public_history(self, history):
+        return self.client.get(f"/api/histories/{history.public_id}/public_history/")
+
+    def test_fabricated_farm_is_marked_on_the_transparency_payload(self):
+        _, history = self._make_published_farm("Specimen Consumer Farm", is_demo=True)
+        response = self._transparency(history)
+        self.assertEqual(response.status_code, 200)
+        specimen = response.json().get("specimen")
+        self.assertIsNotNone(
+            specimen,
+            "a fabricated lot served a public payload with no marking — the state that put an "
+            "invented 285-acre operation on consumer.trazo.io",
+        )
+        self.assertTrue(specimen.get("is_specimen"))
+        self.assertEqual(specimen.get("title"), SPECIMEN_TITLE)
+
+    def test_real_farm_transparency_payload_is_untouched(self):
+        """The asymmetric direction, and the more important of the two.
+
+        Telling a shopper that a legitimate grower's lot is a demonstration is worse than the
+        bug being fixed: it reads as an accusation against the farm.
+        """
+        _, history = self._make_published_farm("Real Consumer Farm", is_demo=False)
+        response = self._transparency(history)
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.json().get("specimen"))
+
+    def test_fabricated_farm_is_marked_on_public_history(self):
+        _, history = self._make_published_farm("Specimen Sibling Farm", is_demo=True)
+        response = self._public_history(history)
+        self.assertEqual(response.status_code, 200)
+        specimen = response.json().get("specimen")
+        self.assertIsNotNone(
+            specimen,
+            "public_history serves the same lot to the same anonymous shopper as the "
+            "transparency endpoint; marking one and not the other is the sibling-surface bug",
+        )
+        self.assertTrue(specimen.get("is_specimen"))
+
+    def test_real_farm_public_history_is_untouched(self):
+        _, history = self._make_published_farm("Real Sibling Farm", is_demo=False)
+        response = self._public_history(history)
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.json().get("specimen"))
+
+    def test_marking_does_not_depend_on_who_is_asking(self):
+        """Anonymous and owner must both see it.
+
+        Unlike the transparency score — which is genuinely audience-dependent and is stripped
+        for non-owners a few lines below the marking in `transparency_views` — whether a farm's
+        records are invented is a fact about the farm. A grower previewing their own demo lot
+        must not be told it is real.
+
+        Ownership is proved BY CONSTRUCTION rather than asserted: the lot is left unpublished,
+        which only an owner may resolve. The first version of this test used
+        `self.client.force_login` and passed while proving nothing — DRF is configured with
+        `users.auth.CustomAuthentication` alone (backend/settings/base.py:138), so a Django
+        session is invisible to it and every "owner" request was arriving anonymous. The
+        marking is unconditional, so the anonymous response satisfied the assertion perfectly.
+        """
+        from rest_framework.test import APIClient
+
+        est, history = self._make_farm("Owner Preview Farm", is_demo=True)
+        self.assertFalse(history.published, "the 404 below is what proves ownership")
+
+        anon = APIClient().get(f"/api/transparency/{history.public_id}/")
+        self.assertEqual(anon.status_code, 404, "an unpublished lot must not resolve anonymously")
+
+        owner = User.objects.create_user(email="owner-preview@test.com", password="x")
+        owner.companies.add(est.company)
+        client = APIClient()
+        client.force_authenticate(user=owner)
+        response = client.get(f"/api/transparency/{history.public_id}/")
+
+        self.assertEqual(response.status_code, 200, "the owner could not open their own unpublished lot")
+        self.assertTrue((response.json().get("specimen") or {}).get("is_specimen"))

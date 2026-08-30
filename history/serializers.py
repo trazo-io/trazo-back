@@ -3591,10 +3591,12 @@ class PublicHistorySerializer(serializers.ModelSerializer):
     parcel = PublicParcelSerializer(read_only=True)
     qr_code = serializers.SerializerMethodField()
     operator = BasicUserSerializer(read_only=True)
+    specimen = serializers.SerializerMethodField()
 
     class Meta:
         model = History
         fields = [
+            "specimen",
             "public_id",
             "name",
             "start_date",
@@ -3807,6 +3809,25 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                             for field in self._CERTIFIER_ONLY_EVENT_FIELDS:
                                 nested.pop(field, None)
         return data
+
+    def get_specimen(self, obj):
+        """Marks a payload whose farm records are FABRICATED (`Establishment.is_demo`).
+
+        The twin of the block in `transparency_views.production_transparency_detail`. Both
+        public surfaces render the same lot to the same anonymous shopper, so marking one and
+        not the other would reproduce, exactly, the bug the specimen module already refuses to
+        repeat: the packet PDF gated and its CSV twin not.
+
+        Returns None rather than `{"is_specimen": False}` for a real operation. There is no
+        such thing as a negative marking to render, and an explicit false invites a UI that
+        prints "not a specimen" on a legitimate grower's page.
+        """
+        from common.specimen import SPECIMEN_BODY, SPECIMEN_TITLE, is_specimen
+
+        establishment = getattr(getattr(obj, "parcel", None), "establishment", None)
+        if not is_specimen(establishment):
+            return None
+        return {"is_specimen": True, "title": SPECIMEN_TITLE, "body": SPECIMEN_BODY}
 
     def get_events_count(self, obj):
         """Total count of documented farming events for this production."""

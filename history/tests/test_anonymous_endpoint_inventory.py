@@ -52,7 +52,14 @@ REVIEWED_ANONYMOUS_ENDPOINTS = {
     # --- The consumer QR surface. THE claim-safety surface: every byte is gated by
     #     claim_authority.py and covered by test_cross_surface_claim_safety. ---
     "production_transparency_detail::AllowAny": "the QR product page (UUID-only lookup)",
-    "transparency_explanation::AllowAny": "static methodology copy, no farm data",
+    # `transparency_explanation` was REMOVED on 2026-08-30. Its entry here read "static
+    # methodology copy, no farm data" — true, and the reason it survived. The endpoint
+    # published "Understanding Farm Transparency Scores" plus a four-band grading rubric
+    # (90-100% excellent / 70-89% good / 50-69% basic / 0-49% limited) and the line "Verify
+    # sustainability claims with real data", anonymously, for a score withheld from
+    # consumers since 2026-08-11 and unread by any component. A self-created grading scale
+    # is the EU ECGT 2024/825 label class whether or not a farm's data is attached, so this
+    # inventory reviews CLAIM exposure as well as DATA exposure.
     "verify_blockchain::AllowAny": "integrity check for a published production",
     "HistoryViewSet::AllowAny": "public_history action only — the @action carries AllowAny",
     "PublicHistoryScanViewSet::AllowAny": (
