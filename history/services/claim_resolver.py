@@ -243,9 +243,25 @@ def build_organic_claim_evidence(organic_claim: dict, lot_eligibility: LotOrgani
         # practices; the farm-level cert is still real and stays in `source`.
         tier = "documented"
 
+    # 🔴 2026-08-30 — `source` names where the evidence CAME FROM, so it may only name the USDA
+    # Organic Integrity Database when a match against it actually happened. It was derived from
+    # `status == "certified_organic"` alone, which means "an active usda_organic certificate row
+    # exists" — a row a manual admin edit, a data import or a fixture can create. Trazo really
+    # does run OID matching (`USDAOrganicVerifier` against the mirrored monthly export), which is
+    # exactly why naming it unearned matters: the claim is credible.
+    #
+    # `oid_matched` is computed once by ConsumerClaimValidator and travels on the claim. Reading
+    # it here rather than re-deriving keeps this the fourth surface that consults one authority
+    # instead of the fourth surface with its own opinion.
+    oid_matched = bool((organic_claim or {}).get("oid_matched"))
+    if status == "certified_organic":
+        source = "USDA Organic Integrity Database" if oid_matched else "Certificate on file for the operation"
+    else:
+        source = "Farmer-reported records"
+
     return {
         "tier": tier,
-        "source": ("USDA Organic Integrity Database" if status == "certified_organic" else "Farmer-reported records"),
+        "source": source,
         "scope": ("production_lot" if status == "certified_organic" and lot_eligibility.eligible is True else "farm"),
         "as_of": timezone.now().isoformat(),
     }

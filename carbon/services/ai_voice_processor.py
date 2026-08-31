@@ -8,9 +8,10 @@ and extract structured agricultural event data with high accuracy.
 
 import json
 import logging
+import re
 import time
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from django.conf import settings
 
@@ -70,6 +71,278 @@ def keyword_key_for(language: str) -> str:
     return _KEYWORD_KEY_BY_FAMILY.get(_language_family(language), "keywords")
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# What each activity actually records.
+#
+# The wizard knows the activity before the microphone opens (its trigger is in step 2, and
+# step 1 collects the verb tile and the production subtype), so the prompt can name the
+# handful of fields worth listening for instead of asking one generic question about
+# everything. These are LISTENING hints, not a schema: the response shape is unchanged, and
+# a field nobody mentioned still comes back null.
+#
+# ⚠️ Written in English inside every localised prompt on purpose. They instruct the MODEL,
+# they are never shown to a farmer, and the response language is governed separately by the
+# system prompt. Translating them would triple the surface that has to stay in step with the
+# field registry for no user-visible gain.
+#
+# Keys are VOICE_TYPE_MAP slugs — the same vocabulary `event_type` answers in, so an entry
+# that does not exist here simply gets no hint rather than a wrong one.
+ACTIVITY_EXTRACTION_HINTS = {
+    "fertilization": "product name, NPK ratio, rate and unit, area covered, application method",
+    "irrigation": "duration, water volume or depth, irrigation method (drip/sprinkler/flood/furrow), water source, area covered",
+    "pesticide": "product name, concentration, rate and unit, area covered, application method, target pest",
+    "herbicide": "product name, concentration, rate and unit, area covered, application method, target weed",
+    "fungicide": "product name, concentration, rate and unit, area covered, application method, target disease",
+    "harvest": "yield quantity and unit, area harvested, container or bin counts, equipment and fuel",
+    "post_harvest": "quantity processed and unit, the operation done (hulling, washing, sorting, packing), equipment and fuel",
+    "planting": "number of plants or seed quantity, variety or cultivar, area planted, spacing, equipment and fuel",
+    "transplanting": "number of plants, variety or cultivar, area planted, spacing",
+    "pruning": "area covered, duration, equipment used, what was removed",
+    "cultivation": "equipment used, duration, fuel consumed, area covered, depth or pass type",
+    "mowing": "equipment used, duration, fuel consumed, area covered",
+    "thinning": "area covered, duration, quantity removed",
+    "frost_protection": "how long the protection ran, method (wind machine, heaters, over-canopy sprinklers), fuel or energy used, area protected, the low temperature reached",
+    "pollination": "number of hives placed or removed, the date they went in or came out, area served, supplier",
+    "transport": "load quantity and unit, destination (huller, packer, buyer), distance, vehicle and fuel",
+    "soil_management": "amendment or material applied, rate and unit, area covered, incorporation depth, equipment and fuel",
+    # ── Slugs the CLIENT can send that the classifier never answers with ──────────────────
+    # `known_activity` is the activity the FARMER picked, not something the model returns, so
+    # this catalogue has to cover the client's vocabulary and not just the `event_type` enum.
+    # It did not, and the view validates against these keys: an Equipment Cleanout or a General
+    # activity had its context silently dropped, while the field list for that same activity was
+    # still sent — a prompt listing an activity's fields without ever naming the activity.
+    "equipment": "what was cleaned, the cleaning method and materials, purge material and quantity, sanitizer and its concentration, equipment type",
+    "general": "what the activity was, how long it took, how many people were involved",
+    # `fertilizer` is VOICE_TYPE_MAP's alias for `fertilization`; the client resolves to the
+    # canonical slug today, but an alias that reaches here must not be silently discarded.
+    "fertilizer": "product name, NPK ratio, rate and unit, area covered, application method",
+}
+
+
+# Field names are interpolated into a model prompt, so they are treated as untrusted input
+# even though the client is our own authenticated app: names must look like form field names,
+# labels are truncated and stripped of newlines (a newline is how you escape a prompt block),
+# and the list is capped. The worst case this bounds is a farmer skewing the parse of their own
+# sentence, but "low impact" is not a reason to interpolate unbounded text.
+# Spoken numbers, PER LANGUAGE.
+#
+# MEASURED 2026-08-30: "irrigated the field for six hours with drip system" filled ONE field —
+# the notes. Every amount pattern in the fallback requires a digit, and both the duration and the
+# NPK helper were written against digits too, so a farmer who speaks the way people speak got
+# nothing extracted. (The NPK comment even claims it handles "ten ten ten"; the regex it
+# describes matches `\d{1,2}` only, so it never did.)
+#
+# ⛔ The maps are SCOPED BY LANGUAGE, and that is not tidiness. A single merged map mistranslated
+# real Portuguese: "dos" is Spanish for two and Portuguese for "of the", so
+# "aplicação dos fertilizantes" became "aplicação 2 fertilizantes" — a quantity invented out of a
+# preposition, which then extracts as an amount if a unit happens to follow it. The same trap is
+# waiting in "um"/"uma" (PT one vs ES a/an). Only the speaker's own numerals are applied.
+_WORD_NUMBERS_BY_LANG = {
+    "keywords": {  # English — the key `keyword_key_for` returns for every non-es/pt tag
+        "zero": "0",
+        "one": "1",
+        "two": "2",
+        "three": "3",
+        "four": "4",
+        "five": "5",
+        "six": "6",
+        "seven": "7",
+        "eight": "8",
+        "nine": "9",
+        "ten": "10",
+        "eleven": "11",
+        "twelve": "12",
+        "thirteen": "13",
+        "fourteen": "14",
+        "fifteen": "15",
+        "sixteen": "16",
+        "seventeen": "17",
+        "eighteen": "18",
+        "nineteen": "19",
+        "twenty": "20",
+        "thirty": "30",
+        "forty": "40",
+        "fifty": "50",
+        "sixty": "60",
+        "seventy": "70",
+        "eighty": "80",
+        "ninety": "90",
+        "hundred": "100",
+    },
+    "es": {
+        "uno": "1",
+        "una": "1",
+        "dos": "2",
+        "tres": "3",
+        "cuatro": "4",
+        "cinco": "5",
+        "seis": "6",
+        "siete": "7",
+        "ocho": "8",
+        "nueve": "9",
+        "diez": "10",
+        "once": "11",
+        "doce": "12",
+        "quince": "15",
+        "veinte": "20",
+        "treinta": "30",
+        "cuarenta": "40",
+        "cincuenta": "50",
+        "sesenta": "60",
+        "cien": "100",
+        "ciento": "100",
+    },
+    "pt": {
+        # ⛔ no "dos"/"das" here: those are prepositions, not numerals.
+        "um": "1",
+        "uma": "1",
+        "dois": "2",
+        "duas": "2",
+        "tres": "3",
+        "três": "3",
+        "quatro": "4",
+        "cinco": "5",
+        "seis": "6",
+        "sete": "7",
+        "oito": "8",
+        "nove": "9",
+        "dez": "10",
+        "onze": "11",
+        "doze": "12",
+        "quinze": "15",
+        "vinte": "20",
+        "trinta": "30",
+        "quarenta": "40",
+        "cinquenta": "50",
+        "sessenta": "60",
+        "cem": "100",
+    },
+}
+
+_WORD_NUMBER_RE_BY_LANG = {
+    key: re.compile(r"\b(" + "|".join(sorted(words, key=len, reverse=True)) + r")\b", re.IGNORECASE)
+    for key, words in _WORD_NUMBERS_BY_LANG.items()
+}
+
+
+def spoken_numbers_to_digits(text: str, language: str = "en-US") -> str:
+    """
+    "six hours" -> "6 hours", "two hundred pounds" -> "200 pounds", "twenty eight" -> "28".
+
+    Word-by-word substitution alone is not enough: it turns "two hundred" into "2 100" and
+    "twenty eight" into "20 8", which extract as the WRONG numbers rather than as none. So the
+    two compounds these quantities actually use are recomposed afterwards — multiplier first
+    ("2 100" -> 200), then tens-plus-unit ("20 8" -> 28), because the other order would read the
+    "8" of "twenty eight hundred" as its own amount.
+
+    Both recompositions accept a hyphen as well as a space: speech-to-text writes "twenty-eight"
+    at least as often as "twenty eight", and matching only whitespace left "20-8" on the record —
+    a number that extracts as nothing.
+    """
+    key = keyword_key_for(language)
+    words = _WORD_NUMBERS_BY_LANG.get(key, _WORD_NUMBERS_BY_LANG["keywords"])
+    pattern = _WORD_NUMBER_RE_BY_LANG.get(key, _WORD_NUMBER_RE_BY_LANG["keywords"])
+
+    out = pattern.sub(lambda m: words[m.group(1).lower()], text)
+    out = re.sub(r"\b([1-9]\d?)[\s-]+100\b", lambda m: str(int(m.group(1)) * 100), out)
+    out = re.sub(r"\b([2-9]0)[\s-]+([1-9])\b", lambda m: str(int(m.group(1)) + int(m.group(2))), out)
+    return out
+
+
+_FIELD_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{1,48}$")
+MAX_REQUESTED_FIELDS = 24
+MAX_ENUM_OPTIONS = 24
+
+
+def match_known_block(transcript: str, options: List[str]) -> Any:
+    """
+    Find a block the farmer actually NAMED, out of the ones this parcel has used.
+
+    Why this is safe where free text is not: the candidate set comes from the parcel's own
+    history (`known_block_ids_for_parcel`), so this can only ever return a block that already
+    exists. It is a match, never a guess — MEASURED 2026-08-30, "in the VGA block" on a parcel
+    whose only block is BGA returns nothing, because inventing which lot a record belongs to is
+    the one thing this field must never do (it becomes CA PUR box 22).
+
+    Two spellings have to land on the same block, and both are mechanical rather than semantic:
+      - separators and case: "bga" / "BGA" / "Block-3" / "block 3";
+      - LETTER-BY-LETTER dictation: speech-to-text writes a spelled-out block as "B G A", which
+        is the farmer saying the same three characters.
+
+    ⛔ Only `block_id`. Generalising this to every enum would match a National-List style
+    vocabulary against incidental words — an option literally named "other" would match the word
+    "other" anywhere in the sentence.
+    """
+    tokens = re.findall(r"[a-z0-9]+", (transcript or "").lower())
+    if not tokens:
+        return None
+
+    # Runs of single characters, joined: ["b", "g", "a"] -> "bga"
+    letter_runs, run = [], []
+    for token in tokens:
+        if len(token) == 1:
+            run.append(token)
+        elif run:
+            letter_runs.append("".join(run))
+            run = []
+    if run:
+        letter_runs.append("".join(run))
+
+    candidates = set(tokens) | set(letter_runs)
+    squashed = "".join(tokens)
+
+    for option in options or []:
+        key = re.sub(r"[^a-z0-9]", "", str(option).lower())
+        # A one-character block cannot be matched from speech without matching half the sentence.
+        if len(key) < 2:
+            continue
+        if key in candidates:
+            return option
+        # Multi-word block names ("North Orchard") arrive as separate tokens.
+        if len(key) >= 4 and key in squashed:
+            return option
+
+    return None
+
+
+def sanitize_requested_fields(raw: Any) -> list:
+    """Keep only well-formed field requests; drop anything else silently."""
+    if not isinstance(raw, list):
+        return []
+
+    clean = []
+    for item in raw[:MAX_REQUESTED_FIELDS]:
+        if not isinstance(item, dict):
+            continue
+        name = item.get("name")
+        kind = item.get("type")
+        if not isinstance(name, str) or not _FIELD_NAME_RE.match(name):
+            continue
+        if kind not in ("number", "text", "enum"):
+            continue
+
+        label = item.get("label") or name
+        label = " ".join(str(label).split())[:80]
+
+        entry = {"name": name, "label": label, "type": kind}
+
+        if kind == "enum":
+            options = item.get("options")
+            if not isinstance(options, list):
+                continue
+            values = [" ".join(str(o).split())[:60] for o in options[:MAX_ENUM_OPTIONS]]
+            values = [v for v in values if v]
+            # An enum with no catalogue cannot be validated on the way back, and an
+            # unvalidated enum is free text wearing a dropdown's name.
+            if not values:
+                continue
+            entry["options"] = values
+
+        clean.append(entry)
+
+    return clean
+
+
 class AIVoiceProcessor:
     """
     AI-powered voice processing for agricultural events using OpenAI GPT models.
@@ -95,7 +368,14 @@ class AIVoiceProcessor:
         # Initialize OpenAI client
         self.openai = OpenAI(api_key=self.api_key)
 
-    def process_voice_input(self, transcript: str, crop_type: str, language: str = "en-US") -> Dict[str, Any]:
+    def process_voice_input(
+        self,
+        transcript: str,
+        crop_type: str,
+        language: str = "en-US",
+        known_activity: str = "",
+        requested_fields: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
         """
         Process voice input using AI to extract structured agricultural event data.
 
@@ -103,6 +383,19 @@ class AIVoiceProcessor:
             transcript: The voice transcript to process
             crop_type: The crop type context (e.g., "strawberries", "corn")
             language: Language code (e.g., 'en-US', 'es-ES', 'pt-BR')
+            known_activity: The activity the farmer ALREADY chose, as an ACTIVITY_SLUGS entry.
+
+        The voice trigger lives inside step 2 of the activity wizard, which is only reachable
+        after step 1 has collected the verb tile and (for production) the subtype. So by the
+        time the microphone opens the activity is a FACT, not a question — and asking the model
+        to rediscover it from the words was both the hardest part of the job and the part whose
+        answer the client mostly discards: the render gate keeps only fields the chosen activity
+        renders. Passing it turns classification into extraction.
+
+        ⛔ It is CONTEXT, not the answer. `event_type` in the response stays the model's own
+        reading of the words, because that disagreement is the only thing that catches a farmer
+        describing an irrigation into a Frost Protection form (both are production, so the
+        client cannot spot it from the event type alone).
 
         Returns:
             Structured event data with confidence scores and extracted information
@@ -111,13 +404,15 @@ class AIVoiceProcessor:
 
         try:
             if not OPENAI_AVAILABLE or not self.api_key:
-                return self._fallback_processing(transcript, crop_type, language)
+                return self._fallback_processing(transcript, crop_type, language, known_activity, requested_fields)
 
             # Pre-process transcript to fix common speech-to-text errors
-            processed_transcript = self._preprocess_transcript(transcript)
+            processed_transcript = self._preprocess_transcript(transcript, language)
 
             # Create AI prompt for agricultural event extraction
-            prompt = self._create_extraction_prompt(processed_transcript, crop_type, language)
+            prompt = self._create_extraction_prompt(
+                processed_transcript, crop_type, language, known_activity, requested_fields or []
+            )
 
             # Call OpenAI API
             response = self.openai.chat.completions.create(
@@ -145,13 +440,13 @@ class AIVoiceProcessor:
 
         except Exception as e:
             logger.error(f"AI voice processing failed: {e}")
-            return self._fallback_processing(transcript, crop_type, language)
+            return self._fallback_processing(transcript, crop_type, language, known_activity, requested_fields)
 
-    def _preprocess_transcript(self, transcript: str) -> str:
+    def _preprocess_transcript(self, transcript: str, language: str = "en-US") -> str:
         """Pre-process transcript to fix common speech-to-text errors for agricultural terms."""
-        import re
-
-        processed = transcript
+        # Spoken numerals first: every pattern below (and every amount pattern in the
+        # fallback) is written against digits. Language-scoped — see _WORD_NUMBERS_BY_LANG.
+        processed = spoken_numbers_to_digits(transcript, language)
 
         # Fix NPK patterns where speech recognition merges numbers
         # "NPK 1010" or "NPK1010" → "NPK 10-10-10"
@@ -190,6 +485,7 @@ You must respond with valid JSON containing these fields:
 - fuel_amount: Fuel consumption if mentioned (e.g., {"value": 15, "unit": "gallons"}). null if not mentioned.
 - water_source: If irrigation, water source if mentioned. null if not mentioned.
 - description: Clean, professional description of the activity
+- activity_fields: Object of extra per-activity values, present ONLY when the user prompt lists fields to record. Use exactly the field names given there, omit anything the farmer did not say, and never invent a typical value.
 
 CRITICAL INSTRUCTIONS:
 - For NPK ratios: "ten ten ten" means "10-10-10". Always format as N-P-K with hyphens.
@@ -218,6 +514,7 @@ Debes responder con JSON válido conteniendo estos campos:
 - fuel_amount: Consumo de combustible si se menciona. null si no se menciona.
 - water_source: Si es irrigación, fuente de agua si se menciona. null si no se menciona.
 - description: Descripción limpia y profesional de la actividad
+- activity_fields: Objeto con valores adicionales por actividad, presente SOLO cuando el prompt del usuario lista campos. Usar exactamente esos nombres, omitir lo que el agricultor no dijo, y nunca inventar un valor típico.
 
 INSTRUCCIONES CRÍTICAS:
 - Para NPK: "diez diez diez" significa "10-10-10". Siempre formatear como N-P-K con guiones.
@@ -243,6 +540,7 @@ Você deve responder com JSON válido contendo estes campos:
 - fuel_amount: Consumo de combustível se mencionado. null se não mencionado.
 - water_source: Se irrigação, fonte de água se mencionada. null se não mencionada.
 - description: Descrição limpa e profissional da atividade
+- activity_fields: Objeto com valores adicionais por atividade, presente APENAS quando o prompt do usuário lista campos. Usar exatamente esses nomes, omitir o que o agricultor não disse, e nunca inventar um valor típico.
 
 INSTRUÇÕES CRÍTICAS:
 - Para NPK: "dez dez dez" significa "10-10-10". Sempre formatar como N-P-K com hifens.
@@ -253,8 +551,17 @@ INSTRUÇÕES CRÍTICAS:
 
         return prompts.get(prompt_key_for(language), prompts["en-US"])
 
-    def _create_extraction_prompt(self, transcript: str, crop_type: str, language: str) -> str:
+    def _create_extraction_prompt(
+        self,
+        transcript: str,
+        crop_type: str,
+        language: str,
+        known_activity: str = "",
+        requested_fields: Optional[List[Dict[str, Any]]] = None,
+    ) -> str:
         """Create the extraction prompt for the AI model."""
+
+        chosen = self._chosen_activity_block(known_activity) + self._requested_fields_block(requested_fields or [])
 
         ag_hints = """
 AGRICULTURAL PATTERN RECOGNITION HINTS:
@@ -274,7 +581,7 @@ Extract ALL mentioned quantities with their units. Be especially careful with:
 Voice Input: "{transcript}"
 Crop Type: {crop_type}
 Date: Today
-{ag_hints}
+{chosen}{ag_hints}
 
 Respond with JSON only.""",
             "es-ES": f"""Analiza esta entrada de voz del agricultor y extrae información del evento agrícola:
@@ -282,7 +589,7 @@ Respond with JSON only.""",
 Entrada de Voz: "{transcript}"
 Tipo de Cultivo: {crop_type}
 Fecha: Hoy
-{ag_hints}
+{chosen}{ag_hints}
 
 Responde solo con JSON.""",
             "pt-BR": f"""Analise esta entrada de voz do agricultor e extraia informações do evento agrícola:
@@ -290,12 +597,81 @@ Responde solo con JSON.""",
 Entrada de Voz: "{transcript}"
 Tipo de Cultura: {crop_type}
 Data: Hoje
-{ag_hints}
+{chosen}{ag_hints}
 
 Responda apenas com JSON.""",
         }
 
         return prompts.get(prompt_key_for(language), prompts["en-US"])
+
+    def _chosen_activity_block(self, known_activity: str) -> str:
+        """
+        The activity the farmer already selected, as a prompt block.
+
+        Two instructions, and the second is the load-bearing one:
+
+        1. EXTRACT for this activity. The listening hints come from ACTIVITY_EXTRACTION_HINTS,
+           so a frost-protection utterance is mined for run time, method and the low temperature
+           instead of for the generic bag of fertiliser questions.
+        2. Do NOT let it decide `event_type`. If the words describe something else, say so.
+           That disagreement is the ONLY signal the client can use to offer "switch to
+           Irrigation" when an irrigation sentence is spoken into a Frost Protection form —
+           both are production events, so nothing else distinguishes them. A prompt that said
+           "this is frost protection" would earn a confident, wrong answer every time.
+
+        Empty when the activity is unknown (soil, pest and business ask their subtype inside the
+        tab, so voice can run before one exists) — in which case this is the old prompt exactly.
+        """
+        if not known_activity:
+            return ""
+
+        hint = ACTIVITY_EXTRACTION_HINTS.get(known_activity, "")
+        block = f'The farmer has ALREADY chosen this activity in the form: "{known_activity}".\n'
+        if hint:
+            block += f"For that activity, listen especially for: {hint}.\n"
+        block += (
+            "Use that as context for EXTRACTION only. Still set event_type to the activity the "
+            "words themselves describe: if they describe a different activity, report that one "
+            "and lower your confidence. Never bend the words to fit the chosen activity.\n"
+        )
+        return block
+
+    def _requested_fields_block(self, requested_fields: List[Dict[str, Any]]) -> str:
+        """
+        The fields THIS activity records, named by the form itself.
+
+        Until this existed the response carried one fixed set of ~12 generic keys for all
+        seventeen activities, so `protection_method` and `low_temperature` — the two facts a
+        frost-protection record is FOR — had nowhere to be returned even when the farmer said
+        them out loud. MEASURED 2026-08-30: voice could write 8 of 45 fields on a fertiliser
+        application, 6 of 12 on frost protection, and 1 of 18 on transport (the notes box).
+
+        The list is built client-side from the display registry, so what the model is asked for
+        and what the form renders cannot drift. Enum options are sent with the field because an
+        answer outside the catalogue is dropped on arrival — telling the model the choices is
+        cheaper than discarding its answer.
+
+        `null` is spelled out as the required answer for anything not said. An LLM asked for a
+        field it has no evidence for will otherwise supply a plausible one, and a plausible
+        number on a certifier record is the worst output this pipeline can produce.
+        """
+        if not requested_fields:
+            return ""
+
+        lines = ["", "FIELDS THIS ACTIVITY RECORDS — return these inside an `activity_fields` object:"]
+        for field in requested_fields:
+            if field["type"] == "enum":
+                choices = ", ".join(field.get("options", []))
+                lines.append(f'- {field["name"]} ({field["label"]}) — answer with EXACTLY one of: {choices}')
+            elif field["type"] == "number":
+                lines.append(f'- {field["name"]} ({field["label"]}) — a number only, no unit')
+            else:
+                lines.append(f'- {field["name"]} ({field["label"]}) — short text')
+        lines.append(
+            "Include a key ONLY if the farmer actually said it. Omit it, or set it to null, "
+            "when they did not — never infer, never fill in a typical value."
+        )
+        return "\n".join(lines) + "\n"
 
     def _structure_ai_response(
         self, ai_response: Dict[str, Any], original_transcript: str, processing_time: float
@@ -310,6 +686,17 @@ Responda apenas com JSON.""",
             "detected_products": ai_response.get("detected_products", []),
             "detected_systems": ai_response.get("detected_systems", []),
             "confidence": min(max(ai_response.get("confidence", 0), 0), 100),
+            # The model answered from the words. Only the keyword fallback ever defers to the
+            # activity the farmer picked, and it says so — see _fallback_processing.
+            "activity_from_context": False,
+            # Per-activity values, keyed by the form's own field names. Passed through as the
+            # model returned it: the CLIENT validates against the list it asked for (type,
+            # enum catalogue, unrequested keys) because that list is built there from the
+            # display registry. Validating loosely here as well would be a second, weaker
+            # copy of that rule.
+            "activity_fields": (
+                ai_response.get("activity_fields") if isinstance(ai_response.get("activity_fields"), dict) else {}
+            ),
             # Structured fields for direct form mapping
             "npk_ratio": ai_response.get("npk_ratio"),
             "concentration": ai_response.get("concentration"),
@@ -326,7 +713,14 @@ Responda apenas com JSON.""",
             "original_transcript": original_transcript,
         }
 
-    def _fallback_processing(self, transcript: str, crop_type: str, language: str) -> Dict[str, Any]:
+    def _fallback_processing(
+        self,
+        transcript: str,
+        crop_type: str,
+        language: str,
+        known_activity: str = "",
+        requested_fields: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
         """
         Fallback processing when AI is not available.
         Uses improved pattern matching as backup.
@@ -334,7 +728,7 @@ Responda apenas com JSON.""",
         logger.info("Using fallback pattern matching for voice processing")
 
         # Pre-process transcript
-        processed = self._preprocess_transcript(transcript)
+        processed = self._preprocess_transcript(transcript, language)
 
         # Enhanced pattern matching
         patterns = {
@@ -488,18 +882,30 @@ Responda apenas com JSON.""",
         # Detect event type
         lang_suffix = keyword_key_for(language)
 
+        # A TIE is broken by what the farmer already chose, not by dict order.
+        #
+        # MEASURED 2026-08-30: "it got down to twenty eight degrees so we ran the wind machines
+        # for four hours", spoken into a Frost Protection form, came back as EQUIPMENT. Both
+        # scored exactly one keyword ("wind machine" and "machine"), and `>` keeps whichever the
+        # dict happens to list first — `equipment` sits six entries above `frost_protection`.
+        # So a frost night was filed as an equipment cleanout by iteration order alone.
+        #
+        # Preferring the chosen activity on a tie is not overriding the words: a strictly better
+        # keyword score still wins, which is what keeps the irrigation-on-frost-protection
+        # mismatch visible.
         max_matches = 0
         for event_type, pattern_data in patterns.items():
             keywords = pattern_data.get(lang_suffix, pattern_data["keywords"])
             matches = sum(1 for keyword in keywords if keyword in text_lower)
-            if matches > max_matches:
+            if matches == 0:
+                continue
+            wins = matches > max_matches or (matches == max_matches and known_activity and event_type == known_activity)
+            if wins:
                 max_matches = matches
                 detected_type = event_type
                 confidence = min(30 + matches * 15, 75)  # Max 75% for fallback
 
         # Extract amounts using regex
-        import re
-
         amount_patterns = [
             (r"(\d+(?:\.\d+)?)\s*(?:pounds?|lbs?)", "lbs", "weight"),
             (r"(\d+(?:\.\d+)?)\s*(?:kg|kilograms?|quilos?|libras?)", "kg", "weight"),
@@ -517,11 +923,53 @@ Responda apenas com JSON.""",
             for match in matches:
                 detected_amounts.append({"value": float(match), "unit": unit, "category": category})
 
+        # Systems and methods the farmer named.
+        #
+        # MEASURED 2026-08-30: "irrigated the field for six hours with drip system", spoken on
+        # the Irrigation form, left Irrigation Method empty. `detected_systems` was hardcoded to
+        # [] here, and that array is exactly what the client maps to `irrigation_method` — so the
+        # one word in the sentence that names a method could not reach the field built for it.
+        # These are the same tokens the keyword tables above already match on; the only thing
+        # missing was reporting WHICH one hit.
+        system_keywords = {
+            "drip": ["drip", "goteo", "gotejamento"],
+            "sprinkler": ["sprinkler", "aspersor", "aspersores"],
+            "flood": ["flood", "inundación", "inundacao", "inundação"],
+            "furrow": ["furrow", "surco", "sulco"],
+            "tractor": ["tractor", "trator"],
+        }
+        detected_systems = [
+            system for system, tokens in system_keywords.items() if any(token in text_lower for token in tokens)
+        ]
+
+        activity_fields = {}
+        block_options = next(
+            (f.get("options") or [] for f in (requested_fields or []) if f.get("name") == "block_id"),
+            [],
+        )
+        matched_block = match_known_block(processed, block_options)
+        if matched_block:
+            activity_fields["block_id"] = matched_block
+
         # Extract NPK ratio
         npk_ratio = None
         npk_match = re.search(r"(\d{1,2})-(\d{1,2})-(\d{1,2})", processed)
         if npk_match:
             npk_ratio = f"{npk_match.group(1)}-{npk_match.group(2)}-{npk_match.group(3)}"
+
+        # Keyword matching found NOTHING. Before this, that answered "general", which the
+        # client reads as an unrecognised activity: voice transcribed the farmer perfectly and
+        # then filled in nothing at all — the whole feature, silently doing no work. The farmer
+        # has already told us the activity in step 1, so deferring to their own choice is the
+        # honest answer here, not a guess.
+        #
+        # It is flagged rather than laundered. `activity_from_context` says the activity came
+        # from the form and not from the words, so the panel can say so and neither the
+        # confidence nor the switch offer treats it as a detection.
+        activity_from_context = False
+        if detected_type == "general" and known_activity:
+            detected_type = known_activity
+            activity_from_context = True
 
         return {
             "type": detected_type,
@@ -529,8 +977,16 @@ Responda apenas com JSON.""",
             "date": time.strftime("%Y-%m-%d"),
             "detected_amounts": detected_amounts,
             "detected_products": [],
-            "detected_systems": [],
+            "detected_systems": detected_systems,
             "confidence": confidence,
+            "activity_from_context": activity_from_context,
+            # Keyword matching cannot ANSWER most per-activity fields — it has no idea what
+            # they mean. `block_id` is the exception, and only because the request carries the
+            # parcel's own blocks: matching one of those against the words is the same kind of
+            # work the tables above already do, and it cannot return a block that does not exist.
+            # An empty object, not a missing key: the client should not have to tell "the parser
+            # found nothing" apart from "this response predates the feature".
+            "activity_fields": activity_fields,
             "npk_ratio": npk_ratio,
             "concentration": npk_ratio,
             "commercial_name": None,
@@ -545,24 +1001,29 @@ Responda apenas com JSON.""",
         }
 
 
-def process_voice_with_ai(transcript: str, crop_type: str, language: str = "en-US") -> Dict[str, Any]:
+def process_voice_with_ai(
+    transcript: str,
+    crop_type: str,
+    language: str = "en-US",
+    known_activity: str = "",
+    requested_fields: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
     """
-    Synchronous wrapper for async AI processing
-    """
-    import asyncio
+    Parse one spoken utterance into event fields.
 
-    try:
-        # Run the async function
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        result = loop.run_until_complete(AIVoiceProcessor().process_voice_input_async(transcript, crop_type, language))
-        loop.close()
-        return result
-    except Exception as e:
-        logger.error(f"Error in async voice processing: {e}")
-        # Fallback to synchronous processing
-        processor = AIVoiceProcessor()
-        return processor.process_voice_input(transcript, crop_type, language)
+    ⛔ There is no async path here, and there never was.
+
+    This used to spin up a fresh event loop and await
+    ``AIVoiceProcessor().process_voice_input_async(...)`` — a method the class does not
+    define. So EVERY voice request raised AttributeError, logged
+    "Error in async voice processing: 'AIVoiceProcessor' object has no attribute
+    'process_voice_input_async'" at ERROR level, and then quietly re-ran the synchronous
+    path that was always going to do the work. Two costs: a loop created and torn down per
+    request, and an ERROR line on every single call, which is exactly the noise that hides
+    a real OpenAI failure underneath it (MEASURED 2026-08-30 — a genuine 429
+    ``insufficient_quota`` was sitting one line below this phantom one).
+    """
+    return AIVoiceProcessor().process_voice_input(transcript, crop_type, language, known_activity, requested_fields)
 
 
 async def _fetch_recent_events_from_db(establishment_id: str, parcel_id: str) -> list:

@@ -101,10 +101,16 @@ class ConsumerClaimValidatorTests(TestCase):
         # The affirmative sentence is the claim; the phrase alone is not, because the honest
         # text names the database in order to DENY the match. Assert on the claim.
         self.assertNotIn("Verification via USDA Organic Integrity Database", result.disclaimer)
-        self.assertTrue(
-            result.disclaimer.startswith("Not verified by Trazo"),
-            "the qualification must lead — this string renders in a clamped popover, and a "
-            f"denial that only appears after a truncation point is not a denial: {result.disclaimer!r}",
+        # The PROPERTY, not the phrasing: the qualification has to be in the first sentence.
+        # This string renders in a clamped popover, so a denial that appears only after a
+        # truncation point is not a denial. Asserted on the leading clause rather than an exact
+        # literal, because the wording was corrected once already (the first version said "Not
+        # verified by Trazo against …", which wrongly implied Trazo does not run the match).
+        first_sentence = result.disclaimer.split(".")[0]
+        self.assertIn(
+            "Not matched",
+            first_sentence,
+            f"the qualification must lead, not trail: {result.disclaimer!r}",
         )
         self.assertIn("certificate on file", result.disclaimer)
 
@@ -208,6 +214,61 @@ class ConsumerClaimValidatorTests(TestCase):
             seen["certified_oid"]["disclaimer_key"],
         )
         self.assertTrue(keys.issubset(set(DISCLAIMER_MESSAGE_IDS.values())))
+
+    def test_oid_matched_travels_with_the_claim(self):
+        """One authority for "did the match happen", consumed by four surfaces.
+
+        The pill, the OID attribution line, `evidence.source` and the disclaimer each used to
+        decide this for themselves — three of the four from `status == "certified_organic"`,
+        which only means a certificate ROW exists. `oid_matched` is the fact the public
+        /methodology page's promise is written about, computed once here.
+        """
+        cert = Certification.objects.create(
+            establishment=self.establishment,
+            certification_type="usda_organic",
+            verification_status="verified",
+            certifier_name="On File Only",
+            effective_date=timezone.now().date() - timedelta(days=30),
+            expiry_date=timezone.now().date() + timedelta(days=300),
+        )
+        unmatched = ConsumerClaimValidator().validate(self._make_history(production_method="organic")).to_dict()
+        self.assertEqual(unmatched["status"], "certified_organic")
+        self.assertFalse(
+            unmatched["oid_matched"],
+            "a certificate with no OID source must not report a database match",
+        )
+
+        cert.verification_source = Certification.DATABASE_VERIFICATION_SOURCE
+        cert.save(update_fields=["verification_source"])
+        matched = ConsumerClaimValidator().validate(self._make_history(production_method="organic")).to_dict()
+        self.assertTrue(matched["oid_matched"])
+
+    def test_uncertified_claims_never_report_a_match(self):
+        """`oid_matched` is False for every other tier — no surface may read it as unset."""
+        for method in ("organic", "conventional"):
+            payload = ConsumerClaimValidator().validate(self._make_history(production_method=method)).to_dict()
+            self.assertIn("oid_matched", payload, method)
+            self.assertFalse(payload["oid_matched"], method)
+
+    def test_evidence_source_names_the_oid_only_on_a_match(self):
+        """`evidence.source` is on the ANONYMOUS payload, so the string itself is the claim."""
+        from history.services.claim_resolver import LotOrganicEligibility, build_organic_claim_evidence
+
+        ineligible = LotOrganicEligibility(
+            eligible=None,
+            status="not_applicable",
+            display_label="",
+            detail="",
+            prohibited_inputs=[],
+            unclassified_input_count=0,
+            checked_at=None,
+        )
+
+        unmatched = build_organic_claim_evidence({"status": "certified_organic", "oid_matched": False}, ineligible)
+        self.assertNotIn("Integrity Database", unmatched["source"])
+
+        matched = build_organic_claim_evidence({"status": "certified_organic", "oid_matched": True}, ineligible)
+        self.assertEqual(matched["source"], "USDA Organic Integrity Database")
 
     # ---- Scenario 2: Transitioning -----------------------------------------
 

@@ -7932,15 +7932,32 @@ def process_voice_event_ai(request):
         transcript = request.data.get("transcript", "")
         crop_type = request.data.get("crop_type", "")
         language = request.data.get("language", "en-US")
+        known_activity = request.data.get("known_activity", "") or ""
 
         if not transcript or not crop_type:
             return Response({"error": "transcript and crop_type are required"}, status=status.HTTP_400_BAD_REQUEST)
 
         # Import here to avoid circular imports
-        from .services.ai_voice_processor import process_voice_with_ai
+        from .services.ai_voice_processor import (
+            ACTIVITY_EXTRACTION_HINTS,
+            process_voice_with_ai,
+            sanitize_requested_fields,
+        )
+
+        # The activity the farmer picked at step 1, echoed back by the client. Validated against
+        # the hint catalogue rather than trusted: it is interpolated into a model prompt, so an
+        # unknown value is dropped instead of forwarded. An empty one simply means "not known
+        # yet" — soil, pest and business ask their subtype inside the tab.
+        if known_activity not in ACTIVITY_EXTRACTION_HINTS:
+            known_activity = ""
+
+        # The fields this activity records, built client-side from the display registry (the
+        # SSOT for what a form renders) and echoed here. Sanitised rather than trusted: the
+        # names and enum options are interpolated into a model prompt.
+        requested_fields = sanitize_requested_fields(request.data.get("requested_fields"))
 
         # Process with AI
-        result = process_voice_with_ai(transcript, crop_type, language)
+        result = process_voice_with_ai(transcript, crop_type, language, known_activity, requested_fields)
 
         return Response(result, status=status.HTTP_200_OK)
 

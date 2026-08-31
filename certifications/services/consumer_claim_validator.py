@@ -58,9 +58,21 @@ DISCLAIMER_CERTIFIED = (
 # "…Certified by a USDA-accredited certifying agent. Verification via the USDA Organic Integrity
 # Datab…" is indistinguishable from the affirmative claim. Same reasoning as the materials-list
 # rule that a "none unlisted" answer must never read as "listed".
+#
+# ⚠️ WORDING — corrected 2026-08-30, second pass. The first version of this string opened
+# "Not verified by Trazo against the USDA Organic Integrity Database", which reads as "Trazo
+# does not do that". Trazo does: `import_usda_organic_data` mirrors the USDA monthly INTEGRITY
+# export (37,071 operations on a dev database) and `USDAOrganicVerifier` fuzzy-matches
+# certificates against it. Saying otherwise understated a real capability AND, worse, implied a
+# finding — a name that fails to match a monthly snapshot is not evidence an operation is
+# uncertified. `PostHarvestFacility.verify()` already refuses that inference in so many words,
+# falling back to `self_reported` rather than "not_found" because "not_found" "would
+# misleadingly read as 'handler not certified'". This string made the same mistake about the
+# farm itself.
 DISCLAIMER_CERTIFIED_ON_FILE = (
-    "Not verified by Trazo against the USDA Organic Integrity Database. Certified by a "
-    "USDA-accredited certifying agent, per the certificate on file for this operation."
+    "Not matched in Trazo's copy of the USDA Organic Integrity Database — an absent match is "
+    "not a finding against this operation. Certified by a USDA-accredited certifying agent, "
+    "per the certificate on file."
 )
 DISCLAIMER_TRANSITIONING = (
     "This farm is in transition to organic certification under 7 CFR 205.202(b). "
@@ -112,6 +124,9 @@ class ConsumerClaimResult:
       days_remaining               int or None
       display_label_key            react-intl message id for `display_label`
       disclaimer_key               react-intl message id for `disclaimer`
+      oid_matched                  True ONLY when this operation's certificate was matched
+                                     against Trazo's copy of the USDA Organic Integrity
+                                     Database. Gates every 'Verified' presentation.
       display_label_params         interpolation values for that message
 
     On `display_label` vs `display_label_key`
@@ -139,6 +154,7 @@ class ConsumerClaimResult:
     display_label_key: Optional[str] = None
     display_label_params: Optional[dict] = None
     disclaimer_key: Optional[str] = None
+    oid_matched: bool = False
 
     def to_dict(self, *, include_diagnostics: bool = False) -> dict:
         """Serialise for a response body.
@@ -214,6 +230,7 @@ class ConsumerClaimValidator:
                 display_label="USDA Certified Organic",
                 display_label_key="consumer.claim.certifiedOrganic",
                 disclaimer=(DISCLAIMER_CERTIFIED if oid_matched else DISCLAIMER_CERTIFIED_ON_FILE),
+                oid_matched=oid_matched,
                 status="certified_organic",
                 status_color="green",
                 reason=(
