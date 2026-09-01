@@ -17,7 +17,14 @@ from django.test import TestCase
 from django.utils import timezone
 
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, PestManagementEvent, ProductionEvent, SoilManagementEvent
+from history.models import (
+    ChemicalEvent,
+    GeneralEvent,
+    History,
+    PestManagementEvent,
+    ProductionEvent,
+    SoilManagementEvent,
+)
 from history.services.audit_export_service import AuditExportService
 from product.models import Parcel, Product
 from users.models import User
@@ -83,6 +90,89 @@ class PdfFieldCoverageTests(TestCase):
         self.assertIn("Jordan Blake PCA", text)
         self.assertIn("Ana Torres", text)
         self.assertIn("Application Context", text)
+
+    def test_contamination_incident_note_reaches_the_packet(self):
+        """The operator's own account of an incident, in the section that holds the incident.
+
+        🔴 2026-08-31 — it reached NEITHER table. `_build_general_events_section` deliberately
+        excludes contamination events and points the reader to the § 205.272 log; that log
+        carried only the structured fields. So the grower's narrative fell through the gap
+        between the two — the one event class in the packet whose field notes were missing, and
+        the class where what the operator says happened is most of what an inspector reads for.
+        """
+        GeneralEvent.objects.create(
+            history=self.history,
+            date=self.now,
+            name="Spray drift from neighbouring block",
+            activity_type="emergency",
+            observation=(
+                "Neighbour applied to the vineyard across the county road on a rising wind. "
+                "Two outside rows showed deposit at the fence line."
+            ),
+            is_contamination_incident=True,
+            contamination_source="spray_drift",
+            contamination_affected_area=1.2,
+            corrective_action_taken="Rows flagged and held pending residue screening.",
+        )
+        text = flowable_text(self._service()._build_soe_compliance_section())
+        self.assertIn("Contamination Incident Log", text)
+        self.assertIn(
+            "Neighbour applied to the vineyard",
+            text,
+            "the operator's own account of the incident never reached the packet",
+        )
+        # The structured fields must still be there — the note is additional, not a replacement.
+        self.assertIn("Rows flagged and held", text)
+
+    def test_tank_mix_adjuvant_reaches_the_input_application_log(self):
+        """An adjuvant is a material applied to the crop, so § 205.105 covers it too.
+
+        🔴 2026-08-31 — tank-mix partners had NO route into this packet, for any subtype. They
+        reached the CA PUR export on their own DPR-PML-017C line and nothing else, so a
+        certifier reading the input log never saw the spreader-sticker that went in the tank.
+        On a FERTILIZER it was worse: PUR does not report fertilizers at all (box 23), and the
+        display registry gated the field to PE/FU/HE, so the grower could not see it either.
+        """
+        ChemicalEvent.objects.create(
+            history=self.history,
+            type="FE",
+            date=self.now,
+            description="Fish emulsion with a spreader-sticker",
+            commercial_name="Neptune's Harvest 2-3-1",
+            tank_mix_partners=[
+                {
+                    "commercial_name": "Nu-Film-P",
+                    "manufacturer": "Miller Chemical",
+                    "epa_registration_number": "50011-AA",
+                    "volume": "1.5",
+                    "volume_unit": "qt",
+                    "organic_approved": True,
+                }
+            ],
+        )
+        text = flowable_text(self._service()._build_chemical_log())
+        self.assertIn("Nu-Film-P", text, "the adjuvant never reached the certifier packet")
+        self.assertIn("Adjuvant", text)
+        self.assertIn("50011-AA", text, "the adjuvant's registration number is what makes it checkable")
+        self.assertIn("1.5 qt", text)
+        self.assertIn("Miller Chemical", text)
+        # A bare checkbox may not be reported as a listing programme — same rule the parent
+        # row's "grower-selected, no listing on file" enforces.
+        self.assertIn("grower-reported", text)
+        self.assertNotIn("OMRI Listed", text)
+
+    def test_blank_tank_mix_rows_are_not_printed(self):
+        """The form leaves empty partner objects behind; they are not applications."""
+        ChemicalEvent.objects.create(
+            history=self.history,
+            type="PE",
+            date=self.now,
+            description="Spinosad",
+            commercial_name="Entrust SC",
+            tank_mix_partners=[{"commercial_name": "", "epa_registration_number": "", "volume": ""}, "junk"],
+        )
+        text = flowable_text(self._service()._build_chemical_log())
+        self.assertNotIn("Adjuvant", text, "a blank partner row printed as an application")
 
     def test_fertigation_flag_reaches_the_application_table(self):
         ChemicalEvent.objects.create(

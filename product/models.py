@@ -216,6 +216,29 @@ class Parcel(models.Model):
         default="approximate",
         help_text="How precisely this parcel's location is shown on the public consumer page",
     )
+    # Whether a HUMAN at this operation has ever chosen the value above.
+    #
+    # 🔴 2026-08-31. Migration 0013 wrote `exact` onto every parcel that existed when the
+    # setting was introduced — correct at the time, because those parcels were already
+    # publishing boundaries and silently narrowing that would have changed what farms had
+    # agreed to show. But the field was never exposed in the producer app, so those farms
+    # have been publishing a field boundary under a setting they were never shown and cannot
+    # reach. That is consent by inertia on the most sensitive datum the page carries: the
+    # boundary sits beside the harvest date and the yield, which together read as a schedule
+    # rather than a provenance claim.
+    #
+    # This flag distinguishes "chose exact" from "inherited exact", so the prompt can ask only
+    # the farms that were never asked. It is NOT a second disclosure setting and must never
+    # gate publication on its own — `public_parcel_geo` still reads
+    # `location_disclosure_level` alone, and adding a second gate there is how one surface
+    # ends up disagreeing with another.
+    location_disclosure_choice_made = models.BooleanField(
+        default=False,
+        help_text=(
+            "True once someone at the operation has explicitly confirmed or changed "
+            "location_disclosure_level. False means the value was inherited, not chosen."
+        ),
+    )
 
     def __str__(self):
         return str(self.id) + " - " + self.name + " - " + self.establishment.name

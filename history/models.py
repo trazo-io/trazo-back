@@ -1623,6 +1623,22 @@ class ChemicalEvent(CommonEvent):
         help_text="Product manufacturer/registrant (GLOBALG.A.P. FV-GFS 32.02.01; DPR-PML-017C box 28). "
         "commercial_name holds the brand/trade name.",
     )
+    # ⏱️ WALL CLOCK, not an instant (convention, verified 2026-08-31).
+    #
+    # These are filled from `datetime-local` inputs, which carry no offset. With
+    # TIME_ZONE="UTC" and USE_TZ=True, DRF makes the naive value aware AS UTC, so a Ventura
+    # grower typing 14:30 gets 14:30Z stored -- seven hours off as an instant, and exactly
+    # right as the wall clock they wrote down. Every reader honours that: the frontend
+    # `formatDateTime` renders in UTC and `pur_export_service` prints boxes 17/18 verbatim
+    # (DPR wants local time) -- those two are the ONLY consumers of these columns.
+    # `cogpro_import._as_event_datetime` encodes imported dates to match. Nothing computes an
+    # interval from them: § 205.203(c)'s safe-harvest date is derived from
+    # `manure_application_date` (a DateField) and REI/PHI are stored durations.
+    #
+    # So do not "correct" this one field, or one form, to send a real offset: a half-migration
+    # shifts printed compliance times by the offset while the rest of the system still reads
+    # UTC. Doing it properly means a per-establishment timezone column (none exists today), a
+    # data migration for stored rows, and farm-local rendering on every surface.
     application_start = models.DateTimeField(
         blank=True,
         null=True,

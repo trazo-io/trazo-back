@@ -2249,10 +2249,25 @@ class AuditExportService:
         notes_headers = ["Date", "Type", "Source", "Notes"]
         notes_data = [[self._hdr(h) for h in notes_headers]]
         for ev, note, source in noted:
+            # The Type cell. A typed event keeps its EXACT previous behaviour — mapped label,
+            # else the raw code — because `_humanize_enum` deliberately DROPS short all-caps
+            # codes, and silently turning an unmapped "LA" into an em-dash in the Application /
+            # Soil / Pest notes tables is not a change this was meant to make.
+            #
+            # Only the general-event path is new: GeneralEvent has no `type` column at all (its
+            # kind lives in `activity_type`, a free CharField with no choices), so the original
+            # `ev.type` would have raised AttributeError the moment contamination events started
+            # using this helper. `_humanize_enum` gives "emergency" -> "Emergency" and leaves
+            # operator-typed text as typed, without a fourth copy of the form's activity list.
+            ev_type = getattr(ev, "type", None)
+            if ev_type:
+                type_cell = type_labels.get(ev_type) or _val(ev_type)
+            else:
+                type_cell = _humanize_enum(getattr(ev, "activity_type", None)) or _val(None)
             notes_data.append(
                 [
                     self._cell(_fmt_date(ev.date)),
-                    self._cell(type_labels.get(ev.type, _val(ev.type))),
+                    self._cell(type_cell),
                     self._cell(source),
                     # NOT truncated. 120 chars cut the §205.203(c)(1) grazing interval and the
                     # §205.206(a) IPM justification mid-sentence — the exact content a
@@ -5009,6 +5024,59 @@ class AuditExportService:
                 row.append(self._cell("Yes" if ev.restricted_use_pesticide else None))
 
             app_data.append(row)
+
+            # 🔴 2026-08-31 — tank-mix partners had NO route into this packet, for any subtype.
+            #
+            # An adjuvant, spreader-sticker or surfactant is a material APPLIED TO THE CROP, so
+            # § 205.105 governs it exactly as it governs the product it rides with, and the
+            # inspector needs it on the input log. It reached the CA PUR export (its own
+            # DPR-PML-017C line, `_adjuvant_rows`) and nothing else: the display registry gated
+            # it to PE/FU/HE so the grower could not even see it on a fertilizer record, and the
+            # certifier packet never rendered it at all. Recorded, exported to the state, and
+            # invisible to the certifier — the one reader the packet exists for.
+            #
+            # A row per partner rather than a column: Table 1 already carries 14 columns at the
+            # 7.0" portrait budget, and each partner has its own amount, EPA/state registration
+            # and organic basis to account for. Same shape the reviewer expects a tank mix in.
+            for partner in getattr(ev, "tank_mix_partners", None) or []:
+                if not isinstance(partner, dict):
+                    continue
+                p_name = (partner.get("commercial_name") or "").strip()
+                p_mfr = (partner.get("manufacturer") or "").strip()
+                p_epa = (partner.get("epa_registration_number") or "").strip()
+                p_vol = (str(partner.get("volume")) if partner.get("volume") not in (None, "") else "").strip()
+                p_vol_unit = (partner.get("volume_unit") or "").strip()
+                # Same skip rule as the PUR exporter: the form leaves blank partner rows behind.
+                if not (p_name or p_epa or p_vol):
+                    continue
+
+                product_txt = f"Tank-mix partner: {p_name}" if p_name else "Tank-mix partner"
+                if p_mfr:
+                    product_txt = f"{product_txt} [mfr: {p_mfr}]"
+
+                # A bare boolean off a checkbox, so it may only be reported as what it is. The
+                # sibling column on the parent row says "OMRI Listed — grower-selected, no
+                # listing on file" for exactly this reason; naming a listing programme on the
+                # strength of a tick is the unearned certification-mark claim `_organic_basis_cell`
+                # was written to stop.
+                # Em dash, matching the parent row's "OMRI Listed — grower-selected, no listing on
+                # file" in the same column. MEASURED at the column's 0.51": the dash form wraps on
+                # a word boundary ("— grower / -reported") while the parenthesised alternative
+                # breaks mid-word ("(grower-r / eported)"), because ReportLab does not hyphenate.
+                p_organic = "Organic-approved — grower-reported" if partner.get("organic_approved") else "Not recorded"
+
+                by_header = {
+                    # The date is repeated rather than blanked: a blank date cell in an
+                    # application log reads as a missing record, and the row has to stand on its
+                    # own once a reviewer sorts or extracts the table.
+                    "Date": _fmt_date(ev.date),
+                    "Product": product_txt,
+                    "Type": "Adjuvant",
+                    "Amount / Rate": f"{p_vol} {p_vol_unit}".strip() or None,
+                    "Organic Status": p_organic,
+                    "EPA Reg #": p_epa or None,
+                }
+                app_data.append([self._cell(by_header.get(header)) for header in app_headers])
 
         # Dynamic column widths based on columns present
         # Target total <=7.0" (letter portrait, 0.75" margins). Globalgap+all cert
@@ -14699,6 +14767,26 @@ class AuditExportService:
             ct = Table(cont_data, colWidths=cont_widths, repeatRows=1)
             ct.setStyle(self._base_table_style())
             elements.append(ct)
+
+            # 🔴 2026-08-31 — the grower's own account of the incident reached NEITHER table.
+            #
+            # `_build_general_events_section` deliberately excludes contamination events and
+            # points here instead, which is right: an incident belongs under § 205.272, not in
+            # ad-hoc documentation. But this table carries only the STRUCTURED fields, so the
+            # observation went out the gap between the two — the one event class in the whole
+            # packet whose field notes were missing, and the class where "what did the operator
+            # say happened" is most of what an inspector is reading for.
+            #
+            # Same sub-table helper every other section uses (Application Notes, Soil Notes,
+            # Pest Notes), so the Source column keeps a farmer's words apart from a
+            # template-generated description exactly as it does elsewhere.
+            elements.extend(
+                self._build_event_notes_subtable(
+                    contamination_events,
+                    "Contamination Incident Notes",
+                    {},
+                )
+            )
 
         # ----------------------------------------------------------------
         # SOE 2024 Compliance Items (88 FR 3622, effective 2024-03-19)

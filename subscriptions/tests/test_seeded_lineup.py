@@ -261,3 +261,45 @@ class SeededLineupTests(TestCase):
             {a.slug for a in AddOn.objects.filter(is_active=True)},
             {"extra-establishment"},
         )
+
+
+class VoiceCeilingMigrationTests(TestCase):
+    """0019 has to patch an EXISTING database, which is the only one it will ever meet.
+
+    Migrations never INSERT plan rows, so on a fresh install 0019 runs against an empty table and
+    does nothing — the seeder supplies the values. The case that matters is the deployed database
+    where the plans already exist and predate the key, and the only way to know that path works is
+    to run it.
+    """
+
+    def test_the_patch_adds_the_ceiling_without_touching_anything_else(self):
+        import importlib
+
+        migration = importlib.import_module("subscriptions.migrations.0019_voice_ceiling_per_plan")
+
+        before = {"voice_recording": True, "compliance_exports": False, "storage_limit_gb": 10}
+        Plan.objects.create(
+            name="Starter",
+            slug="starter",
+            description="",
+            price=0,
+            interval="yearly",
+            features=dict(before),
+        )
+
+        class _Apps:
+            @staticmethod
+            def get_model(app_label, model_name):
+                return Plan
+
+        migration.forwards(_Apps, None)
+
+        after = Plan.objects.get(slug="starter").features
+        self.assertEqual(after["voice_daily_sessions"], migration.VOICE_CEILINGS["starter"])
+        # Everything the plan already carried survives the read-modify-write.
+        for key, value in before.items():
+            self.assertEqual(after[key], value, f"{key} was clobbered")
+
+        # ...and backwards removes the key rather than writing a number the plan never chose.
+        migration.backwards(_Apps, None)
+        self.assertNotIn("voice_daily_sessions", Plan.objects.get(slug="starter").features)

@@ -199,6 +199,77 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         return Response(self._application_payload(parcel))
 
+    # `ParcelViewSet` sets `parser_classes = (MultiPartParser, FormParser)` for the parcel form,
+    # which uploads images. This action carries one enum value and no file, so it accepts JSON —
+    # and needs to: a bodyless GET through MultiPartParser raises on `request.FILES`.
+    @action(
+        detail=True,
+        methods=["get", "patch"],
+        url_path="location-disclosure",
+        parser_classes=[JSONParser, MultiPartParser, FormParser],
+    )
+    def location_disclosure(self, request, pk=None, parcel_pk=None, company_pk=None, establishment_pk=None):
+        """How precisely this parcel's location may appear on the PUBLIC consumer page.
+
+        Its own endpoint rather than a field on the parcel form, for the reason
+        `.claude/rules/frontend.md` gives: a payload sends only what its UI renders. The prompt
+        that collects this answer renders two buttons and nothing else, so folding it into the
+        parcel form's payload would make a one-question dialog write forty unrelated fields —
+        the clobber class that rule exists to prevent.
+
+        Reaches the consumer surface ONLY. `public_parcel_geo` is the sole reader of
+        `location_disclosure_level`, and the parcel application, the dashboard map and the
+        add/update parcel form all read `Parcel.polygon` directly. Narrowing disclosure never
+        removes the boundary from the operation's own records or from its certifier packet.
+
+        PATCH records `location_disclosure_choice_made`, which is the point: migration 0013
+        wrote `exact` onto every pre-existing parcel and the setting was never surfaced, so the
+        product could not tell a farm that CHOSE to publish its boundary from one that inherited
+        the value and was never asked. Answering either way settles it.
+        """
+        # Scoped by ACTUAL OWNERSHIP rather than `self.company`, which is populated only when
+        # the request arrives on the company-nested route. Asking "does a company this user
+        # belongs to own this parcel" is both route-independent and the correct question — the
+        # 2026-08-19 quota bug came from a permission that consulted an "active company" while
+        # the write landed on `parcel.establishment.company`, which made the check bypassable by
+        # switching companies.
+        parcel = get_object_or_404(
+            Parcel,
+            id=pk,
+            establishment__company__in=request.user.companies.all(),
+        )
+
+        if request.method == "PATCH":
+            level = request.data.get("location_disclosure_level")
+            valid = {choice for choice, _label in Parcel.LOCATION_DISCLOSURE_CHOICES}
+            if level not in valid:
+                return Response(
+                    {"location_disclosure_level": [f"Must be one of: {', '.join(sorted(valid))}."]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            parcel.location_disclosure_level = level
+            parcel.location_disclosure_choice_made = True
+            parcel.save(update_fields=["location_disclosure_level", "location_disclosure_choice_made"])
+
+        # The most recent PUBLISHED season on this parcel, so the setting can link to the page it
+        # controls. Without it the farmer has no way to go and look at what they just changed —
+        # which in testing produced the confusion this field exists to remove: a parcel's setting
+        # was changed and a DIFFERENT parcel's public page was then checked, twice, because
+        # finding the right lot means knowing which season belongs to which block.
+        published = parcel.histories.filter(published=True).order_by("-finish_date", "-id").first()
+
+        return Response(
+            {
+                "location_disclosure_level": parcel.location_disclosure_level,
+                "location_disclosure_choice_made": parcel.location_disclosure_choice_made,
+                "preview_production_public_id": str(published.public_id) if published else None,
+                # Whether there is a boundary to publish at all. A parcel set to `exact` with no
+                # polygon exposes nothing, so the prompt must not warn it about a boundary it
+                # does not have.
+                "has_boundary": bool(parcel.polygon),
+            }
+        )
+
     @action(detail=True, methods=["get"], url_path="transition-status")
     def transition_status(self, request, pk=None, parcel_pk=None, company_pk=None, establishment_pk=None):
         """

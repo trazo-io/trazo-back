@@ -34,7 +34,9 @@ WHAT IT CORRECTS
   * cover_image_url set where missing (seeders build History() directly, so the
     models.py auto-derive path never runs and the hero would be blank).
   * Coarse coordinates + approximate parcel disclosure — a demo must not resolve to a
-    real field boundary.
+    real field boundary. The PARCEL is relocated too, not just the establishment: the
+    consumer map centre derives from the parcel, so moving one and not the other left a
+    page reading "Fallbrook, CA" over a satellite view of Fresno County, 410 km away.
 
 Idempotent: safe to run repeatedly. Matches fixtures by OLD *or* NEW name.
 
@@ -250,7 +252,7 @@ class Command(BaseCommand):
                 changes += self._fix_certifications(est, cfg)
                 changes += self._fix_osp(est)
                 for parcel in Parcel.objects.filter(establishment=est):
-                    changes += self._fix_parcel(parcel)
+                    changes += self._fix_parcel(parcel, cfg)
                     for history in History.objects.filter(parcel=parcel):
                         changes += self._fix_history(history, cfg)
                         changes += self._fix_events(history)
@@ -354,7 +356,7 @@ class Command(BaseCommand):
                 changed += 1
         return changed
 
-    def _fix_parcel(self, parcel):
+    def _fix_parcel(self, parcel, cfg):
         fields = []
         for attr in ("name", "description", "certification_type", "address", "contact_person"):
             current = getattr(parcel, attr, None)
@@ -366,6 +368,35 @@ class Command(BaseCommand):
         if getattr(parcel, "location_disclosure_level", None) == "exact":
             parcel.location_disclosure_level = "approximate"
             fields.append("location_disclosure_level")
+
+        # 🔴 2026-08-30 — MOVE the parcel, do not merely blur it.
+        #
+        # `_fix_establishment` has been relocating the ESTABLISHMENT to the fixture's coordinates
+        # since 2026-08-01; the parcel's own geometry was never touched. `map_metadata.center`
+        # derives from the parcel, so production served Solana Verde with a page reading
+        # "Fallbrook, CA" over a satellite map centred at 36.63 / -119.38 — Fresno County, 410 km
+        # away. Downgrading disclosure to `approximate` did not help and could not: it rounds the
+        # centre to ~1 km, which is noise against a 410 km error, and it is a PRIVACY control, not
+        # a correctness one.
+        #
+        # The polygon goes rather than being translated. Its vertices describe a real field
+        # somewhere in Fresno County — offsetting that shape to Fallbrook would draw an equally
+        # real boundary over land the demo has nothing to do with, and `approximate` withholds
+        # boundaries anyway, so there is nothing legitimate left for it to feed.
+        lat, lng = cfg["latitude"], cfg["longitude"]
+        meta = parcel.map_metadata if isinstance(parcel.map_metadata, dict) else {}
+        center = meta.get("center") if isinstance(meta.get("center"), dict) else {}
+        if center.get("lat") != lat or center.get("lng") != lng:
+            parcel.map_metadata = {
+                **meta,
+                "center": {"lat": lat, "lng": lng},
+                "zoom": min(int(float(meta.get("zoom") or 13)), 13),
+            }
+            fields.append("map_metadata")
+        if parcel.polygon:
+            parcel.polygon = None
+            fields.append("polygon")
+
         if fields:
             self._save(parcel, fields, f"Parcel #{parcel.id}")
         return len(fields)

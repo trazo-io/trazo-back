@@ -304,6 +304,10 @@ DEEPGRAM_API_KEY = config("DEEPGRAM_API_KEY", default="")
 # ceiling is an account with unbounded spend. 0 disables it. See
 # carbon/services/voice_budget.py for why this is counted in Postgres rather than the cache.
 VOICE_DAILY_SESSION_LIMIT = config("VOICE_DAILY_SESSION_LIMIT", default=200, cast=int)
+# Emergency lever, unset by default. Plans carry their own `voice_daily_sessions` ceilings, which
+# win over the fallback above — so this is what still caps EVERY company at once when a metered
+# vendor bill has to be stopped now rather than after editing plan rows. 0 or unset = no cap.
+VOICE_DAILY_SESSION_HARD_CAP = config("VOICE_DAILY_SESSION_HARD_CAP", default=0, cast=int)
 
 # OpenAI API Configuration for Voice Processing and AI Suggestions
 OPENAI_AVAILABLE = config("OPENAI_AVAILABLE", default=False, cast=bool)

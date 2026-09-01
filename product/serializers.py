@@ -295,6 +295,12 @@ class CreateParcelSerializer(USContactFieldsMixin, ModelSerializer):
             "current_history",
             "polygon",
             "map_metadata",
+            # Read-only here on purpose. The value is WRITTEN through
+            # `ParcelViewSet.location_disclosure`, so the one-question prompt that collects it
+            # does not have to send a whole parcel payload to answer it. Exposed for reading
+            # because the prompt has to know whether to appear at all.
+            "location_disclosure_level",
+            "location_disclosure_choice_made",
             "buffer_zones",
             "container_production",
             "apn",
@@ -338,7 +344,12 @@ class CreateParcelSerializer(USContactFieldsMixin, ModelSerializer):
             # SerializerMethodField
             "image",
         ]
-        read_only_fields = ["id"]
+        # Disclosure is read here and written ONLY through
+        # `ParcelViewSet.location_disclosure`. Leaving it writable on this serializer would let
+        # the parcel form carry it in a payload whose UI never renders it — and a field that can
+        # be written by a form that does not show it is exactly how a farm ends up publishing a
+        # boundary nobody chose, which is the defect this whole change exists to close.
+        read_only_fields = ["id", "location_disclosure_level", "location_disclosure_choice_made"]
 
     def get_product(self, parcel):
         return None

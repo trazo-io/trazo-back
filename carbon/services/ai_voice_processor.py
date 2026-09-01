@@ -254,6 +254,57 @@ MAX_REQUESTED_FIELDS = 24
 MAX_ENUM_OPTIONS = 24
 
 
+# Option values that name the ABSENCE of an answer. They are ordinary words, so matching them
+# against a sentence is matching noise: an option literally called "other" hits the word "other"
+# anywhere in the transcript.
+_GENERIC_ENUM_VALUES = {"other", "none", "unknown", "mixed", "na", "notapplicable", "n/a"}
+
+
+def _as_int(value: Any, default: int) -> int:
+    """Best-effort int, used where the model may answer with a string, a float or null."""
+    if isinstance(value, bool) or value is None:
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _squash(value: Any) -> str:
+    """Lowercase, letters and digits only — the form both matchers compare in."""
+    return re.sub(r"[^a-z0-9]", "", str(value or "").lower())
+
+
+def match_enum_option(transcript: str, options: List[str]) -> Any:
+    """
+    Find a catalogue value the farmer actually SAID, for a closed-set field.
+
+    The same idea as `match_known_block`, and it is what lets the keyword fallback answer
+    "we ran the wind machines for four hours" with `protection_method = wind_machine` instead of
+    leaving the field a frost record exists for empty while OpenAI is unreachable.
+
+    Three guards, each closing a way this could answer noise:
+      - values that mean "no answer" are skipped entirely (_GENERIC_ENUM_VALUES);
+      - a value must be at least five characters, so short words cannot hit by accident;
+      - the match must be UNIQUE in the catalogue. A transcript naming both "washing" and
+        "packing" leaves `processing_type` for the farmer rather than picking the earlier one.
+
+    ⛔ Enums only. A NUMBER cannot be matched this way — a bare "200" belongs to whichever field
+    the sentence meant, and choosing one by pattern is how a wrong measurement reaches a certifier
+    record. Free text cannot be matched at all, only invented. Both are the model's job.
+    """
+    squashed = _squash(transcript)
+    if not squashed:
+        return None
+
+    hits = [
+        option
+        for option in options or []
+        if len(_squash(option)) >= 5 and _squash(option) not in _GENERIC_ENUM_VALUES and _squash(option) in squashed
+    ]
+    return hits[0] if len(hits) == 1 else None
+
+
 def match_known_block(transcript: str, options: List[str]) -> Any:
     """
     Find a block the farmer actually NAMED, out of the ones this parcel has used.
@@ -671,6 +722,37 @@ Responda apenas com JSON.""",
             "Include a key ONLY if the farmer actually said it. Omit it, or set it to null, "
             "when they did not — never infer, never fill in a typical value."
         )
+        # MEASURED 2026-09-01, both against real farmer phrasing:
+        #   "irrigated the NORTH RIDGE block" on a parcel whose only block is "Ridge Block" came
+        #   back as block_id="Ridge Block" — the model substituting the nearest listed value,
+        #   which for this field means inventing which lot the record belongs to;
+        #   an irrigation sentence spoken on a frost-protection form came back with
+        #   protection_method="other", a value the farmer never uttered, chosen because the key
+        #   was on the list and "other" was the closest thing to nothing.
+        # The catalogue is there to constrain the ANSWER, not to guarantee one.
+        # Only when there is actually a catalogue to talk about. Several activities ask for
+        # nothing but numbers and free text, and an instruction about "the listed values" with no
+        # list in sight is noise the model has to reconcile.
+        if any(f["type"] == "enum" for f in requested_fields):
+            lines.append(
+                "The listed values are the only permitted answers, NOT a menu to pick the nearest "
+                "match from. If what the farmer said is not one of them, omit the key. Never "
+                "substitute a similar-sounding value, and never answer with a catch-all like "
+                '"other" just because a key was requested.'
+            )
+        # MEASURED 2026-09-01 on the demo utterance itself: "Sprayed Kocide 3000-O on the east
+        # block, three and a half pounds an acre, air-blast, for walnut blight" came back with
+        # rei_hours=24, phi_days=0, weather_conditions="calm_dry" and
+        # application_timing="post_emergence". The farmer said none of those. The model knows
+        # Kocide's label and filled it in — helpfully, and wrongly: REI and PHI are regulatory
+        # values an inspector reads off this record, and the weather is what a drift complaint
+        # turns on. A remembered label value is not an observation, and this record is testimony.
+        lines.append(
+            "You may recognise the product, the crop or the practice and know typical values for "
+            "them — label rates, re-entry intervals, pre-harvest intervals, usual conditions. DO "
+            "NOT use that knowledge. This is a record of what one person did and said, not a "
+            "product datasheet: report only what is in their words, and leave everything else out."
+        )
         return "\n".join(lines) + "\n"
 
     def _structure_ai_response(
@@ -679,13 +761,26 @@ Responda apenas com JSON.""",
         """Structure the AI response into the expected format."""
 
         return {
-            "type": ai_response.get("event_type", "general"),
-            "description": ai_response.get("description", original_transcript),
+            # Same `or` idiom as the arrays below, for the same reason: the model returns keys
+            # with null values rather than omitting them, and `.get(k, default)` only defends
+            # against an ABSENT key.
+            "type": ai_response.get("event_type") or "general",
+            "description": ai_response.get("description") or original_transcript,
             "date": time.strftime("%Y-%m-%d"),
-            "detected_amounts": ai_response.get("detected_amounts", []),
-            "detected_products": ai_response.get("detected_products", []),
-            "detected_systems": ai_response.get("detected_systems", []),
-            "confidence": min(max(ai_response.get("confidence", 0), 0), 100),
+            # ⛔ `or []`, NOT `.get(key, [])`. MEASURED 2026-09-01 on an ordinary frost sentence:
+            # the model answered `"detected_amounts": null` rather than omitting the key, and
+            # `dict.get` returns the DEFAULT only when the key is ABSENT — a key present with a
+            # null value returns None. The client then called `.map` on it and the whole "use
+            # these details" action threw. An empty list and a null mean the same thing here, and
+            # only one of them is safe to hand to a caller.
+            "detected_amounts": ai_response.get("detected_amounts") or [],
+            "detected_products": ai_response.get("detected_products") or [],
+            "detected_systems": ai_response.get("detected_systems") or [],
+            # ⛔ A null confidence used to CRASH this function. `max(None, 0)` is a TypeError in
+            # Python 3, the outer handler caught it, and a perfectly good GPT parse silently became
+            # a keyword-matched one — logged as "AI voice processing failed", which is the most
+            # misleading thing it could have said. Coerce, then clamp.
+            "confidence": min(max(_as_int(ai_response.get("confidence"), 0), 0), 100),
             # The model answered from the words. Only the keyword fallback ever defers to the
             # activity the farmer picked, and it says so — see _fallback_processing.
             "activity_from_context": False,
@@ -942,14 +1037,21 @@ Responda apenas com JSON.""",
             system for system, tokens in system_keywords.items() if any(token in text_lower for token in tokens)
         ]
 
+        # Closed-set fields the words themselves answer. Everything else in the request — the
+        # numbers and the free text — stays for the model: see match_enum_option.
         activity_fields = {}
-        block_options = next(
-            (f.get("options") or [] for f in (requested_fields or []) if f.get("name") == "block_id"),
-            [],
-        )
-        matched_block = match_known_block(processed, block_options)
-        if matched_block:
-            activity_fields["block_id"] = matched_block
+        for field in requested_fields or []:
+            if field.get("type") != "enum":
+                continue
+            name = field.get("name")
+            options = field.get("options") or []
+            # `block_id` gets the looser matcher: its options are the farm's own identifiers, so
+            # they can be dictated letter by letter ("B G A") and are safe at two characters.
+            matched = (
+                match_known_block(processed, options) if name == "block_id" else match_enum_option(processed, options)
+            )
+            if matched:
+                activity_fields[name] = matched
 
         # Extract NPK ratio
         npk_ratio = None

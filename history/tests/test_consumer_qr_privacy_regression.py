@@ -715,6 +715,220 @@ class PracticeSummaryTests(_Base):
             for forbidden in ("score", "grade", "percentage", "rating"):
                 self.assertNotIn(forbidden, p, f"graded key '{forbidden}' leaked into practice fact")
 
+    def test_bought_in_compost_is_not_claimed_as_on_farm(self):
+        """ "On-farm compost" is a claim about who MADE it, not that compost was used.
+
+        🔴 2026-08-31, measured on a real lot: a COMPOSTING event naming a supplier, an invoice
+        and a feedstock of bought-in green waste published the chip "On-farm compost". The record
+        did not merely fail to support the claim — it named the pallet supplier that refutes it.
+        """
+        SoilManagementEvent.objects.create(
+            history=self.history,
+            type="CO",
+            compost_method="windrow",
+            compost_feedstock="Green waste, yard trimmings and horse bedding",
+            amendment_supplier_name="Agromin, Oxnard",
+            amendment_purchase_invoice="AGR-2026-1187",
+            date=timezone.now(),
+        )
+        by_key = {p["key"]: p for p in self._practice_summary()["practices"]}
+        self.assertNotIn(
+            "on_farm_compost",
+            by_key,
+            "compost bought from a named supplier was published as made on the farm",
+        )
+        self.assertIn("compost_applied", by_key, "the compost application itself must still be a fact")
+        self.assertNotIn(
+            "methods",
+            by_key["compost_applied"],
+            "the supplier's composting method is not this operation's practice to describe",
+        )
+
+    def test_a_season_doing_both_reports_both(self):
+        # Own pile: no counterparty field anywhere on the record.
+        SoilManagementEvent.objects.create(
+            history=self.history,
+            type="CO",
+            compost_method="windrow",
+            compost_unit_id="WR-7",
+            date=timezone.now(),
+        )
+        SoilManagementEvent.objects.create(
+            history=self.history,
+            type="CO",
+            compost_method="static_aerated",
+            amendment_manufacturer="Agromin",
+            date=timezone.now(),
+        )
+        by_key = {p["key"]: p for p in self._practice_summary()["practices"]}
+        self.assertEqual(by_key["on_farm_compost"]["count"], 1)
+        self.assertEqual(by_key["compost_applied"]["count"], 1)
+        self.assertEqual(
+            by_key["on_farm_compost"]["methods"],
+            ["windrow"],
+            "the bought-in pile's method was attributed to the operation's own composting",
+        )
+
+
+class PayloadRendererParityTests(_Base):
+    """The public payload may not carry a field no consumer surface renders.
+
+    🔴 2026-08-31 — `block_id`, `identification_method` and `shared_with_conventional` were
+    served to anonymous callers while the display registry declared them on `modal`/`form`
+    only. surfaces.ts already records the decision for block IDs: they were swept off the
+    consumer card in the 2026-07-31 review as operator data, "somewhere for operator data to
+    hide on a consumer surface". The card stopped rendering them; the payload did not stop
+    sending them.
+
+    Owner-gated rather than deleted — the producer's own Production Profile reads this same
+    endpoint, and the certifier packet reads the event models directly.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from history.models import PestManagementEvent, ProductionEvent
+
+        ProductionEvent.objects.create(
+            history=self.history,
+            type="HA",
+            date=timezone.now(),
+            description="First pick",
+            block_id="HB-1",
+            shared_with_conventional=True,
+        )
+        PestManagementEvent.objects.create(
+            history=self.history,
+            type="SC",
+            date=timezone.now(),
+            description="Scouting",
+            block_id="HB-1",
+            identification_method="Beat tray and hand-lens confirmation",
+        )
+
+    def _anonymous_events(self):
+        return PublicHistorySerializer(self.history).data.get("events") or []
+
+    def test_fields_without_a_consumer_renderer_are_withheld(self):
+        blob = json.dumps(self._anonymous_events())
+        for field in ("block_id", "identification_method", "shared_with_conventional"):
+            self.assertNotIn(
+                f'"{field}"',
+                blob,
+                f"{field} reaches an anonymous shopper with no consumer surface to render it",
+            )
+        # And the VALUES, in case a key is ever renamed on the way out.
+        self.assertNotIn("HB-1", blob, "an internal block designator reached the public payload")
+        self.assertNotIn("Beat tray", blob)
+
+    def test_the_endpoint_the_consumer_page_calls_is_clean_too(self):
+        """Assert on `/api/transparency/`, not just the serializer.
+
+        The buyer page fetches `/transparency/<public_id>/`, NOT `public_history` — a distinction
+        that has bitten this codebase before. That view reuses PublicHistorySerializer with
+        `force_public_view`, so the strip above covers it, but proving the MECHANISM is not the
+        same as proving the SURFACE: a future payload assembled another way would leave the test
+        above green and the shopper leaking.
+        """
+        resp = self.client.get(
+            reverse(
+                "production-transparency-detail",
+                kwargs={"production_public_id": str(self.history.public_id)},
+            )
+        )
+        self.assertEqual(resp.status_code, 200, resp.content[:300])
+        blob = resp.content.decode()
+        for field in ("block_id", "identification_method", "shared_with_conventional"):
+            self.assertNotIn(f'"{field}"', blob, f"{field} reaches the buyer page payload")
+        self.assertNotIn("HB-1", blob)
+        self.assertNotIn("Beat tray", blob)
+
+    def test_the_producer_keeps_them(self):
+        from rest_framework.test import APIRequestFactory
+
+        self.user.companies.add(self.company)
+        request = APIRequestFactory().get("/")
+        request.user = self.user
+        blob = json.dumps(PublicHistorySerializer(self.history, context={"request": request}).data)
+        self.assertIn("HB-1", blob, "the producer lost the block id on their own record view")
+        self.assertIn("Beat tray", blob)
+
+
+class SoilExtraDataNoiseTests(_Base):
+    """A soil event may not store facts belonging to a subtype it is not.
+
+    🔴 2026-08-31 — every soil event created through the wizard stored
+    `species_planted: ""`, `wildlife_observed: ""`, `structure_notes: ""` and
+    `cover_crop_species: ""`, whatever its subtype: habitat and cover-crop keys on a compost
+    record. `.claude/rules/frontend.md` calls this the clobber class — extra_data is MERGED, so
+    a blank written by one subtype's form can overwrite a real value another subtype stored.
+
+    SoilManagementTab cannot fix it: NewEvent submits `{ ...eventFormData, ...data }` and
+    `eventFormData` holds the whole form state, so a key the tab deletes comes straight back.
+    The gate is in the serializer, where the value is filed.
+    """
+
+    def _create(self, payload):
+        from history.serializers import UpdateSoilManagementEventSerializer
+
+        data = {"history": self.history.id, "date": timezone.now().isoformat(), **payload}
+        ser = UpdateSoilManagementEventSerializer(data=data)
+        ser.is_valid(raise_exception=True)
+        return ser.save()
+
+    def test_create_does_not_store_empty_foreign_subtype_keys(self):
+        event = self._create(
+            {
+                "type": "CO",
+                "name": "Compost spread",
+                "description": "Compost spread",
+                "species_planted": "",
+                "wildlife_observed": "",
+                "structure_notes": "",
+                "cover_crop_species": "",
+            }
+        )
+        extra = event.extra_data or {}
+        stray = [
+            k for k in ("species_planted", "wildlife_observed", "structure_notes", "cover_crop_species") if k in extra
+        ]
+        self.assertEqual(
+            stray,
+            [],
+            f"a compost record stored keys belonging to other subtypes: {stray}",
+        )
+
+    def test_create_still_stores_a_real_value(self):
+        event = self._create(
+            {
+                "type": "CC",
+                "name": "Winter cover",
+                "description": "Winter cover",
+                "cover_crop_species": "Bell bean, oats, vetch",
+            }
+        )
+        self.assertEqual((event.extra_data or {}).get("cover_crop_species"), "Bell bean, oats, vetch")
+
+    def test_update_can_still_clear_a_stored_value(self):
+        # extra_data is merged, so clearing MUST be able to write an empty. Only create skips it.
+        from history.serializers import UpdateSoilManagementEventSerializer
+
+        event = self._create(
+            {
+                "type": "CC",
+                "name": "Winter cover",
+                "description": "Winter cover",
+                "cover_crop_species": "Bell bean",
+            }
+        )
+        ser = UpdateSoilManagementEventSerializer(instance=event, data={"cover_crop_species": ""}, partial=True)
+        ser.is_valid(raise_exception=True)
+        updated = ser.save()
+        self.assertEqual(
+            (updated.extra_data or {}).get("cover_crop_species"),
+            "",
+            "a grower could no longer clear a cover crop they had recorded",
+        )
+
 
 class GrazingSummaryModeTests(_Base):
     """GTM-v3: grazing rotations can be logged as one summary event (is_summary), mirroring
@@ -1503,3 +1717,119 @@ class ComplianceFieldExposureTests(_Base):
         hd = [e for e in self._events() if e.get("habitat_type") == "hedgerow"]
         self.assertTrue(hd)
         self.assertEqual(hd[-1].get("habitat_install_date"), "2019-02-15")
+
+
+class EquipmentKeyIsNotOverloadedTests(_Base):
+    """`equipment` must mean equipment, and `events_count` must count what is served.
+
+    Two defects found in the 17-activity display audit (2026-08-31), one root cause apart:
+
+    1. Five families populated the public payload's `equipment` key and only ONE of them put
+       equipment in it. Chemical put the product name, soil the amendment type, business the
+       certification, and pest the SPECIES -- including its Latin binomial. That put an
+       ungated second copy under a key `eventDescriptions.ts` reads when it builds a card
+       title, where `formatConsumerPestName` -- the function whose entire job is to strip that
+       binomial for shoppers -- never runs.
+
+       It did not in fact render: each family is claimed by an earlier per-family branch
+       first, measured with the frontend gate both present and absent. The payload leak is
+       what THIS class guards; the render half is guarded by frontend
+       `utils/__tests__/equipmentKeyTitleGate.test.ts`, on the one event shape that can still
+       reach that fallback. Every one of those values is already served under its own
+       purpose-built key: `commercial_name`, `amendment_type`, `certification_type_display`,
+       `pest_species`. The overload therefore carried nothing new. It did not bypass a gate
+       either -- `certification_display` is itself computed under `if cert_publishable`, so an
+       unpublishable certification never reached `equipment`; it fell back to the business
+       TYPE, which is simply the wrong fact under that key.
+
+    2. `events_count` counted the eight event managers while `events` withholds whole classes
+       (`claim_authority._CONSUMER_WITHHELD_PRODUCTION_SUBTYPES`). The fixture below serves a
+       count that is strictly lower than the number on file, which is what makes the third
+       test non-vacuous -- with the old implementation it reports the on-file total and fails.
+    """
+
+    BINOMIAL = "Citrus thrips (Scirtothrips citri)"
+
+    def setUp(self):
+        super().setUp()
+        from history.models import BusinessEvent, EquipmentEvent
+
+        now = timezone.now()
+        ProductionEvent.objects.create(history=self.history, type="PL", date=now)
+        # WITHHELD from every consumer surface -> forces events_count != manager count.
+        ProductionEvent.objects.create(history=self.history, type="TP", date=now)
+        ChemicalEvent.objects.create(
+            history=self.history,
+            type="FE",
+            date=now,
+            commercial_name="Neptune's Harvest Fish & Seaweed 2-3-1",
+        )
+        SoilManagementEvent.objects.create(history=self.history, type="CC", date=now, amendment_type="compost")
+        PestManagementEvent.objects.create(history=self.history, type="IP", date=now, pest_species=self.BINOMIAL)
+        BusinessEvent.objects.create(history=self.history, type="CE", date=now, certification_type="organic_usda")
+        EquipmentEvent.objects.create(history=self.history, type="MN", date=now, equipment_name="John Deere 5075E")
+
+    def _events(self):
+        return self._payload().get("events") or []
+
+    def test_equipment_key_appears_only_on_equipment_events(self):
+        events = self._events()
+        self.assertTrue(events, "fixture served no events -- the assertions below would pass vacuously")
+        offenders = [(e.get("type"), e.get("equipment")) for e in events if e.get("equipment") is not None]
+        self.assertTrue(
+            offenders, "no event carried `equipment` at all -- the equipment fixture is not reaching the payload"
+        )
+        for event_type, value in offenders:
+            self.assertEqual(
+                event_type,
+                "equipment",
+                f"a {event_type} event published equipment={value!r}. `equipment` is the machine, "
+                "not the product / amendment / certification / pest. Serve it under its own key.",
+            )
+
+    def test_pest_binomial_reaches_the_payload_only_under_pest_species(self):
+        """The binomial itself is not secret -- `pest_species` carries it and the frontend
+        strips it at render. What is forbidden is a SECOND copy under another key, because
+        every other key is read by code that never learned to strip it."""
+        leaked = []
+        for event in self._events():
+            for key, value in event.items():
+                if key == "pest_species":
+                    continue
+                if isinstance(value, str) and "Scirtothrips citri" in value:
+                    leaked.append((event.get("type"), key, value))
+        self.assertEqual(
+            leaked,
+            [],
+            "the Latin binomial reached the consumer payload outside `pest_species`, where "
+            "`formatConsumerPestName` cannot strip it",
+        )
+
+    def test_events_count_matches_the_events_actually_served(self):
+        payload = self._payload()
+        served = payload.get("events") or []
+        on_file = sum(
+            [
+                self.history.history_productionevent_events.count(),
+                self.history.history_chemicalevent_events.count(),
+                self.history.history_soilmanagementevent_events.count(),
+                self.history.history_pestmanagementevent_events.count(),
+                self.history.history_businessevent_events.count(),
+                self.history.history_equipmentevent_events.count(),
+            ]
+        )
+        # Non-vacuity: if withholding ever stops applying here, the third assertion below
+        # would pass no matter how events_count is computed.
+        self.assertLess(
+            len(served),
+            on_file,
+            "no event was withheld, so this test cannot distinguish a served count from an "
+            "on-file count -- restore a withheld subtype (TP) to the fixture",
+        )
+        self.assertEqual(
+            payload.get("events_count"),
+            len(served),
+            "events_count advertises more activities than the page lists. A shopper reads the "
+            "gap as something held back (FTC 16 CFR 260.6); the withholding is uniform policy "
+            "and fine, announcing it is not.",
+        )

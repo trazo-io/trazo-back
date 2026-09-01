@@ -376,3 +376,130 @@ class FallbackMatchesAKnownBlockTests(SimpleTestCase):
             [{"name": "block_id", "label": "Block", "type": "enum", "options": ["North Orchard"]}],
         )
         self.assertEqual(result["activity_fields"], {"block_id": "North Orchard"})
+
+
+class FallbackMatchesClosedSetsTests(SimpleTestCase):
+    """
+    Every CLOSED-SET field in the request, not just the block.
+
+    The three kinds of per-activity field are not equally answerable without a model:
+      - enums are a catalogue, so the words either name a value or they do not — matchable;
+      - numbers are not: a bare "200" belongs to whichever field the sentence meant, and choosing
+        one by pattern is how a wrong measurement reaches a certifier record;
+      - free text cannot be matched at all, only invented.
+    So the fallback answers enums and leaves the other two to the model. That is a deliberate
+    line, not an omission.
+    """
+
+    def setUp(self):
+        self.processor = AIVoiceProcessor()
+
+    def _fields(self, transcript, requested):
+        return self.processor._fallback_processing(transcript, "blueberry", "en-US", "frost_protection", requested)[
+            "activity_fields"
+        ]
+
+    FROST = [
+        {
+            "name": "protection_method",
+            "label": "Protection Method",
+            "type": "enum",
+            "options": ["wind_machine", "orchard_heater", "under_tree_sprinkler", "other"],
+        }
+    ]
+
+    def test_answers_the_field_the_record_exists_for(self):
+        self.assertEqual(
+            self._fields("we ran the wind machines for four hours", self.FROST),
+            {"protection_method": "wind_machine"},
+        )
+
+    def test_matches_across_the_plural(self):
+        self.assertEqual(
+            self._fields("ran the orchard heaters all night", self.FROST),
+            {"protection_method": "orchard_heater"},
+        )
+
+    def test_never_matches_a_value_that_means_no_answer(self):
+        # An option literally called "other" would otherwise hit the word "other" anywhere.
+        self.assertEqual(self._fields("cold night, we used something other than usual", self.FROST), {})
+
+    def test_refuses_an_ambiguous_transcript(self):
+        # Two values named: the farmer picks, not the array order.
+        requested = [
+            {
+                "name": "processing_type",
+                "label": "Processing",
+                "type": "enum",
+                "options": ["washing", "sorting", "packing"],
+            }
+        ]
+        self.assertEqual(self._fields("spent the morning washing and packing", requested), {})
+        self.assertEqual(
+            self._fields("spent the morning washing the fruit", requested),
+            {"processing_type": "washing"},
+        )
+
+    def test_short_values_are_not_matched(self):
+        # Under five characters a value hits by accident more often than on purpose.
+        requested = [{"name": "soil_texture", "label": "Texture", "type": "enum", "options": ["clay", "silt"]}]
+        self.assertEqual(self._fields("worked the clay ground", requested), {})
+
+    def test_numbers_and_text_are_left_to_the_model(self):
+        requested = [
+            {"name": "low_temperature", "label": "Low temperature", "type": "number"},
+            {"name": "storage_location", "label": "Storage", "type": "text"},
+        ]
+        self.assertEqual(self._fields("it got down to twenty eight in the north shed", requested), {})
+
+
+class NullTolerantResponseTests(SimpleTestCase):
+    """The model answers with keys PRESENT and null, which `dict.get(k, default)` does not defend
+    against — the default applies only to an ABSENT key.
+
+    MEASURED 2026-09-01 on an ordinary frost sentence: `detected_amounts: null` reached the client
+    and `.map` threw, so "Use these details" applied nothing. The same shape in `confidence` was
+    worse than a crash — `max(None, 0)` raised, the outer handler caught it, and a good GPT parse
+    silently became a keyword-matched one, logged as "AI voice processing failed".
+    """
+
+    def setUp(self):
+        self.processor = AIVoiceProcessor()
+
+    def _structure(self, payload):
+        return self.processor._structure_ai_response(payload, "cold night, ran the wind machines", 12.0)
+
+    def test_null_arrays_become_empty_lists(self):
+        result = self._structure(
+            {
+                "event_type": "frost_protection",
+                "detected_amounts": None,
+                "detected_products": None,
+                "detected_systems": None,
+                "confidence": 90,
+            }
+        )
+        self.assertEqual(result["detected_amounts"], [])
+        self.assertEqual(result["detected_products"], [])
+        self.assertEqual(result["detected_systems"], [])
+
+    def test_null_confidence_does_not_raise(self):
+        result = self._structure({"event_type": "irrigation", "confidence": None})
+        self.assertEqual(result["confidence"], 0)
+
+    def test_a_string_confidence_is_still_a_number(self):
+        self.assertEqual(self._structure({"confidence": "85"})["confidence"], 85)
+
+    def test_confidence_stays_clamped(self):
+        self.assertEqual(self._structure({"confidence": 250})["confidence"], 100)
+        self.assertEqual(self._structure({"confidence": -5})["confidence"], 0)
+
+    def test_null_type_and_description_fall_back(self):
+        result = self._structure({"event_type": None, "description": None})
+        self.assertEqual(result["type"], "general")
+        self.assertEqual(result["description"], "cold night, ran the wind machines")
+
+    def test_a_completely_empty_answer_is_survivable(self):
+        result = self._structure({})
+        self.assertEqual(result["type"], "general")
+        self.assertEqual(result["activity_fields"], {})

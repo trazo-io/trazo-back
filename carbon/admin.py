@@ -244,13 +244,25 @@ class EventTemplateAdmin(admin.ModelAdmin):
 class VoiceUsageDayAdmin(admin.ModelAdmin):
     """Voice spend, per operation, per day — for US, not for the farmer.
 
-    This is deliberately an OPS surface and not a row on the subscription page. The 200/day
-    ceiling is an anti-abuse valve, not something a plan sells: `voice_recording` is a
-    boolean feature (True on starter, compliance, operation and pilot alike), and every
-    metric the subscription page meters maps to a `max_*` the plan actually buys. Publishing
-    the ceiling there would turn an implementation detail into a plan term we would then owe
-    the customer — and one we cannot sell more of. The farmer meets this number in exactly
-    one place: the moment it stops them, in the voice panel itself.
+    This is deliberately an OPS surface and not a row on the subscription page. The ceiling is
+    an anti-abuse valve, not something a plan sells: `voice_recording` is a boolean feature
+    (True on starter, compliance, operation and pilot alike), and every metric the subscription
+    page meters maps to a `max_*` the plan actually buys. Publishing the ceiling there would
+    turn an implementation detail into a plan term we would then owe the customer — and one we
+    cannot sell more of. The farmer meets this number in exactly one place: the moment it stops
+    them, in the voice panel itself.
+
+    2026-08-31: the ceiling is now PER PLAN (`voice_daily_sessions` — Starter 50, Compliance 200,
+    Operation 1,000) rather than one deploy-wide 200, because voice is the only entitlement in
+    that dict which costs money per use and the free tier shared a bound sized for a paying one.
+    Two consequences worth knowing here:
+
+      * this table no longer implies a single ceiling — read the company's plan to know what a
+        given `session_count` is measured against;
+      * the number now travels in `Plan.features`, which `PlanSerializer` serves on the public
+        `AllowAny` plans endpoint. That is accepted rather than overlooked: it is a factual limit
+        a farmer is subject to, and hiding limits people run into is worse than stating them. It
+        still gets no UI of its own, which is what the paragraph above is about.
     """
 
     list_display = ("company", "day", "session_count", "updated_at")

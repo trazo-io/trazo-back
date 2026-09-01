@@ -1007,6 +1007,41 @@ def _organic_input_evidence(chemical_events):
     }
 
 
+# Fields that only get filled in when the amendment was BOUGHT. Every one of them names a
+# counterparty or a piece of that counterparty's paperwork — a supplier, the label's maker, an
+# invoice, a delivery ticket's lot number — so none of them can be filled in about a pile the
+# operation built itself.
+#
+# Deliberately does NOT include the compost PROCESS fields (method, feedstock, peak temp,
+# turnings, C:N). Those record § 205.203(c)(2) conformance and a grower applying purchased
+# compost has to hold them too — they say the compost was made properly, never who made it.
+_OFF_FARM_COMPOST_SIGNALS = (
+    "amendment_supplier_name",
+    "amendment_manufacturer",
+    "amendment_purchase_invoice",
+    "amendment_purchase_date",
+    "amendment_quantity_purchased",
+    # A manufacturer's lot/batch number off a bag or delivery ticket. An operation's own pile is
+    # identified by `compost_unit_id` (the windrow ID on its NOP 5021 log), not by this.
+    "amendment_lot_number",
+    "receipt_document",
+)
+
+
+def _compost_was_bought_in(event):
+    """True when this compost event carries any evidence of being sourced off the farm.
+
+    Fails CLOSED, which is the whole point: the cost of getting this wrong in one direction is a
+    practice-based grower missing one chip on their page, and in the other it is Trazo telling
+    shoppers a farm composts on site when its own record names the supplier it bought from.
+    """
+    for field in _OFF_FARM_COMPOST_SIGNALS:
+        value = getattr(event, f"{field}_id", None) if field == "receipt_document" else getattr(event, field, None)
+        if value not in (None, ""):
+            return True
+    return False
+
+
 def _build_practice_summary(history):
     """Aggregate documented soil/regenerative PRACTICE facts for consumer display.
 
@@ -1052,9 +1087,26 @@ def _build_practice_summary(history):
         )
         practices.append({"key": "cover_crops", "count": len(cover_crop), "species": species})
 
+    # 🔴 2026-08-31 — "on-farm compost" is a claim about WHO MADE IT, and this used to make it
+    # for every COMPOSTING event on the season. Measured on a real lot: an event naming
+    # `amendment_supplier_name` "Agromin, Oxnard", an invoice number, and a feedstock of
+    # "green waste, yard trimmings and horse bedding" — compost bought by the pallet — published
+    # the chip "On-farm compost" to shoppers. The record did not merely fail to support the
+    # claim, it contradicted it, which is the FTC 16 CFR 260.6 case in its plainest form.
+    #
+    # Both facts are worth publishing, so the split is by claim rather than by suppression: a
+    # pile the operation built is `on_farm_compost`, compost it bought and spread is
+    # `compost_applied`. A season doing both gets both, with honest counts.
     if compost:
-        methods = sorted({(e.compost_method or "").strip() for e in compost if e.compost_method})
-        practices.append({"key": "on_farm_compost", "count": len(compost), "methods": methods})
+        on_farm = [e for e in compost if not _compost_was_bought_in(e)]
+        bought_in = [e for e in compost if _compost_was_bought_in(e)]
+        if on_farm:
+            methods = sorted({(e.compost_method or "").strip() for e in on_farm if e.compost_method})
+            practices.append({"key": "on_farm_compost", "count": len(on_farm), "methods": methods})
+        if bought_in:
+            # No `methods`: the windrow/static-pile method of compost the operation BOUGHT is the
+            # supplier's process, and attributing it here is how "on-farm" crept in to begin with.
+            practices.append({"key": "compost_applied", "count": len(bought_in)})
 
     # Biodiversity / habitat (HD = developed habitat, NS = nesting/shelter structures). FACTS only —
     # the habitat types and structure totals the farmer logged, never a biodiversity score/index or a

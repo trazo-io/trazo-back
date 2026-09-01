@@ -212,6 +212,14 @@ class Command(BaseCommand):
             # path suppresses exactly the logging that creates the records that create the
             # upgrade. The paid tier sells the artifact, not the keyboard.
             "voice_recording": True,
+            # ...but bounded. Voice is the one entitlement here that costs money PER USE: a
+            # session streams metered audio and then calls a model. At the shared 200/day ceiling
+            # a single free account could run roughly $700 a year of usage against $0 of revenue.
+            # 50 is still five times a heavy logging day (see carbon/services/voice_budget.py),
+            # so it cannot bite a real grower at harvest — the moment the free tier has to be at
+            # its best, because that is when the season's records get made and the packet gets
+            # wanted. It only bites a loop.
+            "voice_daily_sessions": 50,
             "ai_event_templates": True,
             # The gate. False here is what makes Starter a free tier rather than a free product.
             "compliance_exports": False,
@@ -257,6 +265,9 @@ class Command(BaseCommand):
             "priority_support": True,
             "dedicated_support": False,
             "voice_recording": True,
+            # The number this system has always run at, now named by the plan rather than by an
+            # environment variable — one paying farm, and a ceiling that only a runaway reaches.
+            "voice_daily_sessions": 200,
             "ai_event_templates": True,
             # What the $249 actually buys. Starter logs; Compliance produces the documents a
             # certifier, a county ag commissioner or a wholesale buyer asks for: the OSP renewal
@@ -289,6 +300,11 @@ class Command(BaseCommand):
             # The one thing being bought. Everything else is inherited so the two tiers cannot
             # drift — a change to what Compliance includes is automatically in Operation.
             "max_establishments": -1,
+            # The voice budget is counted PER COMPANY, and this is the tier where one company is
+            # many farms. Leaving it at Compliance's 200 would have made the ceiling bind on
+            # legitimate use — ten farms logging a harvest week — which is the one thing it must
+            # never do. Five times Compliance for five times the operation.
+            "voice_daily_sessions": 1000,
             # 4x Compliance, not unlimited. Unlimited is Enterprise's line in the one-pager, and
             # a bounded number here keeps the storage meter meaningful (photo uploads are still
             # hard-limited; see `subscriptions/storage_accounting.py`).

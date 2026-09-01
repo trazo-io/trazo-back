@@ -3743,6 +3743,27 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         # cross-reference Trazo performs, not a claim the farmer types.
         "verification_status",
         # --- Added 2026-08-03 -----------------------------------------------------------
+        # --- Added 2026-08-31 (payload/renderer parity sweep) ---------------------------
+        # Served to anonymous callers with NO consumer renderer behind them. The display
+        # registry declares each of these on `modal`/`form` only, so nothing on the buyer page
+        # could ever show them — the API was simply handing out more than the page uses.
+        #
+        # `block_id` is the one with a written policy already: surfaces.ts records that internal
+        # block IDs were swept off the consumer card in the 2026-07-31 review as operator data,
+        # "somewhere for operator data to hide on a consumer surface". The card stopped
+        # rendering it; the payload never stopped sending it.
+        #
+        # `identification_method` ("Beat tray and hand-lens confirmation against the UC IPM
+        # key") and `shared_with_conventional` are the same shape — the latter is the § 205.272
+        # split-operation signal whose consumer surface was removed the same day, because its
+        # consumer wording asserts a cleaning that a flag alone does not evidence.
+        #
+        # Owner-gated, like everything else in this tuple: the producer's own Production Profile
+        # reads this endpoint and keeps all three, and the certifier packet reads the event
+        # models directly, so neither loses a byte.
+        "block_id",
+        "identification_method",
+        "shared_with_conventional",
         # `photo_content_flag` is the INTERNAL anti-gaming verdict from the Vision check
         # (`not_agricultural` / `ai_generated` / `stock_photo`). Reproduced live on an
         # anonymous payload: timeline[1].photo_content_flag == "not_agricultural".
@@ -3830,26 +3851,20 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         return {"is_specimen": True, "title": SPECIMEN_TITLE, "body": SPECIMEN_BODY}
 
     def get_events_count(self, obj):
-        """Total count of documented farming events for this production."""
-        count = 0
-        for attr in [
-            "history_weatherevent_events",
-            "history_chemicalevent_events",
-            "history_productionevent_events",
-            "history_generalevent_events",
-            "history_equipmentevent_events",
-            "history_soilmanagementevent_events",
-            "history_pestmanagementevent_events",
-            "history_businessevent_events",
-        ]:
-            manager = getattr(obj, attr, None)
-            if manager is not None:
-                try:
-                    # Use prefetched cache if available, else query
-                    count += len(manager.all())
-                except Exception:
-                    pass
-        return count
+        """How many activities this payload SERVES -- not how many are on file.
+
+        The two must agree. This used to count the eight event managers directly, while
+        `get_events` withholds whole classes from every consumer surface
+        (`claim_authority._CONSUMER_WITHHELD_PRODUCTION_SUBTYPES`: buffer use, seed search,
+        equipment cleanout, transport). One real season reported 17 above a timeline of 13.
+
+        A shopper cannot read that gap as anything but four activities being kept back, which
+        is the deception-by-omission shape FTC 16 CFR 260.6 covers and exactly what the
+        uniform-policy rule in transparency-first.md exists to prevent. The withholding itself
+        is fine -- it is categorical and applies to every farm -- but it must not be ADVERTISED
+        by a number the page then fails to show.
+        """
+        return len(self.get_events(obj))
 
     @staticmethod
     def _public_performer(event, show_full_names):
@@ -3890,6 +3905,19 @@ class PublicHistorySerializer(serializers.ModelSerializer):
     # *supplier*/nursery/bee_source/processor/lab_name/source/manure_source/compost_source,
     # auditor/audit_*/inspector/inspected_by/*_nc/control_points, carrier/trailer*/destination*/
     # transit*/departure*, original_*/ui_*/migrated_from/test_production/*_template_id, attestations.
+    # REMOVED 2026-08-31 -- `trust_impact` and `transparency_benefit`. Both were free text in
+    # which a grower states what trust or environmental benefit an event delivers: a
+    # self-created sustainability claim (FTC 16 CFR 260.6; EU ECGT 2024/825 from 2026-09-27),
+    # published to shoppers on the anonymous payload. The EXTRA_DATA_SENSITIVE_SUBSTRINGS guard
+    # below could not catch them because the claim is in the field's PURPOSE, not its name --
+    # so on this list, membership was the only thing standing between them and a shopper.
+    #
+    # They were also unreachable: no BusinessTab input collected them, no display registry
+    # declared them, nothing rendered them anywhere. Only plumbing survived (normalizer copy,
+    # preview copy, edit-time hydration), removed with the same change.
+    # `BusinessEventSerializer.to_internal_value` still FILES a value an API client sends, so
+    # nothing already stored is destroyed -- it simply stops being published.
+    # Guard: test_consumer_extra_data_claim_shapes.NamedClaimFieldsAreNotAllowListedTests.
     ALLOWED_EXTRA_DATA_KEYS = frozenset(
         {
             "acid_ratio",
@@ -4290,7 +4318,6 @@ class PublicHistorySerializer(serializers.ModelSerializer):
             "total_wasps",
             "total_water_gallons_est",
             "traceability_score",
-            "transparency_benefit",
             "transparency_testing",
             "trap_density",
             "trap_type",
@@ -4305,7 +4332,6 @@ class PublicHistorySerializer(serializers.ModelSerializer):
             "trees_replanted",
             "trees_shaken",
             "trigger",
-            "trust_impact",
             "unit",
             "usda_grade",
             "verification_confidence",
@@ -4390,6 +4416,9 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         "revenue",
         "_roi",
         "roi_",
+        # NOTE: a claim can hide in a field's PURPOSE rather than its name, where no substring
+        # here can reach it -- see the `trust_impact` / `transparency_benefit` note on
+        # ALLOWED_EXTRA_DATA_KEYS above.
     )
 
     def _sanitize_extra_data_for_public(self, event):
@@ -4683,6 +4712,12 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         ⚡ PERFORMANCE OPTIMIZATION: Uses prefetched data from transparency_views.py
         instead of creating new querysets. This reduces 232 queries to ~15.
         """
+        # `history.pk is not None` matters: an unsaved instance has pk None, and None == None
+        # would hand it the PREVIOUS row's events.
+        cached = getattr(self, "_events_cache", None)
+        if cached is not None and history.pk is not None and cached[0] == history.pk:
+            return cached[1]
+
         try:
             # Get basic event data without expensive carbon calculations
             events_data = []
@@ -4798,7 +4833,6 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "concentration": event.concentration,
                         "area": getattr(event, "area", None),
                         "area_unit": _public_unit(event, "area_unit"),
-                        "equipment": event.commercial_name,
                         "photo_count": photo_count,
                         "commercial_name": event.commercial_name,
                         "album": album_data,
@@ -5337,6 +5371,29 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "volume": None,
                         "concentration": None,
                         "area": getattr(event, "area", None),
+                        # The ONLY payload that may carry `equipment`. Four other families
+                        # used to overload this key with something that is not equipment --
+                        # chemical put the product name here, soil the amendment type,
+                        # business the certification, and pest the SPECIES, Latin binomial
+                        # included ("Citrus thrips (Scirtothrips citri)"). That is an ungated
+                        # second copy landing under a key `eventDescriptions.ts` reads when it
+                        # builds a card title, where `formatConsumerPestName` -- the function
+                        # whose whole job is to strip that binomial -- never runs.
+                        #
+                        # MEASURED, so the record stays accurate: it did not actually render.
+                        # Each of the four families is claimed by an earlier per-family branch
+                        # ("Pest & scouting", "Soil work", ...) before that fallback is
+                        # reached, verified by running the real payload shapes with the
+                        # frontend gate both present and absent. A leaked payload one refactor
+                        # away from a rendered claim is still worth closing, and every one of
+                        # these values is already served under its own key (`commercial_name`,
+                        # `amendment_type`, `certification_type_display`, `pest_species`). No
+                        # gate was bypassed -- `certification_display` is computed under
+                        # `if cert_publishable`, so an unpublishable certification fell back to
+                        # the business TYPE here rather than leaking. The overload simply filed
+                        # the wrong fact under this key. Guards:
+                        # test_consumer_qr_privacy_regression.EquipmentKeyIsNotOverloadedTests
+                        # and frontend utils/__tests__/equipmentKeyTitleGate.test.ts
                         "equipment": event.equipment_name,
                         # CRITICAL: Add Equipment subtype and operation name for frontend display
                         "operation_type": getattr(event, "type", None),  # Equipment subtype (MN, RE, CA, FC, BD, EI)
@@ -5408,7 +5465,6 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "volume": None,
                         "concentration": None,
                         "area": getattr(event, "area_covered", None),
-                        "equipment": event.amendment_type,
                         "photo_count": photo_count,
                         "commercial_name": None,
                         "album": album_data,
@@ -5574,7 +5630,6 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "volume": None,
                         "concentration": None,
                         "area": getattr(event, "area", None),
-                        "equipment": event.pest_species,
                         "photo_count": photo_count,
                         "commercial_name": None,
                         "album": album_data,
@@ -5810,7 +5865,6 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "volume": None,
                         "concentration": None,
                         "area": getattr(event, "area", None),
-                        "equipment": certification_display or business_display,
                         "photo_count": photo_count,
                         "commercial_name": None,
                         "album": album_data,
@@ -5861,7 +5915,11 @@ class PublicHistorySerializer(serializers.ModelSerializer):
 
             self._annotate_consumer_highlights(events_data)
 
-            return [_drop_unset(e) for e in events_data]
+            result = [_drop_unset(e) for e in events_data]
+            # Keyed by pk, not just stored: with many=True DRF reuses ONE child serializer
+            # across every row, so an unkeyed cache would serve row 1's events for row 2.
+            self._events_cache = (history.pk, result)
+            return result
 
         except Exception as e:
             print(f"Error getting optimized events: {e}")
@@ -6458,10 +6516,33 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "structure_notes",
             "cover_crop_species",
         ]
+        # 🔴 2026-08-31 — an empty value is only meaningful on an UPDATE.
+        #
+        # This wrote "" for every one of these keys on every soil event, so a compost record
+        # created through the wizard stored species_planted:"", wildlife_observed:"",
+        # structure_notes:"" and cover_crop_species:"" — habitat and cover-crop facts belonging
+        # to subtypes it is not. The clobber class in `.claude/rules/frontend.md`, arriving
+        # through the API instead of the form.
+        #
+        # SoilManagementTab does try to strip them and CANNOT: NewEvent submits
+        # `{ ...eventFormData, ...data }`, and eventFormData accumulates the whole form state via
+        # onDataChange, so a key the tab deletes is put straight back by the spread. The gate has
+        # to be here, where the value is filed.
+        #
+        # Empty is still honoured on update: extra_data is MERGED, so clearing a stored cover
+        # crop means sending "" and having it written. On create there is nothing to clear. The
+        # pest serializer below carries a RELATED but different guard (F32, 2026-06): it drops
+        # an empty top-level value only when the client also sent that key inside extra_data.
+        # That protects a real value on an update; this one stops a key being filed on create.
+        is_update = getattr(self, "instance", None) is not None
         for field_name in extra_data_only_fields:
             if field_name in data:
                 value = data.pop(field_name)
-                frontend_extra_data[field_name] = value if value is not None else ""
+                if value is None:
+                    value = ""
+                if value == "" and not is_update:
+                    continue
+                frontend_extra_data[field_name] = value
 
         # Grazing Summary Mode (GTM-v3): the frontend sends summary fields (is_summary + the
         # rotation totals) at top level; none are model columns, so route them into extra_data —
@@ -7185,10 +7266,25 @@ class UpdateBusinessEventSerializer(RetiredCertificationTypeGuardMixin, CustomFi
 
         # Extract fields that don't have model columns into extra_data
         extra_data_only_fields = ["trust_impact", "transparency_benefit"]
+        # An empty value is only meaningful on an UPDATE, where extra_data is merged and ""
+        # is how a stored value gets cleared. On create there is nothing to clear, so writing
+        # "" just files a key the record does not have -- the clobber class in
+        # `.claude/rules/frontend.md`. Same gate the SOIL router carries.
+        #
+        # The pest router's F32 guard below looks similar and is not: it drops an empty
+        # top-level value only when the client ALSO sent that key inside `extra_data`, which
+        # protects a real value on an update. Different failure, different condition. Only the
+        # create-time one is needed here, because no UI collects these two fields at all -- if
+        # that ever changes, the union of both conditions is what this wants, not a swap.
+        is_update = getattr(self, "instance", None) is not None
         for field_name in extra_data_only_fields:
             if field_name in data:
                 value = data.pop(field_name)
-                frontend_extra_data[field_name] = value if value is not None else ""
+                if value is None:
+                    value = ""
+                if value == "" and not is_update:
+                    continue
+                frontend_extra_data[field_name] = value
 
         # Call the parent method to handle the rest
         internal_value = super().to_internal_value(data)

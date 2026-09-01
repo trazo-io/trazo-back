@@ -151,3 +151,71 @@ class ConsumerExtraDataClaimShapeTests(TestCase):
             "a new claim-shaped key was added to ALLOWED_EXTRA_DATA_KEYS — consumer surfaces "
             "show facts, not self-assigned grades (Trazo Test #5, FTC 260.6, EU ECGT)",
         )
+
+
+class NamedClaimFieldsAreNotAllowListedTests(TestCase):
+    """Some claim fields carry the claim in their PURPOSE, not in a matchable name.
+
+    `trust_impact` and `transparency_benefit` are free text in which a grower states what
+    trust or environmental benefit an event delivers -- a self-created sustainability claim
+    (FTC 16 CFR 260.6; EU ECGT 2024/825 from 2026-09-27). Neither name matches any substring
+    in `EXTRA_DATA_SENSITIVE_SUBSTRINGS`, so the 2026-08-03 shape guard could not see them and
+    both stayed allow-listed onto the anonymous payload until 2026-08-31.
+
+    Nothing collected them -- no BusinessTab input, no display registry entry, no renderer on
+    any surface -- so this closes an exposure rather than removing a feature. The write path
+    in `BusinessEventSerializer.to_internal_value` is deliberately kept: a value an API client
+    sends is still filed, it is simply never published.
+
+    Asserted against the allow-list itself, not through `_sanitize`, because the shape guard
+    genuinely cannot catch these; membership is the only thing keeping them out.
+    """
+
+    NAMED_CLAIM_FIELDS = ("trust_impact", "transparency_benefit")
+
+    def test_named_claim_fields_are_absent_from_the_allow_list(self):
+        for key in self.NAMED_CLAIM_FIELDS:
+            with self.subTest(key=key):
+                self.assertNotIn(
+                    key,
+                    PublicHistorySerializer.ALLOWED_EXTRA_DATA_KEYS,
+                    f"{key} is a grower-authored benefit claim; allow-listing it publishes it "
+                    "to shoppers, and no substring in EXTRA_DATA_SENSITIVE_SUBSTRINGS will "
+                    "catch it on the way out",
+                )
+
+    def test_the_shape_guard_alone_would_not_have_caught_them(self):
+        """The two defences must not silently overlap.
+
+        Not a non-vacuity proof of the test above -- that was established by re-adding the
+        keys to the allow-list and watching it fail. This pins the REASON that test has to
+        exist: the shape guard cannot see these names, so allow-list membership is the only
+        thing keeping them out. If a future edit makes them shape-matchable, this fails and
+        the test above becomes redundant -- the moment to simplify, not to widen the
+        allow-list.
+        """
+        substrings = PublicHistorySerializer.EXTRA_DATA_SENSITIVE_SUBSTRINGS
+        for key in self.NAMED_CLAIM_FIELDS:
+            with self.subTest(key=key):
+                self.assertFalse(
+                    any(sub in key.lower() for sub in substrings),
+                    f"{key} now matches the shape guard, so allow-list membership is no longer "
+                    "the only thing keeping it out",
+                )
+
+    def test_they_do_not_reach_the_public_payload(self):
+        out = (
+            _sanitize(
+                {
+                    "trust_impact": "Builds enormous consumer trust in our sustainable methods",
+                    "transparency_benefit": "Proves our environmental leadership",
+                    "growth_stage": "budbreak",
+                }
+            )
+            or {}
+        )
+        self.assertNotIn("trust_impact", out)
+        self.assertNotIn("transparency_benefit", out)
+        # A legitimate neighbour still survives, so the test cannot pass by sanitising away
+        # everything.
+        self.assertIn("growth_stage", out)
