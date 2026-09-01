@@ -150,6 +150,29 @@ class Command(BaseCommand):
             raise CommandError(f"{path.name}: path names a stock library host")
         return path, size
 
+    def _validate_s3_key(self, raw_key):
+        """An object already in Trazo's own bucket, named by key.
+
+        The key is checked for existence rather than trusted, because a typo would otherwise
+        attach a working-looking image row that renders as a broken thumbnail — which is exactly
+        the state the consumer page was in before the gallery fix.
+        """
+        key = str(raw_key).strip().lstrip("/")
+        if key.lower().startswith(("http://", "https://", "//")):
+            raise CommandError(
+                f"`s3_key` is an object key, not a URL: {raw_key}. A URL would let a library "
+                "host back in; keys resolve inside Trazo's own bucket."
+            )
+        if any(host in key.lower() for host in STOCK_IMAGE_HOSTS):
+            raise CommandError(f"{key}: names a stock library host")
+        if not default_storage.exists(key):
+            raise CommandError(f"no object at key {key!r} in the configured bucket")
+        try:
+            size = default_storage.size(key)
+        except Exception:
+            size = 0
+        return key, size
+
     # ---- main ------------------------------------------------------------
 
     def handle(self, *args, **options):
@@ -165,13 +188,22 @@ class Command(BaseCommand):
 
         planned, skipped = [], []
         for index, entry in enumerate(entries, start=1):
-            for field in ("event", "file", "shows"):
+            for field in ("event", "shows"):
                 if not str(entry.get(field) or "").strip():
                     raise CommandError(
                         f"entry {index}: `{field}` is required. `shows` must describe what is "
                         "actually in the frame — that description is the only thing standing "
                         "between this command and the mislabelled photographs it replaces."
                     )
+            has_file = bool(str(entry.get("file") or "").strip())
+            has_key = bool(str(entry.get("s3_key") or "").strip())
+            if has_file == has_key:
+                raise CommandError(
+                    f"entry {index}: give exactly one of `file` (a local path, uploaded by this "
+                    "command) or `s3_key` (an object already in the bucket). `s3_key` exists "
+                    "because this command is normally run in the production console, which "
+                    "cannot see files on your machine."
+                )
             event = self._resolve_event(entry["event"])
             establishment = self._establishment_of(event)
             if not is_specimen(establishment):
@@ -184,14 +216,19 @@ class Command(BaseCommand):
             if event.album and event.album.images.exists():
                 skipped.append((entry["event"], "already has photographs"))
                 continue
-            path, size = self._validate_file(entry["file"])
-            planned.append((entry, event, path, size))
+            if has_file:
+                path, size = self._validate_file(entry["file"])
+                planned.append((entry, event, path, None, size))
+            else:
+                key, size = self._validate_s3_key(entry["s3_key"])
+                planned.append((entry, event, None, key, size))
 
         # ---- report ------------------------------------------------------
         self.stdout.write(f"manifest: {manifest_path}  ({len(entries)} entries)\n")
-        for entry, event, path, size in planned:
+        for entry, event, path, key, size in planned:
             description = (getattr(event, "description", "") or getattr(event, "name", "") or "").strip()
-            self.stdout.write(f"  {entry['event']}  <-  {path.name}  ({size / 1e6:.1f} MB)")
+            label = path.name if path else f"s3:{key}"
+            self.stdout.write(f"  {entry['event']}  <-  {label}  ({size / 1e6:.1f} MB)")
             self.stdout.write(f"      record : {description[:96] or '(no description)'}")
             self.stdout.write(f"      shows  : {entry['shows']}")
             self.stdout.write("")
@@ -214,23 +251,27 @@ class Command(BaseCommand):
 
         attached = 0
         with transaction.atomic():
-            for entry, event, path, _size in planned:
-                key = f"gallery_images/demo/{event.__class__.__name__.lower()}-{event.id}-{path.name}"
-                with path.open("rb") as handle:
-                    stored_key = default_storage.save(key, handle)
+            for entry, event, path, existing_key, _size in planned:
+                if path is not None:
+                    target = f"gallery_images/demo/{event.__class__.__name__.lower()}-{event.id}-{path.name}"
+                    with path.open("rb") as handle:
+                        stored_key = default_storage.save(target, handle)
+                else:
+                    # Already in the bucket; attach it where it lies rather than copying.
+                    stored_key = existing_key
                 if event.album is None:
                     event.album = Gallery.objects.create()
                     event.save(update_fields=["album"])
                 GalleryImage.objects.create(
                     gallery=event.album,
                     s3_key=stored_key,
-                    file_size=path.stat().st_size,
+                    file_size=(path.stat().st_size if path is not None else _size or None),
                     # The operator's own description of the frame, kept beside the image so a
                     # later reviewer can check the pairing without opening the file.
                     extra_data={
                         "shows": entry["shows"],
                         "source": "attach_demo_photos",
-                        "content_type": mimetypes.guess_type(path.name)[0],
+                        "content_type": mimetypes.guess_type(path.name if path else stored_key)[0],
                     },
                 )
                 attached += 1

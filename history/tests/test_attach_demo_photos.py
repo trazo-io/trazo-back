@@ -171,6 +171,62 @@ class AttachDemoPhotosTests(TestCase):
         event.refresh_from_db()
         self.assertEqual(event.album.images.count(), 1, "the prune removed a real photograph")
 
+    # ---- s3_key mode: the one that works in the production console ---------
+
+    @override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.FileSystemStorage")
+    def test_an_existing_bucket_object_can_be_attached_by_key(self):
+        """Why this mode exists: the command is normally run in the DO console, which cannot
+        see files on the operator's machine. `--manifest shots/manifest.json` there fails with
+        "manifest not found" and there is no way to hand it a local photograph."""
+        from django.core.files.base import ContentFile
+        from django.core.files.storage import default_storage
+
+        key = default_storage.save("gallery_images/demo/already-there.png", ContentFile(PNG))
+        event = self._event()
+        entry = self._entry(event)
+        del entry["file"]
+        entry["s3_key"] = key
+
+        call_command("attach_demo_photos", "--manifest", self._manifest([entry]), "--apply", verbosity=0)
+
+        event.refresh_from_db()
+        image = event.album.images.get()
+        self.assertEqual(image.s3_key, key, "the existing object was not attached where it lies")
+        self.assertEqual(image.extra_data["shows"], entry["shows"])
+
+    def test_a_missing_key_is_refused(self):
+        """A typo would otherwise attach a row that renders as a broken thumbnail — the exact
+        state the consumer page was in before the gallery fix."""
+        event = self._event()
+        entry = self._entry(event)
+        del entry["file"]
+        entry["s3_key"] = "gallery_images/demo/does-not-exist.png"
+        with self.assertRaises(CommandError) as ctx:
+            call_command("attach_demo_photos", "--manifest", self._manifest([entry]), verbosity=0)
+        self.assertIn("no object at key", str(ctx.exception))
+
+    def test_a_url_as_s3_key_is_refused(self):
+        event = self._event()
+        entry = self._entry(event)
+        del entry["file"]
+        entry["s3_key"] = "https://images.unsplash.com/photo-123"
+        with self.assertRaises(CommandError) as ctx:
+            call_command("attach_demo_photos", "--manifest", self._manifest([entry]), verbosity=0)
+        self.assertIn("not a URL", str(ctx.exception))
+
+    def test_exactly_one_source_is_required(self):
+        """Both, or neither, is a manifest the operator has not thought through."""
+        event = self._event()
+        both = self._entry(event, s3_key="gallery_images/demo/x.png")
+        with self.assertRaises(CommandError) as ctx:
+            call_command("attach_demo_photos", "--manifest", self._manifest([both]), verbosity=0)
+        self.assertIn("exactly one", str(ctx.exception))
+
+        neither = self._entry(event)
+        del neither["file"]
+        with self.assertRaises(CommandError):
+            call_command("attach_demo_photos", "--manifest", self._manifest([neither]), verbosity=0)
+
     @override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.FileSystemStorage")
     def test_an_event_that_already_has_photographs_is_skipped(self):
         event = self._event()
