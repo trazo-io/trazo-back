@@ -30,6 +30,7 @@ import io
 import re
 
 from common.specimen import SPECIMEN_LINE, is_specimen
+from history.constants import CHEMICAL_EVENT_TYPE
 
 # DPR-PML-017C box order. (key, human header, required?). REI/rate/dilution and
 # pre-plant/block are optional per the official form instructions.
@@ -405,7 +406,13 @@ class PURExportService:
         if method == "Fume" and not row["ffm_code"]:
             missing.append("ffm_code")
 
+        # Two renderings of every gap, on purpose. `notes` is the English prose the CSV's
+        # "Notes / data gaps" column carries — the county commissioner reads it. `flags` is
+        # the same finding as a CODE plus its parameters, for the preview: the client labels
+        # codes in the farmer's locale, whereas a server sentence opts it out of i18n (the
+        # es-419 badge read "requieren datos" over an English "Missing required: …" row).
         notes = []
+        flags = []
         if missing:
             headers = {k: h for k, h, _r in PUR_COLUMNS}
             notes.append("Missing required: " + ", ".join(headers.get(m, m) for m in missing))
@@ -413,6 +420,7 @@ class PURExportService:
         # the latter can't map to a CAC code and box 10 was blanked above.
         if county_name and not county_code:
             notes.append(f"County '{county_name}' is not a recognized CA county — box 10 needs the CAC county number.")
+            flags.append({"code": "county_unrecognized", "county": county_name})
         # Structured tank_mix_partners are exported as their own PUR rows (see
         # _adjuvant_rows). Only fall back to the free-text extra_data["tank_mix"]
         # note when there is NO structured list, so a legacy free-text tank mix
@@ -424,11 +432,37 @@ class PURExportService:
                 f"Tank-mix partner(s) logged ({tank_mix}) — each CA-registered adjuvant/"
                 "spreader-sticker needs its own PUR line (boxes 23/24); not auto-exported."
             )
+            flags.append({"code": "tank_mix_unexported", "partners": tank_mix})
         if (ed.get("is_summary") is True) or _s(event.time_period):
             notes.append("Aggregate/summary event — PUR wants one line per application.")
+            flags.append({"code": "aggregate_event"})
         row["notes"] = " | ".join(notes)
-        row["_missing_required"] = missing
+        self._attach_preview_fields(row, event, getattr(parcel, "id", None), missing, flags)
         return row
+
+    @staticmethod
+    def _attach_preview_fields(row, event, parcel_id, missing, flags):
+        """Preview-only fields for the JSON summary.
+
+        None of these keys is in PUR_COLUMNS, so `to_csv` — which writes `row.get(key)` for
+        the DPR box keys only — never emits them; the filed CSV keeps its column contract
+        (guard: test_preview_only_fields_never_reach_csv).
+
+        They exist because the preview showed two rows reading "Kocide 3000-O / Ground
+        (air-blast)" with no date and no way to open either. `application_start` (box 17)
+        was one of the blanks, so the row lost its only date exactly when the farmer most
+        needed to find the event — and the modal said "open the event" while carrying
+        nothing to open it with.
+        """
+        row["event_id"] = event.id
+        row["event_type"] = CHEMICAL_EVENT_TYPE
+        row["parcel_id"] = parcel_id
+        # The event's own `date` is always set — it is what _applications filters on —
+        # unlike application_start. ISO, so the client formats it in the farmer's locale.
+        event_date = getattr(event, "date", None)
+        row["event_date"] = event_date.isoformat() if event_date else ""
+        row["missing"] = list(missing)
+        row["flags"] = flags
 
     def _adjuvant_rows(self, event, primary_row):
         """One PUR line per structured tank-mix partner (adjuvant/spreader-sticker).
@@ -489,7 +523,13 @@ class PURExportService:
                 notes.append("Missing required: " + ", ".join(headers.get(m, m) for m in missing))
             notes.append(f"Tank-mix adjuvant applied with {primary_name} — separate PUR line per 3 CCR 6624.")
             row["notes"] = " | ".join(notes)
-            row["_missing_required"] = missing
+            self._attach_preview_fields(
+                row,
+                event,
+                primary_row.get("parcel_id"),
+                missing,
+                [{"code": "adjuvant_line", "primary": primary_name}],
+            )
             rows.append(row)
         return rows
 
@@ -504,7 +544,7 @@ class PURExportService:
 
     def summary(self):
         rows = self.build_rows()
-        complete = sum(1 for r in rows if not r["_missing_required"])
+        complete = sum(1 for r in rows if not r["missing"])
         return {
             "establishment_id": self.establishment.id,
             "establishment_name": self.establishment.name,

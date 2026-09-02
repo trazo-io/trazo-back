@@ -2024,12 +2024,11 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             )
             return response
 
-        summary = service.summary()
-        # Drop the internal _missing_required key from the JSON preview rows (the
-        # human-readable gaps are already in each row's "notes").
-        for row in summary["rows"]:
-            row.pop("_missing_required", None)
-        return Response(summary, status=status.HTTP_200_OK)
+        # Preview rows carry `missing` (DPR box keys) and `flags` (coded findings) next to
+        # the CSV's English `notes`; the client labels both in the farmer's locale. This
+        # used to pop the key list off before responding, which left the modal with the
+        # English sentence as its only rendering of a gap. See _attach_preview_fields.
+        return Response(service.summary(), status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["get"], url_path="audit-export", permission_classes=[IsAuthenticated])
     def audit_export(self, request, **kwargs):

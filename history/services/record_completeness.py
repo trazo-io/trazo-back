@@ -11,7 +11,7 @@ CFR-cited checks but none of them look inside a chemical event's own fields. Eve
 spray record with none of them and Trazo says nothing until the certifier PDF prints a blank cell.
 
 This module is the missing layer, modelled directly on the one required-field registry that
-already exists: `PUR_COLUMNS` / `REQUIRED_KEYS` / `_missing_required` in
+already exists: `PUR_COLUMNS` / `REQUIRED_KEYS` / `missing` in
 `history/services/pur_export_service.py:32-64,343-370`. Same shape — a declarative list checked
 against each event, producing a per-event list of what is missing — generalised from "one CA form"
 to "what an organic inspector asks for," and applied at write time rather than only at CA PUR
@@ -277,7 +277,7 @@ def has_registry(event) -> bool:
 def missing_required_fields(event) -> list[dict]:
     """Required fields absent on this event. Empty list = record is complete.
 
-    Each item: {"key", "label", "cfr_cite"} — same shape PUR export's `_missing_required` implies,
+    Each item: {"key", "label", "cfr_cite"} — same shape PUR export's `missing` implies,
     minus the CA-only "which PUR box" framing.
 
     Covers ChemicalEvent and the SEED_SOURCED_SUBTYPES production subtypes. Any other event type

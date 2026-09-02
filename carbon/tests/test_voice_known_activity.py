@@ -503,3 +503,37 @@ class NullTolerantResponseTests(SimpleTestCase):
         result = self._structure({})
         self.assertEqual(result["type"], "general")
         self.assertEqual(result["activity_fields"], {})
+
+
+class RateIsNotAnAreaTests(SimpleTestCase):
+    """ "200 libras por acre" says how much went on each acre, not that one acre was treated.
+
+    MEASURED 2026-09-01 on a farmer's phone: "Apliqué fertilizante hoy 200 libras por acre NPK
+    10 guion 10 guion 10" recorded Área Tratada = 1 acre. The record then claims a single acre was
+    fertilised, and that number also feeds the per-hectare carbon figure.
+
+    The rule lives in all three system prompts because a farmer's transcript arrives in their own
+    language — fixing only the English one left Spanish saying 1 acre, which is how this test
+    earned its second half.
+    """
+
+    def setUp(self):
+        self.processor = AIVoiceProcessor()
+
+    def test_every_language_carries_the_rule(self):
+        for language, needle in (
+            ("en-US", "A RATE IS NOT AN AMOUNT AND NOT AN AREA"),
+            ("es-ES", "UNA DOSIS NO ES UNA CANTIDAD NI UN ÁREA"),
+            ("pt-BR", "UMA DOSE NÃO É UMA QUANTIDADE NEM UMA ÁREA"),
+        ):
+            self.assertIn(needle, self.processor._get_system_prompt(language))
+
+    def test_the_rule_names_the_exact_trap(self):
+        # The failure was specifically the "1" in "per acre" being read as the area.
+        prompt = self.processor._get_system_prompt("en-US")
+        self.assertIn("Never answer area_covered with the 1", prompt)
+
+    def test_it_still_asks_for_a_real_area(self):
+        # A rule that killed area_covered outright would "fix" this while removing the field.
+        prompt = self.processor._get_system_prompt("en-US")
+        self.assertIn("unless the farmer said how much ground they actually treated", prompt)

@@ -544,6 +544,11 @@ CRITICAL INSTRUCTIONS:
 - Prefer specific event types: use "herbicide" when weed-related, "fungicide" when disease/mold-related, "pruning" when trimming/cutting branches.
 - IMPORTANT: Products like Kocide, copper hydroxide, copper fungicide, sulfur, mancozeb, or any product targeting disease (anthracnose, blight, mildew, rust, phytophthora) MUST be classified as "fungicide", NOT "fertilization". Fungicides do NOT have NPK values — set npk_ratio to null for fungicide events.
 - Only set npk_ratio for fertilization events where NPK is explicitly mentioned.
+- A RATE IS NOT AN AMOUNT AND NOT AN AREA. "200 pounds per acre", "two tons per hectare",
+  "3.5 pounds an acre" state how much was applied PER UNIT OF LAND — they say nothing about how
+  much land was covered. Never answer area_covered with the 1 from "per acre"; leave the area
+  null unless the farmer said how much ground they actually treated ("sprayed the whole twelve
+  acres", "did about half the block").
 - If unsure about a value, set it to null rather than guess.
 - Focus on extracting actionable farming data for transparency documentation.""",
             "es-ES": """Eres un asistente agrícola experto para una plataforma de transparencia agrícola.
@@ -571,6 +576,10 @@ INSTRUCCIONES CRÍTICAS:
 - Para NPK: "diez diez diez" significa "10-10-10". Siempre formatear como N-P-K con guiones.
 - Para cantidades: Siempre separar valor y unidad.
 - Preferir tipos específicos: usar "herbicide" para malezas, "fungicide" para enfermedades, "pruning" para poda.
+- UNA DOSIS NO ES UNA CANTIDAD NI UN ÁREA. "200 libras por acre", "dos toneladas por hectárea"
+  indican cuánto se aplicó POR UNIDAD DE TERRENO — no dicen cuánto terreno se cubrió. Nunca
+  responder area_covered con el 1 de "por acre"; dejar el área en null salvo que el agricultor
+  diga cuánta superficie trabajó ("fumigué las doce hectáreas", "hice medio lote").
 - Si no estás seguro de un valor, establecerlo como null en vez de adivinar.""",
             "pt-BR": """Você é um assistente agrícola especialista para uma plataforma de transparência agrícola.
 Seu trabalho é analisar entradas de voz de agricultores e extrair informações estruturadas sobre atividades agrícolas
@@ -597,6 +606,10 @@ INSTRUÇÕES CRÍTICAS:
 - Para NPK: "dez dez dez" significa "10-10-10". Sempre formatar como N-P-K com hifens.
 - Para quantidades: Sempre separar valor e unidade.
 - Preferir tipos específicos: usar "herbicide" para ervas daninhas, "fungicide" para doenças, "pruning" para poda.
+- UMA DOSE NÃO É UMA QUANTIDADE NEM UMA ÁREA. "200 libras por acre", "duas toneladas por
+  hectare" dizem quanto foi aplicado POR UNIDADE DE TERRA — não dizem quanta terra foi coberta.
+  Nunca responder area_covered com o 1 de "por acre"; deixar a área null a menos que o agricultor
+  diga quanta superfície tratou ("pulverizei os doze hectares", "fiz metade do talhão").
 - Se não tem certeza de um valor, definir como null em vez de adivinhar.""",
         }
 

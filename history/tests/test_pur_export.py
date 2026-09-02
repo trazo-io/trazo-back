@@ -5,6 +5,8 @@ Covers: fertilizer exclusion, DPR box mapping from F20 fields, per-row
 completeness flags, month filtering, fumigation FFM requirement, and CSV shape.
 """
 
+import csv
+import io
 from datetime import datetime
 from types import SimpleNamespace
 
@@ -15,7 +17,7 @@ from rest_framework.test import APIClient
 
 from company.models import Company, Establishment
 from history.models import ChemicalEvent, History
-from history.services.pur_export_service import PURExportService
+from history.services.pur_export_service import PUR_COLUMNS, PURExportService
 from product.models import Parcel, Product
 from users.models import User, WorksIn
 
@@ -112,7 +114,7 @@ class PURExportServiceTests(TestCase):
         self.assertEqual(row["application_start"], "2026-06-15 0700")
         self.assertEqual(row["application_end"], "2026-06-15 0930")
         self.assertEqual(row["epa_registration_number"], "62719-621")
-        self.assertEqual(row["_missing_required"], [], f"unexpected gaps: {row['notes']}")
+        self.assertEqual(row["missing"], [], f"unexpected gaps: {row['notes']}")
 
     def test_completeness_flags_missing(self):
         # Minimal event: only the fields a careless quick-entry would have.
@@ -131,7 +133,7 @@ class PURExportServiceTests(TestCase):
             planted_area="",
         )
         row = PURExportService(self.establishment, 6, 2026).build_rows()[0]
-        missing = set(row["_missing_required"])
+        missing = set(row["missing"])
         for key in ("operator_id", "site_id", "county", "section", "application_start", "epa_registration_number"):
             self.assertIn(key, missing, f"{key} should be flagged missing")
         self.assertIn("Missing required", row["notes"])
@@ -149,7 +151,7 @@ class PURExportServiceTests(TestCase):
         self._full_pesticide(application_method_structured="fumigation", ffm_code="")
         row = PURExportService(self.establishment, 6, 2026).build_rows()[0]
         self.assertEqual(row["application_method"], "Fume")
-        self.assertIn("ffm_code", row["_missing_required"])
+        self.assertIn("ffm_code", row["missing"])
 
     def test_csv_structure(self):
         self._full_pesticide()
@@ -170,6 +172,63 @@ class PURExportServiceTests(TestCase):
         self.assertEqual(summary["filing_deadline"], "2026-07-10")
         self.assertEqual(summary["form"], "DPR-PML-017C")
 
+    # ── Preview-only fields (JSON summary) ──────────────────────────────────────────
+    #
+    # The modal says "open the event to complete them". Until 2026-09-01 the row carried
+    # nothing to open it WITH, no date when box 17 was one of the blanks (two "Kocide 3000-O /
+    # Ground (air-blast)" rows, indistinguishable), and the gaps only as the CSV's English
+    # sentence — which the view then stripped of its key list before responding.
+
+    def test_preview_rows_carry_identity_and_structured_gaps(self):
+        event = self._full_pesticide(operator_id="", application_start=None, application_end=None)
+        row = PURExportService(self.establishment, 6, 2026).build_rows()[0]
+        self.assertEqual(row["event_id"], event.id)
+        self.assertEqual(row["event_type"], 2)  # history.constants.CHEMICAL_EVENT_TYPE
+        self.assertEqual(row["parcel_id"], self.parcel.id)
+        # Box 17 is blank, so the DPR-formatted start is "" — the event's own date is the
+        # row's identity, and it is always present (it is what the month filter reads).
+        self.assertEqual(row["application_start"], "")
+        self.assertTrue(row["event_date"].startswith("2026-06-15"), row["event_date"])
+        self.assertEqual(set(row["missing"]), {"operator_id", "application_start", "application_end"})
+        self.assertEqual(row["flags"], [])
+
+    def test_flags_are_coded_for_the_client_to_label(self):
+        self._full_pesticide(
+            application_county="Maricopa",
+            extra_data={"tank_mix": "Dyne-Amic", "is_summary": True},
+        )
+        row = PURExportService(self.establishment, 6, 2026).build_rows()[0]
+        by_code = {f["code"]: f for f in row["flags"]}
+        self.assertEqual(set(by_code), {"county_unrecognized", "tank_mix_unexported", "aggregate_event"})
+        self.assertEqual(by_code["county_unrecognized"]["county"], "Maricopa")
+        self.assertEqual(by_code["tank_mix_unexported"]["partners"], "Dyne-Amic")
+        # The CSV prose is untouched: the county commissioner still reads English sentences.
+        self.assertIn("not a recognized CA county", row["notes"])
+        self.assertIn("Aggregate/summary event", row["notes"])
+
+    def test_adjuvant_row_is_flagged_and_openable(self):
+        event = self._full_pesticide(
+            tank_mix_partners=[{"commercial_name": "Dyne-Amic", "epa_registration_number": "5905-501"}]
+        )
+        adj = PURExportService(self.establishment, 6, 2026).build_rows()[1]
+        # An adjuvant line is a child of the primary event — opening it opens that event.
+        self.assertEqual(adj["event_id"], event.id)
+        self.assertEqual(adj["parcel_id"], self.parcel.id)
+        self.assertEqual(adj["flags"], [{"code": "adjuvant_line", "primary": "Entrust SC"}])
+
+    def test_preview_only_fields_never_reach_csv(self):
+        """The filed CSV keeps the DPR column contract: no ids, no codes, no extra cells."""
+        self._full_pesticide(operator_id="", application_county="Maricopa")
+        csv_text = PURExportService(self.establishment, 6, 2026).to_csv().read().decode("utf-8-sig")
+        parsed = list(csv.reader(io.StringIO(csv_text)))
+        expected_header = [h for _k, h, _r in PUR_COLUMNS]
+        header_idx = next(i for i, r in enumerate(parsed) if r[:1] == ["3. Operator ID/Permit No."])
+        self.assertEqual(parsed[header_idx], expected_header)
+        for data_row in parsed[header_idx + 1 :]:
+            self.assertEqual(len(data_row), len(expected_header), data_row)
+        for leaked in ("event_id", "event_type", "parcel_id", "event_date", "county_unrecognized"):
+            self.assertNotIn(leaked, csv_text)
+
     def test_county_code_resolution(self):
         # San Diego -> code 37; case/suffix-insensitive.
         row = self._make_row(application_county="San Diego County")
@@ -179,7 +238,7 @@ class PURExportServiceTests(TestCase):
         # A county name that is not a CA county must NOT emit an unvalidatable box 10.
         row = self._make_row(application_county="Springfield")
         self.assertEqual(row["county"], "")
-        self.assertIn("county", row["_missing_required"])
+        self.assertIn("county", row["missing"])
         self.assertIn("not a recognized CA county", row["notes"])
 
     def test_blank_quantity_flags_box_24_and_19(self):
@@ -188,7 +247,7 @@ class PURExportServiceTests(TestCase):
         row = self._make_row(volume="", volume_numeric=None, area="", area_numeric=None)
         self.assertEqual(row["total_product_used"], "")
         self.assertEqual(row["acreage_treated"], "")
-        missing = set(row["_missing_required"])
+        missing = set(row["missing"])
         self.assertIn("total_product_used", missing)
         self.assertIn("acreage_treated", missing)
 
@@ -256,6 +315,42 @@ class PURExportStateGateTests(TestCase):
         client = APIClient()
         client.force_authenticate(user=self.user)
         return client.get(self.url, {"establishment_id": est.id, "month": 6, "year": 2026})
+
+    def test_json_preview_keeps_missing_keys_and_flags(self):
+        """The view used to pop the gap-key list before responding, leaving the modal with the
+        English `notes` sentence as its only rendering of a gap (untranslatable by construction)."""
+        est = self._establishment("CA")
+        parcel = Parcel.objects.create(name="Row 1", establishment=est, area=1.0)
+        history = History.objects.create(
+            name="Gate season",
+            start_date=timezone.now(),
+            product=Product.objects.create(name="Lemon"),
+            parcel=parcel,
+            operator=self.user,
+            earning=0.0,
+            production_amount=0.0,
+            reputation=0.0,
+            confidence_score=0.0,
+            transparency_score=0.0,
+            public_views=0,
+            unique_visitors=0,
+            is_outdoor=True,
+            published=True,
+        )
+        event = ChemicalEvent.objects.create(
+            history=history,
+            type=ChemicalEvent.PESTICIDE,
+            commercial_name="Kocide 3000-O",
+            date=timezone.make_aware(datetime(2026, 6, 3, 6, 0)),
+        )
+        body = self._get(est).json()
+        self.assertEqual(body["application_count"], 1)
+        row = body["rows"][0]
+        self.assertEqual(row["event_id"], event.id)
+        self.assertEqual(row["parcel_id"], parcel.id)
+        self.assertIn("operator_id", row["missing"])
+        self.assertIsInstance(row["flags"], list)
+        self.assertNotIn("_missing_required", row)
 
     def test_california_farm_is_allowed(self):
         response = self._get(self._establishment("CA"))
