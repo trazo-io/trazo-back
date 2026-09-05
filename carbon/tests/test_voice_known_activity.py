@@ -537,3 +537,143 @@ class RateIsNotAnAreaTests(SimpleTestCase):
         # A rule that killed area_covered outright would "fix" this while removing the field.
         prompt = self.processor._get_system_prompt("en-US")
         self.assertIn("unless the farmer said how much ground they actually treated", prompt)
+
+
+class ApplicationMethodIsACatalogueValueTests(SimpleTestCase):
+    """The method has to come back as a value the form's dropdown can render.
+
+    MEASURED 2026-09-03, both halves of the demo:
+
+      "…airblast."              -> application_method = "airblast"
+      "…con nebulizadora."      -> application_method = "nebulizadora"
+
+    The PE dropdown's value is `air_blast`. Neither answer is it, so the select fell back to its
+    placeholder while the form held a value no option could display — and the voice banner
+    cheerfully reported Application Method as filled. The client drops an unmatched value now,
+    which is safe but silent: in Spanish it meant the method the farmer DID say was simply lost.
+
+    So the prompt names the permitted values and asks for a translation, which is a task a model
+    is good at, rather than free text, which is a task it answers in the farmer's language. The
+    client still validates against the catalogue — the prompt reduces how often a real answer is
+    thrown away; it is not what keeps a wrong one out.
+    """
+
+    # The union of APPLICATION_METHODS_BY_CHEMICAL_TYPE in trazo-app/src/config/events/enums.ts.
+    VALUES = (
+        "broadcast",
+        "banded",
+        "banding",
+        "subsurface",
+        "soil_incorporation",
+        "fertigation",
+        "foliar",
+        "ground_spray",
+        "air_blast",
+        "aerial",
+        "chemigation",
+        "seed_treatment",
+        "injection",
+        "drip",
+        "flood",
+        "furrow",
+        "sprinkler",
+    )
+
+    def setUp(self):
+        self.processor = AIVoiceProcessor()
+
+    def test_every_language_lists_the_permitted_values(self):
+        for language in ("en-US", "es-ES", "pt-BR"):
+            prompt = self.processor._get_system_prompt(language)
+            for value in self.VALUES:
+                self.assertIn(
+                    value,
+                    prompt,
+                    f"{language} prompt does not offer application_method={value}",
+                )
+
+    def test_the_non_english_prompts_ask_for_a_translation(self):
+        # The English prompt never had this problem: the farmer's word IS roughly the value.
+        # Spanish and Portuguese are where a correct answer arrives in the wrong vocabulary.
+        self.assertIn("nebulizadora", self.processor._get_system_prompt("es-ES"))
+        self.assertIn("a lanço", self.processor._get_system_prompt("pt-BR"))
+
+    def test_it_still_refuses_to_invent_one(self):
+        for language in ("en-US", "es-ES", "pt-BR"):
+            prompt = self.processor._get_system_prompt(language)
+            self.assertTrue(
+                any(phrase in prompt for phrase in ("never invent", "nunca inventes", "nunca invente")),
+                f"{language} prompt does not forbid a value outside the list",
+            )
+
+
+class IrrigationEnumsAreCatalogueValuesTests(SimpleTestCase):
+    """`water_source` and `irrigation_method` are the same shape as application_method.
+
+    Both are `valueType: 'enum'` on the irrigation form, and both used to be free text.
+    MEASURED 2026-09-03:
+
+    * `water_source` — the parser answered "well". ProductionTab offers well_groundwater /
+      municipal / rainwater_harvesting / irrigation_canal / river_stream / pond_reservoir /
+      recycled_water / other. There is no `well`, so the select showed its placeholder while the
+      form state held a value nothing could render. A frontend test had been asserting that
+      passthrough since it was written — it was pinning the defect.
+    * `irrigation_method` — was not a parser field at all. The client derived it from four
+      English substring checks (drip / sprinkler / flood / furrow) against NINE catalogue values,
+      so `micro_sprinkler`, `center_pivot`, `sub_irrigation`, `hand_watering` and `rain_fed` were
+      unreachable in any language, and "por goteo" matched nothing.
+
+    Naming the values makes it a translation task, which the model does well. The client's
+    catalogue match is what keeps a wrong answer out.
+    """
+
+    WATER_SOURCES = (
+        "well_groundwater",
+        "municipal",
+        "rainwater_harvesting",
+        "irrigation_canal",
+        "river_stream",
+        "pond_reservoir",
+        "recycled_water",
+    )
+    IRRIGATION_METHODS = (
+        "flood",
+        "furrow",
+        "drip",
+        "sprinkler",
+        "center_pivot",
+        "sub_irrigation",
+        "micro_sprinkler",
+        "hand_watering",
+        "rain_fed",
+    )
+
+    def setUp(self):
+        self.processor = AIVoiceProcessor()
+
+    def test_every_language_lists_both_catalogues(self):
+        for language in ("en-US", "es-ES", "pt-BR"):
+            prompt = self.processor._get_system_prompt(language)
+            for value in self.WATER_SOURCES + self.IRRIGATION_METHODS:
+                self.assertIn(value, prompt, f"{language} prompt is missing {value}")
+
+    def test_irrigation_method_survives_the_response_shape(self):
+        # It is a NEW key. A prompt that asks for it and a structurer that drops it would look
+        # correct in every prompt test and deliver nothing.
+        structured = self.processor._structure_ai_response(
+            {"irrigation_method": "micro_sprinkler", "water_source": "irrigation_canal"},
+            "regamos con microaspersion desde el canal",
+            12.0,
+        )
+        self.assertEqual(structured["irrigation_method"], "micro_sprinkler")
+        self.assertEqual(structured["water_source"], "irrigation_canal")
+
+    def test_the_spanish_prompt_asks_for_a_translation(self):
+        # ⚠️ Asserted on strings unique to EACH field. The first version of this test checked
+        # "por goteo", which the application_method block also carries — so deleting the
+        # irrigation examples left it passing. A guard that another line can satisfy is not a
+        # guard for this one.
+        prompt = self.processor._get_system_prompt("es-ES")
+        self.assertIn("microaspersión", prompt)  # irrigation_method only
+        self.assertIn("pozo", prompt)  # water_source only
+        self.assertIn("nebulizadora", prompt)  # application_method only

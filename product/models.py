@@ -105,6 +105,16 @@ class Parcel(models.Model):
         null=True,
         help_text="PLSS Section-Township-Range (e.g. S12 T14S R22E) — CCOF Parcel Application.",
     )
+    # CA DPR Site Identification Number, issued by the County Agricultural Commissioner per
+    # site (3 CCR 6622; "one to eight characters ... exactly as it was issued by the CAC",
+    # DPR-PML-017C instruction 8). PUR box 8. A site is a parcel/commodity, so the number
+    # lives here; the PUR export reads the event's own value first and falls back to this.
+    ca_site_id = models.CharField(
+        max_length=8,
+        blank=True,
+        null=True,
+        help_text="CA DPR Site ID for this parcel (PUR box 8, 1-8 characters as issued by the CAC). California only.",
+    )
     date_began_managing = models.DateField(
         blank=True,
         null=True,

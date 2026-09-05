@@ -530,11 +530,12 @@ You must respond with valid JSON containing these fields:
 - npk_ratio: If fertilizer event and NPK mentioned, extract as "N-P-K" format (e.g., "10-10-10"). null if not mentioned.
 - concentration: Chemical concentration if mentioned (e.g., "10-10-10" for NPK, "50%" for liquid). null if not mentioned.
 - commercial_name: Product or brand name if mentioned. null if not mentioned.
-- application_method: Method of application if mentioned (broadcast, banded, foliar, drip, spray, etc.). null if not mentioned.
+- application_method: Method of application, as EXACTLY ONE of these values: broadcast, banded, banding, subsurface, soil_incorporation, fertigation, foliar, ground_spray, air_blast, aerial, chemigation, seed_treatment, injection, drip, flood, furrow, sprinkler. Translate what the farmer said into the matching value ("airblast" -> air_blast, "ran it through the drip" -> drip). null if they did not say how it was applied, and null if what they said is not one of these — never invent a value outside the list.
 - area_covered: Area with unit if mentioned (e.g., {"value": 2, "unit": "hectares"}). null if not mentioned.
 - duration: Time duration if mentioned (e.g., {"value": 6, "unit": "hours"}). null if not mentioned.
 - fuel_amount: Fuel consumption if mentioned (e.g., {"value": 15, "unit": "gallons"}). null if not mentioned.
-- water_source: If irrigation, water source if mentioned. null if not mentioned.
+- water_source: If irrigation, EXACTLY ONE of: well_groundwater, municipal, rainwater_harvesting, irrigation_canal, river_stream, pond_reservoir, recycled_water, other. null if not mentioned, and null if what they said is not one of these.
+- irrigation_method: If irrigation, EXACTLY ONE of: flood, furrow, drip, sprinkler, center_pivot, sub_irrigation, micro_sprinkler, hand_watering, rain_fed. null if not mentioned, and null if what they said is not one of these.
 - description: Clean, professional description of the activity
 - activity_fields: Object of extra per-activity values, present ONLY when the user prompt lists fields to record. Use exactly the field names given there, omit anything the farmer did not say, and never invent a typical value.
 
@@ -564,11 +565,12 @@ Debes responder con JSON válido conteniendo estos campos:
 - npk_ratio: Si es evento de fertilizante y se menciona NPK, extraer como "N-P-K" (e.g., "10-10-10"). null si no se menciona.
 - concentration: Concentración química si se menciona. null si no se menciona.
 - commercial_name: Nombre del producto o marca si se menciona. null si no se menciona.
-- application_method: Método de aplicación si se menciona. null si no se menciona.
+- application_method: Método de aplicación, EXACTAMENTE UNO de estos valores (en inglés): broadcast, banded, banding, subsurface, soil_incorporation, fertigation, foliar, ground_spray, air_blast, aerial, chemigation, seed_treatment, injection, drip, flood, furrow, sprinkler. Traduce lo que dijo el agricultor al valor correspondiente ("nebulizadora" -> air_blast, "al voleo" -> broadcast, "por goteo" -> drip, "foliar" -> foliar). null si no dijo cómo se aplicó, y null si lo que dijo no corresponde a ninguno — nunca inventes un valor fuera de la lista.
 - area_covered: Área con unidad si se menciona (e.g., {"value": 2, "unit": "hectáreas"}). null si no se menciona.
 - duration: Duración si se menciona (e.g., {"value": 6, "unit": "horas"}). null si no se menciona.
 - fuel_amount: Consumo de combustible si se menciona. null si no se menciona.
-- water_source: Si es irrigación, fuente de agua si se menciona. null si no se menciona.
+- water_source: Si es riego, EXACTAMENTE UNO de estos valores (en inglés): well_groundwater, municipal, rainwater_harvesting, irrigation_canal, river_stream, pond_reservoir, recycled_water, other. Traduce lo que dijo ("pozo" -> well_groundwater, "canal" -> irrigation_canal, "arroyo" -> river_stream). null si no se menciona, y null si no corresponde a ninguno.
+- irrigation_method: Si es riego, EXACTAMENTE UNO de estos valores (en inglés): flood, furrow, drip, sprinkler, center_pivot, sub_irrigation, micro_sprinkler, hand_watering, rain_fed. Traduce lo que dijo ("por goteo" -> drip, "aspersión" -> sprinkler, "por surcos" -> furrow, "microaspersión" -> micro_sprinkler). null si no se menciona, y null si no corresponde a ninguno.
 - description: Descripción limpia y profesional de la actividad
 - activity_fields: Objeto con valores adicionales por actividad, presente SOLO cuando el prompt del usuario lista campos. Usar exactamente esos nombres, omitir lo que el agricultor no dijo, y nunca inventar un valor típico.
 
@@ -594,11 +596,12 @@ Você deve responder com JSON válido contendo estes campos:
 - npk_ratio: Se evento de fertilizante e NPK mencionado, extrair como "N-P-K" (e.g., "10-10-10"). null se não mencionado.
 - concentration: Concentração química se mencionada. null se não mencionada.
 - commercial_name: Nome do produto ou marca se mencionado. null se não mencionado.
-- application_method: Método de aplicação se mencionado. null se não mencionado.
+- application_method: Método de aplicação, EXATAMENTE UM destes valores (em inglês): broadcast, banded, banding, subsurface, soil_incorporation, fertigation, foliar, ground_spray, air_blast, aerial, chemigation, seed_treatment, injection, drip, flood, furrow, sprinkler. Traduza o que o agricultor disse para o valor correspondente ("pulverizador" -> air_blast, "a lanço" -> broadcast, "por gotejamento" -> drip). null se não disse como foi aplicado, e null se o que disse não corresponder a nenhum — nunca invente um valor fora da lista.
 - area_covered: Área com unidade se mencionada (e.g., {"value": 2, "unit": "hectares"}). null se não mencionada.
 - duration: Duração se mencionada (e.g., {"value": 6, "unit": "horas"}). null se não mencionada.
 - fuel_amount: Consumo de combustível se mencionado. null se não mencionado.
-- water_source: Se irrigação, fonte de água se mencionada. null se não mencionada.
+- water_source: Se irrigação, EXATAMENTE UM destes valores (em inglês): well_groundwater, municipal, rainwater_harvesting, irrigation_canal, river_stream, pond_reservoir, recycled_water, other. Traduza o que disse ("poço" -> well_groundwater, "canal" -> irrigation_canal). null se não mencionada, e null se não corresponder a nenhum.
+- irrigation_method: Se irrigação, EXATAMENTE UM destes valores (em inglês): flood, furrow, drip, sprinkler, center_pivot, sub_irrigation, micro_sprinkler, hand_watering, rain_fed. Traduza o que disse ("gotejamento" -> drip, "aspersão" -> sprinkler, "sulcos" -> furrow). null se não mencionada, e null se não corresponder a nenhum.
 - description: Descrição limpa e profissional da atividade
 - activity_fields: Objeto com valores adicionais por atividade, presente APENAS quando o prompt do usuário lista campos. Usar exatamente esses nomes, omitir o que o agricultor não disse, e nunca inventar um valor típico.
 
@@ -766,6 +769,38 @@ Responda apenas com JSON.""",
             "NOT use that knowledge. This is a record of what one person did and said, not a "
             "product datasheet: report only what is in their words, and leave everything else out."
         )
+        # MEASURED 2026-09-02, a sweep of all 19 activities against utterances that mention NONE
+        # of the requested fields. Two failure shapes, both deterministic across runs:
+        #
+        #   "Sprayed Entrust on the east block, airblast."  -> application_purpose="pest_management"
+        #   "Mowed the east block today."                   -> floor_management_type="mow"
+        #
+        # The activity is CONTEXT for reading the words, and the model was reading it as evidence
+        # instead — answering the field from the tile the farmer tapped in step 1. It is not a
+        # harmless tautology: the same field answers correctly when the words carry it ("mowed
+        # down the cover crop" -> cover_crop_mgmt), so the echo actively displaces the real value,
+        # and it inflates the "N fields filled" count the farmer skims instead of the form.
+        lines.append(
+            "The activity above is context for reading the words, NOT evidence about these "
+            "fields. Never derive a value from the fact that the farmer chose this activity — if "
+            "they picked Mowing, that alone does not tell you the floor-management type; if they "
+            "picked a spray, that alone does not tell you the purpose. Only their words do."
+        )
+        # MEASURED 2026-09-02, deterministic: "Ran the tractor through the east block" on a
+        # Cultivation form answered `method: "Operation Method"` — the LABEL sent in the request,
+        # handed back as the value. A client-side guard drops it now; this stops it being sent.
+        lines.append(
+            "Never answer a field with the field's own name or label. If you have nothing for it, " "omit the key."
+        )
+        # A rate is not a count either. MEASURED 2026-09-02: "Planted the east block, a hundred
+        # trees an acre" -> plants_established=100, which is the planting DENSITY, not the number
+        # of trees put in the ground.
+        lines.append(
+            'A rate is not a total and not a count. "A hundred trees an acre", "two tons an '
+            'acre", "six ounces an acre" state an intensity per unit of land — they do not say '
+            "how many, or how much, in total. Leave the total or the count null unless the farmer "
+            "stated it."
+        )
         return "\n".join(lines) + "\n"
 
     def _structure_ai_response(
@@ -811,6 +846,7 @@ Responda apenas com JSON.""",
             "commercial_name": ai_response.get("commercial_name"),
             "application_method": ai_response.get("application_method"),
             "water_source": ai_response.get("water_source"),
+            "irrigation_method": ai_response.get("irrigation_method"),
             "area_covered": ai_response.get("area_covered"),
             "duration": ai_response.get("duration"),
             "fuel_amount": ai_response.get("fuel_amount"),
@@ -1107,6 +1143,7 @@ Responda apenas com JSON.""",
             "commercial_name": None,
             "application_method": None,
             "water_source": None,
+            "irrigation_method": None,
             "area_covered": None,
             "duration": None,
             "fuel_amount": None,

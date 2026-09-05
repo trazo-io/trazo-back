@@ -1999,7 +1999,8 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         service = PURExportService(establishment, month, year)
 
         if export_format == "csv":
-            buffer = service.to_csv()
+            built = service.build()
+            buffer = service.to_csv(built)
             # WS-3: file a dated copy in the DMS, then stream the same bytes.
             from io import BytesIO
 
@@ -2008,16 +2009,22 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             data = buffer.getvalue() if hasattr(buffer, "getvalue") else buffer.read()
             if isinstance(data, str):
                 data = data.encode("utf-8")
-            file_document(
-                establishment=establishment,
-                source="pur",
-                folder="exports",
-                title=f"California PUR — {year}-{month:02d}",
-                filename=f"trazo-pur-{establishment_id}-{year}-{month:02d}.csv",
-                content=data,
-                content_type="text/csv",
-                created_by=request.user,
-            )
+            # Only a report with something on it is worth a dated copy on the farm's shelf. The
+            # modal disables the download for an empty month; a direct API call used to file a
+            # zero-application worksheet under Documents → Exports for every month it was asked
+            # about, and negative use reports are not required of property operators anyway
+            # (3 CCR 6628; PUE Compendium Vol. 1 Ch. 4 p. 4-9).
+            if built[0]:
+                file_document(
+                    establishment=establishment,
+                    source="pur",
+                    folder="exports",
+                    title=f"California PUR — {year}-{month:02d}",
+                    filename=f"trazo-pur-{establishment_id}-{year}-{month:02d}.csv",
+                    content=data,
+                    content_type="text/csv",
+                    created_by=request.user,
+                )
             response = FileResponse(BytesIO(data), content_type="text/csv; charset=utf-8")
             response["Content-Disposition"] = (
                 f'attachment; filename="trazo-pur-{establishment_id}-{year}-{month:02d}.csv"'

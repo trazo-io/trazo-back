@@ -279,6 +279,148 @@ class PURExportServiceTests(TestCase):
         rows = PURExportService(self.establishment, 6, 2026).build_rows()
         self.assertEqual(len(rows), 1, "blank adjuvant rows must be skipped")
 
+    # ── 2026-09-05 audit fixes (documentation/audits: CA PUR flow vs CDPR sources) ──────
+
+    def test_pcb_applications_are_not_the_growers_to_report(self):
+        """PUE Compendium Vol. 1 Ch. 4 p. 4-8: the grower "should not include applications made
+        by pest control businesses on his/her use report". 3 CCR 6626(b) makes the business the
+        reporter. Before this, every hired pass was exported as the grower's own — twice filed."""
+        self._full_pesticide()
+        hired = self._full_pesticide(
+            commercial_name="Metam CLR",
+            applied_by_pcb=True,
+            pcb_name="Valley Ag Spray Inc.",
+            date=timezone.make_aware(datetime(2026, 6, 20, 5, 0)),
+        )
+        service = PURExportService(self.establishment, 6, 2026)
+        rows, excluded = service.build()
+        self.assertEqual([r["product_and_manufacturer"] for r in rows], ["Entrust SC / Corteva"])
+        self.assertEqual(len(excluded), 1)
+        self.assertEqual(excluded[0]["event_id"], hired.id)
+        self.assertEqual(excluded[0]["pcb_name"], "Valley Ag Spray Inc.")
+        self.assertEqual(excluded[0]["product"], "Metam CLR")
+        summary = service.summary()
+        self.assertEqual(summary["application_count"], 1)
+        self.assertEqual(summary["pcb_excluded_count"], 1)
+        # Visible in the filed worksheet, never silently dropped.
+        csv_text = service.to_csv().read().decode("utf-8-sig")
+        self.assertIn("NOT reported here: 1 (Valley Ag Spray Inc.)", csv_text)
+        self.assertIn("3 CCR 6626(b)", csv_text)
+        self.assertNotIn("Metam CLR", csv_text.split("3. Operator ID/Permit No.")[1])
+
+    def test_chemigation_is_other_not_ground(self):
+        """CalPIP glossary: "O - Other application methods ... may include: paint, ear tag,
+        injection, chemigation". Box 21 ticked Ground for every drip/fertigation pass."""
+        for method in ("chemigation", "drip", "fertigation"):
+            row = self._make_row(application_method_structured=method)
+            self.assertEqual(row["application_method"], "Other (chemigation)", method)
+            ChemicalEvent.objects.all().delete()
+        self.assertEqual(
+            self._make_row(application_method_structured="injection")["application_method"], "Other (injection)"
+        )
+        ChemicalEvent.objects.all().delete()
+        self.assertEqual(
+            self._make_row(application_method_structured="subsurface")["application_method"], "Ground (subsurface)"
+        )
+        ChemicalEvent.objects.all().delete()
+        self.assertEqual(
+            self._make_row(application_method_structured="air_blast")["application_method"], "Ground (air-blast)"
+        )
+
+    def test_hectares_convert_to_acres(self):
+        """DPR unit-treated codes are A/S/U/C/T/P/K — no hectare. A "12.5 ha" box 19 cannot be keyed."""
+        row = self._make_row(
+            area="10", area_unit="ha", planted_area="20", planted_area_unit="ha", volume="24.71", volume_unit="gal"
+        )
+        self.assertEqual(row["acreage_treated"], "24.71 acres")
+        self.assertEqual(row["planted_area"], "49.42 acres")
+        # Box 26 is per ACRE: 24.71 gal over 24.71 acres.
+        self.assertEqual(row["rate_per_acre"], "1.00 gal/acre")
+        self.assertIn("converted from hectares (20 ha, 10 ha)", row["notes"])
+        self.assertIn({"code": "area_converted_from_ha", "from": "20 ha, 10 ha"}, row["flags"])
+        self.assertEqual(row["missing"], [])
+
+    def test_square_feet_stay_as_entered_and_have_no_per_acre_rate(self):
+        row = self._make_row(area="4000", area_unit="sq_ft", volume="2", volume_unit="gal")
+        # The form's slug never reaches the filing; the box reads the unit the way the CAC does.
+        self.assertEqual(row["acreage_treated"], "4000 sq ft")
+        self.assertEqual(row["rate_per_acre"], "")
+
+    def test_blank_area_unit_never_becomes_a_per_acre_rate(self):
+        # A rate needs BOTH units. An area with no unit is not "probably acres" on a state filing.
+        row = self._make_row(area="10", area_unit="", volume="5", volume_unit="gal")
+        self.assertEqual(row["rate_per_acre"], "")
+
+    def test_rate_uses_the_same_amount_as_box_24(self):
+        # Box 24 falls back to volume_numeric when the legacy string is blank; box 26 must too.
+        row = self._make_row(volume="", volume_numeric=12, volume_unit="gal", area="8", area_unit="acres")
+        # DecimalField(decimal_places=2) renders "12.00"; the form allows decimals in box 24.
+        self.assertEqual(row["total_product_used"], "12.00 gal")
+        self.assertEqual(row["rate_per_acre"], "1.50 gal/acre")
+
+    def test_unrecognized_county_is_named_in_a_multi_county_preamble(self):
+        self._full_pesticide(application_county="Yolo")
+        self._full_pesticide(application_county="Maricopa", commercial_name="Out of state")
+        service = PURExportService(self.establishment, 6, 2026)
+        counties = service.summary()["counties"]
+        self.assertEqual(counties[-1], {"code": "", "name": "Maricopa", "count": 1})
+        csv_text = service.to_csv().read().decode("utf-8-sig")
+        self.assertIn("Maricopa (not a recognized CA county) — 1", csv_text)
+
+    def test_operator_and_site_ids_fall_back_to_farm_and_parcel(self):
+        """The county issues the OIN to the OPERATOR and the site ID to the SITE (3 CCR 6622).
+        A record logged through the quick form or voice never shows the CA block, so without
+        the fallbacks box 3 and box 8 were blank on every such row."""
+        self.establishment.ca_operator_id = "10-26-0007"
+        self.establishment.save(update_fields=["ca_operator_id"])
+        self.parcel.ca_site_id = "N-01"
+        self.parcel.save(update_fields=["ca_site_id"])
+        row = self._make_row(operator_id="", ca_dpr_permit_number="", site_id="")
+        self.assertEqual(row["operator_id"], "10-26-0007")
+        self.assertEqual(row["site_id"], "N-01")
+        self.assertNotIn("operator_id", row["missing"])
+        self.assertNotIn("site_id", row["missing"])
+        ChemicalEvent.objects.all().delete()
+        # The event's own value always wins over the farm/parcel default.
+        row = self._make_row(operator_id="10-26-9999", site_id="0002")
+        self.assertEqual(row["operator_id"], "10-26-9999")
+        self.assertEqual(row["site_id"], "0002")
+
+    def test_rows_group_by_county_and_summary_lists_counties(self):
+        """A use report goes to the commissioner of the county where the work was performed
+        (3 CCR 6626(a)). A two-county month is two filings; the rows must not interleave."""
+        self._full_pesticide(application_county="Yolo", date=timezone.make_aware(datetime(2026, 6, 1, 7, 0)))
+        self._full_pesticide(
+            application_county="Solano",
+            commercial_name="Solano spray",
+            date=timezone.make_aware(datetime(2026, 6, 2, 7, 0)),
+        )
+        self._full_pesticide(
+            application_county="Yolo",
+            commercial_name="Yolo later",
+            date=timezone.make_aware(datetime(2026, 6, 3, 7, 0)),
+        )
+        service = PURExportService(self.establishment, 6, 2026)
+        rows = service.build_rows()
+        self.assertEqual([r["county"] for r in rows], ["48 (Solano)", "57 (Yolo)", "57 (Yolo)"])
+        self.assertEqual(
+            [r["product_and_manufacturer"] for r in rows][1:], ["Entrust SC / Corteva", "Yolo later / Corteva"]
+        )
+        self.assertEqual(
+            service.summary()["counties"],
+            [{"code": "48", "name": "Solano", "count": 1}, {"code": "57", "name": "Yolo", "count": 2}],
+        )
+        csv_text = service.to_csv().read().decode("utf-8-sig")
+        self.assertIn("Counties: 48 Solano — 1, 57 Yolo — 2.", csv_text)
+        self.assertIn("3 CCR 6626(a)", csv_text)
+        # Preview-only grouping keys never become CSV columns.
+        self.assertNotIn("county_code", csv_text)
+
+    def test_single_county_month_has_no_county_preamble(self):
+        self._full_pesticide()
+        csv_text = PURExportService(self.establishment, 6, 2026).to_csv().read().decode("utf-8-sig")
+        self.assertNotIn("Counties:", csv_text)
+
     def _make_row(self, **overrides):
         self._full_pesticide(**overrides)
         return PURExportService(self.establishment, 6, 2026).build_rows()[0]
@@ -351,6 +493,18 @@ class PURExportStateGateTests(TestCase):
         self.assertIn("operator_id", row["missing"])
         self.assertIsInstance(row["flags"], list)
         self.assertNotIn("_missing_required", row)
+
+    def test_empty_month_csv_is_not_filed_in_documents(self):
+        """The modal disables the download for an empty month; a direct API call used to file a
+        zero-application worksheet under Documents → Exports every time it was asked."""
+        from documents.models import GeneratedDocument
+
+        est = self._establishment("CA")
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+        response = client.get(self.url, {"establishment_id": est.id, "month": 6, "year": 2026, "export_format": "csv"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(GeneratedDocument.objects.filter(establishment=est, source="pur").count(), 0)
 
     def test_california_farm_is_allowed(self):
         response = self._get(self._establishment("CA"))

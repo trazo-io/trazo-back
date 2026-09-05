@@ -39,6 +39,7 @@ from common.field_registry import (
     SEED_SOURCED_SUBTYPES,
     SEEDS_SOURCE,
     UNIT_AMENDMENT,
+    UNIT_APPLICATION_RATE,
     UNIT_AREA,
     UNIT_DEPTH,
     UNIT_DISTANCE,
@@ -583,6 +584,15 @@ class History(models.Model):
         try:
             # Use the enhanced TransparencyCalculator service with anti-gaming photo verification
             from .services.transparency_calculator import TransparencyCalculator
+
+            # This is the WRITE-path entry (update_trust_metrics after an event is created,
+            # edited or deleted). Since 2026-09-05 the calculator reads events from the
+            # instance's prefetch cache, so an instance loaded with events prefetched BEFORE the
+            # write would score the old list. Drop those caches; the calculator re-fetches once.
+            prefetched = getattr(self, "_prefetched_objects_cache", None)
+            if prefetched:
+                for lookup in TransparencyCalculator.event_prefetch_lookups():
+                    prefetched.pop(lookup.split("__")[0], None)
 
             calculator = TransparencyCalculator()
             transparency_data = calculator.calculate_transparency_score(self)
@@ -1485,6 +1495,34 @@ class ChemicalEvent(CommonEvent):
         help_text="Area unit",
     )
 
+    # The rate — what the grower says, and what the label is written in.
+    #
+    # MEASURED 2026-09-02 across two real dictations: "six fluid ounces an acre" and "three and
+    # a half pounds an acre". Both are RATES. `volume_numeric` above is a TOTAL ("Total volume of
+    # product applied"), so before this column existed the number either landed there — wrong by
+    # the whole acreage, on the value the certifier packet, the carbon calculation and CA PUR all
+    # read — or was dropped so the record simply lost it.
+    #
+    # This does NOT replace the total. § 205.103(b)(2) mass balance reconciles what was PURCHASED
+    # against what was APPLIED, and a rate alone cannot close that; a certifier wants the rate
+    # (is it within the label?) AND the total (does it match the invoice?). The two answer
+    # different questions, so both columns exist and neither is derived from the other:
+    # multiplying rate x area to fabricate a total would assert a number nobody stated.
+    application_rate = models.DecimalField(
+        max_digits=12,
+        decimal_places=3,
+        blank=True,
+        null=True,
+        help_text="Amount of product applied PER unit of land — the label rate, not the total.",
+    )
+    application_rate_unit = models.CharField(
+        max_length=12,
+        choices=UNIT_APPLICATION_RATE,
+        blank=True,
+        default="",
+        help_text="Unit for application_rate (e.g. fl oz/acre).",
+    )
+
     # Item #14: Fertigation flag — fertilizer injected through irrigation system.
     # When True, application fuel is skipped to avoid double-counting with the irrigation event.
     is_fertigation = models.BooleanField(
@@ -1554,6 +1592,21 @@ class ChemicalEvent(CommonEvent):
     # Sprint 3 — OMRI / National List cross-reference (7 CFR 205.601/602)
     # Farmer-confirmed OMRI ID (nullable) and auto-suggested National List match (nullable).
     # See certifications.services.omri_verifier for the matching logic.
+    wsda_material = models.ForeignKey(
+        "certifications.WSDAMaterial",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="chemical_events",
+        help_text=(
+            "WSDA Materials List row the operator attached in the input lookup. Co-equal with "
+            "OMRI for CCOF, and for 23 of the 42 seeded WSDA brands (Feather Meal 13-0-0, "
+            "AzaMax, Kaligreen, Madex HP …) it is the ONLY third-party listing that exists — "
+            "so without this field those inputs could never be more than grower-reported, no "
+            "matter what the catalogue held. Written only by the operator's tap, never by the "
+            "fuzzy name matcher: see consumer-omri-listing-leak-2026-08-09."
+        ),
+    )
     omri_product = models.ForeignKey(
         "certifications.OMRIProduct",
         on_delete=models.SET_NULL,
@@ -1694,6 +1747,28 @@ class ChemicalEvent(CommonEvent):
         blank=True,
         null=True,
         help_text="Field fumigation method code — required for fumigation method / 1,3-D (DPR box 21 / 3 CCR 6624(c)(8)).",
+    )
+    # Who made the application: the operation itself, or a licensed pest control business
+    # hired for the pass. This is the switch the CA monthly PUR is keyed on. 3 CCR 6626(b)
+    # makes the BUSINESS the reporter for its own applications (within 7 days, with a copy
+    # to the grower within 30), and CDPR's PUE Compendium Vol. 1 Ch. 4 p. 4-8 is explicit:
+    # "The grower or property operator should not include applications made by pest control
+    # businesses on his/her use report to the county." Without this flag every spray on the
+    # farm was exported as the grower's own, so a hired application was reported twice —
+    # once by the business, once by us. The grower still KEEPS the record (3 CCR 6624(d)),
+    # so the event stays; only the PUR export treats it differently.
+    applied_by_pcb = models.BooleanField(
+        default=False,
+        help_text=(
+            "Applied by a licensed pest control business (for hire), not by the operation. "
+            "Excluded from the grower's CA PUR — the business files its own (3 CCR 6626(b))."
+        ),
+    )
+    pcb_name = models.CharField(
+        max_length=150,
+        blank=True,
+        null=True,
+        help_text="Name of the pest control business that made the application (3 CCR 6626(c); PUE Compendium 4-7).",
     )
     # Tank-mix partners (adjuvants / spreader-stickers) applied together with the
     # primary product. CA-registered adjuvants ARE reportable to the PUR and each

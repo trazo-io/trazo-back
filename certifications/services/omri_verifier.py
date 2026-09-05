@@ -83,20 +83,52 @@ def _resolve_omri_by_name(farmer_input: str):
     Tiebreakers: more farmer tokens matched, earlier anchor position, shorter
     product name (prefer base product), lower pk (stable).
     """
+    # ONE ranking, expressed once. This used to hold its own copy of the scoring loop below
+    # `_omri_candidates_by_name`'s; two copies of a tiebreaker drift, and the day they disagree
+    # the UI would offer a shortlist whose top row is not the row every other caller resolves
+    # to. Delegating also means the drift detector and the farmer-facing lookup can never rank
+    # differently.
+    candidates = _omri_candidates_by_name(farmer_input)
+    return candidates[0] if candidates else None
+
+
+def _omri_candidates_by_name(farmer_input: str):
+    """Every catalog row `_resolve_omri_by_name` considered, best first.
+
+    Same ranking, plural answer. `_resolve_omri_by_name` exists to pick ONE row for search
+    and for the drift detector, and picking one is right there. It is wrong the moment a
+    grower is offered a one-tap "this is my product": typing "Neptune" satisfies seven rows
+    (the catalog carries 2-4-1, 2-4-0.5, 2-3-1, 2-3-0.5, kelp meal, seaweed plant food and
+    soluble powder), the "prefer the shorter name" tiebreaker returns the 2-4-1, and a grower
+    holding a bottle of 2-3-1 would attach a listing for a product they did not apply.
+
+    That is the failure `consumer-omri-listing-leak-2026-08-09` names by example
+    ("Neptune's Harvest 2-3-1" -> "Fish Fertilizer 2-4-1", different product) and the reason
+    the FK is only ever written by an operator's tap. A tap on an ambiguous guess is not a
+    decision, so the caller must be able to SHOW the alternatives instead.
+
+    Returns EVERY match, ranked, with no cap: `[]` when nothing matches, one row when the
+    answer is unambiguous. It carried a `limit=6` default until 2026-09-02, which silently
+    dropped the seventh Neptune's Harvest row AND made the caller's `len()` a truncated count
+    presented to the grower as a total ("6 products match" when 7 did) — the same defect the
+    shortlist exists to fix, one layer down. Capping for display is the caller's business, and
+    the caller must then say that it capped.
+    """
     normalized = _normalize(farmer_input)
     if not normalized:
-        return None
+        return []
 
     exact = OMRIProduct.objects.extra(
         where=["LOWER(product_name) = %s OR LOWER(product_name) = %s"],
         params=[normalized, normalized + "-o"],
     ).first()
     if exact:
-        return exact
+        # An exact hit is the answer, not a shortlist — never offer alternatives to it.
+        return [exact]
 
     farmer_tokens = _name_tokens(farmer_input)
     if not farmer_tokens:
-        return None
+        return []
 
     candidates = []
     for pk, pname in OMRIProduct.objects.values_list("id", "product_name"):
@@ -105,13 +137,10 @@ def _resolve_omri_by_name(farmer_input: str):
             continue
 
         if len(farmer_tokens) == 1:
-            # Single-token farmer query — require match of product's first token.
             if ptokens[0] == farmer_tokens[0]:
                 candidates.append((1, 0, -len(ptokens), -pk, pk))
             continue
 
-        # Multi-token: walk farmer tokens through product tokens in order,
-        # allowing skips of product marketing tokens.
         pi = 0
         matched = 0
         anchor = None
@@ -126,16 +155,16 @@ def _resolve_omri_by_name(farmer_input: str):
                 pi += 1
         if matched < len(farmer_tokens):
             continue
-        # Brand-anchor constraint: farmer's first token must match one of the
-        # product's first two tokens. Rules out "organic fertilizer"-style
-        # generic drift into Neptune's/Down-to-Earth products.
         if anchor is None or anchor > 1:
             continue
         candidates.append((matched, -anchor, -len(ptokens), -pk, pk))
 
-    if candidates:
-        return OMRIProduct.objects.filter(pk=max(candidates)[-1]).first()
-    return None
+    if not candidates:
+        return []
+
+    ordered_pks = [c[-1] for c in sorted(candidates, reverse=True)]
+    by_pk = {o.pk: o for o in OMRIProduct.objects.filter(pk__in=ordered_pks)}
+    return [by_pk[pk] for pk in ordered_pks if pk in by_pk]
 
 
 def _resolve_wsda_by_name(farmer_input: str):

@@ -238,6 +238,14 @@ class Command(BaseCommand):
             action="store_true",
             help="Delete existing engagement data and recreate",
         )
+        parser.add_argument(
+            "--scans-per-production",
+            default="45-55",
+            help=(
+                "Scans per finished production over the last 30 days, as MIN-MAX (default 45-55). "
+                "A wholesale orchard whose QR reaches buyers and a farm stand sits nearer 25-35."
+            ),
+        )
 
     @transaction.atomic
     def handle(self, *args, **options):
@@ -245,6 +253,12 @@ class Command(BaseCommand):
 
         email = options["email"]
         reset = options["reset"]
+        try:
+            lo, hi = (int(x) for x in options["scans_per_production"].split("-"))
+            assert 0 < lo <= hi
+        except (ValueError, AssertionError):
+            raise CommandError("--scans-per-production must be MIN-MAX, e.g. 25-35")
+        self.scan_range = (lo, hi)
 
         # 1. Look up user
         try:
@@ -291,7 +305,7 @@ class Command(BaseCommand):
 
         for prod in finished_productions:
             product_name = prod.product.name.lower() if prod.product else ""
-            scans_created = self._create_scans(prod, consumers)
+            scans_created = self._create_scans(prod, consumers, self.scan_range)
             reviews_created = self._create_reviews(prod, consumers, product_name)
             self._update_production_metrics(prod)
 
@@ -381,10 +395,10 @@ class Command(BaseCommand):
         self.stdout.write(f"  Consumers: {len(consumers)} ready")
         return consumers
 
-    def _create_scans(self, production, consumers):
+    def _create_scans(self, production, consumers, scan_range=(45, 55)):
         """Create 45-55 scans spread over last 30 days."""
         now = datetime.now(tz=dt_tz.utc)
-        total_count = random.randint(45, 55)
+        total_count = random.randint(*scan_range)
 
         # Build day weights: last 30 days with weekend boost
         days = []
@@ -436,14 +450,12 @@ class Command(BaseCommand):
                 tzinfo=dt_tz.utc,
             )
 
-            # Scan type distribution
-            r = random.random()
-            if r < 0.70:
-                scan_type = "qr"
-            elif r < 0.90:
-                scan_type = "feedback"
-            else:
-                scan_type = "review"
+            # A page view is a "qr" scan, full stop. The app writes "feedback"/"review" only when a
+            # consumer POSTs a comment or a rating, and no consumer surface has had either input
+            # since the reviews product was retired (2026-08-06). The old 70/20/10 split painted
+            # random "Review" badges on the buyer page's scan list — a fact nothing ever wrote.
+            # Review-linked scans are created in `_create_reviews`, where a Review row backs them.
+            scan_type = "qr"
 
             # Referrer type
             r = random.random()
@@ -462,9 +474,15 @@ class Command(BaseCommand):
                 scan_user = random.choice(consumers)
 
             # Session hash
-            session_seed = f"{production.id}-{actual_dt.isoformat()}-{random.randint(0, 99999)}"
-            session_hash = hashlib.sha256(session_seed.encode()).hexdigest()[:16]
-            session_hashes.add(session_hash)
+            # ~30 % of scans are a RETURN visit: the same browser session as an earlier scan of
+            # this production. Without this every scan minted its own session and the farm home
+            # read "105 unique visitors on 105 scans" — a page nobody ever came back to.
+            if session_hashes and random.random() < 0.30:
+                session_hash = random.choice(sorted(session_hashes))
+            else:
+                session_seed = f"{production.id}-{actual_dt.isoformat()}-{random.randint(0, 99999)}"
+                session_hash = hashlib.sha256(session_seed.encode()).hexdigest()[:16]
+                session_hashes.add(session_hash)
 
             # IP hash
             ip_seed = f"ip-{random.randint(1, 200)}-{scan_date}"
@@ -500,10 +518,8 @@ class Command(BaseCommand):
             # Consent
             consent_given = random.random() < 0.85
 
-            # Comment (~15% of scans)
+            # No comment: no consumer surface writes one (see scan_type above).
             comment = None
-            if random.random() < 0.15:
-                comment = random.choice(QUICK_COMMENTS)
 
             scan = HistoryScan.objects.create(
                 history=production,
@@ -612,16 +628,14 @@ class Command(BaseCommand):
 
     def _update_production_metrics(self, production):
         """Update public_views, unique_visitors, reputation."""
-        scans = HistoryScan.objects.filter(history=production)
+        # Both numbers come from the ONE definition of a countable scan (`counted()`), so a
+        # visitor is never counted on a scan that a view is not: the previous version counted
+        # views over non-bot non-duplicate rows but visitors over ALL rows, and seeded
+        # "60 visitors on 53 views" — impossible, and visible on the farm home.
+        counted = HistoryScan.objects.counted().filter(history=production)
 
-        # public_views = non-duplicate, non-bot scans
-        production.public_views = scans.filter(
-            is_duplicate=False,
-            bot_score__lt=0.3,
-        ).count()
-
-        # unique_visitors = distinct session hashes
-        production.unique_visitors = scans.exclude(session_hash="").values("session_hash").distinct().count()
+        production.public_views = counted.count()
+        production.unique_visitors = counted.exclude(session_hash="").values("session_hash").distinct().count()
 
         production.save(update_fields=["public_views", "unique_visitors"])
 

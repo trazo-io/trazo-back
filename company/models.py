@@ -340,6 +340,16 @@ class Establishment(models.Model):
     email = models.EmailField(max_length=254, blank=True, null=True, help_text="Main establishment email")
     phone = models.CharField(max_length=20, blank=True, null=True, help_text="Main establishment phone")
     zip_code = models.CharField(max_length=20, blank=True, null=True, help_text="Postal/ZIP code")
+    # CA DPR Operator Identification Number / restricted-materials permit number, issued by the
+    # County Agricultural Commissioner to the OPERATOR (3 CCR 6622; valid up to 36 months). It is
+    # PUR box 3 on every line the farm files, so it belongs on the farm, not on each spray: the
+    # PUR export reads the event's own value first and falls back to this. California only.
+    ca_operator_id = models.CharField(
+        max_length=30,
+        blank=True,
+        null=True,
+        help_text="CA DPR Operator ID / restricted-materials permit number (PUR box 3). California farms only.",
+    )
     is_active = models.BooleanField(default=True, help_text="Whether the establishment is active")
     crops_grown = models.JSONField(default=list, blank=True, help_text="List of crops grown at this establishment")
     sustainability_practices = models.JSONField(default=list, blank=True, help_text="List of sustainability practices")

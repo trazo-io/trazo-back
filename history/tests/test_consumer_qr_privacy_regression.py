@@ -403,17 +403,25 @@ class TransparencyScoreGatingTests(_Base):
             self.assertIn("actual_count", category, f"category '{name}' factual count over-stripped")
             self.assertNotIn("expected_count", category, f"category '{name}' republished its denominator")
 
-    def test_owner_still_receives_the_baseline(self):
-        # The mirror of the gate: `expected_events` is the producer dashboard's KPI
-        # input. Stripping it for the OWNER too would be over-correction — the score
-        # is a legitimate engagement metric on the farmer's own surface.
+    def test_owner_does_not_receive_the_baseline_either(self):
+        # 2026-09-05: the owner branch used to keep `expected_events` + `completeness_score` as
+        # "the producer dashboard's KPI input". No producer surface rendered them (the only
+        # reader, TrustSummaryHeader's "12 of 13" fraction, was fed from a key the anonymous
+        # payload never carried), so the baseline now leaves the wire for everyone.
         from rest_framework.test import APIClient
 
         self.user.companies.add(self.company)
         client = APIClient()
         client.force_authenticate(self.user)
         details = ((client.get(self._url()).json().get("standard_view") or {}).get("transparency_details")) or {}
-        self.assertIn("expected_events", details, "owner (producer dashboard) lost its baseline — over-stripped")
+        self.assertIn("actual_events", details, "owner lost the factual event count")
+        for baseline in ("expected_events", "completeness_score"):
+            self.assertNotIn(baseline, details, f"authored baseline '{baseline}' still ships to the owner")
+        for name, category in (details.get("category_breakdown") or {}).items():
+            for key in category:
+                self.assertFalse(self._BASELINE_KEY_RE.search(key), f"baseline key '{key}' in owner category '{name}'")
+                self.assertNotIn(key, self._MACHINERY_KEYS, f"scoring machinery '{key}' in owner category '{name}'")
+                self.assertNotIn("completeness", key, f"graded key '{key}' in owner category '{name}'")
 
     # ---- P4-F5 / P4-F6: word choice and evidence basis (2026-08-11) -----------
 
@@ -472,10 +480,12 @@ class TransparencyScoreGatingTests(_Base):
         self.assertEqual(result["organic_input_evidence"]["grower_reported"], 1)
         self.assertEqual(result["organic_input_basis"], "grower_reported")
 
-    def test_score_present_for_authenticated_owner(self):
-        # The producer dashboard hits this same endpoint authenticated; the owner
-        # must still receive their KPI score AND the deep-insights block. Gating is
-        # anonymous-only.
+    def test_score_absent_for_authenticated_owner_too(self):
+        # 2026-09-05: the score and the "deep insights" block left this endpoint for EVERY
+        # caller. The owner branch kept them for a producer KPI that no surface rendered
+        # (ProfileProduction passed it to a component that ignored the prop; the finish-season
+        # preview tinted a placeholder with it). Gating is no longer anonymous-only — there is
+        # nothing to gate.
         from rest_framework.test import APIClient
 
         self.user.companies.add(self.company)
@@ -484,9 +494,9 @@ class TransparencyScoreGatingTests(_Base):
         resp = client.get(self._url())
         self.assertEqual(resp.status_code, 200, resp.content[:300])
         body = resp.json()
-        score = (body.get("quick_view") or {}).get("transparency_score") or {}
-        self.assertIn("percentage", score, "owner (producer dashboard) lost its transparency score")
-        self.assertIn("detailed_view", body, "owner (producer dashboard) lost its deep-insights block")
+        self.assertNotIn("transparency_score", body.get("quick_view") or {}, "graded score still served to the owner")
+        self.assertNotIn("detailed_view", body, "deep-insights block (raw score, coaching) still served to the owner")
+        self.assertNotIn("verification_status", body.get("transparency") or {}, "verification verdict still served")
 
 
 class ProductionsFlatScoreGatingTests(_Base):
@@ -558,9 +568,16 @@ class ProductionsFlatScoreGatingTests(_Base):
         self.assertIn(self.history.id, returned_ids, "owner lost their own production")
         self.assertNotIn(foreign.id, returned_ids, "cross-tenant production leaked to an authenticated user")
 
-    def test_owner_keeps_score_on_own_productions(self):
-        # The producer dashboard and the onboarding checklist both read this field;
-        # locking the endpoint down must not strip the owner's own KPI.
+    def test_owner_rows_carry_no_score(self):
+        """2026-09-05: the score LEFT this payload for everyone, owner included.
+
+        Until then the owner branch kept `transparency_score` (and `carbon_footprint`) here.
+        Each ran the full TransparencyCalculator plus CarbonEntry aggregates PER production —
+        369 SQL queries and ~3.3 s in production for a 3 KB list — and the request fires on every
+        admin page (`useMilestones` in `layouts/Admin.tsx`). No frontend consumer read either
+        field: `useMilestones` / `useOnboardingChecklist` read `events_count`, `finish_date`,
+        `published`. The score's homes are `transparency/` quick_view and `dashboard_metrics`.
+        """
         from rest_framework.test import APIClient
 
         self.user.companies.add(self.company)
@@ -569,9 +586,14 @@ class ProductionsFlatScoreGatingTests(_Base):
 
         resp = client.get(self._url())
         self.assertEqual(resp.status_code, 200, resp.content[:300])
-        rows = [row for row in resp.json() if row["id"] == self.history.id]
-        self.assertTrue(rows, "owner lost their own production")
-        self.assertIn("transparency_score", rows[0], "owner (producer dashboard) lost its transparency score")
+        rows = resp.json()
+        self.assertTrue(rows, "owner got an empty production list")
+        for row in rows:
+            self.assertNotIn("transparency_score", row, "self-graded score crept back into productions-flat")
+            self.assertNotIn(
+                "carbon_footprint", row, "per-production carbon aggregate crept back into productions-flat"
+            )
+            self.assertIn("events_count", row, "milestones/onboarding need events_count on every row")
 
     def test_events_count_covers_every_event_relation(self):
         # events_count is what the dashboard shows for a season with no score yet
@@ -1194,105 +1216,6 @@ class HabitatCaptureTests(_Base):
         for p in ps["practices"]:
             for forbidden in ("score", "index", "grade", "richness", "rating"):
                 self.assertNotIn(forbidden, p, f"graded key '{forbidden}' leaked into habitat fact")
-
-
-class CarbonQrSummaryScoreGatingTests(_Base):
-    """Claim-safety (V1/V2, 2026-06): the *carbon* anonymous QR endpoint
-    (``carbon/public/productions/<pk>/qr-summary/``, PublicProductionViewSet) is a
-    second public surface, separate from the transparency-detail endpoint covered above.
-    It previously leaked the self-graded ``transparencyScore`` (quick + full payloads) and
-    a hardcoded fake ``transparency_score: 95`` in socialProof. The graded score family must
-    not appear in this anonymous payload either (EU ECGT 2024/825 / FTC 16 CFR 260.6).
-    """
-
-    def setUp(self):
-        super().setUp()
-        ProductionEvent.objects.create(history=self.history, type="PL", date=timezone.now())
-
-    # PublicQRPermission blocks empty/short user agents as suspected bots; the
-    # Django test client sends none, so pass a realistic browser UA.
-    _UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1"
-
-    def _url(self, quick=False):
-        url = reverse("public-production-qr-summary", kwargs={"pk": str(self.history.public_id)})
-        return f"{url}?quick=true" if quick else url
-
-    _GRADED_KEYS = {
-        "transparencyScore",
-        "transparency_score",
-        "documentationCompleteness",
-        "categoryBreakdown",
-    }
-
-    def _assert_no_graded_keys(self, blob):
-        def walk(node):
-            if isinstance(node, dict):
-                for k, v in node.items():
-                    self.assertNotIn(
-                        k,
-                        self._GRADED_KEYS,
-                        f"self-graded key '{k}' leaked to anonymous carbon qr-summary: {json.dumps(node)[:200]}",
-                    )
-                    walk(v)
-            elif isinstance(node, list):
-                for v in node:
-                    walk(v)
-
-        walk(blob)
-
-    def test_quick_mode_has_no_graded_score(self):
-        resp = self.client.get(self._url(quick=True), HTTP_USER_AGENT=self._UA)
-        self.assertEqual(resp.status_code, 200, resp.content[:300])
-        self._assert_no_graded_keys(resp.json())
-
-    def test_full_mode_has_no_graded_score(self):
-        resp = self.client.get(self._url(quick=False), HTTP_USER_AGENT=self._UA)
-        self.assertEqual(resp.status_code, 200, resp.content[:300])
-        self._assert_no_graded_keys(resp.json())
-
-    # ---- Grades hidden in VALUES, not keys (2026-07-31) -------------------------------
-    # The walker above matches KEY names. Three badges were emitted straight from
-    # `transparency_score >= 95 / 85 / 75` and carried the grade in their "name" and
-    # "description" VALUES ("Complete Transparency - Avocado"), so they sailed past it.
-    # A tiered verdict derived from a self-assigned score IS the score.
-
-    _GRADED_PHRASES = (
-        "complete transparency",
-        "high transparency",
-        "good transparency",
-        "complete documentation",
-        "fully documented",
-        "blockchain verified",  # compliance.md: "recorded", never "verified"
-    )
-
-    def _assert_no_graded_phrases(self, blob):
-        haystack = json.dumps(blob).lower()
-        for phrase in self._GRADED_PHRASES:
-            self.assertNotIn(
-                phrase,
-                haystack,
-                f"self-graded verdict or unsafe claim '{phrase}' reached the anonymous "
-                f"carbon qr-summary payload (EU ECGT 2024/825 / FTC 16 CFR 260.6; "
-                f"see .claude/rules/compliance.md)",
-            )
-
-    def test_quick_mode_has_no_graded_verdict_in_values(self):
-        resp = self.client.get(self._url(quick=True), HTTP_USER_AGENT=self._UA)
-        self.assertEqual(resp.status_code, 200, resp.content[:300])
-        self._assert_no_graded_phrases(resp.json())
-
-    def test_full_mode_has_no_graded_verdict_in_values(self):
-        resp = self.client.get(self._url(quick=False), HTTP_USER_AGENT=self._UA)
-        self.assertEqual(resp.status_code, 200, resp.content[:300])
-        self._assert_no_graded_phrases(resp.json())
-
-    def test_badge_names_are_factual_not_graded(self):
-        """Badges may state facts (EPA/USDA-sourced, blockchain-recorded), never grades."""
-        resp = self.client.get(self._url(quick=False), HTTP_USER_AGENT=self._UA)
-        self.assertEqual(resp.status_code, 200, resp.content[:300])
-        for badge in resp.json().get("badges") or []:
-            name = str(badge.get("name", "")).lower()
-            self.assertNotIn("transparency", name, f"score-derived badge still emitted: {badge}")
 
 
 class CarbonCompleteSummaryScoreGatingTests(_Base):

@@ -229,56 +229,21 @@ class TimelineService:
 
     @staticmethod
     def _calculate_verification_level(event) -> str:
+        """What this event's record contains: ``self_reported`` or ``photo_documented``.
+
+        ASK, do not decide — ``claim_authority.record_evidence_level`` owns the rule.
+
+        This was the third independent copy of a five-rung trust ladder, and the only one that
+        could return ``certified`` — awarded for ``extra_data["blockchain_verified"]``, which
+        the consumer card rendered as a purple star reading "Blockchain-Recorded" while
+        ``BLOCKCHAIN_ENABLED`` is False and the add-on is withdrawn. A per-event tier must not
+        be able to make a blockchain claim ``may_claim_blockchain`` would refuse.
         """
-        Calculate verification level for an event based on evidence-based tiered system.
+        from history.services.claim_authority import record_evidence_level
 
-        Verification Levels:
-        - self_reported: No photo evidence (50% trust)
-        - photo_documented: Has photos without GPS/timestamp validation (65% trust)
-        - photo_verified: Has photos with GPS + timestamp verification (80% trust)
-        - data_verified: Reserved for future use when actual external data cross-referencing is implemented
-        - certified: Third-party or blockchain verified (100% trust)
-
-        Photos with invalid content (AI-generated, stock images)
-        are downgraded to self_reported level.
-        """
-        # Check for blockchain verification
-        has_blockchain_verification = False
-        if hasattr(event, "extra_data") and event.extra_data:
-            has_blockchain_verification = event.extra_data.get("blockchain_verified", False)
-
-        if has_blockchain_verification:
-            return "certified"
-
-        # Check for photos
         has_photos = event.album is not None and event.album.images.exists()
-
-        # MVP Photo Verification: Check if photos contain valid agricultural content
-        has_valid_agricultural_content = TimelineService._check_valid_agricultural_content(event)
-
-        # If photos exist but contain invalid content, downgrade to self_reported
-        if has_photos and not has_valid_agricultural_content:
-            return "self_reported"
-
-        # Check for GPS data in photos
-        has_gps_data = False
-        if has_photos:
-            for image in event.album.images.all():
-                if hasattr(image, "extra_data") and image.extra_data:
-                    if image.extra_data.get("gps_latitude") or image.extra_data.get("latitude"):
-                        has_gps_data = True
-                        break
-
-        # Check for timestamp
-        has_timestamp = getattr(event, "date", None) is not None
-
-        if has_photos:
-            if has_gps_data and has_timestamp:
-                return "photo_verified"
-            else:
-                return "photo_documented"
-
-        return "self_reported"
+        photos_flagged = has_photos and not TimelineService._check_valid_agricultural_content(event)
+        return record_evidence_level(has_photos=has_photos, photos_flagged=photos_flagged)
 
     @staticmethod
     def _format_chemical_event(event) -> Dict[str, Any]:

@@ -1,16 +1,11 @@
-"""Farm-level transparency aggregation.
+"""Farm-level dashboard metrics carry COUNTS, never a farm-level score.
 
-The farm headline used to average EVERY History row on the establishment. Two consequences,
-both of which showed up on a real pilot farm:
-
-1. An unpublished draft (or an internal test production) scored 0 and was averaged in, so a
-   farm whose only finished season scored 74 was displayed as 37 — a "D".
-2. Starting a new season necessarily added a near-zero row, so the headline dropped the moment
-   a grower did the one thing the product exists to encourage. That is exactly backwards during
-   the Oct-Feb postharvest window when growers onboard and open their next season.
-
-Only FINISHED, published seasons carry a verdict. A farm with none returns None, not 0 —
-"no verdict yet" must not render as a failing grade.
+Until 2026-09-05 `get_metrics_for_establishment` averaged a full TransparencyCalculator run over
+every finished, published season into `transparency_score` (+ a `transparency_tier` label). That
+was 282 SQL queries and ~3 s in production on every farm-dashboard load, and nothing rendered the
+result — the card reads counts, and the score's only reader was a nudge gated behind 1,000
+monthly scans. The tests that pinned HOW the average was taken (drafts excluded, in-progress
+seasons excluded, None-not-zero) went with it; what remains pins the facts the card shows.
 """
 
 from django.test import TestCase
@@ -56,65 +51,20 @@ class FarmTransparencyAggregationTests(TestCase):
     def _metrics(self):
         return self.serializer.get_metrics_for_establishment(self.establishment)
 
-    def test_unpublished_draft_does_not_lower_the_farm_score(self):
-        self._production(published=True, finished=True, name="Finished season", events=6)
-        finished_only = self._metrics()["transparency_score"]
-
-        # The regression: adding a zero-event draft used to halve the headline.
-        self._production(published=False, finished=False, name="Untitled draft")
-        with_draft = self._metrics()["transparency_score"]
-
-        self.assertEqual(
-            with_draft,
-            finished_only,
-            "an unpublished draft changed the farm score — drafts must not be averaged in",
-        )
-
-    def test_starting_a_new_season_does_not_lower_the_farm_score(self):
-        self._production(published=True, finished=True, name="Finished season", events=6)
-        before = self._metrics()["transparency_score"]
-
-        # A season that has just opened has no events yet; that is not poor documentation.
-        self._production(published=True, finished=False, name="2027 season")
-        after = self._metrics()
-
-        self.assertEqual(
-            after["transparency_score"],
-            before,
-            "opening a new season lowered the farm score — in-progress seasons must be excluded",
-        )
-        self.assertEqual(after["productions_in_progress"], 1)
-        self.assertEqual(after["scored_productions"], 1)
-
-    def test_no_finished_season_returns_none_not_zero(self):
-        self._production(published=True, finished=False, name="Only season, underway")
+    def test_no_farm_level_score_or_tier_in_metrics(self):
+        self._production(published=True, finished=True, name="Finished", events=3)
         metrics = self._metrics()
+        for graded in ("transparency_score", "transparency_tier"):
+            self.assertNotIn(graded, metrics, f"farm-level '{graded}' crept back into dashboard_metrics")
 
-        self.assertIsNone(
-            metrics["transparency_score"],
-            "a farm mid-season reported 0% — that reads as a failing grade for work still underway",
-        )
-        self.assertEqual(metrics["transparency_tier"], "not_started")
-        self.assertEqual(metrics["scored_productions"], 0)
-        self.assertEqual(metrics["productions_in_progress"], 1)
-
-    def test_finished_season_with_no_events_still_scores_zero(self):
-        # Excluding in-progress seasons must not become a way to hide a genuinely
-        # undocumented one: a season the farmer finished and published with nothing
-        # logged really is 0% documented.
-        self._production(published=True, finished=True, name="Finished, undocumented")
+    def test_finished_seasons_are_counted_not_scored(self):
+        self._production(published=True, finished=True, name="Finished A", events=3)
+        self._production(published=True, finished=True, name="Finished B", events=0)
+        self._production(published=False, finished=True, name="Finished draft", events=2)
+        self._production(published=True, finished=False, name="In progress", events=1)
         metrics = self._metrics()
-
-        self.assertEqual(metrics["transparency_score"], 0.0)
-        self.assertEqual(metrics["scored_productions"], 1)
-
-    def test_score_averages_only_finished_seasons(self):
-        self._production(published=True, finished=True, name="Season A", events=6)
-        self._production(published=True, finished=True, name="Season B", events=6)
-        self._production(published=False, finished=False, name="Draft")
-        self._production(published=True, finished=False, name="Underway")
-
-        metrics = self._metrics()
+        # Finished AND published only — a finished-but-unpublished season is neither counted nor underway.
         self.assertEqual(metrics["scored_productions"], 2)
         self.assertEqual(metrics["total_productions"], 4)
-        self.assertEqual(metrics["productions_in_progress"], 2)
+        self.assertEqual(metrics["productions_in_progress"], 1)
+        self.assertEqual(metrics["total_documented_events"], 6)

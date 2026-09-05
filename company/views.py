@@ -17,7 +17,6 @@ from backend.permissions import CompanyNestedViewSet, IsCompanyAdmin
 from history.models import History, HistoryScan
 from history.retention import assert_deletable
 from history.serializers import HistoryListOptionsSerializer
-from history.services.transparency_calculator import TransparencyCalculator
 from product.models import Parcel, Product
 from product.serializers import ProductListOptionsSerializer
 from reviews.models import Review
@@ -886,7 +885,6 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         from carbon.models import CarbonEntry
         from carbon.services.calculator_service import CarbonCalculatorService
-        from history.services.transparency_calculator import TransparencyCalculator
 
         try:
             # Single optimized query with ALL required data (using our new indexes)
@@ -902,6 +900,12 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                             "history_chemicalevent_events",
                             "history_equipmentevent_events",
                             "history_businessevent_events",
+                            # The four below were missing, so the total_events loop paid 4 extra
+                            # queries per history (2026-09-05).
+                            "history_weatherevent_events",
+                            "history_generalevent_events",
+                            "history_soilmanagementevent_events",
+                            "history_pestmanagementevent_events",
                         )
                         # Include all productions for comprehensive dashboard (published and unpublished)
                         # Farmers need to see all their operations, including work-in-progress
@@ -913,47 +917,6 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
             # Calculate comprehensive metrics in single pass
             dashboard_data = self._calculate_comprehensive_metrics(establishment)
-
-            # Calculate transparency analytics based on actual data.
-            # `transparency_percentage` is None when no season has finished, so coerce here:
-            # this local feeds scan-telemetry analytics that need a number, and `None / 100`
-            # raises. The reported `overall_transparency_score` below stays None on purpose —
-            # only this analytics input is floored to 0.
-            transparency_score = (dashboard_data.get("transparency_percentage") or 0) / 100
-            total_productions = dashboard_data.get("total_productions", 0)
-            total_events = dashboard_data.get("total_events", 0)
-
-            # Calculate real transparency analytics
-            transparency_analytics = self._calculate_transparency_analytics(
-                transparency_score, total_productions, total_events, establishment
-            )
-
-            # Use transparency from comprehensive metrics (now properly calculated)
-            transparency_data = {
-                "overall_transparency_score": dashboard_data.get("transparency_percentage", 0),
-                "completeness_score": dashboard_data.get("completeness_score", 0),
-                "total_productions": dashboard_data.get("total_productions", 0),
-                "total_documented_events": dashboard_data.get("total_events", 0),
-                "total_photos": dashboard_data.get("total_photos", 0),
-                "total_verified_events": dashboard_data.get("total_verified_events", 0),
-                "verification_breakdown": {
-                    "usda_factors_used": dashboard_data.get("total_verified_events", 0),
-                    # FIX: Get blockchain_verified from comprehensive data verification_status
-                    "blockchain_verified": dashboard_data.get("verification_status", {}).get("blockchain_verified", 0),
-                    "photo_verified": dashboard_data.get("total_photos", 0),
-                    "third_party_verified": 0,
-                },
-                "trust_indicators": {
-                    "company_verified": establishment.company is not None,
-                    "location_verified": bool(establishment.city and establishment.state),
-                    "area_documented": sum(parcel.area for parcel in establishment.parcels.all() if parcel.area) > 0,
-                    "transparency_enabled": True,
-                },
-                # Add real transparency analytics
-                "transparency_analytics": transparency_analytics,
-                # Category breakdown for Documentation Coverage section
-                "transparency_breakdown": dashboard_data.get("transparency_breakdown", {}),
-            }
 
             # Get carbon footprint summary
             carbon_service = CarbonCalculatorService()
@@ -980,7 +943,6 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                         else None
                     ),
                 },
-                "transparency_metrics": transparency_data,
                 "comprehensive_data": dashboard_data,
                 "carbon_summary": carbon_summary,
                 "optimization_metadata": {
@@ -991,7 +953,6 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     "indexes_used": [
                         "idx_history_establishment_published",
                         "idx_carbon_entry_history_type",
-                        "idx_transparency_metrics",
                     ],
                 },
             }
@@ -1182,7 +1143,6 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             "data_completeness": 0,
             "carbon_intensity_per_hectare": 0,
             "trust_indicators_count": 0,
-            "transparency_percentage": 0,  # Added transparency calculation
         }
 
         total_carbon_emissions = 0
@@ -1333,300 +1293,21 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         if total_area_hectares and total_carbon_emissions > 0:
             metrics["carbon_intensity_per_hectare"] = total_carbon_emissions / total_area_hectares
 
-        # Calculate overall transparency score for establishment
-        # Uses the UNIFIED TransparencyCalculator for consistency with consumer QR pages
-        # This ensures producer dashboard shows SAME scores as consumer-facing pages
-        if metrics["total_productions"] > 0:
-            # Calculate transparency for each production using unified calculator
-            transparency_calculator = TransparencyCalculator()
-            production_scores = []
-            completeness_scores = []
-            all_category_breakdowns = []
-
-            for parcel in establishment.parcels.all():
-                # Only FINISHED, published seasons carry a verdict. An in-progress season has
-                # few or no events yet, so averaging it in as a zero halved the farm headline
-                # the moment a grower started a new production — punishing the exact action the
-                # product exists to encourage. Drafts and internal test productions counted too.
-                # Kept in sync with CompanySerializer.get_metrics_for_establishment.
-                for history in parcel.histories.filter(published=True, finish_date__isnull=False):
-                    try:
-                        result = transparency_calculator.calculate_transparency_score(history)
-                        score = result.get("transparency_percentage", 0)
-                        production_scores.append(score)
-                        completeness_scores.append(result.get("completeness_score", 0))
-                        # Collect category breakdowns for aggregation
-                        consumer_cats = result.get("consumer_friendly_categories", {})
-                        if consumer_cats:
-                            all_category_breakdowns.append(consumer_cats)
-                    except Exception as e:
-                        logger.warning(f"Failed to calculate transparency for history {history.id}: {e}")
-                        continue
-
-            # Average across FINISHED seasons only. None (not 0.0) when none have finished:
-            # a farm mid-season has no verdict yet, and rendering that as 0% reads as a
-            # failing grade for work that is simply still underway.
-            metrics["scored_productions"] = len(production_scores)
-            if production_scores:
-                metrics["transparency_percentage"] = round(sum(production_scores) / len(production_scores), 1)
-            else:
-                metrics["transparency_percentage"] = None
-
-            # Completeness score (weighted, accounts for photo verification penalties)
-            if completeness_scores:
-                metrics["completeness_score"] = round(sum(completeness_scores) / len(completeness_scores), 1)
-            else:
-                metrics["completeness_score"] = None
-
-            # Aggregate category breakdowns across all productions
-            aggregated_categories = {}
-            if all_category_breakdowns:
-                all_keys = set()
-                for breakdown in all_category_breakdowns:
-                    all_keys.update(breakdown.keys())
-
-                for key in all_keys:
-                    total_actual = 0
-                    total_expected = 0
-                    total_photo_verified = 0
-                    completeness_values = []
-
-                    records_values = []
-
-                    for breakdown in all_category_breakdowns:
-                        if key in breakdown:
-                            cat_data = breakdown[key]
-                            total_actual += cat_data.get("actual_count", 0)
-                            total_expected += cat_data.get("expected_count", 0)
-                            total_photo_verified += cat_data.get("photo_verified_count", 0)
-                            completeness_values.append(cat_data.get("completeness_percentage", 0))
-                            # Pre-photo-penalty coverage. Falls back to the penalized value so a
-                            # cached breakdown from before 2026-08-04 still aggregates.
-                            records_values.append(
-                                cat_data.get(
-                                    "records_completeness_percentage",
-                                    cat_data.get("completeness_percentage", 0),
-                                )
-                            )
-
-                    avg_completeness = (
-                        round(sum(completeness_values) / len(completeness_values), 1) if completeness_values else 0
-                    )
-                    avg_records = round(sum(records_values) / len(records_values), 1) if records_values else 0
-
-                    # Build aggregated category with consumer-friendly fields preserved
-                    sample = next((b[key] for b in all_category_breakdowns if key in b), {})
-                    aggregated_categories[key] = {
-                        "actual_count": total_actual,
-                        "expected_count": total_expected,
-                        "photo_verified_count": total_photo_verified,
-                        # Both readings travel together. The producer category rows display
-                        # `records_completeness_percentage` (what the grower actually logged) and
-                        # report photos as a separate count; `completeness_percentage` keeps the
-                        # photo penalty because it is what feeds the score. Dropping the new key
-                        # here silently sent the UI back to the penalized number.
-                        "records_completeness_percentage": avg_records,
-                        "completeness_percentage": avg_completeness,
-                        "consumer_name": sample.get("consumer_name", key.title()),
-                        "consumer_description": sample.get("consumer_description", ""),
-                        "examples": sample.get("examples", ""),
-                        "documented": total_actual > 0,
-                        "transparency_level": sample.get("transparency_level", "No Data"),
-                        "requires_photos": sample.get("requires_photos", False),
-                        "photo_verification_rate": sample.get("photo_verification_rate", 0),
-                    }
-
-            metrics["transparency_breakdown"] = aggregated_categories
-        else:
-            # No productions at all — no verdict, not a zero. See the note above.
-            metrics["transparency_percentage"] = None
-            metrics["completeness_score"] = None
-            metrics["scored_productions"] = 0
-            metrics["transparency_breakdown"] = {}
+        # The farm-level transparency score, completeness score and aggregated category grades
+        # were dropped 2026-09-05. They ran the TransparencyCalculator over every finished season
+        # on every load of this endpoint; the only reader (`CarbonSummaryCard`) shows counts and
+        # the carbon summary, and nothing rendered `transparency_metrics`.
 
         # Calculate overall data completeness
         total_fields_available = 25  # Estimated total transparency fields available in database
         fields_displayed = 15  # Currently displayed in dashboard
         metrics["data_completeness"] = (fields_displayed / total_fields_available) * 100
 
-        # PRODUCTION-SPECIFIC OPPORTUNITIES: Show farmers their actual productions with specific actions needed
-        opportunities = []
-
-        # Get all current productions across all parcels
-        current_productions = []
-        for parcel in establishment.parcels.all():
-            for history in parcel.histories.all():
-                # TRANSPARENCY-FIRST FIX: Only show active productions (no finish_date)
-                # This aligns with Trazo's mission to reward future transparency, not criticize past completeness
-                if history.finish_date is None:
-                    current_productions.append(
-                        {
-                            "history": history,
-                            "parcel": parcel,
-                            "parcel_name": parcel.name,
-                            "crop_type": str(history.crop_type) if history.crop_type else "Unknown Crop",
-                            "start_date": history.start_date,
-                        }
-                    )
-
-        # Analyze each production for specific improvement opportunities
-        for production_info in current_productions:
-            history = production_info["history"]
-            parcel = production_info["parcel"]
-
-            # Calculate production-specific metrics
-            # Collect all event types for this production
-            all_events = []
-
-            # Add all event types using the correct related names
-            all_events.extend(list(history.history_chemicalevent_events.all()))
-            all_events.extend(list(history.history_productionevent_events.all()))
-            all_events.extend(list(history.history_generalevent_events.all()))
-            all_events.extend(list(history.history_weatherevent_events.all()))
-            all_events.extend(list(history.history_equipmentevent_events.all()))
-            all_events.extend(list(history.history_soilmanagementevent_events.all()))
-            all_events.extend(list(history.history_pestmanagementevent_events.all()))
-            all_events.extend(list(history.history_businessevent_events.all()))
-
-            event_count = len(all_events)
-            photos_count = history.album.images.count() if history.album else 0
-
-            # Check photo needs for this specific production
-            events_needing_photos = []
-            for event in all_events:
-                if event.album is None or event.album.images.count() == 0:
-                    # Get a more user-friendly event name
-                    event_type = getattr(event, "event_type", type(event).__name__)
-                    # Convert technical names to farmer-friendly names
-                    friendly_name = {
-                        "ChemicalEvent": "fertilizer/pesticide application",
-                        "ProductionEvent": "harvest/production activity",
-                        "GeneralEvent": "farming activity",
-                        "WeatherEvent": "weather impact",
-                        "EquipmentEvent": "equipment usage",
-                        "SoilManagementEvent": "soil management",
-                        "PestManagementEvent": "pest control",
-                        "BusinessEvent": "business activity",
-                    }.get(event_type, event_type.lower().replace("event", ""))
-                    events_needing_photos.append(friendly_name)
-
-            # Check carbon/USDA verification for this production
-            carbon_entries = CarbonEntry.objects.filter(production=history)
-            total_carbon_entries = carbon_entries.count()
-            usda_factors_based_entries = (
-                carbon_entries.filter(usda_factors_based=True).count() if total_carbon_entries > 0 else 0
-            )
-
-            production_epa_factors_based = False
-            if total_carbon_entries > 0:
-                production_epa_factors_based = usda_factors_based_entries >= (total_carbon_entries * 0.5)
-
-            # Check blockchain verification for this production
-            # Check BOTH field locations for backwards compatibility
-            blockchain_verified = False
-            if history.extra_data and isinstance(history.extra_data, dict):
-                # Check root level first (current format)
-                blockchain_verified = history.extra_data.get("blockchain_verified", False)
-                # Fallback to nested format (legacy)
-                if not blockchain_verified:
-                    blockchain_data = history.extra_data.get("blockchain", {})
-                    if isinstance(blockchain_data, dict):
-                        blockchain_verified = blockchain_data.get("verified", False)
-
-            # Build opportunity card for this production if it needs improvement
-            missing_items = []
-            priority_score = 0
-
-            # Photo opportunities (highest priority)
-            if len(events_needing_photos) > 0:
-                missing_items.append(
-                    f"Add photos to {len(events_needing_photos)} events ({', '.join(events_needing_photos[:2])}{'...' if len(events_needing_photos) > 2 else ''})"
-                )
-                priority_score += 30
-
-            # Event documentation opportunities
-            if event_count < 3:  # Less than 3 events documented
-                events_needed = 3 - event_count
-                missing_items.append(f"Document {events_needed} more farming activities")
-                priority_score += 20
-
-            # EPA/USDA factors opportunities
-            if not production_epa_factors_based and total_carbon_entries == 0:
-                missing_items.append("Add farming events to enable EPA/USDA-sourced carbon calculations")
-                priority_score += 25
-
-            # Only create opportunity card if there are actionable items
-            if missing_items:
-                # Determine priority level
-                priority = "high" if priority_score >= 40 else "medium" if priority_score >= 20 else "low"
-                priority_label = "URGENT" if priority == "high" else "IMPORTANT" if priority == "medium" else "OPTIONAL"
-
-                # Calculate potential transparency improvement
-                potential_improvement = min(priority_score, 50)  # Cap at 50%
-
-                opportunities.append(
-                    {
-                        "type": "production_specific",
-                        "production_id": history.id,
-                        "title": f"Production #{history.id} - {production_info['crop_type']}",
-                        "subtitle": f"Parcel: {production_info['parcel_name']}",
-                        "description": f"Missing: {', '.join(missing_items)}",
-                        "priority": priority,
-                        "priority_label": priority_label,
-                        "missing_items": missing_items,
-                        "current_events": event_count,
-                        "current_photos": photos_count,
-                        "usda_factors_used": production_epa_factors_based,
-                        "blockchain_verified": blockchain_verified,
-                        "potential_improvement": f"+{potential_improvement}% transparency",
-                        "action_url": f"/admin/dashboard/establishment/{establishment.id}/parcel/{parcel.id}",
-                        "start_date": history.start_date.strftime("%B %Y") if history.start_date else "Unknown",
-                    }
-                )
-
-        # TRANSPARENCY-FIRST LOGIC: Handle different production scenarios appropriately
-        if len(opportunities) == 0:
-            if metrics["total_productions"] == 0:
-                # No productions at all - encourage first production
-                opportunities.append(
-                    {
-                        "type": "create_production",
-                        "title": "Start Your First Production",
-                        "description": "Document your first farming production to begin building transparency with consumers.",
-                        "priority": "high",
-                        "priority_label": "URGENT",
-                        "potential_improvement": "+40% transparency",
-                        "action_url": f"/admin/dashboard/establishment/{establishment.id}/parcel/create-production",
-                    }
-                )
-            elif len(current_productions) == 0:
-                # Has completed productions but no active ones - encourage new season/production
-                opportunities.append(
-                    {
-                        "type": "create_new_production",
-                        "title": "Start New Production Season",
-                        "description": "Begin a new production to continue building consumer transparency and trust.",
-                        "priority": "medium",
-                        "priority_label": "RECOMMENDED",
-                        "potential_improvement": "+30% transparency",
-                        "action_url": f"/admin/dashboard/establishment/{establishment.id}/production/add",
-                    }
-                )
-            else:
-                # All active productions are well-documented
-                opportunities.append(
-                    {
-                        "type": "continuous_improvement",
-                        "title": "Excellent Documentation!",
-                        "description": "Your active productions are well-documented. Keep updating with new activities and seasonal changes.",
-                        "priority": "low",
-                        "priority_label": "GREAT JOB",
-                        "potential_improvement": "+5% transparency",
-                        "action_url": f"/admin/dashboard/establishment/{establishment.id}",
-                    }
-                )
-
-        metrics["missing_data_opportunities"] = opportunities
+        # `missing_data_opportunities` (per-production coaching) and the per-production
+        # verification tally were dropped 2026-09-05: neither is read by `CarbonSummaryCard`, the
+        # endpoint's only client, and together they cost one query per EVENT (album image counts)
+        # plus two per history on every farm-dashboard load. The keys stay as empty defaults so
+        # the response shape is unchanged.
 
         # Trust indicators count
         trust_indicators = [
@@ -1637,63 +1318,6 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             metrics["total_photos"] > 0,
         ]
         metrics["trust_indicators_count"] = sum(trust_indicators)
-
-        # CRITICAL FIX: Populate verification_status for frontend dashboard
-        # Count verified productions - track UNIQUE productions with ANY verification type
-        # This prevents double-counting a production that has both blockchain AND USDA verification
-        epa_factors_based_count = 0
-        blockchain_verified_count = 0
-        verified_production_ids = set()  # Track unique verified productions
-
-        for parcel in establishment.parcels.all():
-            for history in parcel.histories.all():
-                is_epa_factors_based = False
-                is_blockchain_verified = False
-
-                # Check EPA/USDA factors usage
-                carbon_entries = CarbonEntry.objects.filter(production=history)
-                total_entries = carbon_entries.count()
-
-                if total_entries > 0:
-                    usda_factors_based_entries = carbon_entries.filter(usda_factors_based=True).count()
-
-                    # Production uses EPA/USDA factors if majority of entries are factors-based
-                    is_epa_factors_based = usda_factors_based_entries >= (total_entries * 0.5)
-
-                    if is_epa_factors_based:
-                        epa_factors_based_count += 1
-
-                # Check blockchain verification
-                # Check BOTH field locations for backwards compatibility:
-                # - Root level: extra_data.blockchain_verified (current format)
-                # - Nested: extra_data.blockchain.verified (legacy format)
-                if hasattr(history, "extra_data") and history.extra_data and isinstance(history.extra_data, dict):
-                    # Check root level first (current format)
-                    is_blockchain_verified = history.extra_data.get("blockchain_verified", False)
-
-                    # Fallback to nested format (legacy)
-                    if not is_blockchain_verified:
-                        blockchain_data = history.extra_data.get("blockchain", {})
-                        if isinstance(blockchain_data, dict):
-                            is_blockchain_verified = blockchain_data.get("verified", False)
-
-                    if is_blockchain_verified:
-                        blockchain_verified_count += 1
-
-                # Track blockchain-verified productions (actual on-chain verification)
-                if is_blockchain_verified:
-                    verified_production_ids.add(history.id)
-
-        # Populate trust indicators for frontend
-        # epa_factors_based_count = productions whose carbon was calculated using
-        # EPA/USDA-published emission factors (automatic, NOT third-party USDA verification)
-        metrics["verification_status"] = {
-            "epa_usda_sourced": epa_factors_based_count,  # Productions using EPA/USDA factors
-            "blockchain_verified": blockchain_verified_count,  # Actual on-chain records
-            "photo_documented": metrics["total_photos"],  # Photos serve as evidence
-            # Total blockchain-verified productions (real verification)
-            "total_blockchain_verified": len(verified_production_ids),
-        }
 
         return metrics
 
@@ -1778,137 +1402,6 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 "carbon_efficiency_score": 0,
                 "calculation_error": "Carbon data temporarily unavailable",
             }
-
-    def _calculate_transparency_analytics(self, transparency_score, total_productions, total_events, establishment):
-        """
-        Calculate REAL transparency analytics from actual HistoryScan data.
-
-        TRAZO TRANSPARENCY-FIRST MISSION: Show real data, not estimates.
-        This function returns actual QR scan metrics, not calculated estimates.
-        """
-        from datetime import timedelta
-
-        from django.db.models import Avg, Count, Q
-        from django.utils import timezone
-
-        from history.models import History, HistoryScan
-
-        # Get all productions for this establishment
-        production_ids = History.objects.filter(parcel__establishment=establishment).values_list("id", flat=True)
-
-        # Get all high-quality scans (non-duplicate, non-bot) for establishment productions
-        now = timezone.now()
-        thirty_days_ago = now - timedelta(days=30)
-        sixty_days_ago = now - timedelta(days=60)
-
-        # Countable scans only — see `HistoryScanQuerySet.counted()`. This block used to define
-        # its own `quality_filter` at bot_score < 0.3 while the analytics service used < 0.5 and
-        # most other surfaces filtered nothing at all, so one farm had three different scan
-        # totals depending on the screen. There is now one definition.
-        counted_scans = HistoryScan.objects.counted()
-
-        # Current month scans (last 30 days)
-        current_month_scans = counted_scans.filter(history_id__in=production_ids, date__gte=thirty_days_ago)
-
-        # Previous month scans (30-60 days ago) for growth calculation
-        previous_month_scans = counted_scans.filter(
-            history_id__in=production_ids, date__gte=sixty_days_ago, date__lt=thirty_days_ago
-        )
-
-        # All-time scans
-        all_time_scans = counted_scans.filter(history_id__in=production_ids)
-
-        # === REAL METRICS ===
-
-        # 1. Monthly QR Scans (last 30 days)
-        monthly_qr_scans = current_month_scans.count()
-
-        # 2. Total QR Scans (all time)
-        total_qr_scans = all_time_scans.count()
-
-        # 3. Unique Visitors (unique session_hash)
-        unique_sessions = all_time_scans.values("session_hash").distinct().count()
-        monthly_unique_visitors = current_month_scans.values("session_hash").distinct().count()
-
-        # 4. Consumer Reach (unique countries)
-        countries_reached = all_time_scans.exclude(country_code="").values("country_code").distinct().count()
-
-        # 5. Geographic breakdown
-        top_countries = list(
-            all_time_scans.exclude(country_code="")
-            .values("country_code")
-            .annotate(scan_count=Count("id"))
-            .order_by("-scan_count")[:5]
-        )
-
-        # 6. Scan Growth % (month over month)
-        previous_month_count = previous_month_scans.count()
-        if previous_month_count > 0:
-            scan_growth_percent = round(((monthly_qr_scans - previous_month_count) / previous_month_count) * 100, 1)
-        else:
-            # If no previous data, show 100% growth if we have current scans
-            scan_growth_percent = 100 if monthly_qr_scans > 0 else 0
-
-        # 7. Average Engagement Score (real engagement from HistoryScan)
-        avg_engagement = all_time_scans.aggregate(avg_engagement=Avg("engagement_score"))["avg_engagement"] or 0
-
-        # 8. Scan Type Breakdown
-        scan_type_breakdown = dict(
-            all_time_scans.values("scan_type").annotate(count=Count("id")).values_list("scan_type", "count")
-        )
-
-        # 9. Referrer Type Breakdown (how consumers found the page)
-        referrer_breakdown = dict(
-            all_time_scans.values("referrer_type").annotate(count=Count("id")).values_list("referrer_type", "count")
-        )
-
-        # 10. Calculate recommendations based on REAL data
-        recommendations = []
-        if total_qr_scans == 0:
-            recommendations.append(
-                {"action": "Share QR codes", "impact": "Start building consumer trust", "priority": "high"}
-            )
-        elif monthly_qr_scans < 10:
-            recommendations.append(
-                {"action": "Increase QR visibility", "impact": "More scans = more consumer trust", "priority": "medium"}
-            )
-        elif scan_growth_percent < 0:
-            recommendations.append(
-                {"action": "Re-engage consumers", "impact": "Reverse declining engagement", "priority": "high"}
-            )
-        else:
-            recommendations.append(
-                {"action": "Maintain momentum", "impact": "Continue growing consumer base", "priority": "low"}
-            )
-
-        return {
-            # === PRIMARY REAL METRICS (for Transparency Impact card) ===
-            "monthly_qr_scans": monthly_qr_scans,
-            "total_qr_scans": total_qr_scans,
-            "unique_visitors": unique_sessions,
-            "monthly_unique_visitors": monthly_unique_visitors,
-            "countries_reached": countries_reached,
-            "scan_growth_percent": scan_growth_percent,
-            "avg_engagement_score": round(avg_engagement * 100, 1),  # Convert to percentage
-            # === DETAILED BREAKDOWNS ===
-            "top_countries": top_countries,
-            "scan_type_breakdown": scan_type_breakdown,
-            "referrer_breakdown": referrer_breakdown,
-            # === CONTEXT DATA ===
-            "transparency_score_percent": round(transparency_score * 100, 1),
-            "total_productions": total_productions,
-            "total_events": total_events,
-            # === ACTIONABLE RECOMMENDATIONS ===
-            "recommendations": recommendations,
-            # === DATA QUALITY INDICATORS ===
-            "data_quality": {
-                "has_real_data": total_qr_scans > 0,
-                "data_period_days": 30,
-                "quality_filter_applied": True,
-                "bot_filtered": True,
-                "duplicates_filtered": True,
-            },
-        }
 
     def _calculate_response_time(self):
         """Calculate response time for performance monitoring"""

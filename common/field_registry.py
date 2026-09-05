@@ -51,6 +51,36 @@ UNIT_VOLUME = [
     ("lbs", "Pounds"),
 ]
 
+# Application-rate units — a quantity PER unit of land.
+# Used in: ChemicalEvent.application_rate_unit
+#
+# A rate is the number a grower actually says, because it is the number written on the label:
+# "six fluid ounces an acre", "three and a half pounds an acre". Until 2026-09-03 there was
+# nowhere to put it. `volume_numeric` is a TOTAL (its help text and the form's label both say
+# so), so a spoken rate either landed there — wrong by the whole acreage, on a value the
+# certifier packet and CA PUR both read — or was dropped on the floor.
+#
+# ⛔ COMPOUND values, one string, never two columns. A rate is a single fact; splitting it into
+# a numerator unit and a denominator unit invites the pair to be written half-way, and
+# `UNIT_AMENDMENT` above records what happens when two halves of one measurement can disagree.
+#
+# US customary first: the ICP is CA/WA wholesale orchards and every label rate in that market is
+# per acre. Metric follows for the same reason `UNIT_AREA` carries both.
+UNIT_APPLICATION_RATE = [
+    ("fl_oz_ac", "fl oz/acre"),
+    ("pt_ac", "pints/acre"),
+    ("qt_ac", "quarts/acre"),
+    ("gal_ac", "gallons/acre"),
+    ("oz_ac", "oz/acre"),
+    ("lb_ac", "lbs/acre"),
+    ("ton_ac", "tons/acre"),
+    ("mL_ha", "mL/hectare"),
+    ("L_ha", "L/hectare"),
+    ("g_ha", "g/hectare"),
+    ("kg_ha", "kg/hectare"),
+    ("t_ha", "tonnes/hectare"),
+]
+
 # Soil-amendment mass/volume units.
 # Used in: SoilManagementEvent.amendment_amount_unit, .amendment_quantity_purchased_unit
 #

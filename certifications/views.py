@@ -69,6 +69,12 @@ def osp_status_phrase(osp_status):
     return _OSP_STATUS_PHRASE.get(osp_status, f"in status '{osp_status}'")
 
 
+#: How many catalog matches the lookup card shows at once. The grower is picking a product
+#: off a label, so a long list is worse than a prompt to type more of the name — but the
+#: response also carries `omri_candidate_count`, and the UI says when it has capped.
+_OMRI_CANDIDATE_DISPLAY_LIMIT = 12
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def verify_input(request):
@@ -102,15 +108,22 @@ def verify_input(request):
     # substance like copper hydroxide may have no brand listing but a strong
     # NL hit. The UI renders all three independently and the farmer picks.
     from certifications.models import WSDAMaterial
-    from certifications.services.omri_verifier import _normalize, _resolve_omri_by_name, _resolve_wsda_by_name
+    from certifications.services.omri_verifier import _normalize, _omri_candidates_by_name, _resolve_wsda_by_name
 
     matched_omri = None
     matched_nl = None
     matched_wsda = None
+    omri_candidates = []
     if omri_id:
         matched_omri = OMRIProduct.objects.filter(omri_id__iexact=omri_id).first()
+        if matched_omri:
+            omri_candidates = [matched_omri]
     if matched_omri is None and name:
-        matched_omri = _resolve_omri_by_name(name)
+        # The shortlist, not just the winner. A single guessed row carrying a one-tap
+        # "use this listing" turns a fuzzy search result into a persisted third-party
+        # claim; when the query matches several products the grower has to choose.
+        omri_candidates = _omri_candidates_by_name(name)
+        matched_omri = omri_candidates[0] if omri_candidates else None
 
     if name:
         matched_wsda = _resolve_wsda_by_name(name)
@@ -158,6 +171,17 @@ def verify_input(request):
             "omri_product_pk": matched_omri.pk if matched_omri else None,
             "omri_product_id": matched_omri.omri_id if matched_omri else None,
             "omri_product_name": matched_omri.product_name if matched_omri else None,
+            # Every row the query matched, best first. One entry (or none) means the answer
+            # is unambiguous; more means the UI must let the grower pick rather than offering
+            # a one-tap attach on a guess.
+            "omri_candidates": [
+                {"pk": o.pk, "omri_id": o.omri_id, "product_name": o.product_name, "manufacturer": o.manufacturer}
+                for o in omri_candidates[:_OMRI_CANDIDATE_DISPLAY_LIMIT]
+            ],
+            # The TRUE number of matches, which is not `len(omri_candidates)` once the list
+            # above is capped. Reporting the capped length as the total would tell a grower
+            # "6 products match" when 7 do — and the one left out could be theirs.
+            "omri_candidate_count": len(omri_candidates),
             "national_list_substance_pk": matched_nl.pk if matched_nl else None,
             "national_list_substance_name": matched_nl.substance_name if matched_nl else None,
             "national_list_cfr_section": matched_nl.cfr_section if matched_nl else None,

@@ -16,6 +16,9 @@ the verdict lives here and every surface consults it.
 Scope discipline: this reports what a certifier will reject a submission over,
 not everything that could be improved. A checklist that cries wolf gets ignored,
 and an ignored checklist is worse than none on the day of an inspection.
+
+⛔ EVERY item carries a stable `code` and machine-readable `params` ALONGSIDE its
+English `title`/`detail`/`fix`. Read `READINESS_CODES` below before adding one.
 """
 
 import logging
@@ -38,6 +41,60 @@ OFPP_SUSPICIOUS_FILENAME_PATTERNS = ("factura", "invoice", "receipt", "comproban
 # A GlobalG.A.P. or FSMA 204 packet must never be blocked over either: an Organic
 # System Plan is 7 CFR 205.201, not a food-safety artifact.
 ORGANIC_PROFILES = ("organic", "all")
+
+# The wire contract with `readinessMessages.ts`. A code that is not in this tuple is drift;
+# `test_readiness_codes.py` fails on an emitted code that is missing here, and the frontend
+# test fails on one this file adds that no message id covers.
+#
+# 🌐 2026-09-02 — WHY CODES EXIST. Read before adding an item.
+#
+# Every string below used to reach the farm dashboard as English prose and nothing else, so a
+# Spanish-locale farmer read "TODA LA OPERACIÓN" over "2 logged product(s) are not on your
+# materials list". A server that returns prose has effectively opted the client out of
+# translation — the same defect `users/constants.py` + `authErrors.ts` fixed for auth, settled
+# the same way: a stable code plus the VALUES, and the client owns the sentence.
+#
+# `title`/`detail`/`fix` stay on the wire and stay English. They are not vestigial:
+#   * `OperationAuditExportService` and the certifier-review page print them into a document
+#     written FOR a US certifying agent, which is an English artifact by design, and
+#   * they are the fallback for a code the client has not learned yet — an English sentence
+#     that is TRUE beats a blank row (`authErrors.ts` calls this `fallbackText`).
+#
+# ⚠️ A param that is a LIST stays a list. Pre-joining it here ("A, B, and 3 more") bakes English
+# conjunctions into a value and the translation cannot come apart again; the truncated array
+# plus its overflow count is what lets es-419 write "y 3 más".
+READINESS_CODES = (
+    "check_unavailable",
+    "ofpp.missing",
+    "ofpp.suspicious_document",
+    "ofpp.ok_module",
+    "ofpp.ok",
+    "osp.none",
+    "osp.no_content",
+    "osp.not_submitted",
+    "osp.ok",
+    "attestation_support.unsupported",
+    "attestation_support.ok",
+    "unmatched_materials.unlisted",
+    "unmatched_materials.ok",
+    "unmatched_materials.not_applicable",
+    "parcel_maps.missing",
+    "parcel_maps.ok",
+    "parcel_maps.not_applicable",
+    "handler_certificates.attention",
+    "handler_certificates.ok",
+    "handler_certificates.not_applicable",
+    "records.none",
+    "records.ok",
+)
+
+# Clause codes for `attestation_support.unsupported`. Each names ONE attestation the packet
+# contradicts; the client renders them as a list, so the joining punctuation is the client's.
+ATTESTATION_CLAUSE_CODES = (
+    "materials_list_empty",
+    "supplier_list_empty",
+    "search_records_disowned",
+)
 
 
 class OperationReadinessService:
@@ -99,6 +156,8 @@ class OperationReadinessService:
                 logger.exception("Operation readiness check %s failed", check_key)
                 result = {
                     "key": f"{check_key}_unavailable",
+                    "code": "check_unavailable",
+                    "params": {"check": check_key},
                     "status": "warning",
                     "title": "A readiness check could not be completed",
                     "detail": (
@@ -188,6 +247,8 @@ class OperationReadinessService:
         if self._ofpp_module_completed():
             return {
                 "key": "ofpp",
+                "code": "ofpp.ok_module",
+                "params": {},
                 "status": "ok",
                 "title": "Organic Fraud Prevention Plan on file",
                 "detail": "Authored in OSP module G2.0 — Monitoring & Organic Fraud Prevention.",
@@ -208,6 +269,8 @@ class OperationReadinessService:
         if not uploaded:
             return {
                 "key": "ofpp",
+                "code": "ofpp.missing",
+                "params": {},
                 "status": "blocker",
                 "title": "Organic Fraud Prevention Plan is not on file",
                 "detail": (
@@ -223,6 +286,8 @@ class OperationReadinessService:
         if suspicious:
             return {
                 "key": "ofpp",
+                "code": "ofpp.suspicious_document",
+                "params": {"filename": doc_name},
                 "status": "blocker",
                 "title": "The uploaded Fraud Prevention Plan looks like the wrong document",
                 "detail": (
@@ -235,6 +300,8 @@ class OperationReadinessService:
 
         return {
             "key": "ofpp",
+            "code": "ofpp.ok",
+            "params": {},
             "status": "ok",
             "title": "Organic Fraud Prevention Plan on file",
             "detail": "",
@@ -260,6 +327,8 @@ class OperationReadinessService:
         if not plans.exists():
             return {
                 "key": "osp",
+                "code": "osp.none",
+                "params": {},
                 "status": "blocker",
                 "title": "No Organic System Plan has been created",
                 "detail": (
@@ -298,6 +367,8 @@ class OperationReadinessService:
         if filled == 0:
             return {
                 "key": "osp",
+                "code": "osp.no_content",
+                "params": {},
                 "status": "blocker",
                 "title": "The Organic System Plan has no usable content",
                 "detail": (
@@ -311,6 +382,8 @@ class OperationReadinessService:
         if not plans.filter(status__in=("submitted", "active")).exists():
             return {
                 "key": "osp",
+                "code": "osp.not_submitted",
+                "params": {"filled": filled, "total": len(OSP_SECTION_KEYS)},
                 "status": "warning",
                 "title": "The Organic System Plan has not been submitted from Trazo",
                 # 🔴 2026-08-19: this read "the plan has never been submitted to or approved by
@@ -330,7 +403,15 @@ class OperationReadinessService:
                 "fix": "Finish the OSP sections and submit it to your certifier.",
             }
 
-        return {"key": "osp", "status": "ok", "title": "Organic System Plan on file", "detail": "", "fix": ""}
+        return {
+            "key": "osp",
+            "code": "osp.ok",
+            "params": {},
+            "status": "ok",
+            "title": "Organic System Plan on file",
+            "detail": "",
+            "fix": "",
+        }
 
     def _check_attestation_support(self):
         """Attestations the operation's own packet contradicts.
@@ -372,7 +453,10 @@ class OperationReadinessService:
             entry = (modules.get(module_key) or {}).get("answers") or {}
             return answer_value(entry, question_key)
 
-        unsupported = []
+        # (clause_code, English sentence). The code is what es-419 renders; the sentence is
+        # what the packet and the untranslated fallback print. Appended in lockstep so a new
+        # clause cannot arrive with only one of the two.
+        unsupported: list = []
 
         materials_attested = any(
             _answer("materials_application", key) is True
@@ -387,8 +471,11 @@ class OperationReadinessService:
         approved_count = plan.approved_national_list_substances.count() + plan.approved_omri_products.count()
         if materials_attested and approved_count == 0:
             unsupported.append(
-                "the Materials Application attests that all input materials are entered, "
-                "but no materials are on the approved list"
+                (
+                    "materials_list_empty",
+                    "the Materials Application attests that all input materials are entered, "
+                    "but no materials are on the approved list",
+                )
             )
 
         if _answer("g3_2_planting_stock", "suppliers_on_supplier_list") is True:
@@ -401,8 +488,11 @@ class OperationReadinessService:
                 supplier_rows = []
             if not supplier_rows:
                 unsupported.append(
-                    "G3.0b attests that planting stock suppliers are on the Supplier List, "
-                    "but the Supplier List is empty"
+                    (
+                        "supplier_list_empty",
+                        "G3.0b attests that planting stock suppliers are on the Supplier List, "
+                        "but the Supplier List is empty",
+                    )
                 )
 
         # 🔴 2026-08-19, found the same way the two above were — by reading a finished packet
@@ -425,13 +515,18 @@ class OperationReadinessService:
             )
             if documented:
                 unsupported.append(
-                    "G3.0b attests that no commercial-availability search records are kept, "
-                    "but the packet prints documented supplier searches against planting events"
+                    (
+                        "search_records_disowned",
+                        "G3.0b attests that no commercial-availability search records are kept, "
+                        "but the packet prints documented supplier searches against planting events",
+                    )
                 )
 
         if not unsupported:
             return {
                 "key": "attestation_support",
+                "code": "attestation_support.ok",
+                "params": {},
                 "status": "ok",
                 "title": "OSP attestations are supported by the packet",
                 "detail": "",
@@ -440,11 +535,13 @@ class OperationReadinessService:
 
         return {
             "key": "attestation_support",
+            "code": "attestation_support.unsupported",
+            "params": {"clauses": [clause_code for clause_code, _ in unsupported]},
             "status": "warning",
             "title": "An OSP attestation is not supported by the rest of the packet",
             "detail": (
                 "A reviewer cross-checks each attestation against the document that should "
-                "corroborate it: " + "; ".join(unsupported) + "."
+                "corroborate it: " + "; ".join(sentence for _, sentence in unsupported) + "."
             ),
             "fix": (
                 "Add the missing entries, or change the answer — an attestation the packet "
@@ -491,11 +588,21 @@ class OperationReadinessService:
 
         osp = self._plan_being_filed()
         if osp is None:
-            return {"key": "unmatched_materials", "status": "ok", "title": "", "detail": "", "fix": ""}
+            return {
+                "key": "unmatched_materials",
+                "code": "unmatched_materials.not_applicable",
+                "params": {},
+                "status": "ok",
+                "title": "",
+                "detail": "",
+                "fix": "",
+            }
         unmatched = unmatched_logged_materials(osp)
         if not unmatched:
             return {
                 "key": "unmatched_materials",
+                "code": "unmatched_materials.ok",
+                "params": {},
                 "status": "ok",
                 "title": "Logged inputs match your materials list",
                 "detail": "",
@@ -504,6 +611,15 @@ class OperationReadinessService:
         shown = ", ".join(unmatched[:5]) + (f", and {len(unmatched) - 5} more" if len(unmatched) > 5 else "")
         return {
             "key": "unmatched_materials",
+            "code": "unmatched_materials.unlisted",
+            # The product names are a LIST, and `overflow` is a NUMBER. `shown` below joins them
+            # with an English ", and N more" for the packet; a client that received only that
+            # string could not write the same sentence in Spanish.
+            "params": {
+                "count": len(unmatched),
+                "products": list(unmatched[:5]),
+                "overflow": max(len(unmatched) - 5, 0),
+            },
             "status": "warning",
             "title": f"{len(unmatched)} logged product(s) are not on your materials list",
             "detail": (
@@ -526,20 +642,37 @@ class OperationReadinessService:
 
         parcels = list(self.establishment.parcels.all())
         if not parcels:
-            return {"key": "parcel_maps", "status": "ok", "title": "", "detail": "", "fix": ""}
+            return {
+                "key": "parcel_maps",
+                "code": "parcel_maps.not_applicable",
+                "params": {},
+                "status": "ok",
+                "title": "",
+                "detail": "",
+                "fix": "",
+            }
         without = [p for p in parcels if not p.polygon and not parcel_map_documents(p)]
         if not without:
             return {
                 "key": "parcel_maps",
+                "code": "parcel_maps.ok",
+                "params": {},
                 "status": "ok",
                 "title": "Every parcel has a map or a recorded boundary",
                 "detail": "",
                 "fix": "",
             }
-        names = ", ".join((p.name or f"Parcel {p.pk}") for p in without[:4])
+        shown_parcels = [(p.name or f"Parcel {p.pk}") for p in without[:4]]
+        names = ", ".join(shown_parcels)
         more = f", and {len(without) - 4} more" if len(without) > 4 else ""
         return {
             "key": "parcel_maps",
+            "code": "parcel_maps.missing",
+            "params": {
+                "count": len(without),
+                "parcels": shown_parcels,
+                "overflow": max(len(without) - 4, 0),
+            },
             "status": "warning",
             "title": f"{len(without)} parcel(s) have no map",
             "detail": (
@@ -561,12 +694,22 @@ class OperationReadinessService:
 
         facilities = list(PostHarvestFacility.objects.filter(establishment=self.establishment))
         if not facilities:
-            return {"key": "handler_certificates", "status": "ok", "title": "", "detail": "", "fix": ""}
+            return {
+                "key": "handler_certificates",
+                "code": "handler_certificates.not_applicable",
+                "params": {},
+                "status": "ok",
+                "title": "",
+                "detail": "",
+                "fix": "",
+            }
         stale = [f for f in facilities if f.cert_is_current is False]
         undated = [f for f in facilities if f.cert_is_current is None]
         if not stale and not undated:
             return {
                 "key": "handler_certificates",
+                "code": "handler_certificates.ok",
+                "params": {},
                 "status": "ok",
                 "title": "Handler certificates are current",
                 "detail": "",
@@ -579,6 +722,16 @@ class OperationReadinessService:
             parts.append("no certificate date recorded: " + ", ".join(f.name for f in undated[:3]))
         return {
             "key": "handler_certificates",
+            "code": "handler_certificates.attention",
+            # Two independent problems under one count, so the client needs both lists
+            # separately: "expired" and "never dated" are not the same ask.
+            "params": {
+                "count": len(stale) + len(undated),
+                "stale": [f.name for f in stale[:3]],
+                "stale_overflow": max(len(stale) - 3, 0),
+                "undated": [f.name for f in undated[:3]],
+                "undated_overflow": max(len(undated) - 3, 0),
+            },
             "status": "warning",
             "title": f"{len(stale) + len(undated)} handler certificate(s) need attention",
             "detail": (
@@ -596,9 +749,19 @@ class OperationReadinessService:
         if not has_any:
             return {
                 "key": "records",
+                "code": "records.none",
+                "params": {},
                 "status": "blocker",
                 "title": "This operation has no production records",
                 "detail": "There is nothing for a certifier to review.",
                 "fix": "Start a production and log the season's events.",
             }
-        return {"key": "records", "status": "ok", "title": "Production records present", "detail": "", "fix": ""}
+        return {
+            "key": "records",
+            "code": "records.ok",
+            "params": {},
+            "status": "ok",
+            "title": "Production records present",
+            "detail": "",
+            "fix": "",
+        }

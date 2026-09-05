@@ -434,7 +434,7 @@ def create_loewen_finished_events(prod, user):
         created_by=user,
         performed_by=by,
         type=ChemicalEvent.FERTILIZER,
-        chemical_subtype="organic",
+        chemical_subtype="organic_fertilizer",
         name="Organic Foliar Nutrition",
         commercial_name="Neptune's Harvest Fish & Seaweed 2-3-1 (OMRI listed)",
         concentration="2-3-1",

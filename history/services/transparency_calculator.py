@@ -10,7 +10,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, Tuple
 
-from django.db.models import Q
+from django.db.models import prefetch_related_objects
 from django.utils import timezone
 
 from carbon.models import CropType
@@ -63,6 +63,42 @@ class TransparencyCalculator:
         "business": [BusinessEvent],
         "general": [GeneralEvent],
     }
+
+    # ------------------------------------------------------------------------------------------
+    # Event access — ALWAYS through the reverse accessors, never `Model.objects.filter(history=)`.
+    #
+    # Until 2026-09-05 every count and loop in this class went back to the database, so the
+    # prefetch its callers already paid for was ignored: 16 COUNTs + one SELECT per event model
+    # per history, then 2-3 queries per event for the photo check. Multiplied by every history
+    # on a farm that is 282 queries for `dashboard_metrics`, 345 for `transparency/` and 369 for
+    # `productions-flat` — ~3 s each in production, where every query crosses to the managed DB.
+    # ------------------------------------------------------------------------------------------
+    @staticmethod
+    def _events_accessor(event_model) -> str:
+        """Reverse accessor History exposes for one event model (`history_<model>_events`)."""
+        return f"history_{event_model.__name__.lower()}_events"
+
+    @classmethod
+    def event_prefetch_lookups(cls) -> Tuple[str, ...]:
+        """Prefetch lookups that make a calculation query-free. Idempotent with any caller that
+        already did them (`prefetch_related_objects` skips fetched levels)."""
+        return tuple(
+            f"{cls._events_accessor(model)}__album__images"
+            for models in cls.EVENT_CATEGORIES.values()
+            for model in models
+        )
+
+    def _ensure_prefetched(self, history: History) -> None:
+        """One bounded round of prefetching so the per-history loops below never hit the DB.
+
+        A caller that prefetched already pays nothing; one that did not pays ~3 queries per
+        event model ONCE, instead of 2 per model plus 2-3 per event.
+        """
+        prefetch_related_objects([history], *self.event_prefetch_lookups())
+
+    def _events_of(self, history: History, event_model) -> list:
+        """All events of one model for this history, from the prefetch cache."""
+        return list(getattr(history, self._events_accessor(event_model)).all())
 
     # 3-Tier photo system — subtype-level photo requirements
     # Tier 1 ESSENTIAL: Full 50% penalty without photos
@@ -126,6 +162,7 @@ class TransparencyCalculator:
         """
         try:
             # Get expected event count based on crop type and farming approach
+            self._ensure_prefetched(history)
             expected_count = self._get_expected_event_count(history)
 
             # Count actual events across all categories
@@ -240,7 +277,7 @@ class TransparencyCalculator:
         # Count each event type
         for event_models in self.EVENT_CATEGORIES.values():
             for event_model in event_models:
-                total_events += event_model.objects.filter(history=history).count()
+                total_events += len(self._events_of(history, event_model))
 
         return total_events
 
@@ -265,8 +302,8 @@ class TransparencyCalculator:
 
             # Count actual events and photo-verified events for this category
             for event_model in event_models:
-                category_events = event_model.objects.filter(history=history)
-                actual_count += category_events.count()
+                category_events = self._events_of(history, event_model)
+                actual_count += len(category_events)
 
                 for event in category_events:
                     event_type = getattr(event, "type", "")
@@ -361,12 +398,14 @@ class TransparencyCalculator:
             if not hasattr(event, "album") or not event.album:
                 return False
 
-            # Album must have actual images
-            if not hasattr(event.album, "images") or not event.album.images.exists():
+            # Album must have actual images (prefetched with the events — one list, no queries)
+            images_manager = getattr(event.album, "images", None)
+            images = list(images_manager.all()) if images_manager is not None else []
+            if not images:
                 return False
 
             # Additional anti-gaming checks
-            image_count = event.album.images.count()
+            image_count = len(images)
 
             # Require 2+ images only for chemical subtypes (label + application evidence)
             min_images_required = (
@@ -379,7 +418,7 @@ class TransparencyCalculator:
             verified_images = 0
 
             # Advanced verification for each image
-            for image in event.album.images.all():
+            for image in images:
                 if hasattr(image, "image") and image.image:
                     try:
                         # LAYER 1: File size validation (anti-placeholder)
@@ -688,8 +727,8 @@ class TransparencyCalculator:
             # Also check chemical events for organic-only subtypes (organic farms may
             # still log organic amendments — they just don't log synthetic chemicals)
             if not organic_production:
-                chem_events = ChemicalEvent.objects.filter(history=history)
-                if chem_events.exists():
+                chem_events = self._events_of(history, ChemicalEvent)
+                if chem_events:
                     organic_subtypes = {
                         "organic_herbicide",
                         "organic_pesticide",
@@ -702,7 +741,7 @@ class TransparencyCalculator:
                     all_organic = all(
                         (e.chemical_subtype or "") in organic_subtypes for e in chem_events if e.chemical_subtype
                     )
-                    if all_organic and chem_events.count() > 0:
+                    if all_organic and len(chem_events) > 0:
                         organic_production = True
 
         if has_zero_chemical_events and organic_production:
@@ -946,11 +985,13 @@ class TransparencyCalculator:
                 return approach
 
         # Infer from chemical events
-        chemical_events = ChemicalEvent.objects.filter(history=history)
-        if chemical_events.exists():
-            synthetic_found = chemical_events.filter(
-                Q(description__icontains="synthetic") | Q(description__icontains="pesticide")
-            ).exists()
+        chemical_events = self._events_of(history, ChemicalEvent)
+        if chemical_events:
+            # Same test as the old `description__icontains` filter, run on the prefetched rows
+            synthetic_found = any(
+                "synthetic" in (e.description or "").lower() or "pesticide" in (e.description or "").lower()
+                for e in chemical_events
+            )
 
             if not synthetic_found:
                 return "organic"

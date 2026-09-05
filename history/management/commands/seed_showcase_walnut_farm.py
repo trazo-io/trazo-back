@@ -1281,7 +1281,7 @@ class Command(BaseCommand):
             _dt(year, 4, 15, 6),
             photo_key="copper-spray",
             type=ChemicalEvent.FUNGICIDE,
-            chemical_subtype="copper",
+            chemical_subtype="copper_fungicide",
             name="Copper #1 — walnut blight (early catkin)",
             description=(
                 "First blight pass at early catkin, timed to the UC IPM Xanthocast model after "
@@ -1353,7 +1353,7 @@ class Command(BaseCommand):
             _dt(year, 5, 2, 6),
             photo_key="copper-spray",
             type=ChemicalEvent.FUNGICIDE,
-            chemical_subtype="copper",
+            chemical_subtype="copper_fungicide",
             name="Copper #2 — walnut blight (40% leaf-out)",
             description=(
                 "Second and final blight pass at 40% leaf-out following a wet front. Kocide "
@@ -1650,7 +1650,7 @@ class Command(BaseCommand):
             _dt(year, 8, 4, 6),
             photo_key="hull-split-spray",
             type=ChemicalEvent.PESTICIDE,
-            chemical_subtype="biological",
+            chemical_subtype="biological_pesticide",
             name="Spinosad at hull split",
             description=(
                 "Single hull-split application against navel orangeworm: Entrust SC at 6 fl "

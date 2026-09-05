@@ -27,8 +27,10 @@ class CarbonCalculatorService:
             Dictionary with carbon calculation results
         """
         try:
-            # Get carbon entries for this production
-            carbon_entries = CarbonEntry.objects.filter(production_id=history_id)
+            # Get carbon entries for this production. `source` is read per entry in the breakdown
+            # loop below — without the join that was one CarbonSource query per entry (45 on a
+            # 69-event season, 2026-09-05).
+            carbon_entries = CarbonEntry.objects.filter(production_id=history_id).select_related("source")
 
             if not carbon_entries.exists():
                 return {

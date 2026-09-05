@@ -21,9 +21,7 @@ class TransparencyResponseFormatter:
         self,
         production,
         carbon_data: Dict[str, Any],
-        transparency_data: Dict[str, Any],
         blockchain_verification: Optional[Dict[str, Any]] = None,
-        achievements: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """
         Format QR scanning response with transparency-first approach
@@ -31,24 +29,17 @@ class TransparencyResponseFormatter:
         Args:
             production: History model instance
             carbon_data: Raw carbon calculation data
-            transparency_data: Transparency metrics and scores
-            blockchain_verification: Blockchain verification data
-            achievements: Transparency-based achievements
+            blockchain_verification: Blockchain verification data (always unverified on this surface)
 
         Returns:
             Standardized transparency-first response
         """
 
-        # PRIMARY: Transparency metrics (non-competitive)
-        transparency_section = {
-            "completeness_percentage": transparency_data.get("transparency_percentage", 0),  # FIX: Use calculated score
-            # `data_quality_grade` removed (2026-08-02). It carried the invented benchmark
-            # level ("certification"/"good"/"below_minimum"), defaulting to a literal "C" —
-            # a grade nobody rendered, derived from thresholds nobody sets.
-            "verification_status": self._get_verification_status(blockchain_verification),
-            "documentation_score": transparency_data.get("completeness_score", 0),  # FIX: Remove hardcoded 75
-            "last_updated": timezone.now().isoformat(),
-        }
+        # `transparency` used to carry the graded section (`completeness_percentage`,
+        # `documentation_score`, a blockchain-derived `verification_status`). All three were
+        # self-assigned verdicts nobody rendered; the block is kept for wire compatibility with
+        # its one remaining fact (2026-09-05).
+        transparency_section = {"last_updated": timezone.now().isoformat()}
 
         # SECONDARY: Raw carbon impact (factual, not comparative)
         net_footprint = self._safe_round(carbon_data.get("net_footprint", 0), 2)
@@ -77,7 +68,6 @@ class TransparencyResponseFormatter:
             "farm_context": farm_context,
             "environmental_impact_description": self._get_impact_description(carbon_impact),
             "data_sources": self._get_data_sources(carbon_data),
-            "achievements": achievements or [],
             # Technical metadata
             "response_format": "transparency_v2",
             "timestamp": timezone.now().isoformat(),
@@ -90,10 +80,7 @@ class TransparencyResponseFormatter:
         """
         return {
             "error": error_message,
-            "transparency": {
-                "completeness_percentage": 0,
-                "verification_status": "error",
-            },
+            "transparency": {},
             "carbon_impact": {
                 "kg_per_kg": 0.0,
                 "total_emissions": 0.0,
@@ -101,17 +88,10 @@ class TransparencyResponseFormatter:
                 "net_impact": 0.0,
                 "unit": "kg CO₂ per kg product",
             },
-            "achievements": [],
             "response_format": "transparency_error_v2",
             "timestamp": timezone.now().isoformat(),
             "error_details": error_details,
         }
-
-    def _get_verification_status(self, blockchain_verification: Optional[Dict[str, Any]]) -> str:
-        """Get verification status from blockchain data"""
-        if not blockchain_verification:
-            return "pending"
-        return "verified" if blockchain_verification.get("verified", False) else "pending"
 
     def _get_farm_context(self, production) -> Dict[str, Any]:
         """Get farm context without competitive elements"""

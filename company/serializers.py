@@ -52,6 +52,7 @@ class EstablishmentSerializer(ModelSerializer):
             "email",
             "phone",
             "zip_code",
+            "ca_operator_id",
             "is_active",
             "crops_grown",
             "sustainability_practices",
@@ -164,6 +165,7 @@ class UpdateEstablishmentSerializer(USContactFieldsMixin, USStateFieldMixin, Mod
             "email",
             "phone",
             "zip_code",
+            "ca_operator_id",
             "is_active",
             "crops_grown",
             "sustainability_practices",
@@ -392,6 +394,7 @@ class RetrieveEstablishmentSerializer(ModelSerializer):
             "email",
             "phone",
             "zip_code",
+            "ca_operator_id",
             "is_active",
             "crops_grown",
             "sustainability_practices",
@@ -534,6 +537,8 @@ class BasicEstablishmentSerializer(ModelSerializer):
             # their spray form. Both call sites are authenticated staff-facing, never
             # the anonymous consumer payload.
             "state",
+            # PUR box 3 default for the spray form's placeholder (California farms only).
+            "ca_operator_id",
         )
 
 
@@ -711,11 +716,14 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
 
         from carbon.models import CarbonEntry
         from history.models import History, HistoryScan
-        from history.services.transparency_calculator import TransparencyCalculator
 
         now = timezone.now()
-        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        last_month_start = (month_start - timedelta(days=1)).replace(day=1)
+        # A rolling 30-day window, not calendar month-to-date. On the 2nd of a month the
+        # month-to-date version showed two days of scans and "1 unique visitor" on a farm with
+        # a hundred, and the other scan surface (`_calculate_transparency_analytics`) already
+        # uses the last 30 days — one window, so the two never disagree.
+        month_start = now - timedelta(days=30)
+        last_month_start = now - timedelta(days=60)
 
         # --- 1. CONSUMER ENGAGEMENT (2 queries) ---
         current_month_scans = HistoryScan.objects.counted().filter(
@@ -746,7 +754,7 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
         if last_month_count > 0:
             scan_growth_percentage = ((monthly_scans - last_month_count) / last_month_count) * 100
         else:
-            # First month: show 0 instead of misleading 100%
+            # No previous window: show 0 instead of a misleading 100%
             scan_growth_percentage = 0
 
         # --- 3. PRODUCTIONS + EVENT COUNTS (bulk, no N+1) ---
@@ -782,40 +790,13 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
             for model in event_models:
                 total_documented_events += model.objects.filter(history_id__in=history_ids).count()
 
-        # --- 4. TRANSPARENCY SCORES (per-production, required by calculator) ---
-        transparency_calc = TransparencyCalculator()
-        transparency_scores = []
-
-        # Score only FINISHED, PUBLISHED productions.
-        #
-        # This used to average every History row on the farm. A season that has only just
-        # started necessarily has few or no events, so it scores ~0 and halves the farm's
-        # headline — i.e. starting a new production, the exact action the product exists to
-        # encourage, made the farmer's number collapse. Unpublished drafts and internal test
-        # productions counted too: one real pilot farm whose only finished season scored 74
-        # was displayed as 37 ("D") because a zero-event draft was averaged in.
-        #
-        # An in-progress season is not a badly-documented season — it is a season with no
-        # verdict yet, so it is excluded rather than counted as zero.
-        scored_histories = establishment_histories.filter(published=True, finish_date__isnull=False)
-
-        for history in scored_histories.select_related("crop_type").prefetch_related(
-            "history_productionevent_events__album__images",
-            "history_chemicalevent_events__album__images",
-            "history_soilmanagementevent_events__album__images",
-            "history_pestmanagementevent_events__album__images",
-            "history_weatherevent_events",
-            "history_businessevent_events",
-            "history_generalevent_events",
-            "history_equipmentevent_events__album__images",
-        ):
-            t_data = transparency_calc.calculate_transparency_score(history)
-            transparency_scores.append(t_data.get("transparency_percentage", 0))
-
-        # None (not 0) when nothing has been finished yet, so the UI can say "no finished
-        # seasons yet" instead of rendering a 0% that reads as a failing grade. Callers must
-        # treat None as "no verdict", never coerce it to 0.
-        transparency_score = sum(transparency_scores) / len(transparency_scores) if transparency_scores else None
+        # --- 4. FINISHED SEASONS (a COUNT, never a score) ---
+        # Until 2026-09-05 this section averaged a TransparencyCalculator run over every finished,
+        # published season (282 SQL queries, ~3 s in production on every dashboard load) into a
+        # farm-level `transparency_score` + `transparency_tier`. Nothing rendered either: the
+        # only reader used the score as a gate behind 1,000 monthly scans. The one fact the card
+        # does show — how many seasons were closed out and published — is a count.
+        scored_productions = establishment_histories.filter(published=True, finish_date__isnull=False).count()
         # Literally "no finish date yet". Deliberately NOT `total - scored`: that would also
         # sweep in a season the farmer finished but has not published, which is not underway.
         productions_in_progress = establishment_histories.filter(finish_date__isnull=True).count()
@@ -830,26 +811,6 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
                     if h.extra_data["blockchain"].get("verified", False):
                         blockchain_verified_count += 1
 
-        # --- 6. TRANSPARENCY TIER (non-comparative, based on farm's own score) ---
-        # Score-tier label derived directly from this farm's transparency score.
-        # Does NOT compare against other farms — no cohort data exists to support
-        # a real percentile claim. This avoids fabricated "Top X%" badges that
-        # would violate FTC Green Guides (16 CFR 260) on unsubstantiated claims.
-        # `None` means no finished season yet — that is an absence of a verdict, not a poor
-        # one, so it must not fall through to "developing".
-        if transparency_score is None:
-            transparency_tier = "not_started"
-        elif transparency_score >= 90:
-            transparency_tier = "excellent"
-        elif transparency_score >= 80:
-            transparency_tier = "strong"
-        elif transparency_score >= 70:
-            transparency_tier = "good"
-        elif transparency_score >= 60:
-            transparency_tier = "solid"
-        else:
-            transparency_tier = "developing"
-
         # --- 7. SUBSCRIPTION CONTEXT ---
         subscription = establishment.company.subscription if hasattr(establishment.company, "subscription") else None
         subscription_usage_percentage = 0
@@ -863,17 +824,13 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
             "consumer_reach": consumer_reach,
             "monthly_scans": monthly_scans,
             "scan_growth_percentage": round(scan_growth_percentage, 1),
-            # Transparency (PRIMARY). None = no finished season yet; clients must render
-            # "not started", never 0%.
-            "transparency_score": round(transparency_score, 1) if transparency_score is not None else None,
-            "scored_productions": len(transparency_scores),
+            # Finished, published seasons (count). The farm-level score left this payload 2026-09-05.
+            "scored_productions": scored_productions,
             "total_documented_events": total_documented_events,
             # Production counts
             "total_productions": total_productions,
             "productions_in_progress": productions_in_progress,
             "blockchain_verified_count": blockchain_verified_count,
-            # Score-tier label (non-comparative, derived from farm's own score)
-            "transparency_tier": transparency_tier,
             # Subscription
             "subscription_usage_percentage": round(subscription_usage_percentage, 1),
         }

@@ -60,6 +60,11 @@ LABEL_DATABASE_VERIFIED = "Verified via USDA Organic Integrity Database"
 # known: a National List citation is a REGULATORY fact about a substance (7 CFR 205.601), and
 # a grower's dropdown pick is the grower's own record.
 LABEL_INPUT_OMRI_LISTED = "OMRI Listed"
+#: WSDA runs a registration programme for materials used in organic production and CCOF treats
+#: it as co-equal with OMRI. Its own label, not OMRI's: they are different organisations
+#: making different determinations, and a surface that blurred them would be naming a body
+#: that never reviewed the product.
+LABEL_INPUT_WSDA_LISTED = "WSDA Listed"
 LABEL_INPUT_NATIONAL_LIST = "Allowed input · National List § 205.601"
 # 🔴 2026-08-20 — hardcoded "§ 205.602", which is wrong for most rows that reach it.
 # § 205.602 lists NONSYNTHETIC substances prohibited in crop production (calcium chloride,
@@ -127,6 +132,65 @@ def may_claim_blockchain(production):
     return ClaimDecision(True, "on-chain transaction present", LABEL_BLOCKCHAIN_RECORDED)
 
 
+# ---------------------------------------------------------------------------
+# Record evidence
+# ---------------------------------------------------------------------------
+#
+# What an event record CONTAINS, said as a fact. Deliberately NOT a tier.
+#
+# Until 2026-09-02 this was a five-rung ladder — self_reported (50% trust) →
+# photo_documented (65) → photo_verified (80) → data_verified (85) → certified (100) —
+# computed independently in THREE places (``history.serializers.EventSerializer``,
+# ``PublicHistorySerializer._get_verification_level_for_event`` and
+# ``carbon.services.timeline_service.TimelineService._calculate_verification_level``), each
+# with its own answer. The consumer card coloured the rungs teal → blue → green-with-a-tick →
+# purple-with-a-star and the frontend helper carried the trust percentages as data.
+#
+# That is a self-created sustainability label with a numeric grade attached, which is the
+# thing EU ECGT 2024/825 (effective 2026-09-27) bans and FTC 16 CFR 260.6 treats as an
+# unqualified general claim. It is the same defect class as the transparency score, which was
+# withheld from consumers in the 2026-06 claim-safety pivot; the ladder survived because it
+# was expressed as a badge instead of a number.
+#
+# Two of the rungs were worse than merely self-graded:
+#
+#   * ``certified`` / ``data_verified`` were awarded for ``extra_data["blockchain_verified"]``.
+#     ``BLOCKCHAIN_ENABLED`` is False and the add-on is withdrawn, so any row still carrying
+#     that flag printed a blockchain claim — the exact thing ``may_claim_blockchain`` exists to
+#     refuse. A per-event tier bypassed the chokepoint by not asking it.
+#   * ``photo_verified`` claimed GPS metadata "verifies" the event. It verifies where a CAMERA
+#     was, which is not whether the practice happened, and both rungs rendered the SAME words
+#     ("Photo Documented") in different colours — the grade moved into the palette.
+#
+# So: two states, both descriptions of the record rather than judgements of it. Evidence a
+# surface wants to show beyond this (photo count, an OMRI catalog match, a certificate number)
+# is ADDITIVE and factual, and each has its own authority above.
+
+EVIDENCE_SELF_REPORTED = "self_reported"
+EVIDENCE_PHOTO_DOCUMENTED = "photo_documented"
+
+#: Every value the retired ladder could emit. Kept so guards can assert no surface revives
+#: one, and so a stale row read from ``extra_data`` is recognisable rather than passed through.
+RETIRED_EVIDENCE_LEVELS = frozenset({"photo_verified", "data_verified", "certified"})
+
+
+def record_evidence_level(*, has_photos, photos_flagged=False):
+    """What this event's record contains — ``self_reported`` or ``photo_documented``.
+
+    Pure and keyword-only: the caller has already loaded the album (three call sites do it
+    three different ways, and none of them can afford this function issuing its own queries),
+    so it passes booleans rather than an event. That also makes the rule testable without a
+    database.
+
+    ``photos_flagged`` is the Vision-API verdict that every photo on the event is AI-generated,
+    stock, or non-agricultural. Photos that fail it add nothing, so the record is described as
+    what it is without them. Absence of a verdict is NOT a flag — an unscanned photo counts.
+    """
+    if has_photos and not photos_flagged:
+        return EVIDENCE_PHOTO_DOCUMENTED
+    return EVIDENCE_SELF_REPORTED
+
+
 def may_claim_input_listing(chemical_event):
     """What may a public surface say about this input's organic standing?
 
@@ -145,12 +209,20 @@ def may_claim_input_listing(chemical_event):
     Evidence tiers, strongest first. Each says only what is actually known:
 
     1. ``omri_product`` FK  → the input matched the OMRI catalog. "OMRI Listed" is earned.
-    2. ``national_list_substance`` (allowed) → a 7 CFR 205.601 citation. This is a REGULATORY
+    2. ``wsda_material`` FK → the input matched the WSDA Materials List. Co-equal evidence
+       (CCOF accepts either), and spoken in WSDA's own name — never as "OMRI Listed", because
+       OMRI did not review it. Added 2026-09-02: the basis was already selectable in the form
+       and already in the dossier's third-party set, so a WSDA-listed input could be CLAIMED
+       and never BACKED — it printed "grower-selected, no listing on file" forever, and the
+       buyer page dropped it to grower-reported. For 23 of 42 seeded WSDA brands there is no
+       OMRI row at all, which also created a quiet pressure to attach a neighbouring OMRI
+       listing to earn the better chip.
+    3. ``national_list_substance`` (allowed) → a 7 CFR 205.601 citation. This is a REGULATORY
        fact about the substance, not a listing by any certifier, so it must not be spoken as
        "OMRI Listed" — § 205.601 lists substances, OMRI lists branded products, and the two
        are different assertions.
-    3. grower's dropdown only → the grower's own record, labelled as such.
-    4. nothing → "Documented". Absence of classification is not evidence of a conventional
+    4. grower's dropdown only → the grower's own record, labelled as such.
+    5. nothing → "Documented". Absence of classification is not evidence of a conventional
        input (the inverse error), so this never says "conventional".
 
     A § 205.602 PROHIBITED match gets its own label rather than sharing the allowed one — the
@@ -162,6 +234,9 @@ def may_claim_input_listing(chemical_event):
 
     if getattr(chemical_event, "omri_product_id", None):
         return ClaimDecision(True, "OMRI catalog match on file", LABEL_INPUT_OMRI_LISTED)
+
+    if getattr(chemical_event, "wsda_material_id", None):
+        return ClaimDecision(True, "WSDA Materials List match on file", LABEL_INPUT_WSDA_LISTED)
 
     nl = getattr(chemical_event, "national_list_substance", None)
     if nl is not None:

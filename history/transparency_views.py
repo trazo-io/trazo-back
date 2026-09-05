@@ -159,7 +159,12 @@ def production_transparency_detail(request, production_public_id=None):
         transparency_calculator = TransparencyCalculator()
         carbon_service = CarbonCalculatorService()
 
-        # Calculate transparency score (NEW - solves farming incentive problem)
+        # The calculator is kept ONLY as the source of FACTS (event count per category, photo
+        # counts, farming approach). Every graded output it also produces — the percentage,
+        # `detailed_view`, the "verification" verdict, the ≥90 % "achievement" — left this
+        # endpoint for every caller on 2026-09-05: no producer surface rendered them, and the
+        # anonymous gate below had always stripped them. Cheap since the same day: it reads the
+        # events prefetched above instead of re-querying per model and per event.
         transparency_data = transparency_calculator.calculate_transparency_score(history)
 
         # Get carbon data (EXISTING - but without competitive ranking)
@@ -173,19 +178,6 @@ def production_transparency_detail(request, production_public_id=None):
             carbon_data = {}
             carbon_score = 0
             carbon_breakdown = {}
-
-        # Compare against the farm's OWN previous finished seasons — never against invented
-        # "industry" or "certification" thresholds.
-        #
-        # Owner-only: it lands in detailed_view, which is dropped wholesale for anonymous
-        # callers, and it recalculates every prior season. Computing it for a shopper scanning
-        # a QR code would spend N calculator runs on a payload they never receive, against a
-        # page held to a sub-500ms budget.
-        own_history_comparison = (
-            transparency_calculator.compare_with_own_history(history, transparency_data=transparency_data)
-            if is_owner
-            else None
-        )
 
         # Build farm information
         establishment = history.parcel.establishment if history.parcel else None
@@ -295,27 +287,6 @@ def production_transparency_detail(request, production_public_id=None):
             "calculation_method": "USDA_EPA_factors",
         }
 
-        transparency_data_formatted = {
-            # `carbonGrade` (-> data_quality_grade) is gone: it only ever carried the invented
-            # benchmark level ("certification"/"good"/"below_minimum"), no consumer rendered it,
-            # and a graded letter/level is precisely the self-created label we withhold.
-            "completeness_score": transparency_data.get("completeness_score", 0),
-            "transparency_percentage": transparency_data.get(
-                "transparency_percentage", 0
-            ),  # FIX: Pass calculated score
-        }
-
-        # Generate transparency-based achievements
-        achievements = []
-        if transparency_data["transparency_percentage"] >= 90:
-            achievements.append(
-                {
-                    "type": "complete_transparency",
-                    "label": "Complete Transparency",
-                    "description": "Full documentation and verification",
-                }
-            )
-
         # Blockchain is no longer a CONSUMER-facing claim (removed 2026-08-03). What the chain
         # can honestly support — "this record is unchanged since it was sealed" — does not
         # answer a shopper's question, and a badge invites the "verified" reading compliance.md
@@ -329,9 +300,7 @@ def production_transparency_detail(request, production_public_id=None):
         response_data = formatter.format_qr_response(
             production=history,
             carbon_data=carbon_data_formatted,
-            transparency_data=transparency_data_formatted,
             blockchain_verification=blockchain_verification_data,
-            achievements=achievements,
         )
 
         # Remove formatter fields that duplicate the view additions below
@@ -339,7 +308,6 @@ def production_transparency_detail(request, production_public_id=None):
             "farm_context",
             "environmental_impact_description",
             "data_sources",
-            "achievements",
             "response_format",
             "timestamp",
         ]:
@@ -383,19 +351,15 @@ def production_transparency_detail(request, production_public_id=None):
         # Add progressive loading structure for backward compatibility
         response_data.update(
             {
-                # IMMEDIATE LOAD - Most critical info (using new format)
-                "quick_view": {
-                    "transparency_score": {
-                        "percentage": transparency_data["transparency_percentage"],
-                        "message": transparency_data["message"],
-                    },
-                },
-                # STANDARD LOAD (10 seconds) - Core transparency details
+                # IMMEDIATE LOAD. `transparency_score` (percentage + message) left this block for
+                # every caller on 2026-09-05; the key stays as an empty object for wire compatibility.
+                "quick_view": {},
+                # STANDARD LOAD (10 seconds) - Core transparency details: FACTS only. The authored
+                # baseline (`expected_events`) and the grade built on it (`completeness_score`) are
+                # no longer constructed for anyone; per-category grades are stripped below.
                 "standard_view": {
                     "transparency_details": {
-                        "completeness_score": transparency_data.get("completeness_score", 0),
                         "actual_events": transparency_data["actual_event_count"],
-                        "expected_events": transparency_data["expected_event_count"],
                         "farming_approach": transparency_data["farming_approach"],
                         "category_breakdown": transparency_data.get("category_breakdown", {}),
                     },
@@ -403,19 +367,6 @@ def production_transparency_detail(request, production_public_id=None):
                     "organic_claim": organic_claim,  # FTC 16 CFR 260.6(d) gate
                     "organic_summary": organic_summary,
                     "practice_summary": practice_summary,  # documented facts (grazing/cover/compost)
-                },
-                # DETAILED LOAD (30+ seconds) - Deep insights
-                "detailed_view": {
-                    "transparency_insights": transparency_calculator.get_transparency_insights(
-                        history, transparency_data=transparency_data
-                    ),
-                    "own_history_comparison": own_history_comparison,
-                    "verification_status": _get_verification_status(history, transparency_data=transparency_data),
-                    "data_quality_indicators": {
-                        "last_updated": transparency_data.get("calculation_timestamp"),
-                        "data_freshness": _calculate_data_freshness(history),
-                        "completeness_trend": "improving",  # Could be calculated from historical data
-                    },
                 },
                 # Consumer blockchain badge removed 2026-08-03 — see the note above. Key kept
                 # with a falsy payload so an un-upgraded client degrades to "no badge".
@@ -687,101 +638,79 @@ def production_transparency_detail(request, production_public_id=None):
                 "body": SPECIMEN_BODY,
             }
 
-        # Claim-safety gate (2026-06): the self-assigned transparency SCORE is a
-        # farmer-dashboard engagement KPI, NOT a consumer-facing claim. A self-created
-        # "% documented / data-quality grade" served to anonymous shoppers is the
-        # self-declared sustainability-label class banned by EU ECGT 2024/825 (live
-        # 2026-09-27) and an FTC 16 CFR 260.6 general-benefit risk — and it is scrapable
-        # straight from this JSON even when the UI hides it. So the graded headline is
-        # withheld from the public payload; only the OWNER (authenticated farmer viewing
-        # their own production = the dashboard) still receives it. Consumers keep the
-        # EVIDENCE the score is built from: event counts, category breakdown,
-        # certifications, photos, carbon facts, timeline.
-        if not is_owner:
-            quick_view = response_data.get("quick_view")
-            if isinstance(quick_view, dict):
-                quick_view.pop("transparency_score", None)
-
-            transparency_block = response_data.get("transparency")
-            if isinstance(transparency_block, dict):
-                for graded_key in (
-                    "completeness_percentage",
-                    "documentation_score",
-                    "data_quality_grade",
-                    "verification_status",
-                ):
-                    transparency_block.pop(graded_key, None)
-
-            standard_view = response_data.get("standard_view")
-            if isinstance(standard_view, dict):
-                details = standard_view.get("transparency_details")
-                if isinstance(details, dict):
-                    # The rule this block enforces, stated once so future keys are
-                    # classified rather than remembered (2026-08-10 USDA audit, P4-F1):
-                    #
-                    #   PUBLISH facts about the FARM. Never publish Trazo's authored
-                    #   BASELINE, nor the scoring machinery that applies it.
-                    #
-                    # Stripping the quotient while shipping its divisor was a rename, not
-                    # a demotion: `actual_events: 12` + `expected_events: 13` is the 92%
-                    # grade, reconstructable by division, and the per-category breakdown
-                    # made the reconstruction exact rather than approximate.
-                    #
-                    # `actual_events` is a fact — this farm documented 12 things.
-                    # `expected_events` is not a fact about the farm at all: it is Trazo's
-                    # opinion of how many events this crop SHOULD have. That is precisely
-                    # the "baseline Trazo authored" the note below already refuses to ship,
-                    # so the baseline itself has to go with the grade computed from it.
-                    # EU ECGT 2024/825 (live 2026-09-27); FTC 16 CFR 260.6.
-                    details.pop("completeness_score", None)
-                    details.pop("expected_events", None)
-                    breakdown = details.get("category_breakdown")
-                    if isinstance(breakdown, dict):
-                        for category in breakdown.values():
-                            if isinstance(category, dict):
-                                category.pop("completeness_percentage", None)
-                                # Added with the key itself (2026-08-04). `records_completeness_percentage`
-                                # is the same self-graded coverage measure with the photo penalty
-                                # removed — strictly MORE flattering, and still Trazo grading a farm
-                                # against a baseline Trazo authored. It is a producer-dashboard
-                                # number; shipping it here would reopen exactly the leak
-                                # `test_consumer_qr_privacy_regression` pins. Counts stay, grades go.
-                                category.pop("records_completeness_percentage", None)
-                                category.pop("status", None)
-                                # Per-category denominators and scoring machinery, same rule
-                                # as `expected_events` above. `expected_count` is the authored
-                                # baseline; `requires_photos` and the essential/recommended
-                                # `photo_tier_summary` are Trazo-authored tiers stating what
-                                # this category OUGHT to carry; `anti_gaming_applied` is an
-                                # internal scoring flag. None describe the farm.
-                                # Kept, because each is a fact the farm produced:
-                                # `actual_count` and the photo counts renamed just below.
-                                category.pop("expected_count", None)
-                                category.pop("requires_photos", None)
-                                category.pop("anti_gaming_applied", None)
-                                category.pop("photo_tier_summary", None)
-                                # P4-F5. These photographs were uploaded by the grower and
-                                # checked by nobody, so "verified" is a claim the data does not
-                                # support — the same word this project reserves for a USDA
-                                # Organic Integrity Database match and enforces through
-                                # `claim_authority`. The key name travels on the wire and is
-                                # scrapable whatever the UI renders, so it is the claim.
-                                #
-                                # Renamed HERE rather than in `transparency_calculator`: the
-                                # internal name reaches the authenticated producer surface too,
-                                # and this block is the one chokepoint that shapes what an
-                                # anonymous caller sees. Renaming the calculator is a wider
-                                # change with its own consumers — worth doing, separately.
-                                if "photo_verified_count" in category:
-                                    category["photo_documented_count"] = category.pop("photo_verified_count")
-                                if "photo_verification_rate" in category:
-                                    category["photo_documentation_rate"] = category.pop("photo_verification_rate")
-
-            # detailed_view (the "30s deep insights": raw current_score, benchmark
-            # level/grade, improvement coaching, verification status) is farmer-facing
-            # only — NO consumer component reads it. Drop it wholesale for anonymous
-            # so the raw score + grade can't be scraped from this surface.
-            response_data.pop("detailed_view", None)
+        # Claim-safety gate (2026-06, widened 2026-09-05): the self-assigned transparency SCORE
+        # was a farmer-dashboard engagement KPI, never a consumer-facing claim — a self-created
+        # "% documented / data-quality grade" served to shoppers is the self-declared
+        # sustainability-label class banned by EU ECGT 2024/825 (live 2026-09-27) and an FTC
+        # 16 CFR 260.6 general-benefit risk, scrapable from this JSON whatever the UI hides.
+        # Until 2026-09-05 the OWNER still received the graded headline, `detailed_view` and the
+        # authored baseline; no producer surface rendered them, so those keys are no longer
+        # built at all (see the response assembly above). What remains here is the one rule that
+        # still has work to do, now applied to EVERY caller: the per-category breakdown the
+        # calculator emits mixes farm FACTS (counts) with Trazo's authored baseline and grades,
+        # and only the facts may travel.
+        standard_view = response_data.get("standard_view")
+        if isinstance(standard_view, dict):
+            details = standard_view.get("transparency_details")
+            if isinstance(details, dict):
+                # The rule this block enforces, stated once so future keys are
+                # classified rather than remembered (2026-08-10 USDA audit, P4-F1):
+                #
+                #   PUBLISH facts about the FARM. Never publish Trazo's authored
+                #   BASELINE, nor the scoring machinery that applies it.
+                #
+                # Stripping the quotient while shipping its divisor was a rename, not
+                # a demotion: `actual_events: 12` + `expected_events: 13` is the 92%
+                # grade, reconstructable by division, and the per-category breakdown
+                # made the reconstruction exact rather than approximate.
+                #
+                # `actual_events` is a fact — this farm documented 12 things.
+                # `expected_events` is not a fact about the farm at all: it is Trazo's
+                # opinion of how many events this crop SHOULD have. That is precisely
+                # the "baseline Trazo authored" the note below already refuses to ship,
+                # so the baseline itself has to go with the grade computed from it.
+                # EU ECGT 2024/825 (live 2026-09-27); FTC 16 CFR 260.6.
+                breakdown = details.get("category_breakdown")
+                if isinstance(breakdown, dict):
+                    for category in breakdown.values():
+                        if isinstance(category, dict):
+                            category.pop("completeness_percentage", None)
+                            # Added with the key itself (2026-08-04). `records_completeness_percentage`
+                            # is the same self-graded coverage measure with the photo penalty
+                            # removed — strictly MORE flattering, and still Trazo grading a farm
+                            # against a baseline Trazo authored. It is a producer-dashboard
+                            # number; shipping it here would reopen exactly the leak
+                            # `test_consumer_qr_privacy_regression` pins. Counts stay, grades go.
+                            category.pop("records_completeness_percentage", None)
+                            category.pop("status", None)
+                            # Per-category denominators and scoring machinery, same rule
+                            # as `expected_events` above. `expected_count` is the authored
+                            # baseline; `requires_photos` and the essential/recommended
+                            # `photo_tier_summary` are Trazo-authored tiers stating what
+                            # this category OUGHT to carry; `anti_gaming_applied` is an
+                            # internal scoring flag. None describe the farm.
+                            # Kept, because each is a fact the farm produced:
+                            # `actual_count` and the photo counts renamed just below.
+                            category.pop("expected_count", None)
+                            category.pop("requires_photos", None)
+                            category.pop("anti_gaming_applied", None)
+                            category.pop("photo_tier_summary", None)
+                            # P4-F5. These photographs were uploaded by the grower and
+                            # checked by nobody, so "verified" is a claim the data does not
+                            # support — the same word this project reserves for a USDA
+                            # Organic Integrity Database match and enforces through
+                            # `claim_authority`. The key name travels on the wire and is
+                            # scrapable whatever the UI renders, so it is the claim.
+                            #
+                            # Renamed HERE rather than in `transparency_calculator`: the
+                            # internal name reaches the authenticated producer surface too,
+                            # and this block is the one chokepoint that shapes what an
+                            # anonymous caller sees. Renaming the calculator is a wider
+                            # change with its own consumers — worth doing, separately.
+                            if "photo_verified_count" in category:
+                                category["photo_documented_count"] = category.pop("photo_verified_count")
+                            if "photo_verification_rate" in category:
+                                category["photo_documentation_rate"] = category.pop("photo_verification_rate")
 
         return Response(response_data, status=status.HTTP_200_OK)
 
@@ -961,6 +890,7 @@ def _organic_input_evidence(chemical_events):
         LABEL_INPUT_NATIONAL_LIST_CONDITIONAL,
         LABEL_INPUT_NATIONAL_LIST_PROHIBITED,
         LABEL_INPUT_OMRI_LISTED,
+        LABEL_INPUT_WSDA_LISTED,
         may_claim_input_listing,
     )
 
@@ -973,7 +903,12 @@ def _organic_input_evidence(chemical_events):
         if event_organic_classification(event) not in ORGANIC_APPROVED_VALUES:
             continue
         label = may_claim_input_listing(event).safe_label
-        if label == LABEL_INPUT_OMRI_LISTED:
+        if label in (LABEL_INPUT_OMRI_LISTED, LABEL_INPUT_WSDA_LISTED):
+            # Both are catalog matches. WSDA added 2026-09-02: a new label with no branch here
+            # fell into the `else` and was counted as GROWER_REPORTED — the inverse of that
+            # branch's own rule, reporting the grower's word for an input Trazo holds a
+            # third-party listing for. A new evidence label must be routed here in the same
+            # change that creates it.
             counts["catalog_matched"] += 1
         elif label == LABEL_INPUT_NATIONAL_LIST:
             counts["national_list"] += 1
@@ -1150,47 +1085,6 @@ def _build_practice_summary(history):
     return {"practices": practices}
 
 
-def _get_verification_status(history, transparency_data=None):
-    """Get verification status for the production"""
-
-    # Check for various verification indicators
-    verifications = {
-        "organic_certified": False,
-        "third_party_audited": False,
-        "blockchain_verified": False,
-        "transparency_verified": False,
-    }
-
-    # Look for organic certification in events or extra_data
-    # BUGFIX: Check that extra_data is a dict before calling .get() to prevent
-    # "'str' object has no attribute 'get'" error for malformed data
-    if history.extra_data and isinstance(history.extra_data, dict):
-        verifications["organic_certified"] = history.extra_data.get("organic_certified", False)
-        # `blockchain_verified` stays False on every consumer payload. It used to be read
-        # straight out of extra_data, so a flag written by any producer-side code path became a
-        # public verification claim with no transaction hash and no add-on behind it.
-        # Consumer blockchain surface removed 2026-08-03.
-
-    # Check business events for certifications
-    from history.models import BusinessEvent
-
-    business_events = BusinessEvent.objects.filter(history=history)
-
-    if business_events.filter(Q(description__icontains="organic") | Q(description__icontains="certified")).exists():
-        verifications["organic_certified"] = True
-
-    if business_events.filter(Q(description__icontains="audit") | Q(description__icontains="inspection")).exists():
-        verifications["third_party_audited"] = True
-
-    # Transparency verification based on completeness (reuse pre-calculated data if available)
-    if transparency_data is None:
-        transparency_calculator = TransparencyCalculator()
-        transparency_data = transparency_calculator.calculate_transparency_score(history)
-    verifications["transparency_verified"] = transparency_data["transparency_percentage"] >= 85
-
-    return verifications
-
-
 def _first_album_image_url(establishment):
     """Return a stable URL for the first image in the establishment's album.
 
@@ -1262,24 +1156,6 @@ def _recompute_production_data_hash(history, finalization_hash):
     except Exception as e:
         logger.error("Failed to recompute production data hash for %s: %s", history.id, e)
         return None
-
-
-def _calculate_data_freshness(history):
-    """Calculate how fresh the production data is"""
-
-    if not history.finish_date:
-        return "ongoing"
-
-    days_since_completion = (timezone.now().date() - history.finish_date.date()).days
-
-    if days_since_completion <= 30:
-        return "very_fresh"
-    elif days_since_completion <= 90:
-        return "fresh"
-    elif days_since_completion <= 365:
-        return "recent"
-    else:
-        return "archived"
 
 
 @api_view(["GET"])

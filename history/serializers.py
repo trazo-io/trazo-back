@@ -572,60 +572,18 @@ class EventSerializer(serializers.ModelSerializer):
         return True
 
     def get_verification_level(self, event):
-        """
-        Determine the verification level for an event based on MVP tiered system:
-        - self_reported: No photo evidence (50% trust)
-        - photo_documented: Has photos without GPS/timestamp validation (65% trust)
-        - photo_verified: Has photos with GPS + timestamp verification (80% trust)
-        - data_verified: Reserved for future use when actual external data cross-referencing is implemented
-        - certified: Third-party or blockchain verified (100% trust)
+        """What this event's record contains: ``self_reported`` or ``photo_documented``.
 
-        MVP Photo Verification: Photos with invalid content (AI-generated, stock images)
-        are downgraded to self_reported level.
+        ASK, do not decide — ``claim_authority.record_evidence_level`` owns the rule. This
+        method used to compute its own five-rung trust ladder, one of three independent
+        copies with three different answers; see that module for why the ladder is gone.
         """
-        # Check for photos
+        from history.services.claim_authority import record_evidence_level
+
         has_photos = event.album is not None and event.album.images.exists()
-
-        # MVP Photo Verification: Check if photos contain valid agricultural content
-        has_valid_agricultural_content = self._check_valid_agricultural_content(event)
-
-        # Check for GPS data (from album images or event metadata)
-        has_gps_data = False
-        if has_photos:
-            for image in event.album.images.all():
-                # Check if image has location metadata in extra_data
-                # BUGFIX: Check that extra_data is a dict before calling .get()
-                if hasattr(image, "extra_data") and image.extra_data and isinstance(image.extra_data, dict):
-                    if image.extra_data.get("gps_latitude") or image.extra_data.get("latitude"):
-                        has_gps_data = True
-                        break
-
-        # Check for timestamp validation (events always have dates)
-        has_timestamp = event.date is not None
-
-        # Check for blockchain verification
-        # BUGFIX: Check that extra_data is a dict before calling .get()
-        has_blockchain_verification = False
-        if hasattr(event, "extra_data") and event.extra_data and isinstance(event.extra_data, dict):
-            has_blockchain_verification = event.extra_data.get("blockchain_verified", False)
-
-        # Determine verification level using tiered logic
-        # Blockchain verification is shown via the BLOCKCHAIN SECURED badge.
-        # "certified" tier is reserved for actual third-party certification bodies.
-        if has_blockchain_verification:
-            return "data_verified"
-
-        if has_photos:
-            # MVP Photo Verification: Downgrade if content is invalid
-            if not has_valid_agricultural_content:
-                return "self_reported"
-
-            if has_gps_data and has_timestamp:
-                return "photo_verified"
-            else:
-                return "photo_documented"
-
-        return "self_reported"
+        # Vision-API verdict. Absence of a verdict is not a flag.
+        photos_flagged = has_photos and not self._check_valid_agricultural_content(event)
+        return record_evidence_level(has_photos=has_photos, photos_flagged=photos_flagged)
 
 
 #: A grouped US number: "1,200", "52,500.25". Groups must be exactly three digits, which is
@@ -754,6 +712,9 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
             "volume_unit",
             "area_numeric",
             "area_unit",
+            # The label RATE, beside the total. Both, never one derived from the other.
+            "application_rate",
+            "application_rate_unit",
             "is_fertigation",
             # Aliased frontend field names (mapped via source above)
             "volume_applied",
@@ -786,6 +747,8 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
             "mtrs_range",
             "mtrs_base_meridian",
             "ffm_code",
+            "applied_by_pcb",
+            "pcb_name",
             "tank_mix_partners",
             # F21 — supervisor review (FSMA 112.161(b)) + GG authorizer (FV-GFS 32.02.01 #10)
             "authorizer_name",
@@ -794,6 +757,7 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
             "review_date",
             # Sprint 3 — OMRI / National List cross-reference (7 CFR 205.601/602)
             "omri_product",
+            "wsda_material",
             "national_list_substance",
         ]
         read_only_fields = ["id"]
@@ -1215,6 +1179,9 @@ class ChemicalEventSerializer(EventSerializer):
             "volume_unit",
             "area_numeric",
             "area_unit",
+            # The label RATE, beside the total. Both, never one derived from the other.
+            "application_rate",
+            "application_rate_unit",
             "is_fertigation",
             "image",
             "carbon_data",
@@ -1244,6 +1211,8 @@ class ChemicalEventSerializer(EventSerializer):
             "mtrs_range",
             "mtrs_base_meridian",
             "ffm_code",
+            "applied_by_pcb",
+            "pcb_name",
             "tank_mix_partners",
             # F21 — supervisor review (FSMA 112.161(b)) + GG authorizer (FV-GFS 32.02.01 #10)
             "authorizer_name",
@@ -1252,6 +1221,7 @@ class ChemicalEventSerializer(EventSerializer):
             "review_date",
             # Sprint 3 — OMRI / National List cross-reference
             "omri_product",
+            "wsda_material",
             "national_list_substance",
             # Sprint 5.1 — OSP ↔ events drift detector finding (null when in-OSP)
             "drift_warning",
@@ -3699,6 +3669,9 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         "ca_dpr_permit_expires",
         "applicator_name",
         "applicator_certification",
+        # Who applied it is certifier data, exactly like the applicator's name above.
+        "applied_by_pcb",
+        "pcb_name",
         "concentration",
         "volume",
         "volume_unit",
@@ -4642,32 +4615,21 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         return result
 
     def _get_verification_level_for_event(self, event, has_photos=False, blockchain_verified=False):
+        """What this event's record contains, for the PUBLIC payload.
+
+        ASK, do not decide — see ``claim_authority.record_evidence_level``.
+
+        ``blockchain_verified`` is still accepted so the eight call sites below need no
+        change, and is deliberately IGNORED: it used to promote the event to
+        ``data_verified`` (a green tick on the buyer page) for a feature that is switched off
+        and whose add-on is withdrawn. Whether a production may say anything about blockchain
+        is ``may_claim_blockchain``'s decision, made once for the production, not a per-event
+        tier that quietly bypasses it.
         """
-        Determine verification level for an event in public history view.
-        Evidence-based tiered system:
-        - self_reported: No photo evidence (50% trust)
-        - photo_documented: Has photos without GPS validation (65% trust)
-        - photo_verified: Has photos with GPS + timestamp (80% trust)
-        - data_verified: Blockchain verified (85% trust)
-        - certified: Third-party verified (100% trust, reserved for future)
-        """
-        if blockchain_verified:
-            return "data_verified"
+        from history.services.claim_authority import record_evidence_level
 
-        if has_photos:
-            analysis = self._analyze_event_photos(event)
-
-            # All photos flagged as AI/stock/non-agricultural = no trust credit
-            if analysis["all_flagged"]:
-                return "self_reported"
-
-            has_timestamp = event.date is not None
-            if analysis["has_gps_data"] and has_timestamp:
-                return "photo_verified"
-            else:
-                return "photo_documented"
-
-        return "self_reported"
+        photos_flagged = bool(has_photos) and self._analyze_event_photos(event)["all_flagged"]
+        return record_evidence_level(has_photos=bool(has_photos), photos_flagged=photos_flagged)
 
     def _get_photo_content_flag(self, event):
         """

@@ -51,6 +51,12 @@ if database_url:
     # DigitalOcean may inject DATABASE_URL without database name — default to 'defaultdb'
     if not _parsed_db.get("NAME"):
         _parsed_db["NAME"] = os.environ.get("DATABASE_NAME", "defaultdb")
+    # Persistent connections: the managed Postgres is a separate host over TLS, so the default
+    # CONN_MAX_AGE=0 paid a full handshake + auth on EVERY request. 600 s keeps one connection
+    # per gunicorn thread (2 workers x 4 threads = 8; the 1 GB DO tier allows ~22).
+    # CONN_HEALTH_CHECKS (Django 4.1+) pings before reuse so a server-side drop is not a 500.
+    _parsed_db["CONN_MAX_AGE"] = int(os.environ.get("DB_CONN_MAX_AGE", "600"))
+    _parsed_db["CONN_HEALTH_CHECKS"] = True
     DATABASES = {"default": _parsed_db}
 else:
     # Use individual database variables (AWS Secrets Manager style)

@@ -305,6 +305,7 @@ class CreateParcelSerializer(USContactFieldsMixin, ModelSerializer):
             "container_production",
             "apn",
             "section_township_range",
+            "ca_site_id",
             "date_began_managing",
             "treated_lumber_present",
             "treated_lumber_description",

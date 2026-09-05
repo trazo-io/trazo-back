@@ -2,6 +2,7 @@ from django.urls import include, path
 
 from rest_framework import routers
 
+from .claim_preview_views import input_status_preview
 from .transparency_views import production_transparency_detail, verify_blockchain
 from .views import (
     BuyerDocRequestViewSet,
@@ -29,6 +30,14 @@ urlpatterns = [
         "histories/<uuid:public_id>/audit-export/",
         audit_export_by_uuid,
         name="audit-export-by-uuid",
+    ),
+    # Dry run of the buyer-page input claim for a draft the wizard has not saved yet.
+    # BEFORE the router include: `events/<pk>/` would otherwise swallow any path under it, and
+    # this deliberately sits outside the events route for that reason.
+    path(
+        "input-status-preview/",
+        input_status_preview,
+        name="input-status-preview",
     ),
     path("", include(router.urls)),
     # Transparency API Endpoints

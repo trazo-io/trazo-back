@@ -30,7 +30,12 @@ from reportlab.platypus import KeepTogether, PageBreak, Paragraph, SimpleDocTemp
 
 from certifications.constants import NOP_CERTIFICATION_TYPES as _NOP_CERTIFICATION_TYPES
 from certifications.constants import ORGANIC_CONFERRING_CERT_TYPES as _ORGANIC_CONFERRING_CERT_TYPES
-from common.field_registry import NO_TREATMENT_ANSWERS, NON_ORGANIC_SEED_STATUSES, ORGANIC_APPROVED
+from common.field_registry import (
+    NO_TREATMENT_ANSWERS,
+    NON_ORGANIC_SEED_STATUSES,
+    ORGANIC_APPROVED,
+    UNIT_APPLICATION_RATE,
+)
 from common.pdf_text import glyph_safe
 from common.specimen import (
     SPECIMEN_BODY,
@@ -282,6 +287,22 @@ def _seed_treatment_basis_display(event):
     if treatment and treatment.lower() not in NO_TREATMENT_ANSWERS:
         return "Not recorded — \u00a7 205.204(a)(2) asks why the treatment is allowed"
     return None
+
+
+def _applied_by(ev):
+    """The Applicator cell: who physically made the application.
+
+    A hired pass names the pest control BUSINESS, because that is the record 3 CCR 6624(d)
+    asks the grower to hold and the reason the same spray is absent from the grower's own
+    monthly PUR (the business reports it, 3 CCR 6626(b)). The named applicator, when the
+    grower recorded one, follows in parentheses so the packet does not lose the person.
+    """
+    business = (getattr(ev, "pcb_name", None) or "").strip()
+    person = (getattr(ev, "applicator_name", None) or getattr(ev, "performed_by", None) or "").strip()
+    if getattr(ev, "applied_by_pcb", False):
+        who = business or "Pest control business (name not recorded)"
+        return f"{who} — for hire" + (f" ({person})" if person else "")
+    return person or None
 
 
 def _target_or_purpose(event):
@@ -1004,7 +1025,10 @@ def _organic_basis_cell(event, raw=_UNSET):
         return None
     if str(raw_value).strip() not in _THIRD_PARTY_BASIS_VALUES:
         return label
-    if getattr(event, "omri_product_id", None):
+    # Either catalogue backs the claim. WSDA added 2026-09-02: `wsda_listed` was already in
+    # the set above, so a WSDA basis was claimable and unbackable — it carried the
+    # "no listing on file" suffix even when the operator had attached the WSDA row.
+    if getattr(event, "omri_product_id", None) or getattr(event, "wsda_material_id", None):
         return label
     return f"{label} — grower-selected, no listing on file"
 
@@ -1090,6 +1114,147 @@ def _rate_per_area(amount, area, amount_unit, area_unit):
     if "/" in numerator_unit or "per" in numerator_unit.lower().split():
         return None
     return f"{_fmt_float(amount_d / area_d)} {numerator_unit}/{area_unit_singular}".strip()
+
+
+#: The rate codes stored on `ChemicalEvent.application_rate_unit`, and the words a certifier
+#: reads them in. Read from the model's own choices so the packet cannot print a spelling the
+#: form does not offer; an UNRECOGNISED code prints nothing at all rather than raw machine text.
+_RATE_UNIT_LABELS = dict(UNIT_APPLICATION_RATE)
+
+#: Unit -> (dimension, size in that dimension's base unit). One table for both halves of the
+#: reconciliation below, because the only thing it needs is a ratio.
+#:
+#: `oz` is LIQUID here, not mass. The volume dropdown's own option reads "Fluid Ounces (oz)"
+#: (ChemicalTab-ENHANCED), and `UNIT_APPLICATION_RATE` carries `fl_oz_ac` beside `oz_ac`. Where
+#: the two sides use the same token the factor cancels and the reading does not matter; where
+#: they differ, guessing mass would be the more damaging half of the ambiguity.
+_UNIT_IN_BASE = {
+    # Liquid volume, base mL
+    "mL": ("volume", Decimal("1")),
+    "ml": ("volume", Decimal("1")),
+    "L": ("volume", Decimal("1000")),
+    "l": ("volume", Decimal("1000")),
+    "gal": ("volume", Decimal("3785.411784")),
+    "qt": ("volume", Decimal("946.352946")),
+    "pt": ("volume", Decimal("473.176473")),
+    "oz": ("volume", Decimal("29.5735295625")),
+    "fl_oz": ("volume", Decimal("29.5735295625")),
+    # Mass, base g
+    "g": ("mass", Decimal("1")),
+    "kg": ("mass", Decimal("1000")),
+    "lb": ("mass", Decimal("453.59237")),
+    "lbs": ("mass", Decimal("453.59237")),
+    "ton": ("mass", Decimal("907184.74")),
+    "t": ("mass", Decimal("1000000")),
+}
+
+#: Area, expressed in the two denominators a rate can be quoted against.
+_AREA_IN_ACRES = {
+    "acres": Decimal("1"),
+    "acre": Decimal("1"),
+    "ac": Decimal("1"),
+    "ha": Decimal("2.4710538147"),
+    "m2": Decimal("0.0002471054"),
+    "km2": Decimal("247.10538147"),
+}
+_ACRES_PER_HECTARE = Decimal("2.4710538147")
+
+#: How far a recorded total may sit from (recorded rate x recorded area) before the packet
+#: refuses to present it as the product amount.
+#:
+#: Deliberately loose. A grower who treated part of a block, rounded a tank, or applied a second
+#: partial pass is inside 2x, and a certifier document must not accuse an operation of a
+#: discrepancy it did not commit. The failure this exists to catch is not a rounding error: a
+#: carrier volume mistaken for a product amount is 50x to 900x out (the Entrust record that
+#: prompted this was 71x), because a spray is measured in tank gallons and a product in fluid
+#: ounces.
+_AMOUNT_RATE_TOLERANCE = Decimal("4")
+
+
+def _recorded_rate_text(event):
+    """The label rate the OPERATOR recorded, in the words of the form's own dropdown, or None.
+
+    🔴 2026-09-03 — `application_rate` became a real column on 2026-09-03 and this packet never
+    read it. The Input Application Log printed only a rate DERIVED from total / area, so the one
+    number a reviewer checks against a label maximum was Trazo's arithmetic rather than the
+    operator's record, and the recorded value appeared nowhere in the document at all.
+    """
+    value = getattr(event, "application_rate", None)
+    code = (getattr(event, "application_rate_unit", "") or "").strip()
+    if value in (None, "") or not code:
+        return None
+    label = _RATE_UNIT_LABELS.get(code)
+    if not label:
+        # Same rule as `_choice_label`: an unrecognised stored code is machine text, and machine
+        # text in a regulatory document is worse than a missing cell.
+        return None
+    return f"{_fmt_float(value)} {label}"
+
+
+def _rate_unit_parts(code):
+    """`"fl_oz_ac"` -> `("fl_oz", "ac")`, or None when the code is not one this file knows."""
+    if code not in _RATE_UNIT_LABELS:
+        return None
+    numerator, _, denominator = str(code).rpartition("_")
+    if not numerator or denominator not in ("ac", "ha"):
+        return None
+    return numerator, denominator
+
+
+def _amount_reconciles_with_rate(event):
+    """Can the recorded TOTAL and the recorded RATE describe the same application?
+
+    Returns True (they agree), False (they cannot both be true) or None (not enough recorded to
+    ask, which is the common case and is never reported as a discrepancy).
+
+    🔴 2026-09-03, found in the wizard's buyer-page preview while filming. The grower said
+    "six fluid ounces an acre, 40 gallons total" and the 40 gallons — the TANK, the carrier the
+    product was mixed into — landed in `volume_numeric`, which this table prints under
+    "Amount / Rate" as the amount of product applied. Six fluid ounces an acre over twelve acres
+    is 72 fl oz; 40 gallons is 5,120. The two numbers are on the same row of the same table and
+    the packet asserted both.
+
+    § 205.103(b)(2) reconciles what was PURCHASED against what was APPLIED, so the total is the
+    number an inspector runs a mass balance on. A carrier volume there is not a rounding error,
+    it is a different fact. The voice mapper no longer writes one (`productTotalFromAmounts`);
+    this is the half that also holds for a value typed by hand, imported, or already on file.
+    """
+    total = getattr(event, "volume_numeric", None)
+    rate = getattr(event, "application_rate", None)
+    area = getattr(event, "area_numeric", None)
+    code = (getattr(event, "application_rate_unit", "") or "").strip()
+    if total in (None, "") or rate in (None, "") or area in (None, ""):
+        return None
+
+    parts = _rate_unit_parts(code)
+    if parts is None:
+        return None
+    numerator, denominator = parts
+
+    total_unit = _UNIT_IN_BASE.get((getattr(event, "volume_unit", "") or "").strip())
+    rate_unit = _UNIT_IN_BASE.get(numerator)
+    if total_unit is None or rate_unit is None or total_unit[0] != rate_unit[0]:
+        # Different dimensions, or a unit this table does not know. We cannot compare, and an
+        # unverifiable comparison must not become an accusation.
+        return None
+
+    acres = _AREA_IN_ACRES.get((getattr(event, "area_unit", "") or "").strip())
+    if acres is None:
+        return None
+
+    try:
+        area_d = Decimal(str(area)) * acres
+        if denominator == "ha":
+            area_d = area_d / _ACRES_PER_HECTARE
+        expected = Decimal(str(rate)) * rate_unit[1] * area_d
+        actual = Decimal(str(total)) * total_unit[1]
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+    if expected <= 0 or actual <= 0:
+        return None
+
+    ratio = actual / expected if actual >= expected else expected / actual
+    return ratio <= _AMOUNT_RATE_TOLERANCE
 
 
 # Last-resort ceiling for an uncapped cell. No legitimate audit value approaches this; it
@@ -4936,12 +5101,34 @@ class AuditExportService:
                 else:
                     amount = f"{raw_volume} (unit not recorded)"
 
-            # Rate per unit area, derived (2026-08-01). A label maximum is written per ACRE
-            # ("4-10 fl oz/acre, 29 fl oz/acre/season"), so the rate — not the total — is the
-            # number an inspector checks the application against. The export was printing only
-            # the total, leaving the reviewer to divide by the area themselves.
-            rate_txt = _rate_per_area(ev.volume_numeric, ev.area_numeric, ev.volume_unit, ev.area_unit)
-            if rate_txt:
+            # The rate a reviewer checks a label maximum against. A label maximum is written per
+            # ACRE ("4-10 fl oz/acre, 29 fl oz/acre/season"), so the rate — not the total — is
+            # the number the application is checked against, and the export used to print only
+            # the total and leave the division to the reader.
+            #
+            # 🔴 2026-09-03 — the RECORDED rate now wins over the derived one. `application_rate`
+            # became a real column the day before and this table never read it, so the packet
+            # showed Trazo's arithmetic where the operator's own record existed, and the recorded
+            # value appeared nowhere in the document. Derivation stays as the fallback for every
+            # row written before the column existed.
+            rate_txt = _recorded_rate_text(ev) or _rate_per_area(
+                ev.volume_numeric, ev.area_numeric, ev.volume_unit, ev.area_unit
+            )
+
+            # 🔴 2026-09-03 — and when the two recorded numbers cannot both be true, this column
+            # must not present the total as the amount of product applied. See
+            # `_amount_reconciles_with_rate`: the case that prompted it is a TANK volume ("40
+            # gallons total" beside a six fluid ounce an acre label rate) reaching
+            # `volume_numeric`, which prints here as 5,120 fl oz of a spinosad product and feeds
+            # the § 205.103(b)(2) mass balance an inspector runs against the purchase records.
+            #
+            # The rate is kept and the total is stated as UNRECONCILED rather than dropped: the
+            # operator did record it, a reviewer is entitled to see it, and silently deleting a
+            # recorded number from an audit document is its own defect.
+            if _amount_reconciles_with_rate(ev) is False:
+                unreconciled = f"amount {amount} not reconciled" if amount else None
+                amount = " · ".join(part for part in (rate_txt, unreconciled) if part)
+            elif rate_txt:
                 amount = f"{amount} ({rate_txt})" if amount else rate_txt
 
             area = ""
@@ -5254,7 +5441,7 @@ class AuditExportService:
                     self._cell(qty_purchased or None),
                     # authorizer_name is NOT folded in here — this column is 0.70" and the
                     # table is at the 7.0" budget. See the Application Context sub-table.
-                    self._cell(ev.applicator_name or ev.performed_by),
+                    self._cell(_applied_by(ev)),
                     # 26 fits "C-0-123456 exp 2027-06-30" (25) without ellipsising the
                     # expiry. The cell is a wrapping Paragraph, so this is a truncation
                     # guard, not a line-width limit — and the number now leads, so any
@@ -15631,9 +15818,14 @@ class AuditExportService:
             # Show the unit whether the amount came from volume_numeric or the
             # free-text volume string — a unitless amount is uninterpretable.
             unit = _val(ev.volume_unit, "") if (ev.volume_numeric or ev.volume) else ""
-            # Same derived per-area rate the PDF prints, in its own column so a spreadsheet
-            # can sort and filter on it.
-            csv_rate = _rate_per_area(ev.volume_numeric, ev.area_numeric, ev.volume_unit, ev.area_unit) or ""
+            # Same rate the PDF prints, in its own column so a spreadsheet can sort and filter
+            # on it: the RECORDED label rate first, the derived one only for rows written before
+            # `application_rate` existed.
+            csv_rate = (
+                _recorded_rate_text(ev)
+                or _rate_per_area(ev.volume_numeric, ev.area_numeric, ev.volume_unit, ev.area_unit)
+                or ""
+            )
             # Same label map as the PDF's Input Application Log: the CSV is read by the same
             # certifier, so it must not be the one that says "air_blast".
             method = _method_label(ev.application_method_structured or ev.way_of_application)
@@ -15648,6 +15840,16 @@ class AuditExportService:
             chem_scope = self._applied_scope_display(ev)
             if chem_scope:
                 chem_note_parts.append(f"Treated scope: {chem_scope}")
+            # The PDF's unreconciled-amount finding, on its sibling surface (2026-09-03). Six of
+            # nine defects in the 2026-08-20 certifier sweep were "fixed on the audited surface,
+            # alive on its sibling", and this CSV is read by the same certifier as the packet.
+            #
+            # It lands in Notes rather than replacing the Amount cell: Amount is a NUMBER column
+            # a reviewer sorts and subtracts against purchase records, and prose in it would
+            # break the mass balance this export exists to support. The PDF can say it in the
+            # cell because that cell is prose already.
+            if _amount_reconciles_with_rate(ev) is False:
+                chem_note_parts.append(f"Amount {amount} {unit}".strip() + " does not reconcile to the recorded rate")
             chem_notes = _val(" | ".join(chem_note_parts))
             all_rows.append(
                 (
@@ -15662,7 +15864,7 @@ class AuditExportService:
                         unit,
                         csv_rate,
                         _val(method),
-                        _val(ev.applicator_name or ev.performed_by),
+                        _val(_applied_by(ev)),
                         str(_photo_count(ev)),
                         "",
                         chem_notes,

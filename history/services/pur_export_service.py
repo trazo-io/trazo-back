@@ -23,6 +23,18 @@ Scope notes / known limitations (surfaced, not hidden):
   a county name that is not a recognized CA county is left blank and flagged.
 - Datetimes are stored/displayed as entered (see F20 tz note); times render in
   24-hour (military) form per boxes 17-18.
+- Applications made by a licensed pest control business (``applied_by_pcb``) are NOT
+  rows: the business is the reporter for those (3 CCR 6626(b); PUE Compendium Vol. 1
+  Ch. 4 p. 4-8 — "the grower ... should not include applications made by pest control
+  businesses on his/her use report"). They are counted and listed in the preamble and
+  the preview so the omission is visible, never silent.
+- Hectares are converted to acres for boxes 9/19/26 (the PUR has no hectare unit) and
+  the original figure is kept in the row notes.
+- Box 3 falls back to the farm's ``Establishment.ca_operator_id`` and box 8 to the
+  parcel's ``Parcel.ca_site_id`` when the event carries neither — the county issues
+  both numbers to the OPERATOR and the SITE, not to a spray.
+- The filing is per COUNTY (3 CCR 6626(a)). Rows are grouped by county code and a
+  multi-county month says so in the preamble; one CSV still covers the establishment.
 """
 
 import csv
@@ -151,6 +163,12 @@ def _county_code(name):
 
 
 # Map Trazo application methods → DPR box-21 categories (Ground / Air / Fume / Other).
+# Box 21 is "Check One: Ground / Air / Fume / Other". CDPR's own definition of the
+# aerial/ground indicator (CalPIP glossary): "A - Aerially applied; G - Ground (ground-based
+# equipment) applied; O - Other application methods. Other application methods (O) may
+# include: paint, ear tag, injection, chemigation, etc.; F - Fumigant". Chemigation — product
+# metered into irrigation water — is therefore OTHER, not Ground, however the water is
+# delivered; until 2026-09-05 drip/fertigation/chemigation all ticked the Ground box.
 _METHOD_TO_DPR = {
     "ground_spray": "Ground",
     "broadcast": "Ground",
@@ -158,15 +176,62 @@ _METHOD_TO_DPR = {
     "banded": "Ground",
     "foliar": "Ground",
     "soil_incorporation": "Ground",
-    "injection": "Ground",
-    "chemigation": "Ground (chemigation)",
+    "subsurface": "Ground (subsurface)",
     "air_blast": "Ground (air-blast)",
-    "drip": "Ground (chemigation)",
-    "fertigation": "Ground (chemigation)",
+    "injection": "Other (injection)",
+    "chemigation": "Other (chemigation)",
+    "drip": "Other (chemigation)",
+    "fertigation": "Other (chemigation)",
     "aerial": "Air",
     "fumigation": "Fume",
     "seed_treatment": "Other (seed treatment)",
 }
+
+# Boxes 9, 19 and 26 are acres (or square feet / units). DPR's unit-treated codes are
+# A, S, U, C, T, P, K — there is no hectare, and CalAgPermits rejects "ha". Trazo's spray
+# form still offers hectares (Parcel.area is stored in hectares), so convert here and keep
+# the grower's original figure in the notes rather than emit a unit the county cannot key.
+_ACRES_PER_HECTARE = 2.47105
+_HECTARE_UNITS = ("ha", "hectare", "hectares", "hectárea", "hectáreas")
+# The spray form's unit slugs → what the box should read. Anything else passes through.
+_AREA_UNIT_DISPLAY = {"sq_ft": "sq ft", "sqft": "sq ft", "square_feet": "sq ft"}
+
+
+def _area_for_pur(value, unit):
+    """Return ``(display, original)`` for an area box.
+
+    ``display`` is what the box carries ("68 acres", "12.35 acres"); ``original`` is the
+    grower's figure when a conversion happened ("5 ha"), else None. Blank value → ("", None):
+    a unit alone is never a value (see the box 24 note in ``_row``).
+    """
+    v = _s(value)
+    u = _s(unit)
+    if not v:
+        return "", None
+    if u.lower() in _HECTARE_UNITS:
+        try:
+            acres = float(v) * _ACRES_PER_HECTARE
+        except ValueError:
+            return f"{v} {u}".strip(), None
+        return f"{acres:.2f} acres", f"{v} {u}"
+    return f"{v} {_AREA_UNIT_DISPLAY.get(u.lower(), u)}".strip(), None
+
+
+def _acres(value, unit):
+    """Numeric acres for the box-26 rate, or None when the area is not in acres/hectares."""
+    v = _s(value)
+    u = _s(unit).lower()
+    if not v:
+        return None
+    try:
+        num = float(v)
+    except ValueError:
+        return None
+    if u in _HECTARE_UNITS:
+        return num * _ACRES_PER_HECTARE
+    if u in ("acre", "acres"):
+        return num
+    return None
 
 
 _MTRS_EMPTY = {"section": "", "township": "", "range": "", "base_meridian": ""}
@@ -311,8 +376,17 @@ class PURExportService:
         method_raw = _s(event.application_method_structured) or _s(event.way_of_application)
         method = _METHOD_TO_DPR.get(method_raw.lower(), method_raw)
 
-        # Operator ID (box 3): F20 operator_id, else the restricted-materials permit number.
-        operator_id = _s(event.operator_id) or _s(event.ca_dpr_permit_number)
+        # Operator ID (box 3): F20 operator_id, else the restricted-materials permit number
+        # (same numbering slot per the form), else the farm's own Operator ID. The county
+        # issues the OIN to the operator, not to a spray — a quick-form or voice record that
+        # never showed the CA block is still box-3 complete when the farm carries the number.
+        operator_id = (
+            _s(event.operator_id)
+            or _s(event.ca_dpr_permit_number)
+            or _s(getattr(self.establishment, "ca_operator_id", None))
+        )
+        # Site ID (box 8): the event's own, else the parcel's — a site ID is issued per site.
+        site_id = _s(event.site_id) or _s(getattr(parcel, "ca_site_id", None))
 
         # Total product used (box 24): formulated product + unit (NOT diluted mix).
         # Only build the "value unit" string when the VALUE is present — the units
@@ -323,13 +397,11 @@ class PURExportService:
         volume_unit = _s(getattr(event, "volume_unit", None))
         total_product = f"{volume} {volume_unit}".strip() if volume else ""
 
-        planted = _s(event.planted_area)
-        planted_unit = _s(event.planted_area_unit)
-        planted_display = f"{planted} {planted_unit}".strip() if planted else ""
+        planted_display, planted_original = _area_for_pur(event.planted_area, event.planted_area_unit)
 
         area_treated = _s(event.area) or _s(getattr(event, "area_numeric", None))
         area_unit = _s(getattr(event, "area_unit", None))
-        area_display = f"{area_treated} {area_unit}".strip() if area_treated else ""
+        area_display, area_original = _area_for_pur(area_treated, area_unit)
 
         # County (box 10): CalAgPermits validates on the 2-digit CAC county code, not
         # the name. Resolve the logged county name to its code and emit "37 (San Diego)".
@@ -349,14 +421,14 @@ class PURExportService:
         # -> "0.67 gal/acre". Leave blank if either is missing/zero (can't fabricate a rate).
         rate_display = ""
         try:
-            vnum = float(event.volume) if event.volume not in (None, "") else None
-            anum = float(event.area) if event.area not in (None, "") else None
-            # Need both units for a meaningful rate; without them the value is ambiguous, so leave
-            # box 26 blank rather than print "gal/" or " /acre".
-            if vnum is not None and anum and volume_unit and area_unit:
-                # singularize the area unit for the rate ("acres" -> "acre", "ha" -> "ha")
-                area_singular = area_unit[:-1] if area_unit.endswith("s") else area_unit
-                rate_display = f"{vnum / anum:.2f} {volume_unit}/{area_singular}"
+            # Same number box 24 carries: `volume` here is the legacy string, else volume_numeric.
+            vnum = float(volume) if volume else None
+            # Box 26 is "Rate Per ACRE": only computable when the treated area is in acres (or
+            # hectares, converted). A square-foot or per-unit area leaves it blank rather than
+            # print a per-something rate under an acre heading.
+            anum = _acres(area_treated, area_unit)
+            if vnum is not None and anum and volume_unit:
+                rate_display = f"{vnum / anum:.2f} {volume_unit}/acre"
         except (TypeError, ValueError, ZeroDivisionError):
             rate_display = ""
 
@@ -376,7 +448,7 @@ class PURExportService:
             "address": header["address"],
             "city": header["city"],
             "zip_code": header["zip_code"],
-            "site_id": _s(event.site_id),
+            "site_id": site_id,
             "planted_area": planted_display,
             "county": county_display,
             "section": _s(event.mtrs_section) or mtrs_fallback["section"],
@@ -436,9 +508,32 @@ class PURExportService:
         if (ed.get("is_summary") is True) or _s(event.time_period):
             notes.append("Aggregate/summary event — PUR wants one line per application.")
             flags.append({"code": "aggregate_event"})
+        converted = [o for o in (planted_original, area_original) if o]
+        if converted:
+            notes.append("Acres converted from hectares (" + ", ".join(converted) + ") — the PUR has no hectare unit.")
+            flags.append({"code": "area_converted_from_ha", "from": ", ".join(converted)})
         row["notes"] = " | ".join(notes)
+        # Preview-only (never CSV columns): the county as code + name so the client can group
+        # and warn on a multi-county month — the filing is per county (3 CCR 6626(a)).
+        row["county_code"] = county_code
+        row["county_name"] = county_name
         self._attach_preview_fields(row, event, getattr(parcel, "id", None), missing, flags)
         return row
+
+    @staticmethod
+    def _pcb_entry(event):
+        """A hired application, listed rather than exported (see module notes)."""
+        history = getattr(event, "history", None)
+        parcel = getattr(history, "parcel", None)
+        event_date = getattr(event, "date", None)
+        return {
+            "event_id": event.id,
+            "event_type": CHEMICAL_EVENT_TYPE,
+            "parcel_id": getattr(parcel, "id", None),
+            "event_date": event_date.isoformat() if event_date else "",
+            "product": _s(event.commercial_name),
+            "pcb_name": _s(getattr(event, "pcb_name", None)),
+        }
 
     @staticmethod
     def _attach_preview_fields(row, event, parcel_id, missing, flags):
@@ -495,10 +590,9 @@ class PURExportService:
             rate_display = ""
             try:
                 vnum = float(vol) if vol else None
-                anum = float(event.area) if event.area not in (None, "") else None
-                if vnum is not None and anum and vol_unit and area_unit:
-                    area_singular = area_unit[:-1] if area_unit.endswith("s") else area_unit
-                    rate_display = f"{vnum / anum:.2f} {vol_unit}/{area_singular}"
+                anum = _acres(_s(event.area) or _s(getattr(event, "area_numeric", None)), area_unit)
+                if vnum is not None and anum and vol_unit:
+                    rate_display = f"{vnum / anum:.2f} {vol_unit}/acre"
             except (TypeError, ValueError, ZeroDivisionError):
                 rate_display = ""
 
@@ -533,17 +627,43 @@ class PURExportService:
             rows.append(row)
         return rows
 
-    def build_rows(self):
+    def build(self):
+        """``(rows, pcb_excluded)`` for the month.
+
+        Rows are the grower's own applications (plus adjuvant lines), grouped by county code
+        and dated within each county — the filing is per county (3 CCR 6626(a)), so a
+        multi-county month reads as N contiguous blocks rather than one interleaved list.
+        ``pcb_excluded`` are the hired applications that are NOT the grower's to report.
+        """
         header = self._operator_header()
-        rows = []
+        rows, excluded = [], []
         for event in self._applications():
+            if getattr(event, "applied_by_pcb", False):
+                excluded.append(self._pcb_entry(event))
+                continue
             primary = self._row(event, header)
             rows.append(primary)
             rows.extend(self._adjuvant_rows(event, primary))
-        return rows
+        # Stable: within a county the query's date order survives, and an adjuvant line
+        # shares its primary's key so it stays directly under it. A blank county sorts last.
+        rows.sort(key=lambda r: (r.get("county_code") or "99", r.get("event_date") or ""))
+        return rows, excluded
+
+    def build_rows(self):
+        return self.build()[0]
+
+    @staticmethod
+    def _counties(rows):
+        """Ordered ``[{code, name, count}]`` over the rows, unknown county last as code ''."""
+        seen = {}
+        for r in rows:
+            code = r.get("county_code") or ""
+            entry = seen.setdefault(code, {"code": code, "name": r.get("county_name") or "", "count": 0})
+            entry["count"] += 1
+        return list(seen.values())
 
     def summary(self):
-        rows = self.build_rows()
+        rows, excluded = self.build()
         complete = sum(1 for r in rows if not r["missing"])
         return {
             "establishment_id": self.establishment.id,
@@ -555,11 +675,14 @@ class PURExportService:
             "application_count": len(rows),
             "complete_count": complete,
             "incomplete_count": len(rows) - complete,
+            "counties": self._counties(rows),
+            "pcb_excluded_count": len(excluded),
+            "pcb_excluded": excluded,
             "rows": rows,
         }
 
-    def to_csv(self):
-        rows = self.build_rows()
+    def to_csv(self, built=None):
+        rows, excluded = built if built is not None else self.build()
         buffer = io.StringIO()
         writer = csv.writer(buffer)
 
@@ -576,6 +699,34 @@ class PURExportService:
         writer.writerow([f"Establishment: {self.establishment.name}"])
         writer.writerow([f"Report period: {self.year}-{self.month:02d}"])
         writer.writerow([f"Applications: {len(rows)}"])
+        if excluded:
+            # Visible, not silent: the county reader can reconcile against the business's filing.
+            names = sorted({e["pcb_name"] for e in excluded if e["pcb_name"]})
+            by = f" ({', '.join(names)})" if names else ""
+            writer.writerow(
+                [
+                    f"Applied by a licensed pest control business — NOT reported here: {len(excluded)}{by}. "
+                    "The business files its own use report within 7 days of the application and sends "
+                    "the operator a copy within 30 days (3 CCR 6626(b))."
+                ]
+            )
+        counties = self._counties(rows)
+        if len(counties) > 1:
+
+            def _label(c):
+                if c["code"]:
+                    return f"{c['code']} {c['name']}"
+                if c["name"]:
+                    return f"{c['name']} (not a recognized CA county)"
+                return "county not recorded"
+
+            parts = ", ".join(f"{_label(c)} — {c['count']}" for c in counties)
+            writer.writerow(
+                [
+                    f"Counties: {parts}. A use report is filed with the Agricultural Commissioner of each county "
+                    "where the work was performed (3 CCR 6626(a)); rows below are grouped by county."
+                ]
+            )
         writer.writerow([])
 
         # Column headers + rows in DPR box order.

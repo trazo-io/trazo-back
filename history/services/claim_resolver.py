@@ -291,15 +291,20 @@ def resolve_input_status(chemical_event) -> dict:
         LABEL_INPUT_NATIONAL_LIST_CONDITIONAL,
         LABEL_INPUT_NATIONAL_LIST_PROHIBITED,
         LABEL_INPUT_OMRI_LISTED,
+        LABEL_INPUT_WSDA_LISTED,
         may_claim_input_listing,
     )
 
     organic = event_organic_classification(chemical_event)
     restricted = event_is_restricted_use(chemical_event)
     listing = may_claim_input_listing(chemical_event)
-    # A linked OMRI product record (Sprint 3 catalog match) is stronger
-    # evidence than the farmer's dropdown pick — treat it as OMRI Listed.
-    has_omri_match = bool(getattr(chemical_event, "omri_product_id", None))
+    # A linked catalog record — OMRI or WSDA — is stronger evidence than the farmer's dropdown
+    # pick. Named for what it holds, not for one of the two catalogs: it gained the WSDA arm on
+    # 2026-09-02 and a reader who trusted the old name `has_omri_match` would have concluded
+    # the restricted-use branch below still tests OMRI alone.
+    has_catalog_match = bool(getattr(chemical_event, "omri_product_id", None)) or bool(
+        getattr(chemical_event, "wsda_material_id", None)
+    )
 
     # NOTE (2026-08-02): `restricted_use` is intentionally NOT a public chip status.
     # `restricted_use_pesticide` is stripped from the consumer payload
@@ -311,9 +316,9 @@ def resolve_input_status(chemical_event) -> dict:
     # is a conventional input, and the chip says so; the certifier PDF carries the RUP flag.
     #
     # Restricted-use still outranks the organic tier, but the test is now "is there real
-    # third-party evidence" (has_omri_match) rather than "did the farmer pick omri_listed".
+    # third-party evidence" (has_catalog_match) rather than "did the farmer pick omri_listed".
     # A grower's dropbox pick must not suppress the restricted-use ordering.
-    if restricted and not has_omri_match:
+    if restricted and not has_catalog_match:
         status = "conventional_documented"
         label = "Conventional input · documented"
     elif listing.safe_label == LABEL_INPUT_NATIONAL_LIST_CONDITIONAL and organic not in PROHIBITED_INPUT_VALUES:
@@ -335,6 +340,9 @@ def resolve_input_status(chemical_event) -> dict:
     elif listing.safe_label == LABEL_INPUT_OMRI_LISTED:
         status = "omri_listed"
         label = LABEL_INPUT_OMRI_LISTED
+    elif listing.safe_label == LABEL_INPUT_WSDA_LISTED:
+        status = "wsda_listed"
+        label = LABEL_INPUT_WSDA_LISTED
     elif listing.safe_label == LABEL_INPUT_NATIONAL_LIST:
         status = "national_list_allowed"
         label = LABEL_INPUT_NATIONAL_LIST
