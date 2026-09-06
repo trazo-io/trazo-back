@@ -16,6 +16,7 @@ import io
 import logging
 import os
 import re
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -1428,7 +1429,7 @@ def looks_like_padding(text) -> bool:
     if len(tokens) < PADDING_MIN_TOKENS:
         return False
     unique_ratio = len(set(tokens)) / len(tokens)
-    dominant_share = max(tokens.count(t) for t in set(tokens)) / len(tokens)
+    dominant_share = Counter(tokens).most_common(1)[0][1] / len(tokens)  # was O(n²): list.count per token
     return unique_ratio < PADDING_MIN_UNIQUE_RATIO or dominant_share > PADDING_MAX_DOMINANT_SHARE
 
 

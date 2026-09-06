@@ -11,6 +11,65 @@ from users.serializers import BasicUserSerializer
 from .models import Parcel, ParcelCropHistory, Product
 
 
+def parcel_members_map(parcels):
+    """{parcel_id: [User, …]} — up to two most recently created users who authored an event on any
+    of the parcel's seasons, for a whole list of parcels at once.
+
+    Replaces the per-parcel path in `ParcelBasicSerializer.get_members` (one query for the
+    seasons, one eight-way UNION per season, one User query per parcel, then the User
+    serializer's WorksIn/company/establishment lookups per member). For the company payload that
+    was ~50 of its 82 queries; this is eight + one, whatever the farm size. Same selection rule:
+    `User.objects.filter(id__in=…)[0:2]` under the model's `-created_at` ordering.
+    """
+    from collections import defaultdict
+
+    from history.models import (
+        BusinessEvent,
+        ChemicalEvent,
+        EquipmentEvent,
+        GeneralEvent,
+        PestManagementEvent,
+        ProductionEvent,
+        SoilManagementEvent,
+        WeatherEvent,
+    )
+
+    parcel_ids = [p.id for p in parcels]
+    if not parcel_ids:
+        return {}
+    ids_by_parcel = defaultdict(set)
+    for model in (
+        WeatherEvent,
+        ChemicalEvent,
+        ProductionEvent,
+        GeneralEvent,
+        EquipmentEvent,
+        SoilManagementEvent,
+        PestManagementEvent,
+        BusinessEvent,
+    ):
+        rows = (
+            model.objects.filter(history__parcel_id__in=parcel_ids, created_by__isnull=False)
+            .values_list("history__parcel_id", "created_by_id")
+            .distinct()
+        )
+        for parcel_id, user_id in rows:
+            ids_by_parcel[parcel_id].add(user_id)
+    all_ids = set().union(*ids_by_parcel.values()) if ids_by_parcel else set()
+    users = {
+        u.id: u
+        for u in User.objects.filter(id__in=all_ids).prefetch_related(
+            # Everything BasicUserSerializer.companies reads, so serializing a member is query-free.
+            "worksin_set__company__establishment_set",
+            "worksin_set__establishments_in_charge",
+        )
+    }
+    return {
+        parcel_id: sorted((users[i] for i in ids if i in users), key=lambda u: (u.created_at, u.id), reverse=True)[:2]
+        for parcel_id, ids in ids_by_parcel.items()
+    }
+
+
 class ParcelBasicSerializer(ModelSerializer):
     product = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
@@ -62,16 +121,20 @@ class ParcelBasicSerializer(ModelSerializer):
         return parcel_application_status(parcel)["state"]
 
     def get_has_current_production(self, parcel):
-        return parcel.current_history is not None
+        # The FK id answers this; `parcel.current_history is not None` loaded the whole
+        # History row, once per parcel.
+        return parcel.current_history_id is not None
 
     def get_image(self, parcel):
         try:
-            if not parcel.album or not parcel.album.images.exists():
+            if not parcel.album_id:
                 return None
-
-            image_obj = parcel.album.images.first()
-            if not image_obj:
+            # From the `album__images` prefetch when the caller set one up; `.exists()` and
+            # `.first()` each went back to the database per parcel.
+            images = list(parcel.album.images.all())
+            if not images:
                 return None
+            image_obj = min(images, key=lambda image: image.pk)  # the row `.first()` returned
 
             # Use the url property which handles image, image_url, and s3_key
             image_url = image_obj.url
@@ -87,11 +150,16 @@ class ParcelBasicSerializer(ModelSerializer):
             return None
 
     def get_members(self, parcel):
-        members_ids = []
-        for history in parcel.histories.all():
-            members_ids += history.get_involved_users()
-        members_ids = list(set(members_ids))
-        members = User.objects.filter(id__in=members_ids)[0:2]
+        batched = self.context.get("parcel_members")
+        if batched is not None:
+            # Built once per establishment by `parcel_members_map` (see EstablishmentSerializer).
+            members = batched.get(parcel.id, [])
+        else:
+            members_ids = []
+            for history in parcel.histories.all():
+                members_ids += history.get_involved_users()
+            members_ids = list(set(members_ids))
+            members = User.objects.filter(id__in=members_ids)[0:2]
         return BasicUserSerializer(members, many=True).data
 
 

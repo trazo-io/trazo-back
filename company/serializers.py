@@ -9,7 +9,7 @@ from rest_framework.serializers import ModelSerializer
 from common.models import Gallery
 from common.serializers import GallerySerializer
 from common.validators import USContactFieldsMixin, USStateFieldMixin
-from product.serializers import ParcelBasicSerializer
+from product.serializers import ParcelBasicSerializer, parcel_members_map
 from subscriptions.serializers import SubscriptionSerializer
 from users.models import WorksIn
 
@@ -80,16 +80,20 @@ class EstablishmentSerializer(ModelSerializer):
         )
 
     def get_parcels(self, establishment):
-        return ParcelBasicSerializer(establishment.parcels.all(), many=True, context=self.context).data
+        # One query for the parcels with their product and album, one batch for every parcel's
+        # members (see `parcel_members_map`), instead of ~8 queries per parcel.
+        parcels = list(establishment.parcels.all().select_related("product", "album").prefetch_related("album__images"))
+        context = {**self.context, "parcel_members": parcel_members_map(parcels)}
+        return ParcelBasicSerializer(parcels, many=True, context=context).data
 
     def get_image(self, establishment):
         try:
-            if not establishment.album or not establishment.album.images.exists():
+            if not establishment.album_id:
                 return None
-
-            image_obj = establishment.album.images.first()
-            if not image_obj:
+            images = list(establishment.album.images.all())  # `album__images` prefetch, see get_establishments
+            if not images:
                 return None
+            image_obj = min(images, key=lambda image: image.pk)  # the row `.first()` returned
 
             # Use the url property which handles image, image_url, and s3_key
             image_url = image_obj.url
@@ -616,12 +620,22 @@ class RetrieveCompanySerializer(USContactFieldsMixin, USStateFieldMixin, ModelSe
             # Company Admins see all establishments
             if worksIn.role == "CA":
                 return EstablishmentSerializer(
-                    company.establishment_set.all().order_by("name"), many=True, context=self.context
+                    company.establishment_set.all()
+                    .select_related("album")
+                    .prefetch_related("album__images")
+                    .order_by("name"),
+                    many=True,
+                    context=self.context,
                 ).data
 
             # Other roles see only their assigned establishments
             return EstablishmentSerializer(
-                worksIn.establishments_in_charge.all().order_by("name"), many=True, context=self.context
+                worksIn.establishments_in_charge.all()
+                .select_related("album")
+                .prefetch_related("album__images")
+                .order_by("name"),
+                many=True,
+                context=self.context,
             ).data
 
         except Exception as e:

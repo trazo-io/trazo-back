@@ -106,6 +106,19 @@ class OperationReadinessService:
         # Every check consults _nop_checks_apply(), which costs two queries.
         # Memoize so one evaluate() is not four round-trips for the same answer.
         self._nop_applies = None
+        # Five checks read the establishment's OSP versions; fetch them once (was 7 queries).
+        self._plans = None
+
+    @property
+    def plans(self):
+        """All OSP versions for the establishment, newest version first (cached per evaluate)."""
+        if self._plans is None:
+            from certifications.models import OrganicSystemPlan
+
+            self._plans = list(
+                OrganicSystemPlan.objects.filter(establishment=self.establishment).order_by("-version_number")
+            )
+        return self._plans
 
     # ------------------------------------------------------------------
 
@@ -203,9 +216,9 @@ class OperationReadinessService:
         if self.certification_type not in ORGANIC_PROFILES:
             return False
 
-        from certifications.models import Certification, OrganicSystemPlan
+        from certifications.models import Certification
 
-        if OrganicSystemPlan.objects.filter(establishment=self.establishment).exists():
+        if self.plans:
             return True
         if Certification.objects.filter(
             establishment=self.establishment, certification_type__in=ORGANIC_CONFERRING_CERT_TYPES
@@ -226,9 +239,7 @@ class OperationReadinessService:
         content). Treating only the upload as valid would tell a farmer who just completed the
         module that they still have a blocker.
         """
-        from certifications.models import OrganicSystemPlan
-
-        for plan in OrganicSystemPlan.objects.filter(establishment=self.establishment):
+        for plan in self.plans:
             entry = ((plan.module_responses or {}).get("modules") or {}).get("g2_0_fraud_prevention") or {}
             if entry.get("completed_at"):
                 return True
@@ -321,10 +332,10 @@ class OperationReadinessService:
         if not self._nop_checks_apply():
             return None
 
-        from certifications.models import OSP_SECTION_KEYS, OrganicSystemPlan
+        from certifications.models import OSP_SECTION_KEYS
 
-        plans = OrganicSystemPlan.objects.filter(establishment=self.establishment)
-        if not plans.exists():
+        plans = self.plans
+        if not plans:
             return {
                 "key": "osp",
                 "code": "osp.none",
@@ -347,7 +358,7 @@ class OperationReadinessService:
         # This OSP is materially incomplete and would not be accepted by an
         # accredited certifier" while this service returned ready=True — so the
         # share guard would have minted a certifier link to it.
-        latest = plans.order_by("-version_number").first()
+        latest = plans[0] if plans else None  # `plans` is newest-version-first
         filled = 0
         if latest is not None:
             sections = latest.sections if isinstance(latest.sections, dict) else {}
@@ -379,7 +390,7 @@ class OperationReadinessService:
                 "fix": "Write the six OSP sections on the farm's Organic System Plan page.",
             }
 
-        if not plans.filter(status__in=("submitted", "active")).exists():
+        if not any(plan.status in ("submitted", "active") for plan in plans):
             return {
                 "key": "osp",
                 "code": "osp.not_submitted",
@@ -430,9 +441,7 @@ class OperationReadinessService:
         if not self._nop_checks_apply():
             return None
 
-        from certifications.models import OrganicSystemPlan
-
-        plan = OrganicSystemPlan.objects.filter(establishment=self.establishment).order_by("-version_number").first()
+        plan = self.plans[0] if self.plans else None
         if plan is None:
             return None
 
@@ -561,16 +570,7 @@ class OperationReadinessService:
 
         Superseded and withdrawn versions are history, never the filing.
         """
-        from certifications.models import OrganicSystemPlan
-
-        return (
-            OrganicSystemPlan.objects.filter(
-                establishment=self.establishment,
-                status__in=("draft", "active", "submitted"),
-            )
-            .order_by("-version_number")
-            .first()
-        )
+        return next((plan for plan in self.plans if plan.status in ("draft", "active", "submitted")), None)
 
     def _check_unmatched_materials(self):
         """Products the records show were applied, with no matching entry on the plan.

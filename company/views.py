@@ -854,11 +854,29 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         establishment = get_object_or_404(self.company.establishment_set.all(), pk=pk)
 
+        # Prefetch what `compliance_snapshot_rows` reads — all eight event tables and their photo
+        # albums — so a season with photographs costs the same fixed set of queries as one without
+        # (the service reads albums from the prefetch cache; unprefetched it is a query per event).
+        seasons = History.objects.select_related("parcel__establishment", "crop_type", "product").prefetch_related(
+            *(
+                f"history_{model}_events__album__images"
+                for model in (
+                    "productionevent",
+                    "chemicalevent",
+                    "soilmanagementevent",
+                    "pestmanagementevent",
+                    "weatherevent",
+                    "generalevent",
+                    "businessevent",
+                    "equipmentevent",
+                )
+            )
+        )
         production = (
-            History.objects.filter(parcel__establishment=establishment, published=True, finish_date__isnull=False)
+            seasons.filter(parcel__establishment=establishment, published=True, finish_date__isnull=False)
             .order_by("-finish_date")
             .first()
-            or History.objects.filter(parcel__establishment=establishment).order_by("-start_date").first()
+            or seasons.filter(parcel__establishment=establishment).order_by("-start_date").first()
         )
 
         if production is None:
