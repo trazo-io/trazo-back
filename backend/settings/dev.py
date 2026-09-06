@@ -221,6 +221,8 @@ REST_FRAMEWORK = {
         "api_sensitive": "2000/hour",
         "qr_scan": "10000/hour",
         "blockchain": "1000/hour",
+        # Dossier-status poll from the anonymous certifier page (see base.py).
+        "certifier_poll": "10000/hour",
     },
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }

@@ -1,0 +1,12 @@
+Hello{% if recipient.first_name %} {{ recipient.first_name }}{% endif %},
+
+Your {{ title|lower }} for {{ establishment.name }} is ready.
+
+Download it from your Documents shelf (Exports folder):
+{{ url }}
+{% if size_mb %}
+File size: {{ size_mb }} MB. The file stays on your Documents shelf; this email carries only the link.
+{% endif %}
+Generated from the records in Trazo at the moment the build started. Log more records and generate again for a current copy.
+
+Trazo

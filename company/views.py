@@ -648,6 +648,87 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         response["Content-Disposition"] = f'attachment; filename="trazo-operation-audit-{establishment.id}.pdf"'
         return response
 
+    # ------------------------------------------------------------------------------------
+    # Background builds of the operation dossier (documents/services/export_jobs.py).
+    #
+    # The GET above still streams the PDF inline for API callers and tests. The app uses
+    # these two instead: a 12-production farm ran ~2,750 queries and ~400 pages inside that
+    # GET — about a minute in production against an edge that drops requests at ~100 s.
+    # POST records the ask and returns at once; the client polls GET until the job is
+    # terminal, then downloads the filed document from the Documents shelf.
+    # ------------------------------------------------------------------------------------
+
+    @action(detail=True, methods=["post"], url_path="export-jobs", url_name="export-jobs")
+    def export_jobs(self, request, pk=None, company_pk=None):
+        """Start (or join) a background build. Body: kind, certification, start, end."""
+        from documents.serializers import ExportJobSerializer
+        from documents.services.export_jobs import OPERATION_DOSSIER, enqueue
+
+        establishment = get_object_or_404(self.company.establishment_set.all(), pk=pk)
+        # Same gate as the inline export: this produces the same certifier document.
+        require_compliance_exports(establishment.company, user=request.user)
+
+        kind = (request.data.get("kind") or OPERATION_DOSSIER).lower()
+        if kind != OPERATION_DOSSIER:
+            return Response({"error": f"Unknown export kind '{kind}'."}, status=status.HTTP_400_BAD_REQUEST)
+        cert_type = (request.data.get("certification") or "organic").lower()
+        valid_certifications = {"all", "organic", "globalgap", "roc", "fsma204", "scs"}
+        if cert_type not in valid_certifications:
+            return Response(
+                {"error": f"Invalid certification type '{cert_type}'.", "valid_options": sorted(valid_certifications)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        def _parse_date(raw):
+            if not raw:
+                return None
+            try:
+                return datetime.strptime(str(raw), "%Y-%m-%d").date()
+            except ValueError:
+                return "invalid"
+
+        start = _parse_date(request.data.get("start"))
+        end = _parse_date(request.data.get("end"))
+        if start == "invalid" or end == "invalid":
+            return Response({"error": "start/end must be YYYY-MM-DD dates."}, status=status.HTTP_400_BAD_REQUEST)
+        if start and end and start > end:
+            return Response({"error": "start must not be after end."}, status=status.HTTP_400_BAD_REQUEST)
+
+        job, created = enqueue(
+            establishment,
+            requested_by=request.user,
+            audience="farmer",
+            kind=kind,
+            certification_type=cert_type,
+            period_start=start,
+            period_end=end,
+        )
+        return Response(
+            ExportJobSerializer(job).data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK
+        )
+
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path=r"export-jobs/(?P<job_id>[0-9a-fA-F-]{36})",
+        url_name="export-job",
+    )
+    def export_job(self, request, pk=None, company_pk=None, job_id=None):
+        """Status of one build. Returns no document — the file is fetched from Documents."""
+        from documents.models import ExportJob
+        from documents.serializers import ExportJobSerializer
+        from documents.services.export_jobs import parse_public_id, reap_stale
+
+        establishment = get_object_or_404(self.company.establishment_set.all(), pk=pk)
+        public_id = parse_public_id(job_id)
+        if public_id is None:
+            return Response({"error": "Malformed job id."}, status=status.HTTP_404_NOT_FOUND)
+        reap_stale(establishment)
+        job = get_object_or_404(
+            ExportJob.objects.select_related("document"), public_id=public_id, establishment=establishment
+        )
+        return Response(ExportJobSerializer(job).data)
+
     @action(detail=True, methods=["get"], url_path="activity-feed")
     def activity_feed(self, request, pk=None, company_pk=None) -> Response:
         """

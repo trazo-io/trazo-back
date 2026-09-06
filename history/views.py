@@ -171,6 +171,41 @@ def _fit_label_text(canvas_obj, text, font, size, max_width, min_size=7.0, max_l
     return min_size, lines
 
 
+def _history_event_count_expression():
+    """Sum of per-table event counts for a History row, as correlated scalar subqueries.
+
+    Never express this as `Count(rel_a) + Count(rel_b) + …` on one queryset: each Count adds a
+    LEFT JOIN and the joins multiply (see `get_optimized_list_queryset`).
+    """
+    from django.db.models import Count, ExpressionWrapper, IntegerField, OuterRef, Subquery, Value
+    from django.db.models.functions import Coalesce
+
+    def count_of(model):
+        per_history = (
+            model.objects.filter(history=OuterRef("pk"))
+            .order_by()
+            .values("history")
+            .annotate(c=Count("pk"))
+            .values("c")[:1]
+        )
+        return Coalesce(Subquery(per_history, output_field=IntegerField()), Value(0))
+
+    models = (
+        ProductionEvent,
+        ChemicalEvent,
+        GeneralEvent,
+        EquipmentEvent,
+        SoilManagementEvent,
+        PestManagementEvent,
+        BusinessEvent,
+        WeatherEvent,
+    )
+    total = count_of(models[0])
+    for model in models[1:]:
+        total = total + count_of(model)
+    return ExpressionWrapper(total, output_field=IntegerField())
+
+
 class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     serializer_class = HistorySerializer
     filter_backends = [filters.OrderingFilter]
@@ -369,6 +404,11 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 "start_date",
                 "finish_date",
                 "published",
+                # Serialized by OptimizedHistoryListSerializer; missing from `.only()` they were
+                # lazy-loaded — three extra queries per row (2026-09-05).
+                "type",
+                "expected_harvest",
+                "production_method",
                 "earning",
                 "reputation",
                 "qr_code",
@@ -395,16 +435,13 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 "crop_type__slug",
             )
             .annotate(
-                total_events_count=(
-                    Count("history_productionevent_events", distinct=True)
-                    + Count("history_chemicalevent_events", distinct=True)
-                    + Count("history_generalevent_events", distinct=True)
-                    + Count("history_equipmentevent_events", distinct=True)
-                    + Count("history_soilmanagementevent_events", distinct=True)
-                    + Count("history_pestmanagementevent_events", distinct=True)
-                    + Count("history_businessevent_events", distinct=True)
-                    + Count("history_weatherevent_events", distinct=True)
-                ),
+                # One correlated scalar subquery per event table. Summing eight
+                # `Count(relation, distinct=True)` in a single annotate LEFT JOINed all eight
+                # tables at once, so Postgres built the CROSS PRODUCT of a season's events before
+                # counting — two 65-event seasons took 6-9 s in production (2026-09-05), and the
+                # cost grew multiplicatively with events per season, i.e. worst on exactly the
+                # farms that log the most. Each subquery counts one table on its own FK index.
+                total_events_count=_history_event_count_expression(),
                 # Annotated, not `.exists()` in the serializer: this list renders one card per
                 # season, so a per-row existence check is a textbook N+1.
                 sales_record_count=Count("sales_records", distinct=True),

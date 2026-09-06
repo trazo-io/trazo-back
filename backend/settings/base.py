@@ -151,6 +151,9 @@ REST_FRAMEWORK = {
         "api_sensitive": "30/hour",
         "qr_scan": "300/hour",
         "blockchain": "20/hour",
+        # A certifier polling a dossier build every ~3 s for a minute is ~20 requests; the
+        # 50/hour anonymous default would cut the poll off mid-build.
+        "certifier_poll": "600/hour",
     },
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
@@ -760,6 +763,15 @@ STRIPE_PUBLIC_KEY = config("STRIPE_PUBLIC_KEY", default="")
 STRIPE_SECRET_KEY = config("STRIPE_SECRET_KEY", default="")
 STRIPE_WEBHOOK_SECRET = config("STRIPE_WEBHOOK_SECRET", default="")
 FRONTEND_URL = config("FRONTEND_URL", default="http://app.localhost:3000")
+
+# Background document builds (documents/services/export_jobs.py).
+#   thread — the web process runs the build on a daemon thread after the request commits
+#            (default; no extra infrastructure, recoverable through the job row)
+#   worker — the web process only enqueues; `manage.py run_export_worker` claims and runs
+#   eager  — the build runs inside the request (tests / debugging only)
+EXPORT_JOB_RUNNER = config("EXPORT_JOB_RUNNER", default="thread")
+# A running job whose heartbeat is older than this is reported as interrupted.
+EXPORT_JOB_STALE_MINUTES = config("EXPORT_JOB_STALE_MINUTES", default=10, cast=int)
 
 # Blockchain Configuration - Environment Specific Polygon Networks
 ENVIRONMENT = config("ENVIRONMENT", default="development")

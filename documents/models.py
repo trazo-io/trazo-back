@@ -109,3 +109,93 @@ class GeneratedDocument(models.Model):
     def is_deletable(self) -> bool:
         """Only farmer uploads may be deleted — generated documents are dated history."""
         return self.source == "upload"
+
+
+class ExportJob(models.Model):
+    """A document build that runs OUTSIDE the request that asked for it.
+
+    Why (2026-09-05): the operation audit dossier for a 12-production farm ran ~2,750 queries
+    and laid out ~400 pages inside one GET — about a minute in production, against an edge
+    that drops requests at ~100 s, holding one of eight gunicorn threads the whole time. A
+    PDF that can take longer than a page load is a JOB: the request records what was asked
+    for and returns at once; a runner builds it, files the result in the DMS (the artifact the
+    farm keeps anyway), and the requester is told where it is. The row is also the cache key
+    for the certifier link — a build whose `fingerprint` still matches the records is served
+    again instead of rebuilt (`history/services/records_fingerprint.py`).
+
+    Status is the only contract the clients read: queued → running → succeeded | failed.
+    `progress_*` is advisory ("Production 4 of 12"). `heartbeat_at` lets a reaper tell a
+    build that is still running from one whose process died mid-way.
+    """
+
+    KIND_CHOICES = [
+        ("operation_dossier", "Operation audit dossier"),
+    ]
+    STATUS_CHOICES = [
+        ("queued", "Queued"),
+        ("running", "Running"),
+        ("succeeded", "Succeeded"),
+        ("failed", "Failed"),
+    ]
+    AUDIENCE_CHOICES = [
+        ("farmer", "Farm member"),
+        ("certifier", "Certifier review link"),
+    ]
+    TERMINAL_STATUSES = ("succeeded", "failed")
+
+    public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, db_index=True)
+    establishment = models.ForeignKey("company.Establishment", on_delete=models.CASCADE, related_name="export_jobs")
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="export_jobs",
+        help_text="Null for a build started by an anonymous certifier review link.",
+    )
+    audience = models.CharField(max_length=16, choices=AUDIENCE_CHOICES, default="farmer")
+    kind = models.CharField(max_length=32, choices=KIND_CHOICES)
+    certification_type = models.CharField(max_length=32, default="organic")
+    period_start = models.DateField(null=True, blank=True)
+    period_end = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default="queued", db_index=True)
+    progress_current = models.PositiveIntegerField(default=0)
+    progress_total = models.PositiveIntegerField(default=0)
+    progress_label = models.CharField(max_length=200, blank=True, default="")
+    fingerprint = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="records_fingerprint() of the establishment at the moment the build started.",
+    )
+    document = models.ForeignKey(
+        GeneratedDocument, on_delete=models.SET_NULL, null=True, blank=True, related_name="export_jobs"
+    )
+    error = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    heartbeat_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["establishment", "kind", "status"], name="documents_exportjob_lookup"),
+        ]
+
+    def __str__(self):
+        return f"{self.get_kind_display()} for establishment {self.establishment_id} [{self.status}]"
+
+    @property
+    def is_terminal(self):
+        return self.status in self.TERMINAL_STATUSES
+
+    def key(self) -> dict:
+        """The parameters that make two builds interchangeable (given equal records)."""
+        return {
+            "kind": self.kind,
+            "certification_type": self.certification_type,
+            "period_start": self.period_start,
+            "period_end": self.period_end,
+        }

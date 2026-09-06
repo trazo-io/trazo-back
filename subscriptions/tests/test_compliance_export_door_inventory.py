@@ -65,6 +65,14 @@ EXEMPT_ROUTES = {
     # is correct: the farm paid for that share, the certifier may be mid-review, and the farm can
     # revoke it (revocation is deliberately NOT gated — see CertifierAccessLinkViewSet).
     "certifier_review_dossier": "certifier holds the token; link creation is what carries the gate",
+    "certifier_review_dossier_status": (
+        "progress of a build the token's dossier route started; status and progress only, the "
+        "document streams from certifier_review_dossier"
+    ),
+    # Background builds (documents/services/export_jobs.py). The POST that STARTS a build is
+    # gated like the inline export it replaces; the status poll returns no document, and the
+    # file itself is fetched through establishment-documents-download above.
+    "company-establishments-export-job": "status of a build the gated export-jobs POST accepted; no document",
     # Billing.
     "invoice-download": "the customer's own invoice",
     # Support-ticket attachments: files the USER uploaded to their own ticket, surfaced by the
@@ -218,6 +226,7 @@ class ComplianceExportDoorInventoryTests(SimpleTestCase):
 
         for expected in (
             "company-establishments-operation-audit-export",
+            "company-establishments-export-jobs",
             "histories-pur-export",
             "histories-audit-export",
             "audit-export-by-uuid",

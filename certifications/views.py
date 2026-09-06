@@ -1825,6 +1825,13 @@ def _client_ip(request):
     return request.META.get("REMOTE_ADDR")
 
 
+class CertifierPollThrottle(AnonRateThrottle):
+    """The dossier-status poll: a reviewer waiting on a build asks every few seconds, which
+    the 50/hour anonymous default would cut off mid-build. Rate in DEFAULT_THROTTLE_RATES."""
+
+    scope = "certifier_poll"
+
+
 def _resolve_link_or_404(token, audience="certifier"):
     """Resolve an ACTIVE link of the expected AUDIENCE, or raise 404.
 
@@ -1935,45 +1942,142 @@ def certifier_review_readiness(request, token):
 @permission_classes([AllowAny])
 @throttle_classes([AnonRateThrottle])
 def certifier_review_dossier(request, token):
-    """Stream the operation audit dossier for this link.
+    """The operation audit dossier for this link — current, and built at most once per change.
 
-    Regenerated on every open, which is the point: a certifier following this link
-    always sees current records, where an emailed PDF is stale the moment the
-    farmer logs the next event.
+    Until 2026-09-05 this regenerated the whole PDF on every open so the reviewer always saw
+    current records. On a 12-production farm that was ~a minute of build per click, inside a
+    request the edge drops at ~100 s, from an anonymous URL. "Always current" is kept a
+    different way: builds are keyed by a fingerprint of the records
+    (`history/services/records_fingerprint.py`). Same records → the filed copy streams at
+    once. Changed records → a build starts and this returns 202 with the job; the page polls
+    `…/dossier/status/` and then fetches `…/dossier/?job=<id>` for exactly the build it
+    watched, so a record edited mid-build cannot send it round again.
     """
     from django.http import FileResponse
 
-    from history.services.operation_audit_export_service import OperationAuditExportService
+    from documents.models import ExportJob
+    from documents.serializers import ExportJobSerializer
+    from documents.services.export_jobs import OPERATION_DOSSIER, enqueue, fresh_document, job_key, parse_public_id
 
     link = _resolve_link_or_404(token)
-
-    CertifierAccessLog.objects.create(
-        link=link,
-        action="dossier",
-        ip_address=_client_ip(request),
-        user_agent=(request.META.get("HTTP_USER_AGENT") or "")[:300],
-    )
-
-    service = OperationAuditExportService(
-        link.establishment,
+    key = job_key(
+        kind=OPERATION_DOSSIER,
         certification_type=link.certification_type,
-        start_date=link.period_start,
-        end_date=link.period_end,
+        period_start=link.period_start,
+        period_end=link.period_end,
     )
+
+    def _stream(document):
+        CertifierAccessLog.objects.create(
+            link=link,
+            action="dossier",
+            ip_address=_client_ip(request),
+            user_agent=(request.META.get("HTTP_USER_AGENT") or "")[:300],
+        )
+        filename = f"{slugify(link.establishment.name)}-audit-dossier.pdf"
+        return FileResponse(
+            document.file.open("rb"), as_attachment=True, filename=filename, content_type="application/pdf"
+        )
+
+    requested_job = request.query_params.get("job")
+    if requested_job:
+        public_id = parse_public_id(requested_job)
+        job = (
+            ExportJob.objects.filter(
+                public_id=public_id, establishment=link.establishment, status="succeeded", document__isnull=False, **key
+            )
+            .select_related("document")
+            .first()
+            if public_id
+            else None
+        )
+        if job is None:
+            raise Http404("No finished dossier build with that id for this link.")
+        return _stream(job.document)
+
     try:
-        pdf = service.generate_pdf()
+        document = fresh_document(link.establishment, **key)
+        if document is not None:
+            return _stream(document)
+        job, _created = enqueue(link.establishment, requested_by=None, audience="certifier", **key)
+        if job.status == "succeeded" and job.document_id:
+            # The eager runner finished inside this request; nothing to poll for.
+            return _stream(job.document)
     except Exception:
-        # This page is read by a certification reviewer judging the farmer's
-        # operation. A raw 500 there reads as "this grower's records are broken",
-        # so fail with a neutral message and log the real cause for us.
-        logger.exception("Certifier dossier generation failed for establishment %s", link.establishment_id)
+        # This page is read by a certification reviewer judging the farmer's operation. A raw
+        # 500 there reads as "this grower's records are broken", so fail with a neutral message
+        # and log the real cause for us.
+        logger.exception("Certifier dossier build could not be started for establishment %s", link.establishment_id)
         return Response(
             {"error": "The dossier could not be generated right now. Please try again shortly."},
             status=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
+    return Response(ExportJobSerializer(job).data, status=status.HTTP_202_ACCEPTED)
 
-    filename = f"{slugify(link.establishment.name)}-audit-dossier.pdf"
-    return FileResponse(pdf, as_attachment=True, filename=filename, content_type="application/pdf")
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+@throttle_classes([CertifierPollThrottle])
+def certifier_review_dossier_status(request, token):
+    """JSON side of the dossier handshake. Never streams a document.
+
+    Without `?job=`: is a current build on file? `{"status": "ready"}` when the newest
+    succeeded build still matches the records (the page then navigates to `…/dossier/`);
+    otherwise a build is started (or joined) and its job is returned with 202. The page used
+    to probe `…/dossier/` itself, which started a PDF stream it then cancelled and logged a
+    download that never happened.
+
+    With `?job=<public_id>`: that build's status and progress. On success the page navigates
+    to `…/dossier/?job=<public_id>`.
+    """
+    from documents.models import ExportJob
+    from documents.serializers import ExportJobSerializer
+    from documents.services.export_jobs import (
+        OPERATION_DOSSIER,
+        enqueue,
+        fresh_document,
+        job_key,
+        parse_public_id,
+        reap_stale,
+    )
+
+    link = _resolve_link_or_404(token)
+    raw_job = request.query_params.get("job")
+    if not raw_job:
+        key = job_key(
+            kind=OPERATION_DOSSIER,
+            certification_type=link.certification_type,
+            period_start=link.period_start,
+            period_end=link.period_end,
+        )
+        try:
+            if fresh_document(link.establishment, **key) is not None:
+                return Response({"status": "ready"})
+            job, _created = enqueue(link.establishment, requested_by=None, audience="certifier", **key)
+        except Exception:
+            logger.exception("Certifier dossier build could not be started for establishment %s", link.establishment_id)
+            return Response(
+                {"error": "The dossier could not be generated right now. Please try again shortly."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response(_neutral_job_payload(job), status=status.HTTP_202_ACCEPTED)
+
+    public_id = parse_public_id(raw_job)
+    if public_id is None:
+        raise Http404("No such build.")
+    reap_stale(link.establishment)
+    job = get_object_or_404(ExportJob, public_id=public_id, establishment=link.establishment)
+    return Response(_neutral_job_payload(job))
+
+
+def _neutral_job_payload(job):
+    from documents.serializers import ExportJobSerializer
+
+    data = ExportJobSerializer(job).data
+    if job.status == "failed":
+        # The reviewer is not the person who can fix a failed build; keep the neutral wording.
+        data["error"] = "The dossier could not be generated right now. Please try again shortly."
+    return data
 
 
 @api_view(["GET"])

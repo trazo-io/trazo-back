@@ -169,9 +169,19 @@ class OperationAuditExportService:
 
     # ------------------------------------------------------------------
 
-    def generate_pdf(self):
+    def generate_pdf(self, progress=None):
+        """Build the dossier. `progress(current, total, label)`, when given, is called before
+        the operation-wide sections and before each production so a background job can show
+        "Production 4 of 12" instead of a spinner (documents/services/export_jobs.py)."""
         productions = self._productions()
         by_parcel = self._group_by_parcel(productions)
+        total = len(productions)
+
+        def _report(current, label):
+            if progress is not None:
+                progress(current, total, label)
+
+        _report(0, "Operation-wide records")
 
         # One instance drives styles + header helpers + the reusable builder map. It constructs
         # fine with a None production (AuditExportService.__init__ only touches the production
@@ -236,6 +246,7 @@ class OperationAuditExportService:
             story += est_builders[k]()
 
         # --- Per parcel ---
+        built = 0
         for parcel, prods in by_parcel.values():
             story.append(PageBreak())
             story.append(header_svc._section_header(f"Parcel — {_esc(_val(getattr(parcel, 'name', None)))}"))
@@ -252,6 +263,8 @@ class OperationAuditExportService:
                     crop = prod.crop_type.name if prod.crop_type else (prod.product.name if prod.product else "")
                 except AttributeError:
                     crop = ""
+                built += 1
+                _report(built, f"{crop or prod.name or 'Production'} — {_val(getattr(parcel, 'name', None))}")
                 span = production_period(prod, joiner=" – ")
                 title = f"Production — {_esc(crop)} ({span})"
                 story.append(header_svc._section_header(title))
@@ -265,6 +278,7 @@ class OperationAuditExportService:
                 for k in prod_keys:
                     story += prod_builders[k]()
 
+        _report(total, "Laying out pages")
         _furniture = specimen_page_callback(
             letter, base_callback=_add_page_number, specimen=is_specimen(self.establishment)
         )

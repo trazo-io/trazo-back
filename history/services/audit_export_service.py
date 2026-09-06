@@ -16,8 +16,9 @@ import io
 import logging
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
 from reportlab.lib import colors
@@ -1560,11 +1561,90 @@ def _compute_registry_sync_diff(*, inputs_narrative, omri_products, wsda_materia
 def _photo_count(event):
     """Return integer photo count for an event instance."""
     try:
-        if event.album and hasattr(event.album, "images"):
-            return event.album.images.count()
+        return len(album_images(getattr(event, "album", None)))
     except Exception:
-        pass
-    return 0
+        return 0
+
+
+def album_images(album):
+    """An album's images, oldest first, read from the prefetch cache when the caller loaded it.
+
+    `album.images.all().order_by("id")` looks like it uses the `album__images` prefetch every
+    export view sets up; it does not — `order_by()` (like `filter()` and `count()`) builds a NEW
+    queryset and goes back to the database, once per album. Sorting in Python keeps the cache.
+    """
+    if album is None:
+        return []
+    cache = getattr(album, "_prefetched_objects_cache", None) or {}
+    rows = list(cache["images"]) if "images" in cache else list(album.images.all())
+    rows.sort(key=lambda img: img.pk or 0)
+    return rows
+
+
+_EVENT_DATE_FLOOR = datetime.min.replace(tzinfo=timezone.utc)
+
+
+def _event_sort_key(field):
+    """Postgres puts NULLs last on ASC and first on DESC. A NULL key that sorts ABOVE every real
+    value gives exactly that under both `sorted()` and `sorted(reverse=True)`, so a prefetched
+    read orders as the query it replaces did."""
+
+    def key(ev):
+        value = getattr(ev, field, None)
+        if value is None:
+            return (True, _EVENT_DATE_FLOOR if field == "date" else 0)
+        if field == "date":
+            if isinstance(value, datetime):
+                if value.tzinfo is None:
+                    value = value.replace(tzinfo=timezone.utc)
+            else:
+                value = datetime.combine(value, datetime.min.time(), tzinfo=timezone.utc)
+        return (False, value)
+
+    return key
+
+
+def _event_matches(ev, filters):
+    for lookup, expected in filters.items():
+        field, _, op = lookup.partition("__")
+        actual = getattr(ev, field, None)
+        if op == "in":
+            if actual not in tuple(expected):
+                return False
+        elif op == "isnull":
+            if (actual is None) != bool(expected):
+                return False
+        elif op:
+            raise ValueError(f"related_events() does not support the lookup {lookup!r}")
+        elif actual != expected:
+            return False
+    return True
+
+
+def related_events(production, related_name, *, order="date", **filters):
+    """Rows of one event relation of `production`, ordered, from the prefetch cache when present.
+
+    Every export view prefetches all eight `history_*_events` relations (and their photo albums)
+    precisely so the section builders do not go back to the database per production. The
+    builders then called `.order_by("date")`, `.filter(type="HA")` or `.count()` on those
+    relations — each of which discards the cache and runs a query. Measured on a 12-production
+    operation dossier (2026-09-05): ~350 extra queries on `history_productionevent` alone.
+
+    `filters` accepts the small lookup set the builders actually use: `field=value`,
+    `field__in=(...)` and `field__isnull=bool`. Anything else raises rather than silently
+    returning the wrong rows. Falls back to a real query when the relation was not prefetched
+    (tests, ad-hoc callers) so the result is the same either way.
+    """
+    reverse = order.startswith("-")
+    field = order.lstrip("-")
+    cache = getattr(production, "_prefetched_objects_cache", None) or {}
+    if related_name in cache:
+        rows = [ev for ev in cache[related_name] if _event_matches(ev, filters)]
+    else:
+        manager = getattr(production, related_name)
+        rows = list(manager.filter(**filters) if filters else manager.all())
+    rows.sort(key=_event_sort_key(field), reverse=reverse)
+    return rows
 
 
 class _PageNumCanvas:
@@ -1947,6 +2027,9 @@ class AuditExportService:
         self._photos_dev_skipped = 0
         self._photos_prod_failed = 0
         self._photos_prod_errors = []  # list of (url, reason) tuples, capped at 10
+        # pk -> (jpeg BytesIO | None, failure) filled by _prefetch_photo_images(); read by
+        # _fetch_image_for_pdf() so the gallery loop never waits on the network.
+        self._image_cache = {}
 
     def _establishment_state(self):
         """Canonical 2-letter state for this production's farm, or None.
@@ -4427,7 +4510,7 @@ class AuditExportService:
         # a verification phone call. Longer than that needs a why.
         try:
             contamination_incidents = [
-                ev for ev in p.history_generalevent_events.filter(is_contamination_incident=True)
+                ev for ev in related_events(p, "history_generalevent_events", is_contamination_incident=True)
             ]
         except Exception:  # noqa: BLE001 — linter degrades to no finding
             contamination_incidents = []
@@ -5041,7 +5124,7 @@ class AuditExportService:
         """
         elements = [self._section_header("Input Application Log")]
 
-        events = list(self.production.history_chemicalevent_events.all().order_by("date"))
+        events = related_events(self.production, "history_chemicalevent_events")
 
         if not events:
             elements.append(
@@ -5940,7 +6023,7 @@ class AuditExportService:
             "Operator",
         ]
 
-        events = list(self.production.history_productionevent_events.all().order_by("date"))
+        events = related_events(self.production, "history_productionevent_events")
 
         if not events:
             elements.append(self._empty_table(headers))
@@ -6634,7 +6717,7 @@ class AuditExportService:
 
         # Seed source data lives on ProductionEvent (PL subtype), NOT on History.
         # Query all planting events for seed info.
-        planting_events = list(self.production.history_productionevent_events.filter(type="PL").order_by("date"))
+        planting_events = related_events(self.production, "history_productionevent_events", type="PL")
 
         # Also check ANY production event for seed_source (some templates set it on non-PL events)
         all_prod_events = list(self.production.history_productionevent_events.all())
@@ -7109,7 +7192,7 @@ class AuditExportService:
             "Organic Status",
         ]
 
-        events = list(self.production.history_soilmanagementevent_events.all().order_by("date"))
+        events = related_events(self.production, "history_soilmanagementevent_events")
 
         if not events:
             elements.append(self._empty_table(headers))
@@ -7974,7 +8057,7 @@ class AuditExportService:
             "Beneficial / Qty",
         ]
 
-        events = list(self.production.history_pestmanagementevent_events.all().order_by("date"))
+        events = related_events(self.production, "history_pestmanagementevent_events")
 
         if not events:
             elements.append(self._empty_table(headers))
@@ -8332,7 +8415,7 @@ class AuditExportService:
         """
         operations = [
             ev
-            for ev in self.production.history_productionevent_events.all().order_by("date")
+            for ev in related_events(self.production, "history_productionevent_events")
             # EM events ARE the cleaning records; they belong in the cleaning-log table above,
             # not in the list of operations that need one.
             if (ev.shared_with_conventional or ev.operator_is_custom) and ev.type != "EM"
@@ -8406,7 +8489,7 @@ class AuditExportService:
             "Area Worked",
         ]
 
-        events = list(self.production.history_equipmentevent_events.all().order_by("date"))
+        events = related_events(self.production, "history_equipmentevent_events")
 
         if not events:
             # 🔴 2026-08-15 — the placeholder table is gone.
@@ -8477,7 +8560,7 @@ class AuditExportService:
         # and it was the one case the packet could not show.
         cleaning_events = [
             ev
-            for ev in self.production.history_productionevent_events.filter(type__in=("EM", "PH"))
+            for ev in related_events(self.production, "history_productionevent_events", type__in=("EM", "PH"))
             if ev.cleaning_date
             or ev.cleaning_method
             or ev.shared_with_conventional
@@ -8757,7 +8840,7 @@ class AuditExportService:
 
         elements = [self._section_header("Weather Events")]
 
-        events = list(self.production.history_weatherevent_events.all().order_by("date"))
+        events = related_events(self.production, "history_weatherevent_events")
 
         headers = ["Date", "Type", "Magnitude", "Start", "End", "Impact / Notes"]
 
@@ -9034,7 +9117,7 @@ class AuditExportService:
         """
         events = [
             ev
-            for ev in self.production.history_chemicalevent_events.all().order_by("date")
+            for ev in related_events(self.production, "history_chemicalevent_events")
             if ev.application_fuel_consumed and float(ev.application_fuel_consumed) > 0
         ]
         if not events:
@@ -9138,7 +9221,8 @@ class AuditExportService:
         # the traceability record matches the Harvest Records table. Fall back to
         # the production finish date only when no harvest event exists (the finish
         # date can be days later than the harvest — e.g. after packing/close-out).
-        harvest_ev = self.production.history_productionevent_events.filter(type="HA").order_by("-date").first()
+        _harvests = related_events(self.production, "history_productionevent_events", order="-date", type="HA")
+        harvest_ev = _harvests[0] if _harvests else None
         harvest_date = harvest_ev.date if (harvest_ev and harvest_ev.date) else p.finish_date
 
         rows = [
@@ -9219,6 +9303,9 @@ class AuditExportService:
     PHOTOS_MAX_PER_EVENT = 4
     PHOTOS_MAX_TOTAL = 60
     PHOTOS_FETCH_TIMEOUT_SEC = 8
+    # Concurrent S3 fetches per section. Each photo was a sequential HTTPS round-trip plus a
+    # decode/resize; at ~0.2-0.4 s each, 60 photos cost a production 15-20 s on their own.
+    PHOTOS_FETCH_WORKERS = 6
     PHOTOS_TARGET_PIXEL_WIDTH = 1400
 
     # NOP-priority order: events whose photo evidence usually decides a finding
@@ -9306,16 +9393,7 @@ class AuditExportService:
         whole PDF.
         """
         env = self._photo_embed_environment()
-        url = None
-        try:
-            url = image_obj.thumbnail_url("md")
-        except Exception:
-            url = None
-        if not url:
-            try:
-                url = image_obj.url
-            except Exception:
-                url = None
+        url = self._image_url(image_obj)
         if not url:
             # No URL at all — count as prod-failure in prod, dev-skip in dev.
             if env["mode"].startswith("prod"):
@@ -9340,17 +9418,62 @@ class AuditExportService:
                     self._photos_prod_errors.append((url, "S3 bucket not configured (None.s3 URL)"))
             return None
 
+        cached = self._image_cache.get(image_obj.pk)
+        if cached is None:
+            cached = self._download_image_bytes(url, self.PHOTOS_FETCH_TIMEOUT_SEC, self.PHOTOS_TARGET_PIXEL_WIDTH)
+        buf, failure = cached
+        if buf is not None:
+            return buf
+        kind, reason = failure
+        if kind == "http":
+            # A reachable bucket answering non-200 is a real error whatever the environment —
+            # the object is missing or the policy is wrong — so it counts as a prod failure
+            # even in dev, as it always has.
+            logger.warning("Audit photo fetch %s returned %s", url, reason)
+            self._photos_prod_failed += 1
+            if len(self._photos_prod_errors) < 10:
+                self._photos_prod_errors.append((url, reason))
+            return None
+        logger.warning("Audit photo embed failed for %s: %s", url, reason)
+        if env["mode"].startswith("prod"):
+            self._photos_prod_failed += 1
+            if len(self._photos_prod_errors) < 10:
+                self._photos_prod_errors.append((url, reason))
+        else:
+            self._photos_dev_skipped += 1
+        return None
+
+    @staticmethod
+    def _image_url(image_obj):
+        """The URL to fetch for one photo: the medium thumbnail when one exists, else the
+        original. None when the row carries no usable location at all."""
+        try:
+            url = image_obj.thumbnail_url("md")
+        except Exception:
+            url = None
+        if not url:
+            try:
+                url = image_obj.url
+            except Exception:
+                url = None
+        return url or None
+
+    @staticmethod
+    def _download_image_bytes(url, timeout, target_px):
+        """Fetch one image and normalise it for ReportLab.
+
+        Returns `(BytesIO, None)` on success, else `(None, (kind, reason))` where kind is
+        "http" (the server answered, not with 200) or "error" (no answer / undecodable).
+        Deliberately touches no instance state and no ORM, so it can run on a worker thread;
+        the caller classifies the outcome against the embed environment.
+        """
         try:
             import requests
             from PIL import Image as PILImage
 
-            resp = requests.get(url, timeout=self.PHOTOS_FETCH_TIMEOUT_SEC)
+            resp = requests.get(url, timeout=timeout)
             if resp.status_code != 200:
-                logger.warning("Audit photo fetch %s returned HTTP %s", url, resp.status_code)
-                self._photos_prod_failed += 1
-                if len(self._photos_prod_errors) < 10:
-                    self._photos_prod_errors.append((url, f"HTTP {resp.status_code}"))
-                return None
+                return None, ("http", f"HTTP {resp.status_code}")
 
             img = PILImage.open(io.BytesIO(resp.content))
             # ReportLab's JPEG embedder needs RGB. PNG-with-alpha and grayscale
@@ -9364,23 +9487,49 @@ class AuditExportService:
             elif img.mode != "RGB":
                 img = img.convert("RGB")
 
-            if max(img.size) > self.PHOTOS_TARGET_PIXEL_WIDTH:
-                img.thumbnail((self.PHOTOS_TARGET_PIXEL_WIDTH, self.PHOTOS_TARGET_PIXEL_WIDTH), PILImage.LANCZOS)
+            if max(img.size) > target_px:
+                img.thumbnail((target_px, target_px), PILImage.LANCZOS)
 
             out = io.BytesIO()
             img.save(out, format="JPEG", quality=78, optimize=True)
             out.seek(0)
-            return out
+            return out, None
         except Exception as exc:
-            logger.warning("Audit photo embed failed for %s: %s", url, exc)
-            env = self._photo_embed_environment()
-            if env["mode"].startswith("prod"):
-                self._photos_prod_failed += 1
-                if len(self._photos_prod_errors) < 10:
-                    self._photos_prod_errors.append((url, f"fetch/decode error: {exc!r}"))
-            else:
-                self._photos_dev_skipped += 1
-            return None
+            return None, ("error", f"fetch/decode error: {exc!r}")
+
+    def _prefetch_photo_images(self, category_events):
+        """Download every photo the gallery below will embed, concurrently, into `_image_cache`.
+
+        Walks the events in the gallery's own order with the gallery's own caps, so it fetches
+        exactly the set `_build_event_photo_block` will ask for. Only the network and the resize
+        run on the pool; URL resolution and the prod/dev bookkeeping stay on the calling thread.
+        """
+        remaining = self.PHOTOS_MAX_TOTAL
+        planned = []
+        for _label, events in category_events:
+            for ev in events:
+                if remaining <= 0:
+                    break
+                photos = album_images(getattr(ev, "album", None))[: min(self.PHOTOS_MAX_PER_EVENT, remaining)]
+                planned.extend(photos)
+                remaining -= len(photos)
+        to_fetch = {}
+        for photo in planned:
+            url = self._image_url(photo)
+            # Malformed-bucket URLs are classified (and counted) by _fetch_image_for_pdf.
+            if url and "None.s3" not in url and "://None" not in url:
+                to_fetch[photo.pk] = url
+        if not to_fetch:
+            return
+        with ThreadPoolExecutor(max_workers=min(self.PHOTOS_FETCH_WORKERS, len(to_fetch))) as pool:
+            futures = {
+                pk: pool.submit(
+                    self._download_image_bytes, url, self.PHOTOS_FETCH_TIMEOUT_SEC, self.PHOTOS_TARGET_PIXEL_WIDTH
+                )
+                for pk, url in to_fetch.items()
+            }
+            for pk, future in futures.items():
+                self._image_cache[pk] = future.result()
 
     def _photo_caption(self, image_obj, idx, total):
         """
@@ -9445,7 +9594,7 @@ class AuditExportService:
         photos once the document-wide cap is reached.
         """
         try:
-            all_photos = list(event.album.images.all().order_by("id")) if event.album else []
+            all_photos = album_images(getattr(event, "album", None))
         except Exception:
             all_photos = []
         if not all_photos:
@@ -9613,8 +9762,7 @@ class AuditExportService:
         # table and the gallery so we don't double-query.
         category_events = []
         for label, related_name in self._photos_category_order_for():
-            qs = getattr(self.production, related_name).all().order_by("date")
-            category_events.append((label, list(qs)))
+            category_events.append((label, related_events(self.production, related_name)))
 
         # ---------- Layer 1: summary table ----------
         summary_headers = ["Event Category", "Event Date", "Description", "Photos"]
@@ -9685,6 +9833,7 @@ class AuditExportService:
         )
         elements.append(self._spacer(0.05))
 
+        self._prefetch_photo_images(category_events)
         photos_remaining = self.PHOTOS_MAX_TOTAL
         embedded_count = 0
         skipped_events = 0
@@ -10283,7 +10432,7 @@ class AuditExportService:
         """
         elements = [self._section_header("Inspection & Compliance Event History")]
 
-        events = list(self.production.history_businessevent_events.all().order_by("date"))
+        events = related_events(self.production, "history_businessevent_events")
 
         if not events:
             elements.append(
@@ -10534,7 +10683,11 @@ class AuditExportService:
         Both the PDF and the CSV call this. They previously each read the header separately,
         which is how the two exports of one production came to disagree about the buyer.
         """
-        events = [ev for ev in self.production.history_productionevent_events.filter(type="HA") if ev.yield_quantity]
+        events = [
+            ev
+            for ev in related_events(self.production, "history_productionevent_events", type="HA")
+            if ev.yield_quantity
+        ]
         units = {(_val(ev.yield_unit, "") or "").strip().lower() for ev in events}
         if events and len(units) == 1:
             return (
@@ -10581,7 +10734,11 @@ class AuditExportService:
         if self.production.finish_date is None:
             return None
 
-        events = [ev for ev in self.production.history_productionevent_events.filter(type="HA") if ev.yield_quantity]
+        events = [
+            ev
+            for ev in related_events(self.production, "history_productionevent_events", type="HA")
+            if ev.yield_quantity
+        ]
         if not events:
             return None
         units = {(_val(ev.yield_unit, "") or "").strip().lower() for ev in events}
@@ -10647,8 +10804,8 @@ class AuditExportService:
         # "[REVIEW] Mass balance cannot be reconciled" — for records that were complete.
         # Soil amendments are purchases too, and CCOF's checklist names them in the same
         # breath as fertiliser.
-        chemical_events = list(p.history_chemicalevent_events.all().order_by("date"))
-        soil_events = list(p.history_soilmanagementevent_events.all().order_by("date"))
+        chemical_events = related_events(p, "history_chemicalevent_events")
+        soil_events = related_events(p, "history_soilmanagementevent_events")
 
         purchased_rows = []
         total_purchased_by_unit = {}
@@ -10867,11 +11024,8 @@ class AuditExportService:
         # harvest (HA) event, falling back to the production finish date.
         harvest_dt = None
         try:
-            _ha = (
-                self.production.history_productionevent_events.filter(type="HA", date__isnull=False)
-                .order_by("date")
-                .first()
-            )
+            _ha_rows = related_events(self.production, "history_productionevent_events", type="HA", date__isnull=False)
+            _ha = _ha_rows[0] if _ha_rows else None
             if _ha and _ha.date:
                 harvest_dt = _ha.date.date()
             elif getattr(self.production, "finish_date", None):
@@ -13075,12 +13229,15 @@ class AuditExportService:
         # --- Full narratives per section (rendered verbatim) ------------------
         # Inspectors need to read the substance, not a char-count summary. We
         # XML-escape to protect against ReportLab Paragraph markup injection.
-        elements.append(
-            Paragraph(
-                "<b>Section narratives</b> — verbatim content filed with the certifier.",
-                self._styles["body"],
-            )
+        # "Filed with the certifier" is only true of a submitted or active plan. The fallback
+        # above prints the newest DRAFT when no plan has been filed, and this line said "filed"
+        # about it — a claim the packet cannot support, on the one page a reviewer reads first.
+        narratives_lead = (
+            "<b>Section narratives</b> — verbatim content filed with the certifier."
+            if osp.status in ("submitted", "active", "superseded")
+            else "<b>Section narratives</b> — verbatim content of the current draft (not yet filed with the certifier)."
         )
+        elements.append(Paragraph(narratives_lead, self._styles["body"]))
         elements.append(self._spacer(0.08))
 
         for key in OSP_SECTION_KEYS:
@@ -14243,7 +14400,7 @@ class AuditExportService:
             manager = getattr(self.production, accessor, None)
             if manager is None:
                 continue
-            for ev in manager.filter(reviewed=True).order_by("date"):
+            for ev in related_events(self.production, accessor, reviewed=True):
                 rows.append(
                     [
                         self._cell(_fmt_date(ev.date)),
@@ -14492,14 +14649,14 @@ class AuditExportService:
 
         elements = [self._section_header("General Documentation")]
 
-        events = list(
-            self.production.history_generalevent_events.filter(is_contamination_incident=False).order_by("date")
-        )
+        events = related_events(self.production, "history_generalevent_events", is_contamination_incident=False)
 
         # Pointer to the excluded incidents — an inspector scanning this
         # section must not conclude contamination went undocumented just
         # because the rows live in the SOE Compliance Status section.
-        contamination_count = self.production.history_generalevent_events.filter(is_contamination_incident=True).count()
+        contamination_count = len(
+            related_events(self.production, "history_generalevent_events", is_contamination_incident=True)
+        )
         contamination_pointer = None
         if contamination_count > 0:
             contamination_pointer = Paragraph(
@@ -14906,8 +15063,8 @@ class AuditExportService:
         # Contamination Incident Log — § 205.272 is the correct cite for
         # commingling / contact-with-prohibited-substance prevention. § 205.201(b)
         # is the OSP-substitution clause and does not govern contamination logs.
-        contamination_events = list(
-            self.production.history_generalevent_events.filter(is_contamination_incident=True).order_by("date")
+        contamination_events = related_events(
+            self.production, "history_generalevent_events", is_contamination_incident=True
         )
         if contamination_events:
             elements.append(self._spacer(0.1))
@@ -15208,19 +15365,37 @@ class AuditExportService:
             )
         )
 
-        all_entries = list(LogEntry.objects.get_for_object(self.production))
-        event_querysets = [
-            self.production.history_productionevent_events.all(),
-            self.production.history_chemicalevent_events.all(),
-            self.production.history_soilmanagementevent_events.all(),
-            self.production.history_pestmanagementevent_events.all(),
-            self.production.history_businessevent_events.all(),
-            self.production.history_weatherevent_events.all(),
-            self.production.history_generalevent_events.all(),
-        ]
-        for qs in event_querysets:
-            for ev in qs:
-                all_entries.extend(LogEntry.objects.get_for_object(ev))
+        # One query for the whole trail. This called `LogEntry.get_for_object()` once per
+        # record — the production and every one of its events — and then read `.actor` and
+        # `.content_type` off every entry: three N+1s deep, ~1,600 of the ~2,750 queries a
+        # 12-production operation dossier ran (measured 2026-09-05) and the single largest
+        # reason the production export took a minute. Same rows, same order; only the number
+        # of round-trips changed. Equipment events were also missing from the list — they are
+        # registered with auditlog like the other seven, and § 205.272 cleaning records are
+        # exactly the edits an inspector asks about.
+        from django.contrib.auth import get_user_model
+        from django.contrib.contenttypes.models import ContentType
+        from django.db.models import Q
+
+        records = [self.production]
+        for _label, related_name in self._SIGNOFF_EVENT_SOURCES:
+            records.extend(related_events(self.production, related_name))
+        by_model = {}
+        for record in records:
+            by_model.setdefault(type(record), []).append(record)
+        content_types = ContentType.objects.get_for_models(*by_model)
+        trail_filter = Q()
+        author_id_by_record = {}
+        for model, rows in by_model.items():
+            ct = content_types[model]
+            trail_filter |= Q(content_type=ct, object_pk__in=[str(r.pk) for r in rows])
+            for r in rows:
+                author_id_by_record[(ct.pk, str(r.pk))] = getattr(r, "created_by_id", None)
+        all_entries = list(LogEntry.objects.filter(trail_filter).select_related("actor", "content_type"))
+        # Fallback attribution (the record's author when the log carries no actor) used to
+        # resolve one user per entry; every author the trail can need comes back in one query.
+        author_ids = {uid for uid in author_id_by_record.values() if uid}
+        authors = get_user_model().objects.in_bulk(author_ids) if author_ids else {}
 
         if not all_entries:
             elements.append(self._spacer(0.1))
@@ -15357,13 +15532,9 @@ class AuditExportService:
                 except Exception:
                     actor = str(le.actor)
             if not actor:
-                try:
-                    record = le.content_type.model_class().objects.filter(pk=le.object_pk).only("created_by").first()
-                    if record is not None and getattr(record, "created_by", None):
-                        cb = record.created_by
-                        actor = getattr(cb, "email", None) or str(cb)
-                except Exception:
-                    actor = None
+                author = authors.get(author_id_by_record.get((le.content_type_id, str(le.object_pk))))
+                if author is not None:
+                    actor = getattr(author, "email", None) or str(author)
             if not actor:
                 actor = "system (background task)"
             model_name = le.content_type.model_class().__name__ if le.content_type else "Unknown"
@@ -16342,7 +16513,7 @@ class AuditExportService:
         # parsing structured data) get the same cert #, inspector, and status
         # traceability that the PDF presents visually.
         if "business_events" in self.sections:
-            business_events = list(self.production.history_businessevent_events.all().order_by("date"))
+            business_events = related_events(self.production, "history_businessevent_events")
             if business_events:
                 writer.writerow([])
                 writer.writerow(["=== INSPECTION & COMPLIANCE EVENT HISTORY ==="])
@@ -16430,7 +16601,7 @@ class AuditExportService:
             # Inputs purchased sub-table
             writer.writerow([])
             writer.writerow(["Date", "Product", "Type", "Qty Purchased", "Unit"])
-            for ev in p.history_chemicalevent_events.all().order_by("date"):
+            for ev in related_events(p, "history_chemicalevent_events"):
                 if ev.quantity_purchased is not None:
                     writer.writerow(
                         [

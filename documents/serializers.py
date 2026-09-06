@@ -4,7 +4,7 @@ from django.conf import settings
 
 from rest_framework import serializers
 
-from .models import GeneratedDocument
+from .models import ExportJob, GeneratedDocument
 
 # What a certified operation legitimately puts on its document shelf: the certifier-facing
 # paperwork, the spreadsheets certifiers send, scans and photos of labels and receipts, and
@@ -126,3 +126,37 @@ class DocumentUploadSerializer(serializers.Serializer):
     # another farm's row.
     history = serializers.IntegerField(required=False, allow_null=True)
     parcel = serializers.IntegerField(required=False, allow_null=True)
+
+
+class ExportJobSerializer(serializers.ModelSerializer):
+    """What a client polls. `document_id` is the handle for the Documents download route; the
+    bytes never travel through this endpoint."""
+
+    document_id = serializers.IntegerField(read_only=True)
+    document_title = serializers.CharField(source="document.title", read_only=True, default=None)
+    document_size_bytes = serializers.IntegerField(source="document.size_bytes", read_only=True, default=None)
+    is_terminal = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = ExportJob
+        fields = [
+            "public_id",
+            "kind",
+            "audience",
+            "certification_type",
+            "period_start",
+            "period_end",
+            "status",
+            "is_terminal",
+            "progress_current",
+            "progress_total",
+            "progress_label",
+            "error",
+            "document_id",
+            "document_title",
+            "document_size_bytes",
+            "created_at",
+            "started_at",
+            "finished_at",
+        ]
+        read_only_fields = fields

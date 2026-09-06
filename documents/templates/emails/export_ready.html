@@ -1,0 +1,18 @@
+<!doctype html>
+<html>
+  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1a1a1a; line-height: 1.5; max-width: 560px; margin: 0 auto; padding: 24px;">
+    <p>Hello{% if recipient.first_name %} {{ recipient.first_name }}{% endif %},</p>
+    <p>Your <strong>{{ title|lower }}</strong> for <strong>{{ establishment.name }}</strong> is ready.</p>
+    <p>
+      <a href="{{ url }}" style="display: inline-block; background: #2E7D32; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 6px; font-weight: 600;">Open your Documents</a>
+    </p>
+    <p style="font-size: 14px; color: #555555;">
+      It is filed under Exports.{% if size_mb %} File size: {{ size_mb }} MB.{% endif %}
+      The file stays on your Documents shelf; this email carries only the link.
+    </p>
+    <p style="font-size: 13px; color: #777777;">
+      Generated from the records in Trazo at the moment the build started. Log more records and generate again for a current copy.
+    </p>
+    <p style="font-size: 13px; color: #777777;">Trazo</p>
+  </body>
+</html>
