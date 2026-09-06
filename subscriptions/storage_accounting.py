@@ -58,7 +58,7 @@ rather than fix the gap. The DMS is the unified shelf those fields are migrating
 
 from decimal import Decimal
 
-from django.db.models import Q, Sum
+from django.db.models import Count, Q, Sum
 
 BYTES_PER_GB = Decimal(1024 * 1024 * 1024)
 
@@ -78,19 +78,18 @@ def media_storage_bytes(company) -> int:
 
     from common.models import GalleryImage
     from history.models import History
+    from product.models import Parcel
 
-    est_gallery_ids = list(company.establishment_set.exclude(album__isnull=True).values_list("album_id", flat=True))
-
-    parcel_gallery_ids = list(
-        company.establishment_set.prefetch_related("parcels")
-        .exclude(parcels__album__isnull=True)
-        .values_list("parcels__album_id", flat=True)
-    )
-
-    history_qs = History.objects.filter(parcel__establishment__company=company).exclude(album__isnull=True)
-    history_gallery_ids = list(history_qs.values_list("album_id", flat=True))
-
-    event_related_names = [
+    # Every gallery the company owns — farm, parcel, season and the eight event tables — as ONE
+    # UNION round trip. Until 2026-09-06 this was twelve queries (one per source plus a
+    # history-id list fed into eight `history_id__in` filters), on every company fetch.
+    scoped = {"parcel__establishment__company": company, "album__isnull": False}
+    sources = [
+        company.establishment_set.exclude(album__isnull=True).values_list("album_id", flat=True),
+        Parcel.objects.filter(establishment__company=company, album__isnull=False).values_list("album_id", flat=True),
+        History.objects.filter(**scoped).values_list("album_id", flat=True),
+    ]
+    for related_name in (
         "history_productionevent_events",
         "history_chemicalevent_events",
         "history_weatherevent_events",
@@ -99,41 +98,32 @@ def media_storage_bytes(company) -> int:
         "history_soilmanagementevent_events",
         "history_pestmanagementevent_events",
         "history_businessevent_events",
-    ]
-
-    history_ids = list(History.objects.filter(parcel__establishment__company=company).values_list("id", flat=True))
-
-    event_gallery_ids = []
-    if history_ids:
-        for related_name in event_related_names:
-            try:
-                manager = getattr(History, related_name, None)
-                if manager is None:
-                    continue
-                related_model = manager.rel.related_model
-                event_gallery_ids.extend(
-                    list(
-                        related_model.objects.filter(history_id__in=history_ids)
-                        .exclude(album__isnull=True)
-                        .values_list("album_id", flat=True)
-                    )
-                )
-            except Exception:
-                pass
-
-    all_gallery_ids = est_gallery_ids + parcel_gallery_ids + history_gallery_ids + event_gallery_ids
+    ):
+        manager = getattr(History, related_name, None)
+        if manager is None:
+            continue
+        related_model = manager.rel.related_model
+        sources.append(
+            related_model.objects.filter(
+                history__parcel__establishment__company=company, album__isnull=False
+            ).values_list("album_id", flat=True)
+        )
+    all_gallery_ids = list(sources[0].union(*sources[1:]))
     if not all_gallery_ids:
         return 0
 
     all_images_qs = GalleryImage.objects.filter(gallery_id__in=all_gallery_ids)
 
-    known_bytes = all_images_qs.filter(file_size__isnull=False).aggregate(total=Sum("file_size"))["total"] or 0
-
-    remote_unknown_count = (
-        all_images_qs.filter(file_size__isnull=True)
-        .filter(Q(s3_key__isnull=False) | Q(image_url__isnull=False))
-        .count()
+    # One aggregate for both the summed known sizes and the count of remote images with no
+    # recorded size (was two queries).
+    totals = all_images_qs.aggregate(
+        known=Sum("file_size", filter=Q(file_size__isnull=False)),
+        remote_unknown=Count(
+            "id", filter=Q(file_size__isnull=True) & (Q(s3_key__isnull=False) | Q(image_url__isnull=False))
+        ),
     )
+    known_bytes = totals["known"] or 0
+    remote_unknown_count = totals["remote_unknown"] or 0
 
     local_images = list(
         all_images_qs.filter(file_size__isnull=True)
