@@ -82,7 +82,13 @@ class EstablishmentSerializer(ModelSerializer):
     def get_parcels(self, establishment):
         # One query for the parcels with their product and album, one batch for every parcel's
         # members (see `parcel_members_map`), instead of ~8 queries per parcel.
-        parcels = list(establishment.parcels.all().select_related("product", "album").prefetch_related("album__images"))
+        parcels = list(
+            establishment.parcels.all()
+            # `current_history__product`: ParcelBasicSerializer.get_product names the season's crop.
+            .select_related("product", "album", "current_history__product")
+            # `crop_history` / `landowner_affidavits`: parcel_application_status reads them per parcel.
+            .prefetch_related("album__images", "crop_history", "landowner_affidavits")
+        )
         context = {**self.context, "parcel_members": parcel_members_map(parcels)}
         return ParcelBasicSerializer(parcels, many=True, context=context).data
 

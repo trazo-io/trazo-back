@@ -75,11 +75,16 @@ def parcel_application_status(parcel) -> dict:
     if not has_map:
         missing.append("map")
 
+    crop_rows = []
     if parcel.container_production:
         has_history = True
     else:
-        years = parcel.crop_history.values_list("year", flat=True).distinct().count()
-        has_history = years >= 3 or parcel.landowner_affidavits.exists()
+        # `.all()` reads the prefetch cache when the caller loaded `crop_history` /
+        # `landowner_affidavits` (the company payload does, for every parcel at once); the
+        # `.count()` / `.exists()` forms always went back to the database, once per parcel.
+        crop_rows = list(parcel.crop_history.all())
+        years = len({row.year for row in crop_rows})
+        has_history = years >= 3 or bool(list(parcel.landowner_affidavits.all()))
     if not has_history:
         missing.append("land_history")
 
@@ -92,7 +97,7 @@ def parcel_application_status(parcel) -> dict:
             or has_buffers
             or has_map
             or bool(answers)
-            or parcel.crop_history.exists()
+            or bool(crop_rows)
         )
         state = "in_progress" if any_signal else "not_started"
 

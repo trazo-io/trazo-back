@@ -62,7 +62,9 @@ class CompanyViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         assert_deletable("company", parcel__establishment__company=instance)
         super().perform_destroy(instance)
 
-    queryset = Company.objects.all()
+    # The nested SubscriptionSerializer reads `subscription.plan` and walks `subscription.addons`
+    # (+ `.addon`) once per limit it computes; prefetched here that is one query instead of six.
+    queryset = Company.objects.select_related("subscription__plan").prefetch_related("subscription__addons__addon")
     filter_backends = [filters.OrderingFilter]
 
     def get_permissions(self):
