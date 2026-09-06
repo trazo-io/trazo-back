@@ -104,14 +104,13 @@ class ChangeHistoryQueryBudgetTests(_Base):
         )
         self.assertLessEqual(large, 10)
 
-    def test_every_event_model_is_in_the_trail(self):
-        """Equipment events were missing from the list; they are audited like the other seven."""
+    def test_retired_equipment_model_stays_out_of_the_trail(self):
+        """EquipmentEvent is retired in the UI (equipment work is a Production EM/PH record);
+        a legacy row must not resurface as an auditable record in a certifier document."""
         from history.models import EquipmentEvent
 
         EquipmentEvent.objects.create(history=self.production, date=timezone.now(), created_by=self.user)
         service = AuditExportService(self._prefetched(), certification_type="organic")
-        text = " ".join(getattr(f, "text", "") for f in service._build_change_history_section() if hasattr(f, "text"))
-        # The table cells are Paragraphs nested in a Table; fall back to scanning the table data.
         tables = [f for f in service._build_change_history_section() if f.__class__.__name__ == "Table"]
         cells = " ".join(
             getattr(c, "text", str(c))
@@ -119,7 +118,7 @@ class ChangeHistoryQueryBudgetTests(_Base):
             for row in t._cellvalues
             for c in (row if isinstance(row, list) else [row])
         )
-        self.assertIn("EquipmentEvent", text + cells)
+        self.assertNotIn("EquipmentEvent", cells)
 
     def test_fallback_author_comes_from_one_bulk_lookup(self):
         """Entries with no actor (created outside a request) still name the record's author."""

@@ -15347,6 +15347,18 @@ class AuditExportService:
     # Section: Record Change History (Sprint 2.1 — django-auditlog)
     # ------------------------------------------------------------------
 
+    # The relations whose edits the trail prints. Equipment is deliberately absent — see the
+    # note inside the builder.
+    _CHANGE_HISTORY_EVENT_SOURCES = (
+        "history_productionevent_events",
+        "history_chemicalevent_events",
+        "history_soilmanagementevent_events",
+        "history_pestmanagementevent_events",
+        "history_businessevent_events",
+        "history_weatherevent_events",
+        "history_generalevent_events",
+    )
+
     def _build_change_history_section(self):
         """
         Per-record edit log from django-auditlog.
@@ -15371,15 +15383,15 @@ class AuditExportService:
         # `.content_type` off every entry: three N+1s deep, ~1,600 of the ~2,750 queries a
         # 12-production operation dossier ran (measured 2026-09-05) and the single largest
         # reason the production export took a minute. Same rows, same order; only the number
-        # of round-trips changed. Equipment events were also missing from the list — they are
-        # registered with auditlog like the other seven, and § 205.272 cleaning records are
-        # exactly the edits an inspector asks about.
+        # of round-trips changed. Seven relations, not eight: EquipmentEvent is retired in the
+        # UI (equipment work is logged as Production EM/PH records), so nothing can edit one and
+        # its legacy rows have no trail worth printing.
         from django.contrib.auth import get_user_model
         from django.contrib.contenttypes.models import ContentType
         from django.db.models import Q
 
         records = [self.production]
-        for _label, related_name in self._SIGNOFF_EVENT_SOURCES:
+        for related_name in self._CHANGE_HISTORY_EVENT_SOURCES:
             records.extend(related_events(self.production, related_name))
         by_model = {}
         for record in records:
