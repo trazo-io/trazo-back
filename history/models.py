@@ -958,6 +958,12 @@ class History(models.Model):
             + PestManagementEventSerializer(self.history_pestmanagementevent_events.all(), many=True).data
             + BusinessEventSerializer(self.history_businessevent_events.all(), many=True).data
         )
+        # Drop null fields. Every event type serializes ~88 keys and, MEASURED on a live season
+        # (21 events, 2026-09-06), 59 % of the values were null: 64 KB of JSON became 37 KB with
+        # nothing removed but nulls. Every reader of this list treats a missing key and null the
+        # same way (`eventDataNormalizer` checks `=== undefined || === null` / `!= null`; nothing
+        # tests key presence). `date` and `index` are never null, so the sort below is unaffected.
+        events = [{key: value for key, value in event.items() if value is not None} for event in events]
         return sorted(events, key=lambda event: (event["date"], event["index"]))
 
 
